@@ -1886,10 +1886,11 @@ describe('GatewayService', () => {
     });
 
     // A stats-only snapshot omits dormant registrations, so an id missing from
-    // it proves nothing about whether the other host released it. Saying the
-    // answer is complete on that basis is the "reported success without it
-    // being true" shape this project keeps producing.
-    it('does not call the answer complete when the other host view is partial', async () => {
+    // it proves nothing about whether the other host released it. Marking the
+    // answer incomplete is not enough on its own: the caller applies what it
+    // receives and only then asks again, so the flag would land after the
+    // duplicate it was meant to prevent. The connection has to be withheld.
+    it('withholds a connection the other host cannot be proven to have released', async () => {
       mockNodeGateway.configured = true;
       mockNodeGateway.platforms = ['wechat'];
       mockNodeGatewayClient.isConfigured = true;
@@ -1909,6 +1910,8 @@ describe('GatewayService', () => {
 
       const result = await service.listDesiredConnectionsForHost('node');
 
+      expect(result.connections).toEqual([]);
+      expect(result.deferred).toBe(1);
       expect(result.complete).toBe(false);
     });
 
@@ -1935,11 +1938,11 @@ describe('GatewayService', () => {
       expect(result.complete).toBe(true);
     });
 
-    // Same trade-off the reconcile already makes and documents: a host we
-    // cannot see is treated as drained, because blocking every restart
-    // recovery on an unrelated host's admin outage costs more availability
-    // than the duplicate window it would avoid.
-    it('still hands over when the other host cannot be read at all', async () => {
+    // Same rule from the other direction: a host we could not reach shows
+    // nothing, which is no more proof of release than a half-seen one. Restart
+    // recovery is an optimisation over the reconcile, so when it cannot be done
+    // safely the right move is not to do it.
+    it('withholds when the other host cannot be read at all', async () => {
       mockNodeGateway.configured = true;
       mockNodeGateway.platforms = ['wechat'];
       mockNodeGatewayClient.isConfigured = true;
@@ -1958,8 +1961,8 @@ describe('GatewayService', () => {
 
       const result = await service.listDesiredConnectionsForHost('node');
 
-      expect(result.connections).toHaveLength(1);
-      expect(result.deferred).toBe(0);
+      expect(result.connections).toEqual([]);
+      expect(result.deferred).toBe(1);
     });
 
     it('reports complete:false when messenger links fail to load', async () => {

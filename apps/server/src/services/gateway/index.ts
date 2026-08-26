@@ -519,32 +519,29 @@ export class GatewayService {
     // more availability than the duplicate window it would avoid — and that
     // window only opens if the outage overlaps an actual migration.
     const elsewhere = new Set<string>();
-    let sawPartialView = false;
+    let peersProven = true;
     for (const other of getConfiguredMessageGatewayHosts()) {
       if (other === host) continue;
       const snapshot = await this.fetchActualConnections(getMessageGatewayClientForHost(other));
-      if (!snapshot) {
+
+      // Absence is only evidence when the view was complete. A snapshot we
+      // could not fetch shows nothing, and a stats-only one omits dormant
+      // registrations — in both cases an id missing from it says nothing about
+      // whether that host released it, so nothing here can be handed over.
+      // Marking the answer incomplete does not substitute: the caller applies
+      // what it receives and only then asks again, so a flag arrives after the
+      // duplicate it was supposed to prevent.
+      if (!snapshot?.complete) {
+        peersProven = false;
         log(
-          'Gateway pull[%s]: %s host snapshot unavailable, cannot confirm it is drained',
+          'Gateway pull[%s]: %s host view is %s, cannot prove it released anything',
           host,
           other,
-        );
-        continue;
-      }
-      // A stats-only snapshot omits dormant registrations, so an id missing
-      // from it is not proof that host released it. Withhold what it does
-      // show, and say the answer is partial rather than letting absence read
-      // as absence — the caller keeps asking and the reconcile, which owns the
-      // hand-off, finishes it.
-      if (!snapshot.complete) {
-        sawPartialView = true;
-        log(
-          'Gateway pull[%s]: %s host view is incomplete, its missing ids prove nothing',
-          host,
-          other,
+          snapshot ? 'incomplete' : 'unavailable',
         );
       }
-      snapshot.connections.forEach((_status, id) => elsewhere.add(id));
+
+      snapshot?.connections.forEach((_status, id) => elsewhere.add(id));
     }
 
     // Paid-gated providers never enter the desired set, so nothing here can
@@ -559,9 +556,13 @@ export class GatewayService {
         excluded++;
         continue;
       }
-      if (elsewhere.has(entry.provider.id)) {
+      if (!peersProven || elsewhere.has(entry.provider.id)) {
         deferred++;
-        log('Gateway pull[%s]: %s still held elsewhere, withholding', host, entry.provider.id);
+        log(
+          'Gateway pull[%s]: %s not proven released elsewhere, withholding',
+          host,
+          entry.provider.id,
+        );
         continue;
       }
       connections.push({ config: buildBotProviderConnectConfig(entry), ensure: true });
@@ -598,9 +599,13 @@ export class GatewayService {
           excluded++;
           continue;
         }
-        if (elsewhere.has(connectionId)) {
+        if (!peersProven || elsewhere.has(connectionId)) {
           deferred++;
-          log('Gateway pull[%s]: %s still held elsewhere, withholding', host, connectionId);
+          log(
+            'Gateway pull[%s]: %s not proven released elsewhere, withholding',
+            host,
+            connectionId,
+          );
           continue;
         }
         connections.push({
@@ -615,8 +620,10 @@ export class GatewayService {
     // Withheld entries make this a partial answer, so the caller keeps asking
     // instead of settling for the set it got. It will run out of attempts long
     // before a hand-off finishes — that is fine: finishing one is the periodic
-    // reconcile's job, not this call's.
-    if (deferred > 0 || sawPartialView) complete = false;
+    // reconcile's job, not this call's. Restart recovery is an optimisation
+    // over that reconcile, so when it cannot be done safely the right move is
+    // not to do it.
+    if (deferred > 0) complete = false;
 
     log(
       'Gateway pull[%s]: %d connection(s), excluded=%d, deferred=%d, complete=%s',
