@@ -5,6 +5,7 @@
   "gateway.statusConnecting": "This device is connecting to Gateway...",
   "gateway.statusDisconnected": "This device is not connected to Gateway",
   "gateway.title": "Device Gateway",
+  "navigation.agentShare": "Share",
   "navigation.agents": "Agents",
   "navigation.apps": "Apps",
   "navigation.channels": "Channels",

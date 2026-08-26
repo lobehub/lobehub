@@ -4,12 +4,17 @@ import { Segmented } from '@lobehub/ui/base-ui';
 import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 
 import {
   type AgentProfileTab,
@@ -54,7 +59,7 @@ interface AgentProfileTabsProps {
  * URL rather than holding local state: deep links and back/forward keep working.
  */
 const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
-  const { t } = useTranslation(['chat', 'spend']);
+  const { t } = useTranslation(['chat', 'common', 'spend']);
   const navigate = useWorkspaceAwareNavigate();
 
   const heterogeneousProviderType = useAgentStore(
@@ -63,9 +68,17 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(agentId));
+  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+  const enableAgentLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
+  // Link-share only exists for personal agents (the share model rejects
+  // workspace agents), never builtin/inbox rows, and only on deployments with
+  // the business link-share capability — same gate as topic share.
+  const shareSupported = !hasActiveWorkspace && !isBuiltinAgent && !isInbox && enableAgentLinkShare;
 
   const options = useMemo(
     () =>
@@ -79,10 +92,12 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
           // so the first segment is the "basic" tab, not "Agent Profile" again —
           // that broader name stays on the sidebar entry that opens the group.
           profile: t('tab.profileBasic'),
+          share: t('share', { ns: 'common' }),
           statistics: t('usageStats.title', { ns: 'spend' }),
         },
+        shareSupported,
       }),
-    [active, canConfigure, channelsSupported, t],
+    [active, canConfigure, channelsSupported, shareSupported, t],
   );
 
   // A lone segment is a label, not a switcher.

@@ -152,10 +152,6 @@ vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
   useHasActiveWorkspace: () => true,
 }));
 
-vi.mock('@/features/AgentSharePopover', () => ({
-  default: ({ children }: PropsWithChildren) => <>{children}</>,
-}));
-
 vi.mock('@/features/ResourcePermission/AccessLevelTag', () => ({
   default: ({ resourceId }: { resourceId?: string }) => (
     <span data-testid="access-level-resource-id">{resourceId}</span>

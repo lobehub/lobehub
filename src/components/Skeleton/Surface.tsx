@@ -4,9 +4,12 @@ import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactElement } from 'react';
 
+import WideScreenContainer from '@/features/WideScreenContainer';
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+
 import SkeletonBar from './Bar';
 
-export type SurfaceSkeletonVariant = 'detail' | 'editor' | 'form' | 'grid' | 'list';
+export type SurfaceSkeletonVariant = 'detail' | 'editor' | 'form' | 'grid' | 'list' | 'sections';
 
 interface SurfaceSkeletonProps {
   header?: boolean;
@@ -31,6 +34,10 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     min-height: 64px;
     padding-block: 16px;
+  `,
+  section: css`
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
   `,
 }));
 
@@ -93,6 +100,31 @@ const FormSkeleton = () => (
       </Flexbox>
     </FormGroup>
   </Flexbox>
+);
+
+/**
+ * Stacked outlined section cards, matching the agent profile group's card
+ * surfaces (statistics / share): a title + desc header, then label/control rows.
+ */
+const SectionsSkeleton = () => (
+  <WideScreenContainer>
+    <Flexbox gap={16} paddingBlock={16}>
+      {[2, 3, 2].map((rows, index) => (
+        <Flexbox className={styles.section} gap={16} key={index} padding={20}>
+          <Flexbox gap={8}>
+            <SkeletonBar height={18} width={128 + index * 24} />
+            <SkeletonBar height={12} width={240 + index * 32} />
+          </Flexbox>
+          {Array.from({ length: rows }).map((_, row) => (
+            <Flexbox horizontal align={'center'} justify={'space-between'} key={row}>
+              <SkeletonBar height={14} width={96 + ((row + index) % 3) * 32} />
+              <SkeletonBar height={28} width={row % 2 ? 140 : 64} />
+            </Flexbox>
+          ))}
+        </Flexbox>
+      ))}
+    </Flexbox>
+  </WideScreenContainer>
 );
 
 const GridSkeleton = () => (
@@ -159,6 +191,7 @@ const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonPro
       {variant === 'grid' && <GridSkeleton />}
       {variant === 'editor' && <EditorSkeleton />}
       {variant === 'detail' && <DetailSkeleton />}
+      {variant === 'sections' && <SectionsSkeleton />}
     </Flexbox>
   </Flexbox>
 );
@@ -175,5 +208,10 @@ export const createSurfaceSkeleton = (variant: SurfaceSkeletonVariant, header = 
   surfaceSkeletonCache.set(key, Component);
   return Component;
 };
+
+/** Route-level adapter so routeMeta can mount the sections shape directly. */
+export const SectionsRouteSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
+  <SurfaceSkeleton header={chrome !== 'body'} variant={'sections'} />
+);
 
 export default SurfaceSkeleton;

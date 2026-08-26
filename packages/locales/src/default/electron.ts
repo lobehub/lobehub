@@ -41,6 +41,7 @@ export default {
   'navigation.resourceImages': 'Images',
   'navigation.resourcePages': 'Pages',
   'navigation.resourceVideos': 'Videos',
+  'navigation.agentShare': 'Share',
   'navigation.settings': 'Settings',
   'navigation.selfLearning': 'Self-evolving',
   'navigation.stats': 'Statistics',

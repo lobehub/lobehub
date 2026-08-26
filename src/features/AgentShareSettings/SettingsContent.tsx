@@ -8,7 +8,6 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentShareSettingsExtension from '@/business/client/features/AgentShareSettingsExtension';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -25,7 +24,7 @@ interface SettingsContentProps {
 }
 
 /**
- * The heavier share configuration behind the popover's "Share Settings" entry.
+ * Permission / tool / limit configuration sections of the share settings page.
  * Every control saves immediately (issue acceptance): each patch is merged over
  * the server-normalized config because `updateShareConfig` replaces the whole
  * object under a strict schema.
@@ -99,7 +98,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
 
   if (createError) {
     return (
-      <Flexbox gap={12} padding={16}>
+      <Flexbox align="flex-start" gap={12}>
         <Text type="danger">{t('share.createError')}</Text>
         <Button loading={isCreating} size="small" onClick={retryCreate}>
           {t('retry', { ns: 'common' })}
@@ -110,7 +109,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
 
   if (isLoading || !shareConfig) {
     return (
-      <Flexbox gap={16} padding={16}>
+      <Flexbox gap={16}>
         <Skeleton active paragraph={{ rows: 6 }} />
       </Flexbox>
     );
@@ -124,8 +123,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
   const filePermission = shareConfig.filePermissionConfig;
 
   return (
-    <Flexbox gap={24} padding={16} style={{ maxHeight: '65vh', overflowY: 'auto' }}>
-      <AgentShareSettingsExtension agentId={agentId} />
+    <Flexbox gap={16}>
       <Section
         desc={t('share.settings.permissions.desc')}
         title={t('share.settings.permissions.title')}
