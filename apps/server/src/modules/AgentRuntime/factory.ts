@@ -87,6 +87,14 @@ export const createStreamEventManager = (): IStreamEventManager => {
         const meta = await stateManager.getOperationMetadata(operationId);
         return meta?.mirrorToOperationId ?? undefined;
       },
+      // Same reasoning as the mirror resolver above, but for share-visitor
+      // detection: a queue worker that never ran `publishAgentRuntimeInit` for
+      // this op still needs to know whether its `step_start` events must have
+      // `uiMessages` scrubbed of the creator's identity.
+      async (operationId) => {
+        const meta = await stateManager.getOperationMetadata(operationId);
+        return Boolean(meta?.streamOwnerUserId);
+      },
     );
   }
 
