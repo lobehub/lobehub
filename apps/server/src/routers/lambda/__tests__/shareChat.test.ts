@@ -192,6 +192,27 @@ describe('shareChatRouter', () => {
         }),
       );
     });
+
+    it('never sets interactiveStart, so concurrent visitor sends contend on the real runningOperation liveness instead of only the short reservation', async () => {
+      // Regression for Codex P1 (LOBE-11930, `shareChat.ts:186`): `interactiveStart:
+      // true` makes `TopicModel.tryReserveTaskCallback` skip its `runningOperation`
+      // liveness check entirely (`ignoreRunningOperation`) and contend only on the
+      // short-lived `taskCallbackReservation`, which is released right after the
+      // FIRST operation is created — long before it finishes running. That let a
+      // second concurrent visitor send for the same topic claim the topic-start
+      // reservation too, create its own creator-credentialed operation, and
+      // overwrite the topic's `runningOperation` marker, orphaning the first
+      // operation beyond the reach of `interruptTask` / the revocation sweep. See
+      // `topicStartReservation.shareVisitorConcurrency.race.test.ts` for the
+      // real-Postgres proof of the underlying reservation mechanics this pins.
+      const caller = await createCaller();
+
+      await caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ interactiveStart: false }),
+      );
+    });
   });
 
   describe('interruptTask', () => {

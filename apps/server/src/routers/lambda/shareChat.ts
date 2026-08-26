@@ -183,7 +183,38 @@ export const shareChatRouter = router({
           appContext: { topicId: input.topicId },
           clientIds: input.clientIds,
           clientIp: ctx.clientIp ?? undefined,
-          interactiveStart: true,
+          // `interactiveStart: true` (the `aiAgent.execAgent` owner path's
+          // default) makes `TopicModel.tryReserveTaskCallback` skip its
+          // `runningOperation` liveness check entirely
+          // (`ignoreRunningOperation`, see that method's JSDoc) — a policy
+          // that is safe there ONLY because the owner's OWN client is the
+          // thing serializing sends (its own queue/tray; see
+          // `aiAgent.ts`'s `execAgent` comment), and a resend after Stop goes
+          // through `replacesOperationId`, which `shareChat` never exposes to
+          // visitors.
+          //
+          // An untrusted visitor has no such client-side gate: firing two
+          // concurrent `execAgent` mutations for the SAME topic let both
+          // requests pass `tryReserveTaskCallback` (each only contends on the
+          // short-lived `taskCallbackReservation`, released right after the
+          // first operation is CREATED, long before it finishes streaming),
+          // so both created creator-credentialed operations. The second
+          // operation's `runningOperation` marker write then overwrote the
+          // first's, leaving the first operation unreachable by
+          // `shareChat.interruptTask` (which matches on the topic's current
+          // marker) and by `AiAgentService.interruptActiveShareRuns`'s
+          // revocation sweep (which also reads only the current marker) —
+          // an orphaned run that keeps using tools and the creator's share
+          // budget until it finishes on its own (Codex P1, LOBE-11930,
+          // `shareChat.ts:186`).
+          //
+          // Leaving this `false` (the background/task-callback default)
+          // routes visitor sends through the SAME liveness-checked
+          // reservation every non-interactive start already uses: a second
+          // concurrent send for a topic with a live operation is rejected
+          // (fails closed with a busy error after bounded retries) instead
+          // of silently displacing the first.
+          interactiveStart: false,
           prompt: input.prompt,
           shareGate,
           trigger: RequestTrigger.Chat,
