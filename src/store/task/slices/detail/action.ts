@@ -27,6 +27,7 @@ type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['d
 // - heartbeat config will get a dedicated action once the upstream task scheduler infra is complete
 export interface TaskUpdatePayload {
   assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
   description?: string;
   editorData?: unknown;
   instruction?: string;
@@ -182,6 +183,7 @@ export class TaskDetailSliceActionImpl {
 
   createTask = async (params: {
     assigneeAgentId?: string;
+    assigneeUserId?: string;
     automationMode?: 'heartbeat' | 'schedule';
     config?: Record<string, unknown>;
     createdByAgentId?: string;
@@ -351,7 +353,7 @@ export class TaskDetailSliceActionImpl {
     data: TaskUpdatePayload,
     options?: TaskUpdateOptions,
   ): Promise<void> => {
-    const { assigneeAgentId, ...rest } = data;
+    const { assigneeAgentId, assigneeUserId, ...rest } = data;
     const optimisticRest = { ...rest };
     delete optimisticRest.parentTaskId;
     // editTask may send only instruction while the detail store still holds old rich editorData.
@@ -362,6 +364,7 @@ export class TaskDetailSliceActionImpl {
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
+      ...(assigneeUserId !== undefined ? { userId: assigneeUserId } : {}),
     };
 
     // Snapshot every map entry the optimistic patch will touch BEFORE dispatch.
@@ -408,6 +411,7 @@ export class TaskDetailSliceActionImpl {
 
     if (
       assigneeAgentId !== undefined ||
+      assigneeUserId !== undefined ||
       data.parentTaskId !== undefined ||
       data.priority !== undefined
     ) {

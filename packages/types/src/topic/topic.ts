@@ -196,6 +196,12 @@ export interface ChatTopicMetadata {
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
   /**
+   * Root operation that most recently consumed `runningOperation`.
+   * Used to scope a post-terminal `unread` → `active` correction when the
+   * watching client receives the terminal event after the server cleared the marker.
+   */
+  lastSettledOperationId?: string;
+  /**
    * Measured dominant model by token volume, written by the usage roll-up
    * (`topicUsage.recompute`). This is an analytics projection of "what actually
    * ran", NOT the topic's configured model — the pinned/config model lives in
@@ -506,6 +512,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .optional(),
   provider: z.string().optional(),
+  lastSettledOperationId: z.string().optional(),
   repos: z.array(z.string()).optional(),
   runningOperation: z
     .object({

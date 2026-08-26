@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
   CreateTaskGoalInput,
@@ -21,11 +22,13 @@ import { TRPCError } from '@trpc/server';
 import { AgentModel } from '@/database/models/agent';
 import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
-import { TaskModel } from '@/database/models/task';
+import { RbacModel } from '@/database/models/rbac';
+import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
@@ -132,6 +135,7 @@ export class TaskService {
    */
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
+    this.assertAutomationAssigneeCompat(input.automationMode, input.assigneeUserId);
 
     const { goal, ...taskInput } = input;
     const createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> } = {
@@ -187,6 +191,15 @@ export class TaskService {
     // we have to assert here even though the inference path can't.
     this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
 
+    // Invariant: a private task can only be assigned to its creator — the
+    // resolved visibility (explicit, inherited, or agent-derived) is what
+    // counts, so this must run after the precedence chain above.
+    this.assertAssigneeUserVisibilityCompat(
+      createData.visibility,
+      createData.assigneeUserId,
+      this.userId,
+    );
+
     // Invariant: a subtask can never be more public than its parent.
     // Otherwise workspace members see an orphaned child whose parent is
     // hidden, leaking the existence of a private task. The inference path
@@ -194,14 +207,14 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    const task = await this.taskModel.create(createData);
+    const task = await this.createTaskWithAssigneeLock(createData);
 
     if (goal) {
-      // Not a transaction on purpose: TaskModel.create's identifier-conflict
-      // retry loop relies on continuing after a 23505, which an enclosing
-      // transaction would abort. Compensate instead — a task committed without
-      // its promised goal is a ghost on goal surfaces (it never lists as a
-      // goal), and a retry would stack another one.
+      // Goal creation stays separate from the task write because the task's
+      // membership-locked transaction has already committed. Compensate on
+      // failure — a task committed without its promised goal is a ghost on
+      // goal surfaces (it never lists as a goal), and a retry would stack
+      // another one.
       let created: GoalItem;
       try {
         created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
@@ -272,6 +285,49 @@ export class TaskService {
       code: 'BAD_REQUEST',
       message:
         'A public task cannot be assigned to a private agent. Either pick a workspace agent or make the task private first.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: a private task can only be assigned to its
+   * creator. A private task is visible to nobody else (ownership is
+   * creator-based), so assigning another member would hand them a task they
+   * can never see. Throws `BAD_REQUEST` on violation. Applies symmetrically
+   * to assigning on a private task and to demoting a member-assigned task to
+   * private.
+   */
+  assertAssigneeUserVisibilityCompat(
+    taskVisibility: 'private' | 'public' | undefined,
+    assigneeUserId: string | null | undefined,
+    creatorUserId: string,
+  ): void {
+    if (!assigneeUserId) return;
+    if (taskVisibility !== 'private') return;
+    if (assigneeUserId === creatorUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A private task can only be assigned to its creator. Unassign the member or keep the task visible to the workspace.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: an automated task (heartbeat / schedule) cannot
+   * be assigned to a human. Automation ticks always execute through an agent
+   * (falling back to the inbox agent), so a member assignee would be pure
+   * decoration that the next tick contradicts. Throws `BAD_REQUEST` on
+   * violation. Callers pass the POST-update effective values.
+   */
+  assertAutomationAssigneeCompat(
+    automationMode: 'heartbeat' | 'schedule' | null | undefined,
+    assigneeUserId: string | null | undefined,
+  ): void {
+    if (!automationMode) return;
+    if (!assigneeUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'An automated task cannot be assigned to a member. Remove the schedule first, or assign an agent.',
     });
   }
 
@@ -622,6 +678,106 @@ export class TaskService {
     }
   }
 
+  /**
+   * A task can only be assigned to a human who can actually see it: an active
+   * member of the current workspace, or the caller themself in personal mode.
+   * NOT_FOUND (not FORBIDDEN) mirrors the agent-assignee path so membership of
+   * other workspaces is never leaked.
+   */
+  async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+  }
+
+  private async assertAssigneeUserAssignableWithDatabase(
+    db: LobeChatDatabase,
+    assigneeUserId?: string | null,
+    lockMember = false,
+  ): Promise<void> {
+    if (!assigneeUserId) return;
+
+    if (!this.workspaceId) {
+      if (assigneeUserId !== this.userId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Assignee user not found',
+        });
+      }
+      return;
+    }
+
+    const memberModel = new WorkspaceMemberModel(db, this.userId);
+    const member = lockMember
+      ? await memberModel.getMemberForUpdate(this.workspaceId, assigneeUserId)
+      : await memberModel.getMember(this.workspaceId, assigneeUserId);
+    if (!member) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user is not a member of this workspace',
+      });
+    }
+
+    const canManageTasks = await new RbacModel(db, assigneeUserId).hasAnyPermission(
+      [...TASK_ASSIGNEE_PERMISSION_CODES],
+      { userId: assigneeUserId, workspaceId: this.workspaceId },
+    );
+    if (!canManageTasks) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user cannot manage tasks in this workspace',
+      });
+    }
+  }
+
+  private async withAssigneeUserLock<T>(
+    assigneeUserId: string | null | undefined,
+    write: (db: LobeChatDatabase) => Promise<T>,
+  ): Promise<T> {
+    if (!assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+      return write(this.db);
+    }
+
+    return this.db.transaction(async (tx) => {
+      await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
+      return write(tx);
+    });
+  }
+
+  private async createTaskWithAssigneeLock(
+    createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> },
+  ): Promise<TaskItem> {
+    if (!createData.assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignable(createData.assigneeUserId);
+      return this.taskModel.create(createData);
+    }
+
+    // TaskModel's normal retry loop cannot continue after a unique violation
+    // inside an open Postgres transaction. Retry the whole lock + validation +
+    // insert transaction instead so concurrent identifier allocation remains
+    // safe while the membership row stays serialized with the write.
+    const maxRetries = 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await this.withAssigneeUserLock(createData.assigneeUserId, (db) =>
+          new TaskModel(db, this.userId, this.workspaceId).create(createData, { maxRetries: 1 }),
+        );
+      } catch (error) {
+        if (!isTaskIdentifierUniqueViolation(error) || attempt === maxRetries - 1) throw error;
+      }
+    }
+
+    throw new Error('Failed to create task after max retries');
+  }
+
+  async updateTaskWithAssigneeLock(
+    taskId: string,
+    data: Parameters<TaskModel['update']>[1],
+  ): Promise<TaskItem | null> {
+    return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
+      new TaskModel(db, this.userId, this.workspaceId).update(taskId, data),
+    );
+  }
+
   private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
@@ -775,8 +931,11 @@ export class TaskService {
                 },
               }
             : {}),
+          assigneeUserId: s.assigneeUserId,
           automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
+          createdByUserId: s.createdByUserId,
+          visibility: s.visibility,
           children: buildSubtaskTree(s.id),
           ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
           identifier: s.identifier,

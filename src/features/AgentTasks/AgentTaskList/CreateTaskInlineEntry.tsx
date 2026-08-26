@@ -18,18 +18,30 @@ import {
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import type { TaskAssigneePayload } from '../features/AssigneeAgentSelector';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 
 interface CreateTaskInlineEntryProps {
   agentId?: string;
   autoFocus?: boolean;
+  /**
+   * Baseline visibility for a fresh composer. Top-level creates default to
+   * workspace-visible; the subtask composer passes its parent's visibility so
+   * a child under a private parent doesn't default to a combination the server
+   * rejects (a subtask cannot be more public than its parent).
+   */
+  defaultVisibility?: 'private' | 'public';
   /**
    * Locks the assignee to `agentId` and hides the agent picker. Used on the
    * agent-scoped task list where every task belongs to that agent.
@@ -51,6 +63,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const {
     agentId,
     autoFocus,
+    defaultVisibility = 'public',
     lockAssignee,
     onCollapse,
     onCreated,
@@ -70,11 +83,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const activeWorkspaceId = useActiveWorkspaceId();
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
+  const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
-  // Default to private in workspace mode so the user has to opt in to share.
+  // Default to workspace-visible (or the parent's visibility for subtasks).
   // In personal mode the chip is hidden and the value is never sent.
-  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+  const [visibility, setVisibility] = useState<'private' | 'public'>(defaultVisibility);
 
   // A private agent can only run a private task. Coerce + lock the
   // visibility chip when the selected agent is private.
@@ -83,6 +97,16 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   useEffect(() => {
     if (isPrivateAgent && visibility === 'public') setVisibility('private');
   }, [isPrivateAgent, visibility]);
+
+  // The mirror constraint: a task assigned to another member must stay
+  // visible to the workspace — a private task is creator-only, so the
+  // assignee could never see it. Selecting a member flips visibility to
+  // workspace and locks the chip.
+  const selfUserId = useUserStore(userProfileSelectors.userId);
+  const isOtherMemberAssignee = Boolean(assigneeUserId) && assigneeUserId !== selfUserId;
+  useEffect(() => {
+    if (isOtherMemberAssignee && visibility === 'private') setVisibility('public');
+  }, [isOtherMemberAssignee, visibility]);
 
   const editor = useEditor();
 
@@ -98,6 +122,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const draftRestoredKeyRef = useRef<string | null>(null);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
+  const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
+
+  const handleAssigneeChange = useCallback((assignee: TaskAssigneePayload) => {
+    setAssigneeAgentId(assignee.assigneeAgentId ?? undefined);
+    setAssigneeUserId(assignee.assigneeUserId ?? undefined);
+  }, []);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
   // `agentId` prop. The route subtree is reused across /agent/A/tasks ->
@@ -106,6 +136,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   useEffect(() => {
     if (lockAssignee) {
       setAssigneeAgentId(agentId);
+      setAssigneeUserId(undefined);
       return;
     }
 
@@ -129,8 +160,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // Reset to baseline for the new scope before hydrating.
     editor.cleanDocument?.();
     setPriority(0);
-    setVisibility('private');
+    setVisibility(defaultVisibility);
     if (!lockAssignee) setAssigneeAgentId(agentId);
+    setAssigneeUserId(undefined);
 
     let raw: string | null;
     try {
@@ -142,6 +174,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     try {
       const draft = JSON.parse(raw) as {
         assigneeAgentId?: string;
+        assigneeUserId?: string;
         markdown?: string;
         priority?: number;
         visibility?: 'private' | 'public';
@@ -149,11 +182,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
+      if (!lockAssignee && !draft.assigneeAgentId && draft.assigneeUserId)
+        setAssigneeUserId(draft.assigneeUserId);
       if (draft.visibility) setVisibility(draft.visibility);
     } catch {
       /* ignore a malformed draft */
     }
-  }, [agentId, draftStorageKey, editor, lockAssignee]);
+  }, [agentId, defaultVisibility, draftStorageKey, editor, lockAssignee]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Write-only on non-empty:
@@ -168,6 +203,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         draftStorageKey,
         JSON.stringify({
           assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
+          assigneeUserId: lockAssignee ? undefined : assigneeUserId,
           markdown,
           priority,
           visibility,
@@ -176,7 +212,16 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } catch {
       /* storage unavailable / quota — persistence is best-effort */
     }
-  }, [assigneeAgentId, draftStorageKey, editor, instruction, lockAssignee, priority, visibility]);
+  }, [
+    assigneeAgentId,
+    assigneeUserId,
+    draftStorageKey,
+    editor,
+    instruction,
+    lockAssignee,
+    priority,
+    visibility,
+  ]);
 
   const handleCollapse = useCallback(() => {
     if (onCollapse) {
@@ -225,6 +270,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     try {
       const result = await createTask({
         assigneeAgentId,
+        assigneeUserId,
         editorData: editorJson,
         instruction: markdown || trimmedText || name || '',
         name,
@@ -239,8 +285,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       if (result) {
         setPriority(0);
         setAssigneeAgentId(agentId);
+        setAssigneeUserId(undefined);
         setInstruction('');
-        setVisibility('private');
+        setVisibility(defaultVisibility);
         editor?.cleanDocument?.();
         if (draftStorageKey) {
           try {
@@ -262,7 +309,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     activeWorkspaceId,
     agentId,
     assigneeAgentId,
+    assigneeUserId,
     createTask,
+    defaultVisibility,
     draftStorageKey,
     editor,
     instruction,
@@ -375,6 +424,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                     <AssigneeAvatar agentId={assigneeAgentId} size={18} />
                     <Text fontSize={12}>{assigneeMeta?.title}</Text>
                   </>
+                ) : assigneeUserId ? (
+                  <>
+                    <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                    <Text fontSize={12}>{memberMeta?.title}</Text>
+                  </>
                 ) : (
                   <>
                     <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
@@ -389,7 +443,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             return lockAssignee ? (
               assigneeChip
             ) : (
-              <AssigneeAgentSelector currentAgentId={assigneeAgentId} onChange={setAssigneeAgentId}>
+              <AssigneeAgentSelector
+                currentAgentId={assigneeAgentId}
+                currentUserId={assigneeUserId}
+                onChange={handleAssigneeChange}
+              >
                 {assigneeChip}
               </AssigneeAgentSelector>
             );
@@ -412,7 +470,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   ? t('createTask.visibility.privateAgentLocked', {
                       defaultValue: 'Private agents can only run private tasks.',
                     })
-                  : undefined
+                  : isOtherMemberAssignee
+                    ? t('createTask.visibility.memberAssigneeLocked', {
+                        defaultValue: 'A task assigned to a member stays visible to the workspace.',
+                      })
+                    : undefined
               }
               onChange={setVisibility}
             >

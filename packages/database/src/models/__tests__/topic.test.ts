@@ -601,8 +601,49 @@ describe('TopicModel', () => {
         threadId: 'thread-old',
       });
       const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.lastSettledOperationId).toBe('op-old');
       expect(row?.metadata?.runningOperation).toBeNull();
       expect(row?.status).toBe('unread');
+    });
+
+    it('corrects unread to active only for the operation that most recently settled', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'watched completion',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+      const corrected = await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      expect(corrected.status).toBe('corrected');
+      expect((await topicModel.findById(topic.id))?.status).toBe('active');
+    });
+
+    it('does not let a watched correction from an old operation hide a newer run', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'new run wins',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+      await topicModel.update(topic.id, {
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-new', operationId: 'op-new' },
+        },
+        status: 'running',
+      });
+
+      const corrected = await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      expect(corrected).toEqual({ activeOperationId: 'op-new', status: 'conflict' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation?.operationId).toBe('op-new');
+      expect(row?.status).toBe('running');
     });
 
     it('uses the requested terminal status only for the matching operation', async () => {

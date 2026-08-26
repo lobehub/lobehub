@@ -1350,6 +1350,23 @@ export class TopicModel {
       const runningOperation = existing?.metadata?.runningOperation;
       if (!runningOperation) {
         const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        if (
+          existing?.metadata?.lastSettledOperationId === operationId &&
+          existing.status === 'unread' &&
+          status === 'active'
+        ) {
+          await tx
+            .update(topics)
+            .set({ status: 'active', updatedAt: new Date() })
+            .where(and(eq(topics.id, id), this.ownership()));
+
+          return {
+            assistantMessageId:
+              currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+            status: 'corrected' as const,
+          };
+        }
+
         return {
           assistantMessageId:
             currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
@@ -1366,6 +1383,7 @@ export class TopicModel {
 
       const metadata = {
         ...existing.metadata,
+        ...(isRoot ? { lastSettledOperationId: operationId } : {}),
         runningOperation: isRoot
           ? null
           : {

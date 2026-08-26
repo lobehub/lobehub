@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canWorkspaceRoleBeTaskAssignee,
   legacyRoleToWorkspaceRole,
   PERSONAL_DEFAULT_PERMISSIONS,
   WORKSPACE_ROLE_PERMISSIONS,
@@ -45,6 +46,14 @@ describe('workspace built-in roles', () => {
     expect(admin).not.toContain('agent:update:owner');
     expect(admin).toContain('agent:delete:owner');
     expect(admin).not.toContain('agent:delete:all');
+  });
+
+  it('allows writable roles but excludes viewers from task assignment', () => {
+    expect(canWorkspaceRoleBeTaskAssignee('owner')).toBe(true);
+    expect(canWorkspaceRoleBeTaskAssignee('admin')).toBe(true);
+    expect(canWorkspaceRoleBeTaskAssignee('member')).toBe(true);
+    expect(canWorkspaceRoleBeTaskAssignee('viewer')).toBe(false);
+    expect(canWorkspaceRoleBeTaskAssignee('unknown')).toBe(false);
   });
 
   // Knowledge-base curation mirrors the Agent rule: `KNOWLEDGE_BASE_UPDATE:all`

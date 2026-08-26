@@ -4,6 +4,7 @@ import { CalendarClock, HeartPulse, UserRound } from 'lucide-react';
 import { memo } from 'react';
 
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import PriorityHighIcon from '../features/icons/PriorityHighIcon';
 import PriorityLowIcon from '../features/icons/PriorityLowIcon';
 import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
@@ -11,6 +12,7 @@ import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
 import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
+import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import type { TaskGroupMeta } from './listViewOptions';
 
 const PRIORITY_ICON_MAP = {
@@ -26,13 +28,16 @@ const AssigneeLabel = memo<{ agentId: string }>(({ agentId }) => {
   return <>{displayMeta?.title}</>;
 });
 
+const AssigneeUserLabel = memo<{ userId: string }>(({ userId }) => {
+  const displayMeta = useUserDisplayMeta(userId);
+  return <>{displayMeta?.title}</>;
+});
+
 const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
   if (group.groupBy === 'assignee') {
-    return group.assigneeId ? (
-      <AssigneeAvatar agentId={group.assigneeId} size={18} />
-    ) : (
-      <Icon icon={UserRound} size={14} />
-    );
+    if (group.assigneeId) return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
+    if (group.assigneeUserId) return <AssigneeUserAvatar size={18} userId={group.assigneeUserId} />;
+    return <Icon icon={UserRound} size={14} />;
   }
 
   if (group.groupBy === 'priority') {
@@ -72,7 +77,13 @@ const TaskGroupLabel = memo<TaskGroupLabelProps>(({ group }) => (
   <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
     <TaskGroupPrefix group={group} />
     <Text ellipsis weight={500}>
-      {group.assigneeId ? <AssigneeLabel agentId={group.assigneeId} /> : group.label}
+      {group.assigneeId ? (
+        <AssigneeLabel agentId={group.assigneeId} />
+      ) : group.assigneeUserId ? (
+        <AssigneeUserLabel userId={group.assigneeUserId} />
+      ) : (
+        group.label
+      )}
     </Text>
   </Flexbox>
 ));

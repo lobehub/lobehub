@@ -338,9 +338,14 @@ export interface TaskDetailSubtaskRunningTopic {
 
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
+  /** Human assignee (workspace member). Coexists with `assignee` (agent) in the
+   *  schema, but the UI writes them mutually exclusively. */
+  assigneeUserId?: string | null;
   automationMode?: TaskAutomationMode | null;
   blockedBy?: string;
   children?: TaskDetailSubtask[];
+  /** Creator of the subtask; with `visibility`, gates who it can be assigned to. */
+  createdByUserId?: string;
   heartbeat?: { interval?: number | null };
   identifier: string;
   name?: string | null;
@@ -349,6 +354,7 @@ export interface TaskDetailSubtask {
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
   updatedAt?: string;
+  visibility?: 'private' | 'public';
 }
 
 export interface TaskDetailWorkspaceNode {
