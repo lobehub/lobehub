@@ -48,6 +48,17 @@ describe('AssistantAction', () => {
 
       expect(discoverService.getAssistantCategories).toHaveBeenCalledWith(params);
     });
+
+    it('should skip the compatibility request when category counts come from the list', async () => {
+      const getAssistantCategories = vi.spyOn(discoverService, 'getAssistantCategories');
+
+      const { result } = renderHook(() =>
+        useStore.getState().useAssistantCategories({}, { enabled: false }),
+      );
+
+      expect(result.current.data).toBeUndefined();
+      expect(getAssistantCategories).not.toHaveBeenCalled();
+    });
   });
 
   describe('useAssistantDetail', () => {

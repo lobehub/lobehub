@@ -10,19 +10,24 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
-import { AssistantCategory, AssistantSorts } from '@/types/discover';
+import { AssistantCategory, type AssistantQueryParams, AssistantSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
+import { buildAssistantListQuery } from '../../assistantListQuery';
 import { useCategory } from './useCategory';
 
 const Category = memo(() => {
   const useAssistantCategories = useDiscoverStore((s) => s.useAssistantCategories);
-  const {
-    category = AssistantCategory.Discover,
-    q,
-    source,
-  } = useQuery() as { category?: AssistantCategory; q?: string; source?: string };
-  const { data: items = [] } = useAssistantCategories({ q, source: source as any });
+  const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
+  const query = useQuery() as AssistantQueryParams;
+  const { category = AssistantCategory.Discover, q, source } = query;
+  const { data } = useAssistantList(buildAssistantListQuery(query));
+  const shouldLoadFallbackCategories = data !== undefined && data.categoryCounts === undefined;
+  const { data: fallbackItems = [] } = useAssistantCategories(
+    { q, source },
+    { enabled: shouldLoadFallbackCategories },
+  );
+  const items = data?.categoryCounts ?? fallbackItems;
   const navigate = useWorkspaceAwareNavigate();
   const cates = useCategory();
 
