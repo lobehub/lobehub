@@ -1046,4 +1046,56 @@ describe('userRouter', () => {
       expect(mergeToolInterventionSetting).toHaveBeenCalledWith({ approvalMode: 'auto-run' });
     });
   });
+
+  describe('updateUninstalledBuiltinTools', () => {
+    it('delegates to the atomic scope patch with the server-derived workspace', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(true) }) as any,
+      );
+
+      const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(
+        () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
+      );
+
+      await userRouter
+        .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: ['dalle'] });
+
+      expect(replaceUninstalledBuiltinToolsSetting).toHaveBeenCalledWith({
+        uninstalledBuiltinTools: ['dalle'],
+        workspaceId: 'ws_1',
+      });
+    });
+
+    it('targets the personal scope outside a workspace', async () => {
+      const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(
+        () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
+      );
+
+      await userRouter
+        .createCaller({ ...mockCtx })
+        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: [] });
+
+      expect(replaceUninstalledBuiltinToolsSetting).toHaveBeenCalledWith({
+        uninstalledBuiltinTools: [],
+        workspaceId: null,
+      });
+    });
+
+    it('rejects workspace members without content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
+      );
+
+      await expect(
+        userRouter
+          .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+          .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: ['dalle'] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+  });
 });

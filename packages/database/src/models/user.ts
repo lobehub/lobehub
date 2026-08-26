@@ -332,6 +332,47 @@ export class UserModel {
       });
   };
 
+  /**
+   * Atomically replace the uninstalled-builtin-tools list for one scope
+   * (personal, or one workspace's slot) inside the `tool` column, leaving every
+   * other key — `humanIntervention`, the other scope's lists — untouched. Same
+   * rationale as `mergeToolInterventionSetting`: a JS-side whole-column write
+   * built from a snapshot races with concurrent tool-column writers and can
+   * revert their changes (e.g. flip approvalMode back).
+   */
+  replaceUninstalledBuiltinToolsSetting = async (value: {
+    uninstalledBuiltinTools: string[];
+    workspaceId?: string | null;
+  }) => {
+    const list = JSON.stringify(value.uninstalledBuiltinTools);
+
+    const initialTool = value.workspaceId
+      ? {
+          uninstalledBuiltinToolsByWorkspace: {
+            [value.workspaceId]: value.uninstalledBuiltinTools,
+          },
+        }
+      : { uninstalledBuiltinTools: value.uninstalledBuiltinTools };
+
+    const toolPatch = value.workspaceId
+      ? sql`jsonb_build_object(
+          'uninstalledBuiltinToolsByWorkspace',
+          coalesce(${userSettings.tool}->'uninstalledBuiltinToolsByWorkspace', '{}'::jsonb)
+          || jsonb_build_object(${value.workspaceId}::text, ${list}::jsonb)
+        )`
+      : sql`jsonb_build_object('uninstalledBuiltinTools', ${list}::jsonb)`;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: initialTool })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || ${toolPatch}`,
+        },
+        target: userSettings.id,
+      });
+  };
+
   updatePreference = async (value: Partial<UserPreference>) => {
     const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
     if (!user) return;

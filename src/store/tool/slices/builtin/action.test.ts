@@ -134,7 +134,7 @@ describe('createBuiltinToolSlice', () => {
         uninstalledBuiltinTools: ['a', 'b'],
       });
       const updateSpy = vi
-        .spyOn(userService, 'updateUserSettings')
+        .spyOn(userService, 'updateUninstalledBuiltinTools')
         .mockResolvedValue(undefined as any);
 
       const { result } = renderHook(() => useToolStore());
@@ -142,12 +142,9 @@ describe('createBuiltinToolSlice', () => {
         await result.current.installBuiltinTool('a');
       });
 
-      expect(updateSpy).toHaveBeenCalledWith({
-        tool: {
-          humanIntervention: { approvalMode: 'manual' },
-          uninstalledBuiltinTools: ['b'],
-        },
-      });
+      // Only the scope's list is sent; the server patches that slot atomically,
+      // so humanIntervention and the other scope's lists cannot be clobbered.
+      expect(updateSpy).toHaveBeenCalledWith(['b']);
     });
 
     it('uninstallBuiltinTool (workspace) writes only the per-workspace slot, leaving personal untouched', async () => {
@@ -158,7 +155,7 @@ describe('createBuiltinToolSlice', () => {
         uninstalledBuiltinToolsByWorkspace: { 'ws-1': [] },
       });
       const updateSpy = vi
-        .spyOn(userService, 'updateUserSettings')
+        .spyOn(userService, 'updateUninstalledBuiltinTools')
         .mockResolvedValue(undefined as any);
 
       const { result } = renderHook(() => useToolStore());
@@ -166,12 +163,7 @@ describe('createBuiltinToolSlice', () => {
         await result.current.uninstallBuiltinTool('x');
       });
 
-      expect(updateSpy).toHaveBeenCalledWith({
-        tool: {
-          uninstalledBuiltinTools: ['personal-tool'],
-          uninstalledBuiltinToolsByWorkspace: { 'ws-1': ['x'] },
-        },
-      });
+      expect(updateSpy).toHaveBeenCalledWith(['x']);
     });
 
     it('install in a workspace reads from the per-workspace slot, not the personal list', async () => {
@@ -183,7 +175,7 @@ describe('createBuiltinToolSlice', () => {
         uninstalledBuiltinToolsByWorkspace: { 'ws-1': ['x', 'y'] },
       });
       const updateSpy = vi
-        .spyOn(userService, 'updateUserSettings')
+        .spyOn(userService, 'updateUninstalledBuiltinTools')
         .mockResolvedValue(undefined as any);
 
       const { result } = renderHook(() => useToolStore());
@@ -191,12 +183,7 @@ describe('createBuiltinToolSlice', () => {
         await result.current.installBuiltinTool('x');
       });
 
-      expect(updateSpy).toHaveBeenCalledWith({
-        tool: {
-          uninstalledBuiltinTools: ['a'],
-          uninstalledBuiltinToolsByWorkspace: { 'ws-1': ['y'] },
-        },
-      });
+      expect(updateSpy).toHaveBeenCalledWith(['y']);
     });
   });
 

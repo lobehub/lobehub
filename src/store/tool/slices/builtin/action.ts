@@ -52,27 +52,6 @@ const resolveUninstalledBuiltinTools = (
 };
 
 /**
- * Build the full `tool` settings payload for persisting a new uninstalled list
- * in the active scope. The whole object is returned (not a partial) because the
- * server replaces the `tool` column wholesale on update — spreading the current
- * `tool` keeps `humanIntervention` and the other scope's list intact.
- */
-const buildUninstalledToolsUpdate = <T extends UninstalledBuiltinToolsScope>(
-  tool: T | undefined,
-  workspaceId: string | null,
-  nextUninstalled: string[],
-) =>
-  workspaceId
-    ? {
-        ...tool,
-        uninstalledBuiltinToolsByWorkspace: {
-          ...tool?.uninstalledBuiltinToolsByWorkspace,
-          [workspaceId]: nextUninstalled,
-        },
-      }
-    : { ...tool, uninstalledBuiltinTools: nextUninstalled };
-
-/**
  * Builtin Tool Action Interface
  */
 
@@ -160,9 +139,11 @@ export class BuiltinToolActionImpl {
    * workspace), persisting to the matching slot in user settings.
    *
    * The current list is read fresh from the server so the diff is against the
-   * real stored value (not the default seed), and the full `tool` object is
-   * written back so the other scope's list and `humanIntervention` survive the
-   * server's wholesale column replacement.
+   * real stored value (not the default seed). Persistence goes through the
+   * scope-targeted server-side patch (`updateUninstalledBuiltinTools`), which
+   * replaces only this scope's slot atomically — writing the whole `tool`
+   * column from this snapshot would race with concurrent tool-column writers
+   * (e.g. an approvalMode change from another tab) and could revert them.
    */
   #toggleBuiltinToolInstalled = async (identifier: string, install: boolean): Promise<void> => {
     const workspaceId = getActiveWorkspaceId();
@@ -186,10 +167,9 @@ export class BuiltinToolActionImpl {
       n(install ? 'installBuiltinTool' : 'uninstallBuiltinTool'),
     );
 
-    // Persist to user settings (scoped to personal / active workspace)
-    await userService.updateUserSettings({
-      tool: buildUninstalledToolsUpdate(tool, workspaceId, newUninstalled),
-    });
+    // Persist the active scope's slot (server derives the scope from the
+    // request's workspace context)
+    await userService.updateUninstalledBuiltinTools(newUninstalled);
 
     // Refresh to ensure consistency
     await this.refreshUninstalledBuiltinTools();

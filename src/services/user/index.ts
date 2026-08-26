@@ -138,6 +138,10 @@ export class UserService {
     return lambdaClient.user.updateToolIntervention.mutate(value);
   };
 
+  updateUninstalledBuiltinTools = async (uninstalledBuiltinTools: string[]) => {
+    return lambdaClient.user.updateUninstalledBuiltinTools.mutate({ uninstalledBuiltinTools });
+  };
+
   updateUserSettings = async (value: PartialDeep<UserSettings>, signal?: AbortSignal) => {
     return lambdaClient.user.updateSettings.mutate(value, { signal });
   };

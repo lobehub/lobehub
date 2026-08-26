@@ -430,6 +430,73 @@ describe('UserModel', () => {
     });
   });
 
+  describe('replaceUninstalledBuiltinToolsSetting', () => {
+    it('should create the settings row for the personal scope when none exists', async () => {
+      await userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: ['dalle'],
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({ uninstalledBuiltinTools: ['dalle'] });
+    });
+
+    it('should replace only the workspace slot, preserving other slots and humanIntervention', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: {
+          humanIntervention: { approvalMode: 'auto-run' },
+          uninstalledBuiltinTools: ['dalle'],
+          uninstalledBuiltinToolsByWorkspace: { ws_other: ['calculator'] },
+        },
+      });
+
+      await userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: ['web-browsing'],
+        workspaceId: 'ws_1',
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+        uninstalledBuiltinToolsByWorkspace: {
+          ws_1: ['web-browsing'],
+          ws_other: ['calculator'],
+        },
+      });
+    });
+
+    it('should not drop an approvalMode change when an uninstall write overlaps it', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { approvalMode: 'manual' } },
+      });
+
+      // The interleaving from the review: an install/uninstall snapshot-write
+      // committing after an approvalMode change used to restore the stale mode.
+      // Both writers patch their own key atomically now, so both must land.
+      await Promise.all([
+        userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' }),
+        userModel.replaceUninstalledBuiltinToolsSetting({ uninstalledBuiltinTools: ['dalle'] }),
+      ]);
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+      });
+    });
+  });
+
   describe('updatePreference', () => {
     it('should update user preference', async () => {
       await userModel.updatePreference({
