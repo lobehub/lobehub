@@ -1190,6 +1190,23 @@ outside the harness's remit: mark the dark case untested and say why, rather tha
 flipping a device-level preference. Note the setting write is not free — it syncs to
 the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
 
+#### A cold desktop boot renders English copy while `status.language` already says zh-CN
+
+**Situation:** asserting anything about localized UI copy on a freshly started
+`electron-dev.sh` instance — a label's text, or that a settings section rendered at all.
+
+**Doesn't work:** grepping the rendered text for the Chinese label while
+`window.__LOBE_STORES.global().status.language` reports `zh-CN`. The persisted language is
+restored into the store, but i18next is still on English until `switchLocale` runs once, so every
+Chinese-text assertion comes back false and reads as "the section never rendered". A full-reload
+`goto` puts it back into that state, so it recurs mid-run after each navigation.
+
+**Works:** never infer the rendered language from `status.language`. Decide from the DOM
+(test for both the Chinese and English label, or read a known-localized node), or normalize first
+by calling `window.__LOBE_STORES.global().switchLocale('<locale>')` — the same action the language
+select calls — and only then assert. When the check under test IS the language, drive the real
+select, and re-read `status.language` plus the DOM copy after every switch: the two can disagree.
+
 #### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
 
 **Situation:** driving the Electron shell to the Home route (`/`) to check the nav
@@ -1236,6 +1253,16 @@ agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electr
 On `cloud`, verify open / render / close only, treat every submit as a user-owned decision, and
 prove afterwards that nothing was written (re-read the relevant store count). Note this also makes
 the whole local-server bring-up unnecessary — check the target before spending minutes on it.
+
+**Corollary — a preference key your branch ADDS cannot be proven to persist here.** The cloud
+server validates `user.updatePreference` against its own deployed `UserPreferenceSchema`, so a key
+that exists only in your working tree is accepted with HTTP 200 and then silently dropped: the
+next `user.getUserState` comes back without it and a reload shows the setting reverted, which
+reads exactly like a broken write path. Attribute it before reporting a defect — wrap `fetch`,
+confirm the request body carries the key, and confirm an ALREADY-shipped sibling key
+(`terminalFontFamily`) round-trips in the same response. Then mark persistence blocked on the
+server schema version rather than failing the change; only a local full stack running the branch's
+schema can close that loop.
 
 #### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
 

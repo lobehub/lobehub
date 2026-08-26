@@ -241,6 +241,11 @@ export interface UserPreference {
    * @deprecated Use lab.enableInputMarkdown instead
    */
   disableInputMarkdownRender?: boolean;
+  /**
+   * CSS font-family value used as the global default UI font.
+   * Empty or whitespace-only values fall back to the application font stack.
+   */
+  fontFamily?: string;
   guide?: UserGuide;
   hideSyncAlert?: boolean;
   /**
@@ -334,6 +339,7 @@ export interface SSOProvider {
 export const UserPreferenceSchema = z
   .object({
     defaultOpenInApp: z.string().optional(),
+    fontFamily: z.string().optional(),
     guide: UserGuideSchema.optional(),
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
