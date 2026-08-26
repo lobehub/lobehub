@@ -29,6 +29,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+import { notShareVisitorMessage, notShareVisitorTopic } from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export type SearchResultType =
@@ -664,6 +665,10 @@ export class SearchRepo {
         and(
           this.scanScopeWhere(topics),
           agentId && !this.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
+          // `senderId` is a plain column (not a BM25 field), so it stays
+          // inline like the other non-scored quals above — agent-share
+          // visitor topics must never surface in the creator's own search.
+          notShareVisitorTopic(),
           sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
       )
@@ -775,6 +780,11 @@ export class SearchRepo {
           this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
           agentId && !this.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
+          // `NOT EXISTS` correlated subquery, not a JOIN, so it does not
+          // break the scan's TopN shape (see the file-level comment above).
+          // Messages carry no senderId of their own — visitor authorship is
+          // only identifiable through the parent share topic.
+          notShareVisitorMessage(),
           sql`${messages.content} @@@ ${bm25Query}`,
         ),
       )

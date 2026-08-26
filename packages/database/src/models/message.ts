@@ -2342,6 +2342,34 @@ export class MessageModel {
     return heatmapData;
   };
 
+  // **************** Agent Share (visitor-scoped) *************** //
+
+  /**
+   * Exact per-topic turn count for one role, used by `maxTurnsPerTopic`.
+   *
+   * MUST NOT reuse {@link MessageModel.count}: its `analyticsConditions()`
+   * ANDs in `notShareVisitorMessage()`, which excludes every message whose
+   * topic has a non-null `senderId` — i.e. every agent-share visitor topic.
+   * That predicate is correct for personal analytics (visitor usage is
+   * reported separately by the Cloud share usage center), but it makes
+   * `count()` return 0 forever for a share topic, silently disabling the
+   * turn cap (see LOBE-11930 acceptance bug).
+   *
+   * Safe without a visitor/ownership check here: the caller (shareChat
+   * router) already resolved and authorized the topic via
+   * `findVisitorTopicOrThrow` before calling this, and `this.ownership()`
+   * matches because share messages carry the creator's `userId` (the model
+   * is constructed with `share.ownerId`).
+   */
+  countByTopic = async ({ role, topicId }: { role: string; topicId: string }): Promise<number> => {
+    const result = await this.db
+      .select({ count: count(messages.id) })
+      .from(messages)
+      .where(and(this.ownership(), eq(messages.topicId, topicId), eq(messages.role, role)));
+
+    return result[0].count;
+  };
+
   hasMoreThanN = async (n: number): Promise<boolean> => {
     const result = await this.db
       .select({ id: messages.id })

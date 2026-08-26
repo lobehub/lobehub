@@ -1328,6 +1328,47 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
     });
   });
 
+  // Regression guard: agent-share visitor topics/messages carry the creator's
+  // userId (so the ownership predicate matches them), but they must never
+  // surface in the creator's own command-palette search — visitor usage is
+  // reported separately by the Cloud share usage center (see LOBE-11930).
+  describe('search - excludes agent-share visitor data', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values({
+        content: 'Visitor-only discussion about zephyrwatt',
+        senderId: 'visitor-user-zephyrwatt',
+        title: 'Zephyrwatt visitor topic',
+        userId,
+      });
+    });
+
+    it('should not surface an agent-share visitor topic', async () => {
+      const results = await searchRepo.search({ query: 'zephyrwatt', type: 'topic' });
+
+      expect(results.some((r) => r.title.includes('Zephyrwatt'))).toBe(false);
+    });
+
+    it('should not surface a message that lives inside an agent-share visitor topic', async () => {
+      const [visitorTopic] = await serverDB
+        .select({ id: topics.id })
+        .from(topics)
+        .where(eq(topics.title, 'Zephyrwatt visitor topic'));
+
+      await serverDB.insert(messages).values({
+        content: 'Zephyrwatt visitor message inside topic',
+        role: 'user',
+        topicId: visitorTopic.id,
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'zephyrwatt', type: 'message' });
+
+      expect(results.some((r) => r.type === 'message' && r.content.includes('Zephyrwatt'))).toBe(
+        false,
+      );
+    });
+  });
+
   // Regression guard: the BM25 scans were split into an inner
   // single-table subquery (so ParadeDB can pick its TopN custom scan) with the
   // joins and — in personal mode — the `workspace_id IS NULL` check moved above
