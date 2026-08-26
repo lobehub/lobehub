@@ -2,7 +2,8 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, use } from 'react';
 import { memo, useEffect } from 'react';

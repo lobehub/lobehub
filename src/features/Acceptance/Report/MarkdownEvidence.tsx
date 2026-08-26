@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Highlighter, Icon, Markdown, Text } from '@lobehub/ui';
-import { Drawer } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
+import { Drawer, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRight, FileText } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';

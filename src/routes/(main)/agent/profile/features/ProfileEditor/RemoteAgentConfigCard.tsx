@@ -5,12 +5,14 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button as BaseButton,
   Button,
   createModal,
   Select,
+  Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { Tag } from 'antd';

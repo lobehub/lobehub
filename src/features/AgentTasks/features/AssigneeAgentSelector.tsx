@@ -1,7 +1,8 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { UserRoundX } from 'lucide-react';

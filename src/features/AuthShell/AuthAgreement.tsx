@@ -1,7 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui';
-import { Checkbox, confirmModal } from '@lobehub/ui/base-ui';
+import { Checkbox, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';

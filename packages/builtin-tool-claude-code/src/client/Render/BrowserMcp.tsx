@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinRender, BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Highlighter, Image, PreviewGroup, Text } from '@lobehub/ui';
+import { Block, Flexbox, Highlighter, Image, PreviewGroup } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';

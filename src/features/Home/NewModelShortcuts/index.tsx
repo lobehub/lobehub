@@ -1,6 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { useCallback, useState } from 'react';

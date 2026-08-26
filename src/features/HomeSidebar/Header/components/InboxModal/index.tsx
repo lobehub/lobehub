@@ -1,7 +1,8 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button,
   createModal,
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   ModalHeader,
   ModalTitle,
   Tabs,
+  Text,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';

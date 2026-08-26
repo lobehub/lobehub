@@ -1,5 +1,6 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Block, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, useThemeMode } from 'antd-style';
 import { UserCircle2 } from 'lucide-react';
 import { memo } from 'react';

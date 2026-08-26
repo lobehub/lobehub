@@ -1,5 +1,11 @@
-import { ActionIcon, copyToClipboard, Icon } from '@lobehub/ui';
-import { confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Icon } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  type DropdownItem,
+  DropdownMenu,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { CopyIcon, LinkIcon, MoreHorizontalIcon, TrashIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

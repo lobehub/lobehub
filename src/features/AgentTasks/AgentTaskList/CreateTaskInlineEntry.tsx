@@ -1,8 +1,8 @@
 'use client';
 
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
 import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';

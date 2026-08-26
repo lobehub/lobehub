@@ -1,6 +1,7 @@
 import { CategoryBar, useThemeColorRange } from '@lobehub/charts';
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Avatar, Collapse, Flexbox, Skeleton, Tag } from '@lobehub/ui';
+import { Collapse, Flexbox, Skeleton } from '@lobehub/ui';
+import { Avatar, Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

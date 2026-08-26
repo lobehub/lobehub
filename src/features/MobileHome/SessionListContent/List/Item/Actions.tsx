@@ -1,5 +1,5 @@
-import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import {

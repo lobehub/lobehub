@@ -9,8 +9,8 @@ import {
   KindDot,
   LineStats,
 } from '@lobechat/shared-tool-ui/components';
-import { Center, Flexbox, PatchDiff, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, PatchDiff } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ArrowUpRightIcon, ChevronDownIcon, ChevronRightIcon, FilePenLineIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, useState } from 'react';

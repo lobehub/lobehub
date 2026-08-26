@@ -6,8 +6,8 @@ import {
 } from '@lobechat/const';
 import { type AgentPluginMode, getDisabledPluginIds } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon, Popover, SearchBar, stopPropagation, Tag, Tooltip } from '@lobehub/ui';
-import { confirmModal, Switch } from '@lobehub/ui/base-ui';
+import { Icon, Popover, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Avatar, confirmModal, Switch, Tag } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';

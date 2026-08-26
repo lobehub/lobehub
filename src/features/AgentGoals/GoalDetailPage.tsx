@@ -1,8 +1,8 @@
 'use client';
 
 import type { TaskDetailSubtask, TaskStatus } from '@lobechat/types';
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BotIcon } from 'lucide-react';

@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PencilIcon, SparklesIcon } from 'lucide-react';

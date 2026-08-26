@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
-import { Flexbox, FormItem, Icon, Tag, Text } from '@lobehub/ui';
-import { Button, Switch, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, FormItem, Icon } from '@lobehub/ui';
+import { Button, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { KeyRound, Link2, Wrench } from 'lucide-react';

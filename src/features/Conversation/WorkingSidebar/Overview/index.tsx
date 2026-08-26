@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon, type IconProps, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {

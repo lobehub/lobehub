@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';

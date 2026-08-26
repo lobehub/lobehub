@@ -1,4 +1,5 @@
-import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Center, Empty, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { ClipboardCheckIcon } from 'lucide-react';

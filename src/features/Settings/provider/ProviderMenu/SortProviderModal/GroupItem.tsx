@@ -1,5 +1,6 @@
 import { ProviderIcon } from '@lobehub/icons';
-import { Avatar, Flexbox, SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { type AiProviderListItem } from '@/types/aiProvider';

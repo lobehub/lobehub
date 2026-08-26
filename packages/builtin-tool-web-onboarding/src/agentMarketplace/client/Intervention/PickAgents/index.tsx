@@ -1,8 +1,8 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';

@@ -1,8 +1,8 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
-import { Button, createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button, createModal, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';

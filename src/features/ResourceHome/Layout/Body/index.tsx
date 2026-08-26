@@ -1,4 +1,5 @@
-import { AccordionItem, ActionIcon, Text, Tooltip } from '@lobehub/ui';
+import { AccordionItem, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

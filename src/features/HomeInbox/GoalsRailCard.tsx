@@ -1,5 +1,5 @@
-import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRightIcon, FlagIcon } from 'lucide-react';
 import { memo, useState } from 'react';

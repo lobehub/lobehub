@@ -2,8 +2,8 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { GroupedTopic } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Checkbox, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
@@ -209,7 +209,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       </div>
       <div className={styles.cell}>
         {projectLabel ? (
-          <Tag bordered={false} icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
+          <Tag icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
             {projectLabel}
           </Tag>
         ) : (

@@ -6,8 +6,8 @@ import type {
   CodexRateLimitResetCredit,
 } from '@lobechat/electron-client-ipc';
 import { uuid } from '@lobechat/utils';
-import { Collapse, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Collapse, Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

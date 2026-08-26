@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button, Segmented } from '@lobehub/ui/base-ui';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';

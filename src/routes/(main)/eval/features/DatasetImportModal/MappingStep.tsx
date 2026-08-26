@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Checkbox, Select } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Checkbox, Select, Text } from '@lobehub/ui/base-ui';
 import { Table } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, type ReactNode, useMemo, useState } from 'react';

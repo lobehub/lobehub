@@ -13,8 +13,8 @@ import type {
   VerifyVerdict,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
-import { Block, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
-import { Button, Drawer } from '@lobehub/ui/base-ui';
+import { Block, Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
+import { Button, Drawer, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {

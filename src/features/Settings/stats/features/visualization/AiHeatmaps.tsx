@@ -1,7 +1,7 @@
 import { type HeatmapsProps } from '@lobehub/charts';
 import { Heatmaps } from '@lobehub/charts';
-import { Flexbox, Icon, Tag } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tabs, Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CoinsIcon, FlameIcon, MessageSquareIcon } from 'lucide-react';
 import { memo, useState } from 'react';

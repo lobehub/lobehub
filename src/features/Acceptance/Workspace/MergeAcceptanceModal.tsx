@@ -1,7 +1,13 @@
 'use client';
 
-import { Empty, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, Icon } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { Search, TriangleAlert } from 'lucide-react';

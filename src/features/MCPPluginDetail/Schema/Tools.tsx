@@ -1,4 +1,5 @@
-import { Block, Collapse, Empty, Highlighter, Icon, Markdown, Tag } from '@lobehub/ui';
+import { Block, Collapse, Empty, Highlighter, Icon, Markdown } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CheckIcon, MinusIcon, Wrench } from 'lucide-react';
 import { memo } from 'react';

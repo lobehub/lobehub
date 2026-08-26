@@ -1,8 +1,8 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIconGroup, Block, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { ActionIconGroup, Block, Flexbox, Markdown } from '@lobehub/ui';
+import { Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';

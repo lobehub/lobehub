@@ -2,8 +2,8 @@
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
-import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { createModal, type ModalInstance, Segmented } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
+import { ActionIcon, createModal, type ModalInstance, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';

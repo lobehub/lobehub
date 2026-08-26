@@ -1,5 +1,5 @@
-import { ActionIcon, EditableText, SortableList } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { EditableText, SortableList } from '@lobehub/ui';
+import { ActionIcon, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Eye, EyeOff, PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';

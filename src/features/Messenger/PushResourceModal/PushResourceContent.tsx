@@ -2,13 +2,14 @@
 
 import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import { DEFAULT_OVERSIZE_IMAGE_STRATEGY } from '@lobechat/const';
-import { Block, Flexbox, Input, Text } from '@lobehub/ui';
+import { Block, Flexbox, Input } from '@lobehub/ui';
 import {
   Alert,
   Button,
   ModalFooter,
   Segmented,
   Select,
+  Text,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';

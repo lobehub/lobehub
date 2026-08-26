@@ -1,7 +1,8 @@
 'use client';
 
 import type { BlockProps } from '@lobehub/ui';
-import { ActionIcon, Block, Popover, Text } from '@lobehub/ui';
+import { Block, Popover } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { ReactNode } from 'react';

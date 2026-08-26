@@ -1,6 +1,7 @@
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Skeleton, Text } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Icon, Skeleton } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
 import { memo, useMemo } from 'react';

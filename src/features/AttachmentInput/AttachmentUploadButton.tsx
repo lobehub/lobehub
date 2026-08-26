@@ -1,4 +1,4 @@
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { Paperclip } from 'lucide-react';
 import { memo } from 'react';

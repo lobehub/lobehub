@@ -1,6 +1,6 @@
 import type { VerifyCheckItem } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import {
   Check,

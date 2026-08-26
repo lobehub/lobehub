@@ -1,8 +1,8 @@
 'use client';
 
 import { type FormItemProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Form, Icon, Popover } from '@lobehub/ui';
-import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Icon, Popover } from '@lobehub/ui';
+import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,

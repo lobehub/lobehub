@@ -4,8 +4,8 @@ import {
   buildAgentSkillIdentifier,
   EMPTY_ARRAY,
 } from '@lobechat/const';
-import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';

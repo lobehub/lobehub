@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Grid, SearchBar, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Grid, SearchBar } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { Pagination } from 'antd';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -5,7 +5,8 @@ import {
   AGENT_CHAT_TOPIC_URL,
   DESKTOP_HEADER_ICON_SMALL_SIZE,
 } from '@lobechat/const';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { ArrowLeft, X } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import { memo } from 'react';

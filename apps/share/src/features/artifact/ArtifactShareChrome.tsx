@@ -1,7 +1,7 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useTranslation } from 'react-i18next';
 

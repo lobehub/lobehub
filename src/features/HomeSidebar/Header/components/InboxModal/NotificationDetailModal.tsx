@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Markdown, Text } from '@lobehub/ui';
-import { Button, createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Button, createModal, Text, useModalContext } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

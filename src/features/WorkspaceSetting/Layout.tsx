@@ -1,6 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { type FC, memo } from 'react';
 import { Outlet, useMatch } from 'react-router';
 

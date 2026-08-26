@@ -2,7 +2,7 @@ import type { TopicCommentJson } from '@lobechat/types';
 import type { IEditor, ISlashMenuOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Avatar } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import type { Ref } from 'react';
 import { memo, useCallback, useImperativeHandle, useMemo } from 'react';
 

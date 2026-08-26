@@ -1,7 +1,8 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {

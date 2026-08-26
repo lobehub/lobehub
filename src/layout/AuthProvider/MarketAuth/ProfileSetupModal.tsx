@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
+import { confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { type UploadProps } from 'antd';
 import { Form, Upload } from 'antd';
 import { cssVar } from 'antd-style';

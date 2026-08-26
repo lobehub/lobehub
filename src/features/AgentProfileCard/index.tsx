@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, Center, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton, Tooltip } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 

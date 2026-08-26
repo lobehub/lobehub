@@ -1,6 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AnchorIcon, CircleCheckIcon, CircleXIcon } from 'lucide-react';
 import { memo } from 'react';

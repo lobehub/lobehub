@@ -1,7 +1,8 @@
 'use client';
 
 import type { NotificationMetadata } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BellOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';

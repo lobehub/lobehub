@@ -2,8 +2,8 @@
 
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
 import type { NotificationMetadata } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, ContextMenuTrigger, useModalContext } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Button, ContextMenuTrigger, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';

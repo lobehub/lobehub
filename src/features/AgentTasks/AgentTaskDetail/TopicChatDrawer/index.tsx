@@ -3,8 +3,8 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
-import { confirmModal, FloatingPanel, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, DropdownMenu, Flexbox, Freeze } from '@lobehub/ui';
+import { ActionIcon, confirmModal, FloatingPanel, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   Copy,

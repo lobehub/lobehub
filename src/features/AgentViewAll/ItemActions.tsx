@@ -2,8 +2,8 @@
 
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
-import { ActionIcon, Icon } from '@lobehub/ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { Icon } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui/base-ui';
 import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

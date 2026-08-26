@@ -1,5 +1,5 @@
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
-import { Button, createModal, ScrollArea, useModalContext } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { Button, createModal, ScrollArea, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { useTranslation } from 'react-i18next';
 

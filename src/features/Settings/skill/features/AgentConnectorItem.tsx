@@ -1,7 +1,8 @@
 'use client';
 
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { Avatar, Icon, Tag } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Avatar, Tag } from '@lobehub/ui/base-ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';

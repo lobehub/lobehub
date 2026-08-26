@@ -1,5 +1,6 @@
 import { type DropdownMenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
 import { type FC, useMemo } from 'react';

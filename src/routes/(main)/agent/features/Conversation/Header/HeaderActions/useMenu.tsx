@@ -1,9 +1,8 @@
 'use client';
 
 import type { DropdownItem } from '@lobehub/ui';
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui/base-ui';
 import {
   Clock3Icon,
   Copy,

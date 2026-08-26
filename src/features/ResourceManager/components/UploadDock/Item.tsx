@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { RotateCwIcon, XIcon } from 'lucide-react';
 import { type ReactNode } from 'react';

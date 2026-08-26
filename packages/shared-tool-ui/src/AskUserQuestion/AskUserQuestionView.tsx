@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
-import { Button, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Hotkey, Icon, KeyMapEnum, TextArea } from '@lobehub/ui';
+import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';

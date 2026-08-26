@@ -1,6 +1,6 @@
 'use client';
 
-import { Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -71,7 +71,7 @@ const AgentStatusTag = memo(() => {
   if (loading || !statusConfig) return null;
 
   return (
-    <Tag bordered={false} color={statusConfig.color} style={{ marginRight: 8 }}>
+    <Tag color={statusConfig.color} style={{ marginRight: 8 }}>
       {statusConfig.label}
     </Tag>
   );

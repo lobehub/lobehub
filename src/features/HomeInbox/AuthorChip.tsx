@@ -1,5 +1,6 @@
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AlarmClockIcon } from 'lucide-react';
 import { memo } from 'react';

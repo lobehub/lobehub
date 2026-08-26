@@ -1,6 +1,6 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';

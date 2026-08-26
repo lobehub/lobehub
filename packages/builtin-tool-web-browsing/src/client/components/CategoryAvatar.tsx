@@ -1,4 +1,4 @@
-import { Avatar } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -14,7 +14,7 @@ export const CategoryAvatar = memo<CategoryAvatarProps>(({ category }) => {
   return (
     <Avatar
       alt={category}
-      icon={<IconComponent />}
+      avatar={<IconComponent />}
       style={{
         backgroundColor: 'transparent',
         color: cssVar.colorTextSecondary,

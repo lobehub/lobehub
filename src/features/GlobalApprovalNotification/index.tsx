@@ -1,7 +1,7 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { ChevronUp } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, useEffect, useRef, useState } from 'react';

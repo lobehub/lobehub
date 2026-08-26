@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { Loader2Icon } from 'lucide-react';
 import { type ChangeEvent } from 'react';

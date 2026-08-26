@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Badge } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';

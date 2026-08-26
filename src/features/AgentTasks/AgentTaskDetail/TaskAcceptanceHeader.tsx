@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ShieldCheck } from 'lucide-react';
 import { memo, type ReactNode } from 'react';

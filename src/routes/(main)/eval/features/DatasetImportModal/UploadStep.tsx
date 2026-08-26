@@ -1,7 +1,8 @@
 'use client';
 
 import { type FileUploadState } from '@lobechat/types';
-import { Center, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { Progress, Upload } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CloudUpload, ImportIcon } from 'lucide-react';

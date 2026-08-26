@@ -9,7 +9,7 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { CopyButton, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
@@ -17,6 +17,7 @@ import {
   createModal,
   type ModalInstance,
   ScrollArea,
+  Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { Typography } from 'antd';

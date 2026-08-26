@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, CopyButton, Flexbox, Markdown, ScrollShadow, TooltipGroup } from '@lobehub/ui';
-import { Button } from 'antd';
+import { CopyButton, Flexbox, Markdown, ScrollShadow, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Maximize2, Minimize2, NotebookText, PencilLine } from 'lucide-react';
 import { memo } from 'react';
@@ -111,10 +111,9 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
       {/* Floating expand/collapse button */}
       <Button
         className={styles.expandButton}
-        color={'default'}
         icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         shape={'round'}
-        variant={'outlined'}
+        type={'default'}
         onClick={handleToggle}
       >
         {isExpanded

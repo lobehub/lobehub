@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRightIcon, RefreshCwIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';

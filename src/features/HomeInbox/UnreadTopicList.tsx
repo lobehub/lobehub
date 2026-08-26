@@ -1,8 +1,8 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Icon, stopPropagation, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';

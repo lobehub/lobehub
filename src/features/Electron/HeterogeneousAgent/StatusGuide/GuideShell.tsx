@@ -1,4 +1,5 @@
-import { ActionIcon, Avatar, Block, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Block, Flexbox, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -45,7 +46,6 @@ const GuideShell = ({
             <Avatar
               avatar={icon}
               background={cssVar.colorFillQuaternary}
-              gap={compact ? 8 : 12}
               shape={'square'}
               size={compact ? 32 : 48}
             />

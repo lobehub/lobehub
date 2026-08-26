@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, DraggablePanel, Flexbox } from '@lobehub/ui';
-import { Drawer } from '@lobehub/ui/base-ui';
+import { DraggablePanel, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { PanelRightOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';

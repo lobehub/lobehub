@@ -1,6 +1,6 @@
 'use client';
 
-import { Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -73,11 +73,7 @@ const GroupStatusTag = memo(() => {
 
   if (loading || !statusConfig) return null;
 
-  return (
-    <Tag bordered={false} color={statusConfig.color}>
-      {statusConfig.label}
-    </Tag>
-  );
+  return <Tag color={statusConfig.color}>{statusConfig.label}</Tag>;
 });
 
 GroupStatusTag.displayName = 'GroupStatusTag';

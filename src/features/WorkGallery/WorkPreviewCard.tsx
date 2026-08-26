@@ -2,7 +2,8 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { formatTokenNumber } from '@lobechat/utils/format';
-import { Avatar, Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
 import { memo } from 'react';

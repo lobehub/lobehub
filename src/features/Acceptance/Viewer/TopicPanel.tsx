@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ArrowLeft, MessagesSquare, PanelRightClose } from 'lucide-react';
 import { memo } from 'react';
