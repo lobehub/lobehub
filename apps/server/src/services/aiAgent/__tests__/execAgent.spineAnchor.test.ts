@@ -203,6 +203,7 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     expect(mockGetLatestNonToolMessageId).not.toHaveBeenCalled();
     expect(mockTryReserve).toHaveBeenCalledWith('topic-1', expect.stringMatching(/^agent-start-/), {
       allowRunningOperationId: undefined,
+      allowSameReservationReentry: true,
       ignoreRunningOperation: undefined,
       replacesOperationId: undefined,
     });

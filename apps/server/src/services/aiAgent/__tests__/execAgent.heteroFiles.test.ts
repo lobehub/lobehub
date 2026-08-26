@@ -1075,6 +1075,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
       expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', expect.any(String), {
         allowRunningOperationId: 'parent-operation',
+        allowSameReservationReentry: true,
         ignoreRunningOperation: undefined,
         replacesOperationId: undefined,
       });
