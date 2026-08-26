@@ -1000,63 +1000,20 @@ describe('userRouter', () => {
   });
 
   describe('updateToolIntervention', () => {
-    it('merges approvalMode into the stored tool column, preserving sibling keys', async () => {
-      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      const getUserSettings = vi.fn().mockResolvedValue({
-        tool: {
-          humanIntervention: { allowList: ['bash/bash'], approvalMode: 'manual' },
-          uninstalledBuiltinTools: ['dalle'],
-        },
-      });
-
-      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
+    it('delegates to the atomic model merge with the raw input', async () => {
+      const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(() => ({ mergeToolInterventionSetting }) as any);
 
       await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
+        appendAllowList: ['bash/bash'],
         approvalMode: 'auto-run',
       });
 
-      expect(updateSetting).toHaveBeenCalledWith({
-        tool: {
-          humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' },
-          uninstalledBuiltinTools: ['dalle'],
-        },
-      });
-    });
-
-    it('unions appendAllowList with the stored list, preserving approvalMode', async () => {
-      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      const getUserSettings = vi.fn().mockResolvedValue({
-        tool: { humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' } },
-      });
-
-      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
-
-      await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
-        appendAllowList: ['bash/bash', 'search/search'],
-      });
-
-      expect(updateSetting).toHaveBeenCalledWith({
-        tool: {
-          humanIntervention: {
-            allowList: ['bash/bash', 'search/search'],
-            approvalMode: 'auto-run',
-          },
-        },
-      });
-    });
-
-    it('works when no settings row exists yet', async () => {
-      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      const getUserSettings = vi.fn().mockResolvedValue(undefined);
-
-      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
-
-      await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
-        approvalMode: 'allow-list',
-      });
-
-      expect(updateSetting).toHaveBeenCalledWith({
-        tool: { humanIntervention: { approvalMode: 'allow-list' } },
+      // Merge semantics (sibling-key preservation, allowList union, concurrency)
+      // are covered by the UserModel integration tests against a real database.
+      expect(mergeToolInterventionSetting).toHaveBeenCalledWith({
+        appendAllowList: ['bash/bash'],
+        approvalMode: 'auto-run',
       });
     });
 
@@ -1079,17 +1036,14 @@ describe('userRouter', () => {
         () => ({ hasAnyPermission: vi.fn().mockResolvedValue(true) }) as any,
       );
 
-      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      const getUserSettings = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
+      const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(() => ({ mergeToolInterventionSetting }) as any);
 
       await userRouter
         .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
         .updateToolIntervention({ approvalMode: 'auto-run' });
 
-      expect(updateSetting).toHaveBeenCalledWith({
-        tool: { humanIntervention: { approvalMode: 'auto-run' } },
-      });
+      expect(mergeToolInterventionSetting).toHaveBeenCalledWith({ approvalMode: 'auto-run' });
     });
   });
 });

@@ -17,10 +17,8 @@ import type {
   ReviseOnboardingUnderstandingInput,
   StartOnboardingUnderstandingInput,
   UserInitializationState,
-  UserInterventionConfig,
   UserPreference,
   UserSettings,
-  UserToolConfig,
 } from '@lobechat/types';
 import {
   MAX_COLLECTION_COUNT,
@@ -933,29 +931,12 @@ export const userRouter = router({
         }
       }
 
-      // Read-merge-write on the server: each browser tab fetches user state once
-      // and can hold hours-stale settings, so a whole-column `tool` replace built
-      // from client memory clobbers changes made from other tabs (e.g. reverts
-      // approvalMode). Merging against the DB row keeps sibling keys intact.
-      const settings = await ctx.userModel.getUserSettings();
-      const currentTool = (settings?.tool ?? {}) as UserToolConfig;
-      const currentIntervention: Partial<UserInterventionConfig> =
-        currentTool.humanIntervention ?? {};
-
-      const nextAllowList = input.appendAllowList
-        ? [...new Set([...(currentIntervention.allowList ?? []), ...input.appendAllowList])]
-        : currentIntervention.allowList;
-
-      const nextTool: UserToolConfig = {
-        ...currentTool,
-        humanIntervention: {
-          ...currentIntervention,
-          ...(input.approvalMode ? { approvalMode: input.approvalMode } : {}),
-          ...(nextAllowList ? { allowList: nextAllowList } : {}),
-        } as UserInterventionConfig,
-      };
-
-      return ctx.userModel.updateSetting({ tool: nextTool });
+      // Server-side merge on the `tool` column: each browser tab fetches user
+      // state once and can hold hours-stale settings, so a whole-column `tool`
+      // replace built from client memory clobbers changes made from other tabs
+      // (e.g. reverts approvalMode). The model merges atomically in one SQL
+      // statement, so even two concurrent calls cannot drop each other's change.
+      return ctx.userModel.mergeToolInterventionSetting(input);
     }),
 
   updateUsername: userProcedure.input(usernameSchema).mutation(async ({ ctx, input }) => {
