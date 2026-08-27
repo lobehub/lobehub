@@ -52,6 +52,8 @@ export interface GoalNodeView {
   dependsOn: string[];
   /** Findings produced by this Work. */
   findings: GoalGraphNode[];
+  /** Decision only: the Work this gate was opened for — its ledger is the case. */
+  gateSubjectId?: string;
   /** Decisions on this node a human already resolved. */
   humanTouches: GoalGraphDecision[];
   /** Active for longer than the lease window with no update — the coordinator would reclaim it. */
@@ -94,34 +96,82 @@ const leaseTimeoutMs = (goal: GoalItem) =>
   goal.config?.recovery?.operationLeaseTimeoutMs ?? DEFAULT_LEASE_TIMEOUT_MS;
 
 /**
- * Attempt ledger from the audit trail: every `activated` event opens an attempt
- * and the next lifecycle event on the same node closes it. There is no cost or
- * duration column per attempt, so neither is reported.
+ * Attempt ledger from the audit trail.
+ *
+ * Only `activated` opens an attempt, and only a *boundary* closes it: the next
+ * `activated` (the coordinator started another attempt, so this one did not
+ * succeed) or a terminal lifecycle event. `updated` is deliberately not a
+ * boundary — the model writes it for bookkeeping too ("Attached Work version
+ * …"), so treating it as an outcome ends every attempt one event too early and
+ * leaves a live attempt looking finished. Its reason is still the best
+ * description of why an attempt ended, so the last one before the boundary is
+ * carried onto the attempt.
+ *
+ * There is no cost or duration per attempt anywhere, so neither is reported.
  */
-const buildAttempts = (nodeId: string, events: GoalGraphEvent[]): GoalAttempt[] => {
-  const own = events.filter((e) => e.entityType === 'node' && e.entityId === nodeId);
+const buildAttempts = (node: GoalGraphNode, events: GoalGraphEvent[]): GoalAttempt[] => {
+  const own = events.filter((e) => e.entityType === 'node' && e.entityId === node.id);
   const attempts: GoalAttempt[] = [];
-  for (const event of own) {
-    if (event.eventType === 'activated') {
-      attempts.push({
-        index: attempts.length + 1,
-        outcome: 'running',
-        startedAt: event.createdAt,
-        taskId: event.taskId ?? undefined,
-      });
-      continue;
-    }
+  let pendingReason: string | undefined;
+
+  const close = (
+    outcome: Exclude<GoalAttemptOutcome, 'running'>,
+    event: GoalGraphEvent,
+    reason?: string,
+  ) => {
     const open = attempts.at(-1);
-    if (!open || open.outcome !== 'running') continue;
-    if (event.eventType === 'resolved') open.outcome = 'passed';
-    else if (event.eventType === 'retired' || event.eventType === 'rejected')
-      open.outcome = 'retired';
-    else if (event.eventType === 'updated') open.outcome = 'failed';
-    else continue;
+    if (!open || open.outcome !== 'running') return;
     open.endedAt = event.createdAt;
-    open.reason = event.reason ?? undefined;
+    open.outcome = outcome;
+    open.reason = reason;
     open.taskId = open.taskId ?? event.taskId ?? undefined;
+  };
+
+  for (const event of own) {
+    switch (event.eventType) {
+      case 'activated': {
+        // A new attempt starting means the previous one did not deliver. Its
+        // reason is the last `updated` note, not this event's — that one is the
+        // instruction the human attached to the *new* attempt.
+        close('failed', event, pendingReason);
+        attempts.push({
+          index: attempts.length + 1,
+          outcome: 'running',
+          startedAt: event.createdAt,
+          taskId: event.taskId ?? undefined,
+        });
+        pendingReason = event.reason ?? undefined;
+        break;
+      }
+      case 'rejected':
+      case 'retired': {
+        close('retired', event, event.reason ?? pendingReason);
+        break;
+      }
+      case 'resolved': {
+        close('passed', event, event.reason ?? pendingReason);
+        break;
+      }
+      case 'updated': {
+        if (event.reason) pendingReason = event.reason;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
   }
+
+  // A Work parked at a decision gate leaves its last attempt open: the gate is
+  // written as `updated`, which is not a boundary. Only an `active` node is
+  // still trying, so close the attempt against the node's own state.
+  const open = attempts.at(-1);
+  if (open?.outcome === 'running' && node.status !== 'active') {
+    open.endedAt = node.updatedAt;
+    open.outcome = node.status === 'resolved' ? 'passed' : 'failed';
+    open.reason = pendingReason;
+  }
+
   return attempts;
 };
 
@@ -135,6 +185,7 @@ export const buildGoalGraphView = (
 
   const dependsOn = new Map<string, string[]>();
   const producesByWork = new Map<string, GoalGraphNode[]>();
+  const gateSubject = new Map<string, string>();
   const producedByFinding = new Map<string, GoalGraphNode>();
   const supportsByFinding = new Map<string, GoalGraphNode[]>();
   for (const edge of edges) {
@@ -147,6 +198,9 @@ export const buildGoalGraphView = (
       producesByWork.set(source.id, [...(producesByWork.get(source.id) ?? []), target]);
       producedByFinding.set(target.id, source);
     }
+    // The coordinator links the failed Work to the gate it opened with `leads_to`.
+    if (edge.kind === 'leads_to' && target.kind === 'decision')
+      gateSubject.set(target.id, source.id);
     if (edge.kind === 'supports')
       supportsByFinding.set(source.id, [...(supportsByFinding.get(source.id) ?? []), target]);
   }
@@ -165,7 +219,7 @@ export const buildGoalGraphView = (
   let seq = 0;
   const views: GoalNodeView[] = nodes.map((node) => {
     const nodeDecisions = decisionsByNode.get(node.id) ?? [];
-    const attempts = buildAttempts(node.id, events);
+    const attempts = buildAttempts(node, events);
     const open = attempts.at(-1);
     const isRunningAttempt = node.status === 'active' && open?.outcome === 'running';
     return {
@@ -178,6 +232,7 @@ export const buildGoalGraphView = (
       decision: nodeDecisions.find((d) => d.status === 'pending'),
       dependsOn: dependsOn.get(node.id) ?? [],
       findings: producesByWork.get(node.id) ?? [],
+      gateSubjectId: gateSubject.get(node.id),
       humanTouches: nodeDecisions.filter((d) => d.status === 'resolved' && !!d.resolvedByUserId),
       isStale:
         node.kind === 'work' && node.status === 'active' && now - node.updatedAt.getTime() > lease,

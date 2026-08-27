@@ -121,9 +121,9 @@ describe('buildGoalGraphView', () => {
       snapshot({
         events: [
           event('w1', 'activated', 5),
-          event('w1', 'updated', 20, 'Delivery did not pass verification.'),
-          event('w1', 'activated', 25),
-          event('w1', 'resolved', 40),
+          event('w1', 'updated', 20, 'Work attempt budget was exhausted'),
+          event('w1', 'activated', 25, 'retry with the missing directory created first'),
+          event('w1', 'resolved', 40, 'Responsible task completed'),
         ],
         nodes: [node('w1', { resolvedAt: at(40), status: 'resolved', updatedAt: at(40) })],
       }),
@@ -131,9 +131,29 @@ describe('buildGoalGraphView', () => {
     );
 
     expect(view.byId.w1.attempts).toMatchObject([
-      { index: 1, outcome: 'failed', reason: 'Delivery did not pass verification.' },
-      { index: 2, outcome: 'passed' },
+      { index: 1, outcome: 'failed', reason: 'Work attempt budget was exhausted' },
+      { index: 2, outcome: 'passed', reason: 'Responsible task completed' },
     ]);
+  });
+
+  it('does not let a bookkeeping `updated` event close a live attempt', () => {
+    // The graph model writes `updated` for housekeeping too ("Attached Work
+    // version …"). Treating it as an outcome ended the running attempt one
+    // event early, which dropped the frontier row's live clock.
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'activated', 115),
+          event('w1', 'updated', 115, 'Attached Work version 704ace21'),
+        ],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.attempts).toMatchObject([{ index: 1, outcome: 'running' }]);
+    expect(view.byId.w1.startedAt).toEqual(at(115));
+    expect(view.frontier[0]).toMatchObject({ kind: 'running' });
   });
 
   it('marks an active work stale once it outlives the operation lease', () => {
@@ -161,6 +181,27 @@ describe('buildGoalGraphView', () => {
 
     expect(view.frontier[0]).toMatchObject({ kind: 'running', rank: 1 });
     expect(view.byId.w1.startedAt).toEqual(at(115));
+  });
+
+  it('closes the parked attempt of a Work waiting at a gate', () => {
+    // The gate is written as an `updated` event, which is not an attempt
+    // boundary — without the node-state fallback the parked Work kept
+    // reporting a running attempt, and the gate case read as still executing.
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'activated', 5),
+          event('w1', 'updated', 40, 'Work attempt budget was exhausted'),
+        ],
+        nodes: [node('w1', { status: 'waiting', taskId: 'task-1', updatedAt: at(40) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.attempts).toMatchObject([
+      { endedAt: at(40), index: 1, outcome: 'failed', reason: 'Work attempt budget was exhausted' },
+    ]);
+    expect(view.byId.w1.startedAt).toBeUndefined();
   });
 
   it('surfaces a pending gate and hides the waiting work it was opened for', () => {
@@ -200,6 +241,8 @@ describe('buildGoalGraphView', () => {
 
     expect(view.frontier.map((item) => [item.view.node.id, item.kind])).toEqual([['d1', 'gate']]);
     expect(view.byId.d1.decision?.id).toBe('dec-1');
+    // The gate's case is the failed Work's ledger, not the decision node's own.
+    expect(view.byId.d1.gateSubjectId).toBe('w1');
   });
 
   it('links a finding to the work that produced it and the problem it answers', () => {
