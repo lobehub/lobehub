@@ -4,6 +4,7 @@ export {
   generateArtworkImage,
   type GenerateArtworkImageOptions,
 } from './generateArtworkImage';
+export { resolveArtworkReferenceImageUrl } from './referenceImages';
 export { selectAgentArtworkModel } from './selectModel';
 export { cutOutFullBodyArtwork } from './transparentFullBody';
 export {

@@ -9,7 +9,10 @@ import { useTranslation } from 'react-i18next';
 import { resolveAgentBackground } from '@/features/AgentProfileArtwork/utils';
 import { ArtworkStudioContent, styleReferencesForArtworkStyle } from '@/features/ArtworkStudio';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { cutOutFullBodyArtwork } from '@/services/artworkGeneration';
+import {
+  cutOutFullBodyArtwork,
+  resolveArtworkReferenceImageUrl,
+} from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -98,7 +101,10 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
         kind: 'avatar',
         name: meta.name,
         direction,
-        referenceImageUrl: resolveAgentBackground(meta.backgroundColor),
+        referenceImageUrl: resolveArtworkReferenceImageUrl(
+          resolveAgentBackground(meta.backgroundColor),
+          appOrigin,
+        ),
         style: nextStyle,
         styleReferenceImageUrls: customReference
           ? [customReference]
@@ -112,7 +118,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       try {
         const result = await generateCharacterSet({
           composition,
-          currentAvatarUrl: meta.avatar,
+          currentAvatarUrl: resolveArtworkReferenceImageUrl(meta.avatar, appOrigin),
           generate: generateAgentArtwork,
           input: commonInput,
         });

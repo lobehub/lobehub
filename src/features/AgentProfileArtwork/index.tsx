@@ -27,6 +27,7 @@ import {
   styleReferencesForArtworkStyle,
 } from '@/features/AgentArtworkStudio';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { resolveArtworkReferenceImageUrl } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -281,7 +282,10 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             id: agentId,
             kind,
             name,
-            referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
+            referenceImageUrl: resolveArtworkReferenceImageUrl(
+              kind === 'background' ? avatar : backgroundUrl,
+              appOrigin,
+            ),
             style,
             styleReferenceImageUrls: styleReferencesForArtworkStyle(style, appOrigin),
             systemRole,
