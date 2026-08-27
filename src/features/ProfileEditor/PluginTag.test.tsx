@@ -32,15 +32,18 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/hooks/useIsDark', () => ({ useIsDark: () => false }));
 
-vi.mock('antd-style', () => ({
-  createGlobalStyle: () => () => null,
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({}),
   cssVar: new Proxy({}, { get: () => 'var(--x)' }),
-  keyframes: () => 'keyframes',
 }));
 vi.mock('@lobehub/const', () => ({ COMPOSIO_APP_TYPES: [], LOBEHUB_SKILL_PROVIDERS: [] }));
 vi.mock('@lobehub/ui/icons', () => ({ McpIcon: () => null }));
 vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+}));
 vi.mock('@lobehub/ui', () => ({
   Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -51,10 +54,6 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </div>
   ),
-}));
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-  Tag: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 // Run selectors against controlled state (the mocked selectors ignore state).

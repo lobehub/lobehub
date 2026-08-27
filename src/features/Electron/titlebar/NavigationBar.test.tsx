@@ -34,14 +34,9 @@ vi.mock('@lobehub/ui', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ icon: _icon, ...props }: Record<string, unknown>) => <button {...props} />,
-}));
-
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({ clock: 'clock' }),
-  cssVar: {},
-  keyframes: () => 'keyframes',
 }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));

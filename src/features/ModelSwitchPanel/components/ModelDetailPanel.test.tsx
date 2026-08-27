@@ -10,8 +10,8 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import ModelDetailPanel from './ModelDetailPanel';
 
-vi.mock('antd-style', () => ({
-  createGlobalStyle: () => () => null,
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({
     actionText: 'actionText',
     container: 'container',
@@ -23,14 +23,6 @@ vi.mock('antd-style', () => ({
     titleText: 'titleText',
   }),
   cssVar: new Proxy({}, { get: (_, token) => `var(--${String(token)})` }),
-  keyframes: () => 'keyframes',
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
-  Text: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-    <span className={className}>{children}</span>
-  ),
 }));
 
 // recharts needs a measured container — stub the chart with its data flattened to text nodes

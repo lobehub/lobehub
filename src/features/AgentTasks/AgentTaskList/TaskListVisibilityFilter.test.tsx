@@ -33,14 +33,9 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="menu-extra-icon" />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: () => <span>Visibility</span>,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({}),
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   cssVar: { colorTextSecondary: '#666' },
-  keyframes: () => 'keyframes',
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({

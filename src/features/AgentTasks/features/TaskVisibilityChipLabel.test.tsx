@@ -13,17 +13,12 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({}),
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   cssVar: {
     colorTextDescription: '#999',
     colorTextSecondary: '#666',
   },
-  keyframes: () => 'keyframes',
 }));
 
 vi.mock('react-i18next', () => ({
