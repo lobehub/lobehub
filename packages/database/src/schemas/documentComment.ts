@@ -1,7 +1,6 @@
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { documents } from './file';
 import { users } from './user';
@@ -15,17 +14,14 @@ import { workspaces } from './workspace';
 export const documentComments = pgTable(
   'document_comments',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => idGenerator('documentComments'))
-      .notNull(),
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     documentId: text('document_id')
       .references(() => documents.id, { onDelete: 'cascade' })
       .notNull(),
     /** Thread root. Every reply in a thread points directly to the root. */
-    parentCommentId: text('parent_comment_id').references((): AnyPgColumn => documentComments.id),
+    parentCommentId: uuid('parent_comment_id').references((): AnyPgColumn => documentComments.id),
     /** Direct reply target when replying to another reply; null for roots and direct replies. */
-    replyToCommentId: text('reply_to_comment_id').references(
+    replyToCommentId: uuid('reply_to_comment_id').references(
       (): AnyPgColumn => documentComments.id,
       { onDelete: 'set null' },
     ),
@@ -73,7 +69,7 @@ export const documentCommentMentions = pgTable(
   'document_comment_mentions',
   {
     id: uuid('id').defaultRandom().notNull().primaryKey(),
-    commentId: text('comment_id')
+    commentId: uuid('comment_id')
       .references(() => documentComments.id, { onDelete: 'cascade' })
       .notNull(),
     mentionedUserId: text('mentioned_user_id')
