@@ -1,6 +1,6 @@
 import type { BuiltinManifestResolver } from '@lobechat/types';
 
-import { LocalSystemManifest, READ_FILE_DESCRIPTION } from './manifest';
+import { IMAGE_CAPABLE_READ_FILE_DESCRIPTION, LocalSystemManifest } from './manifest';
 import { systemPrompt as desktopSystemPrompt } from './systemRole.desktop';
 import { LocalSystemApiName } from './types';
 
@@ -10,11 +10,7 @@ import { LocalSystemApiName } from './types';
  * manifest must not instruct the model to call an unsupported capability.
  */
 export const resolveLocalSystemManifest: BuiltinManifestResolver = (context) => {
-  if (context.executionEnv === 'local') {
-    return { ...LocalSystemManifest, systemRole: desktopSystemPrompt };
-  }
-
-  if (context.executionEnv !== 'device' && context.executionEnv !== 'device-unrouted') {
+  if (context.executionEnv !== 'local') {
     return LocalSystemManifest;
   }
 
@@ -22,8 +18,9 @@ export const resolveLocalSystemManifest: BuiltinManifestResolver = (context) => 
     ...LocalSystemManifest,
     api: LocalSystemManifest.api.map((api) =>
       api.name === LocalSystemApiName.readFile
-        ? { ...api, description: READ_FILE_DESCRIPTION }
+        ? { ...api, description: IMAGE_CAPABLE_READ_FILE_DESCRIPTION }
         : api,
     ),
+    systemRole: desktopSystemPrompt,
   };
 };

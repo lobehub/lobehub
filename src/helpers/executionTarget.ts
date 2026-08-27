@@ -326,6 +326,18 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
     | { kind: 'sandbox' }
   );
 
+export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
+
+/**
+ * Preserve the desktop-local capability signal after the server resolves that
+ * target to a registered device. Unrouted local targets keep their plan kind so
+ * manifests continue to describe the sandbox degradation instead.
+ */
+export const executionPlanToManifestExecutionEnv = (
+  plan: ExecutionPlan,
+): ExecutionManifestEnvironment =>
+  plan.kind === 'device' && plan.target === 'local' ? 'local' : plan.kind;
+
 /** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
 export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
   plan.kind === 'device' || plan.kind === 'device-unrouted';

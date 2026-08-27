@@ -1132,6 +1132,52 @@ describe('createRouterRuntime', () => {
       );
     });
 
+    it('should not label retryable failures as terminal image decoding errors', async () => {
+      const retryableError = {
+        error: {
+          message: 'Rate limit exceeded while unable to process input image',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: 'test',
+        status: 429,
+      };
+      const mockChatFail = vi.fn().mockRejectedValue(retryableError);
+      const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt,
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gemini-vision'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gemini-vision', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(retryableError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(2);
+      expect(onRouteAttempt).toHaveBeenCalledTimes(2);
+      expect(onRouteAttempt).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          nonRetryable: false,
+          nonRetryableReason: undefined,
+          success: false,
+        }),
+      );
+    });
+
     it('should not retry when the response_format schema is invalid', async () => {
       const invalidSchemaError = {
         errorType: AgentRuntimeErrorType.ProviderBizError,

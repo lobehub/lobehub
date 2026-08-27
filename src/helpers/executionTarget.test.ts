@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type ExecutionPlan,
+  executionPlanToManifestExecutionEnv,
   executionTargetToRuntimeMode,
   isDeviceLockedPlan,
   isHeterogeneousSandboxExecutionAvailable,
@@ -425,6 +426,39 @@ describe('executionTargetToRuntimeMode', () => {
     expect(executionTargetToRuntimeMode('sandbox')).toBe('cloud');
     expect(executionTargetToRuntimeMode('device')).toBe('none');
     expect(executionTargetToRuntimeMode('none')).toBe('none');
+  });
+});
+
+describe('executionPlanToManifestExecutionEnv', () => {
+  it('preserves the image-capable desktop target only after it is routed', () => {
+    expect(
+      executionPlanToManifestExecutionEnv({
+        deviceId: 'desktop-device',
+        kind: 'device',
+        target: 'local',
+      }),
+    ).toBe('local');
+    expect(
+      executionPlanToManifestExecutionEnv({
+        kind: 'device-unrouted',
+        reason: 'no-online-device',
+        target: 'local',
+      }),
+    ).toBe('device-unrouted');
+  });
+
+  it('keeps non-local plan kinds unchanged', () => {
+    expect(
+      executionPlanToManifestExecutionEnv({
+        deviceId: 'remote-device',
+        kind: 'device',
+        target: 'device',
+      }),
+    ).toBe('device');
+    expect(executionPlanToManifestExecutionEnv({ kind: 'sandbox', target: 'sandbox' })).toBe(
+      'sandbox',
+    );
+    expect(executionPlanToManifestExecutionEnv({ kind: 'none', target: 'none' })).toBe('none');
   });
 });
 

@@ -305,9 +305,9 @@ export interface BuiltinToolResolveContext {
     unsupportedMessageApis?: string[];
   };
   /**
-   * Where this run executes, mirroring the resolved `ExecutionPlan.kind`
-   * (`device` / `device-unrouted` / `sandbox` / `none`) plus `local` for the
-   * desktop in-process engine. Lets exec-capable tools (e.g. lobe-skills)
+   * Where this run executes, derived from the resolved `ExecutionPlan`. The
+   * routed desktop-local target stays `local`; other plans mirror their `kind`
+   * (`device` / `device-unrouted` / `sandbox` / `none`). Lets exec-capable tools (e.g. lobe-skills)
    * rewrite their API descriptions per environment — most notably
    * `device-unrouted`, where the user picked their local device but it is
    * offline and commands silently fall back to the cloud sandbox. Kept as a

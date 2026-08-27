@@ -760,9 +760,10 @@ export const createRouterRuntime = ({
           }
 
           const nonRetryable = isNonRetryableRequestError(error);
-          const nonRetryableReason = isImageDecodingRequestError(error)
-            ? ('imageDecode' as const)
-            : undefined;
+          const nonRetryableReason =
+            nonRetryable && isImageDecodingRequestError(error)
+              ? ('imageDecode' as const)
+              : undefined;
 
           params
             .onRouteAttempt?.({
