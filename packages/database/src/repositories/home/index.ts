@@ -101,6 +101,7 @@ export class HomeRepository {
       .where(
         and(
           buildWorkspaceWhere(this.scope, {
+            isDeleted: agents.isDeleted,
             userId: agents.userId,
             workspaceId: agents.workspaceId,
             visibility: agents.visibility,
@@ -127,6 +128,7 @@ export class HomeRepository {
       .from(chatGroups)
       .where(
         buildWorkspaceWhere(this.scope, {
+          isDeleted: chatGroups.isDeleted,
           userId: chatGroups.userId,
           workspaceId: chatGroups.workspaceId,
           visibility: chatGroups.visibility,
@@ -170,6 +172,7 @@ export class HomeRepository {
           .from(sessionGroups)
           .where(
             buildWorkspaceWhere(this.scope, {
+              isDeleted: sessionGroups.isDeleted,
               userId: sessionGroups.userId,
               workspaceId: sessionGroups.workspaceId,
               visibility: sessionGroups.visibility,

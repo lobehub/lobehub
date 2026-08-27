@@ -48,6 +48,7 @@ import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -2186,6 +2187,7 @@ export class TopicModel {
       .where(
         and(
           eq(topics.status, 'scheduled'),
+          notTrashed(topics.isDeleted),
           or(
             // `''` is the absent-runAt sentinel, and it never satisfies this pair —
             // an absent gate must not read as "due now", which is what keeps a

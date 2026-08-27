@@ -81,7 +81,12 @@ export const workOwnership = (ctx: WorkContext) =>
 export const taskOwnership = (ctx: WorkContext) =>
   buildWorkspaceWhere(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    { userId: tasks.createdByUserId, visibility: tasks.visibility, workspaceId: tasks.workspaceId },
+    {
+      isDeleted: tasks.isDeleted,
+      userId: tasks.createdByUserId,
+      visibility: tasks.visibility,
+      workspaceId: tasks.workspaceId,
+    },
   );
 
 export const documentOwnership = (ctx: WorkContext) =>

@@ -697,6 +697,77 @@ describe('SessionModel', () => {
     });
   });
 
+  describe('recycle-bin gate (linked agent trashed)', () => {
+    const seedTrashedShell = async () => {
+      // A shell whose agent sits in the recycle bin: the agent is the
+      // restorable unit, so the session must vanish from every legacy read
+      // and write until the agent comes back.
+      await serverDB.insert(sessions).values([
+        { id: 'trashed-shell', slug: 'trashed-shell', userId },
+        { id: 'live-shell', userId },
+      ]);
+      await serverDB.insert(agents).values([
+        { deletedAt: new Date(), id: 'trashed-agent', isDeleted: true, userId },
+        { id: 'live-agent', userId },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'trashed-agent', sessionId: 'trashed-shell', userId },
+        { agentId: 'live-agent', sessionId: 'live-shell', userId },
+      ]);
+      await serverDB
+        .insert(topics)
+        .values({ id: 'recoverable', sessionId: 'trashed-shell', userId });
+    };
+
+    it('hides the shell from list, lookup and count', async () => {
+      await seedTrashedShell();
+      expect((await sessionModel.query()).map((s) => s.id)).toEqual(['live-shell']);
+      expect(await sessionModel.findByIdOrSlug('trashed-shell')).toBeUndefined();
+      expect(await sessionModel.findByIdOrSlug('live-shell')).toBeTruthy();
+      expect(await sessionModel.count()).toBe(1);
+    });
+
+    it('turns delete / batchDelete / update into no-ops so the recoverable topics survive', async () => {
+      await seedTrashedShell();
+
+      const single = await sessionModel.delete('trashed-shell');
+      expect(single.orphanedAgentIds).toEqual([]);
+      const batch = await sessionModel.batchDelete(['trashed-shell', 'live-shell']);
+      expect(batch.orphanedAgentIds).toEqual(['live-agent']);
+      await sessionModel.update('trashed-shell', { title: 'renamed' });
+
+      const [shell] = await serverDB
+        .select()
+        .from(sessions)
+        .where(eq(sessions.id, 'trashed-shell'));
+      expect(shell).toBeTruthy();
+      expect(shell.title).toBeNull();
+      // the link and the topics behind it are untouched — restoring the agent brings everything back
+      expect(
+        await serverDB
+          .select()
+          .from(agentsToSessions)
+          .where(eq(agentsToSessions.sessionId, 'trashed-shell')),
+      ).toHaveLength(1);
+      expect(await serverDB.select().from(topics).where(eq(topics.id, 'recoverable'))).toHaveLength(
+        1,
+      );
+      expect(
+        await serverDB.select().from(sessions).where(eq(sessions.id, 'live-shell')),
+      ).toHaveLength(0);
+    });
+
+    it('deleteAll leaves the hidden shell in place', async () => {
+      await seedTrashedShell();
+      await sessionModel.deleteAll();
+      const remaining = await serverDB.select().from(sessions).where(eq(sessions.userId, userId));
+      expect(remaining.map((s) => s.id)).toEqual(['trashed-shell']);
+      expect(await serverDB.select().from(topics).where(eq(topics.id, 'recoverable'))).toHaveLength(
+        1,
+      );
+    });
+  });
+
   describe('batchDelete', () => {
     it('should handle deleting sessions with no associated messages or topics', async () => {
       // Create test data

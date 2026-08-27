@@ -38,7 +38,12 @@ export class AgentLabelModel {
   private agentOwnership = () =>
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
-      { userId: agents.userId, workspaceId: agents.workspaceId, visibility: agents.visibility },
+      {
+        isDeleted: agents.isDeleted,
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+        visibility: agents.visibility,
+      },
     );
 
   query = async (): Promise<AgentLabelWithUsage[]> => {

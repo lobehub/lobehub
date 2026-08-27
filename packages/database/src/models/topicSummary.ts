@@ -21,6 +21,7 @@ import {
 
 import { messages, topics, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 
 export interface TopicSummaryCandidateCursor {
   id: string;
@@ -51,6 +52,8 @@ export const topicSummaryEligibleMessage = and(
   isNotNull(messages.content),
   ne(messages.content, ''),
   inArray(messages.role, ['assistant', 'user']),
+  // A message sitting in the recycle bin must neither feed nor date the summary.
+  notTrashed(messages.isDeleted),
 );
 
 const getAutoSummaryWatermark = () =>
@@ -93,6 +96,10 @@ export class TopicSummaryModel {
       .where(
         and(
           gte(topics.createdAt, topicCreatedAfter),
+          // System-scoped read — no `buildWorkspaceWhere` funnel here, so the
+          // recycle-bin gate is spelled out: never spend an LLM call on a
+          // trashed topic.
+          notTrashed(topics.isDeleted),
           topicSummaryEligibleMessage,
           or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
           or(isNull(topics.status), notInArray(topics.status, ['running', 'scheduled'])),
@@ -160,7 +167,15 @@ export class TopicSummaryModel {
         metadata: mergeAutoSummaryMetadata(marker),
         updatedAt: new Date(),
       })
-      .where(and(eq(topics.id, input.topicId), exists(snapshotMessage), notExists(newerMessage)))
+      .where(
+        and(
+          eq(topics.id, input.topicId),
+          // Trashed between candidate selection and commit → leave it alone.
+          notTrashed(topics.isDeleted),
+          exists(snapshotMessage),
+          notExists(newerMessage),
+        ),
+      )
       .returning({ id: topics.id });
 
     return rows.length > 0;

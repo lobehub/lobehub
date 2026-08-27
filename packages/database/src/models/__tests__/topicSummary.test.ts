@@ -233,4 +233,82 @@ describe('TopicSummaryModel', () => {
     expect(topic.description).toBe('Description');
     expect(topic.historySummary).toBe('Summary');
   });
+
+  it('skips topics and messages sitting in the recycle bin', async () => {
+    const stamp = { deletedAt: new Date('2026-07-31T10:30:00Z'), isDeleted: true };
+    await db.insert(topics).values([
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'trashed-topic', userId, ...stamp },
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'live-topic', userId },
+    ]);
+    await db.insert(messages).values([
+      // a trashed topic never becomes a candidate, however fresh its messages
+      {
+        content: 'a',
+        id: 'm-trashed-topic',
+        role: 'user',
+        topicId: 'trashed-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      // a trashed message neither dates nor feeds a live topic's summary
+      {
+        content: 'live',
+        id: 'm-live',
+        role: 'user',
+        topicId: 'live-topic',
+        updatedAt: new Date('2026-07-31T09:00:00Z'),
+        userId,
+      },
+      {
+        content: 'gone',
+        id: 'm-gone',
+        role: 'assistant',
+        topicId: 'live-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+        ...stamp,
+      },
+    ]);
+
+    const result = await model.listCandidates({
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'live-topic',
+        lastMessageUpdatedAt: new Date('2026-07-31T09:00:00Z'),
+      }),
+    ]);
+  });
+
+  it('does not commit a summary onto a topic that was trashed after it was selected', async () => {
+    await db.insert(topics).values({ id: 'late-trash', userId });
+    await db.insert(messages).values({
+      content: 'hello',
+      id: 'm-late',
+      role: 'user',
+      topicId: 'late-trash',
+      updatedAt: new Date('2026-07-31T10:00:00Z'),
+      userId,
+    });
+    await db
+      .update(topics)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(topics.id, 'late-trash'));
+
+    const updated = await model.updateSummaryIfCurrent({
+      description: 'Description',
+      lastMessageId: 'm-late',
+      lastMessageUpdatedAt: new Date('2026-07-31T10:00:00Z'),
+      summary: 'Summary',
+      topicId: 'late-trash',
+    });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'late-trash'));
+
+    expect(updated).toBe(false);
+    expect(topic.historySummary).toBeNull();
+  });
 });
