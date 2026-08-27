@@ -22,17 +22,17 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
-import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
-import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
-import { EditorCanvas } from '@/features/EditorCanvas';
-import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import {
   CriterionList,
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify';
+} from '@/features/Acceptance';
+import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
+import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
+import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
+import { EditorCanvas } from '@/features/EditorCanvas';
+import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useTaskStore } from '@/store/task';

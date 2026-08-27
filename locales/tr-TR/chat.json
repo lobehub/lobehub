@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Hiçbir depo seçilmedi",
   "heteroAgent.cloudRepo.sectionTitle": "Depolar",
   "heteroAgent.codexQuota.doesNotExpire": "Süresi dolmaz",
+  "heteroAgent.codexQuota.errorConnection": "Codex kota uç noktasına ulaşılamadı. Ağınızı veya LobeHub proxy ayarlarını kontrol edin.",
+  "heteroAgent.codexQuota.errorGeneric": "Codex kotası yüklenemedi. Daha sonra tekrar deneyin.",
   "heteroAgent.codexQuota.expiresIn": "{{duration}} içinde sona eriyor",
   "heteroAgent.codexQuota.expiresSoon": "Yakında süresi doluyor",
   "heteroAgent.codexQuota.fiveHour": "5 saatlik",

@@ -100,9 +100,9 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <div>loading</div> }));
 
-vi.mock('@/features/Verify', async () => ({
+vi.mock('@/features/Acceptance', async () => ({
   // The real row/list primitives: the assertions cover the shared grammar.
-  ...(await vi.importActual('@/features/Verify/CriterionList')),
+  ...(await vi.importActual('@/features/Acceptance/CriterionList')),
   CheckRow: ({ check }: { check: { title: string } }) => (
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),

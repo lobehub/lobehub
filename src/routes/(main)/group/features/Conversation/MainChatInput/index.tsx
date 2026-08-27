@@ -15,11 +15,12 @@ const leftActions: ActionKeys[] = [
   'memory',
   'fileUpload',
   'tools',
+  'voiceDictation',
   '---',
   ['typo', 'params', 'clear'],
 ];
 
-const rightActions: ActionKeys[] = ['voiceDictation', 'voiceMessage', 'contextWindow'];
+const rightActions: ActionKeys[] = ['voiceMessage', 'contextWindow'];
 
 /**
  * MainChatInput

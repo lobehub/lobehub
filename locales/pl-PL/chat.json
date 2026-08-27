@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Nie wybrano repozytorium",
   "heteroAgent.cloudRepo.sectionTitle": "Repozytoria",
   "heteroAgent.codexQuota.doesNotExpire": "Nie wygasa",
+  "heteroAgent.codexQuota.errorConnection": "Nie można połączyć się z punktem końcowym limitu Codex. Sprawdź swoje ustawienia sieci lub proxy LobeHub.",
+  "heteroAgent.codexQuota.errorGeneric": "Nie udało się załadować limitu Codex. Spróbuj ponownie później.",
   "heteroAgent.codexQuota.expiresIn": "Wygasa za {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "Wkrótce wygaśnie",
   "heteroAgent.codexQuota.fiveHour": "5-godzinny",

@@ -1,7 +1,7 @@
 'use client';
 
-import { AcceptanceViewer, OriginConversationProvider } from '@/features/Verify';
-import TopicPanel from '@/features/Verify/Acceptance/TopicPanel';
+import { AcceptanceViewer, OriginConversationProvider } from '@/features/Acceptance';
+import TopicPanel from '@/features/Acceptance/Viewer/TopicPanel';
 
 export default function AcceptanceRoute() {
   return (

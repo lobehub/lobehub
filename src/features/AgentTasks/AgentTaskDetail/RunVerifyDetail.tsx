@@ -7,7 +7,7 @@ import { Check, ChevronDown, ChevronRight, CircleDashed, X } from 'lucide-react'
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useVerifyResults } from '@/features/Verify';
+import { useVerifyResults } from '@/features/Acceptance';
 
 const styles = createStaticStyles(({ css }) => ({
   check: css`

@@ -7,7 +7,11 @@ import {
   type HeterogeneousProviderBindingProtocol,
   normalizeAnthropicSdkBaseURL,
 } from '@lobechat/heterogeneous-agents';
+import { isRecord, pickString } from '@lobechat/utils/object';
 import { request } from 'undici';
+
+import { createLogger } from '@/utils/logger';
+import { classifyProxyNetworkError } from '@/utils/proxy-network-error';
 
 type ProxyProtocol = Extract<
   HeterogeneousProviderBindingProtocol,
@@ -26,6 +30,10 @@ export interface ProviderBindingProxy {
   closeSync: () => void;
   endpoint: string;
 }
+
+const logger = createLogger('modules:heterogeneousAgent:providerBindingProxy');
+const MAX_ERROR_CAUSE_DEPTH = 5;
+const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -113,6 +121,45 @@ const writeError = (response: ServerResponse, statusCode: number, message: strin
   response.end(message);
 };
 
+const getTransportFailureDiagnostic = (error: unknown) => {
+  const reasons: string[] = [];
+  let code: string | undefined;
+  let current = error;
+
+  for (let depth = 0; depth < MAX_ERROR_CAUSE_DEPTH && current; depth += 1) {
+    if (current instanceof Error) reasons.push(current.message);
+    if (!isRecord(current)) break;
+
+    const currentCode = pickString(current.code);
+    if (!code && currentCode && SAFE_ERROR_CODE.test(currentCode)) code = currentCode;
+
+    const currentMessage = pickString(current.message);
+    if (!(current instanceof Error) && currentMessage) reasons.push(currentMessage);
+    current = current.cause;
+  }
+
+  return {
+    code,
+    errorType: classifyProxyNetworkError(reasons.join(' ')),
+  };
+};
+
+const writeProviderRequestFailure = (
+  response: ServerResponse,
+  error: unknown,
+  protocol: ProxyProtocol,
+  upstreamOrigin: string,
+): void => {
+  const diagnostic = getTransportFailureDiagnostic(error);
+  logger.error('Provider binding relay request failed', {
+    code: diagnostic.code ?? 'UNKNOWN',
+    errorType: diagnostic.errorType,
+    protocol,
+    upstreamOrigin,
+  });
+  writeError(response, 502, `Provider request failed: ${diagnostic.errorType}`);
+};
+
 /**
  * Keep the real provider credential inside Electron main. Kimi receives only
  * an operation-local credential for this loopback relay, so Bash/MCP children
@@ -158,12 +205,16 @@ export const startProviderBindingProxy = async ({
         });
         response.writeHead(upstream.statusCode, copyHeaders(upstream.headers));
         await pipeline(upstream.body, response);
-      } catch {
-        writeError(response, 502, 'Provider request failed');
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          writeProviderRequestFailure(response, error, protocol, route.upstreamURL.origin);
+        }
       } finally {
         activeRequests.delete(abortController);
       }
-    })().catch(() => writeError(response, 502, 'Provider request failed'));
+    })().catch((error) =>
+      writeProviderRequestFailure(response, error, protocol, route.upstreamURL.origin),
+    );
   });
 
   await new Promise<void>((resolve, reject) => {

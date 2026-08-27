@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "リポジトリが選択されていません",
   "heteroAgent.cloudRepo.sectionTitle": "リポジトリ",
   "heteroAgent.codexQuota.doesNotExpire": "期限切れになりません",
+  "heteroAgent.codexQuota.errorConnection": "Codexクォータのエンドポイントに接続できませんでした。ネットワークまたはLobeHubプロキシ設定を確認してください。",
+  "heteroAgent.codexQuota.errorGeneric": "Codexクォータを読み込めませんでした。後でもう一度お試しください。",
   "heteroAgent.codexQuota.expiresIn": "{{duration}}で期限切れ",
   "heteroAgent.codexQuota.expiresSoon": "まもなく期限切れ",
   "heteroAgent.codexQuota.fiveHour": "5時間",

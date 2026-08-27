@@ -215,6 +215,11 @@ describe('format', () => {
       expect(formatPriceByCurrency(1234.56, 'USD')).toBe('1,234.56');
     });
 
+    it('should preserve meaningful precision for sub-dollar unit prices', () => {
+      expect(formatPriceByCurrency(0.075, 'USD')).toBe('0.075');
+      expect(formatPriceByCurrency(0.25, 'USD')).toBe('0.25');
+    });
+
     it('should use the correct CNY_TO_USD conversion rate', () => {
       const price = 1000;
       const expectedCNY = formatPrice(price / USD_TO_CNY);

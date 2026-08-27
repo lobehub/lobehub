@@ -31,7 +31,7 @@ import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
-import { getAcceptanceStatusActions } from '../statusActions';
+import { getAcceptanceStatusActions } from '../Viewer/statusActions';
 import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
 import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 

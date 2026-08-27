@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "未選擇儲存庫",
   "heteroAgent.cloudRepo.sectionTitle": "儲存庫",
   "heteroAgent.codexQuota.doesNotExpire": "不會過期",
+  "heteroAgent.codexQuota.errorConnection": "無法連接到 Codex 配額端點。請檢查您的網絡或 LobeHub 代理設置。",
+  "heteroAgent.codexQuota.errorGeneric": "無法加載 Codex 配額。請稍後再試。",
   "heteroAgent.codexQuota.expiresIn": "於 {{duration}} 後過期",
   "heteroAgent.codexQuota.expiresSoon": "即將過期",
   "heteroAgent.codexQuota.fiveHour": "5 小時",

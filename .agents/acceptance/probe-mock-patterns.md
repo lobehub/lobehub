@@ -385,6 +385,54 @@ skips AI generation of the acceptance criteria (required when there is no local 
 key); the criteria editor and budget field are ordinary inputs, while the goal
 description is contenteditable (use `fill`; `type` does not support contenteditable).
 
+#### Reaching the Claude Code usage calendar: a local-execution agent, a live-CLI identity, and a four-table ledger fixture
+
+**Situation:** verifying the quota usage calendar (`AgentQuotaCalendar`), which needs
+both a way to open it and quota history to render.
+
+**Doesn't work:** three separate dead ends.
+
+- Opening the conversation of a heterogeneous agent whose `executionTarget` is
+  `device`. A bound-but-offline device renders the 设备未连接 state and the composer
+  never shows the quota badge, so the panel that owns the calendar entry does not
+  exist. Reads as "this build has no quota UI".
+- Seeding only `agent_quota_windows`. The window rows carry `observed_tokens`, but
+  the UI does not read them: `buildWindowStats` sums the **usage ledger** turns that
+  fall inside each window, and the day cells come from the same ledger. Windows
+  without ledger rows render as 历史未记录，which looks like a broken read model.
+- Assuming the DB account is the one the modal opens. The composer badge reads the
+  **live** identity from the local Claude Code CLI over Electron IPC and passes its
+  `externalAccountId` down; the modal then resolves that against
+  `agent_provider_accounts`. A fixture account whose `external_account_id` differs
+  from the machine's real Claude login yields 账号不可用 with no other signal.
+
+**Works:** set the agent to local execution, then seed four tables against the
+account row the app itself created when it first ingested the live snapshot.
+
+```bash
+# 1. the composer only mounts the quota panel for a local-execution hetero agent
+update agents set agency_config = '{"executionTarget":"local","heterogeneousProvider":{"type":"claude-code","command":"claude"}}'::jsonb where id='<agentId>';
+# 2. reuse the existing account row — its external_account_id already matches the live CLI identity
+select id, external_account_id from agent_provider_accounts where provider='claude-code';
+```
+
+Then insert `agent_quota_usage_ledger` turns (they drive both the day cells and the
+per-window totals), `agent_quota_windows` rows for the concrete reset windows, and
+`agent_quota_snapshots` readings — a reading whose `resets_at` is in the future is
+what makes a window "live" and draws the burn-down curve, and a model-scoped
+`weekly_scoped` reading is what adds the third segment. Derive every timestamp from
+the browser's own timezone, since the calendar groups by local day. After the agent
+config write, clear the SWR cache tiers before reloading or the composer keeps the
+previous execution target.
+
+One seeded value does not survive: opening the composer's quota panel makes the app
+ingest the machine's **live** CLI reading into the same account row. A seeded current
+window is therefore replaced by the real utilization (and the real `resets_at`, which
+merges with a seeded window inside the five-minute tolerance) as soon as the panel
+renders. Seed the history and the ledger, but never assert on the live window's own
+percentage — read it back from `agent_quota_snapshots` and report what the run
+actually rendered.
+
 ### Driving the UI
 
 #### The composer's slash menu needs real key events — `keyboard type` never opens it

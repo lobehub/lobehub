@@ -13,6 +13,12 @@ import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import {
+  checkHeadMeta,
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+} from '@/features/Acceptance';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useActiveTaskDetail } from '@/features/AgentTasks/AgentTaskDetail';
 import TaskDetailTitleInput from '@/features/AgentTasks/AgentTaskDetail/TaskDetailTitleInput';
@@ -21,12 +27,6 @@ import TopicCard from '@/features/AgentTasks/AgentTaskDetail/TopicCard';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavHeader from '@/features/NavHeader';
-import {
-  checkHeadMeta,
-  CriterionList,
-  CriterionRequiredChip,
-  CriterionRow,
-} from '@/features/Verify';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';

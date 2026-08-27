@@ -457,7 +457,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 > inside `Accordion` groups via one shared `GroupedAccordion` engine (by-project / by-status /
 > by-time), `Block variant='filled'` for the active row, and spacing as `Flexbox` / `Block`
 > props — every row aligns to its highlight and matches every other panel in the app.
-> ❌ **Verify report sidebar** (`features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
+> ❌ **Verify report sidebar** (the since-removed `features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
 > entire panel: a raw grid `<div className={styles.item}>` row with `data-active` +
 > `colorFillSecondary` (instead of `NavItem` / `Block variant`), a bordered `<label>` + `<input>`
 > search box, a raw `<input>` inline-rename, an `opacity`-toggled action reveal re-implemented in

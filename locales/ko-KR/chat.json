@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "선택된 저장소가 없습니다",
   "heteroAgent.cloudRepo.sectionTitle": "저장소",
   "heteroAgent.codexQuota.doesNotExpire": "만료되지 않음",
+  "heteroAgent.codexQuota.errorConnection": "Codex 할당량 엔드포인트에 연결할 수 없습니다. 네트워크 또는 LobeHub 프록시 설정을 확인하세요.",
+  "heteroAgent.codexQuota.errorGeneric": "Codex 할당량을 불러올 수 없습니다. 나중에 다시 시도하세요.",
   "heteroAgent.codexQuota.expiresIn": "{{duration}} 후 만료",
   "heteroAgent.codexQuota.expiresSoon": "곧 만료됨",
   "heteroAgent.codexQuota.fiveHour": "5시간",

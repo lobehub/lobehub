@@ -4,8 +4,8 @@ import { Check, Info, RefreshCw, Shield, ShieldCheck, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useVerifyResults, useVerifyState } from './hooks';
-import { countResults, type DockPhase, phaseFromStatus } from './utils';
+import { useVerifyResults, useVerifyState } from '../hooks';
+import { countResults, type DockPhase, phaseFromStatus } from '../utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`

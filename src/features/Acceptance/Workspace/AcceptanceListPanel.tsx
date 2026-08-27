@@ -37,9 +37,8 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { useAcceptanceList } from '../../hooks';
-import type { ReportPanelExpand } from '../../Workspace/useReportPanelExpand';
-import { acceptanceHomePath } from '../routes';
+import { useAcceptanceList } from '../hooks';
+import { acceptanceHomePath } from '../Viewer/routes';
 import {
   type AcceptanceListFilter,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
@@ -53,6 +52,7 @@ import {
   hasProjectAcceptanceGroups,
   nextCollapsedGroupKeys,
 } from './groupAcceptanceList';
+import type { ReportPanelExpand } from './useReportPanelExpand';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;

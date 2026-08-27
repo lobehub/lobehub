@@ -21,7 +21,6 @@ import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
-import { NewModelShortcuts } from './NewModelShortcuts';
 import PortraitBubble from './PortraitBubble';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
@@ -67,7 +66,7 @@ const COLLAPSED_CONTENT_GAIN = 140;
 const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
 /** Portrait width plus its inline inset and the gap the bubble keeps from it. */
 const PORTRAIT_LANE = 152 + 12 + 16;
-const BUBBLE_MAX_WIDTH = 336;
+const BUBBLE_MAX_WIDTH = 360;
 const BUBBLE_GAP = 16;
 /**
  * What the greeting must leave alone so the bubble never lands on it, measured
@@ -319,7 +318,6 @@ const Home = memo(() => {
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
-  const promoVisible = Boolean(promo);
 
   useEffect(() => {
     clearOnboardingHomeModeParam();
@@ -359,14 +357,12 @@ const Home = memo(() => {
   return (
     <Flexbox className={styles.grid}>
       <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
-        <HomeHeader promo={promo} />
-        {/* A campaign and the Agent's brief are both sentence-like floating
-            content in the same attention lane. They take turns instead of
-            competing; dismissing or expiring the campaign hands the lane back
-            to the portrait without changing the campaign's Cloud-owned policy. */}
-        {portraitVisible && !promoVisible && (
+        <HomeHeader />
+        {/* The portrait has one voice: a live campaign temporarily speaks in
+            place of the daily brief, which returns when the campaign leaves. */}
+        {portraitVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
-            <PortraitBubble />
+            <PortraitBubble promo={promo} />
           </div>
         )}
       </div>
@@ -384,12 +380,12 @@ const Home = memo(() => {
       >
         <Flexbox className={styles.inputArea} gap={12}>
           <InputArea
+            showNewModelShortcuts
             inputValue={inputValue}
             mode={mode}
             onInputValueChange={handleInputValueChange}
             onModeChange={setMode}
           />
-          {mode === 'chat' && <NewModelShortcuts />}
         </Flexbox>
         <HomeModeContent
           inlineRail={railCollapsed && isLogin}

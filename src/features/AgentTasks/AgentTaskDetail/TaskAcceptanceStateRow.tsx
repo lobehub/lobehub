@@ -16,8 +16,8 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAcceptanceBySubject } from '@/features/Verify';
-import { acceptanceOverviewPath } from '@/features/Verify/Acceptance/routes';
+import { useAcceptanceBySubject } from '@/features/Acceptance';
+import { acceptanceOverviewPath } from '@/features/Acceptance/Viewer/routes';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';

@@ -7,9 +7,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { useVerifyReportBundle } from '@/features/Verify/hooks';
-import ReportViewer from '@/features/Verify/ReportViewer';
-import { extractUuid } from '@/features/Verify/utils';
+import { useVerifyReportBundle } from '@/features/Acceptance/hooks';
+import ReportViewer from '@/features/Acceptance/Report/ReportViewer';
+import { extractUuid } from '@/features/Acceptance/utils';
 
 import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 import SWRMutateInitializer from '../acceptance/SWRMutateInitializer';

@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Репозиторий не выбран",
   "heteroAgent.cloudRepo.sectionTitle": "Репозитории",
   "heteroAgent.codexQuota.doesNotExpire": "Не истекает",
+  "heteroAgent.codexQuota.errorConnection": "Не удалось подключиться к конечной точке квоты Codex. Проверьте настройки сети или прокси-сервера LobeHub.",
+  "heteroAgent.codexQuota.errorGeneric": "Не удалось загрузить квоту Codex. Попробуйте позже.",
   "heteroAgent.codexQuota.expiresIn": "Истекает через {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "Скоро истекает",
   "heteroAgent.codexQuota.fiveHour": "5 часов",

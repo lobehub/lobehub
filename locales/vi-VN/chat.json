@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Chưa chọn kho lưu trữ nào",
   "heteroAgent.cloudRepo.sectionTitle": "Kho lưu trữ",
   "heteroAgent.codexQuota.doesNotExpire": "Không hết hạn",
+  "heteroAgent.codexQuota.errorConnection": "Không thể kết nối đến điểm cuối hạn mức Codex. Kiểm tra mạng của bạn hoặc cài đặt proxy LobeHub.",
+  "heteroAgent.codexQuota.errorGeneric": "Không thể tải hạn mức Codex. Vui lòng thử lại sau.",
   "heteroAgent.codexQuota.expiresIn": "Hết hạn sau {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "Sắp hết hạn",
   "heteroAgent.codexQuota.fiveHour": "5 giờ",

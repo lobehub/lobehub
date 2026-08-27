@@ -125,13 +125,28 @@ export const formatPrice = (price: number, fractionDigits: number = 2) => {
   return `${numeral(a).format('0,0')}.${b}`;
 };
 
+/** Keep up to four significant digits below $1 so rates like 0.075 are not shown as 0.07. */
+const formatUnitPrice = (price: number) => {
+  if (price === 0) return formatPrice(price);
+
+  const magnitude = Math.floor(Math.log10(Math.abs(price)));
+  const fractionDigits = Math.min(100, Math.max(2, 3 - magnitude));
+  const formattedPrice = formatPrice(price, fractionDigits);
+  const [integer, fraction] = formattedPrice.split('.');
+
+  if (!fraction) return formattedPrice;
+
+  const trimmedFraction = fraction.replace(/0+$/, '').padEnd(2, '0');
+  return `${integer}.${trimmedFraction}`;
+};
+
 export const formatPriceByCurrency = (price?: number, currency?: ModelPriceCurrency) => {
   if (!price && price !== 0) return '-';
 
   if (currency === 'CNY') {
-    return formatPrice(price / USD_TO_CNY);
+    return formatUnitPrice(price / USD_TO_CNY);
   }
-  return formatPrice(price);
+  return formatUnitPrice(price);
 };
 
 export const formatDate = (date?: Date) => {

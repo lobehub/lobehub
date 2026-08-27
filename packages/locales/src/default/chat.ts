@@ -341,7 +341,6 @@ export default {
     'On current pace this window ends around {{percent}}%',
   'heteroAgent.claudeQuota.calendar.burnout.willExhaust':
     'On current pace, quota runs out around {{time}}',
-  'heteroAgent.claudeQuota.calendar.capacityUsed': 'Capacity used',
   'heteroAgent.claudeQuota.calendar.dayShare': 'Used {{percent}}% of this window',
   'heteroAgent.claudeQuota.calendar.dayTokens': '{{tokens}} tokens · {{cost}}',
   'heteroAgent.claudeQuota.calendar.accountUnavailable':
@@ -359,6 +358,7 @@ export default {
     'Token history is only recorded for runs started in LobeHub after usage tracking was enabled. Earlier usage and runs started directly from the terminal cannot be backfilled.',
   'heteroAgent.claudeQuota.calendar.noLedgerSpendShort': 'History not recorded',
   'heteroAgent.claudeQuota.calendar.partialCost': 'at least {{cost}}',
+  'heteroAgent.claudeQuota.calendar.partialCostCompact': '{{cost}}+',
   'heteroAgent.claudeQuota.calendar.pace': 'Even pace',
   'heteroAgent.claudeQuota.calendar.pastWindow': 'Last observed window',
   'heteroAgent.claudeQuota.calendar.rateLimited': 'Rate limited',

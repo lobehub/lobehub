@@ -1,9 +1,15 @@
 import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startProviderBindingProxy } from './providerBindingProxy';
+
+const mockLoggerError = vi.hoisted(() => vi.fn());
+
+vi.mock('@/utils/logger', () => ({
+  createLogger: () => ({ error: mockLoggerError }),
+}));
 
 interface CapturedRequest {
   body: string;
@@ -14,8 +20,13 @@ interface CapturedRequest {
 
 const cleanups: Array<() => Promise<void>> = [];
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+  vi.restoreAllMocks();
 });
 
 const startUpstream = async () => {
@@ -43,6 +54,14 @@ const startUpstream = async () => {
       }),
   );
   return { origin: `http://127.0.0.1:${address.port}`, requests };
+};
+
+const getClosedUpstreamOrigin = async (): Promise<string> => {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address() as AddressInfo;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return `http://127.0.0.1:${address.port}`;
 };
 
 describe('startProviderBindingProxy', () => {
@@ -123,5 +142,30 @@ describe('startProviderBindingProxy', () => {
     expect(unauthorized.status).toBe(401);
     expect(wrongPath.status).toBe(404);
     expect(upstream.requests).toEqual([]);
+  });
+
+  it('returns and logs credential-safe diagnostics for upstream transport failures', async () => {
+    const upstreamOrigin = await getClosedUpstreamOrigin();
+    const proxy = await startProviderBindingProxy({
+      apiKey: 'upstream-transport-secret',
+      endpoint: `${upstreamOrigin}/v1`,
+      protocol: 'openai-chat-completions',
+    });
+    cleanups.push(proxy.close);
+
+    const response = await fetch(`${proxy.endpoint}/chat/completions`, {
+      body: '{}',
+      headers: { authorization: `Bearer ${proxy.clientApiKey}` },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe('Provider request failed: RemoteServerConnectionRefused');
+    const logs = JSON.stringify(mockLoggerError.mock.calls);
+    expect(logs).toContain('ECONNREFUSED');
+    expect(logs).toContain('RemoteServerConnectionRefused');
+    expect(logs).toContain(upstreamOrigin);
+    expect(logs).not.toContain('upstream-transport-secret');
+    expect(logs).not.toContain(proxy.clientApiKey);
   });
 });

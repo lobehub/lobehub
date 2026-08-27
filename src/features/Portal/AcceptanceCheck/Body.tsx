@@ -13,7 +13,7 @@ import {
   type CheckReviewInput,
   FocusedCheckDetails,
   useAcceptanceBundle,
-} from '@/features/Verify';
+} from '@/features/Acceptance';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';

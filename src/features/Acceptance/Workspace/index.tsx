@@ -9,9 +9,9 @@ import { Outlet, useParams, useSearchParams } from 'react-router';
 
 import { RouteMetaBridge } from '@/features/RouteMeta';
 
-import { useReportPanelExpand } from '../../Workspace/useReportPanelExpand';
 import AcceptanceListPanel from './AcceptanceListPanel';
 import AcceptanceProjectActions from './AcceptanceProjectActions';
+import { useReportPanelExpand } from './useReportPanelExpand';
 
 const renderProjectActions = (projectId?: string) => (
   <AcceptanceProjectActions projectId={projectId} />

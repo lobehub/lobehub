@@ -11,8 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
 import type { AcceptanceListItem } from '@/services/verify';
 
-import { useAcceptanceList } from '../../hooks';
-import { frostedModalStyles } from '../modals';
+import { useAcceptanceList } from '../hooks';
+import { frostedModalStyles } from '../Viewer/modals';
 
 /** A settled aggregate cannot receive checks — the server refuses it too. */
 const SETTLED_STATUSES = new Set(['accepted', 'closed']);

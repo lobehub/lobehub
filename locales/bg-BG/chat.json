@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Няма избрано хранилище",
   "heteroAgent.cloudRepo.sectionTitle": "Хранилища",
   "heteroAgent.codexQuota.doesNotExpire": "Не изтича",
+  "heteroAgent.codexQuota.errorConnection": "Не можа да се осъществи връзка с крайната точка за квота на Codex. Проверете вашата мрежа или настройките на прокси сървъра на LobeHub.",
+  "heteroAgent.codexQuota.errorGeneric": "Не можа да се зареди квотата на Codex. Опитайте отново по-късно.",
   "heteroAgent.codexQuota.expiresIn": "Изтича след {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "Скоро изтича",
   "heteroAgent.codexQuota.fiveHour": "5-часов",

@@ -6,6 +6,7 @@ import {
   buildKanbanColumns,
   canDropTaskIntoKanbanColumn,
   getKanbanAssigneeUpdate,
+  getKanbanColumnHeaderVariant,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
@@ -52,6 +53,13 @@ describe('kanbanBoardModel', () => {
     expect(normalizeKanbanGroupBy('assignee')).toBe('assignee');
     expect(normalizeKanbanGroupBy('priority')).toBe('priority');
     expect(normalizeKanbanGroupBy('none')).toBe('status');
+  });
+
+  it('keeps the column header in skeleton mode for every loading group shape', () => {
+    expect(getKanbanColumnHeaderVariant({ hasGroupMeta: false, loading: true })).toBe('loading');
+    expect(getKanbanColumnHeaderVariant({ hasGroupMeta: true, loading: true })).toBe('loading');
+    expect(getKanbanColumnHeaderVariant({ hasGroupMeta: true })).toBe('group');
+    expect(getKanbanColumnHeaderVariant({ hasGroupMeta: false })).toBe('fallback');
   });
 
   it('builds assignee columns including the unassigned group', () => {

@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Geen repository geselecteerd",
   "heteroAgent.cloudRepo.sectionTitle": "Repositories",
   "heteroAgent.codexQuota.doesNotExpire": "Verloopt niet",
+  "heteroAgent.codexQuota.errorConnection": "Kon de Codex-quota-eindpunt niet bereiken. Controleer je netwerk- of LobeHub-proxy-instellingen.",
+  "heteroAgent.codexQuota.errorGeneric": "Kon de Codex-quota niet laden. Probeer het later opnieuw.",
   "heteroAgent.codexQuota.expiresIn": "Verloopt over {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "Verloopt binnenkort",
   "heteroAgent.codexQuota.fiveHour": "5 uur",
