@@ -463,7 +463,7 @@ describe('GatewayStreamNotifier', () => {
       return JSON.parse(pushCall![1].body).event.data;
     };
 
-    it('drops finalState (userMemory/agentConfig/systemRole/...) but keeps reason/reasonDetail/errorType for a share run, and scrubs uiMessages of creator identity', async () => {
+    it('drops finalState (userMemory/agentConfig/systemRole/...) but keeps reason for a share run, projects errorType to the public bucket, and scrubs uiMessages of creator identity', async () => {
       const uiMessages = [
         {
           content: 'hi',
@@ -475,9 +475,16 @@ describe('GatewayStreamNotifier', () => {
         },
       ] as any;
 
+      // `InsufficientBudgetForModel` — the creator's OWN budget/plan state —
+      // is exactly the class of code `sanitizeVisitorError` must not forward
+      // verbatim (LOBE-11930 Codex P2, round 3, message.ts:432): a visitor
+      // who triggers it would otherwise learn the creator ran out of budget.
       await notifier.publishAgentRuntimeEnd({
         finalState: {
-          error: { type: 'InsufficientBudgetForModel' },
+          error: {
+            message: 'LobeHub Cloud balance is too low',
+            type: 'InsufficientBudgetForModel',
+          },
           metadata: {
             agentConfig: { systemRole: 'secret system prompt' },
             agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
@@ -497,7 +504,9 @@ describe('GatewayStreamNotifier', () => {
       const data = pushEndPayload();
       expect(data).not.toHaveProperty('finalState');
       expect(data.reason).toBe('error');
-      expect(data.errorType).toBe('InsufficientBudgetForModel');
+      // Projected to the generic public bucket, not the creator's real code.
+      expect(data.errorType).toBe('AgentRuntimeError');
+      expect(data.reasonDetail).not.toContain('balance');
       expect(data.uiMessages).toHaveLength(1);
       expect(data.uiMessages[0]).toMatchObject({
         content: 'hi',
@@ -512,6 +521,58 @@ describe('GatewayStreamNotifier', () => {
       expect(JSON.stringify(data)).not.toContain('creator private persona');
       expect(JSON.stringify(data)).not.toContain('Creator');
       expect(JSON.stringify(data)).not.toContain('gpt-4');
+      expect(JSON.stringify(data)).not.toContain('balance');
+    });
+
+    it('forwards type + message verbatim for a share-purpose-built safe error code (ShareTurnLimitExceeded)', async () => {
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {
+          error: {
+            message: 'Reached the turn limit for this topic.',
+            type: 'ShareTurnLimitExceeded',
+          },
+          metadata: {
+            agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+          },
+          status: 'error',
+        },
+        operationId: 'op-share-safe',
+        reason: 'error',
+        stepIndex: 3,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushEndPayload();
+      expect(data.errorType).toBe('ShareTurnLimitExceeded');
+      expect(data.reasonDetail).toBe('Reached the turn limit for this topic.');
+    });
+
+    it('projects a provider-biz error (invalid key / upstream failure) to the public bucket for a share run', async () => {
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {
+          error: {
+            body: { budget: { remaining: 0 }, provider: 'openai', traceId: 'trace-abc' },
+            message: 'OpenAI API key invalid: sk-***',
+            type: 'InvalidProviderAPIKey',
+          },
+          metadata: {
+            agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+          },
+          status: 'error',
+        },
+        operationId: 'op-share-provider-error',
+        reason: 'error',
+        stepIndex: 3,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushEndPayload();
+      expect(data.errorType).toBe('AgentRuntimeError');
+      const serialized = JSON.stringify(data);
+      expect(serialized).not.toContain('openai');
+      expect(serialized).not.toContain('sk-***');
+      expect(serialized).not.toContain('trace-abc');
+      expect(serialized).not.toContain('budget');
     });
 
     it('keeps uiMessages (including sender/usage/model) unchanged for a normal (non-share) creator run', async () => {
@@ -749,6 +810,99 @@ describe('GatewayStreamNotifier', () => {
 
       const data = pushStepStartPayload();
       expect(data.uiMessages).toEqual([uiMessage]);
+    });
+  });
+
+  // ─── LOBE-11930 Codex P2 (round 3, message.ts:432): the live `type: 'error'`
+  //     Gateway stream event (`ServerStreamSink.publishError` →
+  //     `formatErrorEventData`) carries the same raw `{ body, error, errorType }`
+  //     shape as a persisted `ChatMessageError`, but never goes through
+  //     `toVisitorMessage` — it is pushed straight to the visitor's WS channel
+  //     mid-run, before any DB row exists. Redacting the stored copy alone
+  //     would leave this live path leaking provider/budget/upstream details. ───
+
+  describe('shared-agent visitor privacy (live error stream event)', () => {
+    const pushErrorPayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) => c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'error',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    it('strips body (provider/budget/upstream diagnostic) and projects errorType for a share run', async () => {
+      await notifier.publishAgentRuntimeInit('op-share-live-error', {
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-share-live-error', {
+        data: {
+          body: { budget: { remaining: 0 }, provider: 'anthropic', traceId: 'trace-xyz' },
+          error: 'Anthropic API key invalid',
+          errorType: 'InvalidProviderAPIKey',
+          phase: 'llm_call',
+        },
+        stepIndex: 1,
+        type: 'error' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushErrorPayload();
+      expect(data.errorType).toBe('AgentRuntimeError');
+      expect(data).not.toHaveProperty('body');
+      const serialized = JSON.stringify(data);
+      expect(serialized).not.toContain('anthropic');
+      expect(serialized).not.toContain('API key invalid');
+      expect(serialized).not.toContain('trace-xyz');
+      expect(serialized).not.toContain('budget');
+    });
+
+    it('keeps a share-purpose-built safe error code verbatim on the live event', async () => {
+      await notifier.publishAgentRuntimeInit('op-share-live-safe', {
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-share-live-safe', {
+        data: {
+          error: 'This shared agent uses a provider that is not supported for shared visitors.',
+          errorType: 'AgentShareProviderNotSupported',
+          phase: 'setup',
+        },
+        stepIndex: 0,
+        type: 'error' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushErrorPayload();
+      expect(data.errorType).toBe('AgentShareProviderNotSupported');
+      expect(data.error).toBe(
+        'This shared agent uses a provider that is not supported for shared visitors.',
+      );
+    });
+
+    it('keeps the raw error event unchanged for a normal (non-share) creator run', async () => {
+      await notifier.publishAgentRuntimeInit('op-owner-live-error', {
+        status: 'idle',
+        userId: 'creator-1',
+      });
+
+      const rawData = {
+        body: { provider: 'anthropic' },
+        error: 'Anthropic API key invalid',
+        errorType: 'InvalidProviderAPIKey',
+        phase: 'llm_call',
+      };
+      await notifier.publishStreamEvent('op-owner-live-error', {
+        data: rawData,
+        stepIndex: 1,
+        type: 'error' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(pushErrorPayload()).toEqual(rawData);
     });
   });
 

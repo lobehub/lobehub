@@ -1,9 +1,9 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
-import type { UIChatMessage } from '@lobechat/types';
+import type { ChatMessageError, UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { toVisitorMessage } from '@/database/models/message';
+import { sanitizeVisitorError, toVisitorMessage } from '@/database/models/message';
 
 import {
   getDefaultReasonDetail,
@@ -81,6 +81,45 @@ const sanitizeUiMessagesForVisitor = (uiMessages: unknown): unknown => {
 };
 
 /**
+ * Sanitize a live `type: 'error'` Gateway stream event for a shared-agent
+ * visitor. `ServerStreamSink.publishError` (`./adapters/ServerStreamSink.ts`)
+ * builds this event's `data` from `formatErrorEventData`, which — like
+ * `formatErrorForState` — copies the raw upstream `body` (provider, budget,
+ * upstream diagnostic) straight onto the payload. This event is pushed
+ * through `pushEvent` → `sanitizeGatewayEventData`, which — unlike the
+ * `uiMessages` snapshot — never routed through `toVisitorMessage`: it only
+ * knows about `finalState`/`uiMessages`, so an `error` event's `body` rode the
+ * WS channel to the visitor completely unredacted, and the client
+ * (`gatewayEventHandler.ts`'s `case 'error'`) immediately overlays it onto the
+ * visible message via `internal_dispatchMessage` — reaching the visitor's
+ * screen live, during the run, before any DB row (and therefore
+ * `toVisitorMessage`) is ever involved. Reuses {@link sanitizeVisitorError}'s
+ * classification so the live and reloaded-history projections cannot drift
+ * apart, reshaped into `formatErrorEventData`'s flatter `{ body, error,
+ * errorType, phase }` wire shape instead of `ChatMessageError`'s `{ body,
+ * message, type }`.
+ */
+const sanitizeErrorEventDataForVisitor = (data: unknown): unknown => {
+  if (!data || typeof data !== 'object') return data;
+  const record = data as { error?: unknown; errorType?: unknown; phase?: unknown };
+
+  const safe = sanitizeVisitorError(
+    typeof record.errorType === 'string' || typeof record.errorType === 'number'
+      ? ({
+          message: typeof record.error === 'string' ? record.error : undefined,
+          type: record.errorType,
+        } as ChatMessageError)
+      : undefined,
+  );
+
+  return {
+    ...(safe?.message === undefined ? {} : { error: safe.message }),
+    ...(safe?.type === undefined ? {} : { errorType: safe.type }),
+    ...(record.phase === undefined ? {} : { phase: record.phase }),
+  };
+};
+
+/**
  * Chokepoint applied to every event this notifier pushes to the Gateway WS
  * channel (`pushEvent`) — not just `agent_runtime_init` / `agent_runtime_end`.
  * Any event whose `data.finalState` belongs to a shared-agent visitor run
@@ -104,8 +143,19 @@ const sanitizeUiMessagesForVisitor = (uiMessages: unknown): unknown => {
  * per-event DTO builder, so this chokepoint is its only sanitization point.
  * Falls back to the generic `stripFinalStateInEventData` (messages / tool-set
  * fields only) for non-share runs, matching the Redis xadd chokepoint.
+ *
+ * `eventType` additionally routes a live `type: 'error'` event through
+ * {@link sanitizeErrorEventDataForVisitor} for share runs — see that
+ * function's JSDoc for why this is a SEPARATE leak from `uiMessages`/
+ * `finalState`: `error` events carry `formatErrorEventData`'s raw `{ body,
+ * error, errorType }` shape directly, with no `finalState`/`uiMessages` key
+ * for the checks above to even look at.
  */
-const sanitizeGatewayEventData = (data: unknown, isShareRun: boolean): unknown => {
+const sanitizeGatewayEventData = (
+  data: unknown,
+  isShareRun: boolean,
+  eventType?: unknown,
+): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
 
@@ -117,7 +167,11 @@ const sanitizeGatewayEventData = (data: unknown, isShareRun: boolean): unknown =
         })()
       : (stripFinalStateInEventData(data) as Record<string, unknown>);
 
-  if (!isShareRun || !('uiMessages' in withoutFinalState)) return withoutFinalState;
+  if (!isShareRun) return withoutFinalState;
+
+  if (eventType === 'error') return sanitizeErrorEventDataForVisitor(withoutFinalState);
+
+  if (!('uiMessages' in withoutFinalState)) return withoutFinalState;
 
   return {
     ...withoutFinalState,
@@ -295,14 +349,34 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const { operationId, stepIndex, finalState, reason, reasonDetail, uiMessages } = params;
     const result = await this.inner.publishAgentRuntimeEnd(params);
 
-    const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
-    const errorType = finalState?.error?.type || finalState?.error?.errorType;
+    const isShareEnd = isShareVisitorEnd(finalState);
+    // `errorType`/`reasonDetail` both read `finalState.error` — the same
+    // `formatErrorForState` shape `sanitizeVisitorError` projects for
+    // `toVisitorMessage` — but land as SIBLINGS of `finalState` on
+    // `endEventData` below, so `buildPublicEndEventData`'s wholesale
+    // `finalState` drop does not touch them. For a share-visitor run, run the
+    // SAME classification here rather than trusting the raw `reasonDetail`
+    // the caller (`AgentRuntimeService/CompletionLifecycle`, sibling-owned)
+    // passed in — this Gateway push is the enforcement boundary regardless of
+    // what upstream already computed from the unredacted error.
+    const rawErrorType = finalState?.error?.type ?? finalState?.error?.errorType;
+    const safeError = isShareEnd
+      ? sanitizeVisitorError(
+          rawErrorType === undefined
+            ? undefined
+            : ({ message: finalState?.error?.message, type: rawErrorType } as ChatMessageError),
+        )
+      : undefined;
+    const effectiveReasonDetail = isShareEnd
+      ? safeError?.message || getDefaultReasonDetail(undefined, reason)
+      : reasonDetail || getDefaultReasonDetail(finalState, reason);
+    const errorType = isShareEnd ? safeError?.type : rawErrorType;
 
     // `finalState` already tells us definitively whether this is a share run,
     // so record it before pushing — covers the case where `publishAgentRuntimeEnd`
     // runs in a process that never saw this op's `publishAgentRuntimeInit`
     // (e.g. queue mode) without waiting on the async metadata resolver.
-    if (isShareVisitorEnd(finalState)) {
+    if (isShareEnd) {
       this.shareVisitorOps.add(operationId);
     }
     this.shareVisitorResolved.add(operationId);
@@ -324,7 +398,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       // (metadata.userMemory / metadata.agentConfig, systemRole,
       // userInterventionConfig, ...) over their WS channel — see
       // `buildPublicEndEventData`.
-      data: isShareVisitorEnd(finalState) ? buildPublicEndEventData(endEventData) : endEventData,
+      data: isShareEnd ? buildPublicEndEventData(endEventData) : endEventData,
       operationId,
       stepIndex,
       timestamp: Date.now(),
@@ -415,7 +489,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const sanitizedEvent =
       event.data === undefined
         ? event
-        : { ...event, data: sanitizeGatewayEventData(event.data, isShareRun) };
+        : { ...event, data: sanitizeGatewayEventData(event.data, isShareRun, event.type) };
     const pushes: Promise<void>[] = [
       this.httpPost('/api/operations/push-event', {
         event: sanitizedEvent,

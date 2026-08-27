@@ -5,6 +5,7 @@ import type {
   ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
+  ChatMessageError,
   ChatMessageExtra,
   ChatToolPayload,
   ChatTranslate,
@@ -28,7 +29,12 @@ import type {
   UpdateMessageRAGParams,
   WorkSummaryItem,
 } from '@lobechat/types';
-import { MessageGroupType, ThreadType } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  MessageGroupType,
+  ThreadType,
+} from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
@@ -487,7 +493,6 @@ const VISITOR_MESSAGE_ALLOWED_KEYS = [
   'createdAt',
   'updatedAt',
   'editorData',
-  'error',
   'fileList',
   'files',
   'imageList',
@@ -574,6 +579,29 @@ const VISITOR_MESSAGE_DENIED_KEYS = ['sender', 'usage', 'model', 'provider', 'wo
  * `taskCompletions[]` carries a per-block `usage` snapshot, the same class of
  * leak as the `pinnedMessages`/`children` projections but never covered by
  * that fix.
+ *
+ * `error` was previously a plain entry in {@link VISITOR_MESSAGE_ALLOWED_KEYS}
+ * — the same "field is safe, contents are not" mistake as `pluginState`.
+ * Codex P2 (LOBE-11930, round 3): `formatErrorForState`
+ * (`apps/server/src/modules/AgentRuntime/formatErrorForState.ts`)
+ * deliberately copies `provider`, `budget`, and the raw upstream response body
+ * onto `ChatMessageError.body` for every provider/quota/startup failure, so a
+ * visitor who simply triggers an error (an invalid share-agent config, a
+ * quota exhaustion, an upstream 500) got the creator's exact provider name,
+ * remaining budget, and raw upstream diagnostics back verbatim — through
+ * BOTH `queryForVisitor` (reloaded history) and the sanitized Gateway
+ * snapshot (`GatewayStreamNotifier`'s `sanitizeUiMessagesForVisitor`, which
+ * calls this same function). Unlike `pluginState`, `body`'s shape is
+ * intentionally free-form per error source (model-runtime payload, pg driver
+ * error, heterogeneous CLI wire event, raw `Error` stack) with no stable set
+ * of key names to recurse-and-strip the way {@link redactCreatorPrivateBlob}
+ * does — so `sanitizeVisitorError` PROJECTS instead of redacts: only `type`
+ * (and, for a small allowlist of already-generic codes, `message`) survive;
+ * `body` and every other classification field are dropped. See
+ * {@link VISITOR_SAFE_ERROR_TYPES} for why projection beats recursive
+ * redaction here, and `GatewayStreamNotifier`'s `sanitizeErrorEventDataForVisitor`
+ * for the sibling fix on the LIVE `type: 'error'` stream-event path, which
+ * never goes through `toVisitorMessage` at all.
  */
 const VISITOR_MESSAGE_SPECIAL_KEYS = [
   'extra',
@@ -587,6 +615,7 @@ const VISITOR_MESSAGE_SPECIAL_KEYS = [
   'metadata',
   'pluginState',
   'pluginError',
+  'error',
 ] as const;
 
 export const VISITOR_MESSAGE_CLASSIFIED_KEYS: readonly string[] = [
@@ -710,6 +739,78 @@ const sanitizeVisitorPluginError = (pluginError: unknown): unknown =>
   redactCreatorPrivateBlob(pluginError);
 
 /**
+ * `ChatMessageError.type` codes that are safe to forward to a visitor
+ * VERBATIM, `message` included — because they are purpose-built,
+ * business-level codes whose throw sites already write a clean, generic
+ * `message` (never string-concatenated from a raw upstream payload) and whose
+ * NAME itself says nothing about the creator's provider/model/account:
+ * "this shared agent hit its per-topic turn cap", not "OpenAI rejected key
+ * sk-…". Every other code — including the LEGITIMATE quota/rate-limit codes
+ * (`InsufficientQuota`, `RateLimitExceeded`, …), whose `message`/`body` are
+ * still built by `formatErrorForState` from the raw upstream error — is
+ * projected to {@link VISITOR_PUBLIC_ERROR_TYPE} by {@link sanitizeVisitorError}
+ * instead. Kept as a narrow allowlist (fail closed) rather than an exclude
+ * list of "known provider-identifying codes": some codes leak the provider
+ * through the TYPE NAME alone (`OllamaServiceUnavailable`,
+ * `InvalidBedrockCredentials`, the deprecated `NoOpenAIAPIKey`, the
+ * `ComfyUI*`/`InvalidGithub*` family, …), so a denylist would need to
+ * enumerate those instead — and miss the next one a model-runtime change
+ * adds, the exact "silently reaches visitors" failure mode this file's
+ * allowlist-shaped guard exists to close everywhere else.
+ */
+const VISITOR_SAFE_ERROR_TYPES = new Set<string>([
+  ChatErrorType.ShareTurnLimitExceeded,
+  ChatErrorType.ShareTopicLimitExceeded,
+  ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  ChatErrorType.AgentShareProviderNotSupported,
+]);
+
+/**
+ * Public fallback `type` for any `ChatMessageError` whose code is not in
+ * {@link VISITOR_SAFE_ERROR_TYPES}. Reuses the existing generic
+ * `AgentRuntimeError` bucket (already localized — see
+ * `packages/locales/src/default/modelRuntime.ts`) rather than minting a new
+ * code: the visitor only needs "the run failed, retry or contact the
+ * creator," never which of the ~60 specific runtime codes fired.
+ */
+const VISITOR_PUBLIC_ERROR_TYPE = AgentRuntimeErrorType.AgentRuntimeError;
+
+/**
+ * Sanitize a `ChatMessageError` for a visitor — PROJECTION, not the recursive
+ * `redactCreatorPrivateBlob` used for `pluginState`/`pluginError`. `body` has
+ * no stable set of key names to strip: it is free-form per error source
+ * (`formatErrorForState`'s model-runtime payload / pg-driver / heterogeneous
+ * CLI wire-event / raw-`Error` branches all shape it differently) and
+ * `formatErrorForState` deliberately copies `provider`, `budget`, and the raw
+ * upstream diagnostic onto it for exactly the failures a visitor can trigger
+ * on demand (bad key, exhausted quota, upstream 500) — so recursing a fixed
+ * key set would miss the next shape a new error source introduces. Dropping
+ * `body` wholesale and keeping only a classified `type` (+ `message` for the
+ * codes in {@link VISITOR_SAFE_ERROR_TYPES}) fails closed instead: the client
+ * already re-derives its localized copy, alert styling, and error-card variant
+ * from `type` alone via `getRuntimeErrorMessage`/`getErrorCodeSpec`
+ * (`src/features/Conversation/Error/index.tsx`), so nothing the share UI
+ * genuinely renders is lost.
+ *
+ * See `GatewayStreamNotifier`'s `sanitizeErrorEventDataForVisitor` for the
+ * sibling fix: the live `type: 'error'` Gateway stream event carries this same
+ * `formatErrorForState` shape but never reaches `toVisitorMessage` at all, so
+ * this function alone only protects reloaded history, not the in-flight run.
+ */
+export const sanitizeVisitorError = (
+  error: ChatMessageError | null | undefined,
+): ChatMessageError | null | undefined => {
+  if (!error) return error;
+
+  const type = error.type as unknown;
+  if (typeof type === 'string' && VISITOR_SAFE_ERROR_TYPES.has(type)) {
+    return { message: error.message, type: error.type };
+  }
+
+  return { type: VISITOR_PUBLIC_ERROR_TYPE };
+};
+
+/**
  * `signalCallbacks[].callbacks[]` is a denormalized per-callback snapshot
  * built by `FlatListBuilder` (`result.signalCallbacks = signalCallbackBlocks
  * .map(...)` in `packages/conversation-flow`), carrying a bare
@@ -782,6 +883,9 @@ export const toVisitorMessage = (message: UIChatMessage): UIChatMessage =>
     // redaction rather than a plain allow.
     pluginError: sanitizeVisitorPluginError(message.pluginError),
     pluginState: sanitizeVisitorPluginState(message.pluginState),
+    // Projected, not redacted — see `error`'s entry in
+    // `VISITOR_MESSAGE_SPECIAL_KEYS`'s JSDoc / `sanitizeVisitorError`.
+    error: sanitizeVisitorError(message.error),
     sender: null,
     signalCallbacks: sanitizeVisitorSignalCallbacks(message.signalCallbacks),
     taskCompletions: sanitizeVisitorTaskCompletions(message.taskCompletions),
