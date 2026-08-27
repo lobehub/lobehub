@@ -286,18 +286,26 @@ export const imageRouter = router({
             status: AsyncTaskStatus.Success,
           });
 
-          try {
-            await notifyImageCompleted({
-              duration,
-              generationBatchId,
-              model,
-              prompt: params.prompt,
-              topicId: generationTopicId,
-              userId: ctx.userId,
-              workspaceId,
-            });
-          } catch (err) {
-            console.error('[image-async] notification failed:', err);
+          // Agent Share visitor runs execute this worker under the creator's
+          // own `ctx.userId` (see `agentShare`'s JSDoc above), so an
+          // unconditional notify here would recall the creator's push/inbox
+          // for an image an arbitrary link visitor generated. Mirrors the
+          // `agentShare` gate `CompletionLifecycle.dispatchHooks` applies to
+          // `notifyAgentRunCompleted` for the same reason.
+          if (!agentShare) {
+            try {
+              await notifyImageCompleted({
+                duration,
+                generationBatchId,
+                model,
+                prompt: params.prompt,
+                topicId: generationTopicId,
+                userId: ctx.userId,
+                workspaceId,
+              });
+            } catch (err) {
+              console.error('[image-async] notification failed:', err);
+            }
           }
 
           if (ENABLE_BUSINESS_FEATURES) {

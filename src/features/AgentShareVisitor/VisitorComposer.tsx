@@ -1,6 +1,6 @@
 'use client';
 
-import { ChatErrorType } from '@lobechat/types';
+import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { ActionIcon, Flexbox, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
@@ -14,6 +14,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
 import { shouldSubmitOnEnter } from './composerEnterGuard';
+import { resolveVisitorErrorKey } from './resolveVisitorErrorKey';
 import { useBudgetStatusRetry } from './useBudgetStatusRetry';
 import { useShareRunStop } from './useShareRunStop';
 
@@ -30,22 +31,6 @@ interface VisitorComposerProps {
   shareId: string;
   topicId?: string | null;
 }
-
-/** Map a share-run failure to the visitor-facing copy key. */
-const resolveErrorKey = (error: unknown): string => {
-  const message = error instanceof Error ? error.message : String(error);
-  if (message.includes(ChatErrorType.ShareTurnLimitExceeded))
-    return 'share.visitor.errors.turnLimit';
-  if (message.includes(ChatErrorType.ShareTopicLimitExceeded))
-    return 'share.visitor.errors.topicLimit';
-  if (message.includes(ChatErrorType.InsufficientBudgetForModel))
-    return 'share.visitor.errors.insufficientBudget';
-  if (message.includes(ChatErrorType.AgentShareProviderNotSupported))
-    return 'share.visitor.errors.providerNotSupported';
-  if (message.includes(ChatErrorType.ShareHeterogeneousAgentUnsupported))
-    return 'share.visitor.errors.heterogeneousUnsupported';
-  return 'share.visitor.errors.generic';
-};
 
 /**
  * Lean visitor composer for shared agents. Intentionally NOT the owner
@@ -98,7 +83,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
         if (result.topicId && !topicId) onTopicCreated?.(result.topicId);
       } catch (error) {
         console.error('[AgentShareVisitor] send failed:', error);
-        setErrorKey(resolveErrorKey(error));
+        setErrorKey(resolveVisitorErrorKey(error));
         // Give the rejected input back so the visitor can retry / edit.
         setValue(message);
       } finally {
@@ -111,7 +96,13 @@ const VisitorComposer = memo<VisitorComposerProps>(
         {displayedErrorKey && (
           <Flexbox horizontal align="center" gap={8}>
             <span style={{ color: cssVar.colorError, fontSize: 12 }}>
-              {t(displayedErrorKey as any)}
+              {t(displayedErrorKey as any, {
+                // i18next's generated interpolation types default `{{max}}` to
+                // `string` (no `{{max, number}}` format specifier), so pass a
+                // string even though the source constant is numeric. Ignored
+                // by every other error key (i18next drops unused options).
+                max: String(SHARE_VISITOR_PROMPT_MAX_LENGTH),
+              })}
             </span>
             {/* Once the retry check itself has failed, the AsyncError row below
               takes over the retry action so the visitor gets feedback specific
@@ -164,6 +155,13 @@ const VisitorComposer = memo<VisitorComposerProps>(
           <TextArea
             autoSize={{ maxRows: 6, minRows: 1 }}
             disabled={!!blockedKey}
+            // Mirrors `SHARE_VISITOR_PROMPT_MAX_LENGTH` (server-side real gate,
+            // `apps/server/src/routers/lambda/shareChat.ts`) so a legitimate
+            // long paste is capped up front instead of round-tripping to a
+            // rejection. Convenience only — a direct RPC caller still hits the
+            // server bound, handled by `resolveVisitorErrorKey`'s BAD_REQUEST
+            // branch below.
+            maxLength={SHARE_VISITOR_PROMPT_MAX_LENGTH}
             placeholder={t('share.visitor.input.placeholder')}
             style={{ border: 'none', boxShadow: 'none', padding: 0 }}
             value={value}
