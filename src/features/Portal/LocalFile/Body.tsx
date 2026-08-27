@@ -18,6 +18,7 @@ import {
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { cloudSandboxService } from '@/services/cloudSandbox';
+import { localFileService } from '@/services/electron/localFileService';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -258,13 +259,26 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       await onReload?.();
       setHtmlPreviewRevision((prev) => prev + 1);
     }, [onReload]);
+    // Electron's window-open handler denies blob: URLs, so the blob path only
+    // works on web; desktop hands local files to the system default app instead,
+    // and remote/sandbox files have no external route there.
+    const canOpenExternal = isDesktop ? !deviceId && !sandboxTopicId : true;
     const handleOpenExternal = useCallback(() => {
+      if (isDesktop) {
+        void localFileService.openLocalFile({ path: filePath });
+        return;
+      }
+
+      // A top-level blob: document inherits this app's origin, so untrusted HTML
+      // must stay inside a sandboxed (no allow-same-origin) iframe wrapper.
       const html = applyHtmlPreviewBaseUrl(editingValue, resourceBaseUrl);
-      const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+      const shell = `<!doctype html><title>${filePath.split(/[/\\]/).at(-1) ?? ''}</title><style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="allow-scripts allow-modals allow-popups" srcdoc="${srcdoc}"></iframe>`;
+      const url = URL.createObjectURL(new Blob([shell], { type: 'text/html' }));
       window.open(url, '_blank', 'noopener,noreferrer');
       // Revoking immediately can abort the new window's document load — defer it.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    }, [editingValue, resourceBaseUrl]);
+    }, [editingValue, filePath, resourceBaseUrl]);
 
     return (
       <PublishHtmlArtifactProvider
@@ -312,7 +326,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                     onChange={(value) => setMode(value as TextPreviewMode)}
                   />
                 )}
-                {isHtml && (
+                {isHtml && canOpenExternal && (
                   <ToolbarActionButton
                     icon={ExternalLinkIcon}
                     title={t('workingPanel.localFile.preview.openExternal')}

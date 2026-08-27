@@ -115,6 +115,8 @@ export const ToolbarActionButton = memo<ToolbarActionButtonProps>(
   ({ active, disabled, icon, label, loading, onClick, title }) => {
     const button = (
       <button
+        aria-label={title ?? (typeof label === 'string' ? label : undefined)}
+        aria-pressed={active}
         className={cx(styles.action, active && styles.actionActive)}
         disabled={disabled || loading}
         type={'button'}
@@ -137,8 +139,9 @@ interface PreviewToolbarProps {
 }
 
 const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, path }) => {
-  const lastSlash = path.lastIndexOf('/');
+  const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
   const dir = lastSlash > 0 ? path.slice(0, lastSlash) : '';
+  const sep = lastSlash > 0 ? path[lastSlash] : '';
   const name = path.slice(lastSlash + 1);
 
   return (
@@ -146,7 +149,7 @@ const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, path }) => {
       <Tooltip title={path}>
         <Flexbox horizontal align={'center'} className={styles.path} flex={1}>
           {dir && <span className={styles.dir}>{dir}</span>}
-          <span className={styles.name}>{dir ? `/${name}` : name}</span>
+          <span className={styles.name}>{dir ? `${sep}${name}` : name}</span>
         </Flexbox>
       </Tooltip>
       {actions && (
