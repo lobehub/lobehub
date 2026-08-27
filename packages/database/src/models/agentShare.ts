@@ -755,30 +755,51 @@ export class AgentShareModel {
    *
    * Safe to run on a row whose run is still genuinely standing up, however
    * unlikely at `maxAgeMs`'s default: deleting it just makes that run's own
-   * `confirmReservation` return `false` and fail closed (interrupted, never
-   * billed under the creator's budget) — the exact same outcome as an owner
-   * revoking mid-startup, see that method's JSDoc. This is why `maxAgeMs`
-   * must stay comfortably above any realistic `createOperation` duration
-   * (gateway registration + state persistence + queue scheduling): the
-   * default mirrors `VERIFY_ABANDONED_MS`
+   * `confirmReservation` return `false` and fail closed — the exact same
+   * outcome as an owner revoking mid-startup, see that method's JSDoc. This
+   * is why `maxAgeMs` must stay comfortably above any realistic
+   * `createOperation` duration (gateway registration + state persistence +
+   * queue scheduling): the default mirrors `VERIFY_ABANDONED_MS`
    * (`apps/server/src/services/verify/staleness.ts`), this codebase's
    * existing bar for "this durable claim has been outstanding far longer than
    * any real workload, so treat it as dead."
    *
+   * "Fails closed via `confirmReservation` returning `false`" only helps when
+   * the ORIGINAL request process is still alive to observe that `false` and
+   * call `interruptOperation` — see `execAgent`'s reservation block
+   * (`apps/server/src/services/aiAgent/index.ts`). If that process died
+   * before ever reaching `confirmReservation` (the exact case this sweep
+   * exists for), nobody is left to notice, and the queue message
+   * `createOperation` already scheduled keeps running under the creator's
+   * credentials with no topic marker to interrupt it by. `sweep.ts`'s handler
+   * closes that gap by actively calling `AiAgentService.interruptTask` on
+   * every row this method returns, exactly like `interruptActiveShareRuns`
+   * already does for `revokeReservations`'s rows — this method intentionally
+   * returns `agentId` (unlike `revokeReservations`) so that handler can
+   * resolve each row's owner and do the same.
+   *
    * A plain module function, not an `AgentShareModel` instance method: the
    * sweep is agent/owner-agnostic (it scans the whole table), so there is no
    * single `userId` to construct an instance around.
+   *
+   * Returns `agentId` alongside `operationId`/`topicId` (unlike the shape
+   * `revokeReservations` returns) because the sweep handler has no
+   * request-scoped owner to build an `AiAgentService` from the way
+   * `interruptActiveShareRunsAfterResponse` does — it must resolve the
+   * creator's `userId` itself, per agent, from `agents.userId` before it can
+   * call `interruptTask`. See `sweep.ts`'s handler.
    */
   static sweepAbandonedReservations = async (
     db: LobeChatDatabase,
     maxAgeMs: number = 30 * 60 * 1000,
-  ): Promise<Array<{ operationId: string; topicId: string }>> => {
+  ): Promise<Array<{ agentId: string; operationId: string; topicId: string }>> => {
     const cutoff = new Date(Date.now() - maxAgeMs);
 
     const rows = await db
       .delete(agentShareRunReservations)
       .where(lt(agentShareRunReservations.createdAt, cutoff))
       .returning({
+        agentId: agentShareRunReservations.agentId,
         operationId: agentShareRunReservations.id,
         topicId: agentShareRunReservations.topicId,
       });

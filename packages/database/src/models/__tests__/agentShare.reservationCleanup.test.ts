@@ -153,7 +153,10 @@ describe('AgentShareModel abandoned reservation cleanup (real Postgres)', () => 
 
     const swept = await AgentShareModel.sweepAbandonedReservations(serverDB, 30 * 60 * 1000);
 
-    expect(swept).toEqual([{ operationId, topicId: topic.id }]);
+    // `agentId` rides along so `sweep.ts`'s handler can resolve each row's
+    // creator (`agents.userId`) and interrupt the orphaned run — see
+    // `sweepAbandonedReservations`'s JSDoc.
+    expect(swept).toEqual([{ agentId, operationId, topicId: topic.id }]);
 
     const [stillPending] = await serverDB
       .select({ id: agentShareRunReservations.id })
