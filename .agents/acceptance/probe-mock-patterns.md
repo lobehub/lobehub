@@ -863,6 +863,54 @@ code A/B, re-dispatch after each edit rather than expecting react-refresh to kee
 the messages — and re-run the identical dispatch + expand + scroll sequence on both
 sides so the two frames differ only by the change.
 
+#### A client bucket that keeps reverting mid-run is the gateway `uiMessages` snapshot, not your write
+
+**Situation:** a store bucket (`dbMessagesMap[<key>]`) holds the right messages right
+after a gateway send, then silently loses them a second or two later and stays wrong
+for the rest of the session — while the database is correct the whole time.
+
+**Doesn't work:** treating it as a race in your own write and adding another
+`replaceMessages` / refetch earlier in the flow. The overwrite happens _after_ every
+write you control, so each new attempt is undone the same way. It also looks like a
+stale SWR tier (which it is not — a manual `refreshMessages()` fixes it, so the
+server clearly has the data).
+
+**Works:** the server pushes a canonical `uiMessages` snapshot at `step_start` and
+`agent_runtime_end`, and `gatewayEventHandler` applies it as source of truth. That
+snapshot is built by `AgentRuntimeService.queryUiMessages` from the operation's
+`state.metadata`, so it is only as scoped as that metadata — a field the run needs
+but the snapshot query omits makes every step boundary overwrite the bucket with a
+_differently scoped_ message list. Identify the writer instead of guessing: record
+every `replaceMessages` call with `new Error().stack` into a `window.__RM` ring
+buffer, run the flow once, and read `action` (`gateway/step_start`,
+`gateway/agent_runtime_end`) plus the frame. The `action` label alone names the
+culprit. Verified in this catalogue: a subtopic run whose snapshot lacked `threadId`
+kept replacing the thread's bucket with the topic's main spine.
+
+**Corollary — use the non-gateway path as the control.** The same UI action with
+`chatConfig.disableGatewayMode = true` runs through `sendMessageInServer` and never
+applies a pushed snapshot. If the behavior is correct there and wrong in gateway
+mode, the defect is in the gateway transport or in the server snapshot, and you have
+halved the search space before reading any code.
+
+#### A required local service can be someone else's, and `preflight` will not tell you
+
+**Situation:** starting QStash / s3rver for a run through `init-dev-env.sh` in a
+worktree while another agent-testing session is already active on the machine.
+
+**Doesn't work:** trusting that a backgrounded `init-dev-env.sh qstash` (or `s3`)
+came up because `preflight` then reports the service reachable. Both use fixed ports
+(8080 / 29000), so the second starter dies immediately with
+`address already in use` while the sibling session's process keeps answering — and
+`preflight` is a reachability check, so it passes. The run works, but on services it
+does not own.
+
+**Works:** read the start log before assuming ownership
+(`.records/logs/qstash.log`, `.records/logs/s3.log`), and treat "already in use" as
+"this is not mine". It matters at teardown: stopping a service you did not start
+kills the other session's run. Only the dev server (`stop-dev`, which verifies PID
+ownership) and anything you launched on a port you chose yourself are yours to stop.
+
 #### Infinite-scroll failure states
 
 When the fixture is too short for the observer to fire, call the real load-more
