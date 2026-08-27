@@ -332,6 +332,27 @@ export interface AgentRuntimeDelegate {
    * placeholder before resuming the parked parent operation.
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
+  /**
+   * Report whether an Agent Share visitor run's reservation was ever confirmed,
+   * i.e. whether the topic still carries this operation's `runningOperation`
+   * marker.
+   *
+   * Closes a real process-death window: `createOperation` schedules the first
+   * queue message BEFORE `execAgent` reaches `confirmReservation`. If the
+   * request process dies in between, that queued step-0 delivery would execute
+   * LLM and tool work under the CREATOR's credentials and budget, with no
+   * marker for `interruptTask` or the revocation sweep to find — so neither the
+   * visitor nor the creator can stop it. Gating step 0 on confirmation makes
+   * execution conditional instead of cleaning up after the fact.
+   *
+   * Implemented by AiAgentService (which owns the topic model); returning
+   * `false` — or throwing — aborts the run.
+   */
+  verifyShareReservationConfirmed?: (params: {
+    agentId: string;
+    operationId: string;
+    topicId: string;
+  }) => Promise<boolean>;
 }
 
 export interface AgentRuntimeServiceOptions {
@@ -732,6 +753,69 @@ export class AgentRuntimeService {
     if (!persisted) {
       throw new Error(`Failed to persist intervention queue ACK: ${params.operationId}`);
     }
+  }
+
+  /**
+   * Step-0 gate for Agent Share visitor runs: abort the run unless its
+   * reservation was confirmed (the topic still carries this operation's
+   * `runningOperation` marker).
+   *
+   * Fails closed — a confirmation check that throws aborts the run too, since
+   * an unstoppable creator-credentialed run is strictly worse than a visitor
+   * turn that errors out and can simply be re-sent.
+   *
+   * A state-load failure is NOT treated as an abort: without the state we
+   * cannot tell a share run from an ordinary one, and blocking every run on a
+   * transient state-store hiccup would take the whole runtime down. Ordinary
+   * runs are unaffected either way — they carry no `agentShare` marker.
+   *
+   * @returns the terminal result to return from `executeStep`, or `undefined`
+   * when the run may proceed.
+   */
+  private async abortUnconfirmedShareRun(
+    operationId: string,
+  ): Promise<AgentExecutionResult | undefined> {
+    let state: AgentState | null | undefined;
+    try {
+      state = await this.coordinator.loadAgentState(operationId);
+    } catch (error) {
+      log('[%s] Share reservation gate skipped — state load failed: %O', operationId, error);
+      return undefined;
+    }
+
+    const metadata = state?.metadata as
+      { agentShare?: { agentId?: string }; topicId?: string } | undefined;
+    const agentId = metadata?.agentShare?.agentId;
+    const topicId = metadata?.topicId;
+    if (!state || !agentId || !topicId) return undefined;
+
+    let confirmed = false;
+    try {
+      confirmed = await this.delegate.verifyShareReservationConfirmed!({
+        agentId,
+        operationId,
+        topicId,
+      });
+    } catch (error) {
+      log('[%s] Share reservation confirmation check failed: %O', operationId, error);
+      confirmed = false;
+    }
+
+    if (confirmed) return undefined;
+
+    log('[%s] Aborting share run with an unconfirmed reservation', operationId);
+    await this.coordinator.saveAgentState(operationId, {
+      ...state,
+      lastModified: new Date().toISOString(),
+      status: 'interrupted',
+    });
+
+    return {
+      nextStepScheduled: false,
+      state: { status: 'interrupted' },
+      stepResult: null,
+      success: false,
+    };
   }
 
   // ==================== Operation Management ====================
@@ -1184,6 +1268,15 @@ export class AgentRuntimeService {
       // Preserve runtime availability when the durable store has a transient
       // read failure. The step lock and normal persistence path still apply.
       log('[%s][%d] Durable operation status check failed: %O', operationId, stepIndex, error);
+    }
+
+    // Agent Share: refuse to start a visitor run whose reservation was never
+    // confirmed. See `AgentRuntimeDelegate.verifyShareReservationConfirmed`'s
+    // JSDoc for the process-death window this closes. Step 0 only — later
+    // steps continue an already-confirmed run and inherit this guarantee.
+    if (stepIndex === 0 && this.delegate.verifyShareReservationConfirmed) {
+      const abortResult = await this.abortUnconfirmedShareRun(operationId);
+      if (abortResult) return abortResult;
     }
 
     // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS

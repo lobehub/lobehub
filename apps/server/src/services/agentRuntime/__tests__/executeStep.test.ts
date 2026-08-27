@@ -1724,3 +1724,131 @@ describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration'
     expect(registerSpy).not.toHaveBeenCalled();
   });
 });
+
+// Regression for LOBE-11930 Codex P1
+// (`apps/server/src/router-hono/workflows/agent-share/handlers/sweep.ts`):
+// if the request process handling a share-visitor turn dies AFTER
+// `createOperation` schedules the first queue message but BEFORE
+// `execAgent` reaches `confirmReservation`, that queued step-0 delivery must
+// not execute any LLM/tool work under the creator's credentials with no
+// topic `runningOperation` marker to interrupt it by. The
+// `verifyShareReservationConfirmed` delegate call is the runtime's own
+// fail-closed gate for exactly that window — see
+// `AgentRuntimeDelegate.verifyShareReservationConfirmed`'s JSDoc.
+describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation gate', () => {
+  const shareAgentState = (overrides?: Record<string, unknown>) => ({
+    lastModified: new Date().toISOString(),
+    metadata: {
+      agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      topicId: 'topic-1',
+    },
+    status: 'idle',
+    stepCount: 0,
+    ...overrides,
+  });
+
+  it('aborts an unconfirmed step-0 share run instead of executing it', async () => {
+    const verifyShareReservationConfirmed = vi.fn().mockResolvedValue(false);
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationConfirmed },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      operationId: 'op-orphaned',
+      stepIndex: 0,
+      context: { phase: 'user_input' } as any,
+    });
+
+    expect(verifyShareReservationConfirmed).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'op-orphaned',
+      topicId: 'topic-1',
+    });
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-orphaned',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.nextStepScheduled).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+
+  it('fails closed when the confirmation check itself throws', async () => {
+    const verifyShareReservationConfirmed = vi.fn().mockRejectedValue(new Error('db down'));
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationConfirmed },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      operationId: 'op-check-failed',
+      stepIndex: 0,
+      context: { phase: 'user_input' } as any,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+
+  it('does not gate steps past the first, even for an unconfirmed reservation', async () => {
+    const verifyShareReservationConfirmed = vi.fn().mockResolvedValue(false);
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationConfirmed },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    // stepCount > stepIndex triggers the pre-existing "already completed"
+    // short-circuit right after this gate — sufficient to prove the gate
+    // itself was skipped without mocking the full step-execution pipeline.
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState({ stepCount: 5 }));
+
+    // Only the gate's own behavior is under test here — whatever happens
+    // further down the (unmocked) execution pipeline for stepIndex > 0 is
+    // irrelevant to this assertion.
+    await service
+      .executeStep({
+        operationId: 'op-later-step',
+        stepIndex: 1,
+        context: { phase: 'user_input' } as any,
+      })
+      .catch(() => undefined);
+
+    expect(verifyShareReservationConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('does not gate ordinary (non-share) operations', async () => {
+    const verifyShareReservationConfirmed = vi.fn().mockResolvedValue(false);
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationConfirmed },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { topicId: 'topic-1' },
+      status: 'idle',
+      stepCount: 5,
+    });
+
+    await service
+      .executeStep({
+        operationId: 'op-ordinary',
+        stepIndex: 1,
+        context: { phase: 'user_input' } as any,
+      })
+      .catch(() => undefined);
+
+    expect(verifyShareReservationConfirmed).not.toHaveBeenCalled();
+  });
+});

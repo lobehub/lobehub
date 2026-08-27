@@ -104,6 +104,26 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 
+/**
+ * The share-visitor guards run their cap/authorization checks inside a real
+ * `db.transaction`, which this suite's `mockDb = {}` cannot provide. These
+ * cases only assert how `shareGate` shapes `userInterventionConfig`, so stub
+ * the guards out; their own behavior is covered by the dedicated real-Postgres
+ * race tests in this directory.
+ */
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: vi.fn().mockImplementation(() => ({
+    assertRunnableForVisitor: vi.fn().mockResolvedValue(undefined),
+    confirmReservation: vi.fn().mockResolvedValue(true),
+    releaseReservation: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+vi.mock('../shareVisitorAbuseGuards', () => ({
+  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  reserveShareVisitorTurn: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+}));
+
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();
   return {

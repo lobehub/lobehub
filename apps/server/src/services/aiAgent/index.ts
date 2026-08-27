@@ -746,6 +746,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
+        verifyShareReservationConfirmed: this.verifyShareReservationConfirmed,
       },
       workspaceId: wsId,
     });
@@ -2455,6 +2456,12 @@ export class AiAgentService {
         };
       }
     }
+    // Captured BEFORE `topicId` is possibly reassigned to the freshly-created
+    // topic's id below — used by `cleanupRejectedShareVisitorTurn` (see the
+    // catch block near the end of this method) to decide whether a rejected
+    // share-visitor turn must delete the whole topic or only this turn's
+    // messages. See LOBE-11930 Codex P2, `shareVisitorAbuseGuards.ts:100`.
+    const wasNewShareVisitorTopic = !!shareGate && !topicId;
     const isFixedExecutionTargetSelection =
       !!this.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
     const isFixedDeviceTarget =
@@ -2589,6 +2596,7 @@ export class AiAgentService {
             {
               agentId: resolvedAgentId,
               db: this.db,
+              expectedGeneration: shareGate.generation,
               ownerId: this.userId,
               visitorUserId: shareGate.visitorUserId,
               workspaceId: this.workspaceId,
@@ -2761,6 +2769,7 @@ export class AiAgentService {
             {
               agentId: shareGate.agentId,
               db: this.db,
+              expectedGeneration: shareGate.generation,
               ownerId: this.userId,
               topicId,
               workspaceId: this.workspaceId,
@@ -5793,6 +5802,41 @@ export class AiAgentService {
       if (params.topicStartOwnerOperationId) {
         await this.topicModel.removeRunningOperationChild(topicId, operationId).catch(() => false);
       }
+
+      // Fail closed AND clean up: the share was revoked (or replaced by a
+      // disable → re-enable cycle, which mints a brand new `agentShares.id`)
+      // strictly between this turn's `reserveShareVisitorTopic` /
+      // `reserveShareVisitorTurn` (already revalidated up front — see their
+      // JSDoc) and this final `assertRunnableForVisitor` recheck /
+      // `confirmReservation` redemption. That gap cannot be closed by
+      // checking earlier: agent-config/tool/knowledge-base resolution between
+      // the two is real I/O. Unwind whatever THIS turn persisted rather than
+      // leaving a topic/user-message pair the owner never authorized
+      // reachable by the visitor (LOBE-11930 Codex P2,
+      // `shareVisitorAbuseGuards.ts:100`). Rethrow unchanged so the caller
+      // (`shareChat.ts`) surfaces the real FORBIDDEN instead of the generic
+      // "operation failed to start" shape below.
+      if (
+        shareGate &&
+        error instanceof TRPCError &&
+        error.code === 'FORBIDDEN' &&
+        error.message === 'This share is private'
+      ) {
+        await this.cleanupRejectedShareVisitorTurn({
+          assistantMessageId: assistantMessageRecord.id,
+          topicId,
+          userMessageId: userMessageRecord?.id,
+          wasNewTopic: wasNewShareVisitorTopic,
+        }).catch((cleanupError) =>
+          log(
+            'execAgent: cleanupRejectedShareVisitorTurn failed for topic=%s: %O',
+            topicId,
+            cleanupError,
+          ),
+        );
+        throw error;
+      }
+
       if (isAbortError(error)) {
         await updateAbortedAssistantMessage(error.message);
         log('execAgent: createOperation aborted for %s: %s', operationId, error.message);
@@ -5840,6 +5884,51 @@ export class AiAgentService {
         topicId,
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
+    }
+  }
+
+  /**
+   * Unwind the topic/message rows a share-visitor turn persisted before its
+   * final authorization recheck (`AgentShareModel.assertRunnableForVisitor` /
+   * `confirmReservation`) rejected the run as stale.
+   *
+   * This is defense-in-depth, not the primary fix: `reserveShareVisitorTopic`
+   * / `reserveShareVisitorTurn` (`shareVisitorAbuseGuards.ts`) already
+   * revalidate visibility + generation BEFORE inserting, so a request that is
+   * ALREADY stale when it reaches them never creates these rows at all. This
+   * method only covers the residual window between that revalidation and the
+   * final recheck right before `createOperation` — agent-config/tool/
+   * knowledge-base resolution in between is real I/O a concurrent revoke can
+   * still land inside. Without this cleanup, a rejected-but-already-persisted
+   * topic/message pair would remain readable via `shareChat.getMessages` /
+   * `getTopics` even though the owner revoked access before the run was ever
+   * authorized to execute (LOBE-11930 Codex P2,
+   * `shareVisitorAbuseGuards.ts:100`).
+   *
+   * Deletes only what THIS turn wrote: the whole topic when it was newly
+   * created for this request (nothing else could reference it yet, and the
+   * FK cascade removes its messages too), otherwise just this turn's user +
+   * assistant messages, never a pre-existing topic the visitor already had a
+   * legitimate conversation in.
+   */
+  private async cleanupRejectedShareVisitorTurn(params: {
+    assistantMessageId: string;
+    topicId: string;
+    userMessageId?: string;
+    wasNewTopic: boolean;
+  }): Promise<void> {
+    const { assistantMessageId, topicId, userMessageId, wasNewTopic } = params;
+
+    if (wasNewTopic) {
+      await this.topicModel.delete(topicId);
+      return;
+    }
+
+    const messageIdsToDelete = [userMessageId, assistantMessageId].filter(
+      (id): id is string => !!id,
+    );
+    if (messageIdsToDelete.length > 0) {
+      await this.messageModel.deleteMessages(messageIdsToDelete);
     }
   }
 
@@ -5915,6 +6004,34 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
+
+  /**
+   * `AgentRuntimeDelegate.verifyShareReservationConfirmed` implementation —
+   * see that interface member's JSDoc for the exact process-death window
+   * this closes at step-0 pickup.
+   *
+   * Reads the topic's `runningOperation` marker directly (the same field
+   * `confirmReservation` writes and `interruptTask` reads to detect a live
+   * run) rather than the `agent_share_run_reservations` row: that row is
+   * DELETED on every terminal path (confirmed, revoked, or swept), so its
+   * mere absence cannot distinguish "confirmed and running" from "orphaned
+   * and never confirmed" — the marker can. `this.topicModel.findById` scopes
+   * the lookup to `this.userId`, which `runStep.ts` always constructs this
+   * service with as the CREATOR's id (share runs execute under the
+   * creator's credentials), matching `confirmReservation`'s own write.
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  verifyShareReservationConfirmed = async (params: {
+    agentId: string;
+    operationId: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const topic = await this.topicModel.findById(params.topicId);
+    const runningOperation = (topic?.metadata as ChatTopicMetadata | undefined)?.runningOperation;
+    return runningOperation?.operationId === params.operationId;
+  };
 
   /**
    * Execute an agent in an isolated Thread context.
