@@ -13,6 +13,21 @@ import {
  * servers, market plugins, custom plugins) are always available here: they
  * are governed only by the owner's `enabledToolIds` picker, not the builtin
  * allowlist.
+ *
+ * KNOWN GAP (LOBE-11930 P2 re-audit): a `stdio` / local-network MCP connector
+ * is a non-builtin identifier, so this predicate has no way to see its
+ * connection type and always reports it available once the owner enables it.
+ * That class of connector actually tunnels to the OWNER's own paired device
+ * at execution time (see `resolveMcpTunnelTarget` in
+ * `apps/server/src/services/toolExecution/index.ts`, which always resolves
+ * `context.userId` — the creator for a share run, never the visitor). The
+ * dispatch layer (`executeMCPTool`'s `context.agentShare` check, same file)
+ * fails the call closed instead of tunneling, so the owner sees an accurate
+ * "not available" toggle only once server enforcement is in place — this
+ * client picker does not yet reflect that as a disabled row. Filtering it
+ * here would need connector metadata (`customParams.mcp.type` /
+ * `mcpConnectionType`) threaded into this predicate's signature, which no
+ * caller currently provides.
  */
 export const isToolAvailableToVisitors = (toolId: string): boolean =>
   isAgentShareAllowedBuiltinIdentifier(toolId);

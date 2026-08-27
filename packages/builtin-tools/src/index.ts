@@ -208,16 +208,46 @@ export const runtimeManagedToolIds = [
  * for every DENIED identifier (`lobe-agent-management`, `lobe-task`,
  * `lobe-creds`, `lobe-message`, `lobe-skill-store`, `lobe-agent-builder`,
  * `lobe-skills`, `lobe-group-agent-builder`, `lobe-group-management`,
- * `agent-signal-review`, and the hidden system-only self-iteration tools),
- * see `apps/server/src/services/aiAgent/shareGate.ts`'s `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
+ * `agent-signal-review`, `lobe-user-interaction`, `lobe-activator`, and the
+ * hidden system-only self-iteration tools), see
+ * `apps/server/src/services/aiAgent/shareGate.ts`'s `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
  * history / the denied-bucket doc block at the bottom of that file.
+ *
+ * `lobe-user-interaction` and `lobe-activator` were REMOVED (LOBE-11930 P2,
+ * third re-audit round) — not for a data leak, but the same
+ * "picker-promises-an-unusable-grant" defect class `lobe-page-agent` was
+ * removed for: every share run is forced onto `approvalMode: 'reject'`
+ * (`AiAgentService.execAgent`), which blocks any tool call whose own
+ * `humanIntervention` policy isn't `'never'`/unset (see
+ * `GeneralChatAgent.ts`'s `resolve_blocked_tools`: `reject` blocks
+ * `'required'` exactly like `'always'`, with no approver ever present to
+ * unblock it). `lobe-user-interaction`'s ONLY entry point,
+ * `askUserQuestion`, is `humanIntervention: 'always'`, so it never runs —
+ * and every other API on that tool (`submitUserResponse`,
+ * `skipUserResponse`, `cancelUserResponse`, `getInteractionState`) needs a
+ * `requestId` that only a successful `askUserQuestion` call ever mints, so
+ * the whole identifier is dead weight for a visitor. `lobe-activator`'s only
+ * API, `activateTools`, is `humanIntervention: 'required'` and dies the same
+ * way — though it was already unreachable in practice, since it (like
+ * `lobe-skills`/`lobe-skill-store`) is never a candidate the owner-facing
+ * picker offers (`getShareToolCandidateIds` draws only from the agent's own
+ * `plugins` and `runtimeManagedToolIds`, neither of which includes it), so
+ * `applyShareGateToToolSet`'s `enabledToolIds` gate already stripped it from
+ * every share run before this allowlist was ever consulted. Removing it here
+ * is a documentation-accuracy cleanup, not a behavior change.
+ *
+ * Both removals are complemented by a STRUCTURAL fix —
+ * `applyShareGateToInterventionRequiredApis` in `shareGate.ts` — that strips
+ * any API on an ALLOWED tool whose own `humanIntervention` can never resolve
+ * under forced `reject` (e.g. `lobe-agent`'s `createPlan` / `createTodos` /
+ * `clearTodos` / `askUserQuestion`, found by the same re-audit), keyed off
+ * metadata every builtin tool already declares — so a future tool doesn't
+ * need a fifth review round to catch the same mistake by hand.
  */
 export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   TopicReferenceManifest.identifier,
   CalculatorManifest.identifier,
   WebBrowsingManifest.identifier,
-  UserInteractionManifest.identifier,
-  LobeActivatorManifest.identifier,
   ImageGenerationManifest.identifier,
   VerifyToolManifest.identifier,
   AcceptanceEvidenceManifest.identifier,

@@ -498,6 +498,105 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
 
   stripSubAgentDispatchApis(toolSet);
   applyShareGateToDataToolAccess(toolSet, gate);
+  applyShareGateToInterventionRequiredApis(toolSet);
+};
+
+/**
+ * Whether an API's own `humanIntervention` policy can ever complete for a
+ * share-visitor run. Every share run is forced onto `approvalMode: 'reject'`
+ * (see `AiAgentService.execAgent`'s unconditional override, and
+ * `GeneralChatAgent`'s `resolve_blocked_tools` handling of
+ * `toolsNeedingIntervention`) — a fail-closed policy with **no approver
+ * present**, so it blocks EVERY tool call that reaches
+ * `checkInterventionNeeded`'s intervention bucket, not only `'always'`-policy
+ * ones: `'required'` gets the identical treatment (`reject` blocks
+ * "EVERYTHING that reached this branch", regardless of whether the tool's own
+ * policy was overridable). A `dynamic` config might resolve to `'never'` for
+ * some argument, but this static, schema-assembly-time check cannot prove it
+ * always will — fail-closed means never offering a maybe-broken function.
+ *
+ * `undefined` (no config at all) and the literal string `'never'` are the
+ * only two configs guaranteed to execute unconditionally under `reject`.
+ */
+const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
+  humanIntervention === undefined || humanIntervention === 'never';
+
+/**
+ * Structural counterpart to `applyShareGateToDataToolAccess`: strip any
+ * builtin API whose OWN `humanIntervention` policy can never complete under a
+ * share visitor's forced `reject` approval mode (LOBE-11930 P2, third
+ * recurrence). Two prior review rounds each found ONE more instance of this
+ * failure mode by hand (`lobe-user-interaction`'s `askUserQuestion`,
+ * `lobe-agent`'s `createPlan`/`createTodos`/`clearTodos`/`askUserQuestion`) —
+ * this pass reads the SAME `humanIntervention` metadata every builtin tool
+ * already declares for the approval-UI feature, so a future tool added to
+ * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS` with an intervention-gated API is
+ * caught automatically instead of requiring a fourth manual audit.
+ *
+ * Scoped to builtin identifiers only (`isGovernedByBuiltinAllowlist`) — MCP /
+ * market / custom plugin manifests are not `BuiltinToolManifest`s and don't
+ * carry this field's tool-level fallback the same way; they are governed
+ * exclusively by `filterPluginsByShareGate` / `shareConfig.enabledToolIds`.
+ *
+ * A tool whose TOOL-LEVEL `humanIntervention` (the fallback every API without
+ * its own entry inherits) is itself unusable loses every API and is dropped
+ * entirely, the same treatment `applyShareGateToDataToolAccess` gives a
+ * `'none'` grant — this only matters for a hypothetical future tool; none of
+ * the currently allowlisted builtins set a tool-level `humanIntervention`.
+ *
+ * This only ever narrows what the model is OFFERED (UX / token economy — an
+ * intervention-gated API was already unreachable via
+ * `checkInterventionNeeded` regardless of whether it appears in the schema).
+ * It grants nothing and closes no NEW hole; the actual unbypassable
+ * enforcement remains `GeneralChatAgent`'s `reject`-mode handling.
+ */
+const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): void => {
+  for (const identifier of Object.keys(toolSet.manifestMap)) {
+    if (!isGovernedByBuiltinAllowlist(identifier)) continue;
+
+    const manifest = toolSet.manifestMap[identifier];
+    if (!Array.isArray(manifest.api) || manifest.api.length === 0) continue;
+
+    const toolLevelHumanIntervention = (manifest as { humanIntervention?: unknown })
+      .humanIntervention;
+
+    if (!isApiUsableForShareVisitor(toolLevelHumanIntervention)) {
+      delete toolSet.manifestMap[identifier];
+      delete toolSet.sourceMap[identifier];
+      delete toolSet.executorMap[identifier];
+      pruneArrayInPlace(toolSet.enabledToolIds, (id) => id !== identifier);
+      pruneArrayInPlace(toolSet.activatableToolIds, (id) => id !== identifier);
+      if (toolSet.tools) {
+        pruneArrayInPlace(toolSet.tools, (tool) => {
+          const toolIdentifier = tool?.function?.name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0];
+          return toolIdentifier !== identifier;
+        });
+      }
+      continue;
+    }
+
+    const blockedApiNames = new Set(
+      manifest.api
+        .filter((api) => !isApiUsableForShareVisitor(api.humanIntervention))
+        .map((api) => api.name),
+    );
+    if (blockedApiNames.size === 0) continue;
+
+    toolSet.manifestMap[identifier] = {
+      ...manifest,
+      api: manifest.api.filter((api) => !blockedApiNames.has(api.name)),
+    };
+
+    if (toolSet.tools) {
+      pruneArrayInPlace(toolSet.tools, (tool) => {
+        const name: string | undefined = tool?.function?.name;
+        if (!name?.startsWith(`${identifier}${PLUGIN_SCHEMA_SEPARATOR}`)) return true;
+
+        const apiName = name.slice(identifier.length + PLUGIN_SCHEMA_SEPARATOR.length);
+        return !blockedApiNames.has(apiName);
+      });
+    }
+  }
 };
 
 /**
@@ -738,9 +837,33 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   before, since re-adding it without that plumbing would reopen the exact
  *   same "picker promises it, no run can ever use it" gap.
  *
+ * - `lobe-user-interaction` / `lobe-activator`: same "picker promises an
+ *   unusable grant" class as `lobe-page-agent` above, not a data leak — see
+ *   `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`'s JSDoc
+ *   (`packages/builtin-tools/src/index.ts`) for the full evidence. Every
+ *   share run is forced onto `approvalMode: 'reject'`
+ *   (`AiAgentService.execAgent`), which blocks any tool call whose
+ *   `humanIntervention` isn't `'never'`/unset, with no approver ever present
+ *   to unblock it (`GeneralChatAgent.ts`'s `resolve_blocked_tools`).
+ *   `lobe-user-interaction`'s only entry point (`askUserQuestion`,
+ *   `humanIntervention: 'always'`) therefore never runs, and its other APIs
+ *   all require a `requestId` only a successful `askUserQuestion` call
+ *   mints — the whole tool is dead weight for a visitor.
+ *   `lobe-activator`'s only API (`activateTools`,
+ *   `humanIntervention: 'required'`) dies the identical way, though it was
+ *   already unreachable in practice: it is never a candidate the
+ *   owner-facing picker offers (`getShareToolCandidateIds` draws only from
+ *   the agent's `plugins` and `runtimeManagedToolIds`), so
+ *   `applyShareGateToToolSet`'s `enabledToolIds` check already stripped it
+ *   from every share run before this allowlist mattered. See
+ *   `applyShareGateToInterventionRequiredApis` above for the structural fix
+ *   that now catches this failure mode generically on every ALLOWED tool's
+ *   individual APIs (e.g. `lobe-agent`'s `createPlan` / `createTodos` /
+ *   `clearTodos` / `askUserQuestion`), instead of requiring a fourth review
+ *   round per newly-discovered instance.
+ *
  * SAFE / allowed — see `SHARE_VISITOR_ALLOWED_IDENTIFIERS`'s JSDoc above for
  * `lobe-topic-reference`, `lobe-calculator`, `lobe-web-browsing`,
- * `lobe-user-interaction`, `lobe-activator`,
  * `lobe-image-generation`, `lobe-verify`, `lobe-acceptance-evidence`,
  * `lobe-agent`, `lobe-knowledge-base`, `lobe-user-memory`,
  * `lobe-agent-documents`. `lobe-brief` was removed — see "Confirmed leak

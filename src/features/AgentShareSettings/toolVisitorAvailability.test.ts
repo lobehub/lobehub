@@ -1,9 +1,11 @@
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { BrowserIdentifier } from '@lobechat/builtin-tool-browser';
 import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
 import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
+import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { describe, expect, it } from 'vitest';
 
@@ -27,6 +29,14 @@ describe('isToolAvailableToVisitors', () => {
     expect(isToolAvailableToVisitors(PageAgentIdentifier)).toBe(false);
   });
 
+  it('denies lobe-user-interaction — its only entry point (askUserQuestion) is humanIntervention: "always", and every share run is forced onto approvalMode: "reject" with no approver ever present, so the grant could never be exercised (LOBE-11930 P2 re-audit)', () => {
+    expect(isToolAvailableToVisitors(UserInteractionIdentifier)).toBe(false);
+  });
+
+  it('denies lobe-activator — its only API (activateTools) is humanIntervention: "required", which forced reject also blocks unconditionally (LOBE-11930 P2 re-audit)', () => {
+    expect(isToolAvailableToVisitors(LobeActivatorIdentifier)).toBe(false);
+  });
+
   it('allows a non-builtin identifier (MCP/market/custom plugin)', () => {
     expect(isToolAvailableToVisitors('some-mcp-server-id')).toBe(true);
   });
@@ -42,6 +52,12 @@ describe('getVisitorVisibleEnabledToolIds', () => {
   it('drops a pinned lobe-page-agent grant — a pre-existing share config could still have it persisted from before this identifier was denied', () => {
     expect(
       getVisitorVisibleEnabledToolIds([TopicReferenceIdentifier, PageAgentIdentifier]),
+    ).toEqual([TopicReferenceIdentifier]);
+  });
+
+  it('drops a persisted lobe-user-interaction grant — a share created via a template that pinned it (e.g. the Inbox agent) before this round removed it must not render as an active grant', () => {
+    expect(
+      getVisitorVisibleEnabledToolIds([TopicReferenceIdentifier, UserInteractionIdentifier]),
     ).toEqual([TopicReferenceIdentifier]);
   });
 

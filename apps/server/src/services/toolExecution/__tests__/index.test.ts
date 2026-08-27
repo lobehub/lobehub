@@ -327,5 +327,70 @@ describe('ToolExecutionService', () => {
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
       expect(callTool).toHaveBeenCalledTimes(1);
     });
+
+    // LOBE-11930 P2 (re-audit): a share-visitor run's `context.userId` is
+    // always the CREATOR (`AiAgentService` is constructed with
+    // `share.ownerId`, never the visitor's id — see `shareChat.ts`), so
+    // without this guard a device-only MCP call granted to visitors would
+    // tunnel straight to the OWNER's own paired device and execute there,
+    // unattended and unapproved, purely from an anonymous visitor's tool
+    // call. Must fail closed regardless of whether the owner's device is
+    // online — an owner device that happens to be online must NOT execute
+    // on a visitor's behalf.
+    describe('device-only MCP calls are blocked outright for a share-visitor run', () => {
+      it('blocks a stdio MCP call instead of tunneling to the owner device, even with an online plan-routed device', async () => {
+        const service = makeService();
+
+        const result = await service.executeTool(
+          mcpPayload,
+          contextWith(
+            { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+            {
+              activeDeviceId: 'owner-device',
+              agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+            },
+          ),
+        );
+
+        expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+        expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
+        expect((result.error as any)?.code).toBe('MCP_SHARE_VISITOR_BLOCKED');
+      });
+
+      it('blocks a local-network HTTP MCP call the same way', async () => {
+        const service = makeService();
+
+        const result = await service.executeTool(
+          mcpPayload,
+          contextWith(
+            { name: 'my-mcp', type: 'http', url: 'http://192.168.1.10:8080/mcp' },
+            {
+              activeDeviceId: 'owner-device',
+              agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+            },
+          ),
+        );
+
+        expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
+        expect((result.error as any)?.code).toBe('MCP_SHARE_VISITOR_BLOCKED');
+      });
+
+      it('still tunnels for a non-share run with the same device-only params', async () => {
+        const service = makeService();
+
+        const result = await service.executeTool(
+          mcpPayload,
+          contextWith(
+            { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+            { activeDeviceId: 'device-1' },
+          ),
+        );
+
+        expect(result.success).toBe(true);
+        expect(deviceGateway.executeMcpCall).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });
