@@ -376,7 +376,7 @@ export default {
   'share.budget.amountPlaceholder': 'Amount',
   'share.budget.availableToTransfer': 'Available: {{amount}}',
   'share.budget.balance': 'Available usage',
-  'share.budget.confirm.content': 'Use {{amount}} credits for this shared agent?',
+  'share.budget.confirm.content': 'Allocate {{amount}} usage to this shared agent?',
   'share.budget.confirm.ok': 'Continue',
   'share.budget.confirm.rules.irreversible': 'Review the amount before continuing.',
   'share.budget.confirm.rules.permanent': 'This allowance remains assigned to the shared agent.',

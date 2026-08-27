@@ -292,7 +292,7 @@
   "share.budget.amountPlaceholder": "数量",
   "share.budget.availableToTransfer": "可用：{{amount}}",
   "share.budget.balance": "可用用量",
-  "share.budget.confirm.content": "为此共享智能体使用 {{amount}} 积分？",
+  "share.budget.confirm.content": "为此共享智能体分配 {{amount}} 用量？",
   "share.budget.confirm.ok": "继续",
   "share.budget.confirm.rules.irreversible": "继续前请核对数量。",
   "share.budget.confirm.rules.permanent": "此用量额度将分配给共享智能体。",
