@@ -397,6 +397,12 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
 
   it('routes an active Web approval through the same generic first-winner claim', async () => {
     const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000021';
+    const execution = {
+      autoStarted: true,
+      messageId: 'assistant-web',
+      operationId: 'operation-web-resumed',
+      success: true,
+    };
     await insertPendingTool({
       batchId: 'batch-web',
       messageId: 'message-web',
@@ -425,6 +431,7 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       },
       state: 'claimed',
     });
+    aiAgentService.execAgent.mockResolvedValueOnce(execution);
 
     await expect(
       userCaller().resolveAgentInterventionBySource({
@@ -434,7 +441,13 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
         resolutionRequestId,
         targets: [{ toolCallId: 'call-web', toolMessageId: 'message-web' }],
       }),
-    ).resolves.toEqual({ contractVersion: 2, status: 'approved', success: true });
+    ).resolves.toEqual({
+      contractVersion: 2,
+      execution,
+      state: 'claimed',
+      status: 'approved',
+      success: true,
+    });
 
     expect(businessV2.resolveAgentInterventionBySource).toHaveBeenCalledWith({
       action: { scope: 'once', type: 'approve_tool' },
@@ -468,10 +481,41 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
         resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000022',
         targets: [{ toolCallId: 'call-race', toolMessageId: 'message-race' }],
       }),
-    ).resolves.toEqual({ contractVersion: 2, status: 'approved', success: true });
+    ).resolves.toEqual({
+      contractVersion: 2,
+      state: 'already_resolved',
+      status: 'approved',
+      success: true,
+    });
 
     expect(aiAgentService.execAgent).not.toHaveBeenCalled();
     expect(businessV2.onAgentInterventionResolutionPublished).not.toHaveBeenCalled();
+  });
+
+  it('does not synthesize a claim state when the durable source is unavailable', async () => {
+    await insertPendingTool({
+      batchId: 'batch-unavailable',
+      messageId: 'message-unavailable',
+      operationId: 'operation-unavailable',
+      toolCallId: 'call-unavailable',
+    });
+    businessV2.resolveAgentInterventionBySource.mockResolvedValueOnce({ handled: false });
+
+    await expect(
+      userCaller().resolveAgentInterventionBySource({
+        action: { scope: 'once', type: 'approve_tool' },
+        batchId: 'batch-unavailable',
+        operationId: 'operation-unavailable',
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000027',
+        targets: [{ toolCallId: 'call-unavailable', toolMessageId: 'message-unavailable' }],
+      }),
+    ).resolves.toEqual({
+      contractVersion: 2,
+      status: 'unavailable',
+      success: false,
+    });
+
+    expect(aiAgentService.execAgent).not.toHaveBeenCalled();
   });
 
   it('prevents an old direct execAgent approval from bypassing a generic race winner', async () => {

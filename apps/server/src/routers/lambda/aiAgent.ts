@@ -3190,6 +3190,7 @@ export const aiAgentRouter = router({
         return {
           contractVersion: 2 as const,
           ...(resolution.conversationUrl && { conversationUrl: resolution.conversationUrl }),
+          state: resolution.state,
           status: resolution.status,
           success: true as const,
         };
@@ -3200,6 +3201,7 @@ export const aiAgentRouter = router({
         contractVersion: 2 as const,
         ...(resolution.conversationUrl && { conversationUrl: resolution.conversationUrl }),
         ...(dispatch.execution && { execution: dispatch.execution }),
+        state: resolution.state,
         status: dispatch.status,
         success: true as const,
       };

@@ -956,7 +956,46 @@ export const createGatewayEventHandler = (
         // A modern submit response is a producer-delivery leg, not completion.
         // Keep the topic/card waiting until the producer echoes producerAck.
         // Older responses had no request id and remain terminal-compatible.
-        if (data.resolutionRequestId && data.producerAck !== true) break;
+        if (data.resolutionRequestId && data.producerAck !== true) {
+          pendingInterventionToolCallIds.add(data.toolCallId);
+          writeTopicStatus('waitingForHuman');
+          enqueue(async () => {
+            const toolMessage = getToolMessageByCallId(data.toolCallId);
+            if (!toolMessage) return;
+            const intervention = {
+              ...toolMessage.pluginIntervention,
+              resolving: true,
+              status: 'pending' as const,
+            };
+
+            // The inline parent tool reads plugin.intervention, while the
+            // global approval collector reads the durable tool row's top-level
+            // pluginIntervention. Update both local projections immediately so
+            // every subscribed surface becomes non-actionable. Do not persist
+            // this subscriber hint: a slow write could overwrite a later
+            // producer-ACK terminal state.
+            get().internal_dispatchMessage(
+              {
+                id: toolMessage.id,
+                type: 'updateMessage',
+                value: { pluginIntervention: intervention },
+              },
+              { context },
+            );
+            if (toolMessage.parentId && toolMessage.tool_call_id) {
+              get().internal_dispatchMessage(
+                {
+                  id: toolMessage.parentId,
+                  tool_call_id: toolMessage.tool_call_id,
+                  type: 'updateMessageTools',
+                  value: { intervention },
+                },
+                { context },
+              );
+            }
+          });
+          break;
+        }
 
         pendingInterventionToolCallIds.delete(data.toolCallId);
         enqueue(async () => {

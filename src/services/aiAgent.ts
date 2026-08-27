@@ -82,10 +82,13 @@ export interface ResolveAgentInterventionBySourceParams {
   targets: Array<{ toolCallId: string; toolMessageId: string }>;
 }
 
-export interface ResolveAgentInterventionBySourceResult {
-  execution?: ExecAgentResult;
-  handled: boolean;
-}
+export type ResolveAgentInterventionBySourceResult =
+  | { execution?: never; handled: false; state?: never }
+  | {
+      execution?: ExecAgentResult;
+      handled: true;
+      state: 'already_resolved' | 'claimed';
+    };
 
 export interface GetAgentInterventionReviewBySourceParams {
   batchId: string;
@@ -304,9 +307,13 @@ class AiAgentService {
     params: ResolveAgentInterventionBySourceParams,
   ): Promise<ResolveAgentInterventionBySourceResult> {
     const result = await lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate(params);
+
+    if (!result.success) return { handled: false };
+
     return {
       execution: 'execution' in result ? result.execution : undefined,
-      handled: result.success,
+      handled: true,
+      state: result.state,
     };
   }
 

@@ -1028,10 +1028,27 @@ describe('createGatewayEventHandler', () => {
   });
 
   it('keeps a modern intervention resolving until the producer ACK arrives', async () => {
+    const key = messageMapKey(context);
     const getMessages = vi
       .spyOn(messageService, 'getMessages')
       .mockResolvedValue([] as unknown as UIChatMessage[]);
-    const store = createStore();
+    const updateMessagePlugin = vi.spyOn(messageService, 'updateMessagePlugin');
+    const store = createStore({
+      [key]: [
+        {
+          content: '',
+          id: 'permission-message',
+          parentId: 'answer-msg',
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'permission-1',
+        } as UIChatMessage,
+      ],
+    });
     store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
     const handler = createGatewayEventHandler(() => store, {
       assistantMessageId: 'answer-msg',
@@ -1068,7 +1085,41 @@ describe('createGatewayEventHandler', () => {
       }),
     );
     await flush();
-    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'permission-message',
+        type: 'updateMessage',
+        value: {
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'answer-msg',
+        tool_call_id: 'permission-1',
+        type: 'updateMessageTools',
+        value: {
+          intervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+    expect(updateMessagePlugin).not.toHaveBeenCalled();
     expect(getMessages).not.toHaveBeenCalled();
 
     handler(

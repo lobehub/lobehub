@@ -398,6 +398,14 @@ export type ResolveAgentInterventionResult =
       workspaceId?: string;
     };
 
+/**
+ * Source resolution preserves the durable claim outcome for Web callers.
+ * `handled: false` is the OSS compatibility fallback and must not imply a
+ * durable claim state.
+ */
+export type ResolveAgentInterventionBySourceResult =
+  { handled: false; state?: never } | Extract<ResolveAgentInterventionResult, { handled: true }>;
+
 export interface RollbackAgentInterventionResolutionParams {
   actorUserId: string;
   claimId: string;
@@ -542,7 +550,7 @@ export async function resolveAgentIntervention(
  */
 export async function resolveAgentInterventionBySource(
   _params: ResolveAgentInterventionBySourceParams,
-): Promise<ResolveAgentInterventionResult> {
+): Promise<ResolveAgentInterventionBySourceResult> {
   return { handled: false };
 }
 
