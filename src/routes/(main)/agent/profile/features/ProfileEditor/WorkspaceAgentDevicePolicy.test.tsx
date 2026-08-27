@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
@@ -41,6 +42,7 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       role="combobox"
     />
   ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@/features/DeviceManager/useDeviceList', () => ({

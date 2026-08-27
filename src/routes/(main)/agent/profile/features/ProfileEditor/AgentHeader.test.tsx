@@ -56,6 +56,19 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@lobehub/ui', () => ({
+  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Icon: () => <span />,
+  Input: (props: Record<string, unknown>) => {
+    mocks.inputProps.all.push(props);
+    return <input readOnly disabled={props.disabled as boolean} value={props.value as string} />;
+  },
+  Skeleton: {
+    Button: () => <div />,
+  },
+  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
   ActionIcon: (props: Record<string, unknown>) => {
     mocks.actionIconProps.all.push(props);
     return (
@@ -69,17 +82,7 @@ vi.mock('@lobehub/ui', () => ({
       {props.children as ReactNode}
     </button>
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Input: (props: Record<string, unknown>) => {
-    mocks.inputProps.all.push(props);
-    return <input readOnly disabled={props.disabled as boolean} value={props.value as string} />;
-  },
-  Skeleton: {
-    Button: () => <div />,
-  },
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({

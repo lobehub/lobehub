@@ -16,7 +16,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Avatar: () => <span />,
   DropdownMenuGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuGroupLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
@@ -45,11 +44,16 @@ vi.mock('@lobehub/ui', () => ({
   ),
   Icon: () => <span />,
   Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children, title }: { children: ReactNode; title: string }) => (
     <span data-testid={`tooltip-${title}`}>{children}</span>
   ),
   menuSharedStyles: { item: 'item' },
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Avatar: () => <span />,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/icons', () => ({

@@ -100,6 +100,7 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
         onChange={(event) => onChange?.(event.currentTarget.checked)}
       />
     ),
+    Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
     toast: hoisted.toast,
   };
 });

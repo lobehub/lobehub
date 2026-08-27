@@ -18,7 +18,6 @@ const topicMetaCardMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  ContextMenuTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),

@@ -73,6 +73,8 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       ))}
     </select>
   ),
+  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
