@@ -155,9 +155,11 @@ HEAD via `.github/actions/business-overlay` (the clone+overlay step extracted fr
 `desktop-build-setup`: overlay files land in `$GITHUB_WORKSPACE/..`, which works because the
 repo is named `lobehub` so the checkout already sits at the submodule path), then
 `cd .. && pnpm install` and run the overlay repo's own `bun run build:share` — the tsconfig /
-stub knowledge stays over there. **The OSS workflow never names the private repo or its
-token**: they come from the Actions repository variable `OVERLAY_REPOSITORY` and secret
-`OVERLAY_REPO_TOKEN`; when either is unset (fork PRs always), the workflow falls back to the
+stub knowledge stays over there. **The OSS workflow never hardcodes the private repo
+name**: it comes from the Actions repository variable `OVERLAY_REPOSITORY`; the token reuses
+the pre-existing `LOBEHUB_CLOUD_TOKEN` secret (deliberately not renamed — the desktop release
+workflows already reference it, and a rename would mean reconfiguring the org secret). When
+either is unset (fork PRs always), the workflow falls back to the
 OSS-stub build + wrangler dry-run as a pure compile/size guard. Keep new public-facing CI
 wording on the neutral "business overlay" vocabulary — the older desktop release workflows
 still leak the internal naming and are the known remaining exception. One trap: an overlay

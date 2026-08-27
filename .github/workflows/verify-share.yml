@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-      USE_OVERLAY: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.OVERLAY_REPOSITORY != '' && secrets.OVERLAY_REPO_TOKEN != '' }}
+      USE_OVERLAY: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.OVERLAY_REPOSITORY != '' && secrets.LOBEHUB_CLOUD_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,7 +81,7 @@ jobs:
         uses: ./.github/actions/business-overlay
         with:
           overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
-          overlay-token: ${{ secrets.OVERLAY_REPO_TOKEN }}
+          overlay-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
 
       - name: Setup environment
         if: steps.detect.outputs.should_build == 'true'
