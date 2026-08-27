@@ -9,8 +9,8 @@ import {
   projectCompletionReviews,
   projectKnowledgeBases,
   projects,
-  projectWorks,
 } from '../schemas/project';
+import { projectWorks } from '../schemas/projectWork';
 import { tasks } from '../schemas/task';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
