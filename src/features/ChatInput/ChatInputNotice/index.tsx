@@ -37,16 +37,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       min-width: 0;
     }
 
-    .ant-alert-message,
-    .ant-alert-title {
-      overflow: hidden;
-
-      font-size: 12px;
-      line-height: 18px !important;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
     .ant-alert-icon {
       flex: none;
       height: 18px !important;
@@ -56,6 +46,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     @media (width <= 768px) {
       max-width: 100%;
     }
+  `,
+  title: css`
+    overflow: hidden;
+
+    min-width: 0;
+
+    font-size: 12px;
+    line-height: 18px !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -90,7 +90,7 @@ const ChatInputNotice = memo(() => {
   return (
     <Alert
       action={action}
-      classNames={{ alert: cx(styles.alert) }}
+      classNames={{ alert: cx(styles.alert), title: styles.title }}
       style={{ fontSize: 12 }}
       title={t(notice.key)}
       type={notice.type}
