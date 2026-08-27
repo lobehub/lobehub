@@ -1084,11 +1084,39 @@ export class AgentModel {
    * Batch delete agents by IDs.
    * This is a simpler delete that only removes the agent records.
    * Use this for virtual agents that don't have associated sessions.
+   *
+   * Snapshots in-flight Agent Share visitor runs on every agent BEFORE the
+   * delete cascades their topic rows away, same as the single-agent
+   * `delete()` above — this method bypasses that one entirely and has no
+   * other snapshot of its own. Agent sharing is personal-only, so a
+   * workspace-scoped `AgentModel` never has any — skip the query entirely
+   * there. See `delete()`'s JSDoc and LOBE-11930.
    */
   batchDelete = async (agentIds: string[]) => {
     if (agentIds.length === 0) return;
 
-    return this.db.delete(agents).where(and(this.ownership(), inArray(agents.id, agentIds)));
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      if (!this.workspaceId) {
+        const topicModel = new TopicModel(trx as LobeChatDatabase, this.userId);
+        const runs = await Promise.all(
+          agentIds.map((agentId) => topicModel.findActiveVisitorRunTopics(agentId)),
+        );
+        activeShareRuns = runs.flat();
+      }
+
+      return trx.delete(agents).where(and(this.ownership(), inArray(agents.id, agentIds)));
+    });
+
+    // Fired only after the transaction above has committed — mirrors
+    // `delete()`'s `onShareRunsInterrupted` timing, for the same reason:
+    // interrupting a runtime operation must never fire on a rollback.
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return result;
   };
 
   toggleFile = async (agentId: string, fileId: string, enabled?: boolean) => {

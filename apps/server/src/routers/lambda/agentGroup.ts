@@ -170,8 +170,15 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
       // `targetWorkspaceId` param — see
       // `AgentGroupRepositoryOptions.onShareReset`'s JSDoc and
       // `scheduleShareRunInterruptOnReset`'s JSDoc.
+      //
+      // `onShareRunsInterrupted` closes LOBE-11930's group-member-removal
+      // bypass: `removeAgentsFromGroup` deletes an OWNED virtual member
+      // directly, which can carry its own Agent Share the same as any
+      // personal agent — see
+      // `AgentGroupRepositoryOptions.onShareRunsInterrupted`'s JSDoc.
       agentGroupRepo: new AgentGroupRepository(ctx.serverDB, ctx.userId, wsId, {
         onShareReset: scheduleShareRunInterruptOnReset(ctx.serverDB, ctx.userId),
+        onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
       }),
       // `onShareRunsInterrupted` closes LOBE-11930's group-delete bypass:
       // `AgentGroupService.deleteGroup` -> `ChatGroupModel.delete` removes a

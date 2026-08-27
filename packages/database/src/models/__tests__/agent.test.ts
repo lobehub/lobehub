@@ -2395,6 +2395,58 @@ describe('AgentModel', () => {
       });
       expect(remainingKBs).toHaveLength(0);
     });
+
+    // Regression for LOBE-11930: `batchDelete` raw-deletes `agents` with no
+    // snapshot of its own, bypassing `delete()`'s `onShareRunsInterrupted`
+    // contract entirely. A batch-deleted agent can carry its own `link` share
+    // the same as any agent deleted one at a time.
+    it('reports in-flight Agent Share visitor runs via onShareRunsInterrupted', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Shared Agent' })
+        .returning();
+      await serverDB.insert(topics).values({
+        id: 'batch-delete-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId: agent.id,
+        senderId: 'visitor-1',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new AgentModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await modelWithCallback.batchDelete([agent.id]);
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'batch-delete-visitor-topic' },
+      ]);
+
+      // Cascade still ran — nothing left to re-discover afterward.
+      const remainingTopic = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, 'batch-delete-visitor-topic'),
+      });
+      expect(remainingTopic).toBeUndefined();
+    });
+
+    it('does not call onShareRunsInterrupted when there is nothing in flight', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Unshared Agent' })
+        .returning();
+
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new AgentModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await modelWithCallback.batchDelete([agent.id]);
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
+    });
   });
 
   describe('duplicate', () => {

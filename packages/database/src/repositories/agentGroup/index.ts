@@ -18,6 +18,7 @@ import {
   rewriteResidualMessageScope,
 } from '../../models/agentTransferJob';
 import type { AgentDeletionGuard } from '../../models/chatGroup';
+import { type ActiveShareRun, TopicModel } from '../../models/topic';
 import {
   hasForeignTopicComments,
   syncTopicCommentsOnTopicTransfer,
@@ -147,6 +148,23 @@ export interface AgentGroupRepositoryOptions {
    * `packages/database/src/models/agent.ts` and LOBE-11930.
    */
   onShareReset?: (agentId: string, revocationGeneration: number) => void;
+
+  /**
+   * Same contract as `AgentModelOptions.onShareRunsInterrupted` /
+   * `ChatGroupModelOptions.onShareRunsInterrupted` — `removeAgentsFromGroup`
+   * below deletes OWNED virtual group members with a raw `trx.delete(agents)`,
+   * bypassing `AgentModel.delete()` and the free Agent Share interrupt every
+   * other agent-deletion path gets. A group-owned virtual agent can carry its
+   * own `link` share the same as any personal agent, so removing it from the
+   * group must snapshot and interrupt its visitor runs exactly like
+   * `ChatGroupModel.delete()` does, not silently cascade them away while the
+   * visitor's run keeps executing with the creator's credentials until the
+   * next per-step authorization check. Optional and defaulted to a no-op so
+   * every EXISTING `new AgentGroupRepository(...)` call site keeps its current
+   * behavior; only construction sites that can reach the server layer pass a
+   * real callback. See LOBE-11930.
+   */
+  onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
 
 /**
@@ -157,6 +175,7 @@ export class AgentGroupRepository {
   private db: LobeChatDatabase;
   private workspaceId?: string;
   private onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
     db: LobeChatDatabase,
@@ -168,7 +187,30 @@ export class AgentGroupRepository {
     this.db = db;
     this.workspaceId = workspaceId;
     this.onShareReset = options?.onShareReset;
+    this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
   }
+
+  /**
+   * Snapshot in-flight Agent Share visitor runs for a batch of OWNED virtual
+   * group members BEFORE the caller's raw `trx.delete(agents)` cascades their
+   * topic rows away — mirrors `ChatGroupModel`'s private
+   * `snapshotOwnedMemberShareRuns` (see that method's JSDoc and
+   * `AgentGroupRepositoryOptions.onShareRunsInterrupted`'s JSDoc above).
+   * Personal-scope only: agent sharing is personal-only, so a workspace
+   * group's owned members are workspace-scoped and never have one.
+   */
+  private snapshotOwnedMemberShareRuns = async (
+    executor: LobeChatDatabase,
+    ownedAgentIds: string[],
+  ): Promise<ActiveShareRun[]> => {
+    if (this.workspaceId || ownedAgentIds.length === 0) return [];
+
+    const topicModel = new TopicModel(executor, this.userId);
+    const runs = await Promise.all(
+      ownedAgentIds.map((agentId) => topicModel.findActiveVisitorRunTopics(agentId)),
+    );
+    return runs.flat();
+  };
 
   /**
    * Workspace-aware ownership predicate for the `chat_groups` table. In personal
@@ -698,7 +740,9 @@ export class AgentGroupRepository {
     const { virtualAgents } = await this.checkAgentsBeforeRemoval(groupId, agentIds);
     const virtualAgentIds = virtualAgents.map((a) => a.id);
 
-    return this.db.transaction(async (trx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
       // Lock-then-guard, same order as `transferToWorkspace`: take the member
       // rows before consulting the job tables so a concurrent enqueue cannot
       // slip its job row in after the guard reads and before the delete lands.
@@ -755,6 +799,11 @@ export class AgentGroupRepository {
             await deletionGuard(agentId, trx);
           }
         }
+
+        // Snapshot BEFORE the delete below cascades these agents' topic rows
+        // away — see `snapshotOwnedMemberShareRuns`'s JSDoc and LOBE-11930.
+        activeShareRuns = await this.snapshotOwnedMemberShareRuns(trx, virtualAgentIds);
+
         await trx.delete(agents).where(
           and(
             this.agentOwnership(),
@@ -778,6 +827,16 @@ export class AgentGroupRepository {
         removedFromGroup: removed.length,
       };
     });
+
+    // Fired only after the transaction above has committed — mirrors
+    // `AgentModel.delete`'s / `ChatGroupModel.delete`'s `onShareRunsInterrupted`
+    // timing, for the same reason: interrupting a runtime operation is a side
+    // effect that must never fire on a rollback.
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return result;
   }
 
   /**
