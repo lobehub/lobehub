@@ -294,19 +294,24 @@ const styles = createStaticStyles(({ css }) => ({
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 4px;
   `,
+  /**
+   * One line per window — the row is a scannable comparison, not a card. The
+   * panel around them is the only card; a fill per row would stack a second
+   * surface on it for six rows running, so they are separated by rules instead.
+   */
   windowListRow: css`
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(110px, 1fr) minmax(0, 1fr);
     gap: 12px;
     align-items: center;
 
-    /* One line per window — the row is a scannable comparison, not a card. */
-    min-height: 28px;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
+    min-height: 30px;
+    padding-block: 5px;
+    padding-inline: 2px;
 
-    background: ${cssVar.colorFillQuaternary};
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
   `,
   sectionPanel: css`
     padding: 10px;
@@ -441,7 +446,9 @@ const BurnChart = memo<{
             <Text style={{ fontSize: 12 }} type={'secondary'}>
               {spend.tokens > 0
                 ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
-                    cost: formatTrackedCost(spend, t),
+                    // One convention for every amount on this surface; the
+                    // spelled-out bound lives in the tooltips.
+                    cost: formatTrackedCost(spend, t, true),
                     tokens: formatTokens(spend.tokens),
                   })
                 : t('heteroAgent.claudeQuota.calendar.noLedgerSpend')}
@@ -688,43 +695,49 @@ const WindowHistory = memo<{
           {t('heteroAgent.claudeQuota.calendar.weeklyHistoryHint')}
         </Text>
       </Flexbox>
-      {stats.map((stat) => (
-        <div className={styles.windowListRow} key={stat.resetsAt}>
-          <Flexbox horizontal align={'baseline'} gap={6}>
-            <Text style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-              {dayjs(stat.windowStartAt).format('M/D')} – {dayjs(stat.resetsAt).format('M/D')}
-            </Text>
-            {/* Only the live window needs naming; the rest are read as history. */}
-            {stat.isLive && (
-              <Text style={{ fontSize: 10, whiteSpace: 'nowrap' }} type={'secondary'}>
-                {t('heteroAgent.claudeQuota.calendar.currentWindow')}
+      <Flexbox>
+        {stats.map((stat) => (
+          <div className={styles.windowListRow} key={stat.resetsAt}>
+            <Flexbox horizontal align={'baseline'} gap={6}>
+              <Text style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                {dayjs(stat.windowStartAt).format('M/D')} – {dayjs(stat.resetsAt).format('M/D')}
               </Text>
-            )}
-          </Flexbox>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Flexbox flex={1} style={{ minWidth: 0 }}>
-              <CapacityMeter utilization={stat.peakUtilization} />
-            </Flexbox>
-            <Text strong style={{ flex: 'none', fontSize: 12, textAlign: 'right', width: 34 }}>
-              {Math.round(stat.peakUtilization)}%
-            </Text>
-          </Flexbox>
-          {stat.tokens > 0 ? (
-            <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
-              {formatTokens(stat.tokens)} · {formatTrackedCost(stat, t)}
-            </Text>
-          ) : (
-            <Tooltip title={t('heteroAgent.claudeQuota.calendar.noLedgerSpendHint')}>
-              <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
-                <Icon color={cssVar.colorTextTertiary} icon={InfoIcon} size={11} />
-                <Text style={{ fontSize: 11 }} type={'secondary'}>
-                  {t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
+              {/* Only the live window needs naming; the rest are read as history. */}
+              {stat.isLive && (
+                <Text style={{ fontSize: 10, whiteSpace: 'nowrap' }} type={'secondary'}>
+                  {t('heteroAgent.claudeQuota.calendar.currentWindow')}
                 </Text>
+              )}
+            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Flexbox flex={1} style={{ minWidth: 0 }}>
+                <CapacityMeter utilization={stat.peakUtilization} />
               </Flexbox>
-            </Tooltip>
-          )}
-        </div>
-      ))}
+              <Text strong style={{ flex: 'none', fontSize: 12, textAlign: 'right', width: 34 }}>
+                {Math.round(stat.peakUtilization)}%
+              </Text>
+            </Flexbox>
+            {stat.tokens > 0 ? (
+              /* The `+` is the compact bound; hovering spells it out, the way
+                 the session grid already explains its own cells. */
+              <Tooltip title={windowTooltip(stat, t).join(' · ')}>
+                <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
+                  {formatTokens(stat.tokens)} · {formatTrackedCost(stat, t, true)}
+                </Text>
+              </Tooltip>
+            ) : (
+              <Tooltip title={t('heteroAgent.claudeQuota.calendar.noLedgerSpendHint')}>
+                <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
+                  <Icon color={cssVar.colorTextTertiary} icon={InfoIcon} size={11} />
+                  <Text style={{ fontSize: 11 }} type={'secondary'}>
+                    {t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
+                  </Text>
+                </Flexbox>
+              </Tooltip>
+            )}
+          </div>
+        ))}
+      </Flexbox>
     </Flexbox>
   );
 });
