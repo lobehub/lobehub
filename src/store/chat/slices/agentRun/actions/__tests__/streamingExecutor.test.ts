@@ -188,6 +188,7 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
+  desktopFlag.value = false;
   serverConfigMock.enableMultimodalUnderstanding = false;
 
   act(() => {
@@ -1225,6 +1226,41 @@ describe('StreamingExecutor actions', () => {
         selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
         selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       });
+    });
+
+    it('should resolve desktop client tool manifests for the local execution environment', () => {
+      desktopFlag.value = true;
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+      const createToolsEngineSpy = vi
+        .spyOn(toolEngineering, 'createAgentToolsEngine')
+        .mockReturnValue({
+          generateToolsDetailed: vi.fn().mockReturnValue({
+            enabledManifests: [],
+            enabledToolIds: [],
+            tools: [],
+          }),
+        } as any);
+
+      result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+
+      expect(createToolsEngineSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        undefined,
+        expect.objectContaining({ executionEnv: 'local' }),
+      );
     });
 
     it('should not inject page editor context outside page scope', () => {
