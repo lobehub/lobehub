@@ -363,6 +363,45 @@ export interface AgentRuntimeDelegate {
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
+   * Atomically resolve a share reservation the step-0 gate is ABOUT TO abort
+   * (status `'pending'`-after-retry-exhaustion, `'revoked'`, or the
+   * confirmation check itself throwing) against a `confirmReservation` call
+   * that may be racing it from the SAME originating request.
+   *
+   * WHY this must be atomic rather than "abort, then separately check": the
+   * gate observing anything other than `'confirmed'` does NOT prove the
+   * reservation is dead — `confirmReservation` is a separate, unbounded-
+   * duration step of the same request and can still land moments later. See
+   * `AgentShareModel.invalidateReservation`'s JSDoc for the exact race
+   * (LOBE-11930 Codex P2) and how the shared `DELETE ... WHERE id =
+   * operationId AND revoked_at IS NULL` predicate — the SAME one
+   * `confirmReservation` uses — makes the two calls resolve consistently: a
+   * `DELETE` blocked behind a concurrent `confirmReservation` transaction only
+   * unblocks after that transaction has already committed or rolled back.
+   *
+   * Returns:
+   * - `'invalidated'` — this call deleted the still-pending row itself; it won
+   *   the race (or there was no contention). The caller must abort — a
+   *   `confirmReservation` racing behind this call is now guaranteed to find
+   *   the row gone and fail closed on its own.
+   * - `'confirmed'` — the row was already gone because `confirmReservation`
+   *   won the race and committed the topic's `runningOperation` marker first.
+   *   The caller MUST NOT abort: the run is legitimately confirmed and
+   *   proceeding.
+   * - `'gone'` — the row was already gone for any OTHER reason (a genuine
+   *   revoke, sweep, or release). The caller must abort; there is nothing
+   *   left to invalidate.
+   *
+   * Implemented by AiAgentService via `AgentShareModel.invalidateReservation`
+   * plus a marker re-check. A throw or a missing delegate must be treated
+   * exactly like `'gone'` by the caller — fail closed, never fail open.
+   */
+  invalidatePendingShareReservation?: (params: {
+    agentId: string;
+    operationId: string;
+    topicId: string;
+  }) => Promise<ShareReservationInvalidationOutcome>;
+  /**
    * Report whether an Agent Share visitor run's reservation is confirmed,
    * still pending, or resolved without ever being confirmed.
    *
@@ -421,6 +460,12 @@ export interface AgentRuntimeDelegate {
  *   `createOperation` on this same operation id. Nothing left to wait for.
  */
 export type ShareReservationStatus = 'confirmed' | 'pending' | 'revoked';
+
+/**
+ * Outcome of {@link AgentRuntimeDelegate.invalidatePendingShareReservation} —
+ * see that member's JSDoc for what each value means and the race it resolves.
+ */
+export type ShareReservationInvalidationOutcome = 'confirmed' | 'gone' | 'invalidated';
 
 export interface AgentRuntimeServiceOptions {
   /**
@@ -830,7 +875,12 @@ export class AgentRuntimeService {
    *
    * Fails closed on a confirmation-check throw — see the `catch` below — and
    * on `'revoked'`: an unstoppable creator-credentialed run is strictly worse
-   * than a visitor turn that errors out and can simply be re-sent.
+   * than a visitor turn that errors out and can simply be re-sent. Every path
+   * that decides to abort (this throw, `'revoked'`, and retry-exhausted
+   * `'pending'` in `deferShareGateStep`) routes through
+   * `resolveShareGateAbort`, which atomically invalidates the reservation
+   * before recording the abort — see that method's JSDoc for the
+   * confirm-after-abort race (LOBE-11930 Codex P2) this closes.
    *
    * A state-load failure here is NOT treated as "proceed" (fixes LOBE-11930
    * Codex P1(b)). The old reasoning — "we cannot tell a share run from an
@@ -879,7 +929,7 @@ export class AgentRuntimeService {
       });
     } catch (error) {
       log('[%s] Share reservation confirmation check failed: %O', operationId, error);
-      return this.buildShareAbortResult(operationId, state);
+      return this.resolveShareGateAbort(operationId, agentId, topicId, state);
     }
 
     if (status === 'confirmed') return undefined;
@@ -894,29 +944,48 @@ export class AgentRuntimeService {
       // defers rather than trusting it — the confirming write is a
       // synchronous step of the SAME originating request and normally lands
       // within milliseconds.
-      return this.deferShareGateStep(operationId, context, shareGateRetryAttempt, state);
+      return this.deferShareGateStep(
+        operationId,
+        context,
+        shareGateRetryAttempt,
+        state,
+        agentId,
+        topicId,
+      );
     }
 
     // status === 'revoked': the reservation row is gone (revoked, swept as
     // abandoned, or released after `createOperation` failed) and the marker
-    // doesn't name this operation. Nothing left to wait for.
-    return this.buildShareAbortResult(operationId, state);
+    // doesn't name this operation. Nothing left to wait for — UNLESS this
+    // very `verifyShareReservationStatus` read straddled a racing
+    // `confirmReservation` commit (its two internal reads, marker then row,
+    // are not in one transaction) and observed a stale pre-commit marker.
+    // `resolveShareGateAbort` resolves that atomically instead of trusting
+    // this single non-atomic read.
+    return this.resolveShareGateAbort(operationId, agentId, topicId, state);
   }
 
   /**
    * Re-queue the step-0 delivery on a short bounded backoff so a
    * not-yet-resolvable share-reservation signal gets another look instead of
    * either running unconfirmed or aborting on the first miss. Exhausts to
-   * {@link buildShareAbortResult} — fail closed, never fail open — once
+   * {@link resolveShareGateAbort} — fail closed, never fail open — once
    * {@link SHARE_GATE_RETRY_MAX_ATTEMPTS} is reached or re-queueing itself
    * fails.
+   *
+   * `agentId`/`topicId` are threaded through separately (rather than
+   * re-derived from `state` here) so the state-load-failure call site — which
+   * has neither — can still exhaust into a plain {@link buildShareAbortResult}
+   * without a spurious `undefined`-metadata lookup.
    */
   private async deferShareGateStep(
     operationId: string,
     context: AgentRuntimeContext | undefined,
     attempt: number,
     state: AgentState | null | undefined,
-  ): Promise<AgentExecutionResult> {
+    agentId?: string,
+    topicId?: string,
+  ): Promise<AgentExecutionResult | undefined> {
     const nextAttempt = attempt + 1;
     if (this.queueService && nextAttempt <= SHARE_GATE_RETRY_MAX_ATTEMPTS) {
       const delay = shareGateRetryDelayMs(nextAttempt);
@@ -951,6 +1020,69 @@ export class AgentRuntimeService {
     }
 
     log('[%s] Share reservation gate retry budget exhausted — failing closed', operationId);
+    if (agentId && topicId) return this.resolveShareGateAbort(operationId, agentId, topicId, state);
+    return this.buildShareAbortResult(operationId, state);
+  }
+
+  /**
+   * Atomically decide whether a share reservation the step-0 gate is about to
+   * give up on (retry-exhausted `'pending'`, `'revoked'`, or the confirmation
+   * check itself throwing) is actually dead, or was just confirmed by a
+   * racing `confirmReservation` call from the SAME originating request.
+   *
+   * Fixes LOBE-11930 Codex P2: every one of the three call sites above used
+   * to go straight to {@link buildShareAbortResult}, which marks the
+   * operation `interrupted` WITHOUT touching the `agent_share_run_reservations`
+   * row. `confirmReservation` is a separate, unbounded-duration step of the
+   * originating request (it can be paused for arbitrarily long between
+   * `createOperation` returning and this call), so it could still land AFTER
+   * this abort decided the run was dead — deleting the row and writing the
+   * topic's `runningOperation` marker for an operation that is already
+   * `interrupted` and will never run another step. The visitor's original
+   * request would then return success, and their Stop button would target a
+   * marker that names a corpse operation forever.
+   *
+   * Delegates the actual invalidate-or-discover-confirmed decision to
+   * `AiAgentService.invalidatePendingShareReservation`
+   * (`AgentRuntimeDelegate.invalidatePendingShareReservation`) — see that
+   * member's JSDoc for why sharing `confirmReservation`'s own DELETE
+   * predicate under ordinary Postgres row locking is what makes this
+   * atomic without a new lock. `'confirmed'` means the abort must NOT
+   * happen — the caller returns `undefined` (proceed) exactly like an
+   * ordinary `verifyShareReservationStatus === 'confirmed'` result.
+   * `'invalidated'` and `'gone'` both mean the run is genuinely dead — abort.
+   *
+   * A throw here (or a missing delegate — should not happen once
+   * `verifyShareReservationStatus` is wired, since AiAgentService always
+   * installs both together) fails closed the same way `'gone'` does: never
+   * risk leaving a dead reservation confirmable.
+   */
+  private async resolveShareGateAbort(
+    operationId: string,
+    agentId: string,
+    topicId: string,
+    state: AgentState | null | undefined,
+  ): Promise<AgentExecutionResult | undefined> {
+    if (this.delegate.invalidatePendingShareReservation) {
+      try {
+        const outcome = await this.delegate.invalidatePendingShareReservation({
+          agentId,
+          operationId,
+          topicId,
+        });
+        if (outcome === 'confirmed') {
+          log(
+            '[%s] Share reservation gate was about to abort, but a racing confirmReservation' +
+              ' already committed — proceeding instead',
+            operationId,
+          );
+          return undefined;
+        }
+      } catch (error) {
+        log('[%s] Share reservation invalidation failed, failing closed: %O', operationId, error);
+      }
+    }
+
     return this.buildShareAbortResult(operationId, state);
   }
 
