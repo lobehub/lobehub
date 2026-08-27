@@ -20,7 +20,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   ),
   Text: ({ children }: any) => <span>{children}</span>,
   createModal: vi.fn(),
-  Text: ({ children }: any) => <span>{children}</span>,
   useModalContext: () => ({ close: mocks.close }),
 }));
 
