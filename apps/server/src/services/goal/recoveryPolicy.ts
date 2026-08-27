@@ -1,7 +1,5 @@
 import type { GoalItem } from '@lobechat/types';
 
-import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
-
 const DEFAULT_MAX_ATTEMPTS_PER_WORK = 3;
 const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // Agent runtime refreshes the durable operation lease every third 30-second
@@ -9,10 +7,11 @@ const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // so a transient missed write cannot reclaim a healthy operation.
 export const MIN_OPERATION_LEASE_TIMEOUT_MS = 3 * 60 * 1000;
 
-export const resolveWorkAttemptBudget = (goal: GoalItem, taskCarried: boolean): number => {
+/** How many attempts one Work gets before the coordinator opens a decision gate. */
+export const resolveWorkAttemptBudget = (goal: GoalItem): number => {
   const configured = goal.config?.recovery?.maxAttemptsPerWork;
   if (typeof configured === 'number') return Math.max(1, configured);
-  return taskCarried ? resolveGoalRoundBudget(goal) : DEFAULT_MAX_ATTEMPTS_PER_WORK;
+  return DEFAULT_MAX_ATTEMPTS_PER_WORK;
 };
 
 export const resolveWorkMaxSteps = (goal: GoalItem): number | undefined => {

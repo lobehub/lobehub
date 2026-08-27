@@ -3,10 +3,9 @@ import { safeParseJSON } from '@lobechat/utils';
 
 export interface OperationGoal {
   criteriaCount: number;
-  identifier: string;
-  maxRounds?: number;
+  /** The `goals` row the tool created — the card's pointer and its link target. */
+  goalId: string;
   name: string;
-  taskId: string;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -28,20 +27,17 @@ export const deriveOperationGoals = (blocks: AssistantContentBlock[] = []): Oper
       if (tool.result?.error || !isRecord(tool.result?.state) || tool.result.state.success !== true)
         return [];
 
-      const identifier = nonEmptyString(tool.result.state.identifier);
-      const taskId = nonEmptyString(tool.result.state.taskId);
-      if (!identifier || !taskId) return [];
+      const goalId = nonEmptyString(tool.result.state.goalId);
+      if (!goalId) return [];
 
       const parsedArgs = safeParseJSON(tool.arguments);
       const args = isRecord(parsedArgs) ? parsedArgs : undefined;
-      const name =
-        nonEmptyString(tool.result.state.name) ?? nonEmptyString(args?.name) ?? identifier;
+      const name = nonEmptyString(tool.result.state.name) ?? nonEmptyString(args?.name) ?? goalId;
       const criteriaCount = Array.isArray(args?.criteria) ? args.criteria.length : 0;
-      const maxRounds = typeof args?.maxIterations === 'number' ? args.maxIterations : undefined;
 
-      return [{ criteriaCount, identifier, maxRounds, name, taskId }];
+      return [{ criteriaCount, goalId, name }];
     }),
   );
 
-  return [...new Map(goals.map((goal) => [goal.taskId, goal])).values()];
+  return [...new Map(goals.map((goal) => [goal.goalId, goal])).values()];
 };

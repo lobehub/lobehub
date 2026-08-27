@@ -1,4 +1,4 @@
-import type { CreateTaskGoalInput, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -190,7 +190,6 @@ export class TaskDetailSliceActionImpl {
     description?: string;
     editorData?: unknown;
     /** Bind a goal entity (`goals` row) to the created task. */
-    goal?: CreateTaskGoalInput;
     instruction: string;
     name?: string;
     parentTaskId?: string;

@@ -3,9 +3,10 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goals, tasks, users, workspaces } from '../../schemas';
+import { agents, goalEdges, goalNodeDecisions, goalNodes, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
+import { GoalGraphModel } from '../goalGraph';
 import { TaskModel } from '../task';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -13,6 +14,7 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'goal-model-test-user-id';
 const otherUserId = 'goal-model-test-user-2';
 const goalModel = new GoalModel(serverDB, userId);
+const graphModel = new GoalGraphModel(serverDB, userId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -27,16 +29,14 @@ describe('GoalModel', () => {
   describe('create', () => {
     it('creates a goal with defaults', async () => {
       const result = await goalModel.create({
-        subjectId: 'tsk_1',
-        subjectType: 'task',
+        subjectType: 'standalone',
         title: 'Ship the goals table',
       });
 
       expect(result.id).toMatch(/^goal_/);
       expect(result).toMatchObject({
         status: 'planning',
-        subjectId: 'tsk_1',
-        subjectType: 'task',
+        subjectType: 'standalone',
         title: 'Ship the goals table',
         userId,
       });
@@ -47,8 +47,7 @@ describe('GoalModel', () => {
         maxRounds: 5,
         maxTotalCost: 12.5,
         requirement: 'All tests pass',
-        subjectId: 'tsk_2',
-        subjectType: 'task',
+        subjectType: 'standalone',
         title: 'Budgeted goal',
       });
 
@@ -58,109 +57,109 @@ describe('GoalModel', () => {
     });
   });
 
-  describe('findBySubject', () => {
-    it('finds the goal bound to a carrier', async () => {
-      const created = await goalModel.create({
-        subjectId: 'tsk_3',
-        subjectType: 'task',
-        title: 'Carrier goal',
-      });
+  describe('findByWorkTask', () => {
+    it('finds the goal whose graph owns a Work Task', async () => {
+      const task = await new TaskModel(serverDB, userId).create({ instruction: 'do the work' });
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Owner' });
+      const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+      await serverDB.update(goalNodes).set({ taskId: task.id }).where(eq(goalNodes.id, node!.id));
 
-      const found = await goalModel.findBySubject('task', 'tsk_3');
-      expect(found?.id).toBe(created.id);
+      expect((await goalModel.findByWorkTask(task.id))?.id).toBe(goal.id);
     });
 
     it('does not cross user boundaries', async () => {
-      const otherModel = new GoalModel(serverDB, otherUserId);
-      await otherModel.create({ subjectId: 'tsk_4', subjectType: 'task', title: 'Not mine' });
+      const otherGoals = new GoalModel(serverDB, otherUserId);
+      const otherGraph = new GoalGraphModel(serverDB, otherUserId);
+      const task = await new TaskModel(serverDB, otherUserId).create({ instruction: 'theirs' });
+      const goal = await otherGoals.create({ subjectType: 'standalone', title: 'Theirs' });
+      const node = await otherGraph.createNode(goal.id, { kind: 'work', title: 'W1' });
+      await serverDB.update(goalNodes).set({ taskId: task.id }).where(eq(goalNodes.id, node!.id));
 
-      const found = await goalModel.findBySubject('task', 'tsk_4');
-      expect(found).toBeUndefined();
-    });
-  });
-
-  describe('listBySubjects', () => {
-    it('returns goals for the asked carriers only', async () => {
-      await goalModel.create({ subjectId: 'tsk_a', subjectType: 'task', title: 'A' });
-      await goalModel.create({ subjectId: 'tsk_b', subjectType: 'task', title: 'B' });
-      await goalModel.create({ subjectId: 'tsk_c', subjectType: 'task', title: 'C' });
-
-      const rows = await goalModel.listBySubjects('task', ['tsk_a', 'tsk_c']);
-      expect(rows.map((r) => r.subjectId).sort()).toEqual(['tsk_a', 'tsk_c']);
-    });
-
-    it('returns empty for an empty id list', async () => {
-      expect(await goalModel.listBySubjects('task', [])).toEqual([]);
+      expect(await goalModel.findByWorkTask(task.id)).toBeUndefined();
     });
   });
 
   describe('list', () => {
-    it('applies the carrier task visibility boundary in a workspace', async () => {
-      const workspaceId = 'goal-list-visibility-workspace';
-      await serverDB.insert(workspaces).values({
-        id: workspaceId,
-        name: 'Goal list visibility',
-        primaryOwnerId: userId,
-        slug: workspaceId,
-      });
+    it('lists goals the caller owns, newest first, with the graph roll-up', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Reproduce it' });
+      const problem = await graphModel.createNode(goal.id, { kind: 'problem', title: 'P1' });
+      const done = await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+      await graphModel.createNode(goal.id, { kind: 'work', title: 'W2' });
+      await graphModel.createNode(goal.id, { kind: 'finding', title: 'F1' });
+      await graphModel.createEdge(goal.id, problem!.id, done!.id, 'decomposes');
+      await graphModel.updateNodeStatus(goal.id, done!.id, 'resolved');
 
-      const ownerTasks = new TaskModel(serverDB, userId, workspaceId);
-      const ownerGoals = new GoalModel(serverDB, userId, workspaceId);
-      const privateTask = await ownerTasks.create({
-        instruction: 'private',
-        visibility: 'private',
-      });
-      const publicTask = await ownerTasks.create({ instruction: 'public', visibility: 'public' });
-      await ownerGoals.create({
-        subjectId: privateTask.id,
-        subjectType: 'task',
-        title: 'Private goal',
-      });
-      await ownerGoals.create({
-        subjectId: publicTask.id,
-        subjectType: 'task',
-        title: 'Public goal',
-      });
+      const { goals, total } = await goalModel.list();
 
-      const memberGoals = new GoalModel(serverDB, otherUserId, workspaceId);
-      const result = await memberGoals.list();
-
-      expect(result.total).toBe(1);
-      expect(result.goals.map(({ id }) => id)).toEqual([publicTask.id]);
+      expect(total).toBe(1);
+      expect(goals[0]).toMatchObject({
+        findingCount: 1,
+        pendingDecisions: 0,
+        workDone: 1,
+        workTotal: 2,
+      });
+      expect(goals[0].goal.id).toBe(goal.id);
     });
 
-    it('filters by the carrier task current assignee instead of the goal snapshot', async () => {
-      const oldAgentId = 'goal-list-old-agent';
-      const newAgentId = 'goal-list-new-agent';
-      await serverDB.insert(agents).values([
-        { id: oldAgentId, slug: oldAgentId, userId },
-        { id: newAgentId, slug: newAgentId, userId },
-      ]);
-      const task = await new TaskModel(serverDB, userId).create({
-        assigneeAgentId: oldAgentId,
-        instruction: 'reassign me',
+    it('counts only the decision gates still waiting on a human', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Gated' });
+      const open = await graphModel.createNode(goal.id, { kind: 'decision', title: 'D1' });
+      const closed = await graphModel.createNode(goal.id, { kind: 'decision', title: 'D2' });
+      await graphModel.createDecision(goal.id, open!.id, {
+        authority: 'user',
+        question: 'retry?',
       });
-      await goalModel.create({
-        agentId: oldAgentId,
-        subjectId: task.id,
-        subjectType: 'task',
-        title: 'Reassigned goal',
+      await graphModel.createDecision(goal.id, closed!.id, {
+        authority: 'user',
+        question: 'retire?',
       });
       await serverDB
-        .update(tasks)
-        .set({ assigneeAgentId: newAgentId })
-        .where(eq(tasks.id, task.id));
+        .update(goalNodeDecisions)
+        .set({ status: 'resolved' })
+        .where(eq(goalNodeDecisions.nodeId, closed!.id));
 
-      expect((await goalModel.list({ agentId: oldAgentId })).total).toBe(0);
-      expect((await goalModel.list({ agentId: newAgentId })).goals[0]?.id).toBe(task.id);
+      expect((await goalModel.list()).goals[0].pendingDecisions).toBe(1);
+    });
+
+    it('does not leak another user’s goals', async () => {
+      await new GoalModel(serverDB, otherUserId).create({
+        subjectType: 'standalone',
+        title: 'Not mine',
+      });
+
+      expect((await goalModel.list()).total).toBe(0);
+    });
+
+    it('scopes by the goal’s responsible agent', async () => {
+      const mine = 'goal-list-agent-a';
+      const theirs = 'goal-list-agent-b';
+      await serverDB.insert(agents).values([
+        { id: mine, slug: mine, userId },
+        { id: theirs, slug: theirs, userId },
+      ]);
+      await goalModel.create({ agentId: mine, subjectType: 'standalone', title: 'Mine' });
+      await goalModel.create({ agentId: theirs, subjectType: 'standalone', title: 'Theirs' });
+
+      const scoped = await goalModel.list({ agentId: mine });
+      expect(scoped.total).toBe(1);
+      expect(scoped.goals[0].goal.title).toBe('Mine');
+    });
+
+    it('filters by lifecycle status', async () => {
+      const running = await goalModel.create({ subjectType: 'standalone', title: 'Running' });
+      const achieved = await goalModel.create({ subjectType: 'standalone', title: 'Achieved' });
+      await goalModel.updateStatus(running.id, 'running');
+      await goalModel.updateStatus(achieved.id, 'achieved');
+
+      const open = await goalModel.list({ statuses: ['running'] });
+      expect(open.goals.map(({ goal }) => goal.title)).toEqual(['Running']);
     });
   });
 
   describe('updateStatus', () => {
     it('stamps startedAt on first entry into running', async () => {
       const { id } = await goalModel.create({
-        subjectId: 'tsk_5',
-        subjectType: 'task',
+        subjectType: 'standalone',
         title: 'Lifecycle goal',
       });
 
@@ -175,8 +174,7 @@ describe('GoalModel', () => {
 
     it('stamps completedAt on terminal states and clears it on re-open', async () => {
       const { id } = await goalModel.create({
-        subjectId: 'tsk_6',
-        subjectType: 'task',
+        subjectType: 'standalone',
         title: 'Terminal goal',
       });
 
@@ -189,24 +187,27 @@ describe('GoalModel', () => {
 
     it('returns undefined for a goal outside the scope', async () => {
       const otherModel = new GoalModel(serverDB, otherUserId);
-      const { id } = await otherModel.create({
-        subjectId: 'tsk_7',
-        subjectType: 'task',
-        title: 'Not mine',
-      });
+      const { id } = await otherModel.create({ subjectType: 'standalone', title: 'Not mine' });
 
       expect(await goalModel.updateStatus(id, 'running')).toBeUndefined();
     });
   });
 
-  describe('deleteBySubject', () => {
-    it('removes the goal bound to the carrier', async () => {
-      await goalModel.create({ subjectId: 'tsk_8', subjectType: 'task', title: 'Doomed' });
+  describe('delete', () => {
+    it('cascades the whole graph away with the goal', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Doomed' });
+      const problem = await graphModel.createNode(goal.id, { kind: 'problem', title: 'P1' });
+      const work = await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+      await graphModel.createEdge(goal.id, problem!.id, work!.id, 'decomposes');
 
-      await goalModel.deleteBySubject('task', 'tsk_8');
+      await goalModel.delete(goal.id);
 
-      const rows = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId) });
-      expect(rows).toHaveLength(0);
+      expect(
+        await serverDB.query.goalNodes.findMany({ where: eq(goalNodes.goalId, goal.id) }),
+      ).toHaveLength(0);
+      expect(
+        await serverDB.query.goalEdges.findMany({ where: eq(goalEdges.goalId, goal.id) }),
+      ).toHaveLength(0);
     });
   });
 });

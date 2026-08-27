@@ -1,5 +1,6 @@
 'use client';
 
+import { buildGoalRequirement, resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
@@ -34,11 +35,10 @@ import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibil
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
-import { verifyService } from '@/services/verify';
-import { useTaskStore } from '@/store/task';
+import { goalService } from '@/services/goal';
 import { shinyTextStyles } from '@/styles';
 
-import { buildGoalTaskConfig } from './goalConfig';
+import { buildGoalCreateInput } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
 
@@ -277,7 +277,7 @@ export interface CreateGoalContentProps {
   initialRequirement?: string;
   initialRoundBudget?: number;
   initialTitle?: string;
-  onCreated?: (goal: { agentId?: string; identifier: string }) => void;
+  onCreated?: (goal: { agentId?: string; goalId: string }) => void;
   projectId?: string;
 }
 
@@ -296,8 +296,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
 
-  const createTask = useTaskStore((s) => s.createTask);
-  const isCreating = useTaskStore((s) => s.isCreatingTask);
+  const [isCreating, setIsCreating] = useState(false);
   const activeWorkspaceId = useActiveWorkspaceId();
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
@@ -436,59 +435,44 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     if (!canCreate) return;
     const instruction =
       instructionRef.current.trim() || plan.instruction.trim() || plan.name.trim();
-    const editorData = instructionRef.current.trim()
-      ? (editor?.getDocument?.('json') as unknown)
-      : undefined;
     const reviewedCriteria = plan.criteria.filter((criterion) => criterion.title.trim());
     if (!instruction || reviewedCriteria.length === 0) return;
 
-    let verifyCriteriaIds: string[] = [];
-    try {
-      verifyCriteriaIds = await verifyService.createCriteria(reviewedCriteria);
-      const { config, goal } = buildGoalTaskConfig({
-        costBudget: plan.maxTotalCost,
-        instruction,
-        requirement,
-        roundBudget: plan.maxIterations,
-        verifyCriteriaIds,
-      });
-      const result = await createTask({
-        assigneeAgentId: agentId,
-        config,
-        editorData,
-        goal,
-        instruction,
-        name: plan.name.trim() || undefined,
-        projectId,
-        visibility: activeWorkspaceId ? visibility : undefined,
-      });
+    const title = plan.name.trim() || instruction;
+    const budget = buildGoalCreateInput({
+      costBudget: plan.maxTotalCost,
+      instruction,
+      requirement,
+      roundBudget: plan.maxIterations,
+    });
 
-      if (!result) throw new Error('The goal was not created.');
+    setIsCreating(true);
+    try {
+      const graph = await goalService.create({
+        agentId,
+        config: {
+          recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
+        },
+        maxRounds: budget.maxRounds ?? undefined,
+        maxTotalCost: budget.maxTotalCost ?? undefined,
+        projectId,
+        requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
+        title,
+        work: [{ description: instruction, title }],
+      });
+      // The first tick dispatches the opening Work: the coordinator creates its
+      // task and acceptance contract, so the goal is moving when the modal closes.
+      await goalService.tick(graph.goal.id);
 
       close();
-      onCreated?.({
-        agentId: result.assigneeAgentId ?? undefined,
-        identifier: result.identifier,
-      });
+      onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
       console.error('[CreateGoalContent] create failed:', error);
-      await Promise.allSettled(verifyCriteriaIds.map((id) => verifyService.deleteCriterion(id)));
       toast.error(t('createGoal.createFailed'));
+    } finally {
+      setIsCreating(false);
     }
-  }, [
-    activeWorkspaceId,
-    agentId,
-    canCreate,
-    close,
-    createTask,
-    editor,
-    onCreated,
-    plan,
-    projectId,
-    requirement,
-    t,
-    visibility,
-  ]);
+  }, [agentId, canCreate, close, onCreated, plan, projectId, requirement, t]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;

@@ -114,7 +114,6 @@ describe('TaskListSliceAction', () => {
         automated: false,
         excludeStatuses: ['completed', 'canceled'],
         groupBy: 'assignee',
-        hasGoal: false,
         projectId: undefined,
         visibility: undefined,
       });

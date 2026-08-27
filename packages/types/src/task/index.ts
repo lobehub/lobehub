@@ -1,5 +1,4 @@
 import type { BriefArtifacts } from '../brief';
-import type { GoalItem } from '../goal';
 import type { ChatFileItem } from '../message/ui/chat';
 
 // ── Task type aliases ──
@@ -24,7 +23,7 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  *                 scheduling state, nor count against the maxExecutions quota.
  * - `schedule`  — a cron `schedule` tick fired the run.
  * - `heartbeat` — a heartbeat interval tick fired the run.
- * - `goal`      — the goal outer loop spawned this round after a failed verify.
+ * - `goal`      — the Goal coordinator started this Work attempt.
  *                 Like `manual`, it never counts against automation quotas.
  */
 export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
@@ -246,12 +245,6 @@ export interface TaskItem {
   description: string | null;
   editorData: unknown;
   error: string | null;
-  /**
-   * The goal entity bound to this task (`goals.subjectType='task'`), attached
-   * by list/detail reads. Presence marks a goal-driven task; the goal owns its
-   * budget, requirement and lifecycle status.
-   */
-  goal?: GoalItem | null;
   heartbeatInterval: number | null;
   heartbeatTimeout: number | null;
   id: string;
@@ -449,7 +442,7 @@ export interface TaskDetailActivity {
   time?: string;
   title?: string;
   topicId?: string | null;
-  /** Topic-only: what opened this round — `goal` marks a loop-spawned rerun. */
+  /** Topic-only: what opened this round — `goal` marks a coordinator-started attempt. */
   trigger?: TaskRunTrigger | null;
   type: TaskActivityType;
   userId?: string | null;
@@ -490,8 +483,6 @@ export interface TaskDetailData {
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
-  /** The goal entity carried by this task (`goals` row); null when not a goal task. */
-  goal?: GoalItem | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;

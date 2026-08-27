@@ -4,7 +4,6 @@ import type { GoalTickResult } from '@lobechat/types';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalKeys, taskKeys } from '@/libs/swr/keys';
 import { goalService } from '@/services/goal';
-import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
@@ -43,13 +42,13 @@ export class GoalActionImpl {
   }
 
   deleteGoal = async (agentId: string, goalId: string): Promise<void> => {
-    await taskService.deleteGoal(goalId);
+    await goalService.delete(goalId);
     const current = this.#get().goalListByAgentId[agentId] ?? [];
     this.#set(
       ({ goalListByAgentId }) => ({
         goalListByAgentId: {
           ...goalListByAgentId,
-          [agentId]: current.filter(({ id, identifier }) => id !== goalId && identifier !== goalId),
+          [agentId]: current.filter(({ goal }) => goal.id !== goalId),
         },
       }),
       false,

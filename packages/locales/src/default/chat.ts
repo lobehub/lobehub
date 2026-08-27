@@ -1725,6 +1725,10 @@ export default {
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
   'goalList.empty': 'No goals yet',
+  'goalList.workProgress': '{{done}}/{{total}} tasks done',
+  'goalList.findings': '{{count}} findings',
+  'goalList.needsYou': '{{count}} need you',
+  'goalList.noWork': 'No tasks yet',
   'goalList.loadError': 'Could not load goals',
   'goalList.loadErrorDescription':
     'The service is temporarily unavailable. Your goals are not lost.',
@@ -1742,6 +1746,7 @@ export default {
   'goalWork.checks': '{{passed}}/{{total}} checks passed',
   'goalWork.round': 'Round {{current}}',
   'goalWork.roundWithBudget': 'Round {{current}}/{{total}}',
+  'goalWork.workDone': '{{passed}}/{{total}} tasks done',
   'goalWork.status.achieved': 'Achieved',
   'goalWork.status.canceled': 'Canceled',
   'goalWork.status.error': 'Needs attention',

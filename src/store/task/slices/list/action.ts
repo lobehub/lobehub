@@ -246,7 +246,6 @@ export class TaskListSliceActionImpl {
           ...(automated === undefined ? {} : { automated }),
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses] : undefined,
           ...(groupBy === 'status' ? { groups: DEFAULT_KANBAN_GROUPS } : { groupBy }),
-          hasGoal: false,
           projectId,
           visibility: filterToServerVisibility(listVisibility),
         });
@@ -291,7 +290,6 @@ export class TaskListSliceActionImpl {
       async () =>
         this.fetchTaskList({
           automated: true,
-          hasGoal: false,
           limit,
           offset,
           orderBy: 'updatedAt',
@@ -384,7 +382,6 @@ export class TaskListSliceActionImpl {
         return this.fetchTaskList({
           ...(allAgents || projectId ? {} : { assigneeAgentId: id }),
           automated,
-          hasGoal: false,
           orderBy,
           projectId,
           statuses: statuses?.length ? [...statuses] : undefined,
