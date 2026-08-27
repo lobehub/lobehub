@@ -1732,9 +1732,9 @@ describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration'
 // `execAgent` reaches `confirmReservation`, that queued step-0 delivery must
 // not execute any LLM/tool work under the creator's credentials with no
 // topic `runningOperation` marker to interrupt it by. The
-// `verifyShareReservationConfirmed` delegate call is the runtime's own
+// `verifyShareReservationStatus` delegate call is the runtime's own
 // fail-closed gate for exactly that window — see
-// `AgentRuntimeDelegate.verifyShareReservationConfirmed`'s JSDoc.
+// `AgentRuntimeDelegate.verifyShareReservationStatus`'s JSDoc.
 describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation gate', () => {
   const shareAgentState = (overrides?: Record<string, unknown>) => ({
     lastModified: new Date().toISOString(),
@@ -1747,10 +1747,10 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
     ...overrides,
   });
 
-  it('aborts an unconfirmed step-0 share run instead of executing it', async () => {
-    const verifyShareReservationConfirmed = vi.fn().mockResolvedValue(false);
+  it('aborts a step-0 share run whose reservation was revoked', async () => {
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('revoked');
     const service = new AgentRuntimeService({} as any, 'user-1', {
-      delegate: { verifyShareReservationConfirmed },
+      delegate: { verifyShareReservationStatus },
       queueService: null,
     });
 
@@ -1764,7 +1764,7 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
       context: { phase: 'user_input' } as any,
     });
 
-    expect(verifyShareReservationConfirmed).toHaveBeenCalledWith({
+    expect(verifyShareReservationStatus).toHaveBeenCalledWith({
       agentId: 'agent-1',
       operationId: 'op-orphaned',
       topicId: 'topic-1',
@@ -1779,9 +1779,9 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
   });
 
   it('fails closed when the confirmation check itself throws', async () => {
-    const verifyShareReservationConfirmed = vi.fn().mockRejectedValue(new Error('db down'));
+    const verifyShareReservationStatus = vi.fn().mockRejectedValue(new Error('db down'));
     const service = new AgentRuntimeService({} as any, 'user-1', {
-      delegate: { verifyShareReservationConfirmed },
+      delegate: { verifyShareReservationStatus },
       queueService: null,
     });
 
@@ -1800,9 +1800,9 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
   });
 
   it('does not gate steps past the first, even for an unconfirmed reservation', async () => {
-    const verifyShareReservationConfirmed = vi.fn().mockResolvedValue(false);
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('revoked');
     const service = new AgentRuntimeService({} as any, 'user-1', {
-      delegate: { verifyShareReservationConfirmed },
+      delegate: { verifyShareReservationStatus },
       queueService: null,
     });
 
@@ -1823,13 +1823,13 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
       })
       .catch(() => undefined);
 
-    expect(verifyShareReservationConfirmed).not.toHaveBeenCalled();
+    expect(verifyShareReservationStatus).not.toHaveBeenCalled();
   });
 
   it('does not gate ordinary (non-share) operations', async () => {
-    const verifyShareReservationConfirmed = vi.fn().mockResolvedValue(false);
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('revoked');
     const service = new AgentRuntimeService({} as any, 'user-1', {
-      delegate: { verifyShareReservationConfirmed },
+      delegate: { verifyShareReservationStatus },
       queueService: null,
     });
 
@@ -1849,6 +1849,144 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
       })
       .catch(() => undefined);
 
-    expect(verifyShareReservationConfirmed).not.toHaveBeenCalled();
+    expect(verifyShareReservationStatus).not.toHaveBeenCalled();
+  });
+
+  // Regression for LOBE-11930 Codex P1(a): `createOperation` schedules the
+  // step-0 delivery with only a 50ms delay and returns before `execAgent`
+  // reaches `confirmReservation`, so a fast delivery can reach the gate while
+  // the reservation row still exists but hasn't been confirmed yet. The gate
+  // must defer (bounded retry) instead of either running the turn or
+  // aborting it outright — either of those would leave a bad state:
+  // aborting here while the reservation is genuinely about to confirm would
+  // let the originating request's later `confirmReservation` write a
+  // `runningOperation` marker that points at an already-interrupted run.
+  it('defers instead of aborting when the reservation is still pending confirmation', async () => {
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('pending');
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationStatus },
+      queueService: { getImpl: vi.fn(() => ({})), scheduleMessage } as any,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-pending',
+      stepIndex: 0,
+    });
+
+    expect(scheduleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-pending',
+        payload: { shareGateRetryAttempt: 1 },
+        stepIndex: 0,
+      }),
+    );
+    expect(coordinator.saveAgentState).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.shareGateDeferred).toBe(true);
+    expect(result.nextStepScheduled).toBe(true);
+  });
+
+  it('fails closed once the pending-reservation retry budget is exhausted', async () => {
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('pending');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationStatus },
+      // No queue available to re-queue on — the gate must fail closed
+      // immediately rather than falling through to execution.
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-pending-exhausted',
+      // Simulate the last retry attempt already having run out of budget.
+      shareGateRetryAttempt: 6,
+      stepIndex: 0,
+    });
+
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-pending-exhausted',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+
+  // Regression for LOBE-11930 Codex P1(b): a transient failure reading the
+  // gate's own state must not fail open. `executeStep` reloads the exact
+  // same state a few lines later (line ~1209) to actually run the step —
+  // this test proves that later, successful read is never reached because
+  // the gate already deferred (not proceeded) on its own failed read.
+  it('defers instead of proceeding when the gate state read fails but a later read would succeed', async () => {
+    const verifyShareReservationStatus = vi.fn();
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationStatus },
+      queueService: { getImpl: vi.fn(() => ({})), scheduleMessage } as any,
+    });
+
+    const coordinator = (service as any).coordinator;
+    // First call is the gate's own read — fails. Any subsequent call (e.g.
+    // the later reload inside the main step body) would succeed, proving the
+    // fix does not rely on that read ever failing again.
+    coordinator.loadAgentState = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-state-read-flaky',
+      stepIndex: 0,
+    });
+
+    // The gate deferred on its own failed read — it must not have reached
+    // the confirmation check nor let the step body run.
+    expect(verifyShareReservationStatus).not.toHaveBeenCalled();
+    expect(scheduleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-state-read-flaky',
+        payload: { shareGateRetryAttempt: 1 },
+        stepIndex: 0,
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.shareGateDeferred).toBe(true);
+    expect(result.nextStepScheduled).toBe(true);
+  });
+
+  it('fails closed once the state-read retry budget is exhausted with no state to persist', async () => {
+    const verifyShareReservationStatus = vi.fn();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockRejectedValue(new Error('ECONNRESET'));
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-state-read-down',
+      stepIndex: 0,
+    });
+
+    // No state was ever loaded, so there is nothing to spread into
+    // saveAgentState — the abort path must fall back to interruptOperation
+    // (which does its own load) instead of throwing or executing the step.
+    expect(coordinator.saveAgentState).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.state.status).toBe('interrupted');
   });
 });

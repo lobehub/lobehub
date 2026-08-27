@@ -665,6 +665,30 @@ export class AgentShareModel {
   };
 
   /**
+   * Cheap existence check on `confirmReservation`'s DELETE target, used by
+   * the step-0 share gate (`AgentRuntimeDelegate.verifyShareReservationStatus`)
+   * to tell a reservation that is still pending confirmation apart from one
+   * that already resolved.
+   *
+   * Every terminal path — `confirmReservation` (success), `revokeReservations`,
+   * `releaseReservation`, and `sweepAbandonedReservations` — DELETEs this row,
+   * so its continued existence proves "not yet resolved either way." It does
+   * NOT prove "will eventually confirm": a row also exists for an orphaned
+   * reservation until the 30-minute sweep runs. Callers must bound how long
+   * they trust a `true` result — see `AgentRuntimeService.deferShareGateStep`'s
+   * JSDoc for the bounded retry that does so.
+   */
+  hasPendingReservation = async (operationId: string): Promise<boolean> => {
+    const [row] = await this.db
+      .select({ id: agentShareRunReservations.id })
+      .from(agentShareRunReservations)
+      .where(eq(agentShareRunReservations.id, operationId))
+      .limit(1);
+
+    return Boolean(row);
+  };
+
+  /**
    * Revoke every still-pending reservation for an agent that predates
    * `revocationGeneration` — called right after a revocation write
    * (`deleteByAgentId` / `updateVisibility('private')` / tightening

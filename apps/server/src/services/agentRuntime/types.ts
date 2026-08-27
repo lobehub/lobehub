@@ -180,6 +180,15 @@ export interface AgentExecutionParams {
    * via `tryResumeParentFromAsyncTool`.
    */
   resumeAsyncTool?: boolean;
+  /**
+   * 1-based attempt number carried by a re-delivery that the Agent Share
+   * step-0 confirmation gate scheduled after finding its signal not yet
+   * resolvable (a transient state-store read failure, or a reservation still
+   * pending `confirmReservation`). Bounds how long the gate defers before
+   * failing closed — see `AgentRuntimeService.abortUnconfirmedShareRun`'s
+   * JSDoc. Absent (treated as attempt 0) on the original delivery.
+   */
+  shareGateRetryAttempt?: number;
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
@@ -212,6 +221,15 @@ export interface AgentExecutionResult {
    */
   lockRescheduled?: boolean;
   nextStepScheduled: boolean;
+  /**
+   * Set when the Agent Share step-0 confirmation gate could not yet resolve
+   * (a transient state-store read failure, or a reservation still pending
+   * `confirmReservation`) and re-queued itself for a bounded retry instead of
+   * executing unconfirmed or aborting immediately. Callers should ACK (2xx),
+   * mirroring `lockRescheduled` — the redelivery is already scheduled on our
+   * own backoff.
+   */
+  shareGateDeferred?: boolean;
   state: any;
   stepResult?: any;
   success: boolean;
