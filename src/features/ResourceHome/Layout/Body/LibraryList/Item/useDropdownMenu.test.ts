@@ -26,11 +26,6 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: vi.fn(),
-  toast: { error: vi.fn(), success: vi.fn() },
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));

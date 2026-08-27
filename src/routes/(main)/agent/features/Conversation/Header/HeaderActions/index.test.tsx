@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import HeaderActions from './index';
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
     <button
       aria-label={title}

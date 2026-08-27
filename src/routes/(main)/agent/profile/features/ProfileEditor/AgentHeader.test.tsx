@@ -96,12 +96,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       </button>
     );
   },
-  Button: (props: Record<string, unknown>) => (
-    <button type="button" onClick={props.onClick as () => void}>
-      {props.children as ReactNode}
-    </button>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('antd', () => ({

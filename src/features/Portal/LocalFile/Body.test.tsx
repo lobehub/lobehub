@@ -45,12 +45,6 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: () => null,
-  Tabs: () => null,
-}));
-
 vi.mock('@/components/CodeEditorPane', () => ({
   default: () => <textarea data-testid="code-editor" />,
 }));

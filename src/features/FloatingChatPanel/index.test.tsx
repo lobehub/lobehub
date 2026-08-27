@@ -16,7 +16,8 @@ const sheetHandlers = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({
     onClick,
     title,

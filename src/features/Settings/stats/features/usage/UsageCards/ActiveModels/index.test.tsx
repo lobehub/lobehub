@@ -31,7 +31,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
 
   return {
     ...actual,
-    ActionIcon: () => <button type="button" />,
     Avatar: ({ avatar, title }: { avatar?: string | null; title?: string }) => (
       <span aria-label={title} data-testid="active-user-avatar">
         {avatar}

@@ -12,11 +12,6 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: vi.fn(),
-  toast: { error: vi.fn(), success: vi.fn() },
-}));
-
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));

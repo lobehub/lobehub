@@ -6,13 +6,6 @@ import ProSettingsStep from './ProSettingsStep';
 
 // base-ui Button needs a MotionProvider the app wires globally but the unit env
 // lacks; stub it to a native button so the assertions can run.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, disabled, onClick }: any) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-}));
 
 vi.mock('@lobehub/ui', () => ({
   Button: ({

@@ -18,7 +18,8 @@ vi.mock('@lobehub/ui', () => ({
   Skeleton: { Button: () => <div>loading</div> },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Alert: ({ action, afterClose }: { action?: ReactNode; afterClose?: () => void }) => (
     <div>
       <button type="button" onClick={() => afterClose?.()}>
@@ -26,19 +27,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       </button>
       {action}
     </div>
-  ),
-  Button: ({
-    children,
-    disabled,
-    loading,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-  }) => (
-    <button aria-busy={loading || undefined} disabled={disabled} type="button">
-      {children}
-    </button>
   ),
 }));
 

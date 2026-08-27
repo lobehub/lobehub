@@ -12,15 +12,6 @@ vi.mock('@lobehub/ui', () => ({
   Image: ({ alt, src }: any) => <img alt={alt} src={src} />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: any) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  toast: { error: vi.fn(), success: vi.fn() },
-}));
-
 vi.mock('antd', () => ({ Upload: ({ children }: any) => <div>{children}</div> }));
 
 vi.mock('@/store/file', () => ({ useFileStore: () => vi.fn() }));

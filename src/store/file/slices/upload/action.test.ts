@@ -13,8 +13,9 @@ import { useFileStore as useStore } from '../../store';
 vi.mock('zustand/traditional');
 
 // Mock necessary modules
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { info: vi.fn() },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/business/client/handleFileUploadError', () => ({

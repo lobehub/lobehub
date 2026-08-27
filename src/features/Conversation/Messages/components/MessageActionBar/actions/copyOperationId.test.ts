@@ -27,7 +27,8 @@ vi.mock('@lobehub/ui', () => ({
   copyToClipboard: mocks.copyToClipboard,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { success: mocks.messageSuccess },
 }));
 

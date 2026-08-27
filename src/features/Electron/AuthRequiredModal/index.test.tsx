@@ -60,28 +60,13 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="modal-icon" />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled || loading} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createModal: (props: ModalProps) => {
     createModalMock(props);
 
     return modalInstance;
   },
-  ModalFooter: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock('react-i18next', () => ({

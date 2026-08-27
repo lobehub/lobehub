@@ -45,10 +45,9 @@ vi.mock('@lobehub/ui', () => ({
   copyToClipboard: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ title }: { title?: string }) => <button type="button">{title}</button>,
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: (opts: unknown) => mocks.confirmModal(opts),
-  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('antd', () => ({

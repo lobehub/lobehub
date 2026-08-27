@@ -61,14 +61,6 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
-  },
-}));
-
 vi.mock('i18next', () => ({
   t: vi.fn((key, params) => (params.title ? key + '_' + params.title : key)),
 }));

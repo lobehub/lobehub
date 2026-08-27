@@ -137,7 +137,12 @@ vi.mock('antd-style', async (importOriginal) => {
         css: (...args: unknown[]) => string;
         cssVar: Record<string, string>;
       }) => Record<string, string>,
-    ) => create({ css: () => 'cls', cssVar: mockCssVar }),
+    ) =>
+      create({
+        css: () => 'cls',
+        cssVar: mockCssVar,
+        cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
+      } as never),
     cssVar: mockCssVar,
     cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
   };
@@ -222,7 +227,8 @@ vi.mock('@lobehub/ui', async () => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
     onClick,
     title,
@@ -239,25 +245,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       type="button"
       onClick={onClick}
     />
-  ),
-  RadioGroup: () => null,
-  Switch: () => null,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  createModal: vi.fn(),
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled || loading} type="button" onClick={onClick}>
-      {children}
-    </button>
   ),
   confirmModal: confirmModalMock,
   toast: {

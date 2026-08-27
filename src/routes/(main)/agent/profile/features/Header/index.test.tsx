@@ -93,12 +93,6 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: () => <button aria-label="more" type="button" />,
-  confirmModal: vi.fn(),
-  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
-}));
-
 vi.mock('antd', async (importOriginal) => {
   const actual = (await importOriginal()) as {
     App: Record<string, unknown>;

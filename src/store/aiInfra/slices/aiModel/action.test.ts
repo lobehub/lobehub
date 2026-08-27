@@ -23,8 +23,9 @@ vi.mock('i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { error: vi.fn(), warning: vi.fn() },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/libs/swr', async (importOriginal) => {

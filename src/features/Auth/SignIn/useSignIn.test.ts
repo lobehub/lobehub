@@ -33,7 +33,8 @@ vi.mock('react-router', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { error: mockMessageError, success: mockMessageSuccess },
 }));
 

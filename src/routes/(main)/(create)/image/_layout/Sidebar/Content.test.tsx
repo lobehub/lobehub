@@ -39,12 +39,6 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  Tabs: () => <div />,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));

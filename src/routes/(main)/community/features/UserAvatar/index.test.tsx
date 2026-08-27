@@ -18,16 +18,12 @@ vi.mock('@lobehub/ui', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    Avatar: ({ avatar, onClick }: { avatar?: string | null; onClick?: () => void }) => (
-      <button data-avatar={avatar ?? ''} data-testid="community-user-avatar" onClick={onClick} />
-    ),
-    Button: ({ children }: { children?: string }) => <button>{children}</button>,
-  };
-});
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Avatar: ({ avatar, onClick }: { avatar?: string | null; onClick?: () => void }) => (
+    <button data-avatar={avatar ?? ''} data-testid="community-user-avatar" onClick={onClick} />
+  ),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

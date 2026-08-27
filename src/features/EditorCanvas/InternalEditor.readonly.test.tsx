@@ -39,14 +39,6 @@ vi.mock('@lobehub/editor', () => ({
   ReactToolbarPlugin: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ onClick, title }: { onClick?: (e: any) => void; title?: string }) => (
-    <button aria-label={title} onClick={onClick}>
-      {title}
-    </button>
-  ),
-}));
-
 vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));

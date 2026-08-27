@@ -35,19 +35,6 @@ const mockOpenDocument = vi.fn();
 const mockOpenTaskDetail = vi.fn();
 const mockOpenVerifyReport = vi.fn();
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: (props: { onClick?: (e: unknown) => void; title?: string }) => (
-    <button
-      aria-label={props.title}
-      data-side-browser={(props as Record<string, unknown>)['data-side-browser']}
-      type="button"
-      onClick={props.onClick}
-    />
-  ),
-  Avatar: ({ alt }: { alt?: string }) => <span>{alt}</span>,
-  Text: ({ children }: { children?: unknown }) => <span>{children as never}</span>,
-}));
-
 vi.mock('@/business/client/hooks/useWorkspaces', () => ({
   useWorkspaces: () => [{ id: 'ws-1', slug: 'lobe-team' }],
 }));

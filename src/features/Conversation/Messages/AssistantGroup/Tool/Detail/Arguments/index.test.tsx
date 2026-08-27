@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import Arguments from './index';
@@ -16,32 +16,25 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    ActionIcon: ({
-      active,
-      icon: IconComponent,
-      onClick,
-      title,
-    }: {
-      active?: boolean;
-      icon?: ComponentType;
-      onClick?: () => void;
-      title?: string;
-    }) => (
-      <button aria-pressed={active} type="button" onClick={onClick}>
-        {title}
-        {IconComponent ? <IconComponent /> : null}
-      </button>
-    ),
-    Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  };
-});
-
 vi.mock('antd', () => ({
   Divider: () => <hr />,
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ActionIcon: ({
+    active,
+    onClick,
+    title,
+  }: {
+    active?: boolean;
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button aria-pressed={active} type="button" onClick={onClick}>
+      {title}
+    </button>
+  ),
 }));
 
 vi.mock('@/components/Descriptions', () => ({

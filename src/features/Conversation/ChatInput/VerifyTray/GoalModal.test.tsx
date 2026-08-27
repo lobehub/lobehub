@@ -12,14 +12,8 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: any) => <span>{children}</span>,
   TextArea: (props: any) => <textarea {...props} />,
 }));
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick, disabled }: any) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Text: ({ children }: any) => <span>{children}</span>,
-  createModal: vi.fn(),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   useModalContext: () => ({ close: mocks.close }),
 }));
 

@@ -67,23 +67,6 @@ vi.mock('antd', () => ({
 
 // Stub the base-ui Button to a native button — it needs a MotionProvider the
 // app sets up globally but the unit env doesn't.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  confirmModal: vi.fn(),
-}));
-
 vi.mock('@/store/tool', () => ({
   useToolStore<T>(selector: (state: typeof mocks.toolState) => T): T {
     return selector(mocks.toolState);

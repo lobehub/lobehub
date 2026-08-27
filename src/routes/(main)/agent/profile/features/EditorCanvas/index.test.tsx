@@ -128,18 +128,8 @@ vi.mock('@/components/InfoTooltip', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({
-    'aria-label': ariaLabel,
-    'aria-pressed': ariaPressed,
-    onClick,
-  }: {
-    'aria-label'?: string;
-    'aria-pressed'?: boolean;
-    'onClick'?: (e: any) => void;
-  }) => (
-    <button aria-label={ariaLabel} aria-pressed={ariaPressed} type="button" onClick={onClick} />
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: {
     error: (...args: unknown[]) => messageError(...args),
   },

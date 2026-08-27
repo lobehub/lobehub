@@ -74,70 +74,8 @@ vi.mock('./SaveBar', () => ({
     ) : null,
 }));
 
-// Stub the base-ui Button (test-connection) to a native button — it needs a
-// MotionProvider the app sets up globally but the unit env doesn't. Keep
-// type="button" to match the real Button's default htmlType and avoid
-// implicitly submitting the surrounding form.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  RadioGroup: ({
-    disabled,
-    onChange,
-    options,
-    value,
-  }: {
-    disabled?: boolean;
-    onChange?: (value: string) => void;
-    options?: Array<string | { disabled?: boolean; label?: ReactNode; value: string }>;
-    value?: string;
-  }) => (
-    <div role="radiogroup">
-      {options?.map((option) => {
-        const item = typeof option === 'string' ? { label: option, value: option } : option;
-        return (
-          <label key={item.value}>
-            <input
-              checked={value === item.value}
-              disabled={disabled || item.disabled}
-              type="radio"
-              value={item.value}
-              onChange={() => onChange?.(item.value)}
-            />
-            {item.label}
-          </label>
-        );
-      })}
-    </div>
-  ),
-  Switch: ({
-    checked,
-    disabled,
-    onChange,
-  }: {
-    checked?: boolean;
-    disabled?: boolean;
-    onChange?: (checked: boolean) => void;
-  }) => (
-    <button
-      aria-checked={!!checked}
-      disabled={disabled}
-      role="switch"
-      type="button"
-      onClick={() => onChange?.(!checked)}
-    />
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: {
     error: toastErrorMock,
     success: toastSuccessMock,

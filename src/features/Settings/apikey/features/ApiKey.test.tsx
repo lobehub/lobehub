@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,9 +38,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
 
   return {
     ...actual,
-    Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...props}>{children}</button>
-    ),
     Checkbox: ({
       checked,
       children,
@@ -62,45 +59,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
         {children}
       </label>
     ),
-    Drawer: ({
-      children,
-      onClose,
-      open,
-      title,
-    }: {
-      children?: ReactNode;
-      onClose?: () => void;
-      open?: boolean;
-      title?: ReactNode;
-    }) =>
-      open ? (
-        <div role="dialog">
-          <div>{title}</div>
-          <button type="button" onClick={onClose}>
-            close-drawer
-          </button>
-          {children}
-        </div>
-      ) : null,
-    Switch: ({
-      checked,
-      disabled,
-      onChange,
-    }: {
-      checked?: boolean;
-      disabled?: boolean;
-      onChange?: (checked: boolean) => void;
-      children?: ReactNode;
-    }) => (
-      <input
-        checked={checked}
-        disabled={disabled}
-        role="switch"
-        type="checkbox"
-        onChange={(event) => onChange?.(event.currentTarget.checked)}
-      />
-    ),
-    Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
     toast: hoisted.toast,
   };
 });

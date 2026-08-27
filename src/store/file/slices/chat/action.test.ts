@@ -24,10 +24,9 @@ const mockAgentMode = ({
 
 vi.mock('zustand/traditional');
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-  },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/services/rag', () => ({

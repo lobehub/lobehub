@@ -12,10 +12,10 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) =>
     createElement('button', { onClick, title }, title),
-  Text: ({ children }: { children?: ReactNode }) => createElement('span', null, children),
 }));
 
 vi.mock('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer', () => ({

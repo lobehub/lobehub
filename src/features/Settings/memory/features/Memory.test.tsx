@@ -44,25 +44,6 @@ vi.mock('@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider', () =>
   default: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Switch: ({
-    checked,
-    disabled,
-    onChange,
-  }: {
-    checked?: boolean;
-    disabled?: boolean;
-    onChange?: (checked: boolean) => void;
-  }) => (
-    <button
-      aria-checked={!!checked}
-      disabled={disabled}
-      role="switch"
-      onClick={() => onChange?.(!checked)}
-    />
-  ),
-}));
-
 vi.mock('@lobehub/ui', async () => {
   const { Form: AntdForm } = await import('antd');
 

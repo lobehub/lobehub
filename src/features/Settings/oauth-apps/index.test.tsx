@@ -1,5 +1,4 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
@@ -23,10 +22,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('react-router', () => ({
   useParams: () => ({}),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({

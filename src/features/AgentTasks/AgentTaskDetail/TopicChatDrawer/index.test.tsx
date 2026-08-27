@@ -91,7 +91,8 @@ vi.mock('@lobehub/ui', () => ({
   Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({
     disabled,
     icon,
@@ -116,19 +117,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {title}
     </button>
   ),
-  Tag: ({ children, title }: { children?: ReactNode; title?: string }) => (
-    <span title={title}>{children}</span>
-  ),
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
-  confirmModal: vi.fn(),
-  toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
   FloatingPanel: ({
     actions,
     children,

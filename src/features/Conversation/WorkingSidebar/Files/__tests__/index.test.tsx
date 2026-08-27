@@ -195,13 +195,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button type={'button'} onClick={onClick} />
-  ),
-}));
-
 vi.mock('@lobehub/ui', () => ({
   Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   copyToClipboard: vi.fn(),

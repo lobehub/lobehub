@@ -225,19 +225,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       <div data-testid="channel-paid-alert-description">{description}</div>
     </div>
   ),
-  Button: ({
-    children,
-    disabled,
-    icon,
-    loading,
-    onClick,
-    ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; loading?: boolean }) => (
-    <button disabled={disabled || loading} onClick={onClick} {...rest}>
-      {icon}
-      {children}
-    </button>
-  ),
   DropdownMenu: ({
     children,
     items,
@@ -251,22 +238,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
         <span key={item.key ?? index}>{item.label}</span>
       ))}
     </div>
-  ),
-  Switch: ({
-    checked,
-    disabled,
-    onChange,
-  }: {
-    checked?: boolean;
-    disabled?: boolean;
-    onChange?: (next: boolean) => void;
-  }) => (
-    <button
-      aria-checked={checked}
-      disabled={disabled}
-      role="switch"
-      onClick={() => onChange?.(!checked)}
-    />
   ),
 }));
 
