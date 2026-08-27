@@ -59,6 +59,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const fullBody = useAgentStore(agentSelectors.getAgentFullBodyArtworkById(agentId));
   const profile = useAgentStore(agentSelectors.getAgentProfileById(agentId));
+  /** Excludes the display-only default avatar from character references. */
   const storedAvatar = useAgentStore(agentSelectors.getAgentStoredAvatarById(agentId));
   const systemRole = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.systemRole,
@@ -118,7 +119,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       try {
         const result = await generateCharacterSet({
           composition,
-          currentAvatarUrl: resolveArtworkReferenceImageUrl(meta.avatar, appOrigin),
+          currentAvatarUrl: resolveArtworkReferenceImageUrl(storedAvatar, appOrigin),
           generate: generateAgentArtwork,
           input: commonInput,
         });
@@ -141,11 +142,11 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       generateAgentArtwork,
       meta.backgroundColor,
       meta.description,
-      meta.avatar,
       meta.name,
       meta.title,
       profile?.artworkReferenceImage,
       saveProfile,
+      storedAvatar,
       systemRole,
       toTransparentFullBody,
     ],

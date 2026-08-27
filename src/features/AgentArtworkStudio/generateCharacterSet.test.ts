@@ -51,25 +51,26 @@ describe('generateCharacterSet', () => {
     );
   });
 
-  it.each(['🦄', '#fff'])(
-    'keeps the style reference when the current avatar %s is not an image',
-    async (currentAvatar) => {
-      const generate = vi.fn().mockResolvedValue('https://example.com/generated-full-body.webp');
+  it.each([
+    ['missing', undefined],
+    ['an emoji', '🦄'],
+    ['a CSS color', '#fff'],
+  ])('keeps the style reference when the current avatar is %s', async (_case, currentAvatar) => {
+    const generate = vi.fn().mockResolvedValue('https://example.com/generated-full-body.webp');
 
-      await generateCharacterSet({
+    await generateCharacterSet({
+      composition: 'fullBody',
+      currentAvatarUrl: resolveArtworkReferenceImageUrl(currentAvatar, 'https://app.example.com'),
+      generate,
+      input,
+    });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
         composition: 'fullBody',
-        currentAvatarUrl: resolveArtworkReferenceImageUrl(currentAvatar, 'https://app.example.com'),
-        generate,
-        input,
-      });
-
-      expect(generate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          composition: 'fullBody',
-          referenceImageUrl: undefined,
-          styleReferenceImageUrls: input.styleReferenceImageUrls,
-        }),
-      );
-    },
-  );
+        referenceImageUrl: undefined,
+        styleReferenceImageUrls: input.styleReferenceImageUrls,
+      }),
+    );
+  });
 });

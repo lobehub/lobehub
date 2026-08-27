@@ -202,6 +202,7 @@ interface AgentProfileArtworkProps {
   name?: string | null;
   onAvatarChange: (avatar: string | null) => void;
   onBackgroundChange: (background: string | null) => void;
+  storedAvatar?: string | null;
   systemRole?: string | null;
   title?: string | null;
 }
@@ -215,6 +216,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     description,
     locale,
     name,
+    storedAvatar,
     systemRole,
     title,
     onAvatarChange,
@@ -283,7 +285,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             kind,
             name,
             referenceImageUrl: resolveArtworkReferenceImageUrl(
-              kind === 'background' ? avatar : backgroundUrl,
+              kind === 'background' ? storedAvatar : backgroundUrl,
               appOrigin,
             ),
             style,
@@ -298,13 +300,13 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       [
         agentId,
         appOrigin,
-        avatar,
         backgroundUrl,
         canEdit,
         canGenerate,
         description,
         generateAgentArtwork,
         name,
+        storedAvatar,
         systemRole,
         title,
       ],
