@@ -224,7 +224,7 @@ const ChatList = memo<ChatListProps>(
       // server-rendered title the moment the list mounts to fetch.
       return (
         <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-          {headerSlot}
+          {headerSlot && <WideScreenContainer>{headerSlot}</WideScreenContainer>}
           <SkeletonList />
         </Flexbox>
       );
