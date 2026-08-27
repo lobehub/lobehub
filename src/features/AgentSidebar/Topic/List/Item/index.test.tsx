@@ -29,11 +29,15 @@ vi.mock('@lobehub/ui', () => ({
   Skeleton: {
     Button: (props: Record<string, unknown>) => <div {...props} />,
   },
+  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ContextMenuTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Tag: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
     <span style={style}>{children}</span>
   ),
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('antd-style', () => ({

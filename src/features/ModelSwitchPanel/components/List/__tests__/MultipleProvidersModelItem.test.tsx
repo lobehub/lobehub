@@ -58,7 +58,8 @@ vi.mock('@lobehub/icons', () => ({
   ProviderIcon: () => <span />,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({
     container: 'container',
     detailPopup: 'detailPopup',

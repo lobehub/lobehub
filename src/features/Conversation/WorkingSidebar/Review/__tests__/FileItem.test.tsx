@@ -5,6 +5,16 @@ import { FileItemHeader } from '../FileItem';
 
 const mockRevealInFilesTab = vi.fn();
 
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    ActionIcon: ({ icon: _icon, title, onClick, ...rest }: any) => (
+      <button aria-label={title} type="button" onClick={onClick} {...rest} />
+    ),
+  };
+});
+
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (s: any) => any) =>
     selector({ revealInFilesTab: mockRevealInFilesTab }),

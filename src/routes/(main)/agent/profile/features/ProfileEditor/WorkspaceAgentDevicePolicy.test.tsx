@@ -24,7 +24,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   Select: ({
     disabled,
     loading,

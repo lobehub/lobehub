@@ -109,7 +109,19 @@ vi.mock('antd-style', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>
+      action
+    </button>
+  ),
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   confirmModal: vi.fn(),
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 vi.mock('react-i18next', () => ({

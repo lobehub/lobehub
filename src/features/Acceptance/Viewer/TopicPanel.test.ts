@@ -8,10 +8,13 @@ import { describe, expect, it, vi } from 'vitest';
 import TopicPanel from './TopicPanel';
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) =>
-    createElement('button', { onClick, title }, title),
   Flexbox: ({ children }: { children?: ReactNode }) => createElement('div', null, children),
   Icon: () => null,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) =>
+    createElement('button', { onClick, title }, title),
   Text: ({ children }: { children?: ReactNode }) => createElement('span', null, children),
 }));
 

@@ -194,7 +194,21 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({
+    disabled,
+    onClick,
+    title,
+  }: {
+    disabled?: boolean;
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} disabled={disabled} onClick={onClick}>
+      {title}
+    </button>
+  ),
   Alert: ({
     description,
     message,

@@ -13,7 +13,8 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   isDesktop: true,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({
     card: 'card',
     key: 'key',
@@ -35,7 +36,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => null,
   Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -45,7 +45,9 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: () => null,
   Tabs: () => null,
 }));
 

@@ -11,13 +11,17 @@ import AgentPickerStep from './index';
 
 // base-ui Button needs a MotionProvider the app wires globally but the unit env
 // lacks; stub it to a native button so the assertions can run.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, disabled, onClick }: any) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-}));
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    Button: ({ children, disabled, onClick }: any) => (
+      <button disabled={disabled} type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+  };
+});
 
 const navigate = vi.fn();
 const finishOnboarding = vi.fn().mockResolvedValue(undefined);

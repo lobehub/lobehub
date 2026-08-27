@@ -13,14 +13,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ avatar, onClick }: { avatar?: string | null; onClick?: () => void }) => (
-    <button data-avatar={avatar ?? ''} data-testid="community-user-avatar" onClick={onClick} />
-  ),
-  Button: ({ children }: { children?: string }) => <button>{children}</button>,
   Skeleton: {
     Avatar: () => <div data-testid="avatar-skeleton" />,
   },
 }));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    Avatar: ({ avatar, onClick }: { avatar?: string | null; onClick?: () => void }) => (
+      <button data-avatar={avatar ?? ''} data-testid="community-user-avatar" onClick={onClick} />
+    ),
+    Button: ({ children }: { children?: string }) => <button>{children}</button>,
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
