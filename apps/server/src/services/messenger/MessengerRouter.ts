@@ -33,6 +33,7 @@ import {
   renderInlineError,
   renderModeStatus,
 } from '@/server/services/bot/replyTemplate';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 
 import { getInstallationStore } from './installations';
@@ -1028,9 +1029,13 @@ export class MessengerRouter {
           const operationId = AgentBridgeService.getActiveOperationId(ctx.thread.id);
           if (operationId) {
             try {
-              const aiAgentService = new AiAgentService(ctx.serverDB, ctx.link.userId, {
-                workspaceId: ctx.link.workspaceId ?? undefined,
-              });
+              const aiAgentService = new AiAgentService(
+                ctx.serverDB,
+                createOwnerPrincipal(ctx.link.userId),
+                {
+                  workspaceId: ctx.link.workspaceId ?? undefined,
+                },
+              );
               const result = await aiAgentService.interruptTask({ operationId });
               if (!result.success) {
                 log('command /stop: runtime interrupt rejected for op=%s', operationId);

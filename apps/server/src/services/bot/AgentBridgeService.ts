@@ -12,6 +12,7 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
@@ -370,7 +371,7 @@ export class AgentBridgeService {
   }
 
   private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
-    const aiAgentService = new AiAgentService(this.db, this.userId, {
+    const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
       workspaceId: this.workspaceId,
     });
     const result = await aiAgentService.interruptTask({ operationId });
@@ -812,7 +813,7 @@ export class AgentBridgeService {
     }
 
     const queueMode = isQueueAgentRuntimeEnabled();
-    const aiAgentService = new AiAgentService(this.db, this.userId, {
+    const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
       workspaceId: this.workspaceId,
     });
     const timezone = await this.loadTimezone();

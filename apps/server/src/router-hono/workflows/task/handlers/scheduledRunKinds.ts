@@ -7,6 +7,7 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import type { TopicItem } from '@/database/schemas/topic';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 export interface ScheduledRunContext {
   /** The dispatcher's claim lease id — fences post-dispatch writes against stale attempts. */
@@ -60,7 +61,9 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
     }
   }
 
-  const result = await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+  const result = await new AiAgentService(db, createOwnerPrincipal(topic.userId), {
+    workspaceId,
+  }).execAgent({
     agentId: topic.agentId ?? undefined,
     appContext: { topicId: topic.id },
     parentMessageId,
@@ -106,7 +109,7 @@ const runDelayedStart: ScheduledRunHandlers['delayed_start'] = async (
   const userMessage = await messageModel.findById(run.userMessageId);
   if (!userMessage) throw new Error('Scheduled user message no longer exists');
 
-  return new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+  return new AiAgentService(db, createOwnerPrincipal(topic.userId), { workspaceId }).execAgent({
     agentId: topic.agentId ?? undefined,
     appContext: { topicId: topic.id },
     autoStart: true,

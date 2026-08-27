@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:agent:group-member-callback');
 
@@ -75,7 +76,7 @@ export async function groupMemberCallback(c: Context): Promise<Response> {
     }
 
     const serverDB = await getServerDB();
-    const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+    const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(metadata.userId), {
       workspaceId: metadata.workspaceId,
     });
 

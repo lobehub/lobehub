@@ -17,6 +17,7 @@ import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/wor
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
 // Module-level singleton so we don't create a new Redis connection per request.
@@ -34,7 +35,7 @@ const agentNotifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
 
   return opts.next({
     ctx: {
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+      aiAgentService: new AiAgentService(ctx.serverDB, createOwnerPrincipal(ctx.userId), {
         withholdGatewayToken:
           ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
         workspaceId: wsId,

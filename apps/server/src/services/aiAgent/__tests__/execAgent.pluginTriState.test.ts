@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -182,7 +184,7 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
       pluginManifest('plugin-b'),
       pluginManifest('plugin-c'),
     ]);
-    service = new AiAgentService({} as any, 'test-user-id');
+    service = new AiAgentService({} as any, createOwnerPrincipal('test-user-id'));
   });
 
   it('excludes a disabled entry from the installed-plugins auto-discovery pool, in a mixed-shape array', async () => {

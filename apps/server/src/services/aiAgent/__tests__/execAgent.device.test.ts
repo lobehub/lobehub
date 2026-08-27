@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -166,7 +168,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     mockDeviceProxy.isConfigured = false;
     mockDeviceProxy.queryDeviceList.mockResolvedValue([]);
 
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   afterEach(() => {
@@ -210,7 +212,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
           }),
         }) as any,
     );
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   };
 
   describe('IM/Bot scenario with botContext', () => {
@@ -404,7 +406,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
             }),
           }) as any,
       );
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
     };
 
     it('should NOT auto-activate the single online device when executionTarget is none', async () => {
@@ -466,7 +468,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
           }) as any,
       );
 
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -500,7 +502,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
           }) as any,
       );
 
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -522,7 +524,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         executionTargetSelectionPolicy: 'fixed',
         executionTarget: 'device',
       });
-      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+        workspaceId: 'workspace-1',
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -546,7 +550,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         executionTarget: 'sandbox',
         executionTargetSelectionPolicy: 'fixed',
       });
-      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+        workspaceId: 'workspace-1',
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -569,7 +575,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         executionTargetSelectionPolicy: 'fixed',
         executionTarget: 'device',
       });
-      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+        workspaceId: 'workspace-1',
+      });
 
       await expect(
         service.execAgent({ agentId: 'agent-1', prompt: 'Run a command' }),
@@ -607,7 +615,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
           }) as any,
       );
 
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -652,7 +660,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
 
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -810,7 +818,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
           }) as any,
       );
 
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
       await service.execAgent({
         agentId: 'agent-1',
         prompt: 'Run a command',
@@ -841,7 +849,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
             }),
           }) as any,
       );
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       await service.execAgent({
         agentId: 'agent-1',

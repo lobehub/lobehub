@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const { mockCreateOperation, mockFindById, mockMessageCreate, mockMessageQuery, mockQueryTree } =
@@ -166,7 +168,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
     mockMessageCreate.mockResolvedValue({ id: 'assistant-msg-new' });
     mockQueryTree.mockResolvedValue([]);
 
-    service = new AiAgentService({} as any, 'user-1');
+    service = new AiAgentService({} as any, createOwnerPrincipal('user-1'));
   });
 
   it('should create only a new assistant message in resume mode and use caller appContext', async () => {

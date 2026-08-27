@@ -2,6 +2,8 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -200,7 +202,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     mockUpdateMessagePlugin.mockResolvedValue(undefined);
     mockUpdatePluginState.mockResolvedValue(undefined);
     mockUpdateToolMessage.mockResolvedValue(undefined);
-    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+    service = new AiAgentService({} as unknown as LobeChatDatabase, createOwnerPrincipal('user-1'));
   });
 
   const baseParams = {

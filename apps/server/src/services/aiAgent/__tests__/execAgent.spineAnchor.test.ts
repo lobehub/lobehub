@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -182,7 +184,7 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     mockTryReserve.mockResolvedValue(true);
     mockReleaseReservation.mockResolvedValue(undefined);
 
-    service = new AiAgentService(mockDb, 'test-user-id');
+    service = new AiAgentService(mockDb, createOwnerPrincipal('test-user-id'));
   });
 
   it('anchors the user turn on the spine head of an existing topic', async () => {

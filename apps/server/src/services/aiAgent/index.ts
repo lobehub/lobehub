@@ -194,6 +194,7 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
+import type { ExecutionPrincipal } from '@/server/services/executionPrincipal';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -681,6 +682,18 @@ const resolveHeteroDispatchErrorType = (raw?: string): ErrorType =>
  * - Cron jobs / scheduled tasks
  */
 export class AiAgentService {
+  /**
+   * Who this service instance executes as.
+   *
+   * Every model and sub-service constructed below is scoped to
+   * `principal.resourceOwnerUserId` — the identity whose rows, credentials and
+   * balance the run reads, writes and spends. On a shared-agent run that is the
+   * share CREATOR, while `principal.actorUserId` is the visitor driving it.
+   * Taking a principal instead of a bare `userId` is what stops a caller from
+   * handing over "a user id" without saying which of the two it means
+   * (LOBE-13564).
+   */
+  private readonly principal: ExecutionPrincipal;
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
   private readonly agentDocumentsService: AgentDocumentsService;
@@ -709,7 +722,7 @@ export class AiAgentService {
 
   constructor(
     db: LobeChatDatabase,
-    userId: string,
+    principal: ExecutionPrincipal,
     options?: {
       marketAccessToken?: string;
       runtimeOptions?: AgentRuntimeServiceOptions;
@@ -717,6 +730,18 @@ export class AiAgentService {
       workspaceId?: string;
     },
   ) {
+    // Fail closed. `ExecutionPrincipal`'s ids are optional at the type level
+    // only because the run metadata they come from is (see its JSDoc), but a
+    // service with no resource owner would construct every model below with
+    // `undefined` and silently widen their `WHERE user_id = ?` filters. The
+    // previous signature took a non-optional `userId`, so this preserves the
+    // same contract — it just can no longer be expressed in the type.
+    const userId = principal.resourceOwnerUserId;
+    if (!userId) {
+      throw new Error('AiAgentService requires an execution principal with a resourceOwnerUserId');
+    }
+
+    this.principal = principal;
     this.userId = userId;
     this.db = db;
     this.workspaceId = options?.workspaceId;

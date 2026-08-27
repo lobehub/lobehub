@@ -3,6 +3,8 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -206,7 +208,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     mockGenerateToolsDetailed.mockReturnValue({ enabledToolIds: [], tools: [] });
     mockGetEnabledPluginManifests.mockReturnValue(new Map());
     mockGetLobehubSkillManifests.mockResolvedValue([]);
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   describe('RemoteDevice flows through ToolsEngine pipeline', () => {
@@ -578,7 +580,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
     it('should query system info with workspace id and inject into createOperation for workspace devices', async () => {
       const workspaceId = 'ws-1';
-      service = new AiAgentService(mockDb, userId, { workspaceId });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), { workspaceId });
 
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
@@ -610,7 +612,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
     it('should query system info without workspace id when workspace run uses personal device override', async () => {
       const workspaceId = 'ws-1';
-      service = new AiAgentService(mockDb, userId, { workspaceId });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), { workspaceId });
 
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);

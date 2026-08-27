@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -167,7 +169,7 @@ describe('AiAgentService.execAgent - disableTools', () => {
       provider: 'openai',
       systemRole: 'You are a helper',
     });
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   it('should skip all tool discovery when disableTools is true', async () => {

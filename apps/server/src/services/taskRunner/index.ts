@@ -12,6 +12,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
@@ -169,7 +170,7 @@ export class TaskRunnerService {
       const agentRef = task.assigneeAgentId!;
       const isSlug = !agentRef.startsWith('agt_');
 
-      const aiAgentService = new AiAgentService(this.db, this.userId, {
+      const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
         workspaceId: this.workspaceId,
       });
       const taskId = task.id;

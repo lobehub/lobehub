@@ -15,6 +15,7 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import { buildBotContext } from './buildBotContext';
@@ -1707,7 +1708,7 @@ export class BotMessageRouter {
           const operationId = AgentBridgeService.getActiveOperationId(ctx.threadId);
           if (operationId) {
             try {
-              const aiAgentService = new AiAgentService(serverDB, userId, {
+              const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(userId), {
                 workspaceId: info.workspaceId ?? undefined,
               });
               const result = await aiAgentService.interruptTask({ operationId });

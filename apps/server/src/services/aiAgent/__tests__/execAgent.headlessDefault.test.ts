@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate } = vi.hoisted(() => ({
@@ -160,7 +162,7 @@ describe('AiAgentService.execAgent - headless approval default', () => {
       provider: 'openai',
       systemRole: '',
     });
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   it('should default to headless approval mode when userInterventionConfig is not provided', async () => {

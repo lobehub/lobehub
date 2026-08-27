@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 /**
@@ -213,7 +215,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockUpdateDevice.mockResolvedValue(undefined);
     mockUpdateTopicMetadata.mockResolvedValue(undefined);
 
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   it('binds a new topic to the agent per-device working directory', async () => {

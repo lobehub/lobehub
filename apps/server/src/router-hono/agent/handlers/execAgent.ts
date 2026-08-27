@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:agent:exec');
 
@@ -40,7 +41,7 @@ export async function execAgent(c: Context): Promise<Response> {
 
   try {
     const serverDB = await getServerDB();
-    const aiAgentService = new AiAgentService(serverDB, userId as string, {
+    const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(userId as string), {
       workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
     });
 

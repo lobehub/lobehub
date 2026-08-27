@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
 
@@ -259,7 +260,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     delete (heteroAgentConfig as any).visibility;
     delete (heteroAgentConfig as any).workspaceId;
 
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   afterEach(() => {
@@ -1350,7 +1351,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         executionTarget: 'device',
         heterogeneousProvider: { type: 'claude-code' },
       } as any;
-      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+        workspaceId: 'workspace-a',
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -1366,7 +1369,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       heteroAgentConfig.agencyConfig = {
         heterogeneousProvider: { type: 'claude-code' },
       } as any;
-      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+        workspaceId: 'workspace-a',
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -1386,7 +1391,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       (heteroAgentConfig as any).userId = userId;
       (heteroAgentConfig as any).visibility = 'public';
       (heteroAgentConfig as any).workspaceId = 'workspace-a';
-      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+        workspaceId: 'workspace-a',
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -1432,7 +1439,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       (heteroAgentConfig as any).userId = 'author-user';
       (heteroAgentConfig as any).visibility = 'public';
       (heteroAgentConfig as any).workspaceId = 'workspace-a';
-      service = new AiAgentService(mockDb, 'member-user', { workspaceId: 'workspace-a' });
+      service = new AiAgentService(mockDb, createOwnerPrincipal('member-user'), {
+        workspaceId: 'workspace-a',
+      });
 
       await service.execAgent({
         agentId: 'agent-1',

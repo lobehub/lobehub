@@ -6,6 +6,7 @@ import lobeOpenApi, {
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 /**
@@ -27,7 +28,7 @@ const handleAgentShareResetSignal = (response: Response): Response => {
   if (ownerId && agentId && Number.isFinite(revocationGeneration)) {
     after(async () => {
       const serverDB = await getServerDB();
-      await new AiAgentService(serverDB, ownerId)
+      await new AiAgentService(serverDB, createOwnerPrincipal(ownerId))
         .interruptActiveShareRuns(agentId, revocationGeneration)
         .catch((error) => console.error('[openapi] interruptActiveShareRuns failed', error));
     });
@@ -61,7 +62,7 @@ const handleAgentShareDeleteSignal = (response: Response): Response => {
     if (ownerId && activeShareRuns.length > 0) {
       after(async () => {
         const serverDB = await getServerDB();
-        const aiAgentService = new AiAgentService(serverDB, ownerId);
+        const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(ownerId));
         await Promise.all(
           activeShareRuns.map(({ operationId }) =>
             aiAgentService

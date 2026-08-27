@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 // Verifies that a PINNED skill (DB `agent_skills` row or agent-document bundle)
@@ -227,7 +229,7 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     );
     mockGetAgentSkills.mockResolvedValue([]);
     mockHasDocuments.mockResolvedValue(false);
-    service = new AiAgentService({} as any, 'test-user-id');
+    service = new AiAgentService({} as any, createOwnerPrincipal('test-user-id'));
   });
 
   it('injects a pinned DB skill body into the operation skill set, leaving auto skills content-less', async () => {

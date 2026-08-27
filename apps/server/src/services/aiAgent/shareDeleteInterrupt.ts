@@ -1,5 +1,6 @@
 import type { ActiveShareRun } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 /**
@@ -35,7 +36,7 @@ export const interruptSnapshottedShareRuns =
       // time (well after both modules have finished loading) breaks it
       // without changing behavior.
       const { AiAgentService } = await import('.');
-      const aiAgentService = new AiAgentService(serverDB, ownerId);
+      const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(ownerId));
 
       await Promise.all(
         activeShareRuns.map(({ operationId }) =>

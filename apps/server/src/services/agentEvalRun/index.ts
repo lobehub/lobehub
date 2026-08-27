@@ -37,6 +37,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntime
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import {
   AgentEvalRunWorkflow,
   type ResumeAgentTrajectoryPayload,
@@ -859,7 +860,7 @@ export class AgentEvalRunService {
 
     await this.runModel.update(runId, { startedAt: now, status: 'running' });
 
-    const aiAgentService = new AiAgentService(this.db, this.userId, {
+    const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
       workspaceId: this.workspaceId,
     });
     const webhookUrl = '/api/workflows/agent-eval-run/on-trajectory-complete';
@@ -1005,7 +1006,7 @@ export class AgentEvalRunService {
 
     await this.runModel.update(runId, { startedAt: now, status: 'running' });
 
-    const aiAgentService = new AiAgentService(this.db, this.userId, {
+    const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
       workspaceId: this.workspaceId,
     });
     const webhookUrl = '/api/workflows/agent-eval-run/on-thread-complete';
@@ -1325,7 +1326,7 @@ export class AgentEvalRunService {
     // Update status from 'pending' to 'running'
     await this.runTopicModel.updateByRunAndTopic(runId, topicId, { status: 'running' });
 
-    const aiAgentService = new AiAgentService(this.db, this.userId, {
+    const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
       workspaceId: this.workspaceId,
     });
     const webhookUrl = '/api/workflows/agent-eval-run/on-trajectory-complete';
@@ -1604,7 +1605,7 @@ export class AgentEvalRunService {
     const { envPrompt, environment, run, runId, testCaseId, threadId, topicId } = params;
     const caseId = getCaseId(params.testCase.metadata);
 
-    const aiAgentService = new AiAgentService(this.db, this.userId, {
+    const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
       workspaceId: this.workspaceId,
     });
     const webhookUrl = '/api/workflows/agent-eval-run/on-thread-complete';

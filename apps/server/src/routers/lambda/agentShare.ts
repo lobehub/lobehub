@@ -9,6 +9,7 @@ import { VISITOR_TOPIC_PAGE_SIZE } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
@@ -127,7 +128,7 @@ const interruptActiveShareRunsAfterResponse = (
   revocationGeneration: number,
 ) => {
   after(() =>
-    new AiAgentService(serverDB, ownerId)
+    new AiAgentService(serverDB, createOwnerPrincipal(ownerId))
       .interruptActiveShareRuns(agentId, revocationGeneration)
       .catch((error) => console.error('[agentShare] interruptActiveShareRuns failed', error)),
   );

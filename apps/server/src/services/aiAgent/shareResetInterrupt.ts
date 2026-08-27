@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@/database/type';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 /**
@@ -63,7 +64,7 @@ export const scheduleShareRunInterruptOnReset =
       // at write time and threaded straight through — see
       // `interruptActiveShareRuns`'s JSDoc for why it must never be re-read
       // here instead.
-      await new AiAgentService(serverDB, ownerId)
+      await new AiAgentService(serverDB, createOwnerPrincipal(ownerId))
         .interruptActiveShareRuns(agentId, revocationGeneration)
         .catch((error) =>
           console.error('[agentConfigShareReset] interruptActiveShareRuns failed', error),

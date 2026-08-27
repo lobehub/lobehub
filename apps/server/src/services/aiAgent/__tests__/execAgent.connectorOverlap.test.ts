@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -180,7 +182,7 @@ describe('AiAgentService.execAgent - connector/plugin overlap', () => {
       systemRole: 'You are a helper',
     });
     mockPluginQuery.mockResolvedValue([pluginA]);
-    service = new AiAgentService({} as any, 'test-user-id');
+    service = new AiAgentService({} as any, createOwnerPrincipal('test-user-id'));
   });
 
   it('keeps a same-named plugin when the connector is disabled', async () => {

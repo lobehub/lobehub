@@ -1,6 +1,8 @@
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 // Mock trusted client to avoid server-side env access
@@ -123,7 +125,7 @@ describe('AiAgentService.execSubAgent', () => {
     });
     mockThreadModel.update.mockResolvedValue({});
 
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   describe('successful isolated execution', () => {

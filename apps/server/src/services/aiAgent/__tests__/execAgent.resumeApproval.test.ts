@@ -7,6 +7,7 @@ import {
   deriveAgentInterventionContinuationOperationId,
   deriveAgentInterventionQueueDeduplicationId,
 } from '@/business/server/agent-run/agentInterventionIdentity';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
 
@@ -241,7 +242,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     // `MessageModel` is fully mocked above, so the service never touches the
     // raw `db` arg — cast an empty stub through `unknown` to satisfy the
     // `LobeChatDatabase` parameter type without dragging the real schema.
-    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+    service = new AiAgentService({} as unknown as LobeChatDatabase, createOwnerPrincipal('user-1'));
   });
 
   const baseParams = {
@@ -1103,7 +1104,7 @@ describe('AiAgentService.stopPendingApproval', () => {
     });
     mockRecordCompletion.mockResolvedValue(undefined);
     mockInterruptOperation.mockResolvedValue(true);
-    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+    service = new AiAgentService({} as unknown as LobeChatDatabase, createOwnerPrincipal('user-1'));
   });
 
   it('settles every pending row in place and retires the parked operation', async () => {

@@ -8,6 +8,7 @@ import { DocumentModel } from '@/database/models/document';
 import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook, AgentHookEvent } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import type { VerifierAgentRunner } from './executor';
 import { settleVerifierCheckFromTerminal } from './verifierTerminal';
@@ -154,7 +155,9 @@ export const createVerifierAgentRunner = (params: {
     // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
     // aiAgent import cycle is safe statically: every use here is call-time (inside
     // this runner), so the module is fully initialized before it runs.
-    const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
+    const result = await new AiAgentService(db, createOwnerPrincipal(userId), {
+      workspaceId,
+    }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
       // A fresh topic keeps the verifier isolated without inheriting the

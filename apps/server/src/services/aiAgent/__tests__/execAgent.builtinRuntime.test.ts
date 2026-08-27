@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
 
@@ -233,7 +234,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       success: true,
     });
     mockGetBuiltinAgent.mockResolvedValue(null);
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   describe('graph runtime factory', () => {
@@ -247,7 +248,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     };
 
     it('creates GraphAgent when graph mode is enabled with a valid graph snapshot', () => {
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       const agent = getLatestAgentFactory()({
         agentConfig: {
@@ -263,7 +264,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     it('falls back to GeneralChatAgent when the graph snapshot is invalid', () => {
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       const agent = getLatestAgentFactory()({
         agentConfig: {
@@ -279,7 +280,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     it('falls back to a legacy chatConfig graph snapshot', () => {
-      service = new AiAgentService(mockDb, userId);
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
 
       const agent = getLatestAgentFactory()({
         agentConfig: {
@@ -297,7 +298,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     it('keeps an upstream runtime agent factory authoritative', () => {
       const upstreamAgent = { runner: vi.fn() };
       const upstreamFactory = vi.fn(() => upstreamAgent);
-      service = new AiAgentService(mockDb, userId, {
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
         runtimeOptions: {
           agentFactory: upstreamFactory,
         },

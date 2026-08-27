@@ -10,14 +10,52 @@ import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel, sanitizeVisitorError } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
+import type { AgentShareConfig } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
+import {
+  createDelegatedPrincipal,
+  type ExecutionPrincipal,
+} from '@/server/services/executionPrincipal';
 import { FileService } from '@/server/services/file';
 
 const log = debug('lobe-server:router:shareChat');
+
+/**
+ * The identity a shared-agent run executes under: the visitor drives it, but
+ * every row, credential and balance it touches belongs to the creator.
+ *
+ * Note this is deliberately NOT a replacement for `AgentShareGate` — the gate
+ * is the authorization SNAPSHOT (`generation` plus the full `shareConfig`) that
+ * `assertRunnableForVisitor` re-checks right before the operation is created,
+ * and it stays a method-level argument. The principal answers the narrower
+ * question of *who* the run acts as and *whose* resources it may reach.
+ */
+const toVisitorPrincipal = (
+  share: {
+    agentId: string;
+    ownerId: string;
+    shareConfig: AgentShareConfig;
+    shareId: string;
+  },
+  visitorUserId: string,
+): ExecutionPrincipal =>
+  createDelegatedPrincipal({
+    actorUserId: visitorUserId,
+    delegation: {
+      agentId: share.agentId,
+      grants: {
+        allowReadMemory: share.shareConfig.allowReadMemory,
+        enabledToolIds: share.shareConfig.enabledToolIds,
+        filePermissionConfig: share.shareConfig.filePermissionConfig,
+      },
+      shareId: share.shareId,
+    },
+    resourceOwnerUserId: share.ownerId,
+  });
 
 /**
  * Visitor-facing execution chain for shared agents (Agent Share).
@@ -246,9 +284,11 @@ export const shareChatRouter = router({
         // non-fatal — MarketService falls back to trustedClientToken
       }
 
-      const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId, {
-        marketAccessToken,
-      });
+      const aiAgentService = new AiAgentService(
+        ctx.serverDB,
+        toVisitorPrincipal(share, ctx.userId),
+        { marketAccessToken },
+      );
 
       log('execAgent: share=%s visitor=%s topic=%s', input.shareId, ctx.userId, input.topicId);
 
@@ -422,7 +462,10 @@ export const shareChatRouter = router({
       // Creator-scoped service, same as `execAgent` — the run's operation /
       // thread rows were written under the creator's identity, so the
       // underlying `interruptTask` implementation must resolve them there.
-      const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId);
+      const aiAgentService = new AiAgentService(
+        ctx.serverDB,
+        toVisitorPrincipal(share, ctx.userId),
+      );
 
       log(
         'interruptTask: share=%s visitor=%s topic=%s operation=%s',

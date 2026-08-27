@@ -7,6 +7,7 @@ import { agents } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:workflows:agent-share:sweep');
 
@@ -84,7 +85,10 @@ export async function runAgentShareReservationSweep(
         if (!ownerId) return;
 
         try {
-          await new AiAgentService(db, ownerId).interruptTask({ operationId, topicId });
+          await new AiAgentService(db, createOwnerPrincipal(ownerId)).interruptTask({
+            operationId,
+            topicId,
+          });
           interrupted += 1;
         } catch (error) {
           log(

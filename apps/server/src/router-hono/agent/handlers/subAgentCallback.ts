@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:agent:subagent-callback');
 
@@ -63,7 +64,7 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     // runtime's models stay workspace-scoped — a bare AgentRuntimeService
     // would be personal-scoped and the tool-message backfill / resume
     // barrier could miss workspace-scoped rows.
-    const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+    const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(metadata.userId), {
       workspaceId: metadata.workspaceId,
     });
 

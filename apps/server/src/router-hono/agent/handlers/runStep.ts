@@ -6,6 +6,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:agent:run-step');
 
@@ -131,7 +132,7 @@ export async function runStep(c: Context): Promise<Response> {
     // Thread the operation's workspace through so the runtime's models stay
     // workspace-scoped. Without it the worker is personal-scoped and the
     // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
-    const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+    const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(metadata.userId), {
       workspaceId: metadata.workspaceId,
     });
 

@@ -11,6 +11,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { BotCallbackBody } from '@/server/services/bot/BotCallbackService';
 import { BotCallbackService } from '@/server/services/bot/BotCallbackService';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../aiAgent';
 import { acquireTopicStartReservation } from '../aiAgent/topicStartReservation';
@@ -234,7 +235,7 @@ export class TaskResultBridgeService {
         this.workspaceId,
       ).getLastMainThreadSpineMessageId(originTopicId);
 
-      const result = await new AiAgentService(this.db, this.userId, {
+      const result = await new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
         workspaceId: this.workspaceId,
       }).execAgent({
         agentId,

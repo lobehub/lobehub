@@ -8,6 +8,7 @@ import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const buildEvidencePrompt = (
   items: VerifyCheckItem[],
@@ -107,7 +108,9 @@ export const startEvidenceSubmission = async (params: {
     },
   ];
 
-  const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
+  const result = await new AiAgentService(db, createOwnerPrincipal(userId), {
+    workspaceId,
+  }).execAgent({
     agentId: operation.agentId,
     appContext: { taskId: operation.taskId, topicId: operation.topicId },
     autoStart: true,

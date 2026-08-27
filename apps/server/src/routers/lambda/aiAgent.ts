@@ -80,6 +80,7 @@ import {
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
@@ -1504,7 +1505,7 @@ const aiAgentProcedure = aiAgentBaseProcedure.use(async (opts) => {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+      aiAgentService: new AiAgentService(ctx.serverDB, createOwnerPrincipal(ctx.userId), {
         marketAccessToken,
         withholdGatewayToken:
           ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),

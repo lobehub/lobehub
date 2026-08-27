@@ -7,6 +7,7 @@ import type {
 } from '@/server/modules/AgentRuntime/StreamEventManager';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { BaseService } from '../common/base.service';
 import type {
@@ -291,7 +292,7 @@ export class ResponsesService extends BaseService {
       // model field is used as agentId
       const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const functionTools = this.extractFunctionTools(params.tools);
-      const aiAgentService = new AiAgentService(this.db, this.userId, {
+      const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
         workspaceId: this.workspaceId,
       });
       const execResult = await aiAgentService.execAgent({
@@ -393,7 +394,7 @@ export class ResponsesService extends BaseService {
       // model field is used as agentId
       const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const functionTools = this.extractFunctionTools(params.tools);
-      const aiAgentService = new AiAgentService(this.db, this.userId, {
+      const aiAgentService = new AiAgentService(this.db, createOwnerPrincipal(this.userId), {
         workspaceId: this.workspaceId,
       });
       const execResult = await aiAgentService.execAgent({

@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -183,7 +185,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     mockGetPreference.mockResolvedValue({});
     mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
     mockTopicFindById.mockResolvedValue(null);
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   it('should use agent default model/provider when no override is provided', async () => {
@@ -292,7 +294,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       },
       agentModeOverrides: { 'agent-1': false },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -328,7 +332,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       },
       agentModeOverrides: { 'agent-1': false },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -358,7 +364,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       },
       agentModeOverrides: { 'agent-1': false },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -392,7 +400,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       },
       agentModeOverrides: { 'agent-1': false },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -413,7 +423,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
         'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
       },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -437,7 +449,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
         'agent-1': { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
       },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -455,7 +469,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
         'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
       },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -475,7 +491,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
         'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
       },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
@@ -494,7 +512,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
         'agent-1': { model: 'gpt-4', provider: 'openai' },
       },
     });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({
       agentId: 'agent-1',
@@ -536,7 +556,7 @@ describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
     mockGetPreference.mockResolvedValue({});
     mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
     mockTopicFindById.mockResolvedValue(null);
-    service = new AiAgentService(mockDb, userId);
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
   });
 
   it('/mode chat on an agent-mode agent also disables enableAgentMode for context injection', async () => {
@@ -602,7 +622,9 @@ describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
       visibility: 'public',
     });
     mockGetPreference.mockResolvedValue({ agentModeOverrides: { 'agent-1': false } });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+    service = new AiAgentService(mockDb, createOwnerPrincipal(userId), {
+      workspaceId: 'workspace-1',
+    });
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
 

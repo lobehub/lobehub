@@ -91,6 +91,27 @@ const share = {
   visibility: 'public',
 };
 
+/**
+ * The identity every share procedure must construct `AiAgentService` with: the
+ * visitor is the ACTOR, the creator is the RESOURCE OWNER. Asserting the whole
+ * principal (rather than just the owner id, as this test used to) is what keeps
+ * a future refactor from quietly dropping the visitor half and re-attributing
+ * the run to the creator.
+ */
+const expectedVisitorPrincipal = {
+  actorUserId: VISITOR,
+  delegation: {
+    agentId: share.agentId,
+    grants: {
+      allowReadMemory: share.shareConfig.allowReadMemory,
+      enabledToolIds: share.shareConfig.enabledToolIds,
+      filePermissionConfig: share.shareConfig.filePermissionConfig,
+    },
+    shareId: share.shareId,
+  },
+  resourceOwnerUserId: OWNER,
+};
+
 const visitorTopic = {
   agentId: share.agentId,
   id: 'tpc_visitor',
@@ -188,8 +209,13 @@ describe('shareChatRouter', () => {
         operationId: 'op-1',
       });
 
-      // Service runs as the CREATOR — the share's owner, never the visitor.
-      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER, expect.any(Object));
+      // Service reads/writes/bills as the CREATOR, while recording the VISITOR
+      // as the actor driving the run.
+      expect(AiAgentServiceMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expectedVisitorPrincipal,
+        expect.any(Object),
+      );
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           // Agent id comes from the share record, not client input.
@@ -321,7 +347,7 @@ describe('shareChatRouter', () => {
       ).resolves.toMatchObject({ operationId: 'op-1', success: true });
 
       // Service runs as the CREATOR — the run's operation/thread rows live there.
-      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), expectedVisitorPrincipal);
       expect(mockInterruptTask).toHaveBeenCalledWith({
         operationId: 'op-1',
         topicId: 'tpc_visitor',

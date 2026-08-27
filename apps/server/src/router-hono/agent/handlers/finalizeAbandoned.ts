@@ -5,6 +5,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AbandonOperationService } from '@/server/services/agentRuntime';
 import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:agent:finalize-abandoned');
 
@@ -74,7 +75,9 @@ export async function finalizeAbandoned(c: Context): Promise<Response> {
         // No durable queue configured: run the CAS-guarded, idempotent bridge
         // inline through AiAgentService so the runtime's models stay
         // workspace-scoped.
-        const aiAgentService = new AiAgentService(serverDB, userId, { workspaceId });
+        const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(userId), {
+          workspaceId,
+        });
         const won = await aiAgentService.completeSubAgentBridge(bridgeBody);
         log(
           '[%s] resumed parent %s inline (local mode, won=%s)',
