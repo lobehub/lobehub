@@ -3,6 +3,8 @@ import { memo, type PropsWithChildren } from 'react';
 
 import BusinessAuthProvider from '@/business/client/BusinessAuthProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
+import type { IFeatureFlags } from '@/config/featureFlags';
+import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import AuthContainer from '@/features/AuthShell/AuthContainer';
 import { AuthServerConfigProvider } from '@/features/AuthShell/AuthServerConfigProvider';
 import AuthThemeLite from '@/features/AuthShell/AuthThemeLite';
@@ -22,6 +24,7 @@ interface AuthWorkerConfig {
     'disableEmailPassword' | 'enableEmailVerification' | 'enableMagicLink' | 'oAuthSSOProviders'
   >;
   enableOIDC: boolean;
+  featureFlags?: Partial<IFeatureFlags>;
   globalCDN?: boolean;
 }
 
@@ -52,6 +55,11 @@ const AuthAppShell = memo<AuthAppShellProps>(({ children, locale }) => {
           enableOIDC={serverConfig?.enableOIDC}
           isMobile={false}
           serverConfig={serverConfig?.config}
+          featureFlags={
+            serverConfig?.featureFlags
+              ? mapFeatureFlagsEnvToState(serverConfig.featureFlags)
+              : undefined
+          }
         >
           <LobeAnalyticsProviderWrapper
             analytics={serverConfig?.analyticsConfig ?? EMPTY_ANALYTICS}

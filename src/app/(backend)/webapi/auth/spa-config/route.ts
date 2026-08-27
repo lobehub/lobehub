@@ -1,3 +1,4 @@
+import { getServerFeatureFlagsValue } from '@/config/featureFlags';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { buildAnalyticsConfig } from '@/libs/spaHtml';
@@ -23,6 +24,7 @@ export const GET = () => {
         oAuthSSOProviders,
       },
       enableOIDC: authEnv.ENABLE_OIDC,
+      featureFlags: getServerFeatureFlagsValue(),
       globalCDN: appEnv.CDN_USE_GLOBAL,
     },
     {

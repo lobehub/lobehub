@@ -8,9 +8,8 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
-const { DEFAULT_PRERENDER_LOCALE, PRERENDER_LOCALES, PRERENDER_ROUTES } = await import(
-  new URL('../app/lib/prerender.ts', import.meta.url).href
-);
+const { DEFAULT_PRERENDER_LOCALE, PRERENDER_LOCALES, PRERENDER_ROUTES, prerenderOutputDir } =
+  await import(new URL('../app/lib/prerender.ts', import.meta.url).href);
 
 const AUTH_NAMESPACES = ['auth', 'authError', 'common', 'error', 'marketAuth', 'oauth'];
 
@@ -128,7 +127,7 @@ const main = async () => {
   run('node', ['scripts/emit-static-css.mjs']);
 
   for (const route of [...PRERENDER_ROUTES, '']) {
-    const document = path.join(defaultClient, route, 'index.html');
+    const document = path.join(defaultClient, prerenderOutputDir(route), 'index.html');
     await assertDocument(
       await readFile(document, 'utf8'),
       defaultClient,
@@ -146,8 +145,20 @@ const main = async () => {
     const elapsed = await buildPassAsync(locale, buildDir);
 
     for (const route of PRERENDER_ROUTES) {
-      const source = path.join(appRoot, buildDir, 'client', route, 'index.html');
-      const target = path.join(defaultClient, '__i18n', locale, route, 'index.html');
+      const source = path.join(
+        appRoot,
+        buildDir,
+        'client',
+        prerenderOutputDir(route),
+        'index.html',
+      );
+      const target = path.join(
+        defaultClient,
+        '__i18n',
+        locale,
+        prerenderOutputDir(route),
+        'index.html',
+      );
 
       // Only the SSR environment carries the locale, so every pass emits the
       // same client assets — a stale hash here means that stopped being true.
