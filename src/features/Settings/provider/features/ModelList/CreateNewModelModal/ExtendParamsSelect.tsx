@@ -1,6 +1,6 @@
 import { Flexbox, Popover } from '@lobehub/ui';
-import { Select, Switch } from '@lobehub/ui/base-ui';
-import { Space, Tag, theme, Typography } from 'antd';
+import { Select, Switch, Tag } from '@lobehub/ui/base-ui';
+import { Space, theme, Typography } from 'antd';
 import { type ExtendParamsType } from 'model-bank';
 import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -661,9 +661,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
                   />
                 }
               >
-                <Tag bordered={false} color={'processing'}>
-                  {def.label}
-                </Tag>
+                <Tag color={'processing'}>{def.label}</Tag>
               </Popover>
             );
           })}
