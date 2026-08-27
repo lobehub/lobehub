@@ -33,6 +33,14 @@ interface SearchLimits {
   topic: number;
 }
 
+/** Identifies candidate-provider failures that must stay visible to API callers. */
+export class SearchCandidateSearchError extends Error {
+  constructor(cause: unknown) {
+    super('Candidate search provider failed', { cause });
+    this.name = 'SearchCandidateSearchError';
+  }
+}
+
 /**
  * Provider-neutral search facade. Backends own candidate retrieval and final
  * PostgreSQL hydration, while this class preserves the public repository API.
@@ -208,12 +216,17 @@ export class SearchRepo {
     const query = request.query.text.trim();
     if (!query) return { candidates: [], total: 0 };
 
-    const response = await this.execute({
-      ...request,
-      mode: 'candidates',
-      query: { ...request.query, text: query },
-      scope: this.scope,
-    });
+    let response: SearchBackendResponse;
+    try {
+      response = await this.execute({
+        ...request,
+        mode: 'candidates',
+        query: { ...request.query, text: query },
+        scope: this.scope,
+      });
+    } catch (error) {
+      throw new SearchCandidateSearchError(error);
+    }
 
     return {
       candidates: response.candidates,

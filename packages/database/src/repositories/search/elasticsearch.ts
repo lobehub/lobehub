@@ -56,6 +56,20 @@ import type {
  */
 const CANDIDATE_MULTIPLIER = 4;
 
+/**
+ * Rolling reindexes leave legacy documents without newly denormalized fields. Keep those documents
+ * eligible as candidates because PostgreSQL reapplies the exact filters during hydration.
+ */
+const exactOrLegacyMissingFilter = (
+  field: string,
+  exactClause: Record<string, unknown>,
+): Record<string, unknown> => ({
+  bool: {
+    minimum_should_match: 1,
+    should: [exactClause, { bool: { must_not: [{ exists: { field } }] } }],
+  },
+});
+
 export const ELASTICSEARCH_CONVERSATION_QUERY_FIELDS = {
   agents: ['title^5', 'slug^4', 'tags^3', 'description^2', 'system_role'],
   chatGroups: ['title^4', 'description^2', 'content'],
@@ -502,7 +516,9 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     let shouldContinue = true;
     let total = 0;
 
+    /** Unbounded legacy APIs require exhaustive hydration; search_after avoids the result window. */
     while (shouldContinue) {
+      const isFirstPage = searchAfter === undefined;
       const response = await this.client.search({
         body: {
           _source: false,
@@ -525,15 +541,17 @@ export class ElasticsearchSearchBackend implements SearchBackend {
           ...(searchAfter ? { search_after: searchAfter } : {}),
           size,
           sort: [{ _score: 'desc' }, { id: 'asc' }],
-          ...(trackTotalHits ? { track_total_hits: true } : {}),
+          ...(trackTotalHits && isFirstPage ? { track_total_hits: true } : {}),
         },
         index: getSearchIndexAlias(this.indexNamespace, entity),
       });
-      const responseTotal = response.hits.total;
-      total =
-        typeof responseTotal === 'number'
-          ? responseTotal
-          : (responseTotal?.value ?? Math.max(total, hits.length + response.hits.hits.length));
+      if (isFirstPage) {
+        const responseTotal = response.hits.total;
+        total =
+          typeof responseTotal === 'number'
+            ? responseTotal
+            : (responseTotal?.value ?? hits.length + response.hits.hits.length);
+      }
 
       for (const hit of response.hits.hits) {
         if (!hit._id || seen.has(hit._id)) continue;
@@ -562,12 +580,11 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     if (!isElasticsearchMemoryEntity(entity)) return;
 
     if (filters.memoryCategories?.length) {
-      clauses.push({
-        terms: {
-          [entity === 'userMemories' ? 'memory_category' : 'parent_memory_categories']:
-            filters.memoryCategories,
-        },
-      });
+      const field = entity === 'userMemories' ? 'memory_category' : 'parent_memory_categories';
+      const exactClause = { terms: { [field]: filters.memoryCategories } };
+      clauses.push(
+        entity === 'userMemories' ? exactClause : exactOrLegacyMissingFilter(field, exactClause),
+      );
     }
     if (filters.memoryTypes?.length) {
       clauses.push({ terms: { type: filters.memoryTypes } });
@@ -576,11 +593,11 @@ export class ElasticsearchSearchBackend implements SearchBackend {
       clauses.push({ terms: { relationship: filters.memoryRelationships } });
     }
     if (filters.memoryStatus?.length) {
-      clauses.push({
-        terms: {
-          [entity === 'memoryContexts' ? 'current_status.raw' : 'status']: filters.memoryStatus,
-        },
-      });
+      const field = entity === 'memoryContexts' ? 'current_status.raw' : 'status';
+      const exactClause = { terms: { [field]: filters.memoryStatus } };
+      clauses.push(
+        entity === 'memoryContexts' ? exactOrLegacyMissingFilter(field, exactClause) : exactClause,
+      );
     }
     const tagClauses = (filters.memoryTags ?? []).map((tag) =>
       entity === 'userMemories'
@@ -588,7 +605,11 @@ export class ElasticsearchSearchBackend implements SearchBackend {
         : {
             bool: {
               minimum_should_match: 1,
-              should: [{ term: { tags: tag } }, { term: { parent_tags: tag } }],
+              should: [
+                { term: { tags: tag } },
+                { term: { parent_tags: tag } },
+                { bool: { must_not: [{ exists: { field: 'parent_tags' } }] } },
+              ],
             },
           },
     );

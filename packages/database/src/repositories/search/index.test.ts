@@ -22,7 +22,7 @@ import { topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
 import type { SearchResult } from './index';
-import { SearchRepo } from './index';
+import { SearchCandidateSearchError, SearchRepo } from './index';
 
 const userId = 'search-test-user';
 const otherUserId = 'other-search-user';
@@ -84,6 +84,28 @@ describe('SearchRepo candidate search', () => {
       },
       scope: { callerAgentVisibility: undefined, userId, workspaceId: undefined },
     });
+  });
+
+  it('marks provider failures so API boundaries cannot mistake them for legacy fallbacks', async () => {
+    const providerError = new Error('Elasticsearch unavailable');
+    const repo = new SearchRepo(serverDB, userId, undefined, undefined, {
+      backend: { key: 'candidate', search: vi.fn().mockRejectedValue(providerError) },
+      candidateSearchEnabled: true,
+    });
+
+    await expect(
+      repo.searchCandidates({
+        entity: 'memoryContexts',
+        filters: {},
+        pagination: { limit: 12 },
+        query: { text: 'search phrase' },
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        cause: providerError,
+        name: SearchCandidateSearchError.name,
+      }),
+    );
   });
 });
 

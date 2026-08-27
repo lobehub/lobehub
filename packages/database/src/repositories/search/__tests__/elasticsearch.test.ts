@@ -173,22 +173,47 @@ describe('ElasticsearchSearchBackend', () => {
           bool: {
             filter: [
               { term: { user_id: userId } },
-              { terms: { parent_memory_categories: ['project'] } },
-              { terms: { type: ['workflow'] } },
-              { terms: { 'current_status.raw': ['active'] } },
               {
                 bool: {
                   minimum_should_match: 1,
                   should: [
-                    { term: { tags: 'typescript' } },
-                    { term: { parent_tags: 'typescript' } },
+                    { terms: { parent_memory_categories: ['project'] } },
+                    {
+                      bool: {
+                        must_not: [{ exists: { field: 'parent_memory_categories' } }],
+                      },
+                    },
+                  ],
+                },
+              },
+              { terms: { type: ['workflow'] } },
+              {
+                bool: {
+                  minimum_should_match: 1,
+                  should: [
+                    { terms: { 'current_status.raw': ['active'] } },
+                    { bool: { must_not: [{ exists: { field: 'current_status.raw' } }] } },
                   ],
                 },
               },
               {
                 bool: {
                   minimum_should_match: 1,
-                  should: [{ term: { tags: 'search' } }, { term: { parent_tags: 'search' } }],
+                  should: [
+                    { term: { tags: 'typescript' } },
+                    { term: { parent_tags: 'typescript' } },
+                    { bool: { must_not: [{ exists: { field: 'parent_tags' } }] } },
+                  ],
+                },
+              },
+              {
+                bool: {
+                  minimum_should_match: 1,
+                  should: [
+                    { term: { tags: 'search' } },
+                    { term: { parent_tags: 'search' } },
+                    { bool: { must_not: [{ exists: { field: 'parent_tags' } }] } },
+                  ],
                 },
               },
               {
@@ -254,6 +279,7 @@ describe('ElasticsearchSearchBackend', () => {
                           should: [
                             { term: { tags: 'typescript' } },
                             { term: { parent_tags: 'typescript' } },
+                            { bool: { must_not: [{ exists: { field: 'parent_tags' } }] } },
                           ],
                         },
                       },
@@ -263,6 +289,7 @@ describe('ElasticsearchSearchBackend', () => {
                           should: [
                             { term: { tags: 'search' } },
                             { term: { parent_tags: 'search' } },
+                            { bool: { must_not: [{ exists: { field: 'parent_tags' } }] } },
                           ],
                         },
                       },
@@ -368,6 +395,14 @@ describe('ElasticsearchSearchBackend', () => {
     expect(response.candidates).toHaveLength(1001);
     expect(response.total).toBe(1001);
     expect(client.search).toHaveBeenCalledTimes(2);
+    expect(client.search).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        body: expect.not.objectContaining({
+          track_total_hits: true,
+        }),
+      }),
+    );
     expect(client.search).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({

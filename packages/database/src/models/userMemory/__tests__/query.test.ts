@@ -73,6 +73,7 @@ const createActivityPair = async (opts: {
 };
 
 const createContextPair = async (opts: {
+  currentStatus?: string;
   description?: string;
   memoryTags?: string[];
   tags?: string[];
@@ -96,6 +97,7 @@ const createContextPair = async (opts: {
     .insert(userMemoriesContexts)
     .values({
       associatedObjects: [{ name: 'Linear', type: UserMemoryContextObjectType.Application }],
+      currentStatus: opts.currentStatus,
       description: opts.description ?? 'A context description',
       tags: opts.tags,
       title: opts.title ?? 'Atlas context',
@@ -365,6 +367,19 @@ describe('user memory query layer', () => {
       });
 
       expect(result.activities.map((item) => item.id)).toEqual([exactMatch.id]);
+    });
+
+    it('applies context status during lexical filter-only search', async () => {
+      const { context: active } = await createContextPair({ currentStatus: 'active' });
+      await createContextPair({ currentStatus: 'archived' });
+
+      const result = await memoryModel.searchMemory({
+        layers: [LayersEnum.Context],
+        status: ['active'],
+        topK: { activities: 0, contexts: 5, experiences: 0, identities: 0, preferences: 0 },
+      });
+
+      expect(result.contexts.map((item) => item.id)).toEqual([active.id]);
     });
 
     it('does not execute retrieval for layers with topK set to zero', async () => {

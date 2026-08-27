@@ -32,6 +32,7 @@ import {
   UserMemoryIdentityModel,
   UserMemoryModel,
 } from '@/database/models/userMemory';
+import { SearchCandidateSearchError } from '@/database/repositories/search';
 import { UserMemoryTopicRepository } from '@/database/repositories/userMemory';
 import {
   userMemories,
@@ -235,6 +236,11 @@ const normalizeEmbeddable = (value?: string | null): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+/** Candidate-provider outages must not be converted into successful empty memory responses. */
+const rethrowCandidateSearchError = (error: unknown) => {
+  if (error instanceof SearchCandidateSearchError) throw error;
+};
+
 const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const userSettingsRow = await ctx.serverDB.query.userSettings.findFirst({
@@ -307,6 +313,7 @@ export const userMemoriesRouter = router({
       try {
         return await ctx.activityModel.queryList(params);
       } catch (error) {
+        rethrowCandidateSearchError(error);
         console.error('Failed to query activities:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
       }
@@ -334,6 +341,7 @@ export const userMemoriesRouter = router({
       try {
         return await ctx.experienceModel.queryList(params);
       } catch (error) {
+        rethrowCandidateSearchError(error);
         console.error('Failed to query experiences:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
       }
@@ -362,6 +370,7 @@ export const userMemoriesRouter = router({
       try {
         return await ctx.identityModel.queryList(params);
       } catch (error) {
+        rethrowCandidateSearchError(error);
         console.error('Failed to query identities:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
       }
@@ -434,6 +443,7 @@ export const userMemoriesRouter = router({
           sort: params.sort,
         });
       } catch (error) {
+        rethrowCandidateSearchError(error);
         console.error('Failed to query memories:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
       }
@@ -970,6 +980,7 @@ export const userMemoriesRouter = router({
         const result = await searchUserMemories(ctx, searchParams);
         return result;
       } catch (error) {
+        rethrowCandidateSearchError(error);
         console.error('Failed to retrieve memory for topic:', error);
         return EMPTY_SEARCH_RESULT;
       }
@@ -979,6 +990,7 @@ export const userMemoriesRouter = router({
     try {
       return await searchUserMemories(ctx, input);
     } catch (error) {
+      rethrowCandidateSearchError(error);
       console.error('Failed to retrieve memories:', error);
       return EMPTY_SEARCH_RESULT;
     }

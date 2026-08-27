@@ -543,6 +543,19 @@ describe('UserMemoryModel', () => {
         expect(result.total).toBe(1);
       });
 
+      it('applies exact context status filters without an external candidate provider', async () => {
+        const { context: active } = await createContextPair({ currentStatus: 'active' });
+        await createContextPair({ currentStatus: 'archived' });
+
+        const result = await memoryModel.queryMemories({
+          layer: LayersEnum.Context,
+          status: ['active'],
+        });
+
+        expect(result.items.map(({ context }) => context?.id)).toEqual([active.id]);
+        expect(result.total).toBe(1);
+      });
+
       it('hydrates external candidates through current user and context status filters', async () => {
         const { context: matching } = await createContextPair({ currentStatus: 'active' });
         const { context: wrongStatus } = await createContextPair({ currentStatus: 'archived' });
