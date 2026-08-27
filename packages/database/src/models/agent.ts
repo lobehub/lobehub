@@ -229,8 +229,7 @@ export interface AgentModelOptions {
    * `updateConfig()` — see that function's `onShareReset` JSDoc. Optional and
    * defaulted to a no-op so every EXISTING `new AgentModel(...)` call site
    * keeps its current behavior; only construction sites that can reach the
-   * server layer (tRPC procedures, tool executors) pass a real callback. See
-   * LOBE-11930 hole 2.
+   * server layer (tRPC procedures, tool executors) pass a real callback.
    *
    * NO `targetWorkspaceId` parameter, even though `transferAgents` fires this
    * from inside a scope change: the post-commit `interruptActiveShareRuns`
@@ -244,8 +243,8 @@ export interface AgentModelOptions {
    * 'private')` guard below finds nothing to reset), leaving the one
    * scheduled callback scoped to a now-stale workspace. `agentId` is the
    * only identity that survives any number of transfers, so the re-query
-   * must key on it instead. See LOBE-11930 (the double-transfer window) and
-   * `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc.
+   * must key on it instead. See `TopicModel.findActiveVisitorRunTopicsByAgentId`'s
+   * JSDoc for the double-transfer window this avoids.
    */
   onShareReset?: (agentId: string, revocationGeneration: number) => void;
 
@@ -260,7 +259,7 @@ export interface AgentModelOptions {
    * defaulted to a no-op so every EXISTING `new AgentModel(...)` call site
    * keeps its current behavior; only construction sites that can reach the
    * server layer (tRPC procedures, tool executors) pass a real callback —
-   * same shape as `onShareReset` above. See LOBE-11930.
+   * same shape as `onShareReset` above.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -991,7 +990,7 @@ export class AgentModel {
    * removes the topic rows the lookup needs (`topics.agentId` cascades
    * directly off the final `agents` delete, not only through the session
    * delete), and hands the snapshot to `onShareRunsInterrupted` once the
-   * transaction has committed. See LOBE-11930.
+   * transaction has committed.
    */
   delete = async (agentId: string) => {
     let activeShareRuns: ActiveShareRun[] = [];
@@ -1037,7 +1036,7 @@ export class AgentModel {
       // Snapshot in-flight Agent Share visitor runs BEFORE anything below
       // cascades their topic rows away. Agent sharing is personal-only, so a
       // workspace agent never has any — skip the query entirely there. See
-      // this method's JSDoc and LOBE-11930.
+      // this method's JSDoc.
       if (!this.workspaceId) {
         activeShareRuns = await new TopicModel(
           trx as LobeChatDatabase,
@@ -1090,7 +1089,7 @@ export class AgentModel {
    * `delete()` above — this method bypasses that one entirely and has no
    * other snapshot of its own. Agent sharing is personal-only, so a
    * workspace-scoped `AgentModel` never has any — skip the query entirely
-   * there. See `delete()`'s JSDoc and LOBE-11930.
+   * there. See `delete()`'s JSDoc.
    */
   batchDelete = async (agentIds: string[]) => {
     if (agentIds.length === 0) return;
@@ -1249,7 +1248,7 @@ export class AgentModel {
      * `AgentModel.updateConfig` / `SessionModel.updateConfig` /
      * `AgentService.updateAgent` use, instead of writing `agents` directly,
      * so a `link` share can never survive an `update()` call that turns the
-     * agent heterogeneous (Codex / Claude Code). See LOBE-11930.
+     * agent heterogeneous (Codex / Claude Code).
      */
     const touchesHeterogeneityFields =
       Object.hasOwn(sanitizedData, 'model') || Object.hasOwn(sanitizedData, 'agencyConfig');
@@ -1679,10 +1678,10 @@ export class AgentModel {
      * writes the config, and resets a non-private share back to `private`
      * when the merged config is heterogeneous — every writer of
      * `agents.model` / `agents.agencyConfig` must route through it instead of
-     * duplicating this SQL. See that file's JSDoc and LOBE-11930 for the full
-     * race and why the check is limited to `model` / `agencyConfig` writes.
+     * duplicating this SQL. See that file's JSDoc for the full race and why
+     * the check is limited to `model` / `agencyConfig` writes.
      */
-    await writeAgentConfigWithShareReset(this.db, {
+    return await writeAgentConfigWithShareReset(this.db, {
       agentId,
       onShareReset: this.onShareReset,
       resultingConfig: mergedValue,
@@ -2280,7 +2279,7 @@ export class AgentModel {
       // `ne(visibility, 'private')` mirror `writeAgentConfigWithShareReset`'s
       // own guard: only an ACTUAL transition schedules a post-commit
       // interrupt, so a share that was already private (or never existed)
-      // never pays for one. See LOBE-11930.
+      // never pays for one.
       if (!this.workspaceId && targetWorkspaceId) {
         const resetShares = await trx
           .update(agentShares)

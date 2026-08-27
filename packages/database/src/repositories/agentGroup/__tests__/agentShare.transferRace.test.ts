@@ -18,7 +18,7 @@ import {
 import type { LobeChatDatabase } from '../../../type';
 import { AgentGroupRepository } from '../index';
 
-// Real-Postgres reproduction of the Codex P1's group-transfer equivalent at
+// Real-Postgres reproduction of the missing revocation bump's group-transfer equivalent at
 // `packages/database/src/repositories/agentGroup/index.ts` (`transferToWorkspace`):
 // a group-owned agent's `agentShares` reset had the exact same bypass as
 // `AgentModel.transferAgents` — a bare visibility flip with no
@@ -117,16 +117,15 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     });
     expect(confirmed).toBe(false);
 
-    // `revokeReservations` only flags the row (`revokedAt`), it does not
-    // delete it — mirrors `startVisitorRun`'s own cleanup in the
-    // single-agent version of this test (`releaseReservation` on a rejected
-    // confirm), which this test skips since it drives `confirmReservation`
-    // directly instead of through that helper.
-    const [revokedReservation] = await serverDB
-      .select({ revokedAt: agentShareRunReservations.revokedAt })
+    // `revokeReservations` claims the row by deleting it, so nothing is left
+    // for a late `confirmReservation` (whose own `DELETE ... WHERE revoked_at
+    // IS NULL` targets the same row) to find — which is exactly why the
+    // `confirmReservation` above fails closed.
+    const remaining = await serverDB
+      .select({ id: agentShareRunReservations.id })
       .from(agentShareRunReservations)
       .where(eq(agentShareRunReservations.id, operationId));
-    expect(revokedReservation?.revokedAt).toBeTruthy();
+    expect(remaining).toEqual([]);
 
     // The share itself is unresolvable in the new (workspace) scope — the
     // whole point of the transfer's reset.
@@ -215,7 +214,7 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     ]);
   });
 
-  // The Codex P1 this fix targets: a personal→A→B double transfer before the
+  // The bug this fix targets: a personal→A→B double transfer before the
   // deferred `interruptActiveShareRuns` callback (scheduled by the FIRST
   // transfer) fires. The second transfer schedules no callback of its own —
   // the share is already `private` after the first move, so its own
