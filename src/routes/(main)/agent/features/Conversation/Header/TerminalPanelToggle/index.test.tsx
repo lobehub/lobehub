@@ -14,6 +14,12 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   ),
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ active, onClick }: { active?: boolean; onClick?: () => void }) => (
+    <button data-active={String(active)} data-testid="terminal-panel-toggle" onClick={onClick} />
+  ),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));

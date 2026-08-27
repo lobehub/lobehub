@@ -23,6 +23,16 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? undefined : 'overflow-menu-button'}
+      onClick={onClick}
+    />
+  ),
+}));
+
 vi.mock('./useMenu', () => ({
   useMenu: () => ({
     menuHeader: <div data-testid={'topic-info-header'} />,
