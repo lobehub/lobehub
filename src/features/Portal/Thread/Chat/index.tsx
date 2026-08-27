@@ -36,32 +36,50 @@ import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
  */
 interface ThreadChatContentProps {
   composerWritable: boolean;
+  /** The message this thread forked from — its anchor in the main conversation. */
+  forkMessageId?: string;
   isHeterogeneousAgent: boolean;
   readOnly: boolean;
   threadType?: IThreadType;
 }
 
 const ThreadChatContent = memo<ThreadChatContentProps>(
-  ({ composerWritable, isHeterogeneousAgent, readOnly, threadType }) => {
+  ({ composerWritable, forkMessageId, isHeterogeneousAgent, readOnly, threadType }) => {
     const inputMode = getThreadInputMode({
       isExternallyOwnedThread: readOnly,
       isHeterogeneousAgent,
     });
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-    // The thread bucket holds the inherited main-chat history plus the thread's
-    // own messages. The last inherited (threadId-less) message is the fork point.
+    // The portal knows its own fork point (`threadStartMessageId` while the
+    // thread is being created, `thread.sourceMessageId` once it exists), so take
+    // it from there rather than deriving it from the list. Deriving it as "the
+    // last message without a threadId" breaks for the ~2s optimistic window
+    // after send: the just-sent rows have no threadId yet either (the thread row
+    // does not exist), so the scan walked past the fork point onto the assistant
+    // placeholder. Kept as a fallback for callers that have neither.
     const sourceMessageId = useMemo(
-      () => displayMessages.findLast((msg) => !msg.threadId)?.id,
-      [displayMessages],
+      () => forkMessageId ?? displayMessages.findLast((msg) => !msg.threadId)?.id,
+      [forkMessageId, displayMessages],
     );
 
-    // Render only the fork message above the divider — the rest of the main
-    // chat is one click away and re-rendering it here just duplicates it. The
-    // data layer keeps the full history so AI context inheritance is unchanged.
+    // Render the fork message and everything after it — the inherited main chat
+    // above it is one click away and re-rendering it here just duplicates it.
+    // The data layer keeps the full history, so AI context inheritance is
+    // unchanged. Cutting by position (rather than by `threadId`) is what keeps
+    // the user's own message visible during the optimistic window.
+    const visibleIds = useMemo(() => {
+      if (!sourceMessageId) return;
+      const forkIndex = displayMessages.findIndex((msg) => msg.id === sourceMessageId);
+      // Anchor not in this list (a bucket swap mid-flight): show everything
+      // rather than blanking the panel.
+      if (forkIndex < 0) return;
+      return new Set(displayMessages.slice(forkIndex).map((msg) => msg.id));
+    }, [displayMessages, sourceMessageId]);
+
     const filterItem = useCallback(
-      (msg: UIChatMessage) => !!msg.threadId || msg.id === sourceMessageId,
-      [sourceMessageId],
+      (msg: UIChatMessage) => !visibleIds || visibleIds.has(msg.id),
+      [visibleIds],
     );
 
     const itemContent = useCallback(
@@ -103,6 +121,11 @@ const ThreadChatContent = memo<ThreadChatContentProps>(
           <ChatInput
             leftActions={['typo', 'voiceDictation']}
             rightActions={['voiceMessage', 'contextWindow']}
+            // A subtopic runs on the conversation it forked from: mode, device,
+            // working directory and approval all come from there and are not
+            // separately settable here. Rendering the bar anyway put a row of
+            // controls under the panel that only restated the parent's state.
+            showControlBar={false}
           />
         )}
       </>
@@ -264,6 +287,7 @@ const ThreadChat = memo(() => {
     >
       <ThreadChatContent
         composerWritable={composerTarget.writable}
+        forkMessageId={threadStartMessageId ?? portalThread?.sourceMessageId ?? undefined}
         isHeterogeneousAgent={isHeterogeneousAgent}
         readOnly={!composerTarget.writable}
         threadType={isCreatingNewThread ? newThreadMode : portalThread?.type}
