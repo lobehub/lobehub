@@ -358,6 +358,7 @@ export default {
     'Token history is only recorded for runs started in LobeHub after usage tracking was enabled. Earlier usage and runs started directly from the terminal cannot be backfilled.',
   'heteroAgent.claudeQuota.calendar.noLedgerSpendShort': 'History not recorded',
   'heteroAgent.claudeQuota.calendar.partialCost': 'at least {{cost}}',
+  'heteroAgent.claudeQuota.calendar.partialCostCompact': '{{cost}}+',
   'heteroAgent.claudeQuota.calendar.pace': 'Even pace',
   'heteroAgent.claudeQuota.calendar.pastWindow': 'Last observed window',
   'heteroAgent.claudeQuota.calendar.rateLimited': 'Rate limited',

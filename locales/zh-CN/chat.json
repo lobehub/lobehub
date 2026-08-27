@@ -571,6 +571,7 @@
   "heteroAgent.claudeQuota.calendar.noLedgerSpendShort": "历史未记录",
   "heteroAgent.claudeQuota.calendar.pace": "匀速参考",
   "heteroAgent.claudeQuota.calendar.partialCost": "至少 {{cost}}",
+  "heteroAgent.claudeQuota.calendar.partialCostCompact": "{{cost}}+",
   "heteroAgent.claudeQuota.calendar.pastWindow": "最近一个观测窗口",
   "heteroAgent.claudeQuota.calendar.rateLimited": "已限流",
   "heteroAgent.claudeQuota.calendar.resetAt": "{{time}} 窗口重置",

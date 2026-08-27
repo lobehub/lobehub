@@ -360,13 +360,22 @@ const yOf = (utilization: number) => CHART_H * (1 - utilization / 100);
 const formatTrackedCost = (
   spend: Pick<DaySpend, 'cost' | 'hasUnpricedTurn'>,
   t: TFunction<'chat'>,
+  /**
+   * A day cell is one seventh of the panel: "at least $836" does not fit it as
+   * the lead number, so the cell wears the bound as a suffix and keeps every
+   * amount starting on the `$`.
+   */
+  compact = false,
 ) => {
   const trackedCost = trackedCostOf(spend);
   if (trackedCost.kind === 'unknown') return t('heteroAgent.claudeQuota.calendar.unpricedCost');
   if (trackedCost.kind === 'lower-bound')
-    return t('heteroAgent.claudeQuota.calendar.partialCost', {
-      cost: formatCost(trackedCost.cost),
-    });
+    return t(
+      compact
+        ? 'heteroAgent.claudeQuota.calendar.partialCostCompact'
+        : 'heteroAgent.claudeQuota.calendar.partialCost',
+      { cost: formatCost(trackedCost.cost) },
+    );
   return formatCost(trackedCost.cost);
 };
 
@@ -882,7 +891,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
    */
   const dayLabels = (spend: DaySpend | undefined, burn: number) => {
     const cost =
-      spend && (spend.cost > 0 || spend.hasUnpricedTurn) ? formatTrackedCost(spend, t) : '';
+      spend && (spend.cost > 0 || spend.hasUnpricedTurn) ? formatTrackedCost(spend, t, true) : '';
     const tokens = spend && spend.tokens > 0 ? formatTokens(spend.tokens) : '';
     // No ledger row (usage burned outside LobeHub) but the meter still moved.
     const share = !tokens && burn > 0 ? `${Math.round(burn)}%` : '';
