@@ -93,10 +93,10 @@ export class ToolExecutionService {
     // needs_approval is handled via humanIntervention in the manifest; we only
     // hard-block 'disabled' here (and needs_approval in headless/qstash context
     // since the manifest's humanIntervention auto-rejects them there already).
-    if (context.serverDB && context.userId && identifier && apiName) {
+    if (context.serverDB && context.principal.resourceOwnerUserId && identifier && apiName) {
       const permission = await getConnectorToolPermission(
         context.serverDB,
-        context.userId,
+        context.principal.resourceOwnerUserId,
         identifier,
         apiName,
         context.workspaceId,
@@ -241,9 +241,10 @@ export class ToolExecutionService {
         mcpParams.type === 'stdio' ||
         (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
 
-      // LOBE-11930 P2 (re-audit): a share visitor's run always carries
-      // `context.userId` set to the CREATOR (see `AiAgentService` constructed
-      // with `share.ownerId` in `shareChat.ts`), never the visitor. Letting a
+      // LOBE-11930 P2 (re-audit): a share visitor's run always resolves
+      // `principal.resourceOwnerUserId` to the CREATOR (see `AiAgentService`
+      // constructed with `share.ownerId` in `shareChat.ts`), never the
+      // visitor — only `principal.actorUserId` names the visitor. Letting a
       // device-only MCP call fall into the tunnel-resolution branch below
       // would therefore route straight to the OWNER's own paired device and
       // execute there — for real, with the owner's local machine/network
@@ -254,10 +255,10 @@ export class ToolExecutionService {
       // it cannot filter this out client-side; fail closed here instead,
       // unconditionally, the same "never offer what can't be safely
       // exercised" rule `shareGate.ts` applies to builtin tools.
-      if (isDeviceOnlyMcp && context.agentShare) {
+      if (isDeviceOnlyMcp && context.principal.delegation) {
         const message = `MCP server '${identifier}' can only run on the agent owner's machine (stdio or local network) and is not available to share visitors.`;
         log(
-          'Device-only MCP %s:%s blocked for share visitor (agentShare set) — refusing to tunnel to the owner device',
+          'Device-only MCP %s:%s blocked for share visitor (delegated run) — refusing to tunnel to the owner device',
           identifier,
           apiName,
         );
@@ -269,7 +270,7 @@ export class ToolExecutionService {
       }
 
       if (isDeviceOnlyMcp && deviceGateway.isConfigured) {
-        const tunnelTarget = context.userId
+        const tunnelTarget = context.principal.resourceOwnerUserId
           ? await this.resolveMcpTunnelTarget(context)
           : undefined;
         if (!tunnelTarget) {
@@ -347,9 +348,13 @@ export class ToolExecutionService {
     // The scoped helper (not the raw gateway pool) is mandatory here: it
     // applies device visibility and merges DB state. No serverDB → can't
     // apply visibility → fail closed.
-    if (!context.userId || !context.serverDB) return undefined;
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) return undefined;
     try {
-      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
+      const devices = await getScopedOnlineDevices(
+        context.serverDB,
+        context.principal.resourceOwnerUserId,
+        undefined,
+      );
       // Already sorted online-first / most-recently-active; drop offline rows.
       // Only the desktop app handles `mcp` tool calls — the CLI's
       // tool_call_request handler ignores `toolCall.type`/`params`, so a
@@ -422,7 +427,7 @@ export class ToolExecutionService {
                 type: 'http',
                 url: mcpParams.url,
               },
-        userId: context.userId!,
+        userId: context.principal.resourceOwnerUserId!,
         // Address the workspace device pool when the run is workspace-scoped —
         // omitting this would route the call to the personal pool and miss an
         // online workspace-shared device.
@@ -462,7 +467,9 @@ export class ToolExecutionService {
     try {
       // Create DiscoverService with user context
       const discoverService = new DiscoverService({
-        userInfo: context.userId ? { userId: context.userId } : undefined,
+        userInfo: context.principal.resourceOwnerUserId
+          ? { userId: context.principal.resourceOwnerUserId }
+          : undefined,
       });
 
       // Parse arguments

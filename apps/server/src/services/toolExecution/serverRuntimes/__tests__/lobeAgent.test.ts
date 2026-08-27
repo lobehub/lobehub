@@ -3,6 +3,8 @@ import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 import type { ToolExecutionContext } from '../../types';
 
 const mockToolsEnv = vi.hoisted(() => ({
@@ -139,7 +141,7 @@ describe('lobeAgentRuntime', () => {
     messageId: 'msg-1',
     serverDB: {} as any,
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
   };
 
   beforeEach(() => {
@@ -272,19 +274,26 @@ describe('lobeAgentRuntime', () => {
   });
 
   it('should require serverDB, userId and messageId', () => {
-    expect(() => lobeAgentRuntime.factory({ toolManifestMap: {}, userId: 'user-1' })).toThrow(
-      'serverDB is required for LobeAgent execution',
-    );
+    expect(() =>
+      lobeAgentRuntime.factory({
+        principal: createOwnerPrincipal('user-1'),
+        toolManifestMap: {},
+      }),
+    ).toThrow('serverDB is required for LobeAgent execution');
 
-    expect(() => lobeAgentRuntime.factory({ serverDB: {} as any, toolManifestMap: {} })).toThrow(
-      'userId is required for LobeAgent execution',
-    );
+    expect(() =>
+      lobeAgentRuntime.factory({
+        principal: createOwnerPrincipal(undefined),
+        serverDB: {} as any,
+        toolManifestMap: {},
+      }),
+    ).toThrow('userId is required for LobeAgent execution');
 
     expect(() =>
       lobeAgentRuntime.factory({
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       }),
     ).toThrow('messageId is required for LobeAgent execution');
   });
@@ -307,10 +316,10 @@ describe('lobeAgentRuntime', () => {
     it("threads the visitor's own topicId as restrictToTopicId for a share-visitor run", () => {
       lobeAgentRuntime.factory({
         ...baseContext,
-        agentShare: {
-          agentId: 'agent-1',
-          visitorUserId: 'visitor-1',
-        } as any,
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'user-1',
+        }),
         topicId: 'visitor-topic-1',
       });
 
@@ -326,10 +335,10 @@ describe('lobeAgentRuntime', () => {
     it('fails closed to a never-matching topic id when a share-visitor run somehow carries no topicId', () => {
       lobeAgentRuntime.factory({
         ...baseContext,
-        agentShare: {
-          agentId: 'agent-1',
-          visitorUserId: 'visitor-1',
-        } as any,
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'user-1',
+        }),
         topicId: undefined,
       });
 
@@ -347,10 +356,10 @@ describe('lobeAgentRuntime', () => {
     it('forwards the share billing context so a nested multimodal call bills the agentShare budget', async () => {
       const runtime = lobeAgentRuntime.factory({
         ...baseContext,
-        agentShare: {
-          agentId: 'agent-1',
-          visitorUserId: 'visitor-1',
-        } as any,
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'user-1',
+        }),
       });
 
       const result = await runtime.analyzeMedia({
@@ -389,7 +398,10 @@ describe('lobeAgentRuntime', () => {
       const runtime = lobeAgentRuntime.factory({
         ...baseContext,
         // Missing `visitorUserId` — a broken upstream wiring, not "no share".
-        agentShare: { agentId: 'agent-1' } as any,
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1' } as any,
+          userId: 'user-1',
+        }),
       });
 
       // Thrown synchronously (before any model call), not returned as a
@@ -992,7 +1004,10 @@ describe('lobeAgentRuntime', () => {
     ]);
     const runtime = lobeAgentRuntime.factory({
       ...baseContext,
-      agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' } as any,
+      principal: resolveRunPrincipal({
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        userId: 'user-1',
+      }),
     });
     const stableAudioRef = createMediaFileRef({ index: 0, messageId: 'msg-1', type: 'audio' });
 

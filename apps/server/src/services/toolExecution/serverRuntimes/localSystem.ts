@@ -43,7 +43,7 @@ const WORKING_DIR_ARG: Partial<Record<string, 'cwd' | 'scope'>> = {
 
 export const localSystemRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Local System device proxy execution');
     }
     if (!context.activeDeviceId) {
@@ -137,7 +137,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
             // Workspace devices live under the `workspace:<id>` principal in
             // the gateway, so the relay needs the workspaceId to address the
             // right DO pool. Personal device runs resolve to undefined.

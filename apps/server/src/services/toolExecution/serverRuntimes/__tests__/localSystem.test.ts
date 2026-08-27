@@ -5,6 +5,8 @@ import {
 } from '@lobechat/builtin-tool-local-system';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { type ToolExecutionContext } from '../../types';
 
 // Mock deviceGateway
@@ -31,6 +33,7 @@ describe('localSystemRuntime', () => {
     it('should throw when userId is missing', () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-1',
+        principal: createOwnerPrincipal(undefined),
         toolManifestMap: {},
       };
 
@@ -42,7 +45,7 @@ describe('localSystemRuntime', () => {
     it('should throw when activeDeviceId is missing', () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       expect(() => localSystemRuntime.factory(context)).toThrow(
@@ -54,7 +57,7 @@ describe('localSystemRuntime', () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-1',
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       const proxy = localSystemRuntime.factory(context);
@@ -70,7 +73,7 @@ describe('localSystemRuntime', () => {
         activeDeviceId: 'device-1',
         operationId: 'op-1',
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       const expectedResult = { content: 'ok', success: true };
@@ -98,7 +101,7 @@ describe('localSystemRuntime', () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-2',
         toolManifestMap: {},
-        userId: 'user-2',
+        principal: createOwnerPrincipal('user-2'),
       };
 
       mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
@@ -122,7 +125,7 @@ describe('localSystemRuntime', () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-ws',
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'ws-42',
       };
 
@@ -151,7 +154,7 @@ describe('localSystemRuntime', () => {
         activeDeviceId: 'device-personal',
         activeDeviceScope: 'personal',
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'ws-42',
       };
 
@@ -186,7 +189,7 @@ describe('localSystemRuntime', () => {
         agentId: 'agt-1',
         serverDB,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
@@ -213,7 +216,7 @@ describe('localSystemRuntime', () => {
       return localSystemRuntime.factory({
         activeDeviceId: 'device-1',
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory,
       });
     };
@@ -231,7 +234,7 @@ describe('localSystemRuntime', () => {
         activeDeviceId: 'device-1',
         localSandbox: true,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory: '/Users/me/repo',
       });
       await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
@@ -255,7 +258,7 @@ describe('localSystemRuntime', () => {
         activeDeviceId: 'device-1',
         localSandbox: true,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory: '/Users/me/repo',
       });
       await proxy[LocalSystemApiName.runCommand]({
@@ -274,7 +277,7 @@ describe('localSystemRuntime', () => {
         localSandbox: true,
         localSandboxNetwork: true,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory: '/Users/me/repo',
       });
       await proxy[LocalSystemApiName.runCommand]({ command: 'npm install' });
@@ -291,7 +294,7 @@ describe('localSystemRuntime', () => {
         localSandbox: false,
         localSandboxNetwork: true,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory: '/Users/me/repo',
       });
       await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
@@ -308,7 +311,7 @@ describe('localSystemRuntime', () => {
         activeDeviceId: 'device-1',
         localSandbox: true,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory: '/Users/me/repo',
       });
       await proxy[LocalSystemApiName.runCommand]({ command: 'rm -rf /', sandbox: false });
@@ -465,7 +468,7 @@ describe('localSystemRuntime', () => {
       return localSystemRuntime.factory({
         activeDeviceId: 'device-1',
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         ...context,
       });
     };

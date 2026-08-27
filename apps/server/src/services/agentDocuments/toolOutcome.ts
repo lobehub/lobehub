@@ -18,7 +18,8 @@ export interface EmitAgentDocumentToolOutcomeInput {
   /** Agent id used to scope the outcome when available. */
   agentId?: string;
   /**
-   * Share-visitor marker forwarded from `ToolExecutionContext.agentShare`.
+   * Share-visitor marker forwarded from
+   * `ToolExecutionContext.principal.delegation`.
    * Currently unreachable for a share visitor (every agent-document write API
    * is blocked at dispatch by `DATA_TOOL_ACCESS_RULES` in `shareGate.ts`), but
    * forwarded for defense-in-depth at the `emitToolOutcomeSafely` choke point

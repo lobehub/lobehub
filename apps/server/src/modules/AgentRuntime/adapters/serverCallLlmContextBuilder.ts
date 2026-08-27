@@ -113,10 +113,18 @@ export const buildServerCallLlmContext = async ({
       typeof message.content === 'string' && message.content.includes('topic_reference_context'),
   );
 
-  if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
-    const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
-    const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
-    const agentShare = ctx.agentShare;
+  if (!alreadyHasTopicRefs && ctx.serverDB && ctx.principal.resourceOwnerUserId) {
+    const topicModel = new TopicModel(
+      ctx.serverDB,
+      ctx.principal.resourceOwnerUserId,
+      ctx.workspaceId,
+    );
+    const messageModel = new MessageModelClass(
+      ctx.serverDB,
+      ctx.principal.resourceOwnerUserId,
+      ctx.workspaceId,
+    );
+    const { actorUserId, delegation } = ctx.principal;
     // Topic references are limited to the visitor's own topics in shared runs.
     // `TopicModel`'s built-in ownership scoping is not sufficient here — it
     // must also be checked against the visitor/agent pairing of the active
@@ -136,11 +144,12 @@ export const buildServerCallLlmContext = async ({
         | null
         | undefined,
     ): boolean => {
-      if (!agentShare) return true;
+      if (!delegation) return true;
       return (
-        topic?.senderId === agentShare.visitorUserId &&
-        topic?.agentId === agentShare.agentId &&
-        topic?.shareId === agentShare.shareId
+        !!actorUserId &&
+        topic?.senderId === actorUserId &&
+        topic?.agentId === delegation.agentId &&
+        topic?.shareId === delegation.shareId
       );
     };
     topicReferences = await resolveTopicReferences(
@@ -172,14 +181,20 @@ export const buildServerCallLlmContext = async ({
   // This source is fetched independently of agentConfig, so it needs its own
   // gate check rather than inheriting the one already applied there.
   const agentDocumentsAllowedForShare =
-    !ctx.agentShare || ctx.agentShare.filePermissionConfig?.agentFiles === 'read';
+    !ctx.principal.delegation ||
+    ctx.principal.delegation.grants.filePermissionConfig?.agentFiles === 'read';
   let agentDocuments: AgentContextDocument[] | undefined;
   const agentId = state.metadata?.agentId;
-  if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
+  if (
+    agentId &&
+    ctx.serverDB &&
+    ctx.principal.resourceOwnerUserId &&
+    agentDocumentsAllowedForShare
+  ) {
     try {
       const agentDocService = new AgentDocumentsService(
         ctx.serverDB,
-        ctx.userId,
+        ctx.principal.resourceOwnerUserId,
         state.metadata?.workspaceId ?? ctx.workspaceId,
       );
       const docs = await agentDocService.getAgentContextDocuments(agentId);
@@ -213,28 +228,31 @@ export const buildServerCallLlmContext = async ({
   // user info — personal profile data with no share permission that could ever
   // grant it, so a share visitor run never builds it. Two paths reach here: the
   // builtin `web-onboarding` agent, and any shared agent whose whitelist
-  // includes `lobe-web-onboarding`. Gating on `ctx.agentShare` closes both, and
-  // stays correct even though `AgentShareModel` already refuses to share a
-  // reserved builtin agent.
-  const onboardingContextAllowedForShare = !ctx.agentShare;
+  // includes `lobe-web-onboarding`. Gating on the run's delegation closes
+  // both, and stays correct even though `AgentShareModel` already refuses to
+  // share a reserved builtin agent.
+  const onboardingContextAllowedForShare = !ctx.principal.delegation;
 
   if (
     isOnboardingAgent &&
     onboardingContextAllowedForShare &&
     !alreadyHasOnboardingContext &&
     ctx.serverDB &&
-    ctx.userId
+    ctx.principal.resourceOwnerUserId
   ) {
     try {
       const { formatWebOnboardingStateMessage } =
         await import('@lobechat/builtin-tool-web-onboarding/utils');
-      const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+      const onboardingService = new OnboardingService(
+        ctx.serverDB,
+        ctx.principal.resourceOwnerUserId,
+      );
       const docService = new AgentDocumentsService(
         ctx.serverDB,
-        ctx.userId,
+        ctx.principal.resourceOwnerUserId,
         state.metadata?.workspaceId ?? ctx.workspaceId,
       );
-      const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+      const personaModel = new UserPersonaModel(ctx.serverDB, ctx.principal.resourceOwnerUserId);
 
       const [onboardingState, soulDoc, persona, userInfo] = await Promise.all([
         onboardingService.getState(),
@@ -281,9 +299,13 @@ export const buildServerCallLlmContext = async ({
     { description?: string | null; title?: string | null } | undefined;
 
   let lobehubSkillTopicTitle = '';
-  if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
+  if (lobehubSkillTopicId && ctx.serverDB && ctx.principal.resourceOwnerUserId) {
     try {
-      const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const topicModelForLobehub = new TopicModel(
+        ctx.serverDB,
+        ctx.principal.resourceOwnerUserId,
+        ctx.workspaceId,
+      );
       const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
       lobehubSkillTopicTitle = topicRecord?.title ?? '';
     } catch (error) {
@@ -304,9 +326,12 @@ export const buildServerCallLlmContext = async ({
   // In execAgent (server/bot) mode we must fetch from DB directly.
   let serverUsername = '';
   let serverLanguage = '';
-  if (ctx.serverDB && ctx.userId) {
+  if (ctx.serverDB && ctx.principal.resourceOwnerUserId) {
     try {
-      const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, ctx.userId);
+      const userInfo = await UserModel.getInfoForAIGeneration(
+        ctx.serverDB,
+        ctx.principal.resourceOwnerUserId,
+      );
       serverUsername = userInfo.userName;
       serverLanguage = userInfo.responseLanguage;
     } catch (error) {
@@ -316,10 +341,15 @@ export const buildServerCallLlmContext = async ({
 
   const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
   let sandboxUploadedFiles = '';
-  if (sandboxEnabled === 'true' && ctx.serverDB && ctx.userId && lobehubSkillTopicId) {
+  if (
+    sandboxEnabled === 'true' &&
+    ctx.serverDB &&
+    ctx.principal.resourceOwnerUserId &&
+    lobehubSkillTopicId
+  ) {
     try {
       const { formatUploadedFilesPrompt } = await import('@lobechat/builtin-tool-cloud-sandbox');
-      const fileModel = new FileModel(ctx.serverDB, ctx.userId);
+      const fileModel = new FileModel(ctx.serverDB, ctx.principal.resourceOwnerUserId);
       const uploadedFiles = await fileModel.findFilesToInitInSandbox(lobehubSkillTopicId);
       sandboxUploadedFiles = formatUploadedFilesPrompt(uploadedFiles);
     } catch (error) {
@@ -348,12 +378,12 @@ export const buildServerCallLlmContext = async ({
     resolved.enabledToolIds.includes('lobe-agent') &&
     lobehubSkillTopicId &&
     ctx.serverDB &&
-    ctx.userId
+    ctx.principal.resourceOwnerUserId
   ) {
     try {
       const topicDocumentModel = new TopicDocumentModel(
         ctx.serverDB,
-        ctx.userId,
+        ctx.principal.resourceOwnerUserId,
         state.metadata?.workspaceId ?? ctx.workspaceId,
       );
       const [planDocument] = await topicDocumentModel.findByTopicId(lobehubSkillTopicId, {
@@ -372,7 +402,7 @@ export const buildServerCallLlmContext = async ({
   }
 
   let credsListStr = '';
-  if (ctx.userId) {
+  if (ctx.principal.resourceOwnerUserId) {
     try {
       // Read market accessToken from DB so the server-side runtime can
       // authenticate with the Market API instead of falling back to an
@@ -380,7 +410,7 @@ export const buildServerCallLlmContext = async ({
       let marketAccessToken: string | undefined;
       if (ctx.serverDB) {
         try {
-          const userModel = new UserModel(ctx.serverDB, ctx.userId);
+          const userModel = new UserModel(ctx.serverDB, ctx.principal.resourceOwnerUserId);
           const settings = await userModel.getUserSettings();
           marketAccessToken = (settings?.market as any)?.accessToken;
         } catch {
@@ -390,7 +420,7 @@ export const buildServerCallLlmContext = async ({
 
       const marketService = new MarketService({
         accessToken: marketAccessToken,
-        userInfo: { userId: ctx.userId },
+        userInfo: { userId: ctx.principal.resourceOwnerUserId },
       });
       // Inside a workspace, the agent must only see the workspace's shared
       // organization credentials — personal creds are not visible here.
@@ -415,14 +445,14 @@ export const buildServerCallLlmContext = async ({
   }
 
   let composioServicesListStr = '';
-  if (ctx.serverDB && ctx.userId && !!composioEnv.COMPOSIO_API_KEY) {
+  if (ctx.serverDB && ctx.principal.resourceOwnerUserId && !!composioEnv.COMPOSIO_API_KEY) {
     try {
       // Connected = ACTIVE Composio connections across BOTH the legacy plugin
       // projection AND the connector table (agent-scoped connections live only
       // in the latter — see loadConnectedComposioIds).
       const connectedIds = await loadConnectedComposioIds(
         ctx.serverDB,
-        ctx.userId,
+        ctx.principal.resourceOwnerUserId,
         ctx.workspaceId,
         agentId,
       );
@@ -430,7 +460,11 @@ export const buildServerCallLlmContext = async ({
       // "connected, use directly" nor as "available to connect".
       let disabledIdSet = new Set<string>();
       if (agentId) {
-        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+        const agentModel = new AgentModel(
+          ctx.serverDB,
+          ctx.principal.resourceOwnerUserId,
+          ctx.workspaceId,
+        );
         const agentConfig = await agentModel.getAgentConfigById(agentId);
         disabledIdSet = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
       }
@@ -459,9 +493,13 @@ export const buildServerCallLlmContext = async ({
 
   let agentBuilderContext: AgentBuilderContext | undefined;
   const editingAgentId = state.metadata?.editingAgentId;
-  if (editingAgentId && ctx.serverDB && ctx.userId) {
+  if (editingAgentId && ctx.serverDB && ctx.principal.resourceOwnerUserId) {
     try {
-      const editingAgentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const editingAgentModel = new AgentModel(
+        ctx.serverDB,
+        ctx.principal.resourceOwnerUserId,
+        ctx.workspaceId,
+      );
       const editingConfig = (await editingAgentModel.getAgentConfigById(editingAgentId)) as Record<
         string,
         any
@@ -492,7 +530,7 @@ export const buildServerCallLlmContext = async ({
             // connector table so the builder marks them installed too.
             const connectedComposioIds = await loadConnectedComposioIds(
               ctx.serverDB,
-              ctx.userId,
+              ctx.principal.resourceOwnerUserId,
               ctx.workspaceId,
               editingAgentId,
             );
@@ -544,9 +582,13 @@ export const buildServerCallLlmContext = async ({
   // to wire the group up by hand — built-in group agents were missing from the member list.
   let groupAgentBuilderContext: GroupAgentBuilderContext | undefined;
   const editingGroupId = state.metadata?.editingGroupId;
-  if (editingGroupId && ctx.serverDB && ctx.userId) {
+  if (editingGroupId && ctx.serverDB && ctx.principal.resourceOwnerUserId) {
     try {
-      const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const chatGroupModel = new ChatGroupModel(
+        ctx.serverDB,
+        ctx.principal.resourceOwnerUserId,
+        ctx.workspaceId,
+      );
       const [group, roster] = await Promise.all([
         chatGroupModel.findById(editingGroupId),
         chatGroupModel.getGroupAgentsWithMeta(editingGroupId),
@@ -558,7 +600,11 @@ export const buildServerCallLlmContext = async ({
         let supervisorConfig: GroupAgentBuilderContext['supervisorConfig'];
         let enabledPlugins: string[] = [];
         if (supervisorAgentId) {
-          const supervisorModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+          const supervisorModel = new AgentModel(
+            ctx.serverDB,
+            ctx.principal.resourceOwnerUserId,
+            ctx.workspaceId,
+          );
           const supervisor = await supervisorModel.getAgentConfigById(supervisorAgentId);
           if (supervisor) {
             // Pinned identifiers only — `supervisorConfig.plugins` is a prompt
@@ -594,7 +640,7 @@ export const buildServerCallLlmContext = async ({
           try {
             const connectedComposioIds = await loadConnectedComposioIds(
               ctx.serverDB,
-              ctx.userId,
+              ctx.principal.resourceOwnerUserId,
               ctx.workspaceId,
               supervisorAgentId,
             );

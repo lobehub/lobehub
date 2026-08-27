@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
 
 import { ToolExecutionService } from '../index';
 
@@ -41,6 +42,7 @@ describe('ToolExecutionService', () => {
         type: 'builtin',
       },
       {
+        principal: createOwnerPrincipal('user-1'),
         skipResultTruncation: true,
         toolManifestMap: {},
         toolResultMaxLength: 5,
@@ -71,6 +73,7 @@ describe('ToolExecutionService', () => {
         type: 'builtin',
       },
       {
+        principal: createOwnerPrincipal('user-1'),
         toolManifestMap: {},
         toolResultMaxLength: 5,
       },
@@ -102,7 +105,7 @@ describe('ToolExecutionService', () => {
       ({
         serverDB: {},
         toolManifestMap: { 'my-mcp': { mcpParams } },
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         ...over,
       }) as any;
 
@@ -347,7 +350,14 @@ describe('ToolExecutionService', () => {
             { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
             {
               activeDeviceId: 'owner-device',
-              agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+              principal: resolveRunPrincipal({
+                agentShare: {
+                  agentId: 'agent-1',
+                  shareId: 'share-1',
+                  visitorUserId: 'visitor-1',
+                },
+                userId: 'user-1',
+              }),
             },
           ),
         );
@@ -367,7 +377,14 @@ describe('ToolExecutionService', () => {
             { name: 'my-mcp', type: 'http', url: 'http://192.168.1.10:8080/mcp' },
             {
               activeDeviceId: 'owner-device',
-              agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+              principal: resolveRunPrincipal({
+                agentShare: {
+                  agentId: 'agent-1',
+                  shareId: 'share-1',
+                  visitorUserId: 'visitor-1',
+                },
+                userId: 'user-1',
+              }),
             },
           ),
         );

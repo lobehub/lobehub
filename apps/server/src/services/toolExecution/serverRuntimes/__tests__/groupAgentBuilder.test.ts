@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { hasServerRuntime } from '..';
 import { groupAgentBuilderRuntime } from '../groupAgentBuilder';
 
@@ -79,7 +81,7 @@ const createRuntime = (workspaceId?: string) =>
   groupAgentBuilderRuntime.factory({
     serverDB: {} as never,
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
     workspaceId,
   });
 

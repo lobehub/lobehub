@@ -180,12 +180,12 @@ export const registerWorkFromIntent = async ({
 // tests) don't fail at context-build time; failure returns undefined, which
 // leaves URLs as raw keys — same behavior as before this helper existed.
 export const buildPostProcessUrl = (
-  ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'userId' | 'workspaceId'>,
+  ctx: Pick<RuntimeExecutorContext, 'principal' | 'serverDB' | 'workspaceId'>,
 ) => {
-  if (!ctx.userId || !ctx.serverDB) return undefined;
+  if (!ctx.principal.resourceOwnerUserId || !ctx.serverDB) return undefined;
   let fileService: FileService | undefined;
   try {
-    fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId);
+    fileService = new FileService(ctx.serverDB, ctx.principal.resourceOwnerUserId, ctx.workspaceId);
   } catch {
     return undefined;
   }
@@ -348,8 +348,9 @@ export const buildServerAgentMemberRunner = (
 
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
-      const agentMap = (state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> }
-        | undefined)?.agentMap;
+      const agentMap = (
+        state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> } | undefined
+      )?.agentMap;
       const resolvedMembers = members.map((member) => ({
         ...member,
         agentId: resolveGroupMemberId(member.agentId, agentMap),

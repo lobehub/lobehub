@@ -52,6 +52,7 @@ import {
   resolveToolOutcomeScope,
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
@@ -97,7 +98,7 @@ const getEmbeddingRuntime = async (
   // `DATA_TOOL_ACCESS_RULES` always blocks for share visitors — defense in
   // depth so this helper never silently bills the creator's ordinary budget
   // if a future write path becomes visitor-reachable.
-  agentShare?: { agentId: string; visitorUserId: string } | null,
+  agentShare?: { agentId?: string; visitorUserId?: string } | null,
 ) => {
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
@@ -144,7 +145,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
    * `shareGate.ts` — bills the creator's agentShare budget instead of their
    * ordinary personal budget.
    */
-  private agentShare?: { agentId: string; visitorUserId: string } | null;
+  private agentShare?: { agentId?: string; visitorUserId?: string } | null;
   private emitOutcome?: typeof emitToolOutcomeSafely;
   private messageId?: string;
   private memoryModel: UserMemoryModel;
@@ -160,7 +161,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
 
   constructor(options: {
     agentId?: string;
-    agentShare?: { agentId: string; visitorUserId: string } | null;
+    agentShare?: { agentId?: string; visitorUserId?: string } | null;
     emitOutcome?: typeof emitToolOutcomeSafely;
     messageId?: string;
     memoryEffort: MemoryEffort;
@@ -893,7 +894,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for Memory execution');
     }
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Memory execution');
     }
 
@@ -902,7 +903,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
     try {
       const userSettingsRow = await context.serverDB.query.userSettings.findFirst({
         columns: { memory: true },
-        where: eq(userSettings.id, context.userId),
+        where: eq(userSettings.id, context.principal.resourceOwnerUserId),
       });
       const memoryConfig =
         typeof userSettingsRow?.memory === 'object' && userSettingsRow?.memory !== null
@@ -913,13 +914,14 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       // fallback to medium
     }
 
-    const memoryModel = new UserMemoryModel(context.serverDB, context.userId);
+    const memoryModel = new UserMemoryModel(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+    );
 
     const service = new MemoryServerRuntimeService({
       agentId: context.agentId,
-      agentShare: context.agentShare
-        ? { agentId: context.agentShare.agentId, visitorUserId: context.agentShare.visitorUserId }
-        : undefined,
+      agentShare: toDelegationMarker(context.principal),
       emitOutcome: emitToolOutcomeSafely,
       messageId: context.messageId,
       memoryEffort,
@@ -930,7 +932,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       taskId: context.taskId,
       toolCallId: context.toolCallId,
       topicId: context.topicId,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
       workspaceId: context.workspaceId,
     });
 

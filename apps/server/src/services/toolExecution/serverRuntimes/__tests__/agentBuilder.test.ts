@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { agentBuilderRuntime } from '../agentBuilder';
 
 const {
@@ -58,7 +60,7 @@ const createRuntime = () =>
     editingAgentId: 'agent-1',
     serverDB: {} as never,
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
   });
 
 describe('agentBuilderRuntime', () => {

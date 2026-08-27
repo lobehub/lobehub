@@ -406,11 +406,11 @@ const buildService = (
  */
 export const pageAgentRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Page Agent execution');
     }
     return new PageAgentExecutionRuntime(
-      buildService(context.serverDB, context.userId, context.workspaceId),
+      buildService(context.serverDB, context.principal.resourceOwnerUserId, context.workspaceId),
     );
   },
   identifier: PageAgentIdentifier,

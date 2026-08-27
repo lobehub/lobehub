@@ -1,6 +1,7 @@
 import { SkillMaintainerExecutionRuntime } from '@lobechat/builtin-tool-skill-maintainer/executionRuntime';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
 import { skillManagementRuntime } from '../skillManagement';
@@ -22,11 +23,18 @@ describe('skillManagementRuntime', () => {
    */
   it('throws if required server context is missing', () => {
     expect(() =>
-      skillManagementRuntime.factory({ serverDB: {} as never, toolManifestMap: {} }),
+      skillManagementRuntime.factory({
+        principal: createOwnerPrincipal(undefined),
+        serverDB: {} as never,
+        toolManifestMap: {},
+      }),
     ).toThrow('userId and serverDB are required for Skill Management execution');
-    expect(() => skillManagementRuntime.factory({ toolManifestMap: {}, userId: 'user-1' })).toThrow(
-      'userId and serverDB are required for Skill Management execution',
-    );
+    expect(() =>
+      skillManagementRuntime.factory({
+        principal: createOwnerPrincipal('user-1'),
+        toolManifestMap: {},
+      }),
+    ).toThrow('userId and serverDB are required for Skill Management execution');
   });
 
   /**
@@ -37,7 +45,7 @@ describe('skillManagementRuntime', () => {
     const runtime = skillManagementRuntime.factory({
       serverDB: {} as never,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'ws-1',
     });
 

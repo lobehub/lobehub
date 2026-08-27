@@ -11,14 +11,14 @@ import { type ServerRuntimeRegistration } from './types';
  */
 export const notebookRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Notebook execution');
     }
 
     const notebookService = new NotebookRuntimeService({
       callerAgentVisibility: context.agentVisibility,
       serverDB: context.serverDB,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
       workspaceId: context.workspaceId,
     });
 

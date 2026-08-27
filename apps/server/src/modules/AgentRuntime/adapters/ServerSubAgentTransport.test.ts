@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  createDelegatedPrincipal,
+  createOwnerPrincipal,
+} from '@/server/services/executionPrincipal';
+
 import type { RuntimeExecutorContext } from '../context';
 import { ServerSubAgentTransport } from './ServerSubAgentTransport';
 
@@ -11,16 +16,22 @@ const subAgentParams = {
   topicId: 'topic-1',
 } as any;
 
+const visitorPrincipal = createDelegatedPrincipal({
+  actorUserId: 'visitor-1',
+  delegation: { agentId: 'creator-agent', grants: {}, shareId: 'share-1' },
+  resourceOwnerUserId: 'creator-user',
+});
+
 describe('ServerSubAgentTransport', () => {
-  // Agent share C3 (defensive layer): `ctx.agentShare` is only ever set from
-  // `state.metadata.agentShare` (a share-visitor run's marker). Without this
-  // check a `callSubAgent`/`callAgent` child would run with no shareGate of
-  // its own — the creator's full, unrestricted tool/file/memory surface.
+  // Agent share C3 (defensive layer): `ctx.principal.delegation` is only ever
+  // set for a share-visitor run. Without this check a `callSubAgent`/
+  // `callAgent` child would run with no shareGate of its own — the creator's
+  // full, unrestricted tool/file/memory surface.
   it('rejects execSubAgent for a share-visitor run without invoking the callback', async () => {
     const execSubAgent = vi.fn().mockResolvedValue({ success: true });
     const ctx = {
-      agentShare: { agentId: 'creator-agent', visitorUserId: 'visitor-1' },
       execSubAgent,
+      principal: visitorPrincipal,
     } as unknown as RuntimeExecutorContext;
 
     const result = await new ServerSubAgentTransport(ctx).execSubAgent(subAgentParams);
@@ -33,8 +44,8 @@ describe('ServerSubAgentTransport', () => {
   it('rejects execVirtualSubAgent for a share-visitor run without invoking the callback', async () => {
     const execVirtualSubAgent = vi.fn().mockResolvedValue({ success: true });
     const ctx = {
-      agentShare: { agentId: 'creator-agent', visitorUserId: 'visitor-1' },
       execVirtualSubAgent,
+      principal: visitorPrincipal,
     } as unknown as RuntimeExecutorContext;
 
     const result = await new ServerSubAgentTransport(ctx).execVirtualSubAgent(subAgentParams);
@@ -46,7 +57,10 @@ describe('ServerSubAgentTransport', () => {
 
   it('delegates execSubAgent to the injected callback for a normal (non-share) run', async () => {
     const execSubAgent = vi.fn().mockResolvedValue({ success: true, threadId: 'thread-1' });
-    const ctx = { execSubAgent } as unknown as RuntimeExecutorContext;
+    const ctx = {
+      execSubAgent,
+      principal: createOwnerPrincipal('user-1'),
+    } as unknown as RuntimeExecutorContext;
 
     const result = await new ServerSubAgentTransport(ctx).execSubAgent(subAgentParams);
 
@@ -55,7 +69,9 @@ describe('ServerSubAgentTransport', () => {
   });
 
   it('returns a fallback (not an exception) when no callback is injected', async () => {
-    const ctx = {} as unknown as RuntimeExecutorContext;
+    const ctx = {
+      principal: createOwnerPrincipal('user-1'),
+    } as unknown as RuntimeExecutorContext;
 
     const result = await new ServerSubAgentTransport(ctx).execSubAgent(subAgentParams);
 

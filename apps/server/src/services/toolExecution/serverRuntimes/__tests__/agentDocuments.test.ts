@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskModel } from '@/database/models/task';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { agentDocumentsRuntime } from '../agentDocuments';
 
@@ -26,14 +27,21 @@ describe('agentDocumentsRuntime', () => {
 
   it('should throw if userId is missing', () => {
     expect(() =>
-      agentDocumentsRuntime.factory({ serverDB: {} as any, toolManifestMap: {} }),
+      agentDocumentsRuntime.factory({
+        principal: createOwnerPrincipal(undefined),
+        serverDB: {} as any,
+        toolManifestMap: {},
+      }),
     ).toThrow('userId and serverDB are required for Agent Documents execution');
   });
 
   it('should throw if serverDB is missing', () => {
-    expect(() => agentDocumentsRuntime.factory({ toolManifestMap: {}, userId: 'user-1' })).toThrow(
-      'userId and serverDB are required for Agent Documents execution',
-    );
+    expect(() =>
+      agentDocumentsRuntime.factory({
+        principal: createOwnerPrincipal('user-1'),
+        toolManifestMap: {},
+      }),
+    ).toThrow('userId and serverDB are required for Agent Documents execution');
   });
 });
 
@@ -83,7 +91,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       serverDB: { select } as never,
       taskId,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId,
     };
   };
@@ -260,7 +268,7 @@ describe('agentDocumentsRuntime Work registration state', () => {
     onWorkRegistration,
     serverDB: {} as never,
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
     workspaceId: 'workspace-1',
   });
 

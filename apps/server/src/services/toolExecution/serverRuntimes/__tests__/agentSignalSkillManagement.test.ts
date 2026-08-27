@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
 import { agentSignalSkillManagementRuntime } from '../agentSignalSkillManagement';
@@ -13,7 +14,7 @@ describe('agentSignalSkillManagementRuntime', () => {
       agentSignalSkillManagementRuntime.factory({
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       }),
     ).toThrow('agent-signal-skill-management requires agentId, userId and serverDB');
   });
@@ -23,7 +24,7 @@ describe('agentSignalSkillManagementRuntime', () => {
       agentId: 'agent-1',
       serverDB: {} as never,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'ws-1',
     });
 

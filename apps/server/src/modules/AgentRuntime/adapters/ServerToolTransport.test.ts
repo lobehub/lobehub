@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
 import { agentManagementRuntime } from '@/server/services/toolExecution/serverRuntimes/agentManagement';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -44,14 +45,17 @@ describe('ServerToolTransport — share-visitor sub-agent dispatch guard', () =>
       streamManager: {},
       toolExecutionService: { executeTool: vi.fn() },
       topicId: 'topic-1',
-      userId: 'creator-user',
+      principal: createOwnerPrincipal('creator-user'),
       ...overrides,
     }) as unknown as RuntimeExecutorContext;
 
   it('withholds execSubAgent/subAgent runners from the executor for a share-visitor run', async () => {
     const executeTool = vi.fn().mockResolvedValue({ content: '', success: true });
     const ctx = buildCtx({
-      agentShare: { agentId: 'creator-agent', visitorUserId: 'visitor-1' },
+      principal: resolveRunPrincipal({
+        agentShare: { agentId: 'creator-agent', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        userId: 'creator-user',
+      }),
       toolExecutionService: { executeTool },
     });
 
@@ -78,11 +82,18 @@ describe('ServerToolTransport — share-visitor sub-agent dispatch guard', () =>
   it('end-to-end: a share-visitor run reaches AgentManagement.callAgent with no subAgent runner and fails closed', async () => {
     const executeTool = vi.fn(async (_payload: any, options: any) =>
       agentManagementRuntime
-        .factory({ serverDB: {} as never, toolManifestMap: {}, userId: 'creator-user' })
+        .factory({
+          principal: createOwnerPrincipal('creator-user'),
+          serverDB: {} as never,
+          toolManifestMap: {},
+        })
         .callAgent({ agentId: 'target-agent', instruction: 'do the task' }, options),
     );
     const ctx = buildCtx({
-      agentShare: { agentId: 'creator-agent', visitorUserId: 'visitor-1' },
+      principal: resolveRunPrincipal({
+        agentShare: { agentId: 'creator-agent', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        userId: 'creator-user',
+      }),
       toolExecutionService: { executeTool },
     });
 

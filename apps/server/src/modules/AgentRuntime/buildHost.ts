@@ -24,8 +24,8 @@ import { buildPostProcessUrl } from './executorHelpers';
  * message, model, context, blob, stream, operation, and tool ports.
  */
 export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
-  const blob = ctx.userId
-    ? new ServerBlobStore(ctx.serverDB, ctx.userId, ctx.workspaceId)
+  const blob = ctx.principal.resourceOwnerUserId
+    ? new ServerBlobStore(ctx.serverDB, ctx.principal.resourceOwnerUserId, ctx.workspaceId)
     : undefined;
 
   return {
@@ -40,22 +40,26 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
       operationId: ctx.operationId,
       stepIndex: ctx.stepIndex,
       topicId: ctx.topicId,
-      userId: ctx.userId,
+      userId: ctx.principal.resourceOwnerUserId,
       workspaceId: ctx.workspaceId,
     },
     transports: {
       blob,
-      compression: ctx.userId
-        ? new ServerCompressionTransport(ctx.serverDB, ctx.userId, ctx.workspaceId)
+      compression: ctx.principal.resourceOwnerUserId
+        ? new ServerCompressionTransport(
+            ctx.serverDB,
+            ctx.principal.resourceOwnerUserId,
+            ctx.workspaceId,
+          )
         : undefined,
       context: new ServerContextBuilder(ctx),
-      llm: ctx.userId ? new ServerLLMTransport(ctx, blob) : undefined,
+      llm: ctx.principal.resourceOwnerUserId ? new ServerLLMTransport(ctx, blob) : undefined,
       messages: new ServerMessageTransport(ctx.messageModel, {
         postProcessUrl: buildPostProcessUrl(ctx),
       }),
       operationStore: new ServerOperationStore(
         ctx.serverDB,
-        ctx.userId,
+        ctx.principal.resourceOwnerUserId,
         ctx.workspaceId,
         ctx.topicId,
         ctx.operationId,

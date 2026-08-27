@@ -8,7 +8,6 @@ import {
 import type { SearchDecision } from 'model-bank';
 
 import { type MessageModel } from '@/database/models/message';
-import type { AgentShareConfig } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
@@ -16,6 +15,7 @@ import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
 } from '@/server/services/agentRuntime/types';
+import type { ExecutionPrincipal } from '@/server/services/executionPrincipal';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
 import { type IStreamEventManager } from './types';
@@ -28,48 +28,6 @@ export interface RuntimeExecutorContext {
    */
   abortSignal?: AbortSignal;
   agentConfig?: any;
-  /**
-   * Shared-agent visitor marker (agent share C4), read back from
-   * `state.metadata.agentShare`. Forwarded into the business model-runtime
-   * context so LLM billing targets the creator's agentShare budget.
-   *
-   * `filePermissionConfig` is threaded through so per-step context assembly
-   * (e.g. always-on agent context documents) can apply the same fail-closed
-   * file gate as `applyShareGateToAgentConfig` without re-deriving it.
-   *
-   * `enabledToolIds` mirrors `shareConfig.enabledToolIds` so tool runtimes
-   * that resolve their target outside `toolManifestMap` (e.g. `activateSkill`,
-   * `lobe-topic-reference`) can apply the same allowlist/ownership rule the
-   * assembled tool set already enforces.
-   *
-   * `allowReadMemory` mirrors `shareConfig.allowReadMemory`, forwarded (via
-   * `ServerToolTransport`) into `ToolExecutionContext.agentShare` so
-   * `BuiltinToolsExecutor.execute` can re-check the memory tool's grant right
-   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate.ts`.
-   *
-   * `knowledgeBaseIds` mirrors the agent's persisted knowledge-base
-   * assignment so `isShareBlockedDataToolCall` can id-scope
-   * `viewKnowledgeBase`'s `id` argument to what the agent is actually
-   * mounted with, instead of any knowledge base the creator owns.
-   *
-   * `shareId` is the `agentShares.id` this run was authorized against
-   * (`AgentShareGate.shareId`) — forwarded so cross-topic reads within the
-   * run (e.g. `serverCallLlmContextBuilder`'s `<refer_topic>` resolution,
-   * `lobe-topic-reference`'s `getTopicContext`) can reject a topic stamped
-   * with a DIFFERENT `shareId`: it belongs to a share instance the owner has
-   * since disabled and replaced, even though `senderId`/`agentId` still
-   * match. See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`)
-   * and LOBE-11930 codex P2.
-   */
-  agentShare?: {
-    agentId: string;
-    allowReadMemory?: boolean;
-    enabledToolIds?: string[];
-    filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
-    knowledgeBaseIds?: string[];
-    shareId: string;
-    visitorUserId: string;
-  };
   /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result
@@ -103,6 +61,29 @@ export interface RuntimeExecutorContext {
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
   operationId: string;
+  /**
+   * Who this run executes as. Built once per operation by
+   * `AgentRuntimeService` from `state.metadata` (`resolveRunPrincipal`) and
+   * forwarded verbatim into `ToolExecutionContext.principal`.
+   *
+   * Mandatory, and the ONLY identity on this context: there is deliberately no
+   * bare `userId` field, so nothing downstream can filter by "the user"
+   * without stating whether it means the actor driving the run or the resource
+   * owner whose data, credentials and balance it acts on. On an ordinary run
+   * they are the same person; on a shared-agent visitor run they are not, and
+   * `principal.delegation` states exactly what the visitor may reach.
+   *
+   * `principal.delegation` also carries the run's billing target for the
+   * business model-runtime context (LLM spend goes to the creator's share
+   * budget), the fail-closed file gate per-step context assembly applies
+   * without re-deriving it (`applyShareGateToAgentConfig`), and the `shareId`
+   * that lets cross-topic reads (`serverCallLlmContextBuilder`'s
+   * `<refer_topic>` resolution, `lobe-topic-reference`'s `getTopicContext`)
+   * reject a topic stamped with a DIFFERENT share instance — one the owner has
+   * since disabled and replaced, even though `senderId`/`agentId` still match.
+   * See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
+   */
+  principal: ExecutionPrincipal;
   searchDecision?: SearchDecision;
   serverDB: LobeChatDatabase;
   stepIndex: number;
@@ -122,7 +103,6 @@ export interface RuntimeExecutorContext {
    * payload in trace only, reducing per-step Redis state from ~3.4MB to ~6KB.
    */
   tracingContextEngine?: (input: unknown, output: unknown) => void;
-  userId?: string;
   userTimezone?: string;
   /**
    * Workspace scoping for ownership filters on models/services constructed

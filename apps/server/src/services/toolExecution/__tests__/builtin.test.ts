@@ -1,6 +1,8 @@
 import type { ChatToolPayload } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 import { BuiltinToolsExecutor } from '../builtin';
 import type { ToolExecutionContext } from '../types';
 
@@ -70,7 +72,7 @@ const buildPayload = (argsStr: string): ChatToolPayload => ({
 
 const context: ToolExecutionContext = {
   toolManifestMap: {},
-  userId: 'user-1',
+  principal: createOwnerPrincipal('user-1'),
 };
 
 describe('BuiltinToolsExecutor truncated arguments', () => {
@@ -119,10 +121,53 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
       context,
     );
 
-    expect(mockApiHandler).toHaveBeenCalledWith({ title: 'Report', type: 'report' }, context);
+    expect(mockApiHandler).toHaveBeenCalledWith(
+      { title: 'Report', type: 'report' },
+      // The executor re-projects the resource owner as a plain `userId` for
+      // open-source ExecutionRuntimes that still read it off the call context.
+      { ...context, userId: 'user-1' },
+    );
     // The schema-level error from the runtime passes through untouched.
     expect(result.success).toBe(false);
     expect(result.content).toMatch(/Missing content/);
+  });
+
+  // Regression: open-source ExecutionRuntimes read `userId` / `agentShare` off
+  // this call context BY FIELD NAME, because `execute` hands them the whole
+  // `ToolExecutionContext` as the second argument. Both fields were removed
+  // from that type by the execution-principal refactor, so the executor has to
+  // re-project them here. Dropping `agentShare` in particular degrades
+  // silently: image generation's `asyncTaskErrorMessage` reads it to decide
+  // whether to redact a raw upstream provider error, and a missing marker
+  // reads as "ordinary run" — leaking the creator's provider/model names to a
+  // share visitor rather than failing loudly.
+  it('projects the legacy userId/agentShare fields onto the runtime call context', async () => {
+    mockApiHandler.mockResolvedValue({ content: 'ok', success: true });
+
+    await executor.execute(buildPayload('{}'), {
+      ...context,
+      principal: resolveRunPrincipal({
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        userId: 'creator-1',
+      }),
+    });
+
+    const runtimeContext = mockApiHandler.mock.calls[0][1];
+    // The RESOURCE OWNER, never the visitor — this id scopes rows and quota.
+    expect(runtimeContext.userId).toBe('creator-1');
+    expect(runtimeContext.agentShare).toEqual({
+      agentId: 'agent-1',
+      visitorUserId: 'visitor-1',
+    });
+
+    mockApiHandler.mockClear();
+
+    await executor.execute(buildPayload('{}'), context);
+
+    // An ordinary run must carry no marker at all, or every consumer that
+    // treats presence as "this is a share run" would misfire.
+    expect(mockApiHandler.mock.calls[0][1].agentShare).toBeUndefined();
+    expect(mockApiHandler.mock.calls[0][1].userId).toBe('user-1');
   });
 
   it('returns INVALID_JSON_ARGUMENTS for balanced-but-invalid JSON (not truncated)', async () => {
@@ -166,7 +211,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     // parse falls through to `{}` without triggering the invalid-JSON guard.
     const result = await executor.execute(buildPayload(''), context);
 
-    expect(mockApiHandler).toHaveBeenCalledWith({}, context);
+    expect(mockApiHandler).toHaveBeenCalledWith({}, { ...context, userId: 'user-1' });
     expect(result.success).toBe(true);
   });
 
@@ -225,7 +270,10 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
 
       const shareContext: ToolExecutionContext = {
         ...context,
-        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' } as any,
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'user-1',
+        }),
       };
 
       const result = await executor.execute(buildPayload('{}'), shareContext);
@@ -366,7 +414,7 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
     toolManifestMap: {},
     toolMessageId: 'msg-tool-task',
     topicId: 'topic-1',
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
     workspaceId: 'workspace-1',
   };
 

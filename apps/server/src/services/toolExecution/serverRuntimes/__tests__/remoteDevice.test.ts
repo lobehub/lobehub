@@ -2,6 +2,8 @@ import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-device/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { type ToolExecutionContext } from '../../types';
 
 // Mock deviceGateway
@@ -57,6 +59,7 @@ describe('remoteDeviceRuntime', () => {
   describe('factory', () => {
     it('should throw when userId is missing', () => {
       const context: ToolExecutionContext = {
+        principal: createOwnerPrincipal(undefined),
         toolManifestMap: {},
       };
 
@@ -68,7 +71,7 @@ describe('remoteDeviceRuntime', () => {
     it('should return a RemoteDeviceExecutionRuntime instance', () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       const runtime = remoteDeviceRuntime.factory(context);
@@ -79,7 +82,7 @@ describe('remoteDeviceRuntime', () => {
     it('should query only the personal pool when no workspaceId is in context', async () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       const mockDevices = [
@@ -105,7 +108,7 @@ describe('remoteDeviceRuntime', () => {
     it('lists ONLY workspace devices in a workspace run (personal devices excluded)', async () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'ws-1',
       };
 
@@ -149,7 +152,7 @@ describe('remoteDeviceRuntime', () => {
         agentId: 'agt-1',
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       const personalDevice = {
@@ -187,7 +190,7 @@ describe('remoteDeviceRuntime', () => {
         agentId: 'agt-personal',
         serverDB: makeServerDB(null),
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
       mockQueryDeviceList.mockResolvedValue([
         {
@@ -210,7 +213,7 @@ describe('remoteDeviceRuntime', () => {
       const context: ToolExecutionContext = {
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'ws-1',
       };
 
@@ -256,7 +259,7 @@ describe('remoteDeviceRuntime', () => {
       const context: ToolExecutionContext = {
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'ws-1',
       };
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { selfFeedbackIntentRuntime } from '../selfFeedbackIntent';
 
@@ -32,7 +33,10 @@ describe('selfFeedbackIntentRuntime', () => {
    * The runtime accepts a declaration through the enqueue boundary without mutating resources.
    */
   it('calls the enqueue boundary and returns accepted JSON content', async () => {
-    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+    const runtime = selfFeedbackIntentRuntime.factory({
+      principal: createOwnerPrincipal('user-1'),
+      toolManifestMap: {},
+    });
 
     const result = await runtime.declareSelfFeedbackIntent(createInput(), {
       agentId: 'agent-1',
@@ -71,7 +75,10 @@ describe('selfFeedbackIntentRuntime', () => {
    * Missing runtime identity context returns a tool failure instead of enqueueing a source.
    */
   it('returns failure content when required context is missing', async () => {
-    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+    const runtime = selfFeedbackIntentRuntime.factory({
+      principal: createOwnerPrincipal('user-1'),
+      toolManifestMap: {},
+    });
 
     const result = await runtime.declareSelfFeedbackIntent(createInput(), {
       agentId: 'agent-1',
@@ -93,7 +100,10 @@ describe('selfFeedbackIntentRuntime', () => {
    * Rejected declarations still return a successful tool result so the agent can continue.
    */
   it('returns success true with accepted false for rejected service results', async () => {
-    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+    const runtime = selfFeedbackIntentRuntime.factory({
+      principal: createOwnerPrincipal('user-1'),
+      toolManifestMap: {},
+    });
 
     const result = await runtime.declareSelfFeedbackIntent(
       { ...createInput(), confidence: 1.25 },
@@ -121,7 +131,10 @@ describe('selfFeedbackIntentRuntime', () => {
    */
   it('preserves declaration rate-limit state across runtime factory calls', async () => {
     for (const toolCallId of ['tool-call-1', 'tool-call-2', 'tool-call-3']) {
-      const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+      const runtime = selfFeedbackIntentRuntime.factory({
+        principal: createOwnerPrincipal('user-1'),
+        toolManifestMap: {},
+      });
 
       await expect(
         runtime.declareSelfFeedbackIntent(createInput(), {
@@ -134,7 +147,10 @@ describe('selfFeedbackIntentRuntime', () => {
       ).resolves.toMatchObject({ success: true });
     }
 
-    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+    const runtime = selfFeedbackIntentRuntime.factory({
+      principal: createOwnerPrincipal('user-1'),
+      toolManifestMap: {},
+    });
     const result = await runtime.declareSelfFeedbackIntent(createInput(), {
       agentId: 'agent-1',
       toolCallId: 'tool-call-4',

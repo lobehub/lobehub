@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 const mocks = vi.hoisted(() => {
   // A class instance, like the real `createSandboxService` returns — a spread
   // wrapper would silently drop these prototype methods.
@@ -38,7 +40,7 @@ const buildContext = (overrides: Record<string, unknown> = {}) =>
     serverDB: {} as never,
     toolManifestMap: {},
     topicId: 'topic-1',
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
     ...overrides,
   }) as never;
 

@@ -9,9 +9,11 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const webBrowsingRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { userId, serverDB, agentId, agentVisibility } = context;
+    const { principal, serverDB, agentId, agentVisibility } = context;
+    // Everything persisted here lands in the RESOURCE OWNER's Pages library.
+    const userId = principal.resourceOwnerUserId;
     // A share visitor's run executes with the CREATOR's own credentials
-    // (`context.userId` is the creator — see `AgentShareGate`), so without
+    // (`principal.resourceOwnerUserId` is the creator — see `AgentShareGate`), so without
     // this guard `crawlSinglePage`/`crawlMultiPages` would unconditionally
     // persist every crawled page as a new `documents` row (and associate it
     // to the shared agent) regardless of what the share actually grants.
@@ -23,7 +25,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
     // inline in the tool result either way, so the visitor loses nothing
     // except the creator's Pages library silently accumulating
     // visitor-triggered, attacker-URL-titled documents.
-    const canSaveDocuments = userId && serverDB && agentId && !context.agentShare;
+    const canSaveDocuments = userId && serverDB && agentId && !principal.delegation;
 
     return new WebBrowsingExecutionRuntime({
       documentService: canSaveDocuments

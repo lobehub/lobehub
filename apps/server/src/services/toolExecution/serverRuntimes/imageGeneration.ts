@@ -8,6 +8,7 @@ import { aiProviderRouter } from '@/server/routers/lambda/aiProvider';
 import { generationRouter } from '@/server/routers/lambda/generation';
 import { generationTopicRouter } from '@/server/routers/lambda/generationTopic';
 import { imageRouter } from '@/server/routers/lambda/image';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -23,13 +24,23 @@ const normalizeModel = (model: AiProviderModelListItem): ImageGenerationModelSum
 
 export const imageGenerationRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Image Generation tool execution');
     }
 
+    const delegationMarker = toDelegationMarker(context.principal);
+    // Fail closed, mirroring `buildAgentShareModelRuntimeContext`: a marker
+    // that exists but is missing a field means the upstream wiring is broken,
+    // not that this is an ordinary run. Passing it on incomplete would let the
+    // Cloud billing layer fall through to the creator's personal balance.
+    if (delegationMarker && (!delegationMarker.agentId || !delegationMarker.visitorUserId)) {
+      throw new Error(
+        "Share-visitor image generation billing context is incomplete (missing agentId/visitorUserId); refusing to fall back to the creator's ordinary billing.",
+      );
+    }
     const callerContext = {
       clientIp: context.clientIp,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
       workspaceId: context.workspaceId,
       // Forward the share-visitor billing marker (narrowed to the two fields
       // the Cloud billing layer needs) so `imageCaller.createImage` bills the
@@ -37,13 +48,8 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
       // dropping it here would silently charge the creator personally for a
       // share visitor's generation. See `AuthContext.agentShare`'s JSDoc
       // (`packages/trpc/src/lambda/context.ts`).
-      ...(context.agentShare
-        ? {
-            agentShare: {
-              agentId: context.agentShare.agentId,
-              visitorUserId: context.agentShare.visitorUserId,
-            },
-          }
+      ...(delegationMarker
+        ? { agentShare: delegationMarker as { agentId: string; visitorUserId: string } }
         : {}),
     };
     const aiModelCaller = aiModelRouter.createCaller(callerContext);

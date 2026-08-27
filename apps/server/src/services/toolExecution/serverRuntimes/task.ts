@@ -761,12 +761,12 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
 export const taskRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Task tool execution');
     }
 
     const db = context.serverDB;
-    const userId = context.userId;
+    const userId = context.principal.resourceOwnerUserId;
     const {
       agentId,
       assistantMessageId,

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { notebookRuntime } from '../notebook';
 
 vi.mock('@/database/models/document');
@@ -15,7 +17,7 @@ describe('notebookRuntime', () => {
       serverDB: {} as any,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     };
 
     const runtime = notebookRuntime.factory(context);
@@ -29,6 +31,7 @@ describe('notebookRuntime', () => {
 
   it('should throw if userId is missing', () => {
     const context = {
+      principal: createOwnerPrincipal(undefined),
       serverDB: {} as any,
       toolManifestMap: {},
     };
@@ -41,7 +44,7 @@ describe('notebookRuntime', () => {
   it('should throw if serverDB is missing', () => {
     const context = {
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     };
 
     expect(() => notebookRuntime.factory(context)).toThrow(

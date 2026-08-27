@@ -18,7 +18,10 @@ import type { ServerRuntimeRegistration } from './types';
  */
 export const agentSignalReflectionRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { agentId, serverDB, userId, workspaceId } = context;
+    const { agentId, serverDB, workspaceId } = context;
+    // Background self-iteration agents act entirely on the resource owner's
+    // own skills/memory; they never run delegated.
+    const userId = context.principal.resourceOwnerUserId;
     if (!agentId || !userId || !serverDB) {
       throw new Error('agent-signal-reflection requires agentId, userId and serverDB');
     }

@@ -1,6 +1,8 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 import type { ToolExecutionContext } from '../../types';
 
 const mocks = vi.hoisted(() => ({
@@ -73,7 +75,7 @@ const createContext = (): ToolExecutionContext => ({
     },
   } as unknown as LobeChatDatabase,
   toolManifestMap: {},
-  userId: 'synthetic-user',
+  principal: createOwnerPrincipal('synthetic-user'),
 });
 
 describe('memoryRuntime', () => {
@@ -130,12 +132,14 @@ describe('memoryRuntime', () => {
       agentId?: string | null;
       visitorUserId?: string | null;
     }): ToolExecutionContext => ({
-      agentShare: agentShare as any,
+      principal: resolveRunPrincipal({
+        agentShare: agentShare as any,
+        userId: 'creator-1',
+      }),
       serverDB: {
         query: { userSettings: { findFirst: vi.fn(async () => undefined) } },
       } as unknown as LobeChatDatabase,
       toolManifestMap: {},
-      userId: 'creator-1',
     });
 
     it('forwards the share billing context so the query embedding bills the agentShare budget', async () => {

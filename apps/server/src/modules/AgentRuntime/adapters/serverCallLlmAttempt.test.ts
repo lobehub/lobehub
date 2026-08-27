@@ -3,6 +3,8 @@ import { ToolNameResolver } from '@lobechat/context-engine';
 import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import type { RuntimeExecutorContext } from '../context';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
@@ -68,8 +70,8 @@ const createAttempt = (
     serverDB: {} as RuntimeExecutorContext['serverDB'],
     stepIndex: 2,
     streamManager,
+    principal: createOwnerPrincipal('user-1'),
     toolExecutionService: {} as RuntimeExecutorContext['toolExecutionService'],
-    userId: 'user-1',
   } satisfies RuntimeExecutorContext;
   const chat = vi.fn(async (_payload, options?: ChatMethodOptions) => {
     await runCallbacks(options!);

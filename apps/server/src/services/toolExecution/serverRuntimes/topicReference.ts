@@ -132,18 +132,19 @@ export const topicReferenceRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for TopicReference execution');
     }
-    if (!context.userId) {
+    const { delegation } = context.principal;
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for TopicReference execution');
     }
     return new TopicReferenceExecutionRuntime(
       context.serverDB,
-      context.userId,
+      context.principal.resourceOwnerUserId,
       context.workspaceId,
-      context.agentShare
+      delegation && context.principal.actorUserId
         ? {
-            agentId: context.agentShare.agentId,
-            shareId: context.agentShare.shareId,
-            visitorUserId: context.agentShare.visitorUserId,
+            agentId: delegation.agentId,
+            shareId: delegation.shareId,
+            visitorUserId: context.principal.actorUserId,
           }
         : undefined,
     );

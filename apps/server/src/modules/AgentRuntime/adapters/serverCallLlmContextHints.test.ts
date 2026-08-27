@@ -1,6 +1,8 @@
 import type { CallLLMPayload } from '@lobechat/agent-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import type { RuntimeExecutorContext } from '../context';
 import { resolveServerCallLlmContextHints } from './serverCallLlmContextHints';
 
@@ -27,8 +29,8 @@ const createCtx = (agentConfig: any): RuntimeExecutorContext =>
     serverDB: {} as RuntimeExecutorContext['serverDB'],
     stepIndex: 0,
     streamManager: {} as RuntimeExecutorContext['streamManager'],
+    principal: createOwnerPrincipal('user-1'),
     toolExecutionService: {} as RuntimeExecutorContext['toolExecutionService'],
-    userId: 'user-1',
   }) satisfies RuntimeExecutorContext;
 
 const llmPayload = { messages: [] } as unknown as CallLLMPayload;
@@ -254,7 +256,7 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
   it('should not read the instance config when the ctx has no user scope', async () => {
     const ctx = createCtx({ chatConfig: {} });
-    ctx.userId = undefined;
+    ctx.principal = createOwnerPrincipal(undefined);
 
     await resolveServerCallLlmContextHints({
       ctx,

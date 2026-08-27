@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 const mocks = vi.hoisted(() => {
   const sandboxService = {
     callTool: vi.fn(),
@@ -176,7 +178,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     const result = await runtime.execScript({
@@ -210,7 +212,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     const result = await runtime.execScript({
@@ -234,7 +236,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -265,7 +267,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
@@ -297,7 +299,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -334,7 +336,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     const result = await runtime.execScript({
@@ -363,7 +365,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -396,7 +398,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -423,7 +425,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -454,7 +456,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -500,7 +502,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -530,7 +532,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -562,7 +564,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workingDirectory: '/Users/me/project',
       });
 
@@ -606,7 +608,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -671,7 +673,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const pending = runtime.execScript({
@@ -729,7 +731,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -764,7 +766,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -798,7 +800,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -827,7 +829,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -855,7 +857,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       await runtime.execScript({
@@ -900,7 +902,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.execScript({
@@ -927,7 +929,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.runCommand({ command: 'ls' });
@@ -944,7 +946,7 @@ describe('skillsRuntime', () => {
         serverDB: {} as never,
         toolManifestMap: {},
         topicId: 'topic-1',
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.exportFile({ filename: 'out.csv', path: '/tmp/out.csv' });
@@ -966,7 +968,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
@@ -978,7 +980,7 @@ describe('skillsRuntime', () => {
       serverDB: {} as never,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {

@@ -11,6 +11,7 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { isShareBlockedDataToolCall } from '@/server/services/aiAgent/shareGate';
 import { ComposioService } from '@/server/services/composio';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
@@ -141,14 +142,12 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // any routing (including `lobehubSkill` / `composio`, which are never
     // builtin identifiers so this gate never matches them) so it can't be
     // bypassed by a different source.
-    if (
-      context.agentShare &&
-      isShareBlockedDataToolCall(context.agentShare, identifier, apiName, args)
-    ) {
+    const delegation = context.principal.delegation;
+    if (delegation && isShareBlockedDataToolCall(delegation.grants, identifier, apiName, args)) {
       const message =
         `Tool "${identifier}.${apiName}" is not permitted for this shared agent's visitors — ` +
         `the share only grants a restricted view of the creator's data. Do not retry this call.`;
-      log('Blocked share-visitor tool call %s:%s (agentShare gate)', identifier, apiName);
+      log('Blocked share-visitor tool call %s:%s (delegation gate)', identifier, apiName);
       return {
         content: message,
         error: { code: 'SHARE_GATE_BLOCKED', message },
@@ -261,7 +260,22 @@ export class BuiltinToolsExecutor implements IToolExecutor {
         collectedWorkIntent = intent;
       };
 
-      const result = await runtime[apiName](args, context);
+      // Open-source ExecutionRuntimes receive this same object as their per-call
+      // context and read plain `userId` / `agentShare` fields off it by name:
+      // the self-iteration runtime's `DeclareSelfFeedbackIntentContext` needs
+      // `userId`, and image generation's `GenerateImageRuntimeContext` checks
+      // `agentShare` to redact upstream provider errors from share visitors
+      // (`asyncTaskErrorMessage`). The principal refactor removed both fields
+      // from `ToolExecutionContext`, so re-project them at this one boundary:
+      // `userId` is the RESOURCE OWNER (whose rows/quota the call touches), and
+      // `agentShare` is the legacy delegation marker. Dropping either silently
+      // degrades behavior rather than failing loudly — a missing `agentShare`
+      // reads as "ordinary run" and leaks the creator's raw provider errors.
+      const result = await runtime[apiName](args, {
+        ...context,
+        agentShare: toDelegationMarker(context.principal),
+        userId: context.principal.resourceOwnerUserId,
+      });
 
       // Manifest-driven Work registration: resolve the intent from the API's
       // declarative `work` config + result/args and hand it to the agent
@@ -311,9 +325,9 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       // runtime's own try/catch, or attempting to scrub free-text `content`
       // at the visitor-read boundary, which risks mangling legitimate tool
       // output) closes the whole class at once — including tools added after
-      // this fix. Scoped to `context.agentShare` so the creator's OWN runs
-      // keep the raw message for debugging.
-      if (context.agentShare) {
+      // this fix. Scoped to delegated runs so the creator's OWN runs keep the
+      // raw message for debugging.
+      if (delegation) {
         const message = 'The tool call failed. Do not retry with the same arguments.';
         return {
           content: message,

@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import type { ToolExecutionContext } from '../../types';
 import { groupManagementRuntime } from '../groupManagement';
 
@@ -10,7 +12,7 @@ const makeCtx = (overrides?: Partial<ToolExecutionContext>): ToolExecutionContex
   ({
     agentMember: { run },
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
     ...overrides,
   }) as ToolExecutionContext;
 

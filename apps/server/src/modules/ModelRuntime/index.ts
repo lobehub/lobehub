@@ -512,7 +512,11 @@ export interface ShareVisitorBillingMarker {
  * that broken state from silently billing the creator's personal budget.
  */
 export const buildAgentShareModelRuntimeContext = (
-  agentShare?: ShareVisitorBillingMarker | null,
+  // Deliberately `Partial`: the fail-closed check below is only reachable when
+  // a caller hands over a half-built marker, so the parameter must be able to
+  // express that broken state rather than making it a compile error at the one
+  // boundary that is supposed to catch it.
+  agentShare?: Partial<ShareVisitorBillingMarker> | null,
 ): BusinessModelRuntimeContext | undefined => {
   if (!agentShare) return undefined;
 

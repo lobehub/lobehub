@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 import type { StreamEvent } from '../StreamEventManager';
@@ -253,8 +254,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       serverDB: {} as any, // Mock serverDB
       stepIndex: 0,
       streamManager: mockStreamManager,
+      principal: createOwnerPrincipal('user-123'),
       toolExecutionService: mockToolExecutionService,
-      userId: 'user-123',
     };
   });
 
@@ -1607,7 +1608,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     it('should skip compress_context when userId is missing', async () => {
       const executors = createRuntimeExecutors({
         ...ctx,
-        userId: undefined,
+        principal: createOwnerPrincipal(undefined),
       });
       const state = createMockState({
         messages: [{ content: 'history', role: 'user' }],

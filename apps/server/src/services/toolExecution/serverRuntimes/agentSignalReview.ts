@@ -35,7 +35,8 @@ const resolveBriefTextTranslator = async (db: LobeChatDatabase, userId: string) 
  */
 export const agentSignalReviewRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
-    const { agentId, operationId, serverDB, userId, workspaceId } = context;
+    const { agentId, operationId, serverDB, workspaceId } = context;
+    const userId = context.principal.resourceOwnerUserId;
     if (!agentId || !userId || !operationId || !serverDB) {
       throw new Error('agent-signal-review requires agentId, userId, operationId and serverDB');
     }

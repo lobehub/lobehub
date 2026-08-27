@@ -104,13 +104,13 @@ class VerifyResultExecutionRuntime {
 
 export const verifyResultRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for verify-result tool execution');
     }
     return new VerifyResultExecutionRuntime({
       operationId: context.operationId,
       serverDB: context.serverDB,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
       workspaceId: context.workspaceId,
     });
   },

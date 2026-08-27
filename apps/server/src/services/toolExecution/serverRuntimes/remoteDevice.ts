@@ -16,11 +16,11 @@ const log = debug('lobe-server:remote-device');
 
 export const remoteDeviceRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Remote Device execution');
     }
 
-    const userId = context.userId;
+    const userId = context.principal.resourceOwnerUserId;
     const serverDB = context.serverDB;
 
     return new RemoteDeviceExecutionRuntime({

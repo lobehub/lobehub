@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 const mocks = vi.hoisted(() => ({
   emitToolOutcomeSafely: vi.fn().mockResolvedValue(undefined),
   findAll: vi.fn(),
@@ -72,7 +74,7 @@ describe('activatorRuntime', () => {
         agentId: 'agent-1',
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -98,7 +100,7 @@ describe('activatorRuntime', () => {
         agentId: 'agent-1',
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -125,15 +127,17 @@ describe('activatorRuntime', () => {
       const { activatorRuntime } = await import('../activator');
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
-        agentShare: {
-          shareId: 'share-1',
-          agentId: 'agent-1',
-          enabledToolIds: ['some-other-skill-identifier'],
-          visitorUserId: 'visitor-1',
-        },
+        principal: resolveRunPrincipal({
+          agentShare: {
+            agentId: 'agent-1',
+            enabledToolIds: ['some-other-skill-identifier'],
+            shareId: 'share-1',
+            visitorUserId: 'visitor-1',
+          },
+          userId: 'creator-1',
+        }),
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'creator-1',
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -145,15 +149,17 @@ describe('activatorRuntime', () => {
       const { activatorRuntime } = await import('../activator');
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
-        agentShare: {
-          shareId: 'share-1',
-          agentId: 'agent-1',
-          enabledToolIds: [],
-          visitorUserId: 'visitor-1',
-        },
+        principal: resolveRunPrincipal({
+          agentShare: {
+            agentId: 'agent-1',
+            enabledToolIds: [],
+            shareId: 'share-1',
+            visitorUserId: 'visitor-1',
+          },
+          userId: 'creator-1',
+        }),
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'creator-1',
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -165,15 +171,17 @@ describe('activatorRuntime', () => {
       const { activatorRuntime } = await import('../activator');
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
-        agentShare: {
-          shareId: 'share-1',
-          agentId: 'agent-1',
-          enabledToolIds: ['user-skill-identifier'],
-          visitorUserId: 'visitor-1',
-        },
+        principal: resolveRunPrincipal({
+          agentShare: {
+            agentId: 'agent-1',
+            enabledToolIds: ['user-skill-identifier'],
+            shareId: 'share-1',
+            visitorUserId: 'visitor-1',
+          },
+          userId: 'creator-1',
+        }),
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'creator-1',
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -187,7 +195,7 @@ describe('activatorRuntime', () => {
         agentId: 'agent-1',
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -211,12 +219,12 @@ describe('activatorRuntime', () => {
     });
 
     /**
-     * Regression for LOBE-11930 P1: `emitActivationOutcome` must forward
-     * `context.agentShare` into `emitToolOutcomeSafely` so the choke point in
+     * Regression for LOBE-11930 P1: `emitActivationOutcome` must forward the
+     * run's delegation into `emitToolOutcomeSafely` so the choke point in
      * `emitToolOutcome.ts` (`agentShare` presence check) can suppress the
      * write — otherwise a successful visitor `activateSkill` call would write
-     * creator-scoped procedure state / reach self-reflection under
-     * `context.userId` (the share creator), never the visitor.
+     * creator-scoped procedure state / reach self-reflection under the
+     * resource owner (the share creator), never the visitor.
      */
     it('forwards the agentShare marker so the activation outcome cannot enter Agent Signal', async () => {
       const { activatorRuntime } = await import('../activator');
@@ -228,17 +236,20 @@ describe('activatorRuntime', () => {
       };
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
-        agentShare,
+        principal: resolveRunPrincipal({ agentShare, userId: 'creator-1' }),
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'creator-1',
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
 
       expect(result.success).toBe(true);
+      // Downstream still takes the legacy `{ agentId, visitorUserId }` pair —
+      // `toDelegationMarker` is the single adapter that produces it.
       expect(mocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
-        expect.objectContaining({ agentShare }),
+        expect.objectContaining({
+          agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        }),
       );
     });
 
@@ -248,7 +259,7 @@ describe('activatorRuntime', () => {
         agentId: 'agent-1',
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       await runtime.activateSkill({ name: 'user-skill' });

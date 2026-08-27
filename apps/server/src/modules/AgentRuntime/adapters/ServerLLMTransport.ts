@@ -36,6 +36,7 @@ import {
   buildAgentShareModelRuntimeContext,
   initModelRuntimeFromDB,
 } from '@/server/modules/ModelRuntime';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
@@ -217,7 +218,7 @@ export class ServerLLMTransport implements LLMTransport {
           handlers?.onText?.(text);
         },
       },
-      user: this.ctx.userId,
+      user: this.ctx.principal.resourceOwnerUserId,
     });
 
     await consumeStreamUntilDone(response);
@@ -234,19 +235,20 @@ export class ServerLLMTransport implements LLMTransport {
   private createModelRuntime(provider: string) {
     return initModelRuntimeFromDB(
       this.ctx.serverDB,
-      this.ctx.userId!,
+      this.ctx.principal.resourceOwnerUserId!,
       provider,
       this.ctx.workspaceId,
       // Share-visitor runs bill the creator's agentShare budget instead of the
       // executing user's personal budget (agent share C4). `visitorUserId`
-      // must ride along too — `this.ctx.userId` here is the *creator*
-      // (share runs execute as the creator so billing/model access resolve
-      // from the creator's plan), so it is the only place the real visitor
-      // id can reach the billing hooks for spend-log attribution (agent
-      // share M9). Routed through the shared helper so every other
-      // model-runtime call site (nested tool-runtime inference) builds the
-      // exact same shape — see `buildAgentShareModelRuntimeContext`'s JSDoc.
-      buildAgentShareModelRuntimeContext(this.ctx.agentShare),
+      // must ride along too — `principal.resourceOwnerUserId` here is the
+      // *creator* (share runs execute against the creator's resources so
+      // billing/model access resolve from the creator's plan), so
+      // `principal.actorUserId` is the only place the real visitor id can
+      // reach the billing hooks for spend-log attribution (agent share M9).
+      // Routed through the shared helpers so every other model-runtime call
+      // site (nested tool-runtime inference) builds the exact same shape —
+      // see `buildAgentShareModelRuntimeContext`'s JSDoc.
+      buildAgentShareModelRuntimeContext(toDelegationMarker(this.ctx.principal)),
     );
   }
 

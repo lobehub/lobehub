@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { agentManagementRuntime } from '../agentManagement';
 
@@ -55,14 +56,14 @@ const createRuntime = () =>
   agentManagementRuntime.factory({
     serverDB: {} as never,
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
   });
 
 const createWorkspaceRuntime = () =>
   agentManagementRuntime.factory({
     serverDB: {} as never,
     toolManifestMap: {},
-    userId: 'user-1',
+    principal: createOwnerPrincipal('user-1'),
     workspaceId: 'workspace-1',
   });
 
@@ -85,9 +86,12 @@ describe('agentManagementRuntime', () => {
   });
 
   it('throws if required server context is missing', () => {
-    expect(() => agentManagementRuntime.factory({ toolManifestMap: {} })).toThrow(
-      'userId and serverDB are required for Agent Management execution',
-    );
+    expect(() =>
+      agentManagementRuntime.factory({
+        principal: createOwnerPrincipal(undefined),
+        toolManifestMap: {},
+      }),
+    ).toThrow('userId and serverDB are required for Agent Management execution');
   });
 
   it('scopes agent and plugin models to workspace context', () => {
@@ -118,7 +122,7 @@ describe('agentManagementRuntime', () => {
       const runtime = agentManagementRuntime.factory({
         serverDB: { transaction } as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
 
       await runtime.deleteAgent({ agentId: 'agent-to-delete' });

@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 
 const mocks = vi.hoisted(() => ({
@@ -51,7 +53,7 @@ describe('acceptanceEvidenceRuntime', () => {
       operationId: 'evidence-op',
       serverDB: {} as never,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     const result = await runtime.submitEvidence({
@@ -71,7 +73,7 @@ describe('acceptanceEvidenceRuntime', () => {
       operationId: 'evidence-op',
       serverDB: {} as never,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     const result = await runtime.submitEvidence({
@@ -90,7 +92,7 @@ describe('acceptanceEvidenceRuntime', () => {
       operationId: 'evidence-op',
       serverDB: {} as never,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     const result = await runtime.submitEvidence({

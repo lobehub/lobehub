@@ -642,24 +642,28 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for Skills execution');
     }
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Skills execution');
     }
 
     // Fetch market access token from user settings
     let marketAccessToken: string | undefined;
     try {
-      const userModel = new UserModel(context.serverDB, context.userId);
+      const userModel = new UserModel(context.serverDB, context.principal.resourceOwnerUserId);
       const userSettings = await userModel.getUserSettings();
       marketAccessToken = (userSettings as UserSettingsWithMarketToken | undefined)?.market
         ?.accessToken;
       log(
         'Fetched market accessToken for user %s: %s',
-        context.userId,
+        context.principal.resourceOwnerUserId,
         marketAccessToken ? 'exists' : 'not found',
       );
     } catch (error) {
-      log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
+      log(
+        'Failed to fetch market accessToken for user %s: %O',
+        context.principal.resourceOwnerUserId,
+        error,
+      );
     }
 
     // Independent of `<available_skills>` (built once, earlier, in
@@ -669,23 +673,39 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // set here so this path enforces the same tri-state.
     let disabledSkillIds = new Set<string>();
     if (context.agentId) {
-      const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+      const agentModel = new AgentModel(
+        context.serverDB,
+        context.principal.resourceOwnerUserId,
+        context.workspaceId,
+      );
       const agentConfig = await agentModel.getAgentConfigById(context.agentId);
       disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
     }
 
-    const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
+    const skillModel = new AgentSkillModel(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+      context.workspaceId,
+    );
     const resourceService = new SkillResourceService(
       context.serverDB,
-      context.userId,
+      context.principal.resourceOwnerUserId,
       context.workspaceId,
     );
     const marketService = new MarketService({
       accessToken: marketAccessToken,
-      userInfo: { userId: context.userId },
+      userInfo: { userId: context.principal.resourceOwnerUserId },
     });
-    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
-    const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
+    const fileService = new FileService(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+      context.workspaceId,
+    );
+    const fileModel = new FileModel(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+      context.workspaceId,
+    );
 
     // `activeDeviceId` presence is the device-branch switch: execScript then
     // runs on the device instead of the cloud sandbox. The executors filter
@@ -719,7 +739,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       serverDB: context.serverDB,
       skillModel,
       topicId: context.topicId,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
       workspaceId: context.workspaceId,
     });
 
@@ -734,7 +754,11 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // result based on the identifier prefix so the inspector can show
     // "Activate Agent Skill" + the friendly `title`.
     const agentSkillBuiltins: BuiltinSkill[] = context.agentId
-      ? await new AgentDocumentsService(context.serverDB, context.userId, context.workspaceId)
+      ? await new AgentDocumentsService(
+          context.serverDB,
+          context.principal.resourceOwnerUserId,
+          context.workspaceId,
+        )
           .getAgentSkills(context.agentId)
           .then((skills) =>
             skills
@@ -764,8 +788,8 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     //     tree (see commit 8e8f3aed14), so we enumerate live at read time.
     const { activeDeviceId, projectSkills } = context;
     let deviceFileAccess: DeviceFileAccess | undefined;
-    if (activeDeviceId && context.userId) {
-      const userId = context.userId;
+    if (activeDeviceId && context.principal.resourceOwnerUserId) {
+      const userId = context.principal.resourceOwnerUserId;
       deviceFileAccess = {
         listFiles: async (dir: string) => {
           const result = await deviceGateway.executeToolCall(

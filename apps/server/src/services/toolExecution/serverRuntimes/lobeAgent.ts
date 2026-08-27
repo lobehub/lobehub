@@ -30,6 +30,7 @@ import {
   buildAgentShareModelRuntimeContext,
   initModelRuntimeFromDB,
 } from '@/server/modules/ModelRuntime';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 import { FileService } from '@/server/services/file';
 
 import type { ToolExecutionContext } from '../types';
@@ -40,16 +41,17 @@ import type { ServerRuntimeRegistration } from './types';
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
   /**
-   * Full share-visitor billing marker (mirroring
-   * `ToolExecutionContext.agentShare`), present only on shared-agent visitor
-   * runs. `analyzeMedia`'s nested `initModelRuntimeFromDB` call forwards this
+   * Share-visitor billing marker, derived from
+   * `ToolExecutionContext.principal` via `toDelegationMarker` and therefore
+   * present only on delegated (shared-agent visitor) runs.
+   * `analyzeMedia`'s nested `initModelRuntimeFromDB` call forwards this
    * through `buildAgentShareModelRuntimeContext` so the multimodal-analysis
    * inference it triggers bills the creator's agentShare budget instead of
    * their ordinary personal budget — see the agent share P1 note on
    * `analyzeMedia` below. `isShareVisitor` (derived from this) additionally
    * drives the plan-runtime topic restriction.
    */
-  agentShare?: { agentId: string; visitorUserId: string } | null;
+  agentShare?: { agentId?: string; visitorUserId?: string } | null;
   /**
    * Visibility of the executing agent. Forwarded to the plan runtime so plan
    * documents inherit private-agent visibility.
@@ -62,6 +64,11 @@ interface LobeAgentRuntimeContext {
   serverDB: LobeChatDatabase;
   threadId?: string | null;
   topicId?: string;
+  /**
+   * The run's RESOURCE OWNER (`principal.resourceOwnerUserId`) — the share
+   * creator on a delegated run, not the visitor. Every read/write this runtime
+   * performs is scoped to them; visitor attribution lives in `agentShare`.
+   */
   userId: string;
   workspaceId?: string;
 }
@@ -137,7 +144,7 @@ interface ServerMediaSourceMessage extends MediaSourceMessage {
 
 class LobeAgentExecutionRuntime {
   private agentId?: string | null;
-  private agentShare?: { agentId: string; visitorUserId: string } | null;
+  private agentShare?: { agentId?: string; visitorUserId?: string } | null;
   private db: LobeChatDatabase;
   private groupId?: string | null;
   private userId: string;
@@ -539,7 +546,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for LobeAgent execution');
     }
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for LobeAgent execution');
     }
     if (!context.messageId) {
@@ -548,9 +555,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
 
     return new LobeAgentExecutionRuntime({
       agentId: context.agentId,
-      agentShare: context.agentShare
-        ? { agentId: context.agentShare.agentId, visitorUserId: context.agentShare.visitorUserId }
-        : undefined,
+      agentShare: toDelegationMarker(context.principal),
       agentVisibility: context.agentVisibility,
       groupId: context.groupId,
       messageId: context.messageId,
@@ -558,7 +563,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
       serverDB: context.serverDB,
       threadId: context.threadId,
       topicId: context.topicId,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
       workspaceId: context.workspaceId,
     });
   },

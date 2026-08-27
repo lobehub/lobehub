@@ -122,10 +122,11 @@ class AcceptanceEvidenceExecutionRuntime {
 
 export const acceptanceEvidenceRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) throw new Error('userId and serverDB are required');
+    if (!context.principal.resourceOwnerUserId || !context.serverDB)
+      throw new Error('userId and serverDB are required');
     return new AcceptanceEvidenceExecutionRuntime(
       context.serverDB,
-      context.userId,
+      context.principal.resourceOwnerUserId,
       context.operationId,
       context.workspaceId,
     );

@@ -29,12 +29,12 @@ const resolveWorkspaceId = async (
 
 export const briefRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Brief tool execution');
     }
 
     const db = context.serverDB;
-    const userId = context.userId;
+    const userId = context.principal.resourceOwnerUserId;
     const { agentId, taskId } = context;
     // Prefer the workspaceId threaded through the pipeline. Fall back to the
     // owning task row when an older caller still doesn't populate it.

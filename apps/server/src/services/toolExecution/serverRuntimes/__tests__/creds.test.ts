@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { MarketService } from '@/server/services/market';
 
 import { type ToolExecutionContext } from '../../types';
@@ -30,7 +31,7 @@ describe('credsRuntime', () => {
       serverDB,
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -47,7 +48,7 @@ describe('credsRuntime', () => {
       credsRuntime.factory({
         serverDB,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'workspace-1',
       }),
     ).rejects.toThrow('Workspace membership is required for workspace Creds execution');
@@ -58,7 +59,7 @@ describe('credsRuntime', () => {
     await expect(
       credsRuntime.factory({
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'workspace-1',
       }),
     ).rejects.toThrow('serverDB is required for workspace Creds execution');
@@ -70,7 +71,7 @@ describe('credsRuntime', () => {
     await credsRuntime.factory({
       toolManifestMap: {},
       topicId: 'topic-1',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     expect(getMember).not.toHaveBeenCalled();
@@ -80,8 +81,8 @@ describe('credsRuntime', () => {
   });
 
   it('rejects runtime creation without a user identity', async () => {
-    await expect(credsRuntime.factory({ toolManifestMap: {} })).rejects.toThrow(
-      'userId is required for Creds execution',
-    );
+    await expect(
+      credsRuntime.factory({ principal: createOwnerPrincipal(undefined), toolManifestMap: {} }),
+    ).rejects.toThrow('userId is required for Creds execution');
   });
 });

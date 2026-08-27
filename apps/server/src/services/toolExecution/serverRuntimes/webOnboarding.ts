@@ -9,14 +9,17 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const webOnboardingRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Web Onboarding execution');
     }
 
-    const onboardingService = new OnboardingService(context.serverDB, context.userId);
+    const onboardingService = new OnboardingService(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+    );
     const docService = new AgentDocumentsService(
       context.serverDB,
-      context.userId,
+      context.principal.resourceOwnerUserId,
       context.workspaceId,
     );
 
@@ -34,7 +37,10 @@ export const webOnboardingRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        const personaModel = new UserPersonaModel(context.serverDB!, context.userId!);
+        const personaModel = new UserPersonaModel(
+          context.serverDB!,
+          context.principal.resourceOwnerUserId!,
+        );
         const persona = await personaModel.getLatestPersonaDocument();
 
         return {
@@ -57,7 +63,10 @@ export const webOnboardingRuntime: ServerRuntimeRegistration = {
           return { id: doc?.id ?? null };
         }
 
-        const personaModel = new UserPersonaModel(context.serverDB!, context.userId!);
+        const personaModel = new UserPersonaModel(
+          context.serverDB!,
+          context.principal.resourceOwnerUserId!,
+        );
         const result = await personaModel.upsertPersona({
           editedBy: 'agent_tool',
           persona: content,

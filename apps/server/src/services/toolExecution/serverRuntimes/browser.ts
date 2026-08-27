@@ -21,7 +21,7 @@ import { type ServerRuntimeRegistration } from './types';
  */
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Browser device proxy execution');
     }
     if (!context.activeDeviceId) {
@@ -51,7 +51,7 @@ export const browserRuntime: ServerRuntimeRegistration = {
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
             workspaceId: await getDeviceWorkspaceId(),
           },
           {

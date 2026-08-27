@@ -182,7 +182,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for Message tool execution');
     }
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Message tool execution');
     }
 
@@ -191,21 +191,25 @@ export const messageRuntime: ServerRuntimeRegistration = {
     // bot rows and paid-feature checks to the workspace, not the personal plan.
     const providerModel = new AgentBotProviderModel(
       context.serverDB,
-      context.userId,
+      context.principal.resourceOwnerUserId,
       gateKeeper,
       context.workspaceId ?? undefined,
     );
 
     const service = new MessageDispatcherService({
       discord: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'discord', context.userId!);
+        const { credentials } = await resolveCredentials(
+          providerModel,
+          'discord',
+          context.principal.resourceOwnerUserId!,
+        );
         return new DiscordMessageService(new DiscordApi(credentials.botToken));
       },
       feishu: async () => {
         const { applicationId, credentials } = await resolveCredentials(
           providerModel,
           'feishu',
-          context.userId!,
+          context.principal.resourceOwnerUserId!,
         );
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
@@ -216,13 +220,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
         const { applicationId, credentials } = await resolveCredentials(
           providerModel,
           'imessage',
-          context.userId!,
+          context.principal.resourceOwnerUserId!,
         );
         return new ImessageMessageService(
           new ImessageDesktopBridgeApi({
             applicationId,
             deviceId: credentials.desktopDeviceId,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
           }),
         );
       },
@@ -230,7 +234,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         const { applicationId, credentials } = await resolveCredentials(
           providerModel,
           'lark',
-          context.userId!,
+          context.principal.resourceOwnerUserId!,
         );
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
@@ -241,12 +245,16 @@ export const messageRuntime: ServerRuntimeRegistration = {
         const { applicationId, credentials } = await resolveCredentials(
           providerModel,
           'qq',
-          context.userId!,
+          context.principal.resourceOwnerUserId!,
         );
         return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
       },
       slack: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'slack', context.userId!);
+        const { credentials } = await resolveCredentials(
+          providerModel,
+          'slack',
+          context.principal.resourceOwnerUserId!,
+        );
         return new SlackMessageService(new SlackApi(credentials.botToken));
       },
       telegram: async () => {
@@ -256,7 +264,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           const { credentials } = await resolveCredentials(
             providerModel,
             'telegram',
-            context.userId!,
+            context.principal.resourceOwnerUserId!,
           );
           return new TelegramMessageService(new TelegramApi(credentials.botToken));
         } catch (error) {
@@ -278,7 +286,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         const { applicationId, credentials } = await resolveCredentials(
           providerModel,
           'wechat',
-          context.userId!,
+          context.principal.resourceOwnerUserId!,
         );
         return new WechatMessageService(
           // `baseUrl` is issued during QR confirmation and must be honored when
@@ -297,11 +305,15 @@ export const messageRuntime: ServerRuntimeRegistration = {
           action: 'manage',
           applicationId: bot.applicationId,
           platform: bot.platform,
-          userId: context.userId!,
+          userId: context.principal.resourceOwnerUserId!,
           workspaceId: bot.workspaceId ?? undefined,
         });
         const gateway = new GatewayService();
-        const status = await gateway.startClient(bot.platform, bot.applicationId, context.userId!);
+        const status = await gateway.startClient(
+          bot.platform,
+          bot.applicationId,
+          context.principal.resourceOwnerUserId!,
+        );
         return { status };
       },
       createBot: async (params) => {
@@ -309,7 +321,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           action: 'manage',
           applicationId: params.applicationId,
           platform: params.platform,
-          userId: context.userId!,
+          userId: context.principal.resourceOwnerUserId!,
           workspaceId: context.workspaceId ?? undefined,
         });
         const settings = mergeBotSettingsForPersist(params.platform, params.settings);
@@ -318,7 +330,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           applicationId: params.applicationId,
           platform: params.platform,
           settings,
-          userId: context.userId!,
+          userId: context.principal.resourceOwnerUserId!,
           workspaceId: context.workspaceId ?? undefined,
         });
         const result = await providerModel.create({ ...params, settings });
@@ -332,7 +344,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             {
               applicationId: existing.applicationId,
               platform: existing.platform,
-              userId: context.userId!,
+              userId: context.principal.resourceOwnerUserId!,
             },
             { enabled: false },
           );
@@ -396,7 +408,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             action: 'manage',
             applicationId: existing.applicationId,
             platform: existing.platform,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
             workspaceId: existing.workspaceId ?? undefined,
           });
         }
@@ -405,7 +417,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
           },
           { enabled },
         );
@@ -417,7 +429,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           action: 'manage',
           applicationId: existing.applicationId,
           platform: existing.platform,
-          userId: context.userId!,
+          userId: context.principal.resourceOwnerUserId!,
           workspaceId: existing.workspaceId ?? undefined,
         });
 
@@ -432,7 +444,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             existingSettings: existing.settings,
             platform: existing.platform,
             settings: merged,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
             workspaceId: existing.workspaceId ?? undefined,
           });
           value.settings = merged;
@@ -444,7 +456,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             applicationId: existing.applicationId,
             platform: existing.platform,
             settings: existing.settings,
-            userId: context.userId!,
+            userId: context.principal.resourceOwnerUserId!,
           },
           value,
         );
@@ -456,13 +468,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
       // Settings → Messenger UI does. Each handler enforces user ownership;
       // the underlying models are already user-scoped where applicable.
       listMessengers: async () => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required to list System Bot installations');
         }
         const linkGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const rows = await MessengerInstallationModel.listByInstallerUserId(
           context.serverDB,
-          context.userId,
+          context.principal.resourceOwnerUserId,
           linkGateKeeper,
         );
         // We intentionally skip the Slack auth.test reconciliation that the
@@ -489,14 +501,17 @@ export const messageRuntime: ServerRuntimeRegistration = {
           }));
 
         installations.push(
-          ...(await synthesizeInstallsFromLinks(context.serverDB, context.userId)),
+          ...(await synthesizeInstallsFromLinks(
+            context.serverDB,
+            context.principal.resourceOwnerUserId,
+          )),
         );
 
         return installations;
       },
 
       getMessengerDetail: async (installationId) => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required to load installation');
         }
         // Telegram singleton has no DB row — synthesize the detail view from
@@ -505,7 +520,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         if (installationId === TELEGRAM_INSTALLATION_KEY) {
           const links = await new MessengerAccountLinkModel(
             context.serverDB,
-            context.userId,
+            context.principal.resourceOwnerUserId,
           ).list();
           const telegramView = toTelegramInstallationView(
             await maybeSynthesizeTelegramInstall(links),
@@ -515,7 +530,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         }
         const wechatLink = await new MessengerAccountLinkModel(
           context.serverDB,
-          context.userId,
+          context.principal.resourceOwnerUserId,
         ).findById(installationId, 'wechat');
         if (wechatLink?.applicationId) {
           return {
@@ -543,7 +558,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         if (!row) return null;
         // Same ownership guard as `messenger.uninstallInstallation` — the
         // installer is the only user who can see install metadata via the tool.
-        if (row.installedByUserId !== context.userId) {
+        if (row.installedByUserId !== context.principal.resourceOwnerUserId) {
           throw new Error('You can only view installations you initiated');
         }
         return {
@@ -567,7 +582,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       uninstallMessenger: async (installationId) => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required to uninstall');
         }
         // Telegram is env-backed and shared across all users — there is no
@@ -581,11 +596,14 @@ export const messageRuntime: ServerRuntimeRegistration = {
               "Use unlinkMessenger({ platform: 'telegram' }) to remove your own routing.",
           });
         }
-        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const linkModel = new MessengerAccountLinkModel(
+          context.serverDB,
+          context.principal.resourceOwnerUserId,
+        );
         const wechatLink = await linkModel.findById(installationId, 'wechat');
         if (wechatLink) {
           await linkModel.delete(wechatLink.id);
-          await disconnectWechatAccountLink(wechatLink, context.userId);
+          await disconnectWechatAccountLink(wechatLink, context.principal.resourceOwnerUserId);
           return;
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
@@ -600,7 +618,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             message: `Installation not found: ${installationId}`,
           });
         }
-        if (row.installedByUserId !== context.userId) {
+        if (row.installedByUserId !== context.principal.resourceOwnerUserId) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message: 'You can only uninstall installations you initiated',
@@ -639,10 +657,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       listMessengerLinks: async () => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required to list account links');
         }
-        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const linkModel = new MessengerAccountLinkModel(
+          context.serverDB,
+          context.principal.resourceOwnerUserId,
+        );
         const rows = await linkModel.list();
         return rows.map((row) => ({
           activeAgentId: row.activeAgentId ?? null,
@@ -656,7 +677,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       setMessengerActiveAgent: async (params) => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
         // Validate agent ownership before mutating the link — matches the
@@ -665,7 +686,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
           const [agentRow] = await context.serverDB
             .select({ id: agents.id })
             .from(agents)
-            .where(and(eq(agents.id, params.agentId), eq(agents.userId, context.userId)))
+            .where(
+              and(
+                eq(agents.id, params.agentId),
+                eq(agents.userId, context.principal.resourceOwnerUserId),
+              ),
+            )
             .limit(1);
           if (!agentRow) {
             throw new TRPCError({
@@ -674,7 +700,10 @@ export const messageRuntime: ServerRuntimeRegistration = {
             });
           }
         }
-        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const linkModel = new MessengerAccountLinkModel(
+          context.serverDB,
+          context.principal.resourceOwnerUserId,
+        );
         // This in-chat tool only resolves personal-owned agents (validated
         // above via `agents.userId === userId`), so the active scope is always
         // personal (`workspaceId: null`).
@@ -693,10 +722,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       unlinkMessenger: async (params) => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
-        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const linkModel = new MessengerAccountLinkModel(
+          context.serverDB,
+          context.principal.resourceOwnerUserId,
+        );
         if (params.platform === 'wechat') {
           const links = (await linkModel.list()).filter(
             (link) =>
@@ -705,7 +737,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
           );
           await linkModel.deleteByPlatform(params.platform, params.tenantId);
           await Promise.all(
-            links.map((link) => disconnectWechatAccountLink(link, context.userId!)),
+            links.map((link) =>
+              disconnectWechatAccountLink(link, context.principal.resourceOwnerUserId!),
+            ),
           );
           return;
         }
@@ -716,7 +750,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       // Slack workspace ambiguity, so this is a straight pass-through to the
       // platform-agnostic push entry (same one the settings UI test-push uses).
       sendMessengerPush: async (params) => {
-        if (!context.userId || !context.serverDB) {
+        if (!context.principal.resourceOwnerUserId || !context.serverDB) {
           throw new Error('userId and serverDB are required to push messenger messages');
         }
         // The TRPC route caps this with Zod, but this runtime calls the push
@@ -736,7 +770,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           platform: params.platform,
           serverDB: context.serverDB,
           tenantId: params.tenantId,
-          userId: context.userId,
+          userId: context.principal.resourceOwnerUserId,
         });
         return { remaining: result.remaining, status: result.status };
       },

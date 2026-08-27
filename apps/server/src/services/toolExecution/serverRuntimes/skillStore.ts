@@ -239,23 +239,27 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for Skill Store execution');
     }
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Skill Store execution');
     }
 
     // Fetch market access token from user settings
     let marketAccessToken: string | undefined;
     try {
-      const userModel = new UserModel(context.serverDB, context.userId);
+      const userModel = new UserModel(context.serverDB, context.principal.resourceOwnerUserId);
       const userSettings = await userModel.getUserSettings();
       marketAccessToken = (userSettings?.market as any)?.accessToken;
       log(
         'Fetched market accessToken for user %s: %s',
-        context.userId,
+        context.principal.resourceOwnerUserId,
         marketAccessToken ? 'exists' : 'not found',
       );
     } catch (error) {
-      log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
+      log(
+        'Failed to fetch market accessToken for user %s: %O',
+        context.principal.resourceOwnerUserId,
+        error,
+      );
     }
 
     // Importing inside a workspace writes the SHARED workspace skill catalog.
@@ -270,7 +274,7 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
     let importWorkspaceId = context.workspaceId;
     if (importWorkspaceId) {
       try {
-        const rbac = new RbacModel(context.serverDB, context.userId);
+        const rbac = new RbacModel(context.serverDB, context.principal.resourceOwnerUserId);
         const canManageWorkspaceSkills = await rbac.hasAnyPermission(
           [RBAC_PERMISSIONS.AGENT_UPDATE_ALL, RBAC_PERMISSIONS.AGENT_UPDATE_OWNER],
           { workspaceId: importWorkspaceId },
@@ -278,7 +282,7 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
         if (!canManageWorkspaceSkills) {
           log(
             'User %s lacks agent:update in workspace %s; importing skill into personal scope',
-            context.userId,
+            context.principal.resourceOwnerUserId,
             importWorkspaceId,
           );
           importWorkspaceId = undefined;
@@ -294,10 +298,14 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
       }
     }
 
-    const importer = new SkillImporter(context.serverDB, context.userId, importWorkspaceId);
+    const importer = new SkillImporter(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+      importWorkspaceId,
+    );
     const marketService = new MarketService({
       accessToken: marketAccessToken,
-      userInfo: { userId: context.userId },
+      userInfo: { userId: context.principal.resourceOwnerUserId },
     });
 
     const service = new SkillStoreServerRuntimeService({
@@ -310,7 +318,7 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
       taskId: context.taskId,
       toolCallId: context.toolCallId,
       topicId: context.topicId,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
     });
 
     return new SkillStoreExecutionRuntime({ service });

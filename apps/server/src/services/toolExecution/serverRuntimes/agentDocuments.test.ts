@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { agentDocumentsRuntime } from './agentDocuments';
 
 const listDocuments = vi.fn();
@@ -22,7 +24,7 @@ describe('agentDocumentsRuntime', () => {
       const runtime = agentDocumentsRuntime.factory({
         serverDB: {} as never,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       });
       const result = await runtime.listDocuments({}, { agentId: 'agent-1' });
 

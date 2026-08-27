@@ -1,6 +1,8 @@
 import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 const mocks = vi.hoisted(() => ({
   getUserSettings: vi.fn(),
   hasAnyPermission: vi.fn(),
@@ -72,7 +74,7 @@ describe('skillStoreRuntime', () => {
     await skillStoreRuntime.factory({
       serverDB,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -93,7 +95,7 @@ describe('skillStoreRuntime', () => {
     await skillStoreRuntime.factory({
       serverDB,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -107,7 +109,7 @@ describe('skillStoreRuntime', () => {
     await skillStoreRuntime.factory({
       serverDB,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -120,7 +122,7 @@ describe('skillStoreRuntime', () => {
     await skillStoreRuntime.factory({
       serverDB,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     expect(mocks.hasAnyPermission).not.toHaveBeenCalled();

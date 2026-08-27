@@ -102,7 +102,7 @@ export class KnowledgeBaseSearchService {
    * so that inference bills the creator's agentShare budget instead of their
    * ordinary personal budget.
    */
-  private agentShare?: { agentId: string; visitorUserId: string } | null;
+  private agentShare?: { agentId?: string; visitorUserId?: string } | null;
 
   private workspaceId?: string;
 
@@ -111,7 +111,7 @@ export class KnowledgeBaseSearchService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
-    agentShare?: { agentId: string; visitorUserId: string } | null,
+    agentShare?: { agentId?: string; visitorUserId?: string } | null,
   ) {
     this.serverDB = serverDB;
     this.userId = userId;

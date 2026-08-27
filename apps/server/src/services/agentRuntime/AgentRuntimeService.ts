@@ -65,6 +65,7 @@ import {
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import { resolveRunPrincipal } from '@/server/services/executionPrincipal';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { MessageService } from '@/server/services/message';
@@ -4064,7 +4065,6 @@ export class AgentRuntimeService {
       // an early hint would end the visible loading seconds before that card
       // can exist. Deferring to the terminal `visible_output_end` lets loading
       // cover the export and the card land with `agent_runtime_end`.
-      agentShare: metadata?.agentShare,
       allowEarlyFinalAnswerVisibleOutputEnd:
         agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,
@@ -4079,6 +4079,16 @@ export class AgentRuntimeService {
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
+      // The run's single identity source: `metadata.userId` is the resource
+      // owner (whose data/credentials/balance the run acts on), and
+      // `metadata.agentShare` — when present — names the visitor actually
+      // driving it plus the grants that authorize the gap. This is the ONE
+      // place the legacy `(userId, agentShare)` pair is turned into a
+      // principal; everything downstream reads the principal.
+      principal: resolveRunPrincipal({
+        agentShare: metadata?.agentShare,
+        userId: metadata?.userId,
+      }),
       searchDecision: metadata?.searchDecision,
       serverDB: this.serverDB,
       stepIndex,
@@ -4087,7 +4097,6 @@ export class AgentRuntimeService {
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,
       tracingContextEngine,
-      userId: metadata?.userId,
       workspaceId: this.workspaceId,
     };
 

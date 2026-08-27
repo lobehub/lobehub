@@ -85,8 +85,8 @@ export const resolveServerCallLlmContextHints = async ({
     (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
 
   const aiModelModel =
-    ctx.serverDB && ctx.userId
-      ? new AiModelModel(ctx.serverDB, ctx.userId, ctx.workspaceId)
+    ctx.serverDB && ctx.principal.resourceOwnerUserId
+      ? new AiModelModel(ctx.serverDB, ctx.principal.resourceOwnerUserId, ctx.workspaceId)
       : undefined;
 
   // The user's own AI model row serves two purposes: custom/remote models miss

@@ -16,6 +16,7 @@ import {
   resolveToolOutcomeScope,
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -32,27 +33,28 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       status: 'failed' | 'succeeded';
       summary: string;
     }) => {
-      if (!context.userId) return;
+      if (!context.principal.resourceOwnerUserId) return;
 
       const { scope, scopeKey } = resolveToolOutcomeScope({
         agentId: context.agentId,
         taskId: context.taskId,
         topicId: context.topicId,
-        userId: context.userId,
+        userId: context.principal.resourceOwnerUserId,
       });
 
       await emitToolOutcomeSafely({
         // LOBE-11930 P1: `activateSkill`/`markActivated` resolve independently
         // of the assembled tool set (see `isSkillAllowedForShare` above), so a
         // share visitor can reach them through `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`.
-        // This emitter always stamps `context.userId` — the share creator,
-        // never `context.agentShare.visitorUserId` — so without this marker it
-        // would write creator-scoped procedure state and could enqueue a
-        // creator-scoped self-reflection run from a visitor's turn. See
-        // `agentShare`'s JSDoc on `EmitToolOutcomeInput` for the choke point.
-        agentShare: context.agentShare,
+        // This emitter always stamps `principal.resourceOwnerUserId` — the
+        // share creator, never `principal.actorUserId` (the visitor) — so
+        // without this marker it would write creator-scoped procedure state
+        // and could enqueue a creator-scoped self-reflection run from a
+        // visitor's turn. See `agentShare`'s JSDoc on `EmitToolOutcomeInput`
+        // for the choke point.
+        agentShare: toDelegationMarker(context.principal),
         apiName: 'activateSkill',
-        context: { agentId: context.agentId, userId: context.userId },
+        context: { agentId: context.agentId, userId: context.principal.resourceOwnerUserId },
         domainKey: 'skill:builtin-skill',
         errorReason: input.errorReason,
         identifier: LobeActivatorIdentifier,
@@ -77,8 +79,12 @@ export const activatorRuntime: ServerRuntimeRegistration = {
 
     // Create SkillsExecutionRuntime for activateSkill delegation
     let skillsRuntime: SkillsExecutionRuntime | undefined;
-    if (context.serverDB && context.userId) {
-      const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
+    if (context.serverDB && context.principal.resourceOwnerUserId) {
+      const skillModel = new AgentSkillModel(
+        context.serverDB,
+        context.principal.resourceOwnerUserId,
+        context.workspaceId,
+      );
 
       // `activateSkill` resolves independently of `operationSkillSet`/
       // `<available_skills>` (built once, earlier, in aiAgent/index.ts) — it
@@ -89,7 +95,11 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // independent resolution path enforces the same tri-state.
       let disabledSkillIds = new Set<string>();
       if (context.agentId) {
-        const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+        const agentModel = new AgentModel(
+          context.serverDB,
+          context.principal.resourceOwnerUserId,
+          context.workspaceId,
+        );
         const agentConfig = await agentModel.getAgentConfigById(context.agentId);
         disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
       }
@@ -99,8 +109,8 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // assembled tool set / `<available_skills>` pool unless it is re-checked
       // here. A missing/empty allowlist allows nothing, matching how the tool
       // set gate treats an unconfigured share.
-      const shareAllowedSkillIds = context.agentShare
-        ? new Set(context.agentShare.enabledToolIds ?? [])
+      const shareAllowedSkillIds = context.principal.delegation
+        ? new Set(context.principal.delegation.grants.enabledToolIds ?? [])
         : undefined;
       const isSkillAllowedForShare = (identifier: string) =>
         !shareAllowedSkillIds || shareAllowedSkillIds.has(identifier);

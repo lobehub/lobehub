@@ -9,7 +9,7 @@ import {
   type WorkRegistrationIntent,
 } from '@lobechat/types';
 
-import type { AgentShareConfig } from '@/database/schemas';
+import type { ExecutionPrincipal } from '@/server/services/executionPrincipal';
 
 export interface ToolExecutionMemoryEmbeddingRuntime {
   /** Embedding model id used by the memory search runtime. */
@@ -158,51 +158,6 @@ export interface ToolExecutionContext {
    */
   agentMember?: ServerAgentMemberRunner;
   /**
-   * Shared-agent visitor marker (agent share C4), forwarded from
-   * `RuntimeExecutorContext.agentShare`. Tool runtimes that resolve their
-   * target independently of `toolManifestMap` (e.g. `activateSkill` querying
-   * skills by name, `lobe-topic-reference` querying a topic by id) must apply
-   * the same allowlist/ownership rule here that the assembled tool set and
-   * per-step context builder already enforce elsewhere. Undefined for
-   * non-share runs.
-   *
-   * `allowReadMemory` / `filePermissionConfig` carry the memory / knowledge-
-   * base / agent-documents grants so `BuiltinToolsExecutor.execute` can call
-   * `isShareBlockedDataToolCall` (`shareGate.ts`) right before dispatching
-   * `runtime[apiName](...)` — the manifest-level trim
-   * (`applyShareGateToDataToolAccess`) only changes what the model is offered
-   * via function-calling schema, so this per-call check is the actual
-   * enforcement that a whitelisted-but-under-granted data tool cannot read
-   * beyond, or ever write to, the creator's data.
-   *
-   * `knowledgeBaseIds` is the agent's own persisted knowledge-base
-   * assignment (never visitor-supplied). `lobe-knowledge-base`'s non-write
-   * APIs are creator-scoped, not agent-scoped by default: `listFiles` /
-   * `getFileDetail` browse the creator's whole resource library and
-   * `listKnowledgeBases` / `readKnowledge` likewise have no id that ties them
-   * to this agent's grant, so they stay blocked outright regardless of
-   * `filePermissionConfig.knowledgeBase`. Only `viewKnowledgeBase` takes a
-   * knowledge-base `id`, which `isShareBlockedDataToolCall` checks against
-   * this set so a visitor can view a knowledge base actually mounted on the
-   * shared agent, and nothing else the creator owns.
-   */
-  agentShare?: {
-    /** Id of the shared agent this run belongs to. */
-    agentId: string;
-    /** Mirrors `shareConfig.allowReadMemory`; gates the memory tool. */
-    allowReadMemory?: boolean;
-    /** Share whitelist; an empty/missing list allows nothing. */
-    enabledToolIds?: string[];
-    /** Mirrors `shareConfig.filePermissionConfig`; gates knowledge-base / agent-documents tools. */
-    filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
-    /** Agent's assigned (`enabled`) knowledge-base ids; scopes `viewKnowledgeBase`'s `id` arg. */
-    knowledgeBaseIds?: string[];
-    /** The `agentShares.id` this run was authorized against (`AgentShareGate.shareId`, `modules/AgentRuntime/context.ts`'s `agentShare` field). Used to reject cross-share-instance topic reads (e.g. `lobe-topic-reference`). */
-    shareId: string;
-    /** The signed-in visitor driving this run. */
-    visitorUserId: string;
-  };
-  /**
    * Visibility of the agent executing this tool call. Resolved once per tool
    * call in the runtime executor. Tool runtimes that persist agent side-effects
    * (documents, tasks, etc.) forward this so private-agent output inherits
@@ -305,6 +260,30 @@ export interface ToolExecutionContext {
   /** Agent runtime operation ID for structured tool outcome identity. */
   operationId?: string;
   /**
+   * Who this tool call executes as — the actor driving it, the resource owner
+   * whose data/credentials/quota it acts on, and (when they differ) the
+   * delegation that authorizes the gap.
+   *
+   * Mandatory, and the ONLY identity on this context: there is deliberately no
+   * bare `userId` field, so a runtime cannot filter by "the user" without
+   * stating which of the two it means. Ownership filters, credential lookups
+   * and billing take `principal.resourceOwnerUserId`; attribution takes
+   * `principal.actorUserId`.
+   *
+   * `principal.delegation` replaces the former optional `agentShare` marker.
+   * Tool runtimes that resolve their target independently of
+   * `toolManifestMap` (e.g. `activateSkill` querying skills by name,
+   * `lobe-topic-reference` querying a topic by id) apply
+   * `delegation.grants` — the same allowlist/ownership rule the assembled tool
+   * set and per-step context builder enforce elsewhere. It is also what
+   * `BuiltinToolsExecutor.execute` hands to `isShareBlockedDataToolCall`
+   * (`shareGate.ts`) right before dispatching `runtime[apiName](...)`: the
+   * manifest-level trim (`applyShareGateToDataToolAccess`) only changes what
+   * the model is OFFERED via function-calling schema, so that per-call check
+   * is the actual enforcement.
+   */
+  principal: ExecutionPrincipal;
+  /**
    * Filesystem skills (name + absolute SKILL.md path) discovered on the
    * execution device. Used by the Skills runtime to load them on demand via the
    * device gateway. Derived from the operation's skill set.
@@ -341,7 +320,6 @@ export interface ToolExecutionContext {
   toolResultMaxLength?: number;
   /** Topic ID for sandbox session management */
   topicId?: string;
-  userId?: string;
   /**
    * Device-bound working directory resolved when the operation was created
    * (`resolveDeviceWorkingDirectory`: topic override > workingDirByDevice >

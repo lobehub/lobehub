@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 import { imageGenerationRuntime } from '../imageGeneration';
 
 const callerMocks = vi.hoisted(() => ({
@@ -40,7 +42,7 @@ describe('imageGenerationRuntime', () => {
     imageGenerationRuntime.factory({
       clientIp: '203.0.113.7',
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -65,16 +67,18 @@ describe('imageGenerationRuntime', () => {
   // caller (see `AuthContext.agentShare`'s JSDoc).
   it('forwards the agentShare billing marker to every router caller', () => {
     imageGenerationRuntime.factory({
-      agentShare: {
-        shareId: 'share-1',
-        agentId: 'agent-1',
-        allowReadMemory: false,
-        enabledToolIds: ['lobe-image-generation'],
-        visitorUserId: 'visitor-1',
-      },
       clientIp: '203.0.113.7',
+      principal: resolveRunPrincipal({
+        agentShare: {
+          agentId: 'agent-1',
+          allowReadMemory: false,
+          enabledToolIds: ['lobe-image-generation'],
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        userId: 'creator-1',
+      }),
       toolManifestMap: {},
-      userId: 'creator-1',
       workspaceId: 'workspace-1',
     });
 
@@ -112,7 +116,7 @@ describe('imageGenerationRuntime', () => {
     const runtime = imageGenerationRuntime.factory({
       agentVisibility: 'public',
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -165,7 +169,7 @@ describe('imageGenerationRuntime', () => {
     const runtime = imageGenerationRuntime.factory({
       toolManifestMap: {},
       topicId: 'topic-own',
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -215,7 +219,7 @@ describe('imageGenerationRuntime', () => {
 
     const runtime = imageGenerationRuntime.factory({
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -257,7 +261,7 @@ describe('imageGenerationRuntime', () => {
 
     const runtime = imageGenerationRuntime.factory({
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 
@@ -283,7 +287,7 @@ describe('imageGenerationRuntime', () => {
 
     const runtime = imageGenerationRuntime.factory({
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
       workspaceId: 'workspace-1',
     });
 

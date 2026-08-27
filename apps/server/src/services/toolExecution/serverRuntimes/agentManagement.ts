@@ -38,7 +38,11 @@ const MAX_SEARCH_AGENT_LIMIT = 20;
 
 export const agentManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { serverDB, userId } = context;
+    const { serverDB } = context;
+    // Every agent row this tool reads or mutates belongs to the RESOURCE
+    // OWNER. (Delegated runs never reach here — `lobe-agent-management` is
+    // absent from the share allowlist, see shareGate.ts.)
+    const userId = context.principal.resourceOwnerUserId;
     if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Agent Management execution');
     }

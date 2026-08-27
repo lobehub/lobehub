@@ -79,10 +79,11 @@ const groupNotFound = (groupId: string): ToolExecutionResult => ({
 
 export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
   factory: (context: ToolExecutionContext) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Group Agent Builder execution');
     }
-    const { serverDB, userId } = context;
+    const { serverDB } = context;
+    const userId = context.principal.resourceOwnerUserId;
     const workspaceId = context.workspaceId ?? undefined;
 
     const agentModel = new AgentModel(serverDB, userId, workspaceId);

@@ -2,6 +2,8 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import type { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 import { type ToolExecutionContext } from '../../types';
 
 const mockAssociateDocument = vi.fn();
@@ -50,12 +52,15 @@ describe('webBrowsingRuntime', () => {
     expect(webBrowsingRuntime.identifier).toBe('lobe-web-browsing');
   });
 
-  const buildContext = (agentShare?: ToolExecutionContext['agentShare']): ToolExecutionContext => ({
+  const buildContext = (agentShare?: {
+    agentId: string;
+    shareId: string;
+    visitorUserId: string;
+  }): ToolExecutionContext => ({
     agentId: 'agent-1',
-    agentShare,
+    principal: resolveRunPrincipal({ agentShare, userId: 'creator-1' }),
     serverDB: {} as any,
     toolManifestMap: {},
-    userId: 'creator-1',
     workspaceId: 'workspace-1',
   });
 

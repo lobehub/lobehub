@@ -32,10 +32,10 @@ const handleError = (error: unknown, message: string): ToolExecutionResult => {
 
 export const agentBuilderRuntime: ServerRuntimeRegistration = {
   factory: (context: ToolExecutionContext) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Agent Builder execution');
     }
-    const userId = context.userId;
+    const userId = context.principal.resourceOwnerUserId;
 
     // `updateAgentConfig`/`updatePrompt` below can set `model`/`agencyConfig`
     // via `agentModel.updateConfig`/`update` — the Agent Builder tool is one

@@ -8,17 +8,18 @@ import { tasks } from '@/database/schemas';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 
 import { type ServerRuntimeRegistration } from './types';
 
 export const agentDocumentsRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Agent Documents execution');
     }
 
     const db = context.serverDB;
-    const userId = context.userId;
+    const userId = context.principal.resourceOwnerUserId;
     const service = new AgentDocumentsService(
       db,
       userId,
@@ -46,7 +47,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       await emitAgentDocumentToolOutcomeSafely({
         agentDocumentId: input.agentDocumentId,
         agentId: input.agentId ?? context.agentId,
-        agentShare: context.agentShare,
+        agentShare: toDelegationMarker(context.principal),
         apiName: input.apiName,
         errorReason: input.errorReason,
         hintIsSkill: input.hintIsSkill,

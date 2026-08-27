@@ -255,7 +255,7 @@ export class ServerCallLlmAttempt {
       },
       diagnostics: this.runtimeDiagnostics,
       metadata: this.runtimeMetadata,
-      user: this.ctx.userId,
+      user: this.ctx.principal.resourceOwnerUserId,
     });
 
     await consumeStreamUntilDone(response);
@@ -396,7 +396,7 @@ export class ServerCallLlmAttempt {
         stepIndex: this.ctx.stepIndex,
         topicId: this.topicId,
         trigger: this.trigger,
-        userId: this.ctx.userId,
+        userId: this.ctx.principal.resourceOwnerUserId,
         workspaceId: this.ctx.workspaceId,
       });
     } catch (error) {

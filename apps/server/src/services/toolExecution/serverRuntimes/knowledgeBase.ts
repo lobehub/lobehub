@@ -7,6 +7,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ProjectModel } from '@/database/models/project';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
+import { toDelegationMarker } from '@/server/services/executionPrincipal';
 import { FileService } from '@/server/services/file';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 
@@ -14,7 +15,11 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { userId, serverDB, agentId, agentVisibility, taskId, workspaceId, agentShare } = context;
+    const { principal, serverDB, agentId, agentVisibility, taskId, workspaceId } = context;
+    // Every model/service below is scoped to the RESOURCE OWNER: on a share
+    // visitor's run that is the creator, whose knowledge bases the shared
+    // agent is actually mounted with.
+    const userId = principal.resourceOwnerUserId;
     if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Knowledge Base execution');
     }
@@ -33,9 +38,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       // `searchKnowledgeBase`'s query-embedding call must bill the creator's
       // agentShare budget on a share-visitor run — see
       // `KnowledgeBaseSearchService`'s `agentShare` JSDoc.
-      agentShare
-        ? { agentId: agentShare.agentId, visitorUserId: agentShare.visitorUserId }
-        : undefined,
+      toDelegationMarker(principal),
     );
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 

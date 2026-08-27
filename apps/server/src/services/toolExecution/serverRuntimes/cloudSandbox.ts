@@ -63,7 +63,7 @@ const withLhPreprocessing = (
  */
 export const cloudSandboxRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
-    if (!context.userId || !context.topicId) {
+    if (!context.principal.resourceOwnerUserId || !context.topicId) {
       throw new Error('userId and topicId are required for Cloud Sandbox execution');
     }
 
@@ -74,7 +74,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
     // Read market accessToken from DB so server-side sandbox runtime can authenticate.
     let accessToken: string | undefined;
     try {
-      const userModel = new UserModel(context.serverDB, context.userId);
+      const userModel = new UserModel(context.serverDB, context.principal.resourceOwnerUserId);
       const settings = await userModel.getUserSettings();
       accessToken = (settings?.market as any)?.accessToken;
     } catch {
@@ -83,22 +83,26 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
 
     const marketService = new MarketService({
       accessToken,
-      userInfo: { userId: context.userId },
+      userInfo: { userId: context.principal.resourceOwnerUserId },
     });
-    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
+    const fileService = new FileService(
+      context.serverDB,
+      context.principal.resourceOwnerUserId,
+      context.workspaceId,
+    );
     const sandboxService = createSandboxService({
       fileService,
       marketService,
       serverDB: context.serverDB,
       topicId: context.topicId,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
     });
 
     let workspaceIdPromise: Promise<string | undefined> | undefined;
 
     return new CloudSandboxExecutionRuntime(
       withLhPreprocessing(sandboxService, {
-        userId: context.userId,
+        userId: context.principal.resourceOwnerUserId,
         workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
       }),
     );

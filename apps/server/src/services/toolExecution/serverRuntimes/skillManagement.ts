@@ -29,13 +29,13 @@ import { type ServerRuntimeRegistration } from './types';
  */
 export const skillManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    if (!context.principal.resourceOwnerUserId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Skill Management execution');
     }
 
     const service = new SkillManagementDocumentService(
       context.serverDB,
-      context.userId,
+      context.principal.resourceOwnerUserId,
       context.workspaceId,
     );
 

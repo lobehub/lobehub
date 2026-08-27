@@ -1,6 +1,8 @@
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal, resolveRunPrincipal } from '@/server/services/executionPrincipal';
+
 import { type ToolExecutionContext } from '../../types';
 
 // Mock database models
@@ -34,7 +36,7 @@ describe('topicReferenceRuntime', () => {
     it('should throw when serverDB is missing', () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       expect(() => topicReferenceRuntime.factory(context)).toThrow(
@@ -44,6 +46,7 @@ describe('topicReferenceRuntime', () => {
 
     it('should throw when userId is missing', () => {
       const context: ToolExecutionContext = {
+        principal: createOwnerPrincipal(undefined),
         serverDB: {} as any,
         toolManifestMap: {},
       };
@@ -57,7 +60,7 @@ describe('topicReferenceRuntime', () => {
       const context: ToolExecutionContext = {
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       const runtime = topicReferenceRuntime.factory(context);
@@ -70,7 +73,7 @@ describe('topicReferenceRuntime', () => {
       const runtime = topicReferenceRuntime.factory({
         serverDB,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
         workspaceId: 'workspace-1',
       });
 
@@ -93,7 +96,7 @@ describe('topicReferenceRuntime', () => {
       const context: ToolExecutionContext = {
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       runtime = topicReferenceRuntime.factory(context);
@@ -326,10 +329,12 @@ describe('topicReferenceRuntime', () => {
 
     it("limits topic references to the visitor's own topics: rejects a topic outside the share", async () => {
       const context: ToolExecutionContext = {
-        agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'creator-1',
+        }),
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'creator-1',
       };
       const runtime = topicReferenceRuntime.factory(context);
 
@@ -353,10 +358,12 @@ describe('topicReferenceRuntime', () => {
 
     it("limits topic references to the visitor's own topics: rejects a topic on a different agent", async () => {
       const context: ToolExecutionContext = {
-        agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'creator-1',
+        }),
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'creator-1',
       };
       const runtime = topicReferenceRuntime.factory(context);
 
@@ -377,10 +384,12 @@ describe('topicReferenceRuntime', () => {
 
     it('allows a topic reference that matches the active share', async () => {
       const context: ToolExecutionContext = {
-        agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        principal: resolveRunPrincipal({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'creator-1',
+        }),
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'creator-1',
       };
       const runtime = topicReferenceRuntime.factory(context);
 
@@ -404,7 +413,7 @@ describe('topicReferenceRuntime', () => {
       const context: ToolExecutionContext = {
         serverDB: {} as any,
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
       const runtime = topicReferenceRuntime.factory(context);
 

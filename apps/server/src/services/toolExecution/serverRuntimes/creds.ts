@@ -159,7 +159,7 @@ class ServerCredsService implements ICredsService {
  */
 export const credsRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
-    if (!context.userId) {
+    if (!context.principal.resourceOwnerUserId) {
       throw new Error('userId is required for Creds execution');
     }
 
@@ -168,10 +168,10 @@ export const credsRuntime: ServerRuntimeRegistration = {
         throw new Error('serverDB is required for workspace Creds execution');
       }
 
-      const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
-        context.workspaceId,
-        context.userId,
-      );
+      const membership = await new WorkspaceMemberModel(
+        context.serverDB,
+        context.principal.resourceOwnerUserId,
+      ).getMember(context.workspaceId, context.principal.resourceOwnerUserId);
       if (!membership) {
         throw new Error('Workspace membership is required for workspace Creds execution');
       }
@@ -179,7 +179,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
 
     log(
       'Creating CredsExecutionRuntime for userId=%s, topicId=%s, workspaceId=%s',
-      context.userId,
+      context.principal.resourceOwnerUserId,
       context.topicId,
       context.workspaceId,
     );
@@ -188,7 +188,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
     let accessToken: string | undefined;
     if (context.serverDB) {
       try {
-        const userModel = new UserModel(context.serverDB, context.userId);
+        const userModel = new UserModel(context.serverDB, context.principal.resourceOwnerUserId);
         const settings = await userModel.getUserSettings();
         accessToken = (settings?.market as any)?.accessToken;
       } catch {
@@ -198,13 +198,13 @@ export const credsRuntime: ServerRuntimeRegistration = {
 
     const marketService = new MarketService({
       accessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+      userInfo: { userId: context.principal.resourceOwnerUserId, workspaceId: context.workspaceId },
     });
     const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,
-      userId: context.userId,
+      userId: context.principal.resourceOwnerUserId,
     });
   },
   identifier: CredsIdentifier,

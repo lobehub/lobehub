@@ -62,7 +62,7 @@ export class ServerToolTransport implements ToolTransport {
       state: registration.state,
       threadId: state.metadata?.threadId,
       topicId: state.metadata?.topicId,
-      userId: this.ctx.userId,
+      userId: this.ctx.principal.resourceOwnerUserId,
       workspaceId: state.metadata?.workspaceId ?? this.ctx.workspaceId,
     });
   }
@@ -72,7 +72,11 @@ export class ServerToolTransport implements ToolTransport {
     error: unknown,
     context: ToolRunContext,
   ): Promise<void> {
-    const { hookDispatcher, operationId, stepIndex, userId } = this.ctx;
+    const { hookDispatcher, operationId, stepIndex, principal } = this.ctx;
+    // Hook payloads keep reporting the RESOURCE OWNER, unchanged by the
+    // principal refactor. Whether observability/webhook consumers should see
+    // the actor instead is a behavior question, tracked in LOBE-13564.
+    const userId = principal.resourceOwnerUserId;
 
     if (hookDispatcher) {
       hookDispatcher
@@ -101,8 +105,9 @@ export class ServerToolTransport implements ToolTransport {
   }
 
   async run(chatToolPayload: ChatToolPayload, context: ToolRunContext): Promise<ToolRunExecution> {
-    const { operationId, serverDB, stepIndex, streamManager, toolExecutionService, userId } =
+    const { operationId, principal, serverDB, stepIndex, streamManager, toolExecutionService } =
       this.ctx;
+    const userId = principal.resourceOwnerUserId;
     const operationLogId = `${operationId}:${stepIndex}`;
     const executeToolSpan = agentRuntimeTracer.startSpan(executeToolSpanName(context.toolName), {
       attributes: buildExecuteToolAttributes({
@@ -207,7 +212,7 @@ export class ServerToolTransport implements ToolTransport {
                 context.parentMessageId,
               ),
               ...(agentVisibility !== undefined && { agentVisibility }),
-              agentShare: this.ctx.agentShare,
+              principal: this.ctx.principal,
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
               clientIp: context.state.metadata?.clientIp,
@@ -219,7 +224,7 @@ export class ServerToolTransport implements ToolTransport {
               editingAgentId: context.state.metadata?.editingAgentId,
               editingGroupId: context.state.metadata?.editingGroupId,
               // Sub-agent execution is not available for shared visitor runs.
-              execSubAgent: this.ctx.agentShare ? undefined : this.ctx.execSubAgent,
+              execSubAgent: principal.delegation ? undefined : this.ctx.execSubAgent,
               executionTimeoutMs: timeoutMs,
               groupId: context.state.metadata?.groupId,
               isSubAgent: context.state.metadata?.isSubAgent === true,
@@ -245,7 +250,7 @@ export class ServerToolTransport implements ToolTransport {
               serverDB,
               skipResultTruncation: true,
               // Same fail-closed rule as `execSubAgent` above.
-              subAgent: this.ctx.agentShare
+              subAgent: principal.delegation
                 ? undefined
                 : buildServerVirtualSubAgentRunner(
                     this.ctx,
@@ -260,7 +265,6 @@ export class ServerToolTransport implements ToolTransport {
               toolMessageId: context.toolMessageId,
               toolResultMaxLength: context.toolResultMaxLength,
               topicId: this.ctx.topicId,
-              userId,
               workingDirectory: context.state.metadata?.deviceSystemInfo?.workingDirectory,
               workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
             }),
@@ -345,7 +349,11 @@ export class ServerToolTransport implements ToolTransport {
   }
 
   private async dispatchBeforeToolCall(chatToolPayload: ChatToolPayload, context: ToolRunContext) {
-    const { hookDispatcher, operationId, stepIndex, userId } = this.ctx;
+    const { hookDispatcher, operationId, stepIndex, principal } = this.ctx;
+    // Hook payloads keep reporting the RESOURCE OWNER, unchanged by the
+    // principal refactor. Whether observability/webhook consumers should see
+    // the actor instead is a behavior question, tracked in LOBE-13564.
+    const userId = principal.resourceOwnerUserId;
     if (!hookDispatcher) return null;
 
     hookDispatcher
@@ -380,7 +388,11 @@ export class ServerToolTransport implements ToolTransport {
     result: ToolRunExecution['result'],
     mocked: boolean,
   ) {
-    const { hookDispatcher, operationId, stepIndex, userId } = this.ctx;
+    const { hookDispatcher, operationId, stepIndex, principal } = this.ctx;
+    // Hook payloads keep reporting the RESOURCE OWNER, unchanged by the
+    // principal refactor. Whether observability/webhook consumers should see
+    // the actor instead is a behavior question, tracked in LOBE-13564.
+    const userId = principal.resourceOwnerUserId;
     if (!hookDispatcher) return;
 
     // A tool that outlives an abort still finishes in the background — we cannot
@@ -418,10 +430,14 @@ export class ServerToolTransport implements ToolTransport {
 
     const agentId = context.state.metadata?.agentId;
     const workspaceId = context.state.metadata?.workspaceId ?? this.ctx.workspaceId;
-    if (!agentId || !this.ctx.serverDB || !this.ctx.userId) return null;
+    if (!agentId || !this.ctx.serverDB || !this.ctx.principal.resourceOwnerUserId) return null;
 
     try {
-      const agentModel = new AgentModel(this.ctx.serverDB, this.ctx.userId, workspaceId);
+      const agentModel = new AgentModel(
+        this.ctx.serverDB,
+        this.ctx.principal.resourceOwnerUserId,
+        workspaceId,
+      );
       return await agentModel.getAgentVisibility(agentId);
     } catch (error) {
       log(

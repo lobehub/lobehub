@@ -1,6 +1,8 @@
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import type { ToolExecutionContext } from '../../types';
 
 // ==================== Mocks ====================
@@ -220,7 +222,7 @@ const { messageRuntime } = await import('../message');
 const validContext: ToolExecutionContext = {
   serverDB: {} as any,
   toolManifestMap: {},
-  userId: 'user-1',
+  principal: createOwnerPrincipal('user-1'),
 };
 
 const mockProviderFor = (platform: string, credentials: Record<string, string>) => {
@@ -243,7 +245,7 @@ describe('messageRuntime', () => {
     it('should throw when serverDB is missing', async () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
-        userId: 'user-1',
+        principal: createOwnerPrincipal('user-1'),
       };
 
       await expect(messageRuntime.factory(context)).rejects.toThrow(
@@ -253,6 +255,7 @@ describe('messageRuntime', () => {
 
     it('should throw when userId is missing', async () => {
       const context: ToolExecutionContext = {
+        principal: createOwnerPrincipal(undefined),
         serverDB: {} as any,
         toolManifestMap: {},
       };
@@ -985,7 +988,7 @@ describe('messageRuntime', () => {
         }),
       } as any,
       toolManifestMap: {},
-      userId: 'user-1',
+      principal: createOwnerPrincipal('user-1'),
     });
 
     it('updates the link when the agent belongs to the user', async () => {
