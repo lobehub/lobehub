@@ -1965,7 +1965,18 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
     expect(result.nextStepScheduled).toBe(true);
   });
 
-  it('fails closed once the state-read retry budget is exhausted with no state to persist', async () => {
+  // Regression for LOBE-11930 Codex P2 follow-up: when agent state is
+  // unreadable across the WHOLE retry budget, the gate has neither
+  // `agentId`/`topicId` to invalidate-or-verify the reservation through
+  // `resolveShareGateAbort`, nor any state it could durably persist
+  // `interrupted` onto — `interruptOperation`'s fallback would just hit the
+  // same failing read. It must NOT report success/`interrupted` as if it had
+  // recorded a decision (it never did) — that used to ACK the delivery while
+  // leaving the topic's `runningOperation` marker able to end up pointing at
+  // a dead operation if `confirmReservation` lands during the outage. It must
+  // instead surface `shareGateStateUnavailable` so the delivery stays
+  // retryable.
+  it('returns a retryable result once the state-read retry budget is exhausted with no state to persist', async () => {
     const verifyShareReservationStatus = vi.fn();
     const service = new AgentRuntimeService({} as any, 'user-1', {
       delegate: { verifyShareReservationStatus },
@@ -1982,11 +1993,50 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
       stepIndex: 0,
     });
 
-    // No state was ever loaded, so there is nothing to spread into
-    // saveAgentState — the abort path must fall back to interruptOperation
-    // (which does its own load) instead of throwing or executing the step.
+    // Nothing was ever persisted — no reservation invalidation, no
+    // `interrupted` state write. The gate must not claim it aborted the run.
     expect(coordinator.saveAgentState).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
+    expect(result.nextStepScheduled).toBe(false);
+    expect(result.shareGateStateUnavailable).toBe(true);
+    expect(result.state.status).not.toBe('interrupted');
+  });
+
+  it('recovers once the state store comes back: a redelivered attempt reads real state and invalidates the reservation atomically', async () => {
+    // Simulates the queue redelivering step 0 (triggered by the
+    // `shareGateStateUnavailable` retryable response above) after the state
+    // store has recovered. `shareGateRetryAttempt` still carries the
+    // exhausted count from before the outage — this attempt must not defer
+    // again; it must read the now-available state and resolve for real.
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('revoked');
+    const invalidatePendingShareReservation = vi.fn().mockResolvedValue('invalidated');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { invalidatePendingShareReservation, verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-state-read-recovered',
+      shareGateRetryAttempt: 6,
+      stepIndex: 0,
+    });
+
+    expect(invalidatePendingShareReservation).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'op-state-read-recovered',
+      topicId: 'topic-1',
+    });
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-state-read-recovered',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.shareGateStateUnavailable).toBeUndefined();
     expect(result.state.status).toBe('interrupted');
   });
 });

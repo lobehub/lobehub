@@ -972,12 +972,16 @@ export class AgentRuntimeService {
    * either running unconfirmed or aborting on the first miss. Exhausts to
    * {@link resolveShareGateAbort} — fail closed, never fail open — once
    * {@link SHARE_GATE_RETRY_MAX_ATTEMPTS} is reached or re-queueing itself
-   * fails.
+   * fails, PROVIDED `agentId`/`topicId` are known.
    *
    * `agentId`/`topicId` are threaded through separately (rather than
    * re-derived from `state` here) so the state-load-failure call site — which
-   * has neither — can still exhaust into a plain {@link buildShareAbortResult}
-   * without a spurious `undefined`-metadata lookup.
+   * has neither — is distinguishable at exhaustion: it cannot resolve the
+   * reservation atomically (no identifiers) NOR persist `interrupted`
+   * durably (state is unreadable), so it returns a `shareGateStateUnavailable`
+   * result and keeps the delivery retryable instead of acking a decision that
+   * was never actually recorded (LOBE-11930 Codex P2 follow-up) — see the
+   * exhaustion branch below.
    */
   private async deferShareGateStep(
     operationId: string,
@@ -1022,7 +1026,33 @@ export class AgentRuntimeService {
 
     log('[%s] Share reservation gate retry budget exhausted — failing closed', operationId);
     if (agentId && topicId) return this.resolveShareGateAbort(operationId, agentId, topicId, state);
-    return this.buildShareAbortResult(operationId, state);
+
+    // Every attempt in our own bounded backoff failed to read agent state, so
+    // we have neither `agentId`/`topicId` to invalidate-or-verify the
+    // reservation through `resolveShareGateAbort`, NOR can we durably persist
+    // `interrupted` — `buildShareAbortResult`'s fallback `interruptOperation`
+    // would just re-run the very `loadAgentState` that has been failing this
+    // whole time. Calling it anyway used to ACK the delivery with nothing
+    // persisted: if `confirmReservation` lands during the outage (or the
+    // originating request resumes after it), the topic's `runningOperation`
+    // marker would end up naming an operation nothing will ever schedule
+    // another step for, while the visitor's original request still reports
+    // success (LOBE-11930 Codex P2 follow-up). Returning this instead of
+    // acking keeps the delivery retryable — `runStep.ts` turns
+    // `shareGateStateUnavailable` into a non-2xx response so the queue's OWN
+    // retry budget keeps redelivering step 0 until the state store recovers,
+    // at which point this same gate re-reads real identifiers and resolves
+    // the run atomically.
+    log(
+      '[%s] Share reservation gate state unreadable across the whole retry budget — returning retryable',
+      operationId,
+    );
+    return {
+      nextStepScheduled: false,
+      shareGateStateUnavailable: true,
+      state: {},
+      success: false,
+    };
   }
 
   /**
@@ -1090,9 +1120,15 @@ export class AgentRuntimeService {
   /**
    * Terminal "abort" result for the Agent Share step-0 gate. Persists
    * `interrupted` on the loaded state when we have one; falls back to the
-   * public `interruptOperation` (which does its own load/guard) when the
-   * gate never managed to load state at all — e.g. the retry budget in
-   * {@link deferShareGateStep} exhausted on a state-load failure.
+   * public `interruptOperation` (which does its own load/guard) as defense in
+   * depth if it is ever reached without one. In practice every current call
+   * site (via {@link resolveShareGateAbort}) only runs after a successful
+   * state read — the ONE path that used to reach this without state (the
+   * {@link deferShareGateStep} retry budget exhausting on a state-load
+   * failure) no longer calls this method at all: it cannot resolve the
+   * reservation atomically without `agentId`/`topicId`, so it returns a
+   * `shareGateStateUnavailable` result and keeps the delivery retryable
+   * instead (LOBE-11930 Codex P2 follow-up).
    */
   private async buildShareAbortResult(
     operationId: string,
