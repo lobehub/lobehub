@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
+import { buildShareGate, buildSharePrincipal } from './shareRunFixtures';
 
 // Verifies that a PINNED skill (DB `agent_skills` row or agent-document bundle)
 // has its SKILL.md body eagerly injected into the operation's skill set — so
@@ -115,6 +116,25 @@ vi.mock('@/database/models/topic', () => ({
     tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
   })),
+}));
+
+// The share cases below exercise skill-whitelist filtering, which happens long
+// before any row is written. Stub the visitor reservation (it opens a real
+// `db.transaction` against the `{}` stand-in db this suite passes to
+// `AiAgentService`) so these cases fail on the whitelist, not on the storage
+// layer. The reservation's own fail-closed behaviour is covered by
+// `shareVisitorAbuseGuards.*.race.test.ts`.
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: vi.fn().mockImplementation(() => ({
+    assertRunnableForVisitor: vi.fn().mockResolvedValue(undefined),
+    confirmReservation: vi.fn().mockResolvedValue(true),
+    releaseReservation: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+vi.mock('../shareVisitorAbuseGuards', () => ({
+  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  reserveShareVisitorTurn: vi.fn().mockResolvedValue({ id: 'msg-1' }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
@@ -405,11 +425,17 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
   // the share whitelist has to filter the candidate pool itself, before
   // `SkillEngine` ever sees it.
   describe('agent share skill whitelist', () => {
-    const buildShareGate = (enabledToolIds: string[]) => ({
-      agentId: 'agent-1',
-      shareConfig: { enabledToolIds },
-      visitorUserId: 'visitor-1',
-    });
+    // Installs BOTH halves of a share run and returns the gate to pass through.
+    // `execAgent` rejects an owner principal paired with a gate, because the
+    // gateway JWT follows the principal and would be creator-signed.
+    const startShareRun = (enabledToolIds: string[]) => {
+      const shareConfig = { enabledToolIds };
+      service = new AiAgentService(
+        {} as any,
+        buildSharePrincipal({ agentId: 'agent-1', ownerUserId: 'test-user-id', shareConfig }),
+      );
+      return buildShareGate({ agentId: 'agent-1', shareConfig });
+    };
 
     it('excludes every creator skill from the candidate pool when the whitelist is empty', async () => {
       mockGetAgentConfig.mockResolvedValue({
@@ -421,10 +447,15 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
         systemRole: 'You are a helper',
       });
 
+      // Must run BEFORE `service.execAgent` is reached: `startShareRun`
+      // reassigns `service`, and the member access would otherwise resolve to
+      // the previous (owner-principal) instance.
+      const shareGate = startShareRun([]);
+
       await service.execAgent({
         agentId: 'agent-1',
         prompt: 'List your available skills',
-        shareGate: buildShareGate([]),
+        shareGate,
       } as any);
 
       expect(operationSkillSetArg()?.skills).toEqual([]);
@@ -440,10 +471,15 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
         systemRole: 'You are a helper',
       });
 
+      // Must run BEFORE `service.execAgent` is reached: `startShareRun`
+      // reassigns `service`, and the member access would otherwise resolve to
+      // the previous (owner-principal) instance.
+      const shareGate = startShareRun(['db-skill-auto']);
+
       await service.execAgent({
         agentId: 'agent-1',
         prompt: 'List your available skills',
-        shareGate: buildShareGate(['db-skill-auto']),
+        shareGate,
       } as any);
 
       const skills = operationSkillSetArg()?.skills ?? [];

@@ -1680,6 +1680,28 @@ export class AiAgentService {
       ? { approvalMode: 'reject' }
       : requestedUserInterventionConfig;
 
+    // Fail closed on a run whose two share signals disagree. `shareGate` (the
+    // per-call authorization snapshot) and `this.principal` (who the service
+    // acts as) are resolved by the same caller from the same share record, so
+    // they can only diverge if a call site builds one and forgets the other.
+    //
+    // Silence here would be a privilege bug, not a cosmetic one: the gateway
+    // JWT is signed for `principal.actorUserId`, so a share run carrying an
+    // OWNER principal would hand the visitor's browser a creator-signed token —
+    // full oidcAuth over the creator's account. The inverse (a delegated
+    // principal with no gate) would skip every `shareGate`-conditional
+    // restriction while still running as a visitor.
+    if (shareGate && this.principal.actorUserId !== shareGate.visitorUserId) {
+      throw new Error(
+        'Share run principal does not match the share gate: expected the visitor to be the acting user.',
+      );
+    }
+    if (!shareGate && this.principal.delegation) {
+      throw new Error(
+        'Delegated principal supplied without a share gate: the run would skip every share restriction.',
+      );
+    }
+
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration
     // replays reach this method too (resumeApproval, resumeToolResult,
     // parentMessageId), and a replayed id there would collide with the row the

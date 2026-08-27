@@ -11,6 +11,7 @@ import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
+import { buildShareGate, buildSharePrincipal } from './shareRunFixtures';
 
 const {
   mockCreateOperation,
@@ -125,6 +126,25 @@ vi.mock('@/database/models/thread', () => ({
     findById: vi.fn(),
     update: vi.fn(),
   })),
+}));
+
+// The share cases below assert what a visitor run must NOT do (enqueue an
+// Agent Signal event, inject the self-feedback tool). Stub the visitor
+// reservation — it opens a real `db.transaction` against the stand-in db this
+// suite passes to `AiAgentService` — so those cases reach the assertions
+// instead of dying in the storage layer. The reservation's own fail-closed
+// behaviour is covered by `shareVisitorAbuseGuards.*.race.test.ts`.
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: vi.fn().mockImplementation(() => ({
+    assertRunnableForVisitor: vi.fn().mockResolvedValue(undefined),
+    confirmReservation: vi.fn().mockResolvedValue(true),
+    releaseReservation: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+vi.mock('../shareVisitorAbuseGuards', () => ({
+  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  reserveShareVisitorTurn: vi.fn().mockResolvedValue({ id: 'msg-1' }),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -569,11 +589,18 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   // tool injection are gated on `shareGate` regardless of `allowReadMemory`,
   // since v1 grants no memory-write permission through any share config.
   describe('agent share visitor fail-closed gate (C5)', () => {
-    const shareGate = {
-      agentId: 'agent-inbox',
-      shareConfig: { allowReadMemory: true, maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
-      visitorUserId: 'visitor-1',
-    };
+    const shareConfig = { allowReadMemory: true, maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 };
+    const shareGate = buildShareGate({ agentId: 'agent-inbox', shareConfig });
+
+    // A share run carries BOTH halves — the gate and a delegated principal.
+    // `execAgent` rejects the combination this suite used to build (an owner
+    // principal plus a gate), because the gateway JWT follows the principal.
+    beforeEach(() => {
+      service = new AiAgentService(
+        mockDb,
+        buildSharePrincipal({ agentId: 'agent-inbox', ownerUserId: userId, shareConfig }),
+      );
+    });
 
     it('does not enqueue the agent.user.message Agent Signal event for a share-visitor run', async () => {
       mockGetAgentConfig.mockResolvedValue({
@@ -619,6 +646,12 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     it('still enqueues and injects for the same agent config outside a share run', async () => {
+      // The control case for the two above: same agent config, ordinary run.
+      // It must be built with an OWNER principal — the enclosing `beforeEach`
+      // installs a delegated one, and a delegated principal without a share
+      // gate is itself a rejected combination.
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
+
       mockGetAgentConfig.mockResolvedValue({
         chatConfig: { selfIteration: { enabled: true } },
         id: 'agent-inbox',

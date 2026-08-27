@@ -4,6 +4,7 @@ import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLi
 import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
+import { buildShareGate, buildSharePrincipal } from './shareRunFixtures';
 
 const {
   mockDeviceFindByDeviceId,
@@ -872,11 +873,18 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   // Agent share C2: heterogeneous (Claude Code / Codex / …) agents are not
   // available for shared visitor runs.
   describe('agent share visitor fail-closed gate (C2)', () => {
-    const shareGate = {
-      agentId: 'agent-1',
-      shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
-      visitorUserId: 'visitor-1',
-    };
+    const shareConfig = { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 };
+    const shareGate = buildShareGate({ agentId: 'agent-1', shareConfig });
+
+    // A share run carries BOTH halves — the gate and a delegated principal.
+    // `execAgent` rejects an owner principal paired with a gate, because the
+    // gateway JWT follows the principal and would be creator-signed.
+    beforeEach(() => {
+      service = new AiAgentService(
+        mockDb,
+        buildSharePrincipal({ agentId: 'agent-1', ownerUserId: userId, shareConfig }),
+      );
+    });
 
     it('rejects before any topic/message row is created (agencyConfig-declared hetero)', async () => {
       await expect(
@@ -913,6 +921,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('does not affect a non-share hetero run', async () => {
+      // The control case: an ordinary run needs an OWNER principal. The
+      // enclosing `beforeEach` installs a delegated one, and a delegated
+      // principal without a share gate is itself a rejected combination.
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
+
       await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
 
       expect(mockSpawnHeteroSandbox).toHaveBeenCalled();

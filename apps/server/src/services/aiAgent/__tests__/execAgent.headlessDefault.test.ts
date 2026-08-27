@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 
 import { AiAgentService } from '../index';
+import { buildShareGate, buildSharePrincipal } from './shareRunFixtures';
 
 const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
@@ -240,13 +241,17 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     // run carrying a `shareGate` must be forced onto the fail-closed `reject`
     // policy regardless of what the caller passed, so this can't be bypassed
     // by a future execAgent call site that forgets to set it explicitly.
-    const shareGate = {
-      agentId: 'agent-1',
-      generation: 1,
-      shareConfig: {} as any,
-      shareId: 'share-1',
-      visitorUserId: 'visitor-1',
-    };
+    const shareGate = { ...buildShareGate({ agentId: 'agent-1' }), generation: 1 };
+
+    // A share run carries BOTH halves — the gate and a delegated principal.
+    // `execAgent` rejects an owner principal paired with a gate, because the
+    // gateway JWT follows the principal and would be creator-signed.
+    beforeEach(() => {
+      service = new AiAgentService(
+        mockDb,
+        buildSharePrincipal({ agentId: 'agent-1', ownerUserId: userId }),
+      );
+    });
 
     it('forces the reject policy when shareGate is present and no userInterventionConfig was given', async () => {
       await service.execAgent({
@@ -275,6 +280,11 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     });
 
     it('leaves the headless default untouched for a normal (non-share) creator run', async () => {
+      // The control case: an ordinary run needs an OWNER principal. The
+      // enclosing `beforeEach` installs a delegated one, and a delegated
+      // principal without a share gate is itself a rejected combination.
+      service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
+
       await service.execAgent({
         agentId: 'agent-1',
         prompt: 'Hello',
@@ -283,6 +293,40 @@ describe('AiAgentService.execAgent - headless approval default', () => {
       expect(mockCreateOperation).toHaveBeenCalledTimes(1);
       const callArgs = mockCreateOperation.mock.calls[0][0];
       expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    });
+
+    // The two halves of a share run — the gate (per-call authorization
+    // snapshot) and the principal (who the service acts as) — are resolved by
+    // the same caller from the same share record, so a mismatch means a call
+    // site built one and forgot the other. That must fail loudly: the gateway
+    // JWT is signed for `principal.actorUserId`, so a share run carrying an
+    // OWNER principal would hand the visitor's browser a creator-signed token,
+    // which is full oidcAuth over the creator's account.
+    describe('principal / share gate agreement', () => {
+      it('refuses a share gate whose visitor is not the acting user', async () => {
+        service = new AiAgentService(mockDb, createOwnerPrincipal(userId));
+
+        await expect(
+          service.execAgent({ agentId: 'agent-1', prompt: 'Hello', shareGate } as any),
+        ).rejects.toThrow(/does not match the share gate/);
+
+        expect(mockCreateOperation).not.toHaveBeenCalled();
+      });
+
+      it('refuses a delegated principal that arrives without a share gate', async () => {
+        // The inverse leak: the run would execute as a visitor while skipping
+        // every `shareGate`-conditional restriction.
+        service = new AiAgentService(
+          mockDb,
+          buildSharePrincipal({ agentId: 'agent-1', ownerUserId: userId }),
+        );
+
+        await expect(service.execAgent({ agentId: 'agent-1', prompt: 'Hello' })).rejects.toThrow(
+          /without a share gate/,
+        );
+
+        expect(mockCreateOperation).not.toHaveBeenCalled();
+      });
     });
   });
 });
