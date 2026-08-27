@@ -37,7 +37,7 @@ vi.mock('antd-style', async (importOriginal) => ({
   createStaticStyles: () => ({}),
   cssVar: new Proxy({}, { get: () => 'var(--x)' }),
 }));
-vi.mock('@lobehub/const', () => ({ COMPOSIO_APP_TYPES: [], LOBEHUB_SKILL_PROVIDERS: [] }));
+vi.mock('@lobechat/const', () => ({ resolveConnectorCatalogItem: () => undefined }));
 vi.mock('@lobehub/ui/icons', () => ({ McpIcon: () => null }));
 vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
