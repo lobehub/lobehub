@@ -6,9 +6,11 @@ inputs:
     description: Node.js version
     required: true
   cloud-repository:
-    description: Cloud repository to overlay for commercial desktop builds
+    description: >-
+      Overlay repository (owner/name) for commercial desktop builds — pass the
+      OVERLAY_REPOSITORY repository variable; deliberately no hardcoded default.
     required: false
-    default: lobehub/lobehub-cloud
+    default: ''
   cloud-ref:
     description: Optional Cloud repository ref
     required: false
@@ -37,6 +39,8 @@ runs:
         CLOUD_TOKEN: ${{ inputs.cloud-token }}
       run: |
         set -euo pipefail
+        # Fail loudly rather than silently shipping an OSS-only commercial build.
+        : "${CLOUD_REPOSITORY:?cloud-repository input is empty — pass the OVERLAY_REPOSITORY repository variable}"
 
         cloud_root="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
         cloud_checkout="$RUNNER_TEMP/lobehub-cloud"

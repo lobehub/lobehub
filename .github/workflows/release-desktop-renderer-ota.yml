@@ -92,6 +92,7 @@ jobs:
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ steps.base.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
