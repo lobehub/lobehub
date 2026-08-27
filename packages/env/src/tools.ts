@@ -26,6 +26,7 @@ export const getToolsConfig = () => {
       SEARCH_PROVIDERS: process.env.SEARCH_PROVIDERS,
       SEARXNG_URL: process.env.SEARXNG_URL,
       TOOL_NAME_MAX_LENGTH: process.env.TOOL_NAME_MAX_LENGTH,
+      BUILTIN_TOOL_ID_NAMESPACE: process.env.BUILTIN_TOOL_ID_NAMESPACE,
       MULTIMODAL_UNDERSTANDING_MODEL: multimodalUnderstandingModel,
       MULTIMODAL_UNDERSTANDING_PROVIDER: multimodalUnderstandingProvider,
     },
@@ -51,6 +52,21 @@ export const getToolsConfig = () => {
        * the whole server config down, instead of falling back to the default.
        */
       TOOL_NAME_MAX_LENGTH: z.string().optional(),
+      /**
+       * Rewrites the `lobe-` prefix on builtin tool identifiers before they
+       * reach the model — the wire-visible function-calling name, the
+       * `<available_tools>` discovery list, and `lobe-activator`'s own
+       * instruction prose all read it. A white-label deployment's model can
+       * otherwise infer "I am LobeHub" purely from its own tool names.
+       *
+       * Same raw-string convention as `TOOL_NAME_MAX_LENGTH` immediately
+       * above, for the same reason: `ToolNameResolver`
+       * (`@lobechat/context-engine`) parses this identically wherever a tool
+       * name is generated — server-side straight from `process.env`, and
+       * client-side from the value `getServerGlobalConfig` ships through
+       * `GlobalServerConfig.toolIdNamespace`.
+       */
+      BUILTIN_TOOL_ID_NAMESPACE: z.string().optional(),
       MULTIMODAL_UNDERSTANDING_MODEL: z.string().optional(),
       MULTIMODAL_UNDERSTANDING_PROVIDER: z.string().optional(),
     },

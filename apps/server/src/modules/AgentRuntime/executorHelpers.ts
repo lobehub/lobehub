@@ -2,7 +2,7 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
-import { type OperationToolSet } from '@lobechat/context-engine';
+import { type OperationToolSet, toWireToolIdentifier } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import {
   type ChatToolPayload,
@@ -516,7 +516,12 @@ export const buildToolDiscoveryConfig = (
     .filter(([identifier]) => !enabledToolSet.has(identifier))
     .map(([identifier, manifest]) => ({
       description: manifest.meta?.description || '',
-      identifier,
+      // Wire-mapped: this is the identifier the model reads in
+      // `<available_tools>` and echoes back to `lobe-activator`'s
+      // `activateTools`, not an internal lookup key — see
+      // `toWireToolIdentifier`'s doc comment for why the registry itself
+      // stays keyed by the canonical `lobe-*` id.
+      identifier: toWireToolIdentifier(identifier),
       name: manifest.meta?.title || identifier,
     }));
 

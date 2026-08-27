@@ -35,6 +35,83 @@ const readEnvMaxLength = (): number => {
 
 let toolNameMaxLength = readEnvMaxLength();
 
+// Builtin tool identifiers are `lobe-<kebab-domain>` (see
+// `.agents/skills/builtin-tool/references/tool-design.md`), and that literal
+// string is what reaches the model as the function-calling name and in the
+// `<available_tools>` discovery block — a white-label deployment's model can
+// (and does) infer "I am LobeHub" purely from its own tool names. The
+// identifier itself can't just be renamed: it's persisted verbatim in
+// `message_plugins.identifier` and `messages.tools[].identifier`, so a rename
+// would orphan every historical tool call. Instead, swap only the `lobe-`
+// prefix at the wire boundary (this file) — the DB/manifest-registry key
+// underneath is untouched, so `manifests[identifier]` lookups, persistence,
+// and old conversations (still carrying literal `lobe-` wire names) keep
+// working unmodified; only newly generated wire names use the deployment's
+// namespace. Read directly via `process.env` (not routed through
+// `@lobechat/business-const`) for the same reason `TOOL_NAME_MAX_LENGTH`
+// above is: this package can't take on a dependency on the business layer,
+// and the value needs to agree between `generate()` and `resolve()` on every
+// runtime, including cold starts that never touch business config.
+const TOOL_ID_NAMESPACE_ENV = 'BUILTIN_TOOL_ID_NAMESPACE';
+const CANONICAL_TOOL_ID_NAMESPACE = 'lobe';
+const TOOL_ID_NAMESPACE_PATTERN = /^[\w-]+$/;
+
+const readEnvToolIdNamespace = (): string => {
+  try {
+    const raw = typeof process === 'undefined' ? undefined : process.env?.[TOOL_ID_NAMESPACE_ENV];
+    return raw && TOOL_ID_NAMESPACE_PATTERN.test(raw) ? raw : CANONICAL_TOOL_ID_NAMESPACE;
+  } catch {
+    return CANONICAL_TOOL_ID_NAMESPACE;
+  }
+};
+
+let toolIdNamespace = readEnvToolIdNamespace();
+
+/**
+ * Override the tool-identifier wire namespace. Mainly for tests; normal
+ * runtime picks it up from `BUILTIN_TOOL_ID_NAMESPACE` at module load, same
+ * as {@link setToolNameMaxLength}. Pass `undefined` to re-read the env value.
+ */
+export const setToolIdNamespace = (value: string | undefined): void => {
+  toolIdNamespace =
+    value !== undefined && TOOL_ID_NAMESPACE_PATTERN.test(value) ? value : readEnvToolIdNamespace();
+};
+
+/** Current tool-identifier wire namespace; `'lobe'` means no deployment override is set. */
+export const getToolIdNamespace = (): string => toolIdNamespace;
+
+/**
+ * Rewrite a canonical `lobe-*` tool identifier into this deployment's wire
+ * namespace before it's shown to the model. A no-op wherever
+ * `BUILTIN_TOOL_ID_NAMESPACE` is unset (upstream/OSS builds), and a no-op for
+ * identifiers that were never `lobe-`-prefixed to begin with (e.g. skill
+ * slugs like `acceptance`/`task`).
+ */
+export const toWireToolIdentifier = (identifier: string): string => {
+  const namespace = getToolIdNamespace();
+  const prefix = `${CANONICAL_TOOL_ID_NAMESPACE}-`;
+  return namespace !== CANONICAL_TOOL_ID_NAMESPACE && identifier.startsWith(prefix)
+    ? namespace + identifier.slice(CANONICAL_TOOL_ID_NAMESPACE.length)
+    : identifier;
+};
+
+/**
+ * Inverse of {@link toWireToolIdentifier} — recovers the canonical `lobe-*`
+ * identifier from a wire name so it can be used as a `manifests` lookup key.
+ * Deliberately only reverses the *configured* namespace: a wire name that is
+ * still literally `lobe-*` (an older conversation started before this
+ * deployment set a namespace, or a resumed run from before it was set) passes
+ * through unchanged and matches the manifest registry directly, since the
+ * registry was never renamed.
+ */
+export const fromWireToolIdentifier = (identifier: string): string => {
+  const namespace = getToolIdNamespace();
+  const prefix = `${namespace}-`;
+  return namespace !== CANONICAL_TOOL_ID_NAMESPACE && identifier.startsWith(prefix)
+    ? CANONICAL_TOOL_ID_NAMESPACE + identifier.slice(namespace.length)
+    : identifier;
+};
+
 /**
  * Override the max tool-name length before MD5 compression kicks in. Mainly for
  * tests and hosts that source the value differently; normal runtime picks it up
@@ -94,7 +171,10 @@ export class ToolNameResolver {
       type && type !== 'builtin' && type !== 'default'
         ? `${PLUGIN_SCHEMA_SEPARATOR}${this.normalizeComponent(type)}`
         : '';
-    let identifierName = this.normalizeComponent(identifier);
+    // Wire-map before normalizing: the swap only touches a known-valid
+    // `[\w-]+` prefix, so it can never itself trigger the invalid-character
+    // hash fallback below.
+    let identifierName = this.normalizeComponent(toWireToolIdentifier(identifier));
     let apiName = this.normalizeComponent(name);
 
     // Step 1: Try normal format
@@ -145,7 +225,12 @@ export class ToolNameResolver {
       .map((toolCall): ChatToolPayload | null => {
         const [initialIdentifier, initialApiName, type] =
           toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
-        let identifier = initialIdentifier;
+        // Recover the canonical `lobe-*` key before any manifest lookup below.
+        // Harmless when `initialApiName` is absent (the bareName fallback just
+        // below re-derives `identifier` from scratch in that case) and when
+        // `initialIdentifier` is an MD5 hash (never matches the namespace
+        // prefix).
+        let identifier = fromWireToolIdentifier(initialIdentifier);
         let apiName = initialApiName;
 
         // Fallback for malformed tool names without the `____` separator

@@ -1,6 +1,7 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type { ActivatedToolInfo, ActivateSkillParams, ActivateToolsParams } from '../types';
+import { fromWireToolIdentifier, toWireToolIdentifier } from '../wireIdentifier';
 
 export interface ToolManifestInfo {
   apiDescriptions: Array<{ description: string; name: string }>;
@@ -40,7 +41,10 @@ export class ActivatorExecutionRuntime {
   }
 
   async activateTools(args: ActivateToolsParams): Promise<BuiltinServerRuntimeOutput> {
-    const { identifiers } = args;
+    // Recover canonical `lobe-*` ids before any lookup below — the model
+    // received (and echoes back) whatever `buildToolDiscoveryConfig` put in
+    // `<available_tools>`, which is wire-mapped for this deployment.
+    const identifiers = args.identifiers?.map(fromWireToolIdentifier);
 
     if (!identifiers || identifiers.length === 0) {
       return {
@@ -110,11 +114,12 @@ export class ActivatorExecutionRuntime {
         // from the next LLM call onwards, so the result only needs to list the
         // newly callable APIs — returning the full docs here would double-carry
         // them in every subsequent payload.
-        const apiNames = manifests.flatMap((manifest) =>
-          manifest.apiDescriptions.length > 0
-            ? manifest.apiDescriptions.map((api) => `${manifest.identifier}.${api.name}`)
-            : [manifest.identifier],
-        );
+        const apiNames = manifests.flatMap((manifest) => {
+          const wireIdentifier = toWireToolIdentifier(manifest.identifier);
+          return manifest.apiDescriptions.length > 0
+            ? manifest.apiDescriptions.map((api) => `${wireIdentifier}.${api.name}`)
+            : [wireIdentifier];
+        });
         parts.push(`Successfully activated tools: ${apiNames.join(', ')}.`);
         parts.push('Usage instructions for the activated items are in the system prompt.');
       }
@@ -126,11 +131,11 @@ export class ActivatorExecutionRuntime {
       }
 
       if (alreadyActiveList.length > 0) {
-        parts.push(`\nAlready active: ${alreadyActiveList.join(', ')}`);
+        parts.push(`\nAlready active: ${alreadyActiveList.map(toWireToolIdentifier).join(', ')}`);
       }
 
       if (notFound.length > 0) {
-        parts.push(`\nNot found: ${notFound.join(', ')}`);
+        parts.push(`\nNot found: ${notFound.map(toWireToolIdentifier).join(', ')}`);
       }
 
       return {

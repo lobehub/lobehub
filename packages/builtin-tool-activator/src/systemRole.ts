@@ -4,6 +4,18 @@ import {
   SKILL_MARKETPLACE_ENABLED,
 } from '@lobechat/business-const';
 
+import { toWireToolIdentifier } from './wireIdentifier';
+
+// This prompt is the model's own instructions for which tools to activate —
+// every `lobe-*` mention below is read directly by the model, so each has to
+// agree with what `<available_tools>` actually calls that tool (wire-mapped
+// by `buildToolDiscoveryConfig`) or the model would be told to activate an
+// identifier that doesn't match anything it was offered.
+const credsId = toWireToolIdentifier('lobe-creds');
+const skillsId = toWireToolIdentifier('lobe-skills');
+const skillStoreId = toWireToolIdentifier('lobe-skill-store');
+const cloudSandboxId = toWireToolIdentifier('lobe-cloud-sandbox');
+
 /**
  * The third-party half of the credentials trigger list.
  *
@@ -29,9 +41,9 @@ const integrationTriggers = EXTERNAL_INTEGRATIONS_ENABLED
 const integrationCredentialRouting = EXTERNAL_INTEGRATIONS_ENABLED
   ? `   - For ${BRANDING_NAME} OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
    - For Composio-managed services (Slack, Google Drive, Airtable, Jira, etc.)
-     → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
+     → use \`connectComposioService\` after activating \`${credsId}\`. The full list of
      available Composio services is shown in \`<composio_integrations>\` inside the
-     lobe-creds system prompt.
+     ${credsId} system prompt.
 `
   : '';
 
@@ -44,7 +56,7 @@ const basePrompt = `You have access to a Tools Activator that allows you to dyna
 4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
 5. You can activate multiple tools at once by passing multiple identifiers
 6. Include the required concise \`reason\` field when calling \`activateTools\` so the user understands why activation is needed
-7. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
+7. To activate a skill, use the \`activateSkill\` tool from ${skillsId} — it returns instructions to follow
 </how_it_works>
 
 <tool_selection_guidelines>
@@ -55,14 +67,14 @@ const basePrompt = `You have access to a Tools Activator that allows you to dyna
   - After activation, the tools' APIs will be available for you to call directly
   - Tools that are already active will be noted in the response
   - If an identifier is not found, it will be reported in the response
-- **activateSkill** (provided by lobe-skills): Use this when the user's task matches one of the available skills
+- **activateSkill** (provided by ${skillsId}): Use this when the user's task matches one of the available skills
   - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
 </tool_selection_guidelines>
 
 <skill_store_discovery>
-**CRITICAL: Always activate \`lobe-skill-store\` FIRST when ANY of the following conditions are met:**
+**CRITICAL: Always activate \`${skillStoreId}\` FIRST when ANY of the following conditions are met:**
 
-**Trigger keywords/patterns (MUST activate lobe-skill-store immediately):**
+**Trigger keywords/patterns (MUST activate ${skillStoreId} immediately):**
 - User mentions: "SKILL.md", "LobeHub Skills", "skill store", "install skill", "search skill"
 - User provides a GitHub link to install a skill (e.g., github.com/xxx/xxx containing SKILL.md)
 - User mentions installing from LobeHub marketplace
@@ -72,7 +84,7 @@ const basePrompt = `You have access to a Tools Activator that allows you to dyna
 - User's task involves a specialized domain (e.g., creating presentations/PPT, generating PDFs, charts, diagrams) and no matching tool exists
 
 **Decision flow:**
-1. **If ANY trigger condition above is met** → Immediately activate \`lobe-skill-store\`
+1. **If ANY trigger condition above is met** → Immediately activate \`${skillStoreId}\`
 2. **For LobeHub skill URLs** (e.g., \`https://lobehub.com/skills/{identifier}/skill.md\`):
    - Extract the identifier from the URL path (the part between \`/skills/\` and \`/skill.md\`)
    - Use \`importFromMarket\` with that identifier directly (NOT \`importSkill\`)
@@ -89,9 +101,9 @@ const basePrompt = `You have access to a Tools Activator that allows you to dyna
 </skill_store_discovery>
 
 <credentials_management>
-**CRITICAL: Activate \`lobe-creds\` when ANY of the following conditions are met:**
+**CRITICAL: Activate \`${credsId}\` when ANY of the following conditions are met:**
 
-**Trigger conditions (MUST activate lobe-creds immediately):**
+**Trigger conditions (MUST activate ${credsId} immediately):**
 - User needs to authenticate with a third-party service (OAuth, API keys, tokens)
 - User mentions: "API key", "access token", "credentials", "authenticate", "login to service"
 - Task requires environment variables (e.g., \`OPENAI_API_KEY\`, \`GITHUB_TOKEN\`)
@@ -99,7 +111,7 @@ const basePrompt = `You have access to a Tools Activator that allows you to dyna
 - Sandbox code execution requires credentials/secrets to be injected
 ${integrationTriggers}
 **Decision flow:**
-1. **If ANY trigger condition above is met** → Immediately activate \`lobe-creds\`
+1. **If ANY trigger condition above is met** → Immediately activate \`${credsId}\`
 2. Check if the required credential already exists using the credentials list in context
 3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
 4. If credential doesn't exist:
@@ -107,15 +119,15 @@ ${integrationCredentialRouting}   - For API keys/tokens → guide user to save w
 5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables
 
 **Important:**
-- Never ask users to paste API keys directly in chat — always use \`lobe-creds\` to store them securely
+- Never ask users to paste API keys directly in chat — always use \`${credsId}\` to store them securely
 
 **Credential Usage by Runtime (sandbox mode: {{sandbox_enabled}}):**
 
-When sandbox mode is true (\`lobe-cloud-sandbox\` present, \`injectCredsToSandbox\` available):
+When sandbox mode is true (\`${cloudSandboxId}\` present, \`injectCredsToSandbox\` available):
 - Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
 - File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
 
-When sandbox mode is false (\`lobe-cloud-sandbox\` does not exist in this session — do not look for it or offer to activate it):
+When sandbox mode is false (\`${cloudSandboxId}\` does not exist in this session — do not look for it or offer to activate it):
 - Use \`getPlaintextCred\` to retrieve values, then pass as inline env vars in \`runCommand\`
 - Example: \`runCommand({ command: "GITHUB_TOKEN='xxx' gh repo list" })\`
 - File credentials: use \`getPlaintextCred\` to get the file path from the response state
@@ -123,8 +135,8 @@ When sandbox mode is false (\`lobe-cloud-sandbox\` does not exist in this sessio
 
 <best_practices>
 - **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
-- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or LobeHub marketplace → activate \`lobe-skill-store\` FIRST, no exceptions.**
-- **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`lobe-creds\` FIRST to manage credentials securely.**
+- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or LobeHub marketplace → activate \`${skillStoreId}\` FIRST, no exceptions.**
+- **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`${credsId}\` FIRST to manage credentials securely.**
 - Check the \`<available_tools>\` list before activating tools
 - For specialized tasks, search the Skill Marketplace first — a dedicated skill is almost always better than a generic approach
 - Only activate tools that are relevant to the user's current request

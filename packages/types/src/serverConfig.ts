@@ -134,6 +134,14 @@ export interface GlobalServerConfig {
     langfuse?: boolean;
   };
   /**
+   * `BUILTIN_TOOL_ID_NAMESPACE`: rewrites the `lobe-` prefix on builtin tool
+   * identifiers before they reach the model. Same reason as
+   * `toolNameMaxLength` above — the client-driven chat path generates tool
+   * names in the browser too, where the server env isn't visible.
+   * Undefined means "not configured": identifiers stay literally `lobe-*`.
+   */
+  toolIdNamespace?: string;
+  /**
    * `TOOL_NAME_MAX_LENGTH`: the length at which a function-call tool name gets
    * compressed to an opaque `MD5HASH_…`, `0` disabling that compression.
    * Exposed to the client because the client-driven chat path builds the tool

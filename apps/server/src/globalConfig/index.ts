@@ -166,6 +166,11 @@ export const getServerGlobalConfig = async () => {
     // resolver's own function so both sides read the raw value identically —
     // unset/invalid stays `undefined`, i.e. the resolver's default 64.
     toolNameMaxLength: parseToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH),
+    // Same reason as `toolNameMaxLength` immediately above: without this, a
+    // white-label deployment's `BUILTIN_TOOL_ID_NAMESPACE` would only take
+    // effect in gateway (server-run) mode, and the browser-generated tool
+    // names on the client-driven chat path would still say `lobe-*`.
+    toolIdNamespace: toolsEnv.BUILTIN_TOOL_ID_NAMESPACE,
   };
 
   return config;
