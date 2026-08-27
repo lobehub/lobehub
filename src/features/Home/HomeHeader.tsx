@@ -10,6 +10,9 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import AgentSelect from './AgentSelect';
 
 const styles = createStaticStyles(({ css }) => ({
+  // The promo track sizes to its content instead of a fixed cap: marketing copy
+  // is server-driven and unbounded, so a hard width cut the text mid-glyph. It
+  // wraps once it runs out of room.
   // The measure comes from the layout (`--home-greeting-measure`), which derives
   // it from the container width: it has to clear the portrait's bubble, and it
   // must not depend on the rail, or collapsing would re-wrap the headline and
@@ -28,13 +31,9 @@ const styles = createStaticStyles(({ css }) => ({
     letter-spacing: -0.01em;
   `,
   promo: css`
-    overflow: hidden;
     justify-self: center;
-
     min-width: 0;
-    max-width: 100%;
-
-    white-space: nowrap;
+    max-width: min(100%, 720px);
 
     @container home (width <= 720px) {
       justify-self: end;
@@ -48,7 +47,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   toolbar: css`
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content) minmax(0, 1fr);
     align-items: center;
 
     width: 100%;
