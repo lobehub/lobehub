@@ -478,7 +478,7 @@ class ChatService {
        */
       fetcher = async () => {
         try {
-          return await this.fetchOnClient({ payload, provider, runtimeProvider: sdkType, signal });
+          return this.fetchOnClient({ payload, provider, runtimeProvider: sdkType, signal });
         } catch (e) {
           const {
             errorType = ChatErrorType.BadRequest,

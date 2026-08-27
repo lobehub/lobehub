@@ -15,7 +15,7 @@ const changelogProcedure = publicProcedure.use(async ({ next }) => {
 export const changelogRouter = router({
   getIndex: changelogProcedure.query(async ({ ctx }) => {
     try {
-      return await ctx.changelogService.getChangelogIndex();
+      return ctx.changelogService.getChangelogIndex();
     } catch (e) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
@@ -33,7 +33,7 @@ export const changelogRouter = router({
     )
     .query(async ({ input, ctx }) => {
       try {
-        return await ctx.changelogService.getPostById(input.id, { locale: input.locale as any });
+        return ctx.changelogService.getPostById(input.id, { locale: input.locale as any });
       } catch (e) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',

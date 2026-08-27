@@ -85,7 +85,7 @@ export const mcpRouter = router({
   getStreamableMcpServerManifest: mcpProcedure
     .input(GetStreamableMcpServerManifestInputSchema)
     .query(async ({ input }) => {
-      return await mcpService.getStreamableMcpServerManifest(
+      return mcpService.getStreamableMcpServerManifest(
         input.identifier,
         input.url,
         input.metadata,
@@ -102,7 +102,7 @@ export const mcpRouter = router({
       checkStdioEnvironment(input);
 
       // Pass the validated MCPClientParams to the service
-      return await mcpService.listTools(input);
+      return mcpService.listTools(input);
     }),
 
   // listResources now accepts MCPClientParams directly
@@ -113,7 +113,7 @@ export const mcpRouter = router({
       checkStdioEnvironment(input);
 
       // Pass the validated MCPClientParams to the service
-      return await mcpService.listResources(input);
+      return mcpService.listResources(input);
     }),
 
   // listPrompts now accepts MCPClientParams directly
@@ -124,7 +124,7 @@ export const mcpRouter = router({
       checkStdioEnvironment(input);
 
       // Pass the validated MCPClientParams to the service
-      return await mcpService.listPrompts(input);
+      return mcpService.listPrompts(input);
     }),
 
   // callTool now accepts MCPClientParams, toolName, and args

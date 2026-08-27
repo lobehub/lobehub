@@ -97,7 +97,7 @@ export class DeviceGateway {
     if (!client) return { deviceCount: 0, online: false };
 
     try {
-      return await client.queryDeviceStatus(userId, workspaceId);
+      return client.queryDeviceStatus(userId, workspaceId);
     } catch {
       return { deviceCount: 0, online: false };
     }
@@ -1296,7 +1296,7 @@ export class DeviceGateway {
     if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
 
     try {
-      return await client.dispatchAgentRun(params);
+      return client.dispatchAgentRun(params);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log('dispatchAgentRun: error — %s', message);
@@ -1328,7 +1328,7 @@ export class DeviceGateway {
     );
 
     try {
-      return await client.executeToolCall(
+      return client.executeToolCall(
         {
           deviceId: params.deviceId,
           operationId: params.operationId,
@@ -1381,7 +1381,7 @@ export class DeviceGateway {
     );
 
     try {
-      return await client.executeMcpCall({ ...mcpCall, timeout });
+      return client.executeMcpCall({ ...mcpCall, timeout });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log('executeMcpCall: error — %s', message);
@@ -1412,7 +1412,7 @@ export class DeviceGateway {
     );
 
     try {
-      return await client.executeMessageApi(
+      return client.executeMessageApi(
         {
           deviceId: params.deviceId,
           timeout,

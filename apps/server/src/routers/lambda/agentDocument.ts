@@ -564,7 +564,7 @@ export const agentDocumentRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.list(
+        return ctx.agentDocumentVfsService.list(
           input.path,
           {
             agentId: input.agentId,
@@ -593,7 +593,7 @@ export const agentDocumentRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.stat(input.path, {
+        return ctx.agentDocumentVfsService.stat(input.path, {
           agentId: input.agentId,
           topicId: input.topicId,
         });
@@ -616,7 +616,7 @@ export const agentDocumentRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.read(
+        return ctx.agentDocumentVfsService.read(
           input.path,
           {
             agentId: input.agentId,
@@ -646,7 +646,7 @@ export const agentDocumentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.write(
+        return ctx.agentDocumentVfsService.write(
           input.path,
           input.content,
           {
@@ -666,7 +666,7 @@ export const agentDocumentRouter = router({
       try {
         const path = `${getUnifiedSkillNamespaceRootPath(input.targetNamespace)}/${input.skillName}`;
 
-        return await ctx.agentDocumentVfsService.write(
+        return ctx.agentDocumentVfsService.write(
           path,
           input.content,
           {
@@ -705,7 +705,7 @@ export const agentDocumentRouter = router({
       );
 
       try {
-        return await ctx.skillManagementService.createSkill({
+        return ctx.skillManagementService.createSkill({
           agentId: input.agentId,
           bodyMarkdown,
           description: input.description,
@@ -748,7 +748,7 @@ export const agentDocumentRouter = router({
     .input(updateMountedSkillSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.write(
+        return ctx.agentDocumentVfsService.write(
           input.path,
           input.content,
           {
@@ -787,7 +787,7 @@ export const agentDocumentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.mkdir(
+        return ctx.agentDocumentVfsService.mkdir(
           input.path,
           {
             agentId: input.agentId,
@@ -815,7 +815,7 @@ export const agentDocumentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.rename(
+        return ctx.agentDocumentVfsService.rename(
           input.fromPath,
           input.toPath,
           {
@@ -844,7 +844,7 @@ export const agentDocumentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.copy(
+        return ctx.agentDocumentVfsService.copy(
           input.fromPath,
           input.toPath,
           {
@@ -899,7 +899,7 @@ export const agentDocumentRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.listTrash(
+        return ctx.agentDocumentVfsService.listTrash(
           {
             agentId: input.agentId,
             topicId: input.topicId,
@@ -924,7 +924,7 @@ export const agentDocumentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.agentDocumentVfsService.restoreFromTrashByPath(input.path, {
+        return ctx.agentDocumentVfsService.restoreFromTrashByPath(input.path, {
           agentId: input.agentId,
           topicId: input.topicId,
         });

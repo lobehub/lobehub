@@ -58,7 +58,7 @@ export const searchRouter = router({
       }),
     )
     .query(async ({ input }) => {
-      return await searchService.query(input.query, input.optionalParams);
+      return searchService.query(input.query, input.optionalParams);
     }),
 
   webSearch: searchProcedure
@@ -71,6 +71,6 @@ export const searchRouter = router({
       }),
     )
     .query(async ({ input }) => {
-      return await searchService.webSearch(input);
+      return searchService.webSearch(input);
     }),
 });

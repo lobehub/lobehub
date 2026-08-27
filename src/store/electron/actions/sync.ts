@@ -113,7 +113,7 @@ export class ElectronRemoteServerActionImpl {
       electronKeys.remoteServerConfig(),
       async () => {
         try {
-          return await remoteServerService.getRemoteServerConfig();
+          return remoteServerService.getRemoteServerConfig();
         } catch (error) {
           console.error('Failed to get remote server configuration:', error);
           throw error;

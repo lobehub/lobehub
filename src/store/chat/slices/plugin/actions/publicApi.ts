@@ -49,13 +49,13 @@ export class PluginPublicApiActionImpl {
     switch (payload.type) {
       // @ts-ignore
       case 'mcp': {
-        return await this.#get().invokeMCPTypePlugin(id, payload);
+        return this.#get().invokeMCPTypePlugin(id, payload);
       }
 
       case 'builtin':
       default: {
         // Pass stepContext to builtin tools for dynamic state access
-        return await this.#get().invokeBuiltinTool(id, payload, stepContext);
+        return this.#get().invokeBuiltinTool(id, payload, stepContext);
       }
     }
   };

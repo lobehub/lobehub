@@ -40,7 +40,7 @@ export class AgentMemoryActionImpl {
       async () => {
         // Retrieve memories using topic's context
         // The backend will use topic info to build the query
-        return await userMemoryService.retrieveMemoryForTopic(topicId!);
+        return userMemoryService.retrieveMemoryForTopic(topicId!);
       },
       {
         onData: (data) => {

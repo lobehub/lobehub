@@ -71,7 +71,7 @@ describe('KnowledgeBaseCrudAction', () => {
       const refreshSpy = vi.spyOn(result.current, 'refreshKnowledgeBaseList').mockResolvedValue();
 
       const id = await act(async () => {
-        return await result.current.createNewKnowledgeBase(params);
+        return result.current.createNewKnowledgeBase(params);
       });
 
       expect(knowledgeBaseService.createKnowledgeBase).toHaveBeenCalledWith(params);

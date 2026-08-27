@@ -32,7 +32,7 @@ class AbortableRequestManager {
     this.controllers.set(key, controller);
 
     try {
-      return await fetcher(controller.signal);
+      return fetcher(controller.signal);
     } finally {
       // Clean up controller if it's still the active one
       if (this.controllers.get(key) === controller) {

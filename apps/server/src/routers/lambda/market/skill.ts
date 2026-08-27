@@ -84,7 +84,7 @@ export const skillRouter = router({
       log('getSkillCategories input: %O', input);
 
       try {
-        return await ctx.marketService.getSkillCategories();
+        return ctx.marketService.getSkillCategories();
       } catch (error) {
         log('Error fetching skill categories: %O', error);
         throw mapMarketError(error, 'Failed to fetch skill categories');

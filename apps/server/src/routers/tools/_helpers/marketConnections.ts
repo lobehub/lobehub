@@ -62,7 +62,7 @@ export const listOptionalMarketConnectionsWithTimeout = async (
   timeoutMs = MARKET_CONNECTIONS_REQUEST_TIMEOUT_MS,
 ): Promise<ListConnectionsResponse> => {
   try {
-    return await listMarketConnectionsWithTimeout(marketConnect, timeoutMs);
+    return listMarketConnectionsWithTimeout(marketConnect, timeoutMs);
   } catch (error) {
     if (isMarketConnectionsAuthError(error)) {
       return { connections: [], success: true };

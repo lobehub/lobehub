@@ -43,7 +43,7 @@ export class ContentChunk {
           }
 
           default: {
-            return await this.chunkByDefault(params.filename, params.content);
+            return this.chunkByDefault(params.filename, params.content);
           }
         }
       } catch (error) {
@@ -55,7 +55,7 @@ export class ContentChunk {
     }
 
     // Fallback to default chunking if no service succeeded
-    return await this.chunkByDefault(params.filename, params.content);
+    return this.chunkByDefault(params.filename, params.content);
   }
 
   private canUseUnstructured(): boolean {

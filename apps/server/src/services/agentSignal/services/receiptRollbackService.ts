@@ -132,7 +132,7 @@ export const rollbackAgentSignalReceipt = async (
   }
 
   try {
-    return await documentService.runWithDocumentLock(
+    return documentService.runWithDocumentLock(
       resolvedInput.documentId,
       async (lockOwnerId) => {
         const current = await documentService.getDocumentById(resolvedInput.documentId);
@@ -152,7 +152,7 @@ export const rollbackAgentSignalReceipt = async (
 
         const history = await (async () => {
           try {
-            return await documentService.getDocumentHistoryItem({
+            return documentService.getDocumentHistoryItem({
               documentId: resolvedInput.documentId,
               historyId: resolvedInput.historyId,
             });

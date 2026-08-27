@@ -137,7 +137,7 @@ export const agentSkillsRouter = router({
 
   create: skillWriteProcedure.input(createSkillSchema).mutation(async ({ ctx, input }) => {
     try {
-      return await ctx.skillImporter.createUserSkill(input);
+      return ctx.skillImporter.createUserSkill(input);
     } catch (error) {
       handleSkillImportError(error);
     }
@@ -201,7 +201,7 @@ export const agentSkillsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.skillImporter.importFromGitHub(input);
+        return ctx.skillImporter.importFromGitHub(input);
       } catch (error) {
         handleSkillImportError(error);
       }
@@ -211,7 +211,7 @@ export const agentSkillsRouter = router({
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.skillImporter.importFromUrl(input);
+        return ctx.skillImporter.importFromUrl(input);
       } catch (error) {
         handleSkillImportError(error);
       }
@@ -221,7 +221,7 @@ export const agentSkillsRouter = router({
     .input(z.object({ zipFileId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.skillImporter.importFromZip(input);
+        return ctx.skillImporter.importFromZip(input);
       } catch (error) {
         handleSkillImportError(error);
       }
@@ -234,7 +234,7 @@ export const agentSkillsRouter = router({
         // Get download URL from market service
         const downloadUrl = ctx.marketService.getSkillDownloadUrl(input.identifier);
         // Import using the download URL
-        return await ctx.skillImporter.importFromUrl(
+        return ctx.skillImporter.importFromUrl(
           { url: downloadUrl },
           { identifier: input.identifier, source: 'market' },
         );
@@ -292,7 +292,7 @@ export const agentSkillsRouter = router({
       }
 
       try {
-        return await ctx.skillResourceService.readResource(skill.resources, input.path);
+        return ctx.skillResourceService.readResource(skill.resources, input.path);
       } catch (error) {
         if (error instanceof SkillResourceError) {
           throw new TRPCError({ code: 'NOT_FOUND', message: error.message });

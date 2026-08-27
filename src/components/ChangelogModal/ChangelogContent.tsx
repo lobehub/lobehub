@@ -29,7 +29,7 @@ interface PostItemProps extends ChangelogIndexItem {
 
 const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProps) => {
   const { data } = useSWR(changelogKeys.post(id, locale), async () => {
-    return await lambdaClient.changelog.getPostById.query({ id, locale });
+    return lambdaClient.changelog.getPostById.query({ id, locale });
   });
 
   if (!data || !data.title) return null;

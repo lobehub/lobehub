@@ -131,7 +131,7 @@ const withActingAccountHeader = async <T>(
   headers['x-lobe-owner-account-id'] = String(actAs);
 
   try {
-    return await operation();
+    return operation();
   } finally {
     if (previous === undefined) {
       delete headers['x-lobe-owner-account-id'];

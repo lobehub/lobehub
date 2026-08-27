@@ -68,7 +68,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       {
         addFilesToKnowledgeBase: async (knowledgeBaseId, ids) => {
           try {
-            return await knowledgeBaseModel.addFilesToKnowledgeBase(knowledgeBaseId, ids);
+            return knowledgeBaseModel.addFilesToKnowledgeBase(knowledgeBaseId, ids);
           } catch (e: any) {
             // PG unique-constraint violation on (knowledge_base_id, file_id).
             // Re-throw with a friendly message so the ExecutionRuntime's

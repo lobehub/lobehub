@@ -263,7 +263,7 @@ export const userMemoriesRouter = router({
     .input(z.object({ id: z.string(), layer: z.nativeEnum(LayersEnum) }))
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.memoryModel.getMemoryDetail(input);
+        return ctx.memoryModel.getMemoryDetail(input);
       } catch (error) {
         console.error('Failed to retrieve memory detail:', error);
         return null;
@@ -291,7 +291,7 @@ export const userMemoriesRouter = router({
       const fallbackPageSize = params.pageSize ?? 20;
 
       try {
-        return await ctx.activityModel.queryList(params);
+        return ctx.activityModel.queryList(params);
       } catch (error) {
         console.error('Failed to query activities:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
@@ -318,7 +318,7 @@ export const userMemoriesRouter = router({
       const fallbackPageSize = params.pageSize ?? 20;
 
       try {
-        return await ctx.experienceModel.queryList(params);
+        return ctx.experienceModel.queryList(params);
       } catch (error) {
         console.error('Failed to query experiences:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
@@ -346,7 +346,7 @@ export const userMemoriesRouter = router({
       const fallbackPageSize = params.pageSize ?? 20;
 
       try {
-        return await ctx.identityModel.queryList(params);
+        return ctx.identityModel.queryList(params);
       } catch (error) {
         console.error('Failed to query identities:', error);
         return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
@@ -357,7 +357,7 @@ export const userMemoriesRouter = router({
     .input(z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.identityModel.queryForInjection(input?.limit ?? 50);
+        return ctx.identityModel.queryForInjection(input?.limit ?? 50);
       } catch (error) {
         console.error('Failed to query identities for injection:', error);
         return [];
@@ -375,7 +375,7 @@ export const userMemoriesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.memoryModel.queryIdentityRoles(input ?? {});
+        return ctx.memoryModel.queryIdentityRoles(input ?? {});
       } catch (error) {
         console.error('Failed to query identity roles:', error);
         return { roles: [], tags: [] };
@@ -414,7 +414,7 @@ export const userMemoriesRouter = router({
       const fallbackPageSize = params.pageSize ?? 20;
 
       try {
-        return await ctx.memoryModel.queryMemories({
+        return ctx.memoryModel.queryMemories({
           ...params,
           order: params.order ?? 'desc',
           sort: params.sort,
@@ -437,7 +437,7 @@ export const userMemoriesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.memoryModel.queryTags(input ?? {});
+        return ctx.memoryModel.queryTags(input ?? {});
       } catch (error) {
         console.error('Failed to query memory tags:', error);
         return [];
@@ -448,7 +448,7 @@ export const userMemoriesRouter = router({
     .input(queryTaxonomyOptionsSchema.optional())
     .query(async ({ ctx, input }) => {
       try {
-        return await ctx.memoryModel.queryTaxonomyOptions(input ?? {});
+        return ctx.memoryModel.queryTaxonomyOptions(input ?? {});
       } catch (error) {
         console.error('Failed to query memory taxonomy options:', error);
         return EMPTY_TAXONOMY_RESULT;
@@ -963,7 +963,7 @@ export const userMemoriesRouter = router({
 
   searchMemory: memoryProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
     try {
-      return await searchUserMemories(ctx, input);
+      return searchUserMemories(ctx, input);
     } catch (error) {
       console.error('Failed to retrieve memories:', error);
       return EMPTY_SEARCH_RESULT;

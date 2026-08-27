@@ -27,7 +27,7 @@ export const loadI18nNamespaceModuleWithFallback = async (
   const { onFallback, ...rest } = params;
 
   try {
-    return await loadI18nNamespaceModule(rest);
+    return loadI18nNamespaceModule(rest);
   } catch (error) {
     onFallback?.({ error, lng: rest.lng, ns: rest.ns });
     return import(`@/locales/default/${rest.ns}`);

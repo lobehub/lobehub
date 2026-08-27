@@ -167,7 +167,7 @@ export const fileRouter = router({
         };
 
         // Race between the chunking process and the timeout
-        return await Promise.race([embeddingPromise(), timeoutPromise]);
+        return Promise.race([embeddingPromise(), timeoutPromise]);
       } catch (e) {
         console.error('embeddingChunks error', e);
 
@@ -352,7 +352,7 @@ export const fileRouter = router({
           return { success: true };
         };
         // Race between the chunking process and the timeout
-        return await Promise.race([chunkingPromise(), timeoutPromise]);
+        return Promise.race([chunkingPromise(), timeoutPromise]);
       } catch (e) {
         const error = e as any;
 

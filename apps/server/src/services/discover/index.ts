@@ -121,7 +121,7 @@ export class DiscoverService {
         try {
           // Dynamic import
           const { machineId } = await import('node-machine-id');
-          return await machineId();
+          return machineId();
         } catch (error) {
           console.error('Failed to get machine-id:', error);
         }

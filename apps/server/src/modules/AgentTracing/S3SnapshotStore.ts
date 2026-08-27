@@ -114,7 +114,7 @@ export class S3SnapshotStore implements ISnapshotStore {
     // Current format: .json.zst (zstd-compressed)
     try {
       const bytes = await this.s3.getFileByteArray(this.partialKey(operationId));
-      return await this.decodeSnapshot<Partial<ExecutionSnapshot>>(bytes);
+      return this.decodeSnapshot<Partial<ExecutionSnapshot>>(bytes);
     } catch {
       // fall through to legacy
     }

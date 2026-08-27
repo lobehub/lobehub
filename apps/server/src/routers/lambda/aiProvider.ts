@@ -166,7 +166,7 @@ export const aiProviderRouter = router({
     }),
 
   getAiProviderList: aiProviderProcedure.query(async ({ ctx }) => {
-    return await ctx.aiInfraRepos.getAiProviderList();
+    return ctx.aiInfraRepos.getAiProviderList();
   }),
 
   getAiProviderRuntimeState: aiProviderProcedure

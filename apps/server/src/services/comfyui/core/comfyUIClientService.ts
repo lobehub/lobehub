@@ -161,8 +161,8 @@ export class ComfyUIClientService {
    * Uses unified TTL cache for performance optimization
    */
   async getCheckpoints(): Promise<string[]> {
-    return await this.cacheManager.get('checkpoints', async () => {
-      return await this.client.getCheckpoints();
+    return this.cacheManager.get('checkpoints', async () => {
+      return this.client.getCheckpoints();
     });
   }
 
@@ -172,8 +172,8 @@ export class ComfyUIClientService {
    * Uses unified TTL cache for performance optimization
    */
   async getLoras(): Promise<string[]> {
-    return await this.cacheManager.get('loras', async () => {
-      return await this.client.getLoras();
+    return this.cacheManager.get('loras', async () => {
+      return this.client.getLoras();
     });
   }
 
@@ -185,7 +185,7 @@ export class ComfyUIClientService {
    */
   async getNodeDefs(nodeName?: string): Promise<any> {
     const allNodeDefs = await this.cacheManager.get('nodeDefs', async () => {
-      return await this.client.getNodeDefs();
+      return this.client.getNodeDefs();
     });
 
     // Return specific node or all nodes
@@ -221,7 +221,7 @@ export class ComfyUIClientService {
    * Delegates to ConnectionService for connection management
    */
   async validateConnection(): Promise<boolean> {
-    return await this.connectionService.validateConnection(
+    return this.connectionService.validateConnection(
       this.baseURL,
       this.authService.getAuthHeaders(),
     );

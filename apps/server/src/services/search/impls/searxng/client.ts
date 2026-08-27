@@ -62,7 +62,7 @@ export class SearXNGClient {
       const response = await fetch(urlJoin(this.baseUrl, `/search?${searchParams}`));
 
       if (response.ok) {
-        return await response.json();
+        return response.json();
       }
 
       const body = await response.text().catch(() => '');

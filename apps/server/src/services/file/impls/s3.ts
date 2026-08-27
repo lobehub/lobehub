@@ -159,7 +159,7 @@ export class S3StaticFileImpl implements FileServiceImpl {
 
     const key = await this.getStorageKeyFromUrl(url);
 
-    return await this.getCachedPreSignedUrlForPreview(key, expiresIn);
+    return this.getCachedPreSignedUrlForPreview(key, expiresIn);
   }
 
   async uploadContent(path: string, content: string) {
@@ -176,7 +176,7 @@ export class S3StaticFileImpl implements FileServiceImpl {
     // stable media URLs and can reuse provider-side prefix caches.
     const publicUrlBase = fileEnv.S3_SET_ACL ? fileEnv.S3_PUBLIC_DOMAIN : undefined;
     if (!publicUrlBase) {
-      return await this.getCachedPreSignedUrlForPreview(key, expiresIn);
+      return this.getCachedPreSignedUrlForPreview(key, expiresIn);
     }
 
     if (fileEnv.S3_ENABLE_PATH_STYLE) {

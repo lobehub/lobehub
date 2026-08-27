@@ -451,7 +451,7 @@ export class DocumentService {
     }
 
     try {
-      return await fn(ownerId);
+      return fn(ownerId);
     } finally {
       // Only release a lease we freshly claimed. When the same user already
       // held it, leave their session alive — releasing would briefly flip

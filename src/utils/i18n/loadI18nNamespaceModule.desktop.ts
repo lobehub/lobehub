@@ -46,7 +46,7 @@ export const loadI18nNamespaceModuleWithFallback = async (
 ): Promise<NamespaceModule> => {
   const { onFallback, ...rest } = params;
   try {
-    return await loadI18nNamespaceModule(rest);
+    return loadI18nNamespaceModule(rest);
   } catch (error) {
     onFallback?.({ error, lng: rest.lng, ns: rest.ns });
     const loadDefault = defaultLoaders[getDefaultKey(rest.ns)];

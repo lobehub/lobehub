@@ -90,7 +90,7 @@ describe('FileUploadAction', () => {
       vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
       const uploadResult = await act(async () => {
-        return await result.current.uploadBase64FileWithProgress(base64Data);
+        return result.current.uploadBase64FileWithProgress(base64Data);
       });
 
       expect(getImageDimensions).toHaveBeenCalledWith(base64Data);
@@ -137,7 +137,7 @@ describe('FileUploadAction', () => {
       vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
       const uploadResult = await act(async () => {
-        return await result.current.uploadBase64FileWithProgress(base64Data);
+        return result.current.uploadBase64FileWithProgress(base64Data);
       });
 
       expect(getImageDimensions).toHaveBeenCalledWith(base64Data);
@@ -186,7 +186,7 @@ describe('FileUploadAction', () => {
       vi.mocked(handleFileUploadError).mockReturnValue(true);
 
       const uploadResult = await act(async () => {
-        return await result.current.uploadBase64FileWithProgress(base64Data);
+        return result.current.uploadBase64FileWithProgress(base64Data);
       });
 
       expect(uploadResult).toBeUndefined();
@@ -224,7 +224,7 @@ describe('FileUploadAction', () => {
         const uploadToS3Spy = vi.spyOn(uploadService, 'uploadFileToS3');
 
         const uploadResult = await act(async () => {
-          return await result.current.uploadWithProgress({
+          return result.current.uploadWithProgress({
             file: mockFile,
             onStatusUpdate,
           });
@@ -277,7 +277,7 @@ describe('FileUploadAction', () => {
         const uploadToS3Spy = vi.spyOn(uploadService, 'uploadFileToS3');
 
         const uploadResult = await act(async () => {
-          return await result.current.uploadWithProgress({
+          return result.current.uploadWithProgress({
             file: mockFile,
             onStatusUpdate,
           });
@@ -334,7 +334,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
         const uploadResult = await act(async () => {
-          return await result.current.uploadWithProgress({
+          return result.current.uploadWithProgress({
             file: mockFile,
             onStatusUpdate,
           });
@@ -481,7 +481,7 @@ describe('FileUploadAction', () => {
         const createFileSpy = vi.spyOn(fileService, 'createFile');
 
         const uploadResult = await act(async () => {
-          return await result.current.uploadWithProgress({
+          return result.current.uploadWithProgress({
             file: mockFile,
             onStatusUpdate,
           });
@@ -926,7 +926,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
         const uploadResult = await act(async () => {
-          return await result.current.uploadWithProgress({
+          return result.current.uploadWithProgress({
             file: mockFile,
           });
         });
@@ -955,7 +955,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
         const uploadResult = await act(async () => {
-          return await result.current.uploadWithProgress({
+          return result.current.uploadWithProgress({
             file: mockFile,
           });
         });
@@ -985,7 +985,7 @@ describe('FileUploadAction', () => {
         });
 
         const result = await act(async () => {
-          return await uploadWithProgress({
+          return uploadWithProgress({
             file: mockFile,
             onStatusUpdate,
           });

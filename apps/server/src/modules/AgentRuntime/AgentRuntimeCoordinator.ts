@@ -141,7 +141,7 @@ export class AgentRuntimeCoordinator {
     if (state.status === 'interrupted' || state.status === 'waiting_for_async_tool')
       return undefined;
     try {
-      return await this.uiMessagesResolver(state);
+      return this.uiMessagesResolver(state);
     } catch (error) {
       console.error('Failed to resolve uiMessages for agent_runtime_end:', error);
       return undefined;

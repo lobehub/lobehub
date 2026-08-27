@@ -1612,7 +1612,7 @@ export class GatewayService {
     const client = getMessageGatewayClient(platform);
     try {
       const { state } = await client.getStatus(provider.id);
-      return await updateBotRuntimeStatus({
+      return updateBotRuntimeStatus({
         applicationId,
         errorCode: state.errorCode,
         errorMessage: state.error,
