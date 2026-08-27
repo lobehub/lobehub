@@ -18,7 +18,7 @@ export const createServerPlanRuntimeService = (
   workspaceId?: string,
   callerAgentVisibility?: 'private' | 'public' | null,
   /**
-   * Share-visitor scoping (Codex P1, `lobe-agent`'s `updatePlan`): when set,
+   * Share-visitor scoping (`lobe-agent`'s `updatePlan`): when set,
    * `findPlanById` only resolves a plan document that is actually associated
    * with THIS topic, via `topicDocumentModel.isAssociated`.
    *

@@ -63,7 +63,7 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(messages)).toHaveLength(1);
     });
 
-    // Regression for LOBE-11930: a single-topic delete has the same bug shape
+    // Regression test: a single-topic delete has the same bug shape
     // as the bulk sweeps below — see `TopicModel.delete`'s JSDoc.
     it('reports an in-flight Agent Share visitor run on the deleted topic', async () => {
       const onShareRunsInterrupted = vi.fn();
@@ -127,7 +127,6 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(2);
     });
 
-    // Regression for LOBE-11930.
     it('reports an in-flight Agent Share visitor run scoped to the deleted session', async () => {
       const onShareRunsInterrupted = vi.fn();
       const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
@@ -189,7 +188,6 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(2);
     });
 
-    // Regression for LOBE-11930.
     it('reports an in-flight Agent Share visitor run scoped to the deleted group', async () => {
       const onShareRunsInterrupted = vi.fn();
       const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
@@ -359,7 +357,6 @@ describe('TopicModel - Delete', () => {
       expect(remainingMessages).toHaveLength(0);
     });
 
-    // Regression for LOBE-11930.
     it('reports an in-flight Agent Share visitor run on the deleted agent', async () => {
       const onShareRunsInterrupted = vi.fn();
       const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
@@ -407,7 +404,6 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(messages)).toHaveLength(1);
     });
 
-    // Regression for LOBE-11930.
     it('reports an in-flight Agent Share visitor run among the deleted ids', async () => {
       const onShareRunsInterrupted = vi.fn();
       const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
@@ -449,8 +445,8 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(1);
     });
 
-    // Regression for LOBE-11930: this is the exact bug the codex P1 report
-    // named — `topic.removeAllTopics` deleted a visitor's running topic with
+    // Regression test: this is the exact bug —
+    // `topic.removeAllTopics` deleted a visitor's running topic with
     // no interrupt, leaving the operation row orphaned and the visitor unable
     // to stop it. `deleteAll` is not scoped to one agent, so this covers a
     // visitor run on an agent the caller never names explicitly.

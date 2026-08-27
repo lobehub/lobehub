@@ -152,8 +152,7 @@ export class AgentEvalRunService {
     // share-visitor gap `deleteRun`'s `TopicModel.batchDelete` closes below —
     // wiring it here too keeps every bulk delete on this service on one
     // contract instead of assuming eval-run topics can never carry a
-    // `senderId`. See `MessageModelOptions.onShareRunsInterrupted`'s JSDoc
-    // and LOBE-11930.
+    // `senderId`. See `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
     this.messageModel = new MessageModel(db, userId, workspaceId, {
       onShareRunsInterrupted: interruptSnapshottedShareRuns(db, userId),
     });
@@ -162,7 +161,7 @@ export class AgentEvalRunService {
     // `TopicModel.batchDelete`, the same shared bulk-delete surface the
     // `topic.removeAllTopics` router path uses — wiring it here too keeps
     // both callers on one contract instead of assuming eval-run topics can
-    // never carry a `senderId`. See LOBE-11930.
+    // never carry a `senderId`.
     this.topicModel = new TopicModel(db, userId, workspaceId, {
       onShareRunsInterrupted: interruptSnapshottedShareRuns(db, userId),
     });

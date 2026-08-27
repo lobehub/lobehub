@@ -422,7 +422,7 @@ class LobeAgentExecutionRuntime {
     const hasImages = selectedItems.some((item) => item.type === 'image');
     const hasVideos = selectedItems.some((item) => item.type === 'video');
 
-    // Codex P2 (LOBE-11930): these three messages used to interpolate
+    // These three messages used to interpolate
     // `${provider}/${model}` — the exact `MULTIMODAL_UNDERSTANDING_PROVIDER`/
     // `MULTIMODAL_UNDERSTANDING_MODEL` deployment config, never chosen or
     // known by the caller (unlike `imageGeneration`'s `provider`/`model`,
@@ -479,7 +479,7 @@ class LobeAgentExecutionRuntime {
 
     let content = '';
     let usage: unknown;
-    // Codex P1: this nested inference must bill the same target as the
+    // This nested inference must bill the same target as the
     // top-level `call_llm` step. `ServerLLMTransport` forwards
     // `agentShare` through `buildAgentShareModelRuntimeContext` for every
     // ordinary step of a share-visitor run; without the same call here, a

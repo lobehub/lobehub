@@ -375,7 +375,7 @@ export interface AgentRuntimeDelegate {
    * reservation is dead — `confirmReservation` is a separate, unbounded-
    * duration step of the same request and can still land moments later. See
    * `AgentShareModel.invalidateReservation`'s JSDoc for the exact race
-   * (LOBE-11930 Codex P2) and how the shared `DELETE ... WHERE id =
+   * and how the shared `DELETE ... WHERE id =
    * operationId AND revoked_at IS NULL` predicate — the SAME one
    * `confirmReservation` uses — makes the two calls resolve consistently: a
    * `DELETE` blocked behind a concurrent `confirmReservation` transaction only
@@ -436,8 +436,8 @@ export interface AgentRuntimeDelegate {
    * Re-check that an Agent Share visitor run is STILL authorized to continue,
    * called on EVERY step (not only step 0) — see the call site in
    * `executeStep` and `AgentShareModel.isRunStillAuthorized`'s JSDoc for the
-   * exact leak this closes (LOBE-11930 Codex P1: a failed, unretried
-   * `interruptActiveShareRuns` interrupt).
+   * exact leak this closes: a failed, unretried `interruptActiveShareRuns`
+   * interrupt.
    *
    * Implemented by AiAgentService via `AgentShareModel.isRunStillAuthorized`.
    * Returns `false` (not a throw) for an ordinary "no longer authorized"
@@ -882,10 +882,9 @@ export class AgentRuntimeService {
    * `'pending'` in `deferShareGateStep`) routes through
    * `resolveShareGateAbort`, which atomically invalidates the reservation
    * before recording the abort — see that method's JSDoc for the
-   * confirm-after-abort race (LOBE-11930 Codex P2) this closes.
+   * confirm-after-abort race this closes.
    *
-   * A state-load failure here is NOT treated as "proceed" (fixes LOBE-11930
-   * Codex P1(b)). The old reasoning — "we cannot tell a share run from an
+   * A state-load failure here is NOT treated as "proceed". The old reasoning — "we cannot tell a share run from an
    * ordinary one, and blocking every run on a transient hiccup would take the
    * runtime down" — does not hold up: `executeStep` reloads this exact same
    * state a few lines below (`agentState = await
@@ -937,7 +936,7 @@ export class AgentRuntimeService {
     if (status === 'confirmed') return undefined;
 
     if (status === 'pending') {
-      // Fixes LOBE-11930 Codex P1(a): `createOperation` schedules this very
+      // `createOperation` schedules this very
       // step-0 delivery with only a 50ms delay and returns before `execAgent`
       // reaches `confirmReservation` — a fast delivery can land here while
       // the reservation is still valid but not yet redeemed. The reservation
@@ -981,7 +980,7 @@ export class AgentRuntimeService {
    * reservation atomically (no identifiers) NOR persist `interrupted`
    * durably (state is unreadable), so it returns a `shareGateStateUnavailable`
    * result and keeps the delivery retryable instead of acking a decision that
-   * was never actually recorded (LOBE-11930 Codex P2 follow-up) — see the
+   * was never actually recorded — see the
    * exhaustion branch below.
    */
   private async deferShareGateStep(
@@ -1038,7 +1037,7 @@ export class AgentRuntimeService {
     // originating request resumes after it), the topic's `runningOperation`
     // marker would end up naming an operation nothing will ever schedule
     // another step for, while the visitor's original request still reports
-    // success (LOBE-11930 Codex P2 follow-up). Returning this instead of
+    // success. Returning this instead of
     // acking keeps the delivery retryable — `runStep.ts` turns
     // `shareGateStateUnavailable` into a non-2xx response so the queue's OWN
     // retry budget keeps redelivering step 0 until the state store recovers,
@@ -1062,7 +1061,7 @@ export class AgentRuntimeService {
    * check itself throwing) is actually dead, or was just confirmed by a
    * racing `confirmReservation` call from the SAME originating request.
    *
-   * Fixes LOBE-11930 Codex P2: every one of the three call sites above used
+   * Every one of the three call sites above used
    * to go straight to {@link buildShareAbortResult}, which marks the
    * operation `interrupted` WITHOUT touching the `agent_share_run_reservations`
    * row. `confirmReservation` is a separate, unbounded-duration step of the
@@ -1129,7 +1128,7 @@ export class AgentRuntimeService {
    * failure) no longer calls this method at all: it cannot resolve the
    * reservation atomically without `agentId`/`topicId`, so it returns a
    * `shareGateStateUnavailable` result and keeps the delivery retryable
-   * instead (LOBE-11930 Codex P2 follow-up).
+   * instead.
    */
   private async buildShareAbortResult(
     operationId: string,
@@ -1979,7 +1978,7 @@ export class AgentRuntimeService {
 
         // Agent Share: revalidate this run's authorization on EVERY step, not
         // only step 0 (`abortUnconfirmedShareRun`, above, only ever runs once).
-        // Fixes LOBE-11930 Codex P1 — `AiAgentService.interruptActiveShareRuns`
+        // `AiAgentService.interruptActiveShareRuns`
         // best-effort interrupts each affected topic and swallows a failure
         // (transient coordinator/DB/runtime error) with no durable retry; if
         // that swallow fires, the step-0 gate already passed and nothing else
@@ -2725,8 +2724,7 @@ export class AgentRuntimeService {
       // Without this, propagated errors (e.g. markPersistFatal from
       // RuntimeExecutors) leave the partial as an orphan at
       // `_partial/<op>.json.zst` and the canonical
-      // `agent-traces/<agentId>/<topicId>/<op>.json.zst` returns 404 — see
-      // .
+      // `agent-traces/<agentId>/<topicId>/<op>.json.zst` returns 404.
       //
       // `failedStep` synthesizes a step record for the failure because the
       // real step never reached `appendStepToPartial` — it threw before the

@@ -11,8 +11,8 @@ import { agents, messages, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
-// Real-Postgres reproduction of the agent-share visitor abuse-cap race
-// described in LOBE-11930 (Codex P1 on `shareChat.ts:129`).
+// Real-Postgres reproduction of the agent-share visitor abuse-cap race in
+// `shareChat.ts`.
 //
 // Before the fix, `shareChat.execAgent` counted a visitor's existing topics
 // (or turns) and compared against the cap BEFORE dispatching to

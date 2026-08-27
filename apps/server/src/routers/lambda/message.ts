@@ -50,7 +50,7 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   // `removeMessagesByGroup`) — each snapshots in-flight Agent Share visitor
   // runs itself, BEFORE its own delete, and hands the snapshot here once its
   // transaction has committed. See `MessageModelOptions
-  // .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+  // .onShareRunsInterrupted`'s JSDoc.
   const messageModelOptions = {
     onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
   };

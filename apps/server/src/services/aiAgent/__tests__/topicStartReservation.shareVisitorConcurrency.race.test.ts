@@ -9,8 +9,8 @@ import { TopicModel } from '@/database/models/topic';
 
 import { acquireTopicStartReservation } from '../topicStartReservation';
 
-// Real-Postgres reproduction of the Codex P1 on `shareChat.ts:186`
-// (LOBE-11930): "Serialize visitor sends on each topic".
+// Real-Postgres reproduction of the topic-reservation race on `shareChat.ts:186`
+//: "Serialize visitor sends on each topic".
 //
 // `AiAgentService.execAgent` claims the topic via
 // `acquireTopicStartReservation` → `TopicModel.tryReserveTaskCallback` BEFORE

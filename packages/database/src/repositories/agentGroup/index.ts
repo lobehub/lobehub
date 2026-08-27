@@ -134,7 +134,7 @@ export interface AgentGroupRepositoryOptions {
    * post-commit. Optional and defaulted to a no-op so every EXISTING `new
    * AgentGroupRepository(...)` call site keeps its current behavior; only
    * construction sites that can reach the server layer (tRPC procedures) pass
-   * a real callback. See LOBE-11930.
+   * a real callback.
    *
    * NO `targetWorkspaceId` parameter — matches `AgentModelOptions.onShareReset`'s
    * signature exactly. The post-commit `interruptActiveShareRuns` re-query
@@ -145,7 +145,7 @@ export interface AgentGroupRepositoryOptions {
    * while scheduling no new callback of its own (the share is already
    * `private`), so a workspace-scoped re-query would go stale. See
    * `AgentModelOptions.onShareReset`'s full JSDoc in
-   * `packages/database/src/models/agent.ts` and LOBE-11930.
+   * `packages/database/src/models/agent.ts`.
    */
   onShareReset?: (agentId: string, revocationGeneration: number) => void;
 
@@ -162,7 +162,7 @@ export interface AgentGroupRepositoryOptions {
    * next per-step authorization check. Optional and defaulted to a no-op so
    * every EXISTING `new AgentGroupRepository(...)` call site keeps its current
    * behavior; only construction sites that can reach the server layer pass a
-   * real callback. See LOBE-11930.
+   * real callback.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -801,7 +801,7 @@ export class AgentGroupRepository {
         }
 
         // Snapshot BEFORE the delete below cascades these agents' topic rows
-        // away — see `snapshotOwnedMemberShareRuns`'s JSDoc and LOBE-11930.
+        // away — see `snapshotOwnedMemberShareRuns`'s JSDoc.
         activeShareRuns = await this.snapshotOwnedMemberShareRuns(trx, virtualAgentIds);
 
         await trx.delete(agents).where(
@@ -1312,8 +1312,7 @@ export class AgentGroupRepository {
       // `AgentModel.transferAgents` — a bare visibility flip leaves a
       // reservation staked (or an operation already running) under the
       // pre-transfer generation able to confirm/continue after the move, with
-      // no way for the visitor to stop it. See that method's comment and
-      // LOBE-11930. The row lock on `agents` taken above (still held here,
+      // no way for the visitor to stop it. See that method's comment. The row lock on `agents` taken above (still held here,
       // same `trx`) is what `bumpAgentShareGeneration` requires.
       if (!this.workspaceId && targetWorkspaceId && ownedAgentIds.length > 0) {
         const resetShares = await trx

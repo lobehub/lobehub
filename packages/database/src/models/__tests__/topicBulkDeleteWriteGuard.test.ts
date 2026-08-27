@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Structural guard for LOBE-11930.
+ * Structural guard against bulk deletes bypassing visitor-run interruption.
  *
  * A share-visitor topic is owned by the creator (`topics.userId` = creator,
  * `topics.senderId` = visitor — see `utils/shareVisitor.ts`), so ANY raw bulk

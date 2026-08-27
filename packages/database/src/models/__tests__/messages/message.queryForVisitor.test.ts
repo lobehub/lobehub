@@ -86,7 +86,7 @@ describe('MessageModel.queryForVisitor', () => {
       // The creator's exact model/provider choice — top level AND the
       // `extra` duplicate populated by `queryWithWhere`. The previous
       // version of this test asserted `extra.model`/`extra.provider` only,
-      // which let the top-level duplicate (the actual Codex P2 finding on
+      // which let the top-level duplicate (the actual leak at
       // `message.ts:425`) reach the visitor DTO undetected.
       expect(message.model).toBeUndefined();
       expect(message.provider).toBeUndefined();
@@ -167,7 +167,7 @@ describe('toVisitorMessage — nested messages', () => {
           // Top-level `model`/`provider` are what `queryWithWhere` actually
           // populates on every real row (see `message.ts` transform step) —
           // the previous fixture only set them under `extra`, which is why
-          // the top-level leak (Codex P2 on `message.ts:425`) went
+          // the top-level leak (see `message.ts:425`) went
           // undetected despite this test's name.
           content: 'compacted turn',
           createdAt: 1,
@@ -254,7 +254,7 @@ describe('toVisitorMessage — nested messages', () => {
   });
 });
 
-describe('toVisitorMessage — nested blobs (Codex P2, LOBE-11930 message.ts:440)', () => {
+describe('toVisitorMessage — nested blobs', () => {
   it('redacts model/provider/usage nested inside pluginState (lobe-agent analyzeMedia)', () => {
     // Exact shape written by `analyzeMedia`'s server runtime — see
     // `apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts`'s
@@ -353,7 +353,7 @@ describe('toVisitorMessage — nested blobs (Codex P2, LOBE-11930 message.ts:440
   });
 });
 
-describe('toVisitorMessage — error projection (Codex P2, LOBE-11930 message.ts:432)', () => {
+describe('toVisitorMessage — error projection', () => {
   // `error` used to be a plain entry in `VISITOR_MESSAGE_ALLOWED_KEYS` — the
   // same "field is safe, contents are not" mistake as `pluginState`.
   // `formatErrorForState` (`apps/server/src/modules/AgentRuntime/formatErrorForState.ts`)

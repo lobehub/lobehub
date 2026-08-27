@@ -314,7 +314,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.delete).toHaveBeenCalledWith('agent-1');
     });
 
-    // Regression for LOBE-11930: `AgentModel.delete` itself now snapshots
+    // Regression test: `AgentModel.delete` itself now snapshots
     // in-flight visitor runs BEFORE its cascade removes their topic rows,
     // and reports them through `onShareRunsInterrupted` once the delete
     // transaction commits (see `packages/database`'s `agent.test.ts` for

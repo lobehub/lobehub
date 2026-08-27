@@ -136,7 +136,7 @@ describe('Project Router Integration', () => {
     },
   );
 
-  // Regression for LOBE-11930 / codex P1: `project.delete` cascades away
+  // Regression test: `project.delete` cascades away
   // the coordinator agent (a personal, `virtual: true` agent that can carry
   // its own Agent Share — see `ProjectModel`'s own test suite), and used to
   // do so without checking for an in-flight visitor run. This exercises the

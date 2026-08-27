@@ -8,8 +8,7 @@ import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 import { AgentShareModel } from '../agentShare';
 
-// Real-Postgres reproduction of the publish/heterogeneous-reset race described
-// in LOBE-11930.
+// Real-Postgres reproduction of the publish/heterogeneous-reset race.
 //
 // `AgentModel.updateConfig` (packages/database/src/models/agent.ts) resets an
 // agent's share to `private` when a config write turns it heterogeneous

@@ -12,7 +12,7 @@ import {
   reserveShareVisitorTurnOrThrow,
 } from '../shareVisitorAbuseGuards';
 
-// Real-Postgres reproduction of the Codex P2 on
+// Real-Postgres reproduction of the row-lock-ordering race on
 // `apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts:71`:
 //
 // The EARLIER stale-cap fix (see `shareVisitorAbuseGuards.staleCapSnapshot.race.test.ts`)
@@ -29,7 +29,7 @@ import {
 //
 // The fix replaces that advisory lock with `AgentShareModel.lockOwnedAgentRow`,
 // the SAME `agents.id FOR UPDATE` row `updateConfig` locks before writing.
-// These tests force the exact interleaving Codex named: pause a guard
+// These tests force the exact interleaving described above: pause a guard
 // transaction AFTER it has taken the lock and read the cap, but BEFORE its
 // INSERT commits, then fire a concurrent `updateConfig` cap reduction and
 // prove it BLOCKS until the guard's transaction commits — i.e. the reduction

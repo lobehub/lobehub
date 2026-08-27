@@ -49,8 +49,7 @@ export interface AgentShareGate {
    * right before the operation is actually created, that the config this run
    * is about to execute with has since been tightened (the generation moved
    * on) and fail closed instead of starting with a stale, over-broad grant.
-   * See `agentShareGenerations`'s JSDoc (`packages/database/src/schemas/agentShare.ts`)
-   * and LOBE-11930 P1.
+   * See `agentShareGenerations`'s JSDoc (`packages/database/src/schemas/agentShare.ts`).
    */
   generation: number;
   shareConfig: AgentShareConfig;
@@ -64,8 +63,7 @@ export interface AgentShareGate {
    * disabled and replaced (`AgentShareModel.create()` mints a new UUID every
    * disable → re-enable cycle), so it must be treated as out of scope for
    * this run even though `senderId`/`agentId` still match. See
-   * `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`) and
-   * LOBE-11930 codex P2.
+   * `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
    *
    * NOT used to stamp a newly-created topic's `shareId` column —
    * `reserveShareVisitorTopicOrThrow` re-reads the CURRENT `agentShares.id`
@@ -524,9 +522,8 @@ const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
 /**
  * Structural counterpart to `applyShareGateToDataToolAccess`: strip any
  * builtin API whose OWN `humanIntervention` policy can never complete under a
- * share visitor's forced `reject` approval mode (LOBE-11930 P2, third
- * recurrence). Two prior review rounds each found ONE more instance of this
- * failure mode by hand (`lobe-user-interaction`'s `askUserQuestion`,
+ * share visitor's forced `reject` approval mode — this is the third
+ * recurrence of this failure mode found by hand (`lobe-user-interaction`'s `askUserQuestion`,
  * `lobe-agent`'s `createPlan`/`createTodos`/`clearTodos`/`askUserQuestion`) —
  * this pass reads the SAME `humanIntervention` metadata every builtin tool
  * already declares for the approval-UI feature, so a future tool added to
@@ -819,8 +816,8 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *
  * - `lobe-page-agent`: not unsafe — genuinely unreachable for a share
  *   visitor's run, so allowlisting it only let the owner-facing tool picker
- *   confirm a grant no visitor conversation can ever exercise (LOBE-11930
- *   codex P2). `AiAgentService.execAgent`
+ *   confirm a grant no visitor conversation can ever exercise.
+ *   `AiAgentService.execAgent`
  *   (`apps/server/src/services/aiAgent/index.ts:1737-1739`) unconditionally
  *   strips `PageAgentIdentifier` from `activePluginIds` whenever
  *   `appContext?.scope !== 'page'`, and the share visitor path

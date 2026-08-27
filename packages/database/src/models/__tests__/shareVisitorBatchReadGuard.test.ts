@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Structural guard for LOBE-11930.
+ * Structural guard against visitor-content leaks in aggregate reads.
  *
  * Share-visitor topics carry the creator's `userId` (billing/data attribution)
  * plus a non-null `senderId` (the visitor) — see `utils/shareVisitor.ts`. A

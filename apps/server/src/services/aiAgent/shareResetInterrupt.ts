@@ -23,7 +23,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * lives in `packages/database` and cannot import `AiAgentService`
  * (apps/server), so every caller that CAN reach the server layer must build
  * and pass this callback down through `AgentModel`/`SessionModel`'s
- * constructor options instead. See LOBE-11930 hole 2.
+ * constructor options instead.
  *
  * Deliberately constructs `AiAgentService` WITHOUT a `workspaceId`: this
  * callback fires post-commit, arbitrarily long after the write that produced
@@ -45,8 +45,8 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * alone. `agentId` is the one identity that survives any number of transfers,
  * so a `workspaceId` was never actually load-bearing for this path; passing
  * one in was the accidental coupling that caused this bug class in the first
- * place. See LOBE-11930 (the double-transfer window) and
- * `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc.
+ * place. See `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc for the
+ * double-transfer window this closes.
  */
 export const scheduleShareRunInterruptOnReset =
   (serverDB: LobeChatDatabase, ownerId: string) =>

@@ -331,7 +331,7 @@ describe('ToolExecutionService', () => {
       expect(callTool).toHaveBeenCalledTimes(1);
     });
 
-    // LOBE-11930 P2 (re-audit): a share-visitor run's `context.userId` is
+    // A share-visitor run's `context.userId` is
     // always the CREATOR (`AiAgentService` is constructed with
     // `share.ownerId`, never the visitor's id — see `shareChat.ts`), so
     // without this guard a device-only MCP call granted to visitors would

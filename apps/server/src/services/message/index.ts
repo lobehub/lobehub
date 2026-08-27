@@ -102,7 +102,7 @@ export class MessageService {
     // Forwarded straight into `MessageModel` so the trpc `removeMessage(s)`
     // mutations (this service's only delete callers) close the same
     // message-level share-visitor gap as `TopicModel`'s bulk sweeps — see
-    // `MessageModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+    // `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
     messageModelOptions?: MessageModelOptions,
   ) {
     this.messageModel = new MessageModel(db, userId, workspaceId, messageModelOptions);

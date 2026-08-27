@@ -95,7 +95,7 @@ export const topics = pgTable(
      * history from a share instance the owner explicitly took down — and
      * `TopicModel.countBySender` would count those stale topics against the
      * brand-new share's `maxTopicsPerVisitor` cap, potentially making it
-     * unusable immediately. See LOBE-11930 codex P2, `topic.ts:1144`.
+     * unusable immediately. See `topic.ts:1144`.
      *
      * Deliberately NOT `agentShareGenerations.generation`: that counter is
      * bumped by ANY restrictive `shareConfig` change on a still-`link` share

@@ -70,7 +70,7 @@ export type AgentShareItem = typeof agentShares.$inferSelect;
  * (e.g. a run started by a republish that raced a stale deferred `after()`
  * callback) was authorized AFTER this revocation and must survive. See
  * `bumpAgentShareGeneration` / `readAgentShareGeneration`
- * (`../utils/agentShareGeneration.ts`) and LOBE-11930.
+ * (`../utils/agentShareGeneration.ts`).
  *
  * A DEDICATED table, not a column on `agentShares`: that row is hard-deleted
  * by `deleteByAgentId` (disableShare) and freshly re-inserted by `create()`

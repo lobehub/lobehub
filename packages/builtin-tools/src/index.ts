@@ -213,8 +213,8 @@ export const runtimeManagedToolIds = [
  * `apps/server/src/services/aiAgent/shareGate.ts`'s `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
  * history / the denied-bucket doc block at the bottom of that file.
  *
- * `lobe-user-interaction` and `lobe-activator` were REMOVED (LOBE-11930 P2,
- * third re-audit round) — not for a data leak, but the same
+ * `lobe-user-interaction` and `lobe-activator` were REMOVED — not for a data
+ * leak, but the same
  * "picker-promises-an-unusable-grant" defect class `lobe-page-agent` was
  * removed for: every share run is forced onto `approvalMode: 'reject'`
  * (`AiAgentService.execAgent`), which blocks any tool call whose own

@@ -165,7 +165,7 @@ describe('recordToolOutcome', () => {
   });
 
   /**
-   * Regression for LOBE-11930 P1: `activatorRuntime`'s `emitActivationOutcome`
+   * Regression: `activatorRuntime`'s `emitActivationOutcome`
    * called `emitToolOutcomeSafely` unconditionally on every share-visitor
    * `activateSkill`/`markActivated` call, using `context.userId` — the share
    * **creator**, never the visitor — writing creator-scoped procedure state

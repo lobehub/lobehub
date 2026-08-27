@@ -20,7 +20,7 @@ export interface AgentGroupServiceOptions {
    * `ChatGroupModelOptions.onShareRunsInterrupted`'s JSDoc
    * (`packages/database/src/models/chatGroup.ts`). `deleteGroup` below is the
    * only production caller of `ChatGroupModel.delete`, so this is the one
-   * construction site that needs a real callback. See LOBE-11930.
+   * construction site that needs a real callback.
    */
   onShareRunsInterrupted?: ChatGroupModelOptions['onShareRunsInterrupted'];
 }

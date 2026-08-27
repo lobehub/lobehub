@@ -241,8 +241,7 @@ export interface AgentExecutionResult {
    * response here — mirroring the `locked` (without `lockRescheduled`)
    * fallback — so the queue's OWN retry budget keeps redelivering step 0
    * until the state store recovers and the gate can make its real decision.
-   * See `AgentRuntimeService.deferShareGateStep`'s JSDoc (LOBE-11930 Codex P2
-   * follow-up).
+   * See `AgentRuntimeService.deferShareGateStep`'s JSDoc.
    */
   shareGateStateUnavailable?: boolean;
   state: any;
@@ -433,8 +432,8 @@ export interface OperationCreationParams {
      * time). Persisted here so `AgentRuntimeService.executeStep` can re-check
      * it against the CURRENT value on every step, not only step 0 — see
      * `AgentShareModel.isRunStillAuthorized`'s JSDoc for why a per-step
-     * recheck is what actually closes LOBE-11930 Codex P1 (a failed,
-     * unretried `interruptActiveShareRuns` interrupt).
+     * recheck is what actually closes the leak from a failed,
+     * unretried `interruptActiveShareRuns` interrupt.
      */
     generation: number;
     knowledgeBaseIds?: string[];

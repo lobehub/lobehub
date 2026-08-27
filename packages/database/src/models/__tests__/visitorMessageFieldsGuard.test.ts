@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { VISITOR_MESSAGE_CLASSIFIED_KEYS } from '../message';
 
 /**
- * Structural guard for LOBE-11930 (Codex P2 on `message.ts:425`).
+ * Structural guard for `message.ts`'s visitor DTO field classification.
  *
  * `toVisitorMessage` builds the agent-share visitor DTO from an explicit
  * allowlist (`VISITOR_MESSAGE_ALLOWED_KEYS`) plus a small set of

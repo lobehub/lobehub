@@ -909,7 +909,7 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Updated Title');
     });
 
-    // Regression for LOBE-11930: `update()` — unlike `updateConfig()` — used
+    // Regression test: `update()` — unlike `updateConfig()` — used
     // to write `agents.model` / `agents.agencyConfig` directly with
     // `tx.update(agents)`, bypassing the invariant that a `link` share must
     // reset to `private` when a write turns the agent heterogeneous (Codex /
@@ -1200,7 +1200,7 @@ describe('AgentModel', () => {
       expect(remainingKBs).toHaveLength(0);
     });
 
-    // Regression for LOBE-11930: deleting a personal agent cascades its
+    // Regression test: deleting a personal agent cascades its
     // topics away (both through the session delete and directly via
     // `topics.agentId`), so any in-flight Agent Share visitor run must be
     // snapshotted BEFORE that cascade and reported through
@@ -2396,7 +2396,7 @@ describe('AgentModel', () => {
       expect(remainingKBs).toHaveLength(0);
     });
 
-    // Regression for LOBE-11930: `batchDelete` raw-deletes `agents` with no
+    // Regression test: `batchDelete` raw-deletes `agents` with no
     // snapshot of its own, bypassing `delete()`'s `onShareRunsInterrupted`
     // contract entirely. A batch-deleted agent can carry its own `link` share
     // the same as any agent deleted one at a time.

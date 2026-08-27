@@ -9,7 +9,7 @@ describe('AgentShareModel mutation locking', () => {
   it('locks the owned Agent row before every share mutation', () => {
     expect(source).toContain(".for('update')");
     // create, updateConfig, updateVisibility, deleteByAgentId, and
-    // assertRunnableForVisitor (LOBE-11930 hole 1's visitor-start recheck).
+    // assertRunnableForVisitor.
     expect(source.match(/this\.withOwnedPersonalAgentLock\(/g)).toHaveLength(5);
   });
 });

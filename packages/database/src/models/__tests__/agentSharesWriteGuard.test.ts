@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Structural guard for LOBE-11930.
+ * Structural guard for agent share writes.
  *
  * Every write that sets `agentShares.visibility` (to `private` or otherwise)
  * or deletes an `agentShares` row must flow through the shared

@@ -8,8 +8,6 @@ import { agents, agentShares, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { writeAgentConfigWithShareReset } from '../agentConfigShareReset';
 
-// Regression test for LOBE-11930.
-//
 // `packages/openapi/src/services/agent.service.ts`'s `updateAgent` (backing
 // `PATCH /api/v1/agents/:id`) used to write `agents.model` /
 // `agents.agencyConfig` directly with `tx.update(agents)`, bypassing
@@ -98,7 +96,7 @@ describe('writeAgentConfigWithShareReset (real Postgres)', () => {
 
     const onShareReset = vi.fn();
 
-    // Regression for LOBE-11930 hole 2: this callback is the ONLY signal
+    // Regression test: this callback is the ONLY signal
     // `writeAgentConfigWithShareReset`'s callers (AgentModel, SessionModel,
     // the OpenAPI AgentService) have to schedule
     // `AiAgentService.interruptActiveShareRuns` for a visitor run that is
@@ -180,7 +178,7 @@ describe('writeAgentConfigWithShareReset (real Postgres)', () => {
   });
 });
 
-// Regression for LOBE-11930 hole 2's "in-flight" scenario: a config write
+// Regression test for the "in-flight" scenario: a config write
 // (web UI, Agent Builder, or the OpenAPI PATCH) turns an agent heterogeneous
 // WHILE a visitor's operation is already running against the OLD config
 // snapshot, under the creator's credentials. Before the fix,

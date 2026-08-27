@@ -944,7 +944,7 @@ const EXPLICIT_DENY_LIST = new Set<string>([
   // Denied for being visitor-unreachable rather than unsafe.
   PageAgentIdentifier,
   // Denied for promising a grant a forced approvalMode: 'reject' run can
-  // never exercise (LOBE-11930 P2).
+  // never exercise.
   UserInteractionIdentifier,
   LobeActivatorIdentifier,
 ]);
@@ -978,8 +978,8 @@ describe('default-deny covers every registered builtin identifier not explicitly
         BriefIdentifier,
       ]),
     );
-    // Removed for the "picker promises an unusable grant" class (LOBE-11930
-    // P2, not a data leak) — every share run forces `approvalMode: 'reject'`,
+    // Removed for the "picker promises an unusable grant" class (not a data
+    // leak) — every share run forces `approvalMode: 'reject'`,
     // which blocks `lobe-user-interaction`'s only API (`askUserQuestion`,
     // `humanIntervention: 'always'`) and `lobe-activator`'s only API
     // (`activateTools`, `humanIntervention: 'required'`) unconditionally. See
@@ -1003,8 +1003,8 @@ describe('default-deny covers every registered builtin identifier not explicitly
       ]),
     );
     // Denied for being visitor-unreachable rather than unsafe — see
-    // shareGate.ts's `lobe-page-agent` denied-bucket entry (LOBE-11930 codex
-    // P2): `execAgent` always strips it outside `appContext.scope === 'page'`,
+    // shareGate.ts's `lobe-page-agent` denied-bucket entry:
+    // `execAgent` always strips it outside `appContext.scope === 'page'`,
     // and a share visitor's `appContext` never carries that scope.
     expect(deniedBuiltinIdentifiers).toContain(PageAgentIdentifier);
   });
@@ -1186,7 +1186,7 @@ describe('agent-signal-review: cross-agent read and mutation stay blocked for sh
 });
 
 /**
- * Regression coverage for the `lobe-brief` removal (codex P1 finding on
+ * Regression coverage for the `lobe-brief` removal (see
  * `packages/builtin-tools/src/index.ts:219`): `createBrief`
  * (`briefRuntime.createBrief`, `apps/server/src/services/toolExecution/
  * serverRuntimes/brief.ts:60-68`) unconditionally persists a new brief via
@@ -1242,7 +1242,7 @@ describe('lobe-brief: unconditional persistence with no humanIntervention marker
 });
 
 /**
- * Regression coverage for the `lobe-page-agent` removal (codex P2 finding on
+ * Regression coverage for the `lobe-page-agent` removal (see
  * `packages/builtin-tools/src/index.ts:218`): unlike every other identifier
  * removed above, this is not a data leak — `PageAgentExecutionRuntime` only
  * ever acts on the caller's own open page/document editor. The bug is that
@@ -1303,7 +1303,7 @@ describe('lobe-page-agent: unreachable for a share visitor run (appContext never
   });
 });
 
-describe('lobe-user-interaction / lobe-activator: removed for a forced-reject-approval-mode grant no visitor run can ever exercise (LOBE-11930 P2 re-audit)', () => {
+describe('lobe-user-interaction / lobe-activator: removed for a forced-reject-approval-mode grant no visitor run can ever exercise', () => {
   it('are both absent from the master allowlist', () => {
     expect(MIRRORED_ALLOWED_IDENTIFIERS.has(UserInteractionIdentifier)).toBe(false);
     expect(MIRRORED_ALLOWED_IDENTIFIERS.has(LobeActivatorIdentifier)).toBe(false);

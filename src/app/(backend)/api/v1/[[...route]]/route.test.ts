@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe('agent share delete signal handling', () => {
-  // Regression for LOBE-11930 / codex P1: `AgentController.deleteAgent`
+  // Regression test: `AgentController.deleteAgent`
   // signals in-flight visitor runs it snapshotted BEFORE the cascade via
   // `AGENT_SHARE_DELETE_SIGNAL_HEADER` (a JSON payload, unlike the sibling
   // reset signal, since re-querying `topics` post-delete would find

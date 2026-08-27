@@ -63,7 +63,7 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   return opts.next({
     ctx: {
       sessionGroupModel: new SessionGroupModel(ctx.serverDB, ctx.userId, wsId),
-      // `onShareReset` closes LOBE-11930 hole 2 for `updateSessionConfig` /
+      // `onShareReset` interrupts in-flight share runs for `updateSessionConfig` /
       // `updateSessionChatConfig` below — see `scheduleShareRunInterruptOnReset`'s
       // JSDoc and `SessionModel.updateConfig`'s own JSDoc on the
       // session-level bypass this writer guards against.

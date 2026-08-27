@@ -1725,7 +1725,7 @@ describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration'
   });
 });
 
-// Regression for LOBE-11930 Codex P1
+// Regression
 // (`apps/server/src/router-hono/workflows/agent-share/handlers/sweep.ts`):
 // if the request process handling a share-visitor turn dies AFTER
 // `createOperation` schedules the first queue message but BEFORE
@@ -1852,7 +1852,7 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
     expect(verifyShareReservationStatus).not.toHaveBeenCalled();
   });
 
-  // Regression for LOBE-11930 Codex P1(a): `createOperation` schedules the
+  // Regression: `createOperation` schedules the
   // step-0 delivery with only a 50ms delay and returns before `execAgent`
   // reaches `confirmReservation`, so a fast delivery can reach the gate while
   // the reservation row still exists but hasn't been confirmed yet. The gate
@@ -1921,7 +1921,7 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
     expect(result.state.status).toBe('interrupted');
   });
 
-  // Regression for LOBE-11930 Codex P1(b): a transient failure reading the
+  // Regression: a transient failure reading the
   // gate's own state must not fail open. `executeStep` reloads the exact
   // same state a few lines later (line ~1209) to actually run the step —
   // this test proves that later, successful read is never reached because
@@ -1965,7 +1965,7 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
     expect(result.nextStepScheduled).toBe(true);
   });
 
-  // Regression for LOBE-11930 Codex P2 follow-up: when agent state is
+  // Regression: when agent state is
   // unreadable across the WHOLE retry budget, the gate has neither
   // `agentId`/`topicId` to invalidate-or-verify the reservation through
   // `resolveShareGateAbort`, nor any state it could durably persist
@@ -2041,7 +2041,7 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
   });
 });
 
-// Regression for LOBE-11930 Codex P2: every abort decision above used to go
+// Regression test: every abort decision above used to go
 // straight to `buildShareAbortResult`, which marks the operation
 // `interrupted` WITHOUT touching the `agent_share_run_reservations` row.
 // `confirmReservation` is a SEPARATE, unbounded-duration step of the SAME
@@ -2227,7 +2227,7 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation invalidate-b
   });
 });
 
-// Regression for LOBE-11930 Codex P1: `AiAgentService.interruptActiveShareRuns`
+// Regression test: `AiAgentService.interruptActiveShareRuns`
 // calls `interruptTask` best-effort per affected topic and swallows a
 // rejection (transient coordinator/database/runtime failure) with no durable
 // retry. Because the reservation-confirmation gate above only ever runs at

@@ -1037,11 +1037,11 @@ describe('MessageModel Delete Tests', () => {
     });
   });
 
-  // Regression for LOBE-11930: message-level bulk deletes can wipe a
+  // Regression test: message-level bulk deletes can wipe a
   // share-visitor topic's messages without ever touching the topic row, so
   // `TopicModel`'s own delete-time snapshot never fires for them. See
   // `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
-  describe('share-visitor run interrupt (LOBE-11930)', () => {
+  describe('share-visitor run interrupt', () => {
     it('deleteMessage reports an in-flight Agent Share visitor run on the message topic', async () => {
       const onShareRunsInterrupted = vi.fn();
       const modelWithCallback = new MessageModel(serverDB, userId, undefined, {

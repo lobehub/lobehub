@@ -45,7 +45,7 @@ export interface ExecutionDelegation {
  *
  * This type exists because "the user id of a run" was previously ONE field
  * (`userId`) conflating two unrelated questions, which is the root cause the
- * agent-share authorization work kept re-discovering (LOBE-13564):
+ * agent-share authorization work kept re-discovering:
  *
  * - **actor** — who is driving the run. Attribution, rate limits, and any row
  *   recording "who did this" belong to the actor.

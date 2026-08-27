@@ -298,7 +298,7 @@ describe('lobeAgentRuntime', () => {
     ).toThrow('messageId is required for LobeAgent execution');
   });
 
-  describe('plan runtime scoping (Codex P1 — share-visitor cross-topic plan access)', () => {
+  describe('plan runtime scoping — share-visitor cross-topic plan access', () => {
     it('does not restrict the plan runtime to a topic for an ordinary (non-share) run', () => {
       lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
@@ -947,7 +947,7 @@ describe('lobeAgentRuntime', () => {
       success: false,
     });
     expect(mockChat).not.toHaveBeenCalled();
-    // Codex P2 (LOBE-11930): this `content` reaches an agent-share visitor
+    // This `content` reaches an agent-share visitor
     // verbatim (`toVisitorMessage` never redacts free-text `content`), so it
     // must never name the creator's configured multimodal provider/model —
     // the same env-config identifiers `MULTIMODAL_UNDERSTANDING_PROVIDER` /
@@ -978,7 +978,7 @@ describe('lobeAgentRuntime', () => {
       success: false,
     });
     expect(mockChat).not.toHaveBeenCalled();
-    // Codex P2 (LOBE-11930) — see the audio-rejection test above.
+    // See the audio-rejection test above: the creator's provider/model must never leak to the visitor.
     expect(result.content).not.toContain('test-provider');
     expect(result.content).not.toContain('image-only-model');
   });

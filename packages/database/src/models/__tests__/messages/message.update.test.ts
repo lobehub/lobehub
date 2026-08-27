@@ -428,7 +428,7 @@ describe('MessageModel Update Tests', () => {
       expect(otherResult).toHaveLength(1);
     });
 
-    // Regression for LOBE-11930: `deleteAllMessages` is test-only today (no
+    // Regression test: `deleteAllMessages` is test-only today (no
     // router/service reaches it), but must still honor the same
     // share-visitor snapshot contract as every other bulk delete in this
     // model — see `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.

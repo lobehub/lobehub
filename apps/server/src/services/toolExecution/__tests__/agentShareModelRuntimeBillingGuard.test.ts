@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Structural guard for LOBE-11930 (agent share).
+ * Structural guard for agent share billing.
  *
  * `ServerLLMTransport` forwards the share-visitor billing marker into every
  * ordinary `call_llm` step via `buildAgentShareModelRuntimeContext`

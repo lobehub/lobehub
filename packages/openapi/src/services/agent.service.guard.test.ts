@@ -15,7 +15,7 @@ describe('AgentService deletion guard wiring', () => {
 });
 
 describe('AgentService delete share-interrupt guard wiring', () => {
-  // LOBE-11930 / codex P1: `DELETE /api/v1/agents/:id` cascades away the
+  // `DELETE /api/v1/agents/:id` cascades away the
   // agent's share AND its visitor topics in the same transaction as the
   // lambda `removeAgent` path, but used to do so with no interrupt at all.
   // This guards that BOTH delete branches (the `AgentModel.delete` branch
@@ -32,7 +32,7 @@ describe('AgentService delete share-interrupt guard wiring', () => {
 });
 
 describe('AgentService update guard wiring', () => {
-  // LOBE-11930: `updateAgent` (backing `PATCH /api/v1/agents/:id`) used to
+  // `updateAgent` (backing `PATCH /api/v1/agents/:id`) used to
   // write `agents.model` / `agents.agencyConfig` directly with
   // `tx.update(agents)`, bypassing `AgentModel.updateConfig` — and with it,
   // the row lock + share-reset invariant that keeps a `link` share from

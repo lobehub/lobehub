@@ -124,7 +124,7 @@ const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 
   return opts.next({
     ctx: {
-      // `onShareReset` closes LOBE-11930 hole 2 for direct `AgentModel`
+      // `onShareReset` interrupts in-flight share runs for direct `AgentModel`
       // writes (e.g. `updateAgentPinned`) that happen to touch `model` /
       // `agencyConfig`, AND (via its `targetWorkspaceId` param) for
       // `transferAgent(s)` below moving a `link`-shared agent out of
@@ -806,7 +806,7 @@ export const agentRouter = router({
               // `AgentModel.delete` snapshots active Agent Share visitor runs
               // itself, BEFORE its cascade removes their topic rows, and hands
               // the snapshot here once the transaction commits — see that
-              // method's JSDoc and LOBE-11930.
+              // method's JSDoc.
               onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
             },
           );

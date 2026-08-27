@@ -19,8 +19,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * same transaction (`topics.agentId` -> `agents.id`), so by the time this
  * runs post-commit there is nothing left to re-discover — the caller must
  * snapshot `TopicModel.findActiveVisitorRunTopics` BEFORE the delete (see
- * `AgentModel.delete`) and hand the list straight through here instead. See
- * LOBE-11930.
+ * `AgentModel.delete`) and hand the list straight through here instead.
  */
 export const interruptSnapshottedShareRuns =
   (serverDB: LobeChatDatabase, ownerId: string) =>

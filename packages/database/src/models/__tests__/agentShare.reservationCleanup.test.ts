@@ -7,7 +7,7 @@ import { agents, agentShareRunReservations, topics, users } from '../../schemas'
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
-// Regression tests for the Codex P2 on
+// Regression tests for the abandoned-reservation leak in
 // `packages/database/src/models/agentShare.ts:538`:
 //
 // If the request process dies after `assertRunnableForVisitor` inserts a

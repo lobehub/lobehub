@@ -238,7 +238,7 @@ describe('runStep handler', () => {
     expect(captured.headers).toEqual({ 'Retry-After': '37' });
   });
 
-  // Regression for LOBE-11930 Codex P2 follow-up: when the Agent Share
+  // Regression test for the case where the Agent Share
   // step-0 gate exhausts its retry budget without ever reading agent state
   // (`AgentExecutionResult.shareGateStateUnavailable`), it has no way to
   // durably invalidate the reservation or persist `interrupted` — acking here

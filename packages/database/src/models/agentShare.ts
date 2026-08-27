@@ -209,8 +209,8 @@ export class AgentShareModel {
    * (`create`, `updateConfig`, `updateVisibility`, `deleteByAgentId`,
    * `assertRunnableForVisitor`) — see `withOwnedPersonalAgentLock`'s JSDoc for
    * why one shared row is the serialization point for this whole family,
-   * including, as of LOBE-11930's cap-vs-config-reduction fix, the visitor
-   * abuse guards.
+   * including — as of the cap-vs-config-reduction fix — the visitor abuse
+   * guards.
    *
    * Returns `null` (never locks) when the agent does not exist, is not
    * personally owned by `ownerId`, is workspace-scoped, or is a reserved
@@ -252,11 +252,11 @@ export class AgentShareModel {
    * still-homogeneous config, let a concurrent `updateConfig` reset the share
    * to `private`, then blindly flip it back to `link` — a live share link on
    * a Codex/Claude Code agent whose every visitor send is fail-closed by
-   * `AiAgentService`. See LOBE-11930.
+   * `AiAgentService`.
    *
-   * As of the cap-vs-config-reduction fix (LOBE-11930 Codex P2,
-   * `shareVisitorAbuseGuards.ts:71`), this is also the ONLY lock in the whole
-   * share-mutation family — no advisory lock runs alongside it anywhere. The
+   * As of the cap-vs-config-reduction fix (see `shareVisitorAbuseGuards.ts:71`),
+   * this is also the ONLY lock in the whole share-mutation family — no
+   * advisory lock runs alongside it anywhere. The
    * visitor abuse guards used to take a separate `pg_advisory_xact_lock`
    * keyed per `agentId:visitorUserId` (topic cap) or per `topicId` (turn cap)
    * to serialize concurrent visitor requests against EACH OTHER, but that
@@ -428,7 +428,7 @@ export class AgentShareModel {
    * revoke/config-reset — commits its transaction first is the one the other
    * observes. A revoke that already committed is always seen here, so this
    * run fails closed instead of creating an operation the visitor can no
-   * longer stop. See LOBE-11930 hole 1.
+   * longer stop.
    *
    * Deliberately narrow: only the `visibility` column is re-read (not
    * `isHeterogeneousAgentConfig`, which `updateVisibility` already enforces
@@ -522,7 +522,7 @@ export class AgentShareModel {
    * instance is ACTUALLY live at insert time. `null` when the agent has no
    * share row at all (fully disabled, never re-enabled) — callers must fail
    * closed on that, mirroring `lockOwnedAgentRow`'s `null` contract. See
-   * `topics.shareId`'s JSDoc (`../schemas/topic.ts`) and LOBE-11930 codex P2.
+   * `topics.shareId`'s JSDoc (`../schemas/topic.ts`).
    */
   static readCurrentVisitorCaps = async (
     db: LobeChatDatabase,
@@ -681,7 +681,7 @@ export class AgentShareModel {
    * could still delete it and write the topic's `runningOperation` marker —
    * returning success to the visitor's original request for a run that was
    * already dead, and leaving the topic's Stop button targeting a corpse
-   * operation forever (LOBE-11930 Codex P2). See
+   * operation forever. See
    * `AgentRuntimeService.buildShareAbortResult`'s JSDoc for the full race.
    *
    * DELETEs the SAME row, under the SAME predicate
@@ -898,7 +898,7 @@ export class AgentShareModel {
    * stale-validation lost update. Re-reading `model`/`agencyConfig` under the
    * lock closes that window: whichever of this call and `updateConfig` wins
    * the row lock decides the outcome, and the other sees its committed
-   * result. See LOBE-11930.
+   * result.
    *
    * Only publishing (`link`) needs the check — reverting to `private` never
    * exposes visitor execution, so it must stay reachable even if the agent
@@ -1015,8 +1015,8 @@ export class AgentShareModel {
    * from `AgentRuntimeService.executeStep` on EVERY step (not only step 0)
    * so a run cannot cross a step boundary without still being authorized.
    *
-   * Fixes LOBE-11930 Codex P1: `AiAgentService.interruptActiveShareRuns`
-   * calls `interruptTask` best-effort and swallows a failure (transient
+   * `AiAgentService.interruptActiveShareRuns` calls `interruptTask`
+   * best-effort and swallows a failure (transient
    * coordinator/database/runtime error) with no durable retry — if that
    * swallow fires, nothing else was ever going to re-check this run. Rather
    * than trying to never lose an interrupt (which would need a durable

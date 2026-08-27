@@ -13,7 +13,7 @@ import {
   reserveShareVisitorTurnOrThrow,
 } from '../shareVisitorAbuseGuards';
 
-// Real-Postgres reproduction of the Codex P2 on
+// Real-Postgres reproduction of the stale-authorization race on
 // `apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts:100`:
 //
 // The row-lock and stale-cap fixes (see the sibling race test files) made
@@ -32,7 +32,7 @@ import {
 // The fix adds an `assertShareStillAuthorized` check — visibility must be
 // `link` AND the current `agentShareGenerations` value must match the
 // caller's `expectedGeneration` — inside the SAME locked transaction, before
-// any row is written. These tests force both orderings Codex named:
+// any row is written. These tests force both orderings described above:
 // (1) owner makes the link private mid-request, and (2) owner disables then
 // re-enables mid-request (the stale request must not stamp onto the
 // replacement share).

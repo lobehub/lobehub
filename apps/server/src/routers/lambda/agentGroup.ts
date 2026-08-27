@@ -164,14 +164,14 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 
   return opts.next({
     ctx: {
-      // `onShareReset` closes LOBE-11930's transfer-race hole for
+      // `onShareReset` covers the transfer race for
       // `transferToWorkspace`'s own `agentShares` reset (a group-owned
       // agent's share), including the already-running case via its
       // `targetWorkspaceId` param — see
       // `AgentGroupRepositoryOptions.onShareReset`'s JSDoc and
       // `scheduleShareRunInterruptOnReset`'s JSDoc.
       //
-      // `onShareRunsInterrupted` closes LOBE-11930's group-member-removal
+      // `onShareRunsInterrupted` covers the group-member-removal
       // bypass: `removeAgentsFromGroup` deletes an OWNED virtual member
       // directly, which can carry its own Agent Share the same as any
       // personal agent — see
@@ -180,7 +180,7 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
         onShareReset: scheduleShareRunInterruptOnReset(ctx.serverDB, ctx.userId),
         onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
       }),
-      // `onShareRunsInterrupted` closes LOBE-11930's group-delete bypass:
+      // `onShareRunsInterrupted` covers the group-delete bypass:
       // `AgentGroupService.deleteGroup` -> `ChatGroupModel.delete` removes a
       // group's owned member agents directly, which can carry their own
       // Agent Share the same as any personal agent — see

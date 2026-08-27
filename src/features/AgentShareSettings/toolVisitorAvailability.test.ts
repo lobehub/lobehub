@@ -25,15 +25,15 @@ describe('isToolAvailableToVisitors', () => {
     expect(isToolAvailableToVisitors(TaskIdentifier)).toBe(false);
   });
 
-  it('denies lobe-page-agent — not unsafe, but every share-visitor run supplies only a main-topic appContext, so AiAgentService.execAgent always strips it outside scope: "page" (LOBE-11930 codex P2)', () => {
+  it('denies lobe-page-agent — not unsafe, but every share-visitor run supplies only a main-topic appContext, so AiAgentService.execAgent always strips it outside scope: "page"', () => {
     expect(isToolAvailableToVisitors(PageAgentIdentifier)).toBe(false);
   });
 
-  it('denies lobe-user-interaction — its only entry point (askUserQuestion) is humanIntervention: "always", and every share run is forced onto approvalMode: "reject" with no approver ever present, so the grant could never be exercised (LOBE-11930 P2 re-audit)', () => {
+  it('denies lobe-user-interaction — its only entry point (askUserQuestion) is humanIntervention: "always", and every share run is forced onto approvalMode: "reject" with no approver ever present, so the grant could never be exercised', () => {
     expect(isToolAvailableToVisitors(UserInteractionIdentifier)).toBe(false);
   });
 
-  it('denies lobe-activator — its only API (activateTools) is humanIntervention: "required", which forced reject also blocks unconditionally (LOBE-11930 P2 re-audit)', () => {
+  it('denies lobe-activator — its only API (activateTools) is humanIntervention: "required", which forced reject also blocks unconditionally', () => {
     expect(isToolAvailableToVisitors(LobeActivatorIdentifier)).toBe(false);
   });
 

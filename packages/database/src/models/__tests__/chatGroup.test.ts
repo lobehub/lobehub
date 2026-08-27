@@ -1156,7 +1156,7 @@ describe('ChatGroupModel', () => {
       expect(survivors).toEqual([{ id: 'referenced-member' }]);
     });
 
-    // Regression for LOBE-11930's group-delete bypass: `deleteOwnedMemberAgents`
+    // Regression test for the group-delete bypass: `deleteOwnedMemberAgents`
     // removes an owned member's `agents` row directly, cascading its
     // `agentShares` / `agentShareRunReservations` rows away with it — but an
     // owned member is an ordinary personal agent as far as Agent Share is

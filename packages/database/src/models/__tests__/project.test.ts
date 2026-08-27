@@ -88,7 +88,7 @@ describe('ProjectModel', () => {
     ).toHaveLength(1);
   });
 
-  // Regression for LOBE-11930: a project's coordinator agent is an ordinary
+  // Regression test: a project's coordinator agent is an ordinary
   // (virtual) personal agent that can carry its own Agent Share — see the
   // first test in this file, which asserts `virtual: true` on the row this
   // one shares a run against. Deleting the project must not silently drop

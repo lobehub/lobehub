@@ -694,8 +694,7 @@ export class AiAgentService {
    * balance the run reads, writes and spends. On a shared-agent run that is the
    * share CREATOR, while `principal.actorUserId` is the visitor driving it.
    * Taking a principal instead of a bare `userId` is what stops a caller from
-   * handing over "a user id" without saying which of the two it means
-   * (LOBE-13564).
+   * handing over "a user id" without saying which of the two it means.
    */
   private readonly principal: ResolvedExecutionPrincipal;
   private readonly db: LobeChatDatabase;
@@ -2535,7 +2534,7 @@ export class AiAgentService {
     // topic's id below — used by `cleanupRejectedShareVisitorTurn` (see the
     // catch block near the end of this method) to decide whether a rejected
     // share-visitor turn must delete the whole topic or only this turn's
-    // messages. See LOBE-11930 Codex P2, `shareVisitorAbuseGuards.ts:100`.
+    // messages. See `shareVisitorAbuseGuards.ts:100`.
     const wasNewShareVisitorTopic = !!shareGate && !topicId;
     const isFixedExecutionTargetSelection =
       !!this.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
@@ -2664,7 +2663,7 @@ export class AiAgentService {
       // Share-visitor runs must reserve the `maxTopicsPerVisitor` slot and
       // insert the topic in ONE locked transaction — see
       // `reserveShareVisitorTopic`'s JSDoc for the race this closes
-      // (LOBE-11930, Codex P1 on `shareChat.ts:129`). Non-share runs (no
+      //. Non-share runs (no
       // per-visitor cap to enforce) keep the plain unlocked insert.
       const newTopic = shareGate
         ? await reserveShareVisitorTopic(
@@ -2834,7 +2833,7 @@ export class AiAgentService {
     // Share-visitor runs must reserve the `maxTurnsPerTopic` slot and insert
     // the user message in ONE locked transaction — see
     // `reserveShareVisitorTurn`'s JSDoc for the race this closes (same class
-    // of count-then-act bug as the topic cap above, LOBE-11930). Harmless
+    // of count-then-act bug as the topic cap above). Harmless
     // no-op on a topic this same call just created (count is 0). Non-share
     // runs (no per-turn cap) keep the plain unlocked insert.
     const userMessageRecord = runFromHistory
@@ -5641,7 +5640,7 @@ export class AiAgentService {
       // SAME error path `createOperation` failures already use (message
       // updated with an error card, no operation created), instead of a raw
       // unhandled throw. See `AgentShareModel.assertRunnableForVisitor`'s
-      // JSDoc for the exact race this closes and LOBE-11930 hole 1.
+      // JSDoc for the exact race this closes.
       //
       // Also stakes the durable `agentShareRunReservations` claim that
       // `confirmReservation` below redeems — see that method's JSDoc for why
@@ -5969,8 +5968,8 @@ export class AiAgentService {
       // checking earlier: agent-config/tool/knowledge-base resolution between
       // the two is real I/O. Unwind whatever THIS turn persisted rather than
       // leaving a topic/user-message pair the owner never authorized
-      // reachable by the visitor (LOBE-11930 Codex P2,
-      // `shareVisitorAbuseGuards.ts:100`). Rethrow unchanged so the caller
+      // reachable by the visitor (see `shareVisitorAbuseGuards.ts:100`).
+      // Rethrow unchanged so the caller
       // (`shareChat.ts`) surfaces the real FORBIDDEN instead of the generic
       // "operation failed to start" shape below.
       if (
@@ -6059,8 +6058,7 @@ export class AiAgentService {
    * still land inside. Without this cleanup, a rejected-but-already-persisted
    * topic/message pair would remain readable via `shareChat.getMessages` /
    * `getTopics` even though the owner revoked access before the run was ever
-   * authorized to execute (LOBE-11930 Codex P2,
-   * `shareVisitorAbuseGuards.ts:100`).
+   * authorized to execute (see `shareVisitorAbuseGuards.ts:100`).
    *
    * Deletes only what THIS turn wrote: the whole topic when it was newly
    * created for this request (nothing else could reference it yet, and the
@@ -6200,7 +6198,7 @@ export class AiAgentService {
   /**
    * `AgentRuntimeDelegate.invalidatePendingShareReservation` implementation —
    * see that interface member's JSDoc for the confirm-after-abort race this
-   * closes (LOBE-11930 Codex P2) and why sharing `confirmReservation`'s own
+   * closes and why sharing `confirmReservation`'s own
    * DELETE predicate is what makes this atomic.
    *
    * Two steps, in this order:
@@ -6239,8 +6237,8 @@ export class AiAgentService {
    * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
    * that interface member's and `AgentShareModel.isRunStillAuthorized`'s
    * JSDoc for what "authorized" checks and why a per-step recheck (not only
-   * at step 0) is what actually closes LOBE-11930 Codex P1: a failed,
-   * unretried `interruptActiveShareRuns` interrupt no longer needs to be
+   * at step 0) is what actually closes the leak from a failed,
+   * unretried `interruptActiveShareRuns` interrupt: it no longer needs to be
    * retried to be effective — the very next step re-proves authorization on
    * its own and aborts if it can't.
    *
@@ -7295,7 +7293,7 @@ export class AiAgentService {
    * actually bounded by anything — `AgentRuntimeService.createOperation` does
    * gateway registration, state persistence, and queue scheduling, any of
    * which can outlast a fixed 3s window under load, letting the run start
-   * unstoppably anyway. See LOBE-11930 hole 1.
+   * unstoppably anyway.
    *
    * This now relies on `AgentShareModel.revokeReservations` for durability
    * instead: it revokes every reservation `assertRunnableForVisitor` staked
@@ -7343,8 +7341,7 @@ export class AiAgentService {
         // BOTH attempts here fail (or the process dies in between).
         // The actual backstop is `AgentRuntimeService.executeStep` re-checking
         // this run's share generation on every step
-        // (`AgentShareModel.isRunStillAuthorized`) — see LOBE-11930 Codex
-        // P1's fix there. This retry only shaves latency off remote-hetero
+        // (`AgentShareModel.isRunStillAuthorized`). This retry only shaves latency off remote-hetero
         // task cancellation and Thread status settlement, which that
         // per-step recheck does not cover (the runtime step loop is what it
         // gates, not the remote process or the Thread row).
@@ -7397,7 +7394,7 @@ export class AiAgentService {
     // transferred AGAIN since `this.topicModel` was constructed for the
     // FIRST transfer's target workspace — a workspace-scoped query would
     // silently miss the topic in its new home. See that method's JSDoc for
-    // the exact double-transfer window this closes (LOBE-11930).
+    // the exact double-transfer window this closes.
     const activeRuns = await this.topicModel.findActiveVisitorRunTopicsByAgentId(
       agentId,
       revocationGeneration,

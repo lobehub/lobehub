@@ -1331,7 +1331,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
   // Regression guard: agent-share visitor topics/messages carry the creator's
   // userId (so the ownership predicate matches them), but they must never
   // surface in the creator's own command-palette search — visitor usage is
-  // reported separately by the Cloud share usage center (see LOBE-11930).
+  // reported separately by the Cloud share usage center.
   describe('search - excludes agent-share visitor data', () => {
     beforeEach(async () => {
       await serverDB.insert(topics).values({

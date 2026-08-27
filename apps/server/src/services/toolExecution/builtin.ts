@@ -306,7 +306,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);
 
-      // Codex P2 (LOBE-11930) follow-up: an uncaught exception from ANY
+      // An uncaught exception from ANY
       // allowlisted builtin tool's runtime — not just `lobe-agent`'s
       // `analyzeMedia` — lands here with the raw `error.message` forwarded
       // verbatim as the tool message `content` (and on `error`, which becomes

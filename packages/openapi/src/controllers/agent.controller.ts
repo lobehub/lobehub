@@ -83,7 +83,7 @@ export class AgentController extends BaseController {
         // (`src/app/(backend)/api/v1/[[...route]]/route.ts`, which DOES have
         // `@/server/*` access) can schedule the interrupt after the response
         // is built. Stripped from the response before it reaches the API
-        // caller — see that route file. See LOBE-11930 hole 2.
+        // caller — see that route file.
         onShareReset: ({ agentId, ownerId, revocationGeneration }) => {
           c.header(
             AGENT_SHARE_RESET_SIGNAL_HEADER,
@@ -120,7 +120,7 @@ export class AgentController extends BaseController {
         // (`src/app/(backend)/api/v1/[[...route]]/route.ts`, which DOES have
         // `@/server/*` access) can schedule the interrupt after the response
         // is built. Stripped from the response before it reaches the API
-        // caller — see that route file. See LOBE-11930.
+        // caller — see that route file.
         onShareRunsInterrupted: (activeShareRuns) => {
           if (!ownerId) return;
           c.header(AGENT_SHARE_DELETE_SIGNAL_HEADER, JSON.stringify({ activeShareRuns, ownerId }));

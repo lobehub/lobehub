@@ -73,7 +73,6 @@ export interface ChatGroupModelOptions {
    * them away. Optional and defaulted to a no-op so every EXISTING `new
    * ChatGroupModel(...)` call site keeps its current behavior; only
    * construction sites that can reach the server layer pass a real callback.
-   * See LOBE-11930.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -869,8 +868,7 @@ export class ChatGroupModel {
       const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, [id]);
 
       // Snapshot BEFORE `deleteOwnedMemberAgents` cascades the owned members'
-      // topic rows away — see `snapshotOwnedMemberShareRuns`'s JSDoc and
-      // LOBE-11930.
+      // topic rows away — see `snapshotOwnedMemberShareRuns`'s JSDoc.
       activeShareRuns = await this.snapshotOwnedMemberShareRuns(trx, ownedAgentIds);
 
       const [deletedGroup] = await trx

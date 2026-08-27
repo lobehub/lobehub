@@ -43,7 +43,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       });
 
       await emitToolOutcomeSafely({
-        // LOBE-11930 P1: `activateSkill`/`markActivated` resolve independently
+        // `activateSkill`/`markActivated` resolve independently
         // of the assembled tool set (see `isSkillAllowedForShare` above), so a
         // share visitor can reach them through `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`.
         // This emitter always stamps `principal.resourceOwnerUserId` — the

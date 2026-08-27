@@ -51,7 +51,7 @@ describe('createServerPlanRuntimeService', () => {
     expect(DocumentModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1', 'private');
   });
 
-  describe('findPlanById restrictToTopicId (Codex P1 — share-visitor cross-topic plan access)', () => {
+  describe('findPlanById restrictToTopicId — share-visitor cross-topic plan access', () => {
     const planDoc = {
       content: 'context',
       createdAt: new Date('2024-01-01'),
@@ -91,7 +91,7 @@ describe('createServerPlanRuntimeService', () => {
     });
 
     it('fails closed (returns null, same as "not found") when the plan belongs to a DIFFERENT topic than the visitor is in', async () => {
-      // Regression for Codex P1: a share visitor whitelisted into `lobe-agent`
+      // Regression test: a share visitor whitelisted into `lobe-agent`
       // could call `updatePlan` with any `docs_xxx` id the creator owns — e.g.
       // a plan created in a different topic, or by a different shared agent —
       // and read/overwrite it, because `findPlanById` was only creator-scoped

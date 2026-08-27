@@ -1648,7 +1648,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
   });
 
-  // Regression for LOBE-11930: revoking an Agent Share must proactively stop
+  // Regression test: revoking an Agent Share must proactively stop
   // every in-flight visitor run instead of only re-authorizing cancellation
   // for a visitor who may no longer be present (closed tab).
   describe('interruptActiveShareRuns', () => {
@@ -1663,8 +1663,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
       // Agent-scoped, NOT workspace-scoped: `findActiveVisitorRunTopicsByAgentId`,
       // not the sibling `findActiveVisitorRunTopics` — see that method's
-      // JSDoc for why the sweep must key on `agentId` alone (LOBE-11930's
-      // double-transfer window).
+      // JSDoc for why the sweep must key on `agentId` alone, to cover the
+      // double-transfer window where an agent moves between workspaces.
       expect(topicMock.findActiveVisitorRunTopicsByAgentId).toHaveBeenCalledWith('agent-1', 2);
       expect(interruptTaskSpy).toHaveBeenCalledWith({
         operationId: 'op-1',
@@ -1730,7 +1730,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
     });
 
-    // Regression for LOBE-11930 Codex P1: `interruptTask` rejecting on a
+    // Regression test: `interruptTask` rejecting on a
     // transient failure must not be the end of the story for this run — the
     // in-process retry here recovers it without waiting for the per-step
     // authorization recheck in `AgentRuntimeService` (covered separately in

@@ -2400,7 +2400,7 @@ describe('TopicModel - Query', () => {
       expect(result[0].id).toBe('visitor-a-topic');
     });
 
-    // Regression for LOBE-11930 codex P2: `AgentShareModel.create()` mints a
+    // Regression test: `AgentShareModel.create()` mints a
     // brand-new `agentShares.id` every disable → re-enable cycle. A returning
     // visitor opening the REPLACEMENT link must not see (or have counted)
     // conversations from the share instance the owner already took down —
@@ -2442,7 +2442,7 @@ describe('TopicModel - Query', () => {
   });
 
   describe('countBySender', () => {
-    // Regression for LOBE-11930 codex P2: without `shareId` scoping, stale
+    // Regression test: without `shareId` scoping, stale
     // topics from a share instance the owner already disabled would count
     // against a brand-new share's `maxTopicsPerVisitor`, potentially making
     // it unusable immediately after re-enabling.
@@ -2479,7 +2479,7 @@ describe('TopicModel - Query', () => {
     });
   });
 
-  // Regression for LOBE-11930: revoking a share must be able to find every
+  // Regression test: revoking a share must be able to find every
   // in-flight visitor run so it can interrupt them — see
   // `AiAgentService.interruptActiveShareRuns`.
   describe('findActiveVisitorRunTopics', () => {

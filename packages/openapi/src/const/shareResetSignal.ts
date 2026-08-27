@@ -14,7 +14,7 @@
  * the third segment is the EXACT `agentShareGenerations` value the reset
  * transaction bumped to, threaded straight through to
  * `AiAgentService.interruptActiveShareRuns` (never re-read at header-parse
- * time — see that method's JSDoc for why). See LOBE-11930 hole 2.
+ * time — see that method's JSDoc for why).
  */
 export const AGENT_SHARE_RESET_SIGNAL_HEADER = 'x-lobehub-agent-share-reset';
 
@@ -29,8 +29,7 @@ export const AGENT_SHARE_RESET_SIGNAL_HEADER = 'x-lobehub-agent-share-reset';
  * `{ operationId, topicId }` still in flight at delete time) instead of just
  * an agentId, JSON-encoded since a header value cannot hold a structured
  * value directly. Stripped from the response before it reaches the API
- * caller — see `src/app/(backend)/api/v1/[[...route]]/route.ts`. See
- * LOBE-11930.
+ * caller — see `src/app/(backend)/api/v1/[[...route]]/route.ts`.
  */
 export const AGENT_SHARE_DELETE_SIGNAL_HEADER = 'x-lobehub-agent-share-delete';
 

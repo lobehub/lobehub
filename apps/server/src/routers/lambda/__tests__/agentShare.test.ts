@@ -157,7 +157,7 @@ describe('agentShareRouter', () => {
     expect(mockDeleteByAgentId).toHaveBeenCalledWith('agent-1');
   });
 
-  // Regression for LOBE-11930: revoking a share (link -> private, or
+  // Regression test: revoking a share (link -> private, or
   // disabling it outright) must proactively interrupt any visitor run that
   // is still executing, not just stop authorizing future cancellation —
   // see `AiAgentService.interruptActiveShareRuns`.
@@ -238,7 +238,7 @@ describe('agentShareRouter', () => {
   // pre-lock `getAgentConfigById` read (`enableShare` only ever creates a
   // `private` share, so a stale read is harmless). `updateVisibility('link')`
   // used to run the same kind of pre-lock check here too, but that made it
-  // vulnerable to a race with `AgentModel.updateConfig` (see LOBE-11930):
+  // vulnerable to a race with `AgentModel.updateConfig`:
   // the check could pass, `updateConfig` could reset a share to `private` in
   // between, and this call would still flip it back to `link`. That check now
   // lives in `AgentShareModel.updateVisibility` itself, re-read from the

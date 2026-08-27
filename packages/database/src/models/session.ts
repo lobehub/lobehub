@@ -30,7 +30,7 @@ export interface SessionModelOptions {
   /**
    * Forwarded to `writeAgentConfigWithShareReset` from `updateConfig()` — see
    * that function's `onShareReset` JSDoc and `AgentModelOptions` (same
-   * pattern, kept in sync). See LOBE-11930 hole 2.
+   * pattern, kept in sync).
    */
   onShareReset?: (agentId: string, revocationGeneration: number) => void;
 
@@ -42,8 +42,7 @@ export interface SessionModelOptions {
    * same way `AgentModel.delete` does, and bypasses that method entirely (a
    * raw `trx.delete(agents)`), so it needs the identical before/after
    * snapshot split here instead of inheriting it for free. Same shape as
-   * `AgentModelOptions.onShareRunsInterrupted` — kept in sync. See
-   * LOBE-11930.
+   * `AgentModelOptions.onShareRunsInterrupted` — kept in sync.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -499,7 +498,7 @@ export class SessionModel {
    * user-wide sweep) entirely, the exact bypass `delete()` / `batchDelete()`
    * already close. Agent sharing is personal-only, so a workspace-scoped
    * `SessionModel` never has any — skip the query entirely there. See
-   * `SessionModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * `SessionModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   deleteAll = async () => {
     const activeShareRuns: ActiveShareRun[] = [];
@@ -555,7 +554,7 @@ export class SessionModel {
     // delete below cascades their topic rows away. Agent sharing is
     // personal-only, so a workspace-scoped SessionModel never has any — skip
     // the query entirely there. Mirrors `AgentModel.delete`'s JSDoc, which
-    // this raw delete bypasses. See LOBE-11930.
+    // this raw delete bypasses.
     const activeShareRuns: ActiveShareRun[] = [];
     if (!this.workspaceId && orphanedAgentIds.length > 0) {
       const topicModel = new TopicModel(trx as LobeChatDatabase, this.userId);
@@ -644,7 +643,7 @@ export class SessionModel {
      * `agencyConfig` — and used to land it here with a bare
      * `tx.update(agents)`, bypassing `AgentModel.updateConfig`'s heterogeneous
      * -share-reset invariant entirely (same class of bug as the OpenAPI
-     * `PATCH /api/v1/agents/:id` bypass — see LOBE-11930). Route through the
+     * `PATCH /api/v1/agents/:id` bypass). Route through the
      * shared `writeAgentConfigWithShareReset` choke point instead of
      * duplicating the lock + reset SQL here.
      */

@@ -31,7 +31,7 @@ interface WriteAgentConfigWithShareResetParams {
    * executor, an OpenAPI controller) MUST pass a callback here that schedules
    * that interrupt (typically via `after()`), mirroring what
    * `agentShareRouter.disableShare` / `updateVisibility` already do for
-   * explicit revocation. See LOBE-11930 hole 2.
+   * explicit revocation.
    *
    * `revocationGeneration` is the EXACT value this function itself just
    * bumped `agentShareGenerations` to as part of the SAME transaction as the
@@ -74,7 +74,7 @@ interface WriteAgentConfigWithShareResetParams {
  *   /api/v1/agents/:id`. This endpoint used to write `agents` directly with
  *   `tx.update(agents)`, bypassing `updateConfig` (and this reset) entirely,
  *   so a published homogeneous agent could be flipped to a heterogeneous
- *   model over the OpenAPI while its share stayed `link`. See LOBE-11930.
+ *   model over the OpenAPI while its share stayed `link`.
  *
  * `AgentShareModel.updateVisibility` (packages/database/src/models/
  * agentShare.ts) takes the SAME row lock (`agents.id = agentId` FOR UPDATE)

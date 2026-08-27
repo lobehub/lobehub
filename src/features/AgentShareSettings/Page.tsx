@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Full-page share management for one agent (LOBE-11944): visibility + link on
+ * Full-page share management for one agent: visibility + link on
  * top, business budget/usage slot in the middle, then the permission / tool /
  * limit configuration. Replaces the previous share popover + settings modal —
  * sharing an agent grants visitors real execution on the creator's account, so

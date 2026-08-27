@@ -48,8 +48,8 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     }
 
     // `updateAgent`/`updatePrompt` below can set `model`/`agencyConfig` via
-    // `agentModel.updateConfig`/`update` — see LOBE-11930 hole 2 and
-    // `agentBuilder.ts`'s identical wiring for the sibling Agent Builder tool.
+    // `agentModel.updateConfig`/`update` — see `agentBuilder.ts`'s identical
+    // wiring for the sibling Agent Builder tool.
     const agentModel = new AgentModel(serverDB, userId, context.workspaceId, {
       onShareReset: scheduleShareRunInterruptOnReset(serverDB, userId),
     });
@@ -167,7 +167,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
               // itself, BEFORE its cascade removes their topic rows, and
               // hands the snapshot here once the transaction commits — this
               // tool-runtime delete had no interrupt at all before. See that
-              // method's JSDoc and LOBE-11930.
+              // method's JSDoc.
               onShareRunsInterrupted: interruptSnapshottedShareRuns(serverDB, userId),
             });
             if (await transactionAgentModel.existsById(params.agentId)) {

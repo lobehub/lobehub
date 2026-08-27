@@ -21,8 +21,7 @@ interface TopicReferenceShareContext {
    * share instance the owner has since disabled and replaced
    * (`AgentShareModel.create()` mints a new UUID every disable → re-enable
    * cycle) is rejected even though the visitor/agent pairing still matches.
-   * See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`)
-   * and LOBE-11930 codex P2.
+   * See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
    */
   shareId: string;
   visitorUserId: string;

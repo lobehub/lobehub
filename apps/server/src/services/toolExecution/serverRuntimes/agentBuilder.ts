@@ -39,7 +39,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
     // `updateAgentConfig`/`updatePrompt` below can set `model`/`agencyConfig`
     // via `agentModel.updateConfig`/`update` — the Agent Builder tool is one
-    // of the three surfaces LOBE-11930 hole 2 names explicitly. Wiring the
+    // of the surfaces that can turn an agent heterogeneous mid-share. Wiring the
     // interrupt here closes it for THIS surface.
     const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId, {
       onShareReset: scheduleShareRunInterruptOnReset(context.serverDB, userId),

@@ -219,7 +219,7 @@ describe('activatorRuntime', () => {
     });
 
     /**
-     * Regression for LOBE-11930 P1: `emitActivationOutcome` must forward the
+     * Regression test: `emitActivationOutcome` must forward the
      * run's delegation into `emitToolOutcomeSafely` so the choke point in
      * `emitToolOutcome.ts` (`agentShare` presence check) can suppress the
      * write — otherwise a successful visitor `activateSkill` call would write

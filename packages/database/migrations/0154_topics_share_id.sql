@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS "topics_share_id_idx" ON "topics" USING btree ("share
 -- topics `share_id IS NULL` — which already correctly excludes them from
 -- whatever NEW share instance a future re-enable creates, since a fresh
 -- `agent_shares.id` can never equal NULL. See `topics.shareId`'s JSDoc
--- (`../src/schemas/topic.ts`) and LOBE-11930 codex P2.
+-- (`../src/schemas/topic.ts`).
 --
 -- Write volume is bounded: the `sender_id IS NOT NULL` predicate is served by
 -- `topics_sender_id_idx` and matches only share-visitor topics, a small

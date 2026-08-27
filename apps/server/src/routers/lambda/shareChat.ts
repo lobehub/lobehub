@@ -72,7 +72,7 @@ const toVisitorPrincipal = (
  * re-enable cycle — without it, a returning visitor's `senderId` match alone
  * would resurface (and cap-count) conversations from a share instance the
  * owner already took down. See `topics.shareId`'s JSDoc
- * (`packages/database/src/schemas/topic.ts`) and LOBE-11930 codex P2.
+ * (`packages/database/src/schemas/topic.ts`).
  *
  * Agent sharing is personal-only (workspace agents cannot be shared), so no
  * workspaceId is ever threaded into the creator-scoped models/services.
@@ -95,7 +95,7 @@ const ShareTopicScopeSchema = z.object({
  * and replaced (`AgentShareModel.create()` mints a new `agentShares.id` every
  * disable → re-enable cycle) simply by remembering/bookmarking its topicId —
  * `senderId`/`agentId` alone still match. See `topics.shareId`'s JSDoc
- * (`packages/database/src/schemas/topic.ts`) and LOBE-11930 codex P2.
+ * (`packages/database/src/schemas/topic.ts`).
  */
 const findVisitorTopicOrThrow = async (
   topicModel: TopicModel,
@@ -128,14 +128,14 @@ const findVisitorTopicOrThrow = async (
  * under the CREATOR's identity) went straight to the visitor. Logs the raw
  * error server-side and returns only the classified `{ type }` (or `{
  * message }` for the narrow allowlisted codes) that `sanitizeVisitorError`
- * already deems visitor-safe (Codex P2, LOBE-11930).
+ * already deems visitor-safe.
  *
  * Also the sink for a RESOLVED (not thrown) `{ success: false, error }` from
  * `AiAgentService.execAgent` — a `createOperation` startup failure resolves
  * rather than rejects there (see `aiAgent/index.ts`'s `execAgent` catch
  * block), so the visitor-facing `execAgent` handler below re-throws that
  * case through this same function instead of letting the raw message escape
- * via a normal `return` (Codex P2 follow-up, LOBE-11930).
+ * via a normal `return`.
  */
 const toVisitorSafeStartupError = (context: string, error: unknown): TRPCError => {
   log('%s failed: %O', context, error);
@@ -218,8 +218,7 @@ export const shareChatRouter = router({
       // (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`),
       // which locks and re-checks the same counters immediately around the
       // real topic/message INSERT inside `AiAgentService.execAgent` — see
-      // those functions' JSDoc for the race this two-layer split closes
-      // (LOBE-11930, Codex P1 on this file).
+      // those functions' JSDoc for the race this two-layer split closes.
       if (input.topicId) {
         await findVisitorTopicOrThrow(topicModel, {
           agentId: share.agentId,
@@ -320,8 +319,7 @@ export const shareChatRouter = router({
           // marker) and by `AiAgentService.interruptActiveShareRuns`'s
           // revocation sweep (which also reads only the current marker) —
           // an orphaned run that keeps using tools and the creator's share
-          // budget until it finishes on its own (Codex P1, LOBE-11930,
-          // `shareChat.ts:186`).
+          // budget until it finishes on its own (see `shareChat.ts:186`).
           //
           // Leaving this `false` (the background/task-callback default)
           // routes visitor sends through the SAME liveness-checked

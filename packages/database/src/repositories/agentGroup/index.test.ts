@@ -991,7 +991,7 @@ describe('AgentGroupRepository', () => {
       expect(stillAlive).toBeDefined();
     });
 
-    // Regression for LOBE-11930's group-member-removal bypass:
+    // Regression test for the group-member-removal bypass:
     // `removeAgentsFromGroup` deletes an OWNED virtual member's `agents` row
     // directly with a raw `trx.delete(agents)`, cascading its `agentShares`
     // row and topic away with it — but a group-owned virtual member can carry

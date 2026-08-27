@@ -7,7 +7,7 @@ import { agents, agentShareRunReservations, topics, users } from '../../schemas'
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
-// Real-Postgres reproduction of LOBE-11930 Codex P2:
+// Real-Postgres reproduction of a reservation-abort race:
 // `AgentRuntimeService`'s step-0 share-reservation gate used to abort a
 // still-`pending` reservation (retry budget exhausted, or a `'revoked'` read)
 // WITHOUT touching the `agent_share_run_reservations` row. `confirmReservation`

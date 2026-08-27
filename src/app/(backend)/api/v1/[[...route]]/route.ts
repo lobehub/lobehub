@@ -13,7 +13,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * `packages/openapi` cannot import `AiAgentService`/`after()` (apps/server
  * layer) to interrupt an Agent Share visitor's in-flight run when a config
  * write resets a `link` share back to `private` — see
- * `AGENT_SHARE_RESET_SIGNAL_HEADER`'s JSDoc and LOBE-11930 hole 2. This is
+ * `AGENT_SHARE_RESET_SIGNAL_HEADER`'s JSDoc. This is
  * the one place, on the actual server boundary, that CAN reach both sides:
  * read the signal `AgentController.updateAgent` left on the response, fire
  * the interrupt, and strip the header before the response reaches the API
@@ -50,8 +50,7 @@ const handleAgentShareResetSignal = (response: Response): Response => {
  * pre-snapshotted run list (JSON-encoded) instead of just an agentId: the
  * delete already cascaded the topic rows away by the time this runs, so
  * `AiAgentService.interruptActiveShareRuns` (a re-query) would find nothing.
- * Calls `interruptTask` directly for each snapshotted operation instead. See
- * LOBE-11930.
+ * Calls `interruptTask` directly for each snapshotted operation instead.
  */
 const handleAgentShareDeleteSignal = (response: Response): Response => {
   const signal = response.headers.get(AGENT_SHARE_DELETE_SIGNAL_HEADER);

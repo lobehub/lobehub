@@ -262,7 +262,7 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
   });
 });
 
-// Regression for LOBE-11930 Codex P1: `AgentRuntimeService.executeStep` calls
+// Regression test: `AgentRuntimeService.executeStep` calls
 // `AgentShareModel.isRunStillAuthorized` on EVERY step (not only step 0) so a
 // share run self-corrects at the next step boundary even if the best-effort
 // `interruptActiveShareRuns` interrupt for it was silently lost. These tests

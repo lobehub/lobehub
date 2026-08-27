@@ -24,7 +24,7 @@ export interface EmitToolOutcomeInput {
    * `agentShare.visitorUserId` — see `shareChat.ts`), so a caller that
    * forgets its own per-call-site guard still fails closed here instead of
    * writing creator-scoped procedure state or enqueuing self-reflection work
-   * for a visitor turn. Fixed for LOBE-11930 P1: `activatorRuntime`'s
+   * for a visitor turn. This closes the gap where `activatorRuntime`'s
    * `emitActivationOutcome` called this machinery unconditionally on every
    * share-visitor `activateSkill`/`markActivated` call, bypassing the
    * `!shareGate` guard that only covered the generic `agent.user.message`

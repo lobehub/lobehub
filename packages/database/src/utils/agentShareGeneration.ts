@@ -14,7 +14,7 @@ import type { LobeChatDatabase } from '../type';
  * compare, stake a reservation at it" and "bump generation, capture the new
  * value as a revocation cutoff" strictly ordered instead of racing. See
  * `agentShareGenerations`'s JSDoc (`../schemas/agentShare.ts`) for why this
- * lives in its own table and LOBE-11930.
+ * lives in its own table.
  *
  * Upsert, not a plain `UPDATE`: the counter row may not exist yet (no
  * restrictive change has ever happened for this agent), in which case the

@@ -9,7 +9,7 @@ import { AgentModel } from '../agent';
 import { AgentShareModel } from '../agentShare';
 import { TopicModel } from '../topic';
 
-// Real-Postgres reproduction of the Codex P1 at
+// Real-Postgres reproduction of the missing revocation bump at
 // `packages/database/src/models/agent.ts:2221`: `AgentModel.transferAgents`
 // used to flip a link-shared personal agent's `agentShares.visibility` to
 // `private` with a bare `UPDATE`, WITHOUT bumping `agentShareGenerations` or
@@ -268,7 +268,7 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
     expect(movedShare.visibility).toBe('private');
   }, 15_000);
 
-  // The Codex P1 this fix targets: personal -> workspace A -> workspace B,
+  // The bug this fix targets: personal -> workspace A -> workspace B,
   // with the deferred `interruptActiveShareRuns` callback (scheduled by the
   // FIRST transfer, still carrying ITS `revocationGeneration`) firing only
   // AFTER the second move. The second transfer flips no `agentShares` row

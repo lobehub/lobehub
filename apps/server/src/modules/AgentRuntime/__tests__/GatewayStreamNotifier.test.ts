@@ -406,7 +406,7 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
-  // ─── LOBE-11930: shared-agent visitor runs must not leak the creator's
+  // ─── shared-agent visitor runs must not leak the creator's
   //     raw operation metadata / AgentState over the visitor's WS channel ───
 
   describe('shared-agent visitor privacy (agent_runtime_init)', () => {
@@ -477,7 +477,7 @@ describe('GatewayStreamNotifier', () => {
 
       // `InsufficientBudgetForModel` — the creator's OWN budget/plan state —
       // is exactly the class of code `sanitizeVisitorError` must not forward
-      // verbatim (LOBE-11930 Codex P2, round 3, message.ts:432): a visitor
+      // verbatim: a visitor
       // who triggers it would otherwise learn the creator ran out of budget.
       await notifier.publishAgentRuntimeEnd({
         finalState: {
@@ -813,7 +813,7 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
-  // ─── LOBE-11930 Codex P2 (round 3, message.ts:432): the live `type: 'error'`
+  // ─── the live `type: 'error'`
   //     Gateway stream event (`ServerStreamSink.publishError` →
   //     `formatErrorEventData`) carries the same raw `{ body, error, errorType }`
   //     shape as a persisted `ChatMessageError`, but never goes through
@@ -906,7 +906,7 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
-  // ─── LOBE-11930 Codex P2 (round 4): every event type other than
+  // ─── every event type other than
   //     `agent_runtime_init`/`agent_runtime_end`/`error` still forwarded its
   //     raw payload for a share run. `stream_start` (callLlm.ts) carries the
   //     creator's `model`/`provider` directly, `tool_end`'s `result.state` is

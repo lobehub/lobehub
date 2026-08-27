@@ -699,7 +699,7 @@ describe('SessionModel', () => {
       ).toHaveLength(1);
     });
 
-    // Regression for LOBE-11930: deleting a session can orphan-delete its last
+    // Regression test: deleting a session can orphan-delete its last
     // agent, which cascades that agent's topics away the same as
     // `AgentModel.delete` — but through a raw `trx.delete(agents)` that
     // bypasses `AgentModel.delete` entirely. Any in-flight Agent Share
@@ -937,7 +937,7 @@ describe('SessionModel', () => {
       expect(otherUserSessions).toHaveLength(2);
     });
 
-    // Regression for LOBE-11930: `deleteAll` cascades every one of this
+    // Regression test: `deleteAll` cascades every one of this
     // user's agents away via a raw `trx.delete(agents)` that bypasses both
     // `AgentModel.delete` and this class's own `clearOrphanAgent` — the same
     // bypass `delete()` / `batchDelete()` already close. Any in-flight Agent
@@ -1454,7 +1454,7 @@ describe('SessionModel', () => {
       });
     });
 
-    // Regression test for LOBE-11930: `updateConfig` used to write
+    // Regression test: `updateConfig` used to write
     // `agents.model` / `agents.agencyConfig` directly with `tx.update(agents)`,
     // bypassing `AgentModel.updateConfig`'s invariant that a `link` share must
     // be reset to `private` when a config write turns the agent heterogeneous

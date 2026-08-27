@@ -105,7 +105,7 @@ const assertShareableAgent = async (agentModel: AgentModel, agentId: string) => 
  * (`shareChat.interruptTask` re-resolves the share and gets `FORBIDDEN`), so
  * this is the only thing left to stop an already-running operation instead
  * of letting it keep spending the creator's share budget until it finishes
- * on its own. See LOBE-11930.
+ * on its own.
  *
  * `revocationGeneration` MUST be the exact value `AgentShareModel` bumped
  * `agentShareGenerations` to as part of the SAME write this schedules after
@@ -178,7 +178,7 @@ export const agentShareRouter = router({
       // NARROWED a `link` share's grants (`AgentShareModel.isConfigTightening`)
       // — a purely additive/loosening patch, or any patch to a `private`
       // share, must not interrupt anything. See both methods' JSDoc for the
-      // exact field-by-field tightening rules (LOBE-11930 P1).
+      // exact field-by-field tightening rules.
       if (revocationGeneration !== undefined) {
         interruptActiveShareRunsAfterResponse(
           ctx.serverDB,

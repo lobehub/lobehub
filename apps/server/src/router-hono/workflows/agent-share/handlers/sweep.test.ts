@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Regression test for LOBE-11930 Codex P1
+// Regression test for the abandoned-reservation sweep
 // (`apps/server/src/router-hono/workflows/agent-share/handlers/sweep.ts`):
 //
 // If the request process handling a share-visitor turn dies AFTER

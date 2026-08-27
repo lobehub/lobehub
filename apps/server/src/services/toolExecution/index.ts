@@ -241,7 +241,7 @@ export class ToolExecutionService {
         mcpParams.type === 'stdio' ||
         (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
 
-      // LOBE-11930 P2 (re-audit): a share visitor's run always resolves
+      // A share visitor's run always resolves
       // `principal.resourceOwnerUserId` to the CREATOR (see `AiAgentService`
       // constructed with `share.ownerId` in `shareChat.ts`), never the
       // visitor — only `principal.actorUserId` names the visitor. Letting a

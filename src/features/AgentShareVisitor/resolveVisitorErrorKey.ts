@@ -18,7 +18,7 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
   // client-side `maxLength` mirror on the composer's `TextArea` should catch
   // this before the request goes out, but a direct RPC caller (or any future
   // desync between the two bounds) still needs actionable copy instead of
-  // the generic fallback (Codex P2, LOBE-11930).
+  // the generic fallback.
   //
   // Narrowed to the `prompt`/`too_big` issue rather than any `BAD_REQUEST`:
   // this procedure's schema can also reject a malformed `clientIds`/`topicId`,

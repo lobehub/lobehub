@@ -29,6 +29,6 @@ export const AGENT_SHARE_MAX_TOPICS_PER_VISITOR = 50;
  * Kept in `@lobechat/const` (instead of inline in `shareChat.ts`) so both the
  * server input schema and `VisitorComposer`'s client-side `maxLength`/error
  * copy share one source of truth — the server bound is still the real gate;
- * the client mirror is convenience only (see LOBE-11930 codex P2).
+ * the client mirror is convenience only.
  */
 export const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;

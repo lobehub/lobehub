@@ -133,7 +133,7 @@ export class AgentService extends BaseService {
    *   (apps/server) to schedule the visitor-run interrupt itself — this
    *   package must not depend on an app — so the caller (the controller,
    *   which forwards it to the HTTP boundary that CAN reach apps/server) has
-   *   to supply the hook. See LOBE-11930 hole 2.
+   *   to supply the hook.
    * @returns Updated Agent info
    */
   async updateAgent(
@@ -236,7 +236,7 @@ export class AgentService extends BaseService {
       // bypassing `AgentModel.updateConfig` (and its share-reset invariant)
       // entirely, so `PATCH /api/v1/agents/:id` could switch a published
       // homogeneous agent to Codex/Claude Code while its share stayed `link`.
-      // See `writeAgentConfigWithShareReset`'s JSDoc and LOBE-11930.
+      // See `writeAgentConfigWithShareReset`'s JSDoc.
       const updatedAgent = await writeAgentConfigWithShareReset(this.db, {
         agentId: request.id,
         onShareReset: (agentId, revocationGeneration) =>
@@ -281,7 +281,7 @@ export class AgentService extends BaseService {
    * interrupt in-flight Agent Share visitor runs itself, so the caller that
    * CAN (`AgentController.deleteAgent`) must pass a callback that stashes the
    * post-commit snapshot somewhere the mounting route file can pick up — see
-   * `AGENT_SHARE_DELETE_SIGNAL_HEADER`. See LOBE-11930.
+   * `AGENT_SHARE_DELETE_SIGNAL_HEADER`.
    */
   async deleteAgent(
     request: AgentDeleteRequest,
@@ -308,7 +308,7 @@ export class AgentService extends BaseService {
       // whichever delete cascades the visitor topic rows away, and reported
       // to `options.onShareRunsInterrupted` only after the transaction has
       // committed — a runtime interrupt is a side effect that must never
-      // fire on a rollback. See LOBE-11930.
+      // fire on a rollback.
       let activeShareRuns: ActiveShareRun[] = [];
 
       await this.db.transaction(async (tx) => {

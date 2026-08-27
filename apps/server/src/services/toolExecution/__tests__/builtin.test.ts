@@ -255,7 +255,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(result.content).toContain('barApi');
   });
 
-  describe('uncaught runtime exceptions (Codex P2, LOBE-11930 follow-up)', () => {
+  describe('uncaught runtime exceptions', () => {
     // A share-visitor run executes with the CREATOR's own credentials, so an
     // uncaught exception from ANY allowlisted builtin tool's runtime (e.g. a
     // model-runtime/embedding call `lobe-memory`'s `searchMemory` makes with

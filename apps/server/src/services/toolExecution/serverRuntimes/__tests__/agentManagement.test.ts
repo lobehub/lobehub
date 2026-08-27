@@ -97,7 +97,7 @@ describe('agentManagementRuntime', () => {
   it('scopes agent and plugin models to workspace context', () => {
     createWorkspaceRuntime();
 
-    // 4th arg wires `onShareReset` (LOBE-11930 hole 2) so a mid-run
+    // 4th arg wires `onShareReset` so a mid-run
     // `updateAgentConfig`/`update` call that turns the agent heterogeneous
     // schedules the Agent Share visitor-run interrupt — see
     // `scheduleShareRunInterruptOnReset`.
@@ -108,7 +108,7 @@ describe('agentManagementRuntime', () => {
   });
 
   describe('deleteAgent', () => {
-    // Regression for LOBE-11930 / codex P1: this tool-runtime delete used to
+    // Regression test: this tool-runtime delete used to
     // construct its transaction-scoped `AgentModel` with NO options at all,
     // so a visitor mid-conversation on the deleted agent's share was never
     // interrupted. `AgentModel.delete` now snapshots and reports in-flight

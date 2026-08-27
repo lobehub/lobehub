@@ -8,8 +8,8 @@ import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 import { TopicModel } from '../topic';
 
-// Real-Postgres reproduction of LOBE-11930 hole 1, and of the follow-up gap
-// Codex flagged in the first fix attempt.
+// Real-Postgres reproduction of a visibility-recheck race, and of the
+// follow-up gap found in the first fix attempt.
 //
 // A visitor's `shareChat.execAgent` passes `findByShareIdWithAccessCheck`
 // once, at request entry, while the share is still `link`. Thousands of

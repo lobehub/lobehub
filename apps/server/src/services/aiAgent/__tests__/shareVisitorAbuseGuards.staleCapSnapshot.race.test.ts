@@ -12,7 +12,7 @@ import {
   reserveShareVisitorTurnOrThrow,
 } from '../shareVisitorAbuseGuards';
 
-// Real-Postgres reproduction of the Codex P2 on
+// Real-Postgres reproduction of the stale-cap-snapshot race on
 // `packages/database/src/models/agentShare.ts:113`:
 //
 // `shareChat.ts`'s `execAgent` resolves `shareConfig` (and therefore

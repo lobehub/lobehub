@@ -175,7 +175,7 @@ export async function runStep(c: Context): Promise<Response> {
     // reading agent state, so it has no `agentId`/`topicId` to invalidate or
     // verify the reservation, and no state it could durably mark
     // `interrupted` — see `AgentExecutionResult.shareGateStateUnavailable`'s
-    // JSDoc for the marker-leak this avoids (LOBE-11930 Codex P2 follow-up).
+    // JSDoc for the marker-leak this avoids.
     // Mirror the `locked` (backoff-exhausted) fallback below: return a
     // retryable response so the queue's OWN retry budget keeps redelivering
     // step 0 until the state store recovers and the gate can decide for real.

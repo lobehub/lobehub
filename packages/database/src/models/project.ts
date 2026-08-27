@@ -126,7 +126,7 @@ export class ProjectModel {
    * JSDoc. A project's coordinator agent is an ordinary personal agent (not
    * `workspaceId`-scoped when the project itself is personal), so it can
    * carry its own Agent Share the same as any other agent; deleting the
-   * project must not silently drop its visitor runs. See LOBE-11930.
+   * project must not silently drop its visitor runs.
    */
   async delete(
     id: string,

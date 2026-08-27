@@ -137,7 +137,7 @@ export const buildServerCallLlmContext = async ({
     // returning visitor — without this check, a `<refer_topic>` tag naming an
     // old topicId could pull that stale conversation's content into a
     // supposedly-fresh new-share run. See `topics.shareId`'s JSDoc
-    // (`packages/database/src/schemas/topic.ts`) and LOBE-11930 codex P2.
+    // (`packages/database/src/schemas/topic.ts`).
     const isTopicVisibleToRun = (
       topic:
         | { agentId?: string | null; senderId?: string | null; shareId?: string | null }

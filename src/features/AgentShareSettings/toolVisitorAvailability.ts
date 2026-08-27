@@ -14,7 +14,7 @@ import {
  * are governed only by the owner's `enabledToolIds` picker, not the builtin
  * allowlist.
  *
- * KNOWN GAP (LOBE-11930 P2 re-audit): a `stdio` / local-network MCP connector
+ * KNOWN GAP: a `stdio` / local-network MCP connector
  * is a non-builtin identifier, so this predicate has no way to see its
  * connection type and always reports it available once the owner enables it.
  * That class of connector actually tunnels to the OWNER's own paired device

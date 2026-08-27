@@ -82,7 +82,7 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       // single delete — each snapshots in-flight Agent Share visitor runs
       // itself, BEFORE its own delete, and hands the snapshot here once its
       // transaction has committed. See `TopicModelOptions
-      // .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+      // .onShareRunsInterrupted`'s JSDoc.
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, {
         onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
       }),

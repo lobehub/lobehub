@@ -15,8 +15,7 @@ import { readAgentShareGeneration } from '@/database/utils/agentShareGeneration'
 /**
  * Re-validate the share is still `link` AND still on the generation the
  * caller observed, from INSIDE the same `agents.id FOR UPDATE` transaction
- * `AgentShareModel.lockOwnedAgentRow` just took — the fix for LOBE-11930
- * Codex P2 (`shareVisitorAbuseGuards.ts:100`).
+ * `AgentShareModel.lockOwnedAgentRow` just took (see `shareVisitorAbuseGuards.ts:100`).
  *
  * WHY this must run BEFORE the topic/message INSERT the two guard functions
  * below perform, not only later in `AgentShareModel.assertRunnableForVisitor`:
@@ -75,8 +74,7 @@ const assertShareStillAuthorized = async (
  * INSERT this function performs are two unrelated statements, on two
  * unrelated requests/connections, with nothing serializing them. Concurrent
  * new-topic requests from the same visitor can all observe the same
- * pre-insert count and all insert — Codex P1, LOBE-11930 review round
- * (`shareChat.ts:129`).
+ * pre-insert count and all insert (see `shareChat.ts:129`).
  *
  * `AgentShareModel.lockOwnedAgentRow` takes `FOR UPDATE` on the SAME
  * `agents.id` row every other share-mutation path locks (`create`,
@@ -95,8 +93,8 @@ const assertShareStillAuthorized = async (
  * against each other — it was a lock disjoint from anything `updateConfig`
  * takes, so a cap read inside it could still straddle a concurrent
  * `updateConfig` reduction: read the OLD (higher) cap, then have the owner's
- * write commit a LOWER one, then insert against the stale number anyway
- * (Codex P2, LOBE-11930 review round, `shareVisitorAbuseGuards.ts:71`).
+ * write commit a LOWER one, then insert against the stale number anyway.
+ *
  * Reusing the Agent row lock closes that gap for free — see
  * `withOwnedPersonalAgentLock`'s JSDoc for why the advisory lock is not kept
  * ALONGSIDE this one, and for the deadlock analysis of taking this lock from
@@ -134,8 +132,7 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
    * `shareConfig`/`shareId` it resolved this request against
    * (`AgentShareGate.generation`) — re-checked fresh under this same row
    * lock via {@link assertShareStillAuthorized} before anything is inserted.
-   * See that function's JSDoc for the stale-authorization insert this closes
-   * (LOBE-11930 Codex P2, `shareVisitorAbuseGuards.ts:100`).
+   * See that function's JSDoc for the stale-authorization insert this closes.
    */
   expectedGeneration: number;
   ownerId: string;

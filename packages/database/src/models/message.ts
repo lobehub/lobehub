@@ -557,7 +557,7 @@ const VISITOR_MESSAGE_DENIED_KEYS = ['sender', 'usage', 'model', 'provider', 'wo
  * {@link VISITOR_MESSAGE_ALLOWED_KEYS}, which only proves the FIELD is safe
  * to forward, not its CONTENTS — `pluginState?: any` on `UIChatMessage`
  * means a builtin tool's server runtime controls everything inside it. Codex
- * P2 (LOBE-11930): `lobe-agent`'s `analyzeMedia` API writes
+ * P2: `lobe-agent`'s `analyzeMedia` API writes
  * `model`/`provider`/`usage` straight into its `pluginState`
  * (`apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts`'s
  * `analyzeMedia`, `state: { model, provider, usage, ... }`) — the exact
@@ -582,7 +582,7 @@ const VISITOR_MESSAGE_DENIED_KEYS = ['sender', 'usage', 'model', 'provider', 'wo
  *
  * `error` was previously a plain entry in {@link VISITOR_MESSAGE_ALLOWED_KEYS}
  * — the same "field is safe, contents are not" mistake as `pluginState`.
- * Codex P2 (LOBE-11930, round 3): `formatErrorForState`
+ * `formatErrorForState`
  * (`apps/server/src/modules/AgentRuntime/formatErrorForState.ts`)
  * deliberately copies `provider`, `budget`, and the raw upstream response body
  * onto `ChatMessageError.body` for every provider/quota/startup failure, so a
@@ -724,7 +724,7 @@ const CREATOR_PRIVATE_BLOB_KEYS = new Set([
  * tool's `state` with `model`/`provider`/`usage`), and `step_complete`
  * (`subagent_progress`'s sibling `model`/`totalCost`/token fields) — the live
  * WS payload equivalents of the persisted `pluginState`/`pluginError` blobs
- * this function was written for. See LOBE-11930 review round 4.
+ * this function was written for.
  */
 export const redactCreatorPrivateBlob = <T>(value: T): T => {
   if (Array.isArray(value)) return value.map((item) => redactCreatorPrivateBlob(item)) as T;
@@ -951,7 +951,7 @@ export interface MessageModelOptions {
    * predicate matches a visitor's messages exactly like any other message
    * the creator owns, the same shape as the topic-level bug this mirrors.
    * Same contract, same reason, as `TopicModelOptions
-   * .onShareRunsInterrupted` — kept in sync. See LOBE-11930.
+   * .onShareRunsInterrupted` — kept in sync.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -2922,7 +2922,7 @@ export class MessageModel {
    * That predicate is correct for personal analytics (visitor usage is
    * reported separately by the Cloud share usage center), but it makes
    * `count()` return 0 forever for a share topic, silently disabling the
-   * turn cap (see LOBE-11930 acceptance bug).
+   * turn cap.
    *
    * Safe without a visitor/ownership check here: the caller (shareChat
    * router) already resolved and authorized the topic via
@@ -4386,7 +4386,7 @@ export class MessageModel {
    * message" action never surfaces a visitor topic to click on, but the
    * underlying id-scoped delete has no such guard, so fail closed rather than
    * rely on that UI gap. See `MessageModelOptions.onShareRunsInterrupted`'s
-   * JSDoc and LOBE-11930.
+   * JSDoc.
    */
   deleteMessage = async (id: string) => {
     let activeShareRuns: ActiveShareRun[] = [];
@@ -4458,7 +4458,7 @@ export class MessageModel {
   /**
    * Snapshots in-flight Agent Share visitor runs among the topics touched by
    * this exact id set BEFORE the delete — see `MessageModelOptions
-   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * .onShareRunsInterrupted`'s JSDoc.
    */
   deleteMessages = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -4616,7 +4616,7 @@ export class MessageModel {
    * `TopicModel.batchDeleteBySessionId` / `batchDeleteByGroupId`'s bug: a
    * visitor topic's messages could be wiped out from under an active run
    * while the topic row (and its `runningOperation` marker) survives. See
-   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   deleteMessagesBySession = async (
     sessionId?: string | null,
@@ -4655,7 +4655,7 @@ export class MessageModel {
    * service path reaches this method — but wired with the same contract as
    * every other bulk delete here so it doesn't become a silent regression the
    * moment a caller does show up. See `MessageModelOptions
-   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * .onShareRunsInterrupted`'s JSDoc.
    */
   deleteAllMessages = async () => {
     let activeShareRuns: ActiveShareRun[] = [];
@@ -4687,7 +4687,7 @@ export class MessageModel {
    * Test-only today — no router or service path reaches this method — but
    * wired with the same contract as every other bulk delete here so it
    * doesn't become a silent regression the moment a caller does show up. See
-   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteByAgentId = async (agentId: string) => {
     // Get the associated sessionId for backward compatibility with legacy data

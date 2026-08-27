@@ -75,7 +75,7 @@ export class ServerToolTransport implements ToolTransport {
     const { hookDispatcher, operationId, stepIndex, principal } = this.ctx;
     // Hook payloads keep reporting the RESOURCE OWNER, unchanged by the
     // principal refactor. Whether observability/webhook consumers should see
-    // the actor instead is a behavior question, tracked in LOBE-13564.
+    // the actor instead is a behavior question, tracked separately.
     const userId = principal.resourceOwnerUserId;
 
     if (hookDispatcher) {
@@ -352,7 +352,7 @@ export class ServerToolTransport implements ToolTransport {
     const { hookDispatcher, operationId, stepIndex, principal } = this.ctx;
     // Hook payloads keep reporting the RESOURCE OWNER, unchanged by the
     // principal refactor. Whether observability/webhook consumers should see
-    // the actor instead is a behavior question, tracked in LOBE-13564.
+    // the actor instead is a behavior question, tracked separately.
     const userId = principal.resourceOwnerUserId;
     if (!hookDispatcher) return null;
 
@@ -391,7 +391,7 @@ export class ServerToolTransport implements ToolTransport {
     const { hookDispatcher, operationId, stepIndex, principal } = this.ctx;
     // Hook payloads keep reporting the RESOURCE OWNER, unchanged by the
     // principal refactor. Whether observability/webhook consumers should see
-    // the actor instead is a behavior question, tracked in LOBE-13564.
+    // the actor instead is a behavior question, tracked separately.
     const userId = principal.resourceOwnerUserId;
     if (!hookDispatcher) return;
 
