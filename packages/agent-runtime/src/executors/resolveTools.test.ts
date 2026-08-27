@@ -140,6 +140,9 @@ describe('resolveTools executors', () => {
       parentMessageId: 'tool-msg-1',
       toolCount: 1,
     });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+    );
   });
 
   it('persists a caller-provided blocked reason and content', async () => {
@@ -202,6 +205,10 @@ describe('resolveTools executors', () => {
     );
     expect(result.newState.status).toBe('done');
     expect(result.newState.messages).toHaveLength(2);
+    expect(result.newState.messages).toEqual([
+      expect.objectContaining({ id: 'tool-msg-1', tool_call_id: 'tool-call-1' }),
+      expect.objectContaining({ id: 'tool-msg-1', tool_call_id: 'tool-call-2' }),
+    ]);
     expect(result.events).toContainEqual(
       expect.objectContaining({
         reason: 'user_aborted',
@@ -260,6 +267,10 @@ describe('resolveTools executors', () => {
     expect(createToolMessage).toHaveBeenCalledWith(
       expect.objectContaining({ tool_call_id: 'tool-call-2' }),
     );
+    expect(result.newState.messages).toEqual([
+      expect.objectContaining({ id: 'pending-msg-1', tool_call_id: 'tool-call-1' }),
+      expect.objectContaining({ id: 'tool-msg-1', tool_call_id: 'tool-call-2' }),
+    ]);
     expect(result.newState.status).toBe('done');
   });
 
