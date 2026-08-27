@@ -893,6 +893,36 @@ applies a pushed snapshot. If the behavior is correct there and wrong in gateway
 mode, the defect is in the gateway transport or in the server snapshot, and you have
 halved the search space before reading any code.
 
+#### `curl /health` does not prove the local agent-gateway trusts your key — run the JWT probe
+
+**Situation:** restarting the local agent-gateway between acceptance rounds and
+gating on `curl -s -o /dev/null -w '%{http_code}' http://localhost:<port>/health`.
+
+**Doesn't work:** treating a 200 as "the closed loop is up". `/health` answers before
+any key is checked, so it is equally 200 when `.dev.vars` carries a JWKS that has
+nothing to do with the app's. The failure then surfaces far from its cause: runs
+complete server-side (`agent_operations` = `done`, full content in `messages`) while
+the browser's `execServerAgentRuntime` op ends after \~100ms, the assistant bubble
+stays on the `...` placeholder for the rest of the session, and a cold reload shows
+the reply — reading exactly like a client-side streaming regression in the branch
+under test. The tells are `chat().gatewayConnections === {}`, no `GET /ws` in the
+gateway log (only server→gateway `push-event` lines, which use the static service
+token and keep working), and `[Gateway] Auth failed ... signature verification
+failed` in the browser console.
+
+**Works:** after every gateway (re)start, run the decisive handshake and require
+`auth_success` before collecting any evidence:
+
+```bash
+GATEWAY_PORT= < port > .agents/acceptance/scripts/agent-gateway/local-gateway-setup.sh
+GATEWAY_WS=ws://localhost: .agents/acceptance/scripts/agent-gateway/local-gateway-probe.mjs < port > node
+```
+
+`.dev.vars` is regenerated per app instance, so restoring it at teardown (or another
+worktree regenerating it) silently invalidates it for the next run — compare the
+`kid` in `agent-gateway/.dev.vars` against `.records/env/agent-testing-jwks.json`
+when in doubt.
+
 #### A required local service can be someone else's, and `preflight` will not tell you
 
 **Situation:** starting QStash / s3rver for a run through `init-dev-env.sh` in a
