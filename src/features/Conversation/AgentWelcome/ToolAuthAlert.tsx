@@ -2,7 +2,7 @@
 
 import type { TaskTemplateConnectorReference } from '@lobechat/const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Alert, Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Alert, Avatar, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -11,7 +11,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
-import { useConnectorConnection } from '@/features/RecommendTaskTemplates/useConnectorConnection';
+import {
+  ConnectorConnectionMarketAuthRequiredError,
+  ConnectorConnectionPopupBlockedError,
+  useConnectorConnection,
+} from '@/features/RecommendTaskTemplates/useConnectorConnection';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -269,6 +273,7 @@ interface LobehubToolAuthItemProps {
 
 const LobehubToolAuthItem = ({ tool }: LobehubToolAuthItemProps) => {
   const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
   const removePlugin = useAgentStore((state) => state.removePlugin);
   const connectorSpecs = useMemo<TaskTemplateConnectorReference[]>(
     () => [{ identifier: tool.id, source: 'lobehub' }],
@@ -280,7 +285,15 @@ const LobehubToolAuthItem = ({ tool }: LobehubToolAuthItemProps) => {
     try {
       await connect();
     } catch (error) {
-      console.error('[ToolAuthAlert] Failed to authorize LobeHub connector:', error);
+      // MarketAuthProvider already surfaces this interruption; avoid a duplicate toast.
+      if (error instanceof ConnectorConnectionMarketAuthRequiredError) return;
+      toast.error(
+        tCommon(
+          error instanceof ConnectorConnectionPopupBlockedError
+            ? 'taskTemplate.action.connect.popupBlocked'
+            : 'taskTemplate.action.connect.error',
+        ),
+      );
     }
   };
 
