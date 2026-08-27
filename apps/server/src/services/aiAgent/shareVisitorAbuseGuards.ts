@@ -64,7 +64,15 @@ import type { TopicItem } from '@/database/schemas';
  */
 export const reserveShareVisitorTopicOrThrow = async (params: {
   agentId: string;
-  create: (topicModel: TopicModel) => Promise<TopicItem>;
+  /**
+   * `shareId` is the CURRENT `agentShares.id`, re-read fresh under this same
+   * row lock (see `AgentShareModel.readCurrentVisitorCaps`'s JSDoc) — never
+   * the caller's possibly-stale `AgentShareGate.shareId` snapshot. Callers
+   * must stamp it onto the new topic's `topics.shareId` column so the row is
+   * correctly scoped to the share instance that was ACTUALLY live at insert
+   * time, not whichever instance the request started against.
+   */
+  create: (topicModel: TopicModel, shareId: string) => Promise<TopicItem>;
   db: LobeChatDatabase;
   ownerId: string;
   visitorUserId: string;
@@ -84,11 +92,26 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     }
 
     // Fresh read under the lock, not a caller-supplied value — see this
-    // function's JSDoc for the stale-cap flood this closes.
-    const { maxTopicsPerVisitor } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);
+    // function's JSDoc and `readCurrentVisitorCaps`'s JSDoc for the
+    // stale-cap flood and stale-`shareId` misfile this closes.
+    const { maxTopicsPerVisitor, shareId } = await AgentShareModel.readCurrentVisitorCaps(
+      tx,
+      agentId,
+    );
+
+    // Fail closed: the row lock above already proved the agent is owned and
+    // live, but a share disabled (and never re-enabled) between that lock
+    // and this read has no `agentShares` row to stamp a new topic against.
+    if (!shareId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+    }
 
     const txTopicModel = new TopicModel(tx, ownerId, workspaceId);
-    const currentCount = await txTopicModel.countBySender({ agentId, senderId: visitorUserId });
+    const currentCount = await txTopicModel.countBySender({
+      agentId,
+      senderId: visitorUserId,
+      shareId,
+    });
 
     // Fail closed: a visitor already at (or somehow past) the cap never gets
     // another topic, even if `create`'s own params disagree with `agentId`.
@@ -99,7 +122,7 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
       });
     }
 
-    return create(txTopicModel);
+    return create(txTopicModel, shareId);
   });
 };
 
@@ -117,7 +140,10 @@ export const reserveShareVisitorTopic = (
 ): Promise<TopicItem> =>
   reserveShareVisitorTopicOrThrow({
     ...params,
-    create: (topicModel) => topicModel.create(createParams, id),
+    // Overrides any `shareId` already on `createParams` (e.g. the request's
+    // stale `AgentShareGate.shareId` snapshot) with the freshly-locked
+    // current value — see this function's JSDoc.
+    create: (topicModel, shareId) => topicModel.create({ ...createParams, shareId }, id),
   });
 
 /**

@@ -9,6 +9,7 @@ import {
   primaryKey,
   text,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -82,6 +83,44 @@ export const topics = pgTable(
      */
     senderId: text('sender_id'),
 
+    /**
+     * The `agentShares.id` (share UUID) live at the moment this visitor topic
+     * was created. `senderId` alone identifies the VISITOR, but not which
+     * share INSTANCE granted them access: `AgentShareModel.create()`
+     * generates a brand-new random UUID every time an owner disables
+     * (`deleteByAgentId` hard-deletes the `agentShares` row) and re-enables
+     * (`create()` inserts a fresh row) sharing for the same agent. Without
+     * this column, `(agentId, senderId)` alone matched the SAME returning
+     * visitor's topics across that boundary, letting them see conversation
+     * history from a share instance the owner explicitly took down — and
+     * `TopicModel.countBySender` would count those stale topics against the
+     * brand-new share's `maxTopicsPerVisitor` cap, potentially making it
+     * unusable immediately. See LOBE-11930 codex P2, `topic.ts:1144`.
+     *
+     * Deliberately NOT `agentShareGenerations.generation`: that counter is
+     * bumped by ANY restrictive `shareConfig` change on a still-`link` share
+     * (`AgentShareModel.isConfigTightening` — e.g. dropping a tool), not only
+     * by a disable/re-enable cycle. Scoping visitor topics by generation
+     * would wrongly reset a visitor's history and cap every time the owner
+     * merely tightened permissions on the SAME live link, which is not the
+     * "new share instance" case this column exists for. `shareId` answers
+     * "which share row was live when I created this topic"; `generation`
+     * answers a different question — "which grants/runs are still valid
+     * right now" — see `agentShareGenerations`'s JSDoc
+     * (`./agentShare.ts`).
+     *
+     * No FK to `agentShares.id`: that row is hard-deleted on every disable
+     * (see above), so a live reference is neither expected nor desired to
+     * survive — this column is a point-in-time marker, not a live
+     * relationship. (A cross-file FK would also create a schema import
+     * cycle with `./agentShare.ts`, which itself references `./topic.ts`
+     * for `agentShareRunReservations.topicId`.) `NULL` for regular
+     * (non-share) conversations and for visitor topics created before this
+     * column existed — see the backfill migration for how pre-existing rows
+     * are handled.
+     */
+    shareId: uuid('share_id'),
+
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
@@ -101,6 +140,7 @@ export const topics = pgTable(
     index('topics_provider_idx').on(t.provider),
     index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
     index('topics_sender_id_idx').on(t.senderId),
+    index('topics_share_id_idx').on(t.shareId),
     index('topics_workspace_id_idx').on(t.workspaceId),
     index('topics_extract_status_gin_idx').using(
       'gin',

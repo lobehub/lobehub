@@ -75,9 +75,14 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
     // genuinely happens with the row lock held, not after it is released.
     const reservationA = reserveShareVisitorTopicOrThrow({
       agentId,
-      create: async (topicModel) => {
+      create: async (topicModel, shareId) => {
         await sleep(DELAY_MS);
-        const created = await topicModel.create({ agentId, senderId: visitorId, title: 'topic-a' });
+        const created = await topicModel.create({
+          agentId,
+          senderId: visitorId,
+          shareId,
+          title: 'topic-a',
+        });
         timestamps.insertCommitted = Date.now();
         return created;
       },
@@ -122,8 +127,8 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
     await expect(
       reserveShareVisitorTopicOrThrow({
         agentId,
-        create: (topicModel) =>
-          topicModel.create({ agentId, senderId: visitorId, title: 'topic-b' }),
+        create: (topicModel, shareId) =>
+          topicModel.create({ agentId, senderId: visitorId, shareId, title: 'topic-b' }),
         db: serverDB,
         ownerId,
         visitorUserId: visitorId,

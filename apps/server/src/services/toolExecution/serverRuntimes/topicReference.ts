@@ -15,6 +15,16 @@ interface GetTopicContextParams {
 
 interface TopicReferenceShareContext {
   agentId: string;
+  /**
+   * The `agentShares.id` this run was authorized against. Checked alongside
+   * `visitorUserId`/`agentId` in `isTopicVisibleToRun` so a topic from a
+   * share instance the owner has since disabled and replaced
+   * (`AgentShareModel.create()` mints a new UUID every disable → re-enable
+   * cycle) is rejected even though the visitor/agent pairing still matches.
+   * See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`)
+   * and LOBE-11930 codex P2.
+   */
+  shareId: string;
   visitorUserId: string;
 }
 
@@ -44,12 +54,16 @@ class TopicReferenceExecutionRuntime {
    * automatic topic-reference injection in `buildServerCallLlmContext`.
    */
   private isTopicVisibleToRun = (
-    topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
+    topic:
+      | { agentId?: string | null; senderId?: string | null; shareId?: string | null }
+      | null
+      | undefined,
   ): boolean => {
     if (!this.shareContext) return true;
     return (
       topic?.senderId === this.shareContext.visitorUserId &&
-      topic?.agentId === this.shareContext.agentId
+      topic?.agentId === this.shareContext.agentId &&
+      topic?.shareId === this.shareContext.shareId
     );
   };
 
@@ -126,7 +140,11 @@ export const topicReferenceRuntime: ServerRuntimeRegistration = {
       context.userId,
       context.workspaceId,
       context.agentShare
-        ? { agentId: context.agentShare.agentId, visitorUserId: context.agentShare.visitorUserId }
+        ? {
+            agentId: context.agentShare.agentId,
+            shareId: context.agentShare.shareId,
+            visitorUserId: context.agentShare.visitorUserId,
+          }
         : undefined,
     );
   },

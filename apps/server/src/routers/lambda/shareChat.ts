@@ -23,9 +23,16 @@ const log = debug('lobe-server:router:shareChat');
  * All procedures authenticate the VISITOR (ctx.userId) but operate on
  * CREATOR-owned rows: topics/messages of a share conversation carry the
  * creator's userId (so runtime, billing, and tool paths behave exactly as a
- * creator-owned chat) plus `topics.senderId = visitor` for scoping. Every
- * read/write here is therefore manually authorized: resolve the share via
- * `findByShareIdWithAccessCheck`, then require `topic.senderId === visitor`.
+ * creator-owned chat) plus `topics.senderId = visitor` AND `topics.shareId =`
+ * the live `agentShares.id` for scoping. Every read/write here is therefore
+ * manually authorized: resolve the share via `findByShareIdWithAccessCheck`,
+ * then require `topic.senderId === visitor && topic.shareId === share.shareId`
+ * (`findVisitorTopicOrThrow`). The `shareId` half matters because
+ * `AgentShareModel.create()` mints a brand-new share UUID every disable →
+ * re-enable cycle — without it, a returning visitor's `senderId` match alone
+ * would resurface (and cap-count) conversations from a share instance the
+ * owner already took down. See `topics.shareId`'s JSDoc
+ * (`packages/database/src/schemas/topic.ts`) and LOBE-11930 codex P2.
  *
  * Agent sharing is personal-only (workspace agents cannot be shared), so no
  * workspaceId is ever threaded into the creator-scoped models/services.
@@ -39,16 +46,29 @@ const ShareTopicScopeSchema = z.object({
 
 /**
  * Resolve a visitor-owned share topic or fail closed. The topic row belongs to
- * the creator (creator-scoped TopicModel), so the senderId + agentId match is
- * the ONLY thing standing between a visitor and the creator's other topics.
+ * the creator (creator-scoped TopicModel), so the senderId + agentId + shareId
+ * match is the ONLY thing standing between a visitor and the creator's other
+ * topics.
+ *
+ * `shareId` is required, not optional: without it, a returning visitor could
+ * reach a topic created under a share instance the owner has since disabled
+ * and replaced (`AgentShareModel.create()` mints a new `agentShares.id` every
+ * disable → re-enable cycle) simply by remembering/bookmarking its topicId —
+ * `senderId`/`agentId` alone still match. See `topics.shareId`'s JSDoc
+ * (`packages/database/src/schemas/topic.ts`) and LOBE-11930 codex P2.
  */
 const findVisitorTopicOrThrow = async (
   topicModel: TopicModel,
-  params: { agentId: string; topicId: string; visitorUserId: string },
+  params: { agentId: string; shareId: string; topicId: string; visitorUserId: string },
 ) => {
   const topic = await topicModel.findById(params.topicId);
 
-  if (!topic || topic.senderId !== params.visitorUserId || topic.agentId !== params.agentId) {
+  if (
+    !topic ||
+    topic.senderId !== params.visitorUserId ||
+    topic.agentId !== params.agentId ||
+    topic.shareId !== params.shareId
+  ) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
 
@@ -115,6 +135,7 @@ export const shareChatRouter = router({
       if (input.topicId) {
         await findVisitorTopicOrThrow(topicModel, {
           agentId: share.agentId,
+          shareId: share.shareId,
           topicId: input.topicId,
           visitorUserId: ctx.userId,
         });
@@ -136,6 +157,7 @@ export const shareChatRouter = router({
         const topicCount = await topicModel.countBySender({
           agentId: share.agentId,
           senderId: ctx.userId,
+          shareId: share.shareId,
         });
         if (topicCount >= maxTopicsPerVisitor) {
           throw new TRPCError({
@@ -157,6 +179,9 @@ export const shareChatRouter = router({
         // between now and operation creation.
         generation: share.generation,
         shareConfig: share.shareConfig,
+        // See `AgentShareGate.shareId`'s JSDoc — the share instance this run
+        // is authorized against, for `topics.shareId` comparisons.
+        shareId: share.shareId,
         visitorUserId: ctx.userId,
       };
 
@@ -242,6 +267,7 @@ export const shareChatRouter = router({
     const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
     await findVisitorTopicOrThrow(topicModel, {
       agentId: share.agentId,
+      shareId: share.shareId,
       topicId: input.topicId,
       visitorUserId: ctx.userId,
     });
@@ -274,7 +300,11 @@ export const shareChatRouter = router({
       );
 
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
-      return topicModel.queryBySender({ agentId: share.agentId, senderId: ctx.userId });
+      return topicModel.queryBySender({
+        agentId: share.agentId,
+        senderId: ctx.userId,
+        shareId: share.shareId,
+      });
     }),
 
   /**
@@ -305,6 +335,7 @@ export const shareChatRouter = router({
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
       const topic = await findVisitorTopicOrThrow(topicModel, {
         agentId: share.agentId,
+        shareId: share.shareId,
         topicId: input.topicId,
         visitorUserId: ctx.userId,
       });
@@ -366,6 +397,7 @@ export const shareChatRouter = router({
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
       const topic = await findVisitorTopicOrThrow(topicModel, {
         agentId: share.agentId,
+        shareId: share.shareId,
         topicId: input.topicId,
         visitorUserId: ctx.userId,
       });

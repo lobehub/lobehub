@@ -121,11 +121,27 @@ export const buildServerCallLlmContext = async ({
     // `TopicModel`'s built-in ownership scoping is not sufficient here — it
     // must also be checked against the visitor/agent pairing of the active
     // share, not just the DB row's owner.
+    //
+    // `shareId` is checked too, not just `senderId`/`agentId`: a topic
+    // created under a share instance the owner has since disabled and
+    // replaced (`AgentShareModel.create()` mints a new `agentShares.id` every
+    // disable → re-enable cycle) still matches `senderId`/`agentId` for a
+    // returning visitor — without this check, a `<refer_topic>` tag naming an
+    // old topicId could pull that stale conversation's content into a
+    // supposedly-fresh new-share run. See `topics.shareId`'s JSDoc
+    // (`packages/database/src/schemas/topic.ts`) and LOBE-11930 codex P2.
     const isTopicVisibleToRun = (
-      topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
+      topic:
+        | { agentId?: string | null; senderId?: string | null; shareId?: string | null }
+        | null
+        | undefined,
     ): boolean => {
       if (!agentShare) return true;
-      return topic?.senderId === agentShare.visitorUserId && topic?.agentId === agentShare.agentId;
+      return (
+        topic?.senderId === agentShare.visitorUserId &&
+        topic?.agentId === agentShare.agentId &&
+        topic?.shareId === agentShare.shareId
+      );
     };
     topicReferences = await resolveTopicReferences(
       messagesForContext as Array<{ content: string | unknown }>,

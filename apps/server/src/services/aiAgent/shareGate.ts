@@ -55,6 +55,27 @@ export interface AgentShareGate {
   generation: number;
   shareConfig: AgentShareConfig;
   /**
+   * The `agentShares.id` this run was authorized against — the SAME read
+   * (`AgentShareModel.findByShareId`, via `findByShareIdWithAccessCheck`) as
+   * `generation`/`shareConfig` above. Used for AUTHORIZATION comparisons
+   * against `topics.shareId` (e.g. `shareChat.ts`'s `findVisitorTopicOrThrow`,
+   * the topic-reference tool's `isTopicVisibleToRun`) — a topic stamped with a
+   * DIFFERENT share id belongs to a share instance the owner has since
+   * disabled and replaced (`AgentShareModel.create()` mints a new UUID every
+   * disable → re-enable cycle), so it must be treated as out of scope for
+   * this run even though `senderId`/`agentId` still match. See
+   * `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`) and
+   * LOBE-11930 codex P2.
+   *
+   * NOT used to stamp a newly-created topic's `shareId` column —
+   * `reserveShareVisitorTopicOrThrow` re-reads the CURRENT `agentShares.id`
+   * fresh under the same row lock it uses for `maxTopicsPerVisitor`, for the
+   * identical staleness reason `AgentShareModel.readCurrentVisitorCaps`
+   * documents: this snapshot can predate a disable/re-enable that happened
+   * while agent-config/tool resolution was in flight.
+   */
+  shareId: string;
+  /**
    * The signed-in visitor driving this run. Recorded on `topics.senderId` and
    * spend-log metadata; the run itself executes as the creator.
    */

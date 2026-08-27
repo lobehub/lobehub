@@ -144,6 +144,14 @@ export interface CreateTopicParams {
   senderId?: string | null;
   sessionId?: string | null;
   /**
+   * The live `agentShares.id` at creation time, for agent-share visitor
+   * topics only (see `topics.shareId`'s JSDoc in `../schemas/topic.ts` for
+   * why this must be persisted alongside `senderId`). Always resolved
+   * server-side from the share the run was authorized against — never
+   * trusted from client input. NULL for regular conversations.
+   */
+  shareId?: string | null;
+  /**
    * Initial status. Defaults to the column default (`active`). A topic created
    * with `metadata.scheduledRun` must set `scheduled` here so the status and the
    * payload land in the same insert — the dispatcher treats the pair as one fact.
@@ -1129,7 +1137,16 @@ export class TopicModel {
    * Share-visitor topic list for one visitor on one shared agent. The model is
    * constructed with the creator's userId (visitor topics carry it), so the
    * caller — the shareChat router — must have already authorized the visitor
-   * via the share access check; `senderId` is the only per-visitor boundary.
+   * via the share access check; `senderId` + `shareId` together are the
+   * per-visitor boundary.
+   *
+   * `shareId` scopes to the CURRENT `agentShares` instance, not just the
+   * visitor: `AgentShareModel.create()` mints a brand-new share UUID every
+   * disable → re-enable cycle (`deleteByAgentId` hard-deletes the row,
+   * `create()` inserts a fresh one), so `senderId` alone would resurface a
+   * returning visitor's conversations from a share instance the owner
+   * already took down. See `topics.shareId`'s JSDoc (`../schemas/topic.ts`)
+   * and LOBE-11930 codex P2.
    *
    * Selects a visitor-facing DTO instead of the full row: the visitor surface
    * only renders id/title, and the row also carries creator-only fields
@@ -1137,7 +1154,7 @@ export class TopicModel {
    * metadata) that must never reach a share visitor.
    */
   queryBySender = async (
-    { agentId, senderId }: { agentId: string; senderId: string },
+    { agentId, senderId, shareId }: { agentId: string; senderId: string; shareId: string },
     { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
   ): Promise<VisitorTopicItem[]> => {
     return this.db
@@ -1148,23 +1165,46 @@ export class TopicModel {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
-      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
+      .where(
+        and(
+          this.mine(),
+          eq(topics.agentId, agentId),
+          eq(topics.senderId, senderId),
+          eq(topics.shareId, shareId),
+        ),
+      )
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
   };
 
-  /** Per-visitor topic count on one shared agent — drives `maxTopicsPerVisitor`. */
+  /**
+   * Per-visitor topic count on the CURRENT share instance — drives
+   * `maxTopicsPerVisitor`. Scoped by `shareId` for the same reason as
+   * `queryBySender`: without it, topics from a share instance the owner
+   * already disabled would count against a brand-new instance's cap,
+   * potentially making it unusable immediately after re-enabling. See
+   * `topics.shareId`'s JSDoc and LOBE-11930 codex P2.
+   */
   countBySender = async ({
     agentId,
     senderId,
+    shareId,
   }: {
     agentId: string;
     senderId: string;
+    shareId: string;
   }): Promise<number> => {
     const result = await this.db
       .select({ count: count(topics.id) })
       .from(topics)
-      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
+      .where(
+        and(
+          this.mine(),
+          eq(topics.agentId, agentId),
+          eq(topics.senderId, senderId),
+          eq(topics.shareId, shareId),
+        ),
+      );
 
     return result[0].count;
   };

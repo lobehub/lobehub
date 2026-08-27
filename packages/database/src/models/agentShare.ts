@@ -507,12 +507,31 @@ export class AgentShareModel {
    * keys still enforces the same baseline (5 topics / 20 turns) instead of
    * `undefined >= count` silently passing.
    */
+  /**
+   * `shareId` is returned alongside the caps for the identical staleness
+   * reason documented above: `shareChat.ts` resolves `share.shareId` exactly
+   * ONCE, at `findByShareIdWithAccessCheck`, long before
+   * `reserveShareVisitorTopicOrThrow` reaches this same locked transaction.
+   * A caller-supplied `shareId` could be a share instance the owner already
+   * disabled and replaced (`create()` mints a new UUID every disable →
+   * re-enable cycle) by the time the topic is actually inserted — stamping
+   * the STALE id would misfile the new topic under a share instance that no
+   * longer exists, while stamping nothing would leave it unscoped forever.
+   * Reading it fresh here, under the same `agents.id FOR UPDATE` lock as the
+   * caps, guarantees the topic is always stamped with whichever share
+   * instance is ACTUALLY live at insert time. `null` when the agent has no
+   * share row at all (fully disabled, never re-enabled) — callers must fail
+   * closed on that, mirroring `lockOwnedAgentRow`'s `null` contract. See
+   * `topics.shareId`'s JSDoc (`../schemas/topic.ts`) and LOBE-11930 codex P2.
+   */
   static readCurrentVisitorCaps = async (
     db: LobeChatDatabase,
     agentId: string,
-  ): Promise<Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic'>> => {
+  ): Promise<
+    Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic'> & { shareId: string | null }
+  > => {
     const [row] = await db
-      .select({ shareConfig: agentShares.shareConfig })
+      .select({ id: agentShares.id, shareConfig: agentShares.shareConfig })
       .from(agentShares)
       .where(eq(agentShares.agentId, agentId));
 
@@ -520,6 +539,7 @@ export class AgentShareModel {
     return {
       maxTopicsPerVisitor: normalized.maxTopicsPerVisitor,
       maxTurnsPerTopic: normalized.maxTurnsPerTopic,
+      shareId: row?.id ?? null,
     };
   };
 

@@ -2566,6 +2566,13 @@ export class AiAgentService {
         // (this.userId), but stamping the visitor's id keeps it out of the
         // creator's listings and lets shareChat scope reads per visitor.
         senderId: shareGate?.visitorUserId,
+        // Placeholder only — `reserveShareVisitorTopic` (below) overrides
+        // this with the FRESH `agentShares.id` it reads under its own row
+        // lock, since this `shareGate.shareId` snapshot can predate a
+        // disable/re-enable that happened during the agent-config/tool
+        // resolution above. See that function's JSDoc and `topics.shareId`'s
+        // JSDoc (`packages/database/src/schemas/topic.ts`).
+        shareId: shareGate?.shareId,
         title:
           title !== undefined
             ? title
@@ -5534,6 +5541,11 @@ export class AiAgentService {
                   (kb: { enabled?: boolean | null; id?: string | null }) => kb.enabled && kb.id,
                 )
                 .map((kb: { id?: string | null }) => kb.id as string),
+              // The share instance this run was authorized against — see
+              // `AgentShareGate.shareId`'s JSDoc for why cross-topic reads
+              // within the run must reject a topic stamped with a different
+              // `shareId` even when `senderId`/`agentId` still match.
+              shareId: shareGate.shareId,
               visitorUserId: shareGate.visitorUserId,
             }
           : undefined,
