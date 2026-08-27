@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
+import { resolveLocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import type * as LobeChatConst from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
@@ -1241,15 +1242,19 @@ describe('StreamingExecutor actions', () => {
       } as UIChatMessage;
       const createToolsEngineSpy = vi
         .spyOn(toolEngineering, 'createAgentToolsEngine')
-        .mockReturnValue({
-          generateToolsDetailed: vi.fn().mockReturnValue({
-            enabledManifests: [],
-            enabledToolIds: [],
-            tools: [],
-          }),
-        } as any);
+        .mockImplementation((_workingModel, _pluginIds, manifestContext) => {
+          const localSystemManifest = resolveLocalSystemManifest(manifestContext ?? {});
 
-      result.current.internal_createAgentState({
+          return {
+            generateToolsDetailed: vi.fn().mockReturnValue({
+              enabledManifests: localSystemManifest ? [localSystemManifest] : [],
+              enabledToolIds: localSystemManifest ? [localSystemManifest.identifier] : [],
+              tools: [],
+            }),
+          } as any;
+        });
+
+      const { state } = result.current.internal_createAgentState({
         messages: [userMessage],
         parentMessageId: userMessage.id,
         agentId: TEST_IDS.SESSION_ID,
@@ -1260,6 +1265,14 @@ describe('StreamingExecutor actions', () => {
         expect.any(Object),
         undefined,
         expect.objectContaining({ executionEnv: 'local' }),
+      );
+      const readFile = state.toolManifestMap['lobe-local-system']?.api.find(
+        (api) => api.name === 'readFile',
+      );
+
+      expect(readFile?.description).toContain('base64');
+      expect(state.toolManifestMap['lobe-local-system']?.systemRole).toContain(
+        'Image files are uploaded as visual tool results',
       );
     });
 

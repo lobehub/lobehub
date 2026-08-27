@@ -1,151 +1,126 @@
-import type * as LobeChatConst from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
 
-const desktopFlag = vi.hoisted(() => ({ value: false }));
-
-vi.mock('@lobechat/const', async (importOriginal) => {
-  const actual = await importOriginal<typeof LobeChatConst>();
-
-  return {
-    ...actual,
-    get isDesktop() {
-      return desktopFlag.value;
-    },
-  };
-});
-
 // Mock the store and helper dependencies
-vi.mock('@/store/tool', async () => {
-  const { LocalSystemManifest, resolveLocalSystemManifest } =
-    await import('@lobechat/builtin-tool-local-system');
-
-  return {
-    getToolStoreState: () => ({
-      connectors: [],
-      builtinTools: [
-        {
+vi.mock('@/store/tool', () => ({
+  getToolStoreState: () => ({
+    connectors: [],
+    builtinTools: [
+      {
+        identifier: 'search',
+        manifest: {
+          api: [
+            {
+              description: 'Search the web',
+              name: 'search',
+              parameters: {
+                properties: {
+                  query: { description: 'Search query', type: 'string' },
+                },
+                required: ['query'],
+                type: 'object',
+              },
+            },
+          ],
           identifier: 'search',
-          manifest: {
-            api: [
-              {
-                description: 'Search the web',
-                name: 'search',
-                parameters: {
-                  properties: {
-                    query: { description: 'Search query', type: 'string' },
-                  },
-                  required: ['query'],
-                  type: 'object',
+          meta: {
+            title: 'Web Search',
+            description: 'Search tool',
+            avatar: '🔍',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: 'lobe-web-browsing',
+        manifest: {
+          api: [
+            {
+              description:
+                'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
+              name: 'search',
+              parameters: {
+                properties: {
+                  query: { description: 'The search query', type: 'string' },
                 },
+                required: ['query'],
+                type: 'object',
               },
-            ],
-            identifier: 'search',
-            meta: {
-              title: 'Web Search',
-              description: 'Search tool',
-              avatar: '🔍',
             },
-            type: 'builtin',
-          } as unknown as ToolManifest,
-          type: 'builtin' as const,
-        },
-        {
+          ],
           identifier: 'lobe-web-browsing',
-          manifest: {
-            api: [
-              {
-                description:
-                  'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
-                name: 'search',
-                parameters: {
-                  properties: {
-                    query: { description: 'The search query', type: 'string' },
+          meta: {
+            title: 'Web Browsing',
+            avatar: '🌐',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: 'lobe-agent',
+        manifest: {
+          api: [
+            {
+              description: 'Analyze visual media',
+              name: 'analyzeMedia',
+              parameters: {
+                properties: {
+                  question: { type: 'string' },
+                  refs: {
+                    items: { type: 'string' },
+                    type: 'array',
                   },
-                  required: ['query'],
-                  type: 'object',
+                  urls: {
+                    items: { type: 'string' },
+                    type: 'array',
+                  },
                 },
+                required: ['question'],
+                type: 'object',
               },
-            ],
-            identifier: 'lobe-web-browsing',
-            meta: {
-              title: 'Web Browsing',
-              avatar: '🌐',
             },
-            type: 'builtin',
-          } as unknown as ToolManifest,
-          type: 'builtin' as const,
-        },
-        {
+          ],
           identifier: 'lobe-agent',
-          manifest: {
-            api: [
-              {
-                description: 'Analyze visual media',
-                name: 'analyzeMedia',
-                parameters: {
-                  properties: {
-                    question: { type: 'string' },
-                    refs: {
-                      items: { type: 'string' },
-                      type: 'array',
-                    },
-                    urls: {
-                      items: { type: 'string' },
-                      type: 'array',
-                    },
-                  },
-                  required: ['question'],
-                  type: 'object',
+          meta: {
+            title: 'Lobe Agent',
+            avatar: 'V',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: 'lobe-image-generation',
+        manifest: {
+          api: [
+            {
+              description: 'Generate image',
+              name: 'generateImage',
+              parameters: {
+                properties: {
+                  prompt: { type: 'string' },
                 },
+                required: ['prompt'],
+                type: 'object',
               },
-            ],
-            identifier: 'lobe-agent',
-            meta: {
-              title: 'Lobe Agent',
-              avatar: 'V',
             },
-            type: 'builtin',
-          } as unknown as ToolManifest,
-          type: 'builtin' as const,
-        },
-        {
+          ],
           identifier: 'lobe-image-generation',
-          manifest: {
-            api: [
-              {
-                description: 'Generate image',
-                name: 'generateImage',
-                parameters: {
-                  properties: {
-                    prompt: { type: 'string' },
-                  },
-                  required: ['prompt'],
-                  type: 'object',
-                },
-              },
-            ],
-            identifier: 'lobe-image-generation',
-            meta: {
-              title: 'Image Generation',
-              avatar: 'I',
-            },
-            type: 'builtin',
-          } as unknown as ToolManifest,
-          type: 'builtin' as const,
-        },
-        {
-          identifier: LocalSystemManifest.identifier,
-          manifest: LocalSystemManifest,
-          resolveManifest: resolveLocalSystemManifest,
-          type: 'builtin' as const,
-        },
-      ],
-    }),
-  };
-});
+          meta: {
+            title: 'Image Generation',
+            avatar: 'I',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
+    ],
+  }),
+}));
 
 let mockGetInstalledPluginById: (id: string) => () => any = () => () => undefined;
 let mockInstalledPluginManifestList: () => ToolManifest[] = () => [];
@@ -179,7 +154,6 @@ let mockCurrentAgentPlugins: string[] = [];
 let mockCurrentAgentDisabledPlugins: string[] = [];
 let mockCurrentChatConfig: { enableAgentMode?: boolean; memory?: { enabled?: boolean } } = {};
 let mockImageOutputSupport = false;
-let mockLocalSystemEnabled = false;
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
@@ -194,7 +168,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentChatConfigSelectors: {
     currentChatConfig: () => mockCurrentChatConfig,
     isCloudSandboxEnabled: () => false,
-    isLocalSystemEnabled: () => mockLocalSystemEnabled,
+    isLocalSystemEnabled: () => false,
     isMemoryToolEnabled: () => false,
   },
 }));
@@ -239,9 +213,7 @@ describe('toolEngineering', () => {
     mockIsCanUseFC = true;
     mockCurrentChatConfig = {};
     mockImageOutputSupport = false;
-    mockLocalSystemEnabled = false;
     mockServerConfig = {};
-    desktopFlag.value = false;
   });
 
   // `TOOL_NAME_MAX_LENGTH` is a server env, but this path generates tool names in
@@ -347,31 +319,6 @@ describe('toolEngineering', () => {
   });
 
   describe('createChatToolsEngine', () => {
-    it('should expose image reads through the resolved local-system manifest on desktop', () => {
-      desktopFlag.value = true;
-      mockLocalSystemEnabled = true;
-
-      const toolsEngine = createAgentToolsEngine(
-        { model: 'gpt-4', provider: 'openai' },
-        ['lobe-local-system'],
-        { executionEnv: 'local' },
-      );
-      const result = toolsEngine.generateToolsDetailed({
-        model: 'gpt-4',
-        provider: 'openai',
-        toolIds: ['lobe-local-system'],
-      });
-      const localSystemManifest = result.enabledManifests.find(
-        (manifest) => manifest.identifier === 'lobe-local-system',
-      );
-      const readFile = localSystemManifest?.api.find((api) => api.name === 'readFile');
-
-      expect(readFile?.description).toContain('base64');
-      expect(localSystemManifest?.systemRole).toContain(
-        'Image files are uploaded as visual tool results',
-      );
-    });
-
     it('should not auto-enable image generation in chat mode', () => {
       mockCurrentChatConfig = { enableAgentMode: false };
       mockImageOutputSupport = false;
