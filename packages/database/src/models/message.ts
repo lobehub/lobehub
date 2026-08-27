@@ -700,6 +700,12 @@ const CREATOR_PRIVATE_BLOB_KEYS = new Set([
   'completionTokens',
   'inputTokens',
   'outputTokens',
+  // `AgentRuntimeService.publishSubAgentProgress`'s live `step_complete`
+  // (`subagent_progress` phase) reads these off `state.usage.llm.tokens`
+  // under the `total*` spelling rather than `inputTokens`/`outputTokens` —
+  // same class of creator token-spend data, different key name.
+  'totalInputTokens',
+  'totalOutputTokens',
 ]);
 
 /**
@@ -711,8 +717,16 @@ const CREATOR_PRIVATE_BLOB_KEYS = new Set([
  * instances, matching this file's other blob handling) — anything else
  * (string, number, boolean, `Date`, etc.) is returned as-is, since it cannot
  * itself carry a nested creator-identity field.
+ *
+ * Exported so `GatewayStreamNotifier`'s live Gateway-push chokepoint
+ * (`sanitizeGatewayEventData`) can apply the SAME key set to `stream_start`
+ * (`model`/`provider`), `tool_end` (`result`/`payload`, which can carry a
+ * tool's `state` with `model`/`provider`/`usage`), and `step_complete`
+ * (`subagent_progress`'s sibling `model`/`totalCost`/token fields) — the live
+ * WS payload equivalents of the persisted `pluginState`/`pluginError` blobs
+ * this function was written for. See LOBE-11930 review round 4.
  */
-const redactCreatorPrivateBlob = <T>(value: T): T => {
+export const redactCreatorPrivateBlob = <T>(value: T): T => {
   if (Array.isArray(value)) return value.map((item) => redactCreatorPrivateBlob(item)) as T;
   if (!isPlainRecord(value)) return value;
 

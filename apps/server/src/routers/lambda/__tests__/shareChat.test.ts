@@ -254,6 +254,42 @@ describe('shareChatRouter', () => {
       });
     });
 
+    // Regression for Codex P2 follow-up (LOBE-11930, `shareChat.ts:249`):
+    // `AiAgentService.execAgent` RESOLVES (rather than throws) with
+    // `{ success: false, error }` when `createOperation` itself fails to
+    // start (see `aiAgent/index.ts`'s `execAgent` catch block) — a case the
+    // surrounding try/catch above never sees because nothing was thrown.
+    // Without a check on the resolved value, that raw `error` (and the
+    // whole "started" shape) would flow straight back to the visitor and
+    // the Gateway client would try to open a WebSocket for an operation
+    // that never began.
+    it('redacts a RESOLVED (not thrown) startup failure and never returns it as a live operation', async () => {
+      const diagnostic =
+        'QStash publish failed: 503 from internal-queue.prod.internal (token=shhh)';
+      mockExecAgent.mockResolvedValueOnce({
+        agentId: share.agentId,
+        assistantMessageId: 'msg_assistant',
+        autoStarted: false,
+        createdAt: new Date().toISOString(),
+        error: diagnostic,
+        message: 'Agent operation failed to start',
+        operationId: 'op-failed',
+        status: 'error',
+        success: false,
+        timestamp: new Date().toISOString(),
+        topicId: 'tpc_visitor',
+        userMessageId: 'msg_user',
+      });
+      const caller = await createCaller();
+
+      const rejection = caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+      await expect(rejection).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      await rejection.catch((error: any) => {
+        expect(error.message).not.toContain('internal-queue');
+        expect(error.message).not.toContain('token=shhh');
+      });
+    });
+
     it('never sets interactiveStart, so concurrent visitor sends contend on the real runningOperation liveness instead of only the short reservation', async () => {
       // Regression for Codex P1 (LOBE-11930, `shareChat.ts:186`): `interactiveStart:
       // true` makes `TopicModel.tryReserveTaskCallback` skip its `runningOperation`

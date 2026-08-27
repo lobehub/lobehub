@@ -1,5 +1,6 @@
 import {
   type AsyncTaskError,
+  AsyncTaskErrorType,
   AsyncTaskStatus,
   type BuiltinServerRuntimeOutput,
 } from '@lobechat/types';
@@ -33,6 +34,16 @@ const WAIT_POLL_INTERVAL_MS = 3000;
 const MAX_GENERATION_TOPIC_TITLE_LENGTH = 100;
 
 export interface GenerateImageRuntimeContext {
+  /**
+   * Present (truthy) when this call is a share-visitor run — mirrors
+   * `ToolExecutionContext.agentShare` (`apps/server/src/services/toolExecution/types.ts`).
+   * `BuiltinToolsExecutor.execute` (`apps/server/src/services/toolExecution/builtin.ts`)
+   * passes the whole `ToolExecutionContext` straight through as `runtime[apiName](args,
+   * context)`'s second argument, so this field arrives here without any extra wiring —
+   * only presence is checked, the full shape stays owned by the server layer so this
+   * package doesn't need to import it.
+   */
+  agentShare?: unknown;
   executionTimeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -114,8 +125,54 @@ const formatParameterDetails = (state: GetImageModelParametersState) => {
   ].join('\n');
 };
 
-const asyncTaskErrorMessage = (error: AsyncTaskError | null | undefined) => {
+/**
+ * Generic-but-actionable fallback text for a share visitor, keyed by
+ * `AsyncTaskErrorType` (`error.name` on `AsyncTaskError`,
+ * `packages/types/src/asyncTask.ts`). `categorizeImageGenerationError`
+ * (`apps/server/src/routers/async/imageError.ts`) sets `errorMessage` (→
+ * `body.detail`) from raw upstream text in most branches — `error.message` /
+ * `error.error?.message` straight from the provider SDK/HTTP response, which
+ * can name the creator's provider, an internal endpoint, or quota/billing
+ * state — while `errorType` (→ `error.name`) is always one of this finite,
+ * safe enum. Keying the visitor-facing message off `error.name` instead of
+ * `body.detail` keeps the category (content policy vs. rate limit vs. bad
+ * model) actionable for the calling LLM without forwarding the raw text.
+ */
+const SHARE_VISITOR_ASYNC_TASK_ERROR_MESSAGES: Partial<Record<AsyncTaskErrorType, string>> = {
+  [AsyncTaskErrorType.FreePlanLimit]:
+    'Image generation failed because of a plan limit. Do not retry with the same arguments.',
+  [AsyncTaskErrorType.InvalidProviderAPIKey]:
+    'Image generation failed because of a provider configuration issue. Do not retry with the same arguments.',
+  [AsyncTaskErrorType.ModelNotFound]:
+    'The requested image model is not available. Try a different model.',
+  [AsyncTaskErrorType.ProviderContentModeration]:
+    "The prompt or reference image was blocked by the provider's content policy. Try a different prompt.",
+  [AsyncTaskErrorType.SubscriptionPlanLimit]:
+    'Image generation failed because of a plan limit. Do not retry with the same arguments.',
+  [AsyncTaskErrorType.Timeout]: 'Image generation timed out. You may retry once.',
+  [AsyncTaskErrorType.WorkspaceFrozenByAdmin]:
+    'Image generation failed because of an account restriction. Do not retry with the same arguments.',
+  [AsyncTaskErrorType.WorkspaceFrozenByRiskControl]:
+    'Image generation failed because of an account restriction. Do not retry with the same arguments.',
+};
+
+const GENERIC_SHARE_VISITOR_ASYNC_TASK_ERROR_MESSAGE =
+  'Image generation failed. Do not retry with the same arguments.';
+
+const asyncTaskErrorMessage = (
+  error: AsyncTaskError | null | undefined,
+  isShareVisitor?: boolean,
+) => {
   if (!error) return 'Image generation failed.';
+
+  if (isShareVisitor) {
+    const errorType = error.name as AsyncTaskErrorType;
+    return (
+      SHARE_VISITOR_ASYNC_TASK_ERROR_MESSAGES[errorType] ??
+      GENERIC_SHARE_VISITOR_ASYNC_TASK_ERROR_MESSAGE
+    );
+  }
+
   const body = error.body;
   if (typeof body === 'string') return body;
   return body.detail || error.name || 'Image generation failed.';
@@ -173,7 +230,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 
-const formatStatusContent = (state: GetImageGenerationStatusState) => {
+const formatStatusContent = (state: GetImageGenerationStatusState, isShareVisitor?: boolean) => {
   if (state.status === 'success') {
     const url = getAssetUrl(state);
     return url
@@ -182,7 +239,7 @@ const formatStatusContent = (state: GetImageGenerationStatusState) => {
   }
 
   if (state.status === 'error') {
-    return `Image generation ${state.generationId} failed: ${asyncTaskErrorMessage(state.error)}`;
+    return `Image generation ${state.generationId} failed: ${asyncTaskErrorMessage(state.error, isShareVisitor)}`;
   }
 
   return `Image generation ${state.generationId} is ${state.status}. Check again later with getImageGenerationStatus.`;
@@ -190,13 +247,15 @@ const formatStatusContent = (state: GetImageGenerationStatusState) => {
 
 const formatGenerationLines = (
   generations: GeneratedImageTask[],
-  options: { includeImageUrl?: boolean } = {},
+  options: { includeImageUrl?: boolean; isShareVisitor?: boolean } = {},
 ) =>
   generations.map((item, index) => {
     const url = getTaskAssetUrl(item);
     const status = item.status ? `, status=${item.status}` : '';
     const error =
-      item.status === AsyncTaskStatus.Error ? `, error=${asyncTaskErrorMessage(item.error)}` : '';
+      item.status === AsyncTaskStatus.Error
+        ? `, error=${asyncTaskErrorMessage(item.error, options.isShareVisitor)}`
+        : '';
     const suffix =
       url && options.includeImageUrl !== false
         ? `, imageUrl=${url}`
@@ -213,12 +272,12 @@ const formatMarkdownImageLines = (generations: GeneratedImageTask[]) =>
     })
     .filter((line): line is string => Boolean(line));
 
-const formatStartedContent = (state: GenerateImageState) =>
+const formatStartedContent = (state: GenerateImageState, isShareVisitor?: boolean) =>
   [
     `Image generation started with ${state.provider}/${state.model}.`,
     state.batchId ? `Batch ID: ${state.batchId}` : undefined,
     'Generations:',
-    ...formatGenerationLines(state.generations),
+    ...formatGenerationLines(state.generations, { isShareVisitor }),
     'Use getImageGenerationStatus for each generation until status is success or error.',
   ]
     .filter((line): line is string => Boolean(line))
@@ -236,34 +295,42 @@ const formatCompletedContent = (state: GenerateImageState) =>
     .filter((line): line is string => Boolean(line))
     .join('\n');
 
-const formatFailedContent = (state: GenerateImageState) =>
+const formatFailedContent = (state: GenerateImageState, isShareVisitor?: boolean) =>
   [
     `Image generation finished with errors using ${state.provider}/${state.model}.`,
     state.batchId ? `Batch ID: ${state.batchId}` : undefined,
     'Results:',
-    ...formatGenerationLines(state.generations, { includeImageUrl: false }),
+    ...formatGenerationLines(state.generations, { includeImageUrl: false, isShareVisitor }),
     ...formatMarkdownImageLines(state.generations),
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n');
 
-const formatTimedOutContent = (state: GenerateImageState, waitTimeoutMs: number) =>
+const formatTimedOutContent = (
+  state: GenerateImageState,
+  waitTimeoutMs: number,
+  isShareVisitor?: boolean,
+) =>
   [
     `Image generation started with ${state.provider}/${state.model} and is still processing after ${waitTimeoutMs}ms.`,
     state.batchId ? `Batch ID: ${state.batchId}` : undefined,
     'Current generations:',
-    ...formatGenerationLines(state.generations),
+    ...formatGenerationLines(state.generations, { isShareVisitor }),
     'Use getImageGenerationStatus later only for generations that are not success or error.',
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n');
 
-const formatWaitFailedContent = (state: GenerateImageState, message: string) =>
+const formatWaitFailedContent = (
+  state: GenerateImageState,
+  message: string,
+  isShareVisitor?: boolean,
+) =>
   [
     `Image generation started with ${state.provider}/${state.model}, but the latest status could not be checked.`,
     state.batchId ? `Batch ID: ${state.batchId}` : undefined,
     'Generations:',
-    ...formatGenerationLines(state.generations),
+    ...formatGenerationLines(state.generations, { isShareVisitor }),
     `Status check error: ${message}`,
     'Use getImageGenerationStatus later for each generation until status is success or error.',
   ]
@@ -464,6 +531,7 @@ export class ImageGenerationExecutionRuntime {
     }
 
     const { model, provider } = selection;
+    const isShareVisitor = Boolean(context.agentShare);
     const waitUntilComplete = args.waitUntilComplete !== false;
     const referenceUrls = normalizeReferenceUrls(args);
     const params = {
@@ -523,7 +591,7 @@ export class ImageGenerationExecutionRuntime {
 
       if (!waitUntilComplete) {
         return {
-          content: formatStartedContent(state),
+          content: formatStartedContent(state, isShareVisitor),
           state,
           success: true,
         };
@@ -557,7 +625,7 @@ export class ImageGenerationExecutionRuntime {
 
       if (waitResult.timedOut) {
         return {
-          content: formatTimedOutContent(waitedState, waitTimeoutMs),
+          content: formatTimedOutContent(waitedState, waitTimeoutMs, isShareVisitor),
           state: waitedState,
           success: true,
         };
@@ -566,7 +634,7 @@ export class ImageGenerationExecutionRuntime {
       if (waitResult.generations.some((item) => item.status === AsyncTaskStatus.Error)) {
         const message = 'One or more image generations failed.';
         return {
-          content: formatFailedContent(waitedState),
+          content: formatFailedContent(waitedState, isShareVisitor),
           error: { message, type: 'ImageGenerationFailed' },
           state: waitedState,
           success: false,
@@ -588,6 +656,7 @@ export class ImageGenerationExecutionRuntime {
 
   async getImageGenerationStatus(
     args: GetImageGenerationStatusParams,
+    context: Pick<GenerateImageRuntimeContext, 'agentShare'> = {},
   ): Promise<BuiltinServerRuntimeOutput> {
     const generationId = args.generationId?.trim();
     const asyncTaskId = args.asyncTaskId?.trim();
@@ -596,14 +665,19 @@ export class ImageGenerationExecutionRuntime {
       return errorOutput('InvalidToolArguments', '`generationId` and `asyncTaskId` are required.');
     }
 
+    const isShareVisitor = Boolean(context.agentShare);
+
     try {
       const state = await this.service.getGenerationStatus({ asyncTaskId, generationId });
-      const content = formatStatusContent(state);
+      const content = formatStatusContent(state, isShareVisitor);
 
       if (state.status === 'error') {
         return {
           content,
-          error: { message: asyncTaskErrorMessage(state.error), type: 'ImageGenerationFailed' },
+          error: {
+            message: asyncTaskErrorMessage(state.error, isShareVisitor),
+            type: 'ImageGenerationFailed',
+          },
           state,
           success: false,
         };

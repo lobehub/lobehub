@@ -422,4 +422,117 @@ describe('ImageGenerationExecutionRuntime', () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain('https://cdn.example.com/image.png');
   });
+
+  describe('agent share visitor error redaction', () => {
+    // Agent Share: a visitor's run executes under the creator's own credentials
+    // (see `ToolExecutionContext.agentShare`,
+    // `apps/server/src/services/toolExecution/types.ts`), so a raw async-task
+    // failure `detail` can carry the creator's provider name, an internal
+    // endpoint, or quota/billing state. `BuiltinToolsExecutor.execute`
+    // (`apps/server/src/services/toolExecution/builtin.ts`) forwards the whole
+    // `ToolExecutionContext` as the runtime call's second argument, so
+    // `context.agentShare` arrives here without extra wiring.
+    const agentShareContext = { agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' } };
+
+    it('redacts the raw async-task error detail from generateImage for a share visitor', async () => {
+      const service = createService({
+        getGenerationStatus: vi.fn().mockResolvedValue({
+          asyncTaskId: 'task-1',
+          error: {
+            body: { detail: 'acme-provider.internal returned 402: insufficient credit balance' },
+            name: 'SubscriptionPlanLimit',
+          },
+          generation: null,
+          generationId: 'generation-1',
+          status: AsyncTaskStatus.Error,
+        }),
+      });
+      const runtime = new ImageGenerationExecutionRuntime(service);
+
+      const result = await runtime.generateImage(
+        { prompt: 'A compact workbench UI' },
+        agentShareContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('acme-provider.internal');
+      expect(result.content).not.toContain('insufficient credit balance');
+      expect(result.content).toContain('plan limit');
+    });
+
+    it('still returns the raw async-task error detail for a non-share (creator) run', async () => {
+      const service = createService({
+        getGenerationStatus: vi.fn().mockResolvedValue({
+          asyncTaskId: 'task-1',
+          error: {
+            body: { detail: 'acme-provider.internal returned 402: insufficient credit balance' },
+            name: 'SubscriptionPlanLimit',
+          },
+          generation: null,
+          generationId: 'generation-1',
+          status: AsyncTaskStatus.Error,
+        }),
+      });
+      const runtime = new ImageGenerationExecutionRuntime(service);
+
+      const result = await runtime.generateImage({ prompt: 'A compact workbench UI' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain(
+        'acme-provider.internal returned 402: insufficient credit balance',
+      );
+    });
+
+    it('falls back to a fully generic message for a share visitor when the error name is unrecognized', async () => {
+      const service = createService({
+        getGenerationStatus: vi.fn().mockResolvedValue({
+          asyncTaskId: 'task-1',
+          error: {
+            body: { detail: 'Upstream fal.ai request to /v1/queue failed' },
+            name: 'SomeUnmappedProviderErrorClass',
+          },
+          generation: null,
+          generationId: 'generation-1',
+          status: AsyncTaskStatus.Error,
+        }),
+      });
+      const runtime = new ImageGenerationExecutionRuntime(service);
+
+      const result = await runtime.generateImage(
+        { prompt: 'A compact workbench UI' },
+        agentShareContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('fal.ai');
+      expect(result.content).toContain('Do not retry with the same arguments.');
+    });
+
+    it('redacts the raw async-task error detail from getImageGenerationStatus for a share visitor', async () => {
+      const runtime = new ImageGenerationExecutionRuntime(
+        createService({
+          getGenerationStatus: vi.fn().mockResolvedValue({
+            asyncTaskId: 'task-1',
+            error: {
+              body: { detail: 'acme-provider.internal API key rejected' },
+              name: 'InvalidProviderAPIKey',
+            },
+            generation: null,
+            generationId: 'generation-1',
+            status: AsyncTaskStatus.Error,
+          }),
+        }),
+      );
+
+      const result = await runtime.getImageGenerationStatus(
+        { asyncTaskId: 'task-1', generationId: 'generation-1' },
+        agentShareContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('acme-provider.internal');
+      expect(result.error?.message).not.toContain('acme-provider.internal');
+      expect(result.content).toContain('provider configuration issue');
+    });
+  });
 });

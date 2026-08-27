@@ -91,6 +91,13 @@ const findVisitorTopicOrThrow = async (
  * error server-side and returns only the classified `{ type }` (or `{
  * message }` for the narrow allowlisted codes) that `sanitizeVisitorError`
  * already deems visitor-safe (Codex P2, LOBE-11930).
+ *
+ * Also the sink for a RESOLVED (not thrown) `{ success: false, error }` from
+ * `AiAgentService.execAgent` — a `createOperation` startup failure resolves
+ * rather than rejects there (see `aiAgent/index.ts`'s `execAgent` catch
+ * block), so the visitor-facing `execAgent` handler below re-throws that
+ * case through this same function instead of letting the raw message escape
+ * via a normal `return` (Codex P2 follow-up, LOBE-11930).
  */
 const toVisitorSafeStartupError = (context: string, error: unknown): TRPCError => {
   log('%s failed: %O', context, error);
@@ -246,7 +253,7 @@ export const shareChatRouter = router({
       log('execAgent: share=%s visitor=%s topic=%s', input.shareId, ctx.userId, input.topicId);
 
       try {
-        return await aiAgentService.execAgent({
+        const result = await aiAgentService.execAgent({
           agentId: share.agentId,
           appContext: { topicId: input.topicId },
           clientIds: input.clientIds,
@@ -288,6 +295,31 @@ export const shareChatRouter = router({
           trigger: RequestTrigger.Chat,
           userAgent: ctx.userAgent ?? undefined,
         });
+
+        // `AiAgentService.execAgent` RESOLVES (does not throw) when
+        // `createOperation` itself fails to start (e.g. the queue/runtime
+        // backend is unavailable) — see that method's catch block
+        // (`aiAgent/index.ts`, the `success: false` return alongside
+        // `error: errorMessage`). That `error` is the same raw
+        // `error.message` the thrown path guards against (can carry the
+        // CREATOR's provider/infra diagnostic), so it must go through the
+        // exact same `toVisitorSafeStartupError` projection instead of
+        // reaching the visitor verbatim via a normal `return`.
+        //
+        // Reject rather than sanitize-and-return: the Gateway client
+        // (`gateway.ts`'s `executeGatewayAgent`) never checks
+        // `result.success` — it unconditionally treats the resolved value as
+        // a live operation and calls `connectToGateway` with its
+        // `operationId`/`token`. A sanitized `success: false` object would
+        // still be consumed as if the run started, opening a WebSocket for
+        // an operation that never began (empty token) instead of surfacing
+        // the failure through the same rejection path `sendMessage` already
+        // handles for every other startup error on this endpoint.
+        if (!result.success) {
+          throw toVisitorSafeStartupError('execAgent', { message: result.error });
+        }
+
+        return result;
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 

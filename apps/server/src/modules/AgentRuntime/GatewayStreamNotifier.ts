@@ -3,7 +3,11 @@ import type { ChatMessageError, UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { sanitizeVisitorError, toVisitorMessage } from '@/database/models/message';
+import {
+  redactCreatorPrivateBlob,
+  sanitizeVisitorError,
+  toVisitorMessage,
+} from '@/database/models/message';
 
 import {
   getDefaultReasonDetail,
@@ -150,6 +154,27 @@ const sanitizeErrorEventDataForVisitor = (data: unknown): unknown => {
  * `finalState`: `error` events carry `formatErrorEventData`'s raw `{ body,
  * error, errorType }` shape directly, with no `finalState`/`uiMessages` key
  * for the checks above to even look at.
+ *
+ * Every OTHER event type for a share run — `stream_start` (`{ model,
+ * provider, assistantMessage: { model, provider } }`, see `callLlm.ts`),
+ * `tool_end` (`{ result, payload }`, where `result.state` is a tool's own
+ * free-form blob — e.g. `lobe-agent`'s `analyzeMedia` writes `{ model,
+ * provider, usage }` straight into it, same as the `pluginState` class of
+ * leak `toVisitorMessage` already closes for persisted rows), and
+ * `step_complete`'s `subagent_progress` phase (`{ model, totalCost,
+ * totalInputTokens, totalOutputTokens, totalTokens }` sitting as SIBLINGS of
+ * `phase`, not nested under `finalState` — see
+ * `AgentRuntimeService.publishSubAgentProgress`) — all carry creator
+ * model/provider/usage/cost shapes this chokepoint did not touch. Rather than
+ * enumerate and denylist each event type (which silently stops covering the
+ * next producer that lands a new field), {@link redactCreatorPrivateBlob} is
+ * applied to the WHOLE remaining payload: it recursively strips the same
+ * `model`/`provider`/`usage`/`cost`/token-count key set `toVisitorMessage`
+ * uses for `pluginState`/`pluginError`, at any nesting depth, so a future
+ * event type or tool cannot reintroduce this leak by construction. `error`
+ * is excluded from this generic pass because it needs PROJECTION (only
+ * `type`/an allowlisted `message` survive; `body` has no stable key names to
+ * strip) rather than key-name redaction — see `sanitizeVisitorError`'s JSDoc.
  */
 const sanitizeGatewayEventData = (
   data: unknown,
@@ -171,10 +196,21 @@ const sanitizeGatewayEventData = (
 
   if (eventType === 'error') return sanitizeErrorEventDataForVisitor(withoutFinalState);
 
-  if (!('uiMessages' in withoutFinalState)) return withoutFinalState;
+  // Fail-closed net for every other event type: strip creator
+  // model/provider/usage/cost/token fields at ANY nesting depth (see the
+  // JSDoc above for the `stream_start` / `tool_end` / `step_complete` leaks
+  // this specifically closes).
+  const redacted = redactCreatorPrivateBlob(withoutFinalState);
+
+  if (!('uiMessages' in withoutFinalState)) return redacted;
 
   return {
-    ...withoutFinalState,
+    ...redacted,
+    // `toVisitorMessage` does a full field allowlist (sender identity,
+    // pinnedMessages/children/taskCompletions projections, error
+    // projection, …), not just the private-blob key strip above, so run the
+    // dedicated snapshot sanitizer on the ORIGINAL uiMessages too rather
+    // than relying on `redactCreatorPrivateBlob` alone.
     uiMessages: sanitizeUiMessagesForVisitor(withoutFinalState.uiMessages),
   };
 };

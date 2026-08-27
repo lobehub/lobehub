@@ -415,23 +415,39 @@ class LobeAgentExecutionRuntime {
     const hasImages = selectedItems.some((item) => item.type === 'image');
     const hasVideos = selectedItems.some((item) => item.type === 'video');
 
+    // Codex P2 (LOBE-11930): these three messages used to interpolate
+    // `${provider}/${model}` — the exact `MULTIMODAL_UNDERSTANDING_PROVIDER`/
+    // `MULTIMODAL_UNDERSTANDING_MODEL` deployment config, never chosen or
+    // known by the caller (unlike `imageGeneration`'s `provider`/`model`,
+    // which the calling LLM explicitly selected). `lobe-agent` is on
+    // `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, and this tool result's
+    // `content` reaches an agent-share visitor VERBATIM — `toVisitorMessage`
+    // only redacts structured `pluginState`/`pluginError`/`error` fields
+    // (`packages/database/src/models/message.ts`), never free-text `content`,
+    // since `content` is unbounded per-tool prose that cannot be redacted by
+    // key name without risking legitimate text. Fixed at the SOURCE instead
+    // of the visitor boundary: the exact model id has no functional value to
+    // either caller (it does not change what the LLM should do next — the
+    // media type is simply unsupported), and the creator already knows the
+    // value since they set the env vars themselves, so making the message
+    // generic for everyone costs nothing while closing the visitor leak.
     if (hasAudios && abilities?.audio === false) {
       return buildError(
-        `Configured multimodal understanding model "${provider}/${model}" does not support audio understanding.`,
+        'The configured multimodal understanding model does not support audio understanding.',
         'MULTIMODAL_MODEL_AUDIO_UNSUPPORTED',
       );
     }
 
     if (hasImages && abilities?.vision === false) {
       return buildError(
-        `Configured multimodal understanding model "${provider}/${model}" does not support image vision.`,
+        'The configured multimodal understanding model does not support image vision.',
         'MULTIMODAL_MODEL_IMAGE_UNSUPPORTED',
       );
     }
 
     if (hasVideos && abilities?.video === false) {
       return buildError(
-        `Configured multimodal understanding model "${provider}/${model}" does not support video understanding.`,
+        'The configured multimodal understanding model does not support video understanding.',
         'MULTIMODAL_MODEL_VIDEO_UNSUPPORTED',
       );
     }

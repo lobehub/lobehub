@@ -906,6 +906,190 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
+  // ─── LOBE-11930 Codex P2 (round 4): every event type other than
+  //     `agent_runtime_init`/`agent_runtime_end`/`error` still forwarded its
+  //     raw payload for a share run. `stream_start` (callLlm.ts) carries the
+  //     creator's `model`/`provider` directly, `tool_end`'s `result.state` is
+  //     a tool's own free-form blob (e.g. `analyzeMedia` writes
+  //     `{ model, provider, usage }` into it), and `step_complete`'s
+  //     `subagent_progress` phase carries `model`/`totalCost`/token fields as
+  //     SIBLINGS of `phase`, not nested under `finalState`. All three are now
+  //     closed by routing the whole non-`finalState`/non-`error` payload
+  //     through `redactCreatorPrivateBlob`. ───
+
+  describe('shared-agent visitor privacy (stream_start model/provider)', () => {
+    const pushStreamStartPayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) =>
+          c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'stream_start',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    const streamStartData = {
+      assistantMessage: { id: 'msg_1', model: 'gpt-4', provider: 'openai', role: 'assistant' },
+      model: 'gpt-4',
+      provider: 'openai',
+    };
+
+    it('strips top-level and assistantMessage model/provider for a share run', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-share', {
+        data: streamStartData,
+        stepIndex: 0,
+        type: 'stream_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStreamStartPayload();
+      expect(data.model).toBeUndefined();
+      expect(data.provider).toBeUndefined();
+      expect(data.assistantMessage).toEqual({ id: 'msg_1', role: 'assistant' });
+      expect(JSON.stringify(data)).not.toContain('gpt-4');
+      expect(JSON.stringify(data)).not.toContain('openai');
+    });
+
+    it('keeps model/provider unchanged for a normal (non-share) creator run', async () => {
+      await notifier.publishAgentRuntimeInit('op-owner', { status: 'idle', userId: 'creator-1' });
+
+      await notifier.publishStreamEvent('op-owner', {
+        data: streamStartData,
+        stepIndex: 0,
+        type: 'stream_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(pushStreamStartPayload()).toEqual(streamStartData);
+    });
+  });
+
+  describe('shared-agent visitor privacy (tool_end result.state)', () => {
+    const pushToolEndPayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) =>
+          c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'tool_end',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    // Shape mirrors `analyzeMedia`'s server runtime writing
+    // `{ model, provider, usage }` straight into `result.state`.
+    const toolEndData = {
+      executionTime: 120,
+      isSuccess: true,
+      payload: { parentMessageId: 'msg_1', toolCalling: { apiName: 'analyzeMedia' } },
+      result: {
+        content: 'analyzed',
+        state: { model: 'gpt-4-vision', provider: 'openai', usage: { totalTokens: 99 } },
+      },
+    };
+
+    it('strips result.state model/provider/usage for a share run', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-share', {
+        data: toolEndData,
+        stepIndex: 0,
+        type: 'tool_end' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushToolEndPayload();
+      expect(data.isSuccess).toBe(true);
+      expect(data.result.content).toBe('analyzed');
+      expect(data.result.state).toEqual({});
+      expect(JSON.stringify(data)).not.toContain('gpt-4-vision');
+      expect(JSON.stringify(data)).not.toContain('99');
+    });
+
+    it('keeps result.state unchanged for a normal (non-share) creator run', async () => {
+      await notifier.publishAgentRuntimeInit('op-owner', { status: 'idle', userId: 'creator-1' });
+
+      await notifier.publishStreamEvent('op-owner', {
+        data: toolEndData,
+        stepIndex: 0,
+        type: 'tool_end' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(pushToolEndPayload()).toEqual(toolEndData);
+    });
+  });
+
+  describe('shared-agent visitor privacy (step_complete subagent_progress)', () => {
+    const pushSubAgentProgressPayload = () => {
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => {
+        if (!c[0].includes('push-event')) return false;
+        const body = JSON.parse(c[1].body);
+        return (
+          body.event.type === 'step_complete' && body.event.data?.phase === 'subagent_progress'
+        );
+      });
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    // Mirrors `AgentRuntimeService.publishSubAgentProgress`: `model`/token
+    // fields are SIBLINGS of `phase`, not nested under `finalState`.
+    const subAgentProgressData = {
+      model: 'gpt-4',
+      phase: 'subagent_progress',
+      toolMessageId: 'tool_msg_1',
+      totalCost: 0.42,
+      totalInputTokens: 100,
+      totalOutputTokens: 200,
+      totalTokens: 300,
+      totalToolCalls: 2,
+    };
+
+    it('strips model/totalCost/token fields for a share run, keeping phase/toolMessageId', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-share', {
+        data: subAgentProgressData,
+        stepIndex: 0,
+        type: 'step_complete' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushSubAgentProgressPayload();
+      // `totalToolCalls` is a plain count, not model/provider/spend data, so
+      // it is intentionally NOT part of `CREATOR_PRIVATE_BLOB_KEYS`.
+      expect(data).toEqual({
+        phase: 'subagent_progress',
+        toolMessageId: 'tool_msg_1',
+        totalToolCalls: 2,
+      });
+      expect(JSON.stringify(data)).not.toContain('gpt-4');
+      expect(JSON.stringify(data)).not.toContain('0.42');
+    });
+
+    it('keeps model/totalCost/token fields unchanged for a normal (non-share) creator run', async () => {
+      await notifier.publishAgentRuntimeInit('op-owner', { status: 'idle', userId: 'creator-1' });
+
+      await notifier.publishStreamEvent('op-owner', {
+        data: subAgentProgressData,
+        stepIndex: 0,
+        type: 'step_complete' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(pushSubAgentProgressPayload()).toEqual(subAgentProgressData);
+    });
+  });
+
   // ─── Read/subscribe methods: must delegate directly to inner ───
 
   describe('subscribeStreamEvents', () => {

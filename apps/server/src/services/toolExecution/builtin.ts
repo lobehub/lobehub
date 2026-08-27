@@ -292,6 +292,36 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);
 
+      // Codex P2 (LOBE-11930) follow-up: an uncaught exception from ANY
+      // allowlisted builtin tool's runtime — not just `lobe-agent`'s
+      // `analyzeMedia` — lands here with the raw `error.message` forwarded
+      // verbatim as the tool message `content` (and on `error`, which becomes
+      // `pluginError`). A share-visitor run executes with the CREATOR's own
+      // credentials, so exceptions thrown by model-runtime/embedding calls a
+      // visitor can trigger (e.g. `lobe-memory`'s `searchMemory`, which calls
+      // `initModelRuntimeFromDB`/`embedUserMemoryTexts` with no local
+      // try/catch) can carry the creator's provider name, upstream API
+      // diagnostics, or other deployment detail through this single seam.
+      // `redactCreatorPrivateBlob` (`packages/database/src/models/message.ts`)
+      // only strips a fixed set of KEY NAMES from structured blobs — it
+      // cannot help here because the leak is inside a free-text `message`
+      // string, not a `model`/`provider`-named field. Since this catch is the
+      // one terminal choke point every builtin tool's uncaught exception
+      // passes through, sanitizing HERE (rather than re-auditing every
+      // runtime's own try/catch, or attempting to scrub free-text `content`
+      // at the visitor-read boundary, which risks mangling legitimate tool
+      // output) closes the whole class at once — including tools added after
+      // this fix. Scoped to `context.agentShare` so the creator's OWN runs
+      // keep the raw message for debugging.
+      if (context.agentShare) {
+        const message = 'The tool call failed. Do not retry with the same arguments.';
+        return {
+          content: message,
+          error: { code: 'TOOL_EXECUTION_FAILED', message },
+          success: false,
+        };
+      }
+
       return { content: error.message, error, success: false };
     }
   }

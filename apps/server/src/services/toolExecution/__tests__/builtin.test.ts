@@ -28,6 +28,19 @@ vi.mock('@/server/services/market', () => ({
 // authoritative source of declared APIs — it also lists `listDocuments`, so an
 // UNKNOWN_API hint sourced from the manifest must surface both.
 vi.mock('@lobechat/builtin-tools', () => ({
+  // `builtin.ts` imports `isShareBlockedDataToolCall` from `shareGate.ts`,
+  // which reads these two exports at MODULE LOAD time (`shareGate.ts`'s
+  // `SHARE_VISITOR_ALLOWED_IDENTIFIERS` / `isGovernedByBuiltinAllowlist`) —
+  // so this mock must provide them even for tests that never exercise the
+  // agent-share gate, or importing `builtin.ts` throws before any test runs.
+  // Neither test identifier here ('lobe-notebook', 'lobe-task') needs to be
+  // "known" to `isBuiltinToolIdentifier`: returning `false` routes them
+  // through `isGovernedByBuiltinAllowlist`'s early "outside this gate's
+  // jurisdiction" return, i.e. never blocked by the share gate — correct for
+  // tests that don't care about it, and irrelevant to `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`
+  // being empty.
+  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: new Set<string>(),
+  isBuiltinToolIdentifier: () => false,
   builtinTools: [
     {
       identifier: 'lobe-notebook',
@@ -195,6 +208,43 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
 
     expect(result.error?.code).toBe('UNKNOWN_API');
     expect(result.content).toContain('barApi');
+  });
+
+  describe('uncaught runtime exceptions (Codex P2, LOBE-11930 follow-up)', () => {
+    // A share-visitor run executes with the CREATOR's own credentials, so an
+    // uncaught exception from ANY allowlisted builtin tool's runtime (e.g. a
+    // model-runtime/embedding call `lobe-memory`'s `searchMemory` makes with
+    // no local try/catch) can carry the creator's provider name or other
+    // deployment/upstream diagnostic in `error.message`. This is the single
+    // terminal catch every such exception passes through, so it must sanitize
+    // for a share-visitor run regardless of which tool threw.
+    it('replaces the raw error message with a generic one for a share-visitor run', async () => {
+      mockApiHandler.mockRejectedValueOnce(
+        new Error('AgentRuntimeError: invalid API key for provider "acme-llm" model "gpt-secret"'),
+      );
+
+      const shareContext: ToolExecutionContext = {
+        ...context,
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' } as any,
+      };
+
+      const result = await executor.execute(buildPayload('{}'), shareContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('TOOL_EXECUTION_FAILED');
+      expect(result.content).not.toContain('acme-llm');
+      expect(result.content).not.toContain('gpt-secret');
+      expect(JSON.stringify(result.error)).not.toContain('acme-llm');
+    });
+
+    it('keeps the raw error message for an ordinary (non-share) run', async () => {
+      mockApiHandler.mockRejectedValueOnce(new Error('boom: creator-only diagnostic'));
+
+      const result = await executor.execute(buildPayload('{}'), context);
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('boom: creator-only diagnostic');
+    });
   });
 
   it('emits a Linear skill Work intent after a successful server-side LobeHub Skill tool call', async () => {

@@ -935,6 +935,13 @@ describe('lobeAgentRuntime', () => {
       success: false,
     });
     expect(mockChat).not.toHaveBeenCalled();
+    // Codex P2 (LOBE-11930): this `content` reaches an agent-share visitor
+    // verbatim (`toVisitorMessage` never redacts free-text `content`), so it
+    // must never name the creator's configured multimodal provider/model —
+    // the same env-config identifiers `MULTIMODAL_UNDERSTANDING_PROVIDER` /
+    // `MULTIMODAL_UNDERSTANDING_MODEL` resolve to (`test-provider`/`no-audio-model`).
+    expect(result.content).not.toContain('test-provider');
+    expect(result.content).not.toContain('no-audio-model');
   });
 
   it('should reject video files when the configured model lacks video support', async () => {
@@ -959,6 +966,47 @@ describe('lobeAgentRuntime', () => {
       success: false,
     });
     expect(mockChat).not.toHaveBeenCalled();
+    // Codex P2 (LOBE-11930) — see the audio-rejection test above.
+    expect(result.content).not.toContain('test-provider');
+    expect(result.content).not.toContain('image-only-model');
+  });
+
+  it('never names the creator provider/model to a share-visitor run hitting an unsupported-media error', async () => {
+    // Reproduces the exact codex-named scenario: the owner grants `lobe-agent`
+    // via Agent Share, and a visitor's `analyzeMedia` call hits a media type
+    // the configured fallback model doesn't support. `analyzeMedia` doesn't
+    // branch on `context.agentShare` for this message (see the source-fix
+    // comment above `hasAudios`/`abilities?.audio`) — the message is generic
+    // for every caller — but this test pins the visitor-reachable path
+    // specifically so a future regression that reintroduces `${provider}/${model}`
+    // fails here even if the non-share tests above are ever removed.
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'no-audio-model';
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        audioList: [
+          { alt: 'recording.mp3', id: 'file-audio', url: 'https://example.com/recording.mp3' },
+        ],
+        id: 'msg-1',
+        role: 'user',
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory({
+      ...baseContext,
+      agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' } as any,
+    });
+    const stableAudioRef = createMediaFileRef({ index: 0, messageId: 'msg-1', type: 'audio' });
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is said in the audio?',
+      refs: [stableAudioRef],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_MODEL_AUDIO_UNSUPPORTED' },
+      success: false,
+    });
+    expect(result.content).not.toContain('test-provider');
+    expect(result.content).not.toContain('no-audio-model');
   });
 
   describe('callSubAgent', () => {
