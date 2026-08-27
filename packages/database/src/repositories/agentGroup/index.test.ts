@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { AgentShareModel } from '../../models/agentShare';
 import { AGENT_TRANSFER_IN_PROGRESS } from '../../models/agentTransferJob';
 import { ChatGroupModel } from '../../models/chatGroup';
 import {
@@ -988,6 +989,62 @@ describe('AgentGroupRepository', () => {
         where: (a, { eq }) => eq(a.id, 'remove-virtual'),
       });
       expect(stillAlive).toBeDefined();
+    });
+
+    // Regression for LOBE-11930's group-member-removal bypass:
+    // `removeAgentsFromGroup` deletes an OWNED virtual member's `agents` row
+    // directly with a raw `trx.delete(agents)`, cascading its `agentShares`
+    // row and topic away with it — but a group-owned virtual member can carry
+    // its own `link` share the same as any personal agent. Removing it must
+    // snapshot and interrupt its in-flight visitor runs exactly like
+    // `AgentModel.delete()` / `ChatGroupModel.delete()` do, not silently
+    // cascade the active run's runtime operation away with no notice to the
+    // visitor, who would otherwise be unable to stop a run still executing
+    // with the creator's credentials.
+    it('snapshots and reports in-flight Agent Share visitor runs on an owned member before removing it', async () => {
+      const visitorId = 'agent-group-share-visitor';
+      await serverDB.insert(users).values([{ id: visitorId }]);
+
+      const agentShareModel = new AgentShareModel(serverDB, userId);
+      await agentShareModel.create('remove-virtual', 'link');
+
+      const operationId = 'op-remove-agents-from-group';
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({ agentId: 'remove-virtual', senderId: visitorId, userId })
+        .returning();
+      await agentShareModel.assertRunnableForVisitor({
+        agentId: 'remove-virtual',
+        expectedGeneration: 1,
+        operationId,
+        topicId: topic.id,
+        visitorUserId: visitorId,
+      });
+      const confirmed = await agentShareModel.confirmReservation({
+        operationId,
+        runningOperation: {
+          assistantMessageId: 'msg',
+          operationId,
+          startedAt: new Date().toISOString(),
+        },
+        topicId: topic.id,
+      });
+      expect(confirmed).toBe(true);
+
+      const onShareRunsInterrupted = vi.fn();
+      const repoWithCallback = new AgentGroupRepository(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      const result = await repoWithCallback.removeAgentsFromGroup('remove-group', [
+        'remove-virtual',
+      ]);
+
+      expect(result.deletedVirtualAgentIds).toEqual(['remove-virtual']);
+      expect(onShareRunsInterrupted).toHaveBeenCalledTimes(1);
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([{ operationId, topicId: topic.id }]);
+
+      await serverDB.delete(users).where(eq(users.id, visitorId));
     });
   });
 
