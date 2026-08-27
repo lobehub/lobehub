@@ -6,10 +6,10 @@ name: Release Desktop Renderer OTA
 # 前提: <channel>/base.json 由全量发版流程写入 (desktop-publish-s3)。
 # 门禁: HEAD 的 mainHash 必须等于该 marker —— main 变了只能走全量发版,
 #       此工作流会直接跳过。
-# 产物: <channel>/<appVersion>/renderer/latest.json (签名 manifest + zstd tree delta)
-#       <channel>/<appVersion>/renderer/versions/rN.json (打下一版差分用的文件清单)
-#       <channel>/<appVersion>/renderer/files/<sha256>.bin (gzip CAS)
-# delta: r0 + 最近 2 个 rN，客户端只下一份对得上的 fromVersion
+# 产物: <channel>/<appVersion>/renderer/v2/latest.json (签名 manifest)
+#       <channel>/<appVersion>/renderer/v2/versions/rN.json (签名快照)
+#       <channel>/<appVersion>/renderer/v2/packs/<sha256>.zip (聚合 full/delta pack)
+# delta: r0 + 最近 2 个 rN，客户端一次只下载一份对得上的 pack
 # ============================================
 
 on:
@@ -71,6 +71,12 @@ jobs:
             exit 0
           fi
 
+          if [ "$(jq -r '.rendererProtocol // 0' <<< "$BASE")" != "2" ]; then
+            echo "::warning::renderer OTA base is not V2; run a full release first"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           MAIN_HASH=$(jq -er '.mainHash | select(type == "string" and test("^[0-9a-f]{64}$"))' <<< "$BASE")
           CLOUD_REF=$(jq -er '.cloudRef | select(type == "string" and test("^[0-9a-f]{40}$"))' <<< "$BASE")
           APP_VERSION=$(jq -er '.version | select(type == "string" and test("^[0-9A-Za-z.+-]+$"))' <<< "$BASE")
@@ -119,7 +125,7 @@ jobs:
           APP_VERSION: ${{ steps.base.outputs.app_version }}
           CHANNEL: ${{ inputs.channel }}
         run: |
-          CURRENT=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/latest.json" | node -e "
+          CURRENT=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/v2/latest.json" | node -e "
             let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
               try { console.log(JSON.parse(d).version) } catch { console.log('r0') }
             })" || echo "r0")
@@ -148,17 +154,13 @@ jobs:
           MAIN_HASH: ${{ steps.gate.outputs.main_hash }}
         run: |
           set -euo pipefail
-          sudo apt-get update -y
-          sudo apt-get install -y zstd
-
           node apps/desktop/scripts/buildRendererManifest.mjs \
             --renderer=apps/desktop/dist/renderer \
             --out=renderer-ota-out \
             --channel=${{ inputs.channel }} \
             --version=${{ steps.version.outputs.version }} \
             --mainHash=${{ steps.gate.outputs.main_hash }} \
-            --feed-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer" \
-            --cas-base-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/files"
+            --feed-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/v2"
 
       - name: Upload to S3
         if: steps.gate.outputs.allowed == 'true'
@@ -176,21 +178,19 @@ jobs:
             ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
           fi
 
-          # CAS objects first (immutable, skip existing), manifest last so a
-          # client never sees a manifest whose files are not yet uploaded.
-          RENDERER_ROOT="renderer-ota-out/$CHANNEL/$APP_VERSION/renderer"
-          S3_RENDERER_ROOT="s3://$S3_BUCKET/$CHANNEL/$APP_VERSION/renderer"
-          aws s3 sync "$RENDERER_ROOT/files" "$S3_RENDERER_ROOT/files" \
+          # Immutable packs first, then the version snapshot, latest.json last.
+          RENDERER_ROOT="renderer-ota-out/$CHANNEL/$APP_VERSION/renderer/v2"
+          S3_RENDERER_ROOT="s3://$S3_BUCKET/$CHANNEL/$APP_VERSION/renderer/v2"
+          aws s3 sync "$RENDERER_ROOT/packs" "$S3_RENDERER_ROOT/packs" \
             --size-only \
-            --content-encoding gzip \
-            --content-type application/octet-stream \
+            --content-type application/zip \
             --cache-control public,max-age=31536000,immutable \
             "${ENDPOINT_ARGS[@]}"
-          aws s3 cp "$RENDERER_ROOT/latest.json" \
-            "$S3_RENDERER_ROOT/latest.json" \
-            --cache-control no-store "${ENDPOINT_ARGS[@]}"
           aws s3 cp "$RENDERER_ROOT/versions/${{ steps.version.outputs.version }}.json" \
             "$S3_RENDERER_ROOT/versions/${{ steps.version.outputs.version }}.json" \
+            --cache-control no-store "${ENDPOINT_ARGS[@]}"
+          aws s3 cp "$RENDERER_ROOT/latest.json" \
+            "$S3_RENDERER_ROOT/latest.json" \
             --cache-control no-store "${ENDPOINT_ARGS[@]}"
 
           echo "✅ Published renderer patch ${{ steps.version.outputs.version }} for $CHANNEL/$APP_VERSION"

@@ -16,20 +16,20 @@ import {
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../../App';
-import { decodeCasPayload } from './casPayload';
-import { canApplyDelta, indexLocalByHash, pickDelta } from './deltaFeed';
 import {
-  diffManifest,
   findMissingEntryAssets,
   isValidManifestShape,
   patchNumber,
+  type RendererArtifact,
   type RendererDelta,
   type RendererManifest,
-  type RendererManifestFile,
+  type RendererTreeFile,
   sha256File,
   verifyManifestSignature,
 } from './manifest';
+import { decodeRendererPack } from './pack';
 import { emptyPointer, type OtaPointer, readPointer, writePointer } from './pointer';
+import { canApplyDelta, indexLocalByHash, pickDelta } from './updatePlan';
 import { applyZstdPatch } from './zstdPatch';
 
 const logger = createLogger('core:RendererUpdateManager');
@@ -54,6 +54,7 @@ type RendererOtaChannel = UpdateChannel | 'beta';
 
 export class RendererUpdateManager {
   private readonly app: App;
+  private readonly legacyOtaRootDir: string;
   private readonly otaRootDir: string;
   private activeChannel: RendererOtaChannel;
   private pointer: OtaPointer;
@@ -67,7 +68,9 @@ export class RendererUpdateManager {
 
   constructor(app: App) {
     this.app = app;
-    this.otaRootDir = path.join(electronApp.getPath('userData'), 'renderer-ota');
+    const userDataDir = electronApp.getPath('userData');
+    this.legacyOtaRootDir = path.join(userDataDir, 'renderer-ota');
+    this.otaRootDir = path.join(userDataDir, 'renderer-ota-v2');
     this.activeChannel = this.rendererChannel(
       coerceStoredUpdateChannel(this.app.storeManager.get('updateChannel') as string | undefined) ||
         UPDATE_CHANNEL,
@@ -89,6 +92,8 @@ export class RendererUpdateManager {
    * serving root.
    */
   initialize = () => {
+    this.cleanupLegacyV1();
+
     if (!this.enabled) {
       logger.info('Renderer OTA disabled (dev build or missing MAIN_HASH/key/server url)');
       return;
@@ -239,12 +244,19 @@ export class RendererUpdateManager {
     return BUILD_CHANNEL === 'beta' && channel === 'canary' ? 'beta' : channel;
   }
 
-  private rendererUrl(channel: RendererOtaChannel) {
-    return `${UPDATE_SERVER_BASE_URL}/${channel}/${APP_VERSION}/renderer`;
+  private cleanupLegacyV1() {
+    if (!existsSync(this.legacyOtaRootDir)) return;
+
+    try {
+      rmSync(this.legacyOtaRootDir, { force: true, recursive: true });
+      logger.info('Removed legacy Renderer OTA V1 data');
+    } catch (error) {
+      logger.warn(`Failed to remove legacy Renderer OTA V1 data: ${String(error)}`);
+    }
   }
 
-  private fileUrl(rendererUrl: string, sha256: string) {
-    return `${rendererUrl}/files/${sha256}.bin`;
+  private rendererUrl(channel: RendererOtaChannel) {
+    return `${UPDATE_SERVER_BASE_URL}/${channel}/${APP_VERSION}/renderer/v2`;
   }
 
   private async fetchManifest(rendererUrl: string): Promise<RendererManifest | null> {
@@ -275,21 +287,26 @@ export class RendererUpdateManager {
     const byHash = indexLocalByHash(localHashes);
     const localVersion = pointer.current ?? 'r0';
     const delta = pickDelta(manifest, localVersion);
+    let targetTree: RendererTreeFile[];
 
-    if (delta && canApplyDelta(delta, byHash)) {
+    if (delta) {
       logger.info(`Renderer ${manifest.version}: applying delta from ${delta.fromVersion}`);
-      await this.stageDelta(delta, stagingDir, byHash, rendererUrl);
+      try {
+        targetTree = await this.stageDelta(manifest, delta, stagingDir, byHash, rendererUrl);
+      } catch (error) {
+        logger.warn(`Renderer delta failed, retrying full pack: ${String(error)}`);
+        rmSync(stagingDir, { force: true, recursive: true });
+        mkdirSync(stagingDir, { recursive: true });
+        targetTree = await this.stageFull(manifest, stagingDir, rendererUrl);
+      }
     } else {
-      const { missing, reusable } = diffManifest(manifest, localHashes);
-      logger.info(
-        `Renderer ${manifest.version}: ${reusable.length} files reused, ${missing.length} to download`,
-      );
-      await this.stageCas(stagingDir, missing, reusable, rendererUrl);
+      logger.info(`Renderer ${manifest.version}: applying full pack`);
+      targetTree = await this.stageFull(manifest, stagingDir, rendererUrl);
     }
 
-    for (const file of manifest.files) {
+    for (const file of targetTree) {
       const content = await readFile(path.join(stagingDir, file.path));
-      if (sha256File(content) !== file.sha256) {
+      if (content.byteLength !== file.size || sha256File(content) !== file.sha256) {
         throw new Error(`Hash mismatch after staging: ${file.path}`);
       }
     }
@@ -310,53 +327,65 @@ export class RendererUpdateManager {
     rmSync(stagingRoot, { force: true, recursive: true });
   }
 
-  private async stageCas(
+  private async stageFull(
+    manifest: RendererManifest,
     stagingDir: string,
-    missing: RendererManifestFile[],
-    reusable: Array<{ file: RendererManifestFile; localPath: string }>,
     rendererUrl: string,
-  ) {
-    for (const { file, localPath } of reusable) {
-      await this.placeLocalFile(localPath, path.join(stagingDir, file.path));
+  ): Promise<RendererTreeFile[]> {
+    const { entries, metadata } = await this.fetchPack(rendererUrl, manifest.full, {
+      kind: 'full',
+      version: manifest.version,
+    });
+    if (metadata.kind !== 'full') throw new Error('Full pack metadata mismatch');
+    for (const file of metadata.tree) {
+      const content = entries.get(`objects/${file.sha256}`);
+      if (!content) throw new Error(`Full pack missing ${file.path}`);
+      await this.writeStaged(stagingDir, file.path, content);
     }
-    for (const file of missing) {
-      await this.writeStaged(
-        stagingDir,
-        file.path,
-        await this.fetchCas(rendererUrl, file.sha256, file.path),
-      );
-    }
+    return metadata.tree;
   }
 
   private async stageDelta(
+    manifest: RendererManifest,
     delta: RendererDelta,
     stagingDir: string,
     byHash: Map<string, string>,
     rendererUrl: string,
-  ) {
-    for (const op of delta.ops) {
-      const target = path.join(stagingDir, op.path);
-      if (op.op === 'copy') {
-        const localPath = byHash.get(op.sha256);
-        if (!localPath) throw new Error(`Delta copy missing local ${op.sha256}`);
-        await this.placeLocalFile(localPath, target);
+  ): Promise<RendererTreeFile[]> {
+    const { entries, metadata } = await this.fetchPack(rendererUrl, delta.pack, {
+      fromVersion: delta.fromVersion,
+      kind: 'delta',
+      version: manifest.version,
+    });
+    if (metadata.kind !== 'delta') throw new Error('Delta pack metadata mismatch');
+    if (!canApplyDelta(metadata, byHash)) throw new Error('Delta base content is incomplete');
+    const objects = new Set(metadata.objects);
+    const patches = new Map(metadata.patches.map((patch) => [patch.toSha256, patch]));
+
+    for (const file of metadata.tree) {
+      const localPath = byHash.get(file.sha256);
+      if (localPath) {
+        await this.placeLocalFile(localPath, path.join(stagingDir, file.path));
         continue;
       }
-      if (op.op === 'full') {
-        await this.writeStaged(
-          stagingDir,
-          op.path,
-          await this.fetchCas(rendererUrl, op.sha256, op.path),
-        );
+
+      if (objects.has(file.sha256)) {
+        const content = entries.get(`objects/${file.sha256}`);
+        if (!content) throw new Error(`Delta pack missing full object ${file.path}`);
+        await this.writeStaged(stagingDir, file.path, content);
         continue;
       }
-      const localPath = byHash.get(op.fromSha256);
-      if (!localPath) throw new Error(`Delta patch missing base ${op.fromSha256}`);
-      const oldContent = await readFile(localPath);
-      const patch = await this.fetchCas(rendererUrl, op.patchSha256, op.path);
-      const next = await applyZstdPatch(oldContent, patch);
-      await this.writeStaged(stagingDir, op.path, next);
+
+      const patch = patches.get(file.sha256);
+      const basePath = patch && byHash.get(patch.fromSha256);
+      const patchContent = patch && entries.get(`patches/${patch.patchSha256}`);
+      if (!patch || !basePath || !patchContent) {
+        throw new Error(`Delta cannot reconstruct ${file.path}`);
+      }
+      const next = await applyZstdPatch(await readFile(basePath), patchContent);
+      await this.writeStaged(stagingDir, file.path, next);
     }
+    return metadata.tree;
   }
 
   private async placeLocalFile(localPath: string, target: string) {
@@ -374,10 +403,18 @@ export class RendererUpdateManager {
     await writeFile(target, content);
   }
 
-  private async fetchCas(rendererUrl: string, sha256: string, label: string) {
-    const res = await fetch(this.fileUrl(rendererUrl, sha256));
-    if (!res.ok) throw new Error(`Asset fetch failed (${res.status}): ${label}`);
-    return decodeCasPayload(Buffer.from(await res.arrayBuffer()));
+  private async fetchPack(
+    rendererUrl: string,
+    artifact: RendererArtifact,
+    expected: Parameters<typeof decodeRendererPack>[1],
+  ) {
+    const res = await fetch(`${rendererUrl}/${artifact.path}`);
+    if (!res.ok) throw new Error(`Renderer pack fetch failed (${res.status}): ${artifact.path}`);
+    const content = Buffer.from(await res.arrayBuffer());
+    if (content.byteLength !== artifact.size || sha256File(content) !== artifact.sha256) {
+      throw new Error(`Renderer pack integrity mismatch: ${artifact.path}`);
+    }
+    return decodeRendererPack(content, expected);
   }
 
   private async hashLocalTree(otaDir: string, pointer: OtaPointer): Promise<Map<string, string>> {
@@ -483,7 +520,7 @@ export class RendererUpdateManager {
   private reloadAllWindows() {
     this.app.browserManager.browsers.forEach((browser) => {
       try {
-        browser.browserWindow.webContents.reload();
+        browser.browserWindow.webContents.reloadIgnoringCache();
       } catch {
         /* window may be destroyed */
       }

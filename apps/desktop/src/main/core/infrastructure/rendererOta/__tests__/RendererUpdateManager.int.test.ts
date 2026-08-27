@@ -1,13 +1,20 @@
-import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { zstdCompressSync } from 'node:zlib';
 
+import { zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { canonicalJson, type RendererManifest, sha256File } from '../manifest';
+import {
+  canonicalJson,
+  type RendererDeltaPackMetadata,
+  type RendererManifest,
+  type RendererPackMetadata,
+  type RendererTreeFile,
+  sha256File,
+} from '../manifest';
 import { readPointer } from '../pointer';
 
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
@@ -49,7 +56,7 @@ const makeApp = () => ({
   storeManager: { get: vi.fn(() => 'stable') },
 });
 
-const channelDir = (channel = 'stable') => path.join(userDataDir, 'renderer-ota', channel);
+const channelDir = (channel = 'stable') => path.join(userDataDir, 'renderer-ota-v2', channel);
 
 const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererManifest => ({
   ...unsigned,
@@ -59,55 +66,97 @@ const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererMa
 const entryHtml = (marker: string) =>
   `<html><head><script type="module" src="/assets/entry-e2e.js"></script></head><body>${marker}</body></html>`;
 
-const buildFeed = (version: string, files: Record<string, string>) => {
+type Feed = {
+  manifest: RendererManifest;
+  objects: Map<string, Buffer>;
+  packs: Map<string, Buffer>;
+  tree: RendererTreeFile[];
+};
+
+const createPack = (metadata: RendererPackMetadata, entries: Map<string, Buffer>) => {
+  const input = Object.fromEntries([
+    ['meta.json', Buffer.from(JSON.stringify(metadata))],
+    ...entries,
+  ]);
+  const content = Buffer.from(zipSync(input));
+  const sha256 = sha256File(content);
+  return {
+    artifact: { path: `packs/${sha256}.zip`, sha256, size: content.byteLength },
+    content,
+  };
+};
+
+const buildFeed = (version: string, files: Record<string, Buffer | string>): Feed => {
   const withEntries = {
     'apps/desktop/overlay.html': entryHtml(`${version}-overlay`),
     'apps/desktop/popup.html': entryHtml(`${version}-popup`),
     ...files,
   };
-  const cas = new Map<string, Buffer>();
-  const manifestFiles = Object.entries(withEntries).map(([filePath, text]) => {
-    const content = Buffer.from(text);
+  const objects = new Map<string, Buffer>();
+  const tree = Object.entries(withEntries).map(([filePath, value]) => {
+    const content = Buffer.isBuffer(value) ? value : Buffer.from(value);
     const sha256 = sha256File(content);
-    cas.set(sha256, content);
+    objects.set(sha256, content);
     return { path: filePath, sha256, size: content.byteLength };
   });
-  const manifest = signManifest({
-    appVersion: APP_VERSION,
-    files: manifestFiles,
-    mainHash: MAIN_HASH,
-    version,
-  });
-  return { cas, manifest };
+  const fullPack = createPack(
+    { kind: 'full', packVersion: 1, tree, version },
+    new Map([...objects].map(([sha256, content]) => [`objects/${sha256}`, content])),
+  );
+  return {
+    manifest: signManifest({
+      appVersion: APP_VERSION,
+      full: fullPack.artifact,
+      mainHash: MAIN_HASH,
+      schemaVersion: 2,
+      version,
+    }),
+    objects,
+    packs: new Map([[fullPack.artifact.path, fullPack.content]]),
+    tree,
+  };
 };
 
-const stubFetch = (
-  feed: { cas: Map<string, Buffer>; manifest: RendererManifest } | null,
-  channel = 'stable',
+const addDelta = (
+  feed: Feed,
+  delta: Pick<RendererDeltaPackMetadata, 'fromVersion' | 'objects' | 'patches'>,
+  payloads: Map<string, Buffer>,
 ) => {
+  const pack = createPack(
+    {
+      ...delta,
+      kind: 'delta',
+      packVersion: 1,
+      tree: feed.tree,
+      version: feed.manifest.version,
+    },
+    payloads,
+  );
+  feed.packs.set(pack.artifact.path, pack.content);
+  const { signature: _signature, ...unsigned } = feed.manifest;
+  feed.manifest = signManifest({
+    ...unsigned,
+    deltas: [{ fromVersion: delta.fromVersion, pack: pack.artifact }],
+  });
+};
+
+const stubFetch = (feed: Feed | null, channel = 'stable') => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
-      if (url === `${SERVER}/${channel}/${APP_VERSION}/renderer/latest.json`) {
+    vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      const root = `${SERVER}/${channel}/${APP_VERSION}/renderer/v2`;
+      if (url === `${root}/latest.json`) {
         if (!feed) return new Response('nope', { status: 404 });
         return Response.json(feed.manifest);
       }
-      const match = /\/renderer\/files\/([0-9a-f]{64})\.bin$/.exec(url);
-      const content = match && feed?.cas.get(match[1]);
+      const relative = url.startsWith(`${root}/`) ? url.slice(root.length + 1) : '';
+      const content = feed?.packs.get(relative);
       if (content) return new Response(new Uint8Array(content));
       return new Response('nope', { status: 404 });
     }),
   );
 };
-
-const hasZstd = (() => {
-  try {
-    execFileSync('zstd', ['-V'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-})();
 
 const loadManager = async (app: ReturnType<typeof makeApp>) => {
   vi.resetModules();
@@ -134,12 +183,15 @@ afterEach(() => {
   delete process.env.RENDERER_OTA_PUBLIC_KEY;
 });
 
-describe('RendererUpdateManager full path', () => {
-  it('check → incremental download → stage → apply → boot ping → gc', async () => {
+describe('RendererUpdateManager V2 lifecycle', () => {
+  it('downloads one full pack, stages it, applies it, and commits after boot ping', async () => {
     const app = makeApp();
+    const reloadIgnoringCache = vi.fn();
+    app.browserManager.browsers.set('app', {
+      browserWindow: { webContents: { reloadIgnoringCache } },
+    });
     const manager = await loadManager(app);
     manager.initialize();
-
     const feed = buildFeed('r1', {
       'apps/desktop/index.html': entryHtml('v1'),
       'assets/entry-e2e.js': 'console.log("v1")',
@@ -152,153 +204,141 @@ describe('RendererUpdateManager full path', () => {
     const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBe('r1');
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('rendererUpdateReady', {
-      appVersion: '1.0.0',
+      appVersion: APP_VERSION,
       version: 'r1',
     });
-
-    const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(fetchedUrls[0]).toBe(`${SERVER}/stable/${APP_VERSION}/renderer/latest.json`);
-    const casFetches = fetchedUrls.filter((u: string) => u.includes('/renderer/files/'));
-    expect(casFetches).toHaveLength(4);
+    const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
+    expect(fetchedUrls).toEqual([
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/latest.json`,
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/${feed.manifest.full.path}`,
+    ]);
+    expect(fetchedUrls.some((url: string) => url.includes('/renderer/files/'))).toBe(false);
 
     expect(manager.applyStagedNow()).toBe(true);
-    expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(
-      path.join(otaDir, 'versions', 'r1'),
-    );
+    expect(reloadIgnoringCache).toHaveBeenCalledOnce();
     expect(
       readFileSync(path.join(otaDir, 'versions', 'r1', 'apps', 'desktop', 'index.html'), 'utf8'),
     ).toBe(entryHtml('v1'));
-    expect(readPointer(otaDir, MAIN_HASH).pendingBootCheck).toBe(true);
-
     manager.handleBootPing();
-    const committed = readPointer(otaDir, MAIN_HASH);
-    expect(committed.pendingBootCheck).toBe(false);
-    expect(committed.current).toBe('r1');
-
-    expect(manager.getStatus().state).toBe('idle');
-    stubFetch(
-      buildFeed('r2', {
-        'apps/desktop/index.html': entryHtml('v2'),
-        'assets/entry-e2e.js': 'console.log("v2")',
-      }),
-    );
-    await manager.checkForUpdates();
-    expect(readPointer(otaDir, MAIN_HASH).staged).toBe('r2');
+    expect(readPointer(otaDir, MAIN_HASH)).toMatchObject({
+      current: 'r1',
+      pendingBootCheck: false,
+    });
   });
 
-  it.skipIf(!hasZstd)('downloads only zstd patches when a delta from r0 applies', async () => {
-    const app = makeApp();
+  it('uses one delta pack to reuse, patch, and add renderer files', async () => {
     const oldChunk = Buffer.alloc(32 * 1024, 7);
-    writeFileSync(path.join(builtinDir, 'chunk.bin'), oldChunk);
-
     const newChunk = Buffer.from(oldChunk);
     newChunk[10] = 9;
-    const dir = mkdtempSync(path.join(tmpdir(), 'ota-delta-'));
-    const oldPath = path.join(dir, 'old.bin');
-    const newPath = path.join(dir, 'new.bin');
-    const patchPath = path.join(dir, 'patch.zst');
-    writeFileSync(oldPath, oldChunk);
-    writeFileSync(newPath, newChunk);
-    execFileSync('zstd', ['--patch-from', oldPath, '-19', '-q', '-f', newPath, '-o', patchPath]);
-    const patch = readFileSync(patchPath);
+    writeFileSync(path.join(builtinDir, 'chunk.bin'), oldChunk);
 
+    const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
-
     const feed = buildFeed('r1', {
       'apps/desktop/index.html': entryHtml('v1'),
       'assets/entry-e2e.js': 'console.log("v1")',
-      'chunk.bin': newChunk.toString('latin1'),
+      'chunk.bin': newChunk,
       'shared.js': 'shared-content',
     });
-    const chunkFile = feed.manifest.files.find((f) => f.path === 'chunk.bin');
-    const sharedFile = feed.manifest.files.find((f) => f.path === 'shared.js');
-    if (!chunkFile || !sharedFile) throw new Error('expected files');
-    const patchSha = sha256File(patch);
-    feed.cas.set(patchSha, patch);
-    feed.cas.set(chunkFile.sha256, newChunk);
-    const { signature: _ignored, ...unsigned } = feed.manifest;
-    feed.manifest = signManifest({
-      ...unsigned,
-      deltas: [
-        {
-          fromVersion: 'r0',
-          ops: [
-            { op: 'copy', path: 'shared.js', sha256: sharedFile.sha256 },
-            {
-              fromSha256: sha256File(oldChunk),
-              op: 'patch',
-              patchSha256: patchSha,
-              patchSize: patch.byteLength,
-              path: 'chunk.bin',
-              sha256: chunkFile.sha256,
-              size: newChunk.byteLength,
-            },
-            ...feed.manifest.files
-              .filter((f) => f.path !== 'shared.js' && f.path !== 'chunk.bin')
-              .map((f) => ({ op: 'full' as const, path: f.path, sha256: f.sha256, size: f.size })),
-          ],
-        },
-      ],
-    });
-
+    const chunk = feed.tree.find((file) => file.path === 'chunk.bin');
+    const shared = feed.tree.find((file) => file.path === 'shared.js');
+    if (!chunk || !shared) throw new Error('expected files');
+    const patch = Buffer.from(zstdCompressSync(newChunk, { dictionary: oldChunk }));
+    const patchSha256 = sha256File(patch);
+    const fullObjects = feed.tree.filter(
+      (file) => file.sha256 !== chunk.sha256 && file.sha256 !== shared.sha256,
+    );
+    addDelta(
+      feed,
+      {
+        fromVersion: 'r0',
+        objects: fullObjects.map((file) => file.sha256),
+        patches: [{ fromSha256: sha256File(oldChunk), patchSha256, toSha256: chunk.sha256 }],
+      },
+      new Map([
+        ...fullObjects.map(
+          (file) => [`objects/${file.sha256}`, feed.objects.get(file.sha256) as Buffer] as const,
+        ),
+        [`patches/${patchSha256}`, patch],
+      ]),
+    );
     stubFetch(feed);
+
     await manager.checkForUpdates();
 
-    const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    const casFetches = fetchedUrls.filter((u: string) => u.includes('/renderer/files/'));
-    expect(casFetches).toContain(`${SERVER}/stable/${APP_VERSION}/renderer/files/${patchSha}.bin`);
-    expect(casFetches).not.toContain(
-      `${SERVER}/stable/${APP_VERSION}/renderer/files/${sharedFile.sha256}.bin`,
-    );
-    expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
+    const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
+    const delta = feed.manifest.deltas?.[0];
+    expect(fetchedUrls).toEqual([
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/latest.json`,
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/${delta?.pack.path}`,
+    ]);
     expect(readFileSync(path.join(channelDir(), 'versions', 'r1', 'chunk.bin'))).toEqual(newChunk);
   });
 
-  it('accepts gzip-compressed CAS objects when Content-Encoding is missing', async () => {
+  it('falls back to the full pack when the selected delta pack is corrupt', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
+    const feed = buildFeed('r1', {
+      'apps/desktop/index.html': entryHtml('v1'),
+      'assets/entry-e2e.js': 'console.log("v1")',
+      'shared.js': 'shared-content',
+    });
+    const localHash = sha256File(Buffer.from('shared-content'));
+    const targetHashes = [
+      ...new Set(feed.tree.filter((file) => file.sha256 !== localHash).map((file) => file.sha256)),
+    ];
+    addDelta(
+      feed,
+      { fromVersion: 'r0', objects: targetHashes, patches: [] },
+      new Map(
+        targetHashes.map((sha256) => [`objects/${sha256}`, feed.objects.get(sha256) as Buffer]),
+      ),
+    );
+    const delta = feed.manifest.deltas?.[0];
+    if (!delta) throw new Error('expected delta');
+    feed.packs.set(delta.pack.path, Buffer.from('corrupt'));
+    stubFetch(feed);
 
+    await manager.checkForUpdates();
+
+    const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
+    expect(fetchedUrls).toEqual([
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/latest.json`,
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/${delta.pack.path}`,
+      `${SERVER}/stable/${APP_VERSION}/renderer/v2/${feed.manifest.full.path}`,
+    ]);
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
+  });
+
+  it('keeps the current renderer when a full pack fails integrity verification', async () => {
+    const app = makeApp();
+    const manager = await loadManager(app);
+    manager.initialize();
     const feed = buildFeed('r1', {
       'apps/desktop/index.html': entryHtml('v1'),
       'assets/entry-e2e.js': 'console.log("v1")',
     });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (url === `${SERVER}/stable/${APP_VERSION}/renderer/latest.json`) {
-          return Response.json(feed.manifest);
-        }
-        const match = /\/renderer\/files\/([0-9a-f]{64})\.bin$/.exec(url);
-        const content = match && feed.cas.get(match[1]);
-        if (content) return new Response(new Uint8Array(gzipSync(content)));
-        return new Response('nope', { status: 404 });
-      }),
-    );
+    feed.packs.set(feed.manifest.full.path, Buffer.from('tampered-on-cdn'));
+    stubFetch(feed);
 
     await manager.checkForUpdates();
 
-    expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
-    expect(
-      readFileSync(
-        path.join(channelDir(), 'versions', 'r1', 'apps', 'desktop', 'index.html'),
-        'utf8',
-      ),
-    ).toBe(entryHtml('v1'));
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
+    expect(existsSync(path.join(channelDir(), 'staging'))).toBe(false);
   });
 
   it('rejects a manifest signed by a foreign key', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
-
     const feed = buildFeed('r1', {
       'apps/desktop/index.html': entryHtml('evil'),
       'assets/entry-e2e.js': 'evil',
     });
     const foreign = generateKeyPairSync('ed25519').privateKey;
-    const { signature: _sig, ...unsigned } = feed.manifest;
+    const { signature: _signature, ...unsigned } = feed.manifest;
     feed.manifest = {
       ...unsigned,
       signature: sign(null, Buffer.from(canonicalJson(unsigned)), foreign).toString('base64'),
@@ -311,27 +351,29 @@ describe('RendererUpdateManager full path', () => {
     expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
   });
 
-  it('discards staging when a downloaded file is tampered', async () => {
+  it('clears the complete V1 root without migrating its state', async () => {
+    const legacyRoot = path.join(userDataDir, 'renderer-ota');
+    const legacyDir = path.join(legacyRoot, 'stable');
+    mkdirSync(path.join(legacyDir, 'versions', 'r9', 'assets'), { recursive: true });
+    mkdirSync(path.join(legacyDir, 'staging', 'r10'), { recursive: true });
+    mkdirSync(path.join(legacyRoot, 'cache'), { recursive: true });
+    writeFileSync(
+      path.join(legacyDir, 'pointer.json'),
+      JSON.stringify({ current: 'r9', mainHash: MAIN_HASH }),
+    );
+    writeFileSync(path.join(legacyDir, 'versions', 'r9', 'assets', 'app.js'), 'v1');
+    writeFileSync(path.join(legacyRoot, 'cache', 'patch.bin'), 'cached-patch');
+
     const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
 
-    const feed = buildFeed('r1', {
-      'apps/desktop/index.html': entryHtml('v1'),
-      'assets/entry-e2e.js': 'console.log("v1")',
-    });
-    const [sha] = feed.cas.keys();
-    feed.cas.set(sha, Buffer.from('tampered-on-cdn'));
-    stubFetch(feed);
-
-    await manager.checkForUpdates();
-
-    const otaDir = channelDir();
-    expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
-    expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
+    expect(readPointer(channelDir(), MAIN_HASH).current).toBeNull();
+    expect(existsSync(legacyRoot)).toBe(false);
+    expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
   });
 
-  it('rewrites the pointer on disk when mainHash changed (new full release)', async () => {
+  it('resets V2 state when a full release changes mainHash', async () => {
     const otaDir = channelDir();
     mkdirSync(otaDir, { recursive: true });
     writeFileSync(
@@ -350,44 +392,17 @@ describe('RendererUpdateManager full path', () => {
     const manager = await loadManager(app);
     manager.initialize();
 
-    const onDisk = JSON.parse(readFileSync(path.join(otaDir, 'pointer.json'), 'utf8'));
-    expect(onDisk.mainHash).toBe(MAIN_HASH);
-    expect(onDisk.current).toBeNull();
-    expect(onDisk.blacklist).toEqual([]);
-    expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
-  });
-
-  it('rolls back and blacklists when the previous session never passed boot check', async () => {
-    const app = makeApp();
-    let manager = await loadManager(app);
-    manager.initialize();
-
-    const feed = buildFeed('r1', {
-      'apps/desktop/index.html': entryHtml('v1'),
-      'assets/entry-e2e.js': 'console.log("v1")',
+    expect(readPointer(otaDir, MAIN_HASH)).toMatchObject({
+      blacklist: [],
+      current: null,
+      mainHash: MAIN_HASH,
     });
-    stubFetch(feed);
-    await manager.checkForUpdates();
-    manager.applyStagedNow();
-
-    const app2 = makeApp();
-    manager = await loadManager(app2);
-    manager.initialize();
-
-    const pointer = readPointer(channelDir(), MAIN_HASH);
-    expect(pointer.current).toBeNull();
-    expect(pointer.blacklist).toContain('r1');
-    expect(app2.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
-
-    await manager.checkForUpdates();
-    expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
   });
 
   it('rejects a staged tree whose entry html references a missing chunk', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
-
     stubFetch(
       buildFeed('r1', {
         'apps/desktop/index.html':
@@ -397,37 +412,14 @@ describe('RendererUpdateManager full path', () => {
 
     await manager.checkForUpdates();
 
-    const otaDir = channelDir();
-    expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
-    expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
+    expect(existsSync(path.join(channelDir(), 'staging'))).toBe(false);
   });
 
-  it('rejects a staged tree whose popup entry references a missing chunk', async () => {
+  it('rolls back and blacklists a renderer that never sends the load ping', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
-
-    stubFetch(
-      buildFeed('r1', {
-        'apps/desktop/index.html': entryHtml('v1'),
-        'apps/desktop/popup.html':
-          '<html><script type="module" src="/assets/gone.js"></script></html>',
-        'assets/entry-e2e.js': 'console.log("v1")',
-      }),
-    );
-
-    await manager.checkForUpdates();
-
-    const otaDir = channelDir();
-    expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
-    expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
-  });
-
-  it('rolls back within seconds when the load ping never arrives after hot apply', async () => {
-    const app = makeApp();
-    const manager = await loadManager(app);
-    manager.initialize();
-
     stubFetch(
       buildFeed('r1', {
         'apps/desktop/index.html': entryHtml('v1'),
@@ -444,77 +436,43 @@ describe('RendererUpdateManager full path', () => {
       vi.useRealTimers();
     }
 
-    const pointer = readPointer(channelDir(), MAIN_HASH);
-    expect(pointer.current).toBeNull();
-    expect(pointer.blacklist).toContain('r1');
+    expect(readPointer(channelDir(), MAIN_HASH)).toMatchObject({
+      blacklist: ['r1'],
+      current: null,
+    });
   });
 
-  it('load ping defers the verdict to the mount-stage timeout', async () => {
+  it('keeps V2 patch state independent across update channels', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
     manager.initialize();
-
-    stubFetch(
-      buildFeed('r1', {
-        'apps/desktop/index.html': entryHtml('v1'),
-        'assets/entry-e2e.js': 'console.log("v1")',
-      }),
-    );
-    await manager.checkForUpdates();
-
-    const otaDir = channelDir();
-    vi.useFakeTimers();
-    try {
-      manager.applyStagedNow();
-      manager.handleBootPing('loaded');
-      vi.advanceTimersByTime(5000);
-      expect(readPointer(otaDir, MAIN_HASH).current).toBe('r1');
-
-      vi.advanceTimersByTime(11_000);
-    } finally {
-      vi.useRealTimers();
-    }
-
-    const pointer = readPointer(otaDir, MAIN_HASH);
-    expect(pointer.current).toBeNull();
-    expect(pointer.blacklist).toContain('r1');
-  });
-
-  it('keeps patch versions independent when the update channel changes', async () => {
-    const app = makeApp();
-    const manager = await loadManager(app);
-    manager.initialize();
-
     const feed = buildFeed('r1', {
       'apps/desktop/index.html': entryHtml('v1'),
       'assets/entry-e2e.js': 'console.log("v1")',
     });
     stubFetch(feed);
     await manager.checkForUpdates();
-    expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
 
     manager.switchChannel('canary');
-    expect(readPointer(channelDir('canary'), MAIN_HASH).staged).toBeNull();
-    expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
-
     stubFetch(feed, 'canary');
     await manager.checkForUpdates();
-    expect(readPointer(channelDir('canary'), MAIN_HASH).staged).toBe('r1');
+
     expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
+    expect(readPointer(channelDir('canary'), MAIN_HASH).staged).toBe('r1');
   });
 
-  it('uses a dedicated beta feed for beta binaries', async () => {
+  it('uses the dedicated V2 beta feed for beta binaries', async () => {
     updaterConfigMock.buildChannel = 'beta';
     const app = makeApp();
     app.storeManager.get.mockReturnValue('canary');
     const manager = await loadManager(app);
     manager.initialize();
-
     const feed = buildFeed('r1', {
       'apps/desktop/index.html': entryHtml('beta'),
       'assets/entry-e2e.js': 'console.log("beta")',
     });
     stubFetch(feed, 'beta');
+
     await manager.checkForUpdates();
 
     expect(readPointer(channelDir('beta'), MAIN_HASH).staged).toBe('r1');

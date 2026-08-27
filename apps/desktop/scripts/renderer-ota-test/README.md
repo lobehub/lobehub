@@ -1,8 +1,15 @@
 # Renderer OTA 本地 E2E 测试
 
-在本地完整走通：检查 → 增量下载 → staged toast → 刷新应用 → boot ping 提交，以及坏包自动回退。全程 dev 模式，不需要打包。
+在本地完整走通 V2 协议：检查 → 下载一个 full/delta pack → staged toast → 刷新应用 → boot ping 提交，以及坏增量包自动改下 full pack。全程 dev 模式，不需要打包。
 
 所有命令在 `apps/desktop/` 下执行。
+
+## 协议边界
+
+- V2 客户端只访问 `/<channel>/<appVersion>/renderer/v2`，本地状态只写入 `renderer-ota-v2`。
+- `latest.json` / `versions/rN.json` 只负责选择 pack；目标文件 tree 与 delta 重建信息放在所选 ZIP 的 `meta.json` 中。
+- 新构建不包含 V1 manifest/CAS 解析、URL fallback 或 pointer 迁移。
+- 发布流程不会删除或覆盖远端既有 V1 feed/object；旧客户端继续停留在冻结的 V1 数据上。
 
 ## 0. 生成测试密钥 (一次)
 
@@ -15,6 +22,8 @@ node scripts/buildRendererManifest.mjs --gen-key > /tmp/ota-keys.pem
 
 ```bash
 npm run build:renderer
+rm -rf /tmp/lobehub-ota-r0
+cp -R dist/renderer /tmp/lobehub-ota-r0
 ```
 
 ## 2. 以「生产形态」启动 dev 应用
@@ -40,21 +49,22 @@ DESKTOP_RENDERER_STATIC=1 \
 npm run build:renderer
 RENDERER_OTA_PRIVATE_KEY="$(cat /tmp/ota-priv.pem)" \
   node scripts/buildRendererManifest.mjs \
-  --renderer=dist/renderer --out=/tmp/ota-feed --channel=stable --version=r1
+  --renderer=dist/renderer --out=/tmp/ota-feed --channel=stable --version=r1 \
+  --from-dir=/tmp/lobehub-ota-r0 --from-version=r0
 node scripts/renderer-ota-test/serveOta.mjs /tmp/ota-feed 8787
 ```
 
 注意 `--channel` 要和应用实际渠道一致 (dev 默认 stable; feed 路径为
-`/<channel>/<appVersion>/renderer`)。
+`/<channel>/<appVersion>/renderer/v2`)。
 
 ## 4. 验收 happy path
 
 - 等下一轮检查，或在 DevTools console 手动触发:
   `await window.electronAPI.invoke('rendererOta.checkNow')`
-- serveOta 日志：未变文件 copy，改动走 zstd `--patch-from` 差分；原文 `.bin` 为 gzip
+- serveOta 日志：每次检查只下载一个 `packs/<sha256>.zip`；pack 内 `meta.json` 携带目标 tree，增量 pack 另含新增对象与 zstd dictionary patch
 - 应用左下角出现「新版本已就绪，刷新即可使用」toast
 - 点「立即刷新」: 窗口 reload (应用不重启), 改动的文案出现
-- `~/Library/Application Support/<dev userData>/renderer-ota/pointer.json`:
+- `~/Library/Application Support/<dev userData>/renderer-ota-v2/stable/pointer.json`:
   `current: "r1"`, 收到 boot ping 后 `pendingBootCheck: false`
 - `versions/` 只留 current (+previous)
 
