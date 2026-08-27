@@ -28,6 +28,7 @@ import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import HomeSkeleton from '@/components/Skeleton/Home';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
@@ -1344,6 +1345,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     handle: {
       meta: routeMeta({
         icon: HomeIcon,
+        Skeleton: HomeSkeleton,
         tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),

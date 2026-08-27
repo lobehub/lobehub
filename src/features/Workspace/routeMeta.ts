@@ -1,6 +1,7 @@
 'use client';
 
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import HomeSkeleton from '@/components/Skeleton/Home';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -24,5 +25,6 @@ const WorkspaceHomeDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) 
 
 export const workspaceHomeRouteMeta = routeMeta({
   DynamicMeta: WorkspaceHomeDynamicMeta,
+  Skeleton: HomeSkeleton,
   titleKey: 'navigation.home',
 });
