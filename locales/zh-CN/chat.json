@@ -790,6 +790,7 @@
   "input.modelDisabled": "当前模型已禁用",
   "input.modelDisabled.action": "启用",
   "input.modelDisabled.actionFailed": "启用模型失败，请重试。",
+  "input.modelDisabled.selectionFailed": "模型已启用，但切换服务商失败。请重新选择该模型后继续。",
   "input.modelFixedTip": "模型已在助理档案中固定，聊天时不可切换。",
   "input.modelUnavailable": "当前模型已下线。请选择其他模型后继续使用。",
   "input.more": "更多",

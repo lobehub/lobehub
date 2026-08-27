@@ -633,6 +633,8 @@ export default {
   'input.modelDisabled': 'The current model is disabled',
   'input.modelDisabled.action': 'Enable',
   'input.modelDisabled.actionFailed': 'Failed to enable the model. Please try again.',
+  'input.modelDisabled.selectionFailed':
+    'The model was enabled, but switching providers failed. Select it again to continue.',
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
   'input.viewOnlyAgent': 'You can only view this agent',

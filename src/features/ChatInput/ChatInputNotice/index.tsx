@@ -1,5 +1,6 @@
 'use client';
 
+import { Tooltip } from '@lobehub/ui';
 import { Alert, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
@@ -12,6 +13,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
     height: 24px;
     padding-inline: 10px;
+  `,
+  actionWrapper: css`
+    display: inline-flex;
   `,
   alert: css`
     flex: 0 1 auto;
@@ -53,17 +57,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       max-width: 100%;
     }
   `,
-  title: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    min-width: 0;
-  `,
-  titleText: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
 }));
 
 const ChatInputNotice = memo(() => {
@@ -72,28 +65,36 @@ const ChatInputNotice = memo(() => {
 
   if (!notice) return null;
 
+  const enableButton = notice.action === 'enableModel' && (
+    <Button
+      className={styles.action}
+      disabled={notice.actionDisabled}
+      loading={notice.actionLoading}
+      size={'small'}
+      type={'primary'}
+      onClick={() => void notice.onAction?.()}
+    >
+      {t('input.modelDisabled.action')}
+    </Button>
+  );
+
+  const action =
+    enableButton && notice.actionDisabled ? (
+      <Tooltip title={notice.actionDisabledReason}>
+        <span className={styles.actionWrapper}>{enableButton}</span>
+      </Tooltip>
+    ) : (
+      enableButton
+    );
+
   return (
     <Alert
-      classNames={{ alert: cx(styles.alert), title: styles.title }}
+      action={action}
+      classNames={{ alert: cx(styles.alert) }}
       style={{ fontSize: 12 }}
+      title={t(notice.key)}
       type={notice.type}
       variant={'borderless'}
-      title={
-        <>
-          <span className={styles.titleText}>{t(notice.key)}</span>
-          {notice.action === 'enableModel' && (
-            <Button
-              className={styles.action}
-              loading={notice.actionLoading}
-              size={'small'}
-              type={'primary'}
-              onClick={() => void notice.onAction?.()}
-            >
-              {t('input.modelDisabled.action')}
-            </Button>
-          )}
-        </>
-      }
     />
   );
 });

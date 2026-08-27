@@ -1,7 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatInputNotice } from './useChatInputNotice';
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 
 interface TestModel {
   abilities?: {
@@ -50,6 +52,7 @@ const testState = vi.hoisted(() => ({
   isDesktop: false,
   permission: {
     canManageAiInfra: true,
+    reason: undefined as string | undefined,
   },
   resourceAccess: {
     canConfigureResource: true,
@@ -68,6 +71,8 @@ vi.mock('@lobechat/const', () => ({
     return testState.isDesktop;
   },
 }));
+
+vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: toastError } }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
   useAgentId: () => 'agent-id',
@@ -95,7 +100,10 @@ vi.mock('@/hooks/useEnabledChatModels', () => ({
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: testState.permission.canManageAiInfra }),
+  usePermission: () => ({
+    allowed: testState.permission.canManageAiInfra,
+    reason: testState.permission.reason,
+  }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -120,6 +128,10 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 
 describe('useChatInputNotice', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
     testState.agent.isConfigLoading = false;
@@ -140,8 +152,10 @@ describe('useChatInputNotice', () => {
     testState.aiInfra.modelRedirects = {};
     testState.aiInfra.toggleProviderEnabled.mockReset();
     testState.aiInfra.toggleProviderModelEnabled.mockReset();
+    toastError.mockReset();
     testState.isDesktop = false;
     testState.permission.canManageAiInfra = true;
+    testState.permission.reason = undefined;
     testState.resourceAccess = {
       canConfigureResource: true,
       isAccessLoading: false,
@@ -281,8 +295,9 @@ describe('useChatInputNotice', () => {
     });
   });
 
-  it('keeps the disabled-model notice without Enable when the member cannot manage AI infrastructure', () => {
+  it('disables Enable with the permission reason when the member cannot manage AI infrastructure', () => {
     testState.permission.canManageAiInfra = false;
+    testState.permission.reason = 'Requires admin permission';
     testState.aiInfra.isInitAiProviderRuntimeState = true;
     testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
     testState.aiInfra.enabledChatModelList = [{ children: [{ id: 'gpt-4.1' }], id: 'openai' }];
@@ -291,8 +306,12 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({
-      action: undefined,
+      action: 'enableModel',
+      actionDisabled: true,
+      actionDisabledReason: 'Requires admin permission',
+      actionLoading: false,
       key: 'input.modelDisabled',
+      onAction: undefined,
       type: 'warning',
     });
   });
@@ -345,6 +364,35 @@ describe('useChatInputNotice', () => {
       model: 'gpt-4o',
       provider: 'openai',
     });
+  });
+
+  it('reports a provider selection failure separately after enabling the fallback model', async () => {
+    const selectionError = new Error('selection failed');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    testState.agent.provider = 'removed-provider';
+    testState.agentModelSelection.selectModel = vi.fn(async () => {
+      throw selectionError;
+    });
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringMatching(/selectionFailed|switching providers failed/),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to select the enabled chat model provider:',
+      selectionError,
+    );
   });
 
   it('does not return unavailable model copy while the agent config is still loading', () => {

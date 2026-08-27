@@ -1,5 +1,5 @@
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
@@ -17,7 +17,6 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 interface ResolveChatInputNoticeParams {
-  canEnableModel?: boolean;
   currentChatModel?: unknown;
   isAgentModelPending: boolean;
   isGroupContext?: boolean;
@@ -38,7 +37,6 @@ const findEnabledChatModel = (
 };
 
 export const resolveChatInputNotice = ({
-  canEnableModel,
   currentChatModel,
   isAgentModelPending,
   isGroupContext,
@@ -73,7 +71,7 @@ export const resolveChatInputNotice = ({
   ) {
     if (isModelDisabled)
       return {
-        action: canEnableModel ? ('enableModel' as const) : undefined,
+        action: 'enableModel' as const,
         key: 'input.modelDisabled',
         type: 'warning',
       } as const;
@@ -90,13 +88,16 @@ export const resolveChatInputNotice = ({
 
 /** Union of every notice shape `resolveChatInputNotice` can return. */
 export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNotice>> & {
+  actionDisabled?: boolean;
+  actionDisabledReason?: string;
   actionLoading?: boolean;
   onAction?: () => Promise<void>;
 };
 
 export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const { t } = useTranslation('chat');
-  const { allowed: canManageAiInfra } = usePermission('manage_provider_key');
+  const { allowed: canManageAiInfra, reason: aiInfraPermissionReason } =
+    usePermission('manage_provider_key');
   const agentId = useAgentId();
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -126,17 +127,21 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );
   const currentChatModel = findEnabledChatModel(enabledChatModelList, model, provider);
-  const staleModelState = isModelConfigReady
-    ? resolveStaleModelState(
-        { model, provider },
-        {
-          builtinAiModelList,
-          enabledList: enabledChatModelList,
-          modelRedirects,
-          modelType: 'chat',
-        },
-      )
-    : undefined;
+  const staleModelState = useMemo(
+    () =>
+      isModelConfigReady
+        ? resolveStaleModelState(
+            { model, provider },
+            {
+              builtinAiModelList,
+              enabledList: enabledChatModelList,
+              modelRedirects,
+              modelType: 'chat',
+            },
+          )
+        : undefined,
+    [builtinAiModelList, enabledChatModelList, isModelConfigReady, model, modelRedirects, provider],
+  );
   const enableTargetProviderId =
     staleModelState?.status === 'notEnabled'
       ? resolveEnableTargetProviderId(
@@ -158,7 +163,6 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const { canUseResource, isGroupContext } = useChatInputResourceAccess();
 
   const notice = resolveChatInputNotice({
-    canEnableModel: canManageAiInfra && isModelDisabled,
     currentChatModel,
     isAgentModelPending: isAgentConfigLoading || isMemberOverridePending,
     isGroupContext,
@@ -183,8 +187,16 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
         providerId,
         type: 'chat',
       });
-      if (providerId !== provider) await selectModel({ model, provider: providerId });
-    } catch {
+      if (providerId !== provider) {
+        try {
+          await selectModel({ model, provider: providerId });
+        } catch (error) {
+          console.error('Failed to select the enabled chat model provider:', error);
+          toast.error(t('input.modelDisabled.selectionFailed'));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to enable the selected chat model:', error);
       toast.error(t('input.modelDisabled.actionFailed'));
     } finally {
       setActionLoading(false);
@@ -202,5 +214,11 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
 
   if (notice?.action !== 'enableModel') return notice;
 
-  return { ...notice, actionLoading, onAction: handleEnableModel };
+  return {
+    ...notice,
+    actionDisabled: !canManageAiInfra,
+    actionDisabledReason: canManageAiInfra ? undefined : aiInfraPermissionReason,
+    actionLoading,
+    onAction: canManageAiInfra ? handleEnableModel : undefined,
+  };
 };
