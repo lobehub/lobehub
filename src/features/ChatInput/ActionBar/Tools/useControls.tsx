@@ -66,12 +66,6 @@ import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 
-const officialTag = (
-  <Tooltip placement={'top'} title={'LobeHub'}>
-    <Tag color={'success'} icon={<Icon icon={BadgeCheck} />} size={'small'} />
-  </Tooltip>
-);
-
 type SkillPolicyMode = AgentPluginMode;
 
 interface SkillDeleteConfig {
@@ -439,6 +433,24 @@ const styles = createStaticStyles(({ css }) => ({
 
 export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
   const { t } = useTranslation('setting');
+  // Was a hardcoded `title={'LobeHub'}` module-level constant, bypassing the
+  // i18n key (`skillStore.tabs.lobehub`) already used for this exact label two
+  // lines below (`sourceLabel`) — brandPostProcessor rewrites LobeHub-branded
+  // locale strings at `t()` time, but only strings that actually go through
+  // `t()`. Needs to live inside the hook body now: `t` isn't available at
+  // module scope. Memoized (keyed on `t`) so it stays referentially stable
+  // across renders, same as the module constant it replaces — several of the
+  // `useMemo`s below list it as a dependency, and without this they'd
+  // recompute on every render instead of only when the tool list actually
+  // changes.
+  const officialTag = useMemo(
+    () => (
+      <Tooltip placement={'top'} title={t('skillStore.tabs.lobehub')}>
+        <Tag color={'success'} icon={<Icon icon={BadgeCheck} />} size={'small'} />
+      </Tooltip>
+    ),
+    [t],
+  );
   const agentId = useAgentId();
   const navigate = useWorkspaceAwareNavigate();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -1020,6 +1032,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       recommendedComposioIds,
       agentId,
       t,
+      officialTag,
       createManagedSkillItem,
       getServerByName,
       removeComposioServer,
@@ -1092,6 +1105,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       recommendedLobehubIds,
       agentId,
       t,
+      officialTag,
       createManagedSkillItem,
     ],
   );
@@ -1145,7 +1159,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
+    [filteredBuiltinList, t, officialTag, createManagedSkillItem, uninstallBuiltinTool],
   );
 
   // Builtin runtime tools support an explicit pinned/disabled policy. They intentionally
@@ -1196,7 +1210,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [createManagedSkillItem, fixedDisplayList, t],
+    [createManagedSkillItem, fixedDisplayList, t, officialTag],
   );
 
   // Builtin Agent Skills list items (grouped under LobeHub)
@@ -1244,7 +1258,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [installedBuiltinSkills, t, createManagedSkillItem],
+    [installedBuiltinSkills, t, officialTag, createManagedSkillItem],
   );
 
   // Market Agent Skills list items (grouped under Community)
