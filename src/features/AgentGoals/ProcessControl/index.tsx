@@ -16,6 +16,7 @@ import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
 import Graph from './Graph';
+import { runGoal } from './runGoal';
 
 /**
  * The process-control band of the goal detail page: what can move now
@@ -52,11 +53,18 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
 
   const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
 
+  // One press carries the goal as far as it can go and stops where the user is
+  // actually needed. A single coordinator step is an implementation unit — a
+  // press that only ticked once usually looked like it did nothing at all,
+  // because the very next step is what dispatches the task.
   const advance = useCallback(async () => {
     if (advancing) return;
     setAdvancing(true);
     try {
-      const result = await tickGoal(goalId);
+      const { result } = await runGoal({
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        tick: () => tickGoal(goalId),
+      });
       toast.info(result.message);
     } catch (error) {
       toast.error((error as Error).message);
@@ -98,7 +106,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
                   type={'primary'}
                   onClick={advance}
                 >
-                  {t('goalProcess.advance.label')}
+                  {advancing ? t('goalProcess.advance.running') : t('goalProcess.advance.label')}
                 </Button>
               </Tooltip>
               <Button
