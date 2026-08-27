@@ -1,4 +1,5 @@
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -53,7 +54,7 @@ const RecentListItem = memo<RecentItem>((item) => {
         disabled={editing}
         title={title}
         actions={
-          <DropdownMenu items={dropdownMenu()} nativeButton={false}>
+          <DropdownMenu items={dropdownMenu()}>
             <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
           </DropdownMenu>
         }

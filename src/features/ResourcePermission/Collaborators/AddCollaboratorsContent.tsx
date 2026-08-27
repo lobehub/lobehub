@@ -1,17 +1,8 @@
 'use client';
 
 import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
-import {
-  Avatar,
-  Empty,
-  Flexbox,
-  Icon,
-  SearchBar,
-  SkeletonAvatar,
-  SkeletonTitle,
-  Text,
-} from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, Icon, SearchBar, SkeletonAvatar, SkeletonTitle } from '@lobehub/ui';
+import { Avatar, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckIcon, SearchXIcon, UsersIcon } from 'lucide-react';

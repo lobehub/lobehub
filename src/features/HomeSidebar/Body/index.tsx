@@ -1,7 +1,8 @@
 'use client';
 
 import type { MenuProps } from '@lobehub/ui';
-import { Accordion, ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, MoreHorizontalIcon, SlidersHorizontalIcon } from 'lucide-react';
 import type { Key, ReactElement } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -175,7 +176,7 @@ const Body = memo(() => {
             icon={navItem.icon}
             title={navItem.title}
             actions={
-              <DropdownMenu items={getContextMenuItems(key)} nativeButton={false}>
+              <DropdownMenu items={getContextMenuItems(key)}>
                 <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
               </DropdownMenu>
             }

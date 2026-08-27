@@ -1,13 +1,5 @@
-import {
-  ActionIcon,
-  Block,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';

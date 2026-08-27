@@ -1,17 +1,13 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import {
-  ActionIcon,
-  Avatar,
   Block,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
   Markdown,
   stopPropagation,
-  Tag,
-  Text,
 } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   ChevronDown,

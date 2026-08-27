@@ -1,5 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { type CSSProperties } from 'react';
+import { type CSSProperties, type MouseEventHandler } from 'react';
 import { memo } from 'react';
 
 import A from '@/components/Avatar';
@@ -10,7 +10,7 @@ export interface AvatarProps {
   alt?: string;
   avatar: ChatItemProps['avatar'];
   loading?: boolean;
-  onClick?: ChatItemProps['onAvatarClick'];
+  onClick?: ChatItemProps['onAvatarClick'] | MouseEventHandler<HTMLDivElement>;
   size?: number;
   style?: CSSProperties;
   unoptimized?: boolean;

@@ -3,16 +3,8 @@
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  ContextMenuTrigger,
-  Flexbox,
-  type MenuProps,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { ContextMenuTrigger, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';

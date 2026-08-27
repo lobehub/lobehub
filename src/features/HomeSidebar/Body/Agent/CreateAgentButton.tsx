@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { Block, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -144,7 +144,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
             e.stopPropagation();
           }}
         >
-          <DropdownMenu items={dropdownItems} nativeButton={false}>
+          <DropdownMenu items={dropdownItems}>
             <ActionIcon
               color={cssVar.colorTextQuaternary}
               icon={ChevronDownIcon}

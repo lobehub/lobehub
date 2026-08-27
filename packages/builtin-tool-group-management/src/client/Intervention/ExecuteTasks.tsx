@@ -2,15 +2,8 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import {
-  Accordion,
-  AccordionItem,
-  Avatar,
-  Flexbox,
-  Icon,
-  stopPropagation,
-  Tooltip,
-} from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { Input, InputNumber } from 'antd';
 import { createStaticStyles, useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';

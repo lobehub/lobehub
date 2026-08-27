@@ -50,19 +50,6 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    'aria-label': ariaLabel,
-    className,
-    onClick,
-  }: {
-    'aria-label'?: string;
-    'className'?: string;
-    'onClick'?: () => void;
-  }) => (
-    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
-      Refresh
-    </button>
-  ),
   CopyButton: () => <button type="button">Copy</button>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: () => <span>Icon</span>,
@@ -94,13 +81,24 @@ vi.mock('@lobehub/ui', () => ({
       }}
     />
   ),
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    'aria-label': ariaLabel,
+    className,
+    onClick,
+  }: {
+    'aria-label'?: string;
+    'className'?: string;
+    'onClick'?: () => void;
+  }) => (
+    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
+      Refresh
+    </button>
+  ),
   Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>
       {children}
@@ -160,6 +158,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       )}
     </select>
   ),
+  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('antd-style', () => ({

@@ -3,12 +3,11 @@
 import {
   Accordion,
   AccordionItem,
-  ActionIcon,
   ContextMenuTrigger,
   Flexbox,
   stopPropagation,
-  Text,
 } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';

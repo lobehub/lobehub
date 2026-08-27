@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ActionIcon,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -11,6 +10,7 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import type { ComponentType } from 'react';

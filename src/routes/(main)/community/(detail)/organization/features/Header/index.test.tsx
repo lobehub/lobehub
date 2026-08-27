@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { render, screen } from '@testing-library/react';
-import type { ElementType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -15,9 +16,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     <span>{alt ?? String(avatar ?? '')}</span>
   ),
   Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ as: As = 'span', children }: { as?: ElementType; children?: ReactNode }) => (
-    <As>{children}</As>
-  ),
+  Text: ({ as = 'span', children }: { as?: string; children?: ReactNode }) =>
+    createElement(as, undefined, children),
 }));
 
 vi.mock('react-i18next', () => ({

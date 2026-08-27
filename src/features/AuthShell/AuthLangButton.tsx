@@ -1,12 +1,7 @@
 'use client';
 
-import {
-  DropdownMenu,
-  type DropdownMenuCheckboxItem,
-  Flexbox,
-  Text,
-} from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { DropdownMenu, type DropdownMenuCheckboxItem, Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { GlobeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

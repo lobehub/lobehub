@@ -1,17 +1,15 @@
 'use client';
 
+import { Center, ContextMenuTrigger, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
-  Center,
-  ContextMenuTrigger,
-  Empty,
-  Flexbox,
-  Icon,
-  SearchBar,
+  Button,
+  confirmModal,
+  type DropdownItem,
+  DropdownMenu,
   Text,
-  Tooltip,
-} from '@lobehub/ui';
-import { Button, confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import {

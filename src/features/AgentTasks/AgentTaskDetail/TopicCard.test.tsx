@@ -13,6 +13,24 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>
+      action
+    </button>
+  ),
+  Avatar: () => <span>avatar</span>,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  confirmModal: vi.fn(),
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
+
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: any) => unknown) =>
     selector({
