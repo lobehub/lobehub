@@ -3963,6 +3963,7 @@ export class AiAgentService {
         canUseDevice,
         chatConfig: agentConfig.chatConfig ?? undefined,
         clientExecutionAvailable: gatewayConfigured,
+        localDeviceId,
         onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
         requestedDeviceId,
         trigger: requestTriggerMetadata?.trigger,
@@ -4133,7 +4134,7 @@ export class AiAgentService {
                 ?.unsupportedMessageApis,
             },
           }),
-          executionEnv: executionPlanToManifestExecutionEnv(executionPlan),
+          executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),
           executionEnvUnroutedReason:
             executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
           isSubAgent: appContext?.isSubAgent,

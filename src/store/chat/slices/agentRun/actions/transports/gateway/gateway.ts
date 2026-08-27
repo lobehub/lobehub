@@ -50,11 +50,13 @@ import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's
- * own gateway deviceId so it can be passed as the run's `deviceId`. The server
- * then presets `activeDeviceId` and injects `lobe-local-system` into the very
- * first LLM payload — skipping the extra `activateDevice` round-trip the model
- * is otherwise forced to make whenever more than one device is online (with a
- * single device the server's heuristic already covered it).
+ * own gateway deviceId so it can be passed as the run's routing `deviceId` and
+ * `localDeviceId` capability hint. The server then presets `activeDeviceId`,
+ * injects `lobe-local-system` into the first LLM payload, and advertises direct
+ * image reads only when the routed device still matches this desktop. This
+ * skips the extra `activateDevice` round-trip the model is otherwise forced to
+ * make whenever more than one device is online (with a single device the
+ * server's heuristic already covered it).
  *
  * Gated on the effective runtime mode (`isLocalSystemEnabledById`), which
  * derives from `agencyConfig.executionTarget` — only a `local` target presets
@@ -109,7 +111,9 @@ const resolveDesktopDeviceHints = async (
   try {
     const info = await gatewayConnectionService.getDeviceInfo();
     if (!info?.deviceId) return {};
-    return isPlatformTask ? { localDeviceId: info.deviceId } : { deviceId: info.deviceId };
+    return isPlatformTask
+      ? { localDeviceId: info.deviceId }
+      : { deviceId: info.deviceId, localDeviceId: info.deviceId };
   } catch {
     return {};
   }

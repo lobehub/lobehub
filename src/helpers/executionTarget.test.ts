@@ -432,11 +432,14 @@ describe('executionTargetToRuntimeMode', () => {
 describe('executionPlanToManifestExecutionEnv', () => {
   it('preserves the image-capable desktop target only after it is routed', () => {
     expect(
-      executionPlanToManifestExecutionEnv({
-        deviceId: 'desktop-device',
-        kind: 'device',
-        target: 'local',
-      }),
+      executionPlanToManifestExecutionEnv(
+        {
+          deviceId: 'desktop-device',
+          kind: 'device',
+          target: 'local',
+        },
+        'desktop-device',
+      ),
     ).toBe('local');
     expect(
       executionPlanToManifestExecutionEnv({
@@ -445,6 +448,17 @@ describe('executionPlanToManifestExecutionEnv', () => {
         target: 'local',
       }),
     ).toBe('device-unrouted');
+  });
+
+  it('does not advertise desktop capabilities when a local target routes elsewhere', () => {
+    const plan: ExecutionPlan = {
+      deviceId: 'remote-cli-device',
+      kind: 'device',
+      target: 'local',
+    };
+
+    expect(executionPlanToManifestExecutionEnv(plan, 'desktop-device')).toBe('device');
+    expect(executionPlanToManifestExecutionEnv(plan)).toBe('device');
   });
 
   it('keeps non-local plan kinds unchanged', () => {

@@ -330,13 +330,18 @@ export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
 
 /**
  * Preserve the desktop-local capability signal after the server resolves that
- * target to a registered device. Unrouted local targets keep their plan kind so
- * manifests continue to describe the sandbox degradation instead.
+ * target to the caller's registered desktop. A per-request device override can
+ * keep `target: local` while routing to another machine, so the device IDs must
+ * match before the manifest advertises desktop-only image reads. Unrouted local
+ * targets keep their plan kind so manifests describe the sandbox degradation.
  */
 export const executionPlanToManifestExecutionEnv = (
   plan: ExecutionPlan,
+  localDeviceId?: string,
 ): ExecutionManifestEnvironment =>
-  plan.kind === 'device' && plan.target === 'local' ? 'local' : plan.kind;
+  plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
+    ? 'local'
+    : plan.kind;
 
 /** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
 export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
