@@ -5,9 +5,15 @@ import type { Context } from 'hono';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { agents } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:workflows:agent-share:sweep');
+
+export interface AgentShareReservationSweepResult {
+  deleted: number;
+  interrupted: number;
+}
 
 /**
  * Cron-style sweep for `agent_share_run_reservations` rows abandoned before
@@ -44,49 +50,65 @@ const log = debug('lobe-server:workflows:agent-share:sweep');
  * 'cascade'` on `agentShareRunReservations.agentId`), so there's nothing left
  * to interrupt.
  *
- * No per-user authentication: this is a global scan registered as a QStash
- * Schedule (cron), same pattern as `workflows/verify/handlers/sweep.ts`.
- * Signature verification is handled by the `qstashAuth` middleware mounted on
- * the route.
+ * No per-user authentication: this is a global scan invoked by the
+ * deployment's cron schedule, same pattern as
+ * `workflows/verify/handlers/sweep.ts`. Signature verification for the
+ * QStash-triggered HTTP path is handled by the `qstashAuth` middleware
+ * mounted on the route; a deployment that instead drives this off a plain
+ * cron calls {@link runAgentShareReservationSweep} directly (already
+ * authenticated at that call site) and never goes through `qstashAuth`.
+ *
+ * Framework-free core: extracted from the Hono handler so a non-QStash cron
+ * caller (e.g. a scheduled route gated by its own auth) can invoke the sweep
+ * directly without constructing a Hono `Context`.
  */
+export async function runAgentShareReservationSweep(
+  db: LobeChatDatabase,
+): Promise<AgentShareReservationSweepResult> {
+  const swept = await AgentShareModel.sweepAbandonedReservations(db);
+
+  log('Agent share reservation sweep: deleted=%d', swept.length);
+
+  let interrupted = 0;
+  if (swept.length > 0) {
+    const agentIds = [...new Set(swept.map((row) => row.agentId))];
+    const ownerRows = await db
+      .select({ id: agents.id, userId: agents.userId })
+      .from(agents)
+      .where(inArray(agents.id, agentIds));
+    const ownerByAgentId = new Map(ownerRows.map((row) => [row.id, row.userId]));
+
+    await Promise.all(
+      swept.map(async ({ agentId, operationId, topicId }) => {
+        const ownerId = ownerByAgentId.get(agentId);
+        if (!ownerId) return;
+
+        try {
+          await new AiAgentService(db, ownerId).interruptTask({ operationId, topicId });
+          interrupted += 1;
+        } catch (error) {
+          log(
+            'Agent share reservation sweep: failed to interrupt operationId=%s topicId=%s: %O',
+            operationId,
+            topicId,
+            error,
+          );
+        }
+      }),
+    );
+    log('Agent share reservation sweep: interrupted=%d', interrupted);
+  }
+
+  return { deleted: swept.length, interrupted };
+}
+
+/** Thin QStash-authenticated HTTP wrapper over {@link runAgentShareReservationSweep}. */
 export async function sweep(c: Context) {
   try {
     const db = await getServerDB();
-    const swept = await AgentShareModel.sweepAbandonedReservations(db);
+    const result = await runAgentShareReservationSweep(db);
 
-    log('Agent share reservation sweep: deleted=%d', swept.length);
-
-    if (swept.length > 0) {
-      const agentIds = [...new Set(swept.map((row) => row.agentId))];
-      const ownerRows = await db
-        .select({ id: agents.id, userId: agents.userId })
-        .from(agents)
-        .where(inArray(agents.id, agentIds));
-      const ownerByAgentId = new Map(ownerRows.map((row) => [row.id, row.userId]));
-
-      let interrupted = 0;
-      await Promise.all(
-        swept.map(async ({ agentId, operationId, topicId }) => {
-          const ownerId = ownerByAgentId.get(agentId);
-          if (!ownerId) return;
-
-          try {
-            await new AiAgentService(db, ownerId).interruptTask({ operationId, topicId });
-            interrupted += 1;
-          } catch (error) {
-            log(
-              'Agent share reservation sweep: failed to interrupt operationId=%s topicId=%s: %O',
-              operationId,
-              topicId,
-              error,
-            );
-          }
-        }),
-      );
-      log('Agent share reservation sweep: interrupted=%d', interrupted);
-    }
-
-    return c.json({ deleted: swept.length, success: true });
+    return c.json({ ...result, success: true });
   } catch (error) {
     console.error('[agent-share/sweep] Error:', error);
     return c.json({ error: error instanceof Error ? error.message : 'Internal error' }, 500);

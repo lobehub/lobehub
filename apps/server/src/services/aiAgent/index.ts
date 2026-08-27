@@ -7188,11 +7188,12 @@ export class AiAgentService {
         // One bounded, in-process retry for a transient coordinator/database/
         // runtime hiccup — cheap because it costs nothing beyond this
         // already-running `after()` callback and needs no durable
-        // infrastructure. This is NOT what makes a missed interrupt safe: if
-        // BOTH attempts fail (or the process dies in between), nothing here
-        // schedules a durable retry — the existing
-        // `/api/workflows/agent-share/sweep` endpoint has no QStash schedule
-        // wired in production, so leaning on it would silently never fire.
+        // infrastructure. This is NOT what makes a missed interrupt safe:
+        // even though `/api/workflows/agent-share/sweep` IS invoked by the
+        // deployment's cron schedule, it only runs on a bounded interval
+        // (see `sweepAbandonedReservations`'s `maxAgeMs`), so leaning on it
+        // alone would leave a run unstoppable for up to that whole window if
+        // BOTH attempts here fail (or the process dies in between).
         // The actual backstop is `AgentRuntimeService.executeStep` re-checking
         // this run's share generation on every step
         // (`AgentShareModel.isRunStillAuthorized`) — see LOBE-11930 Codex

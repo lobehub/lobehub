@@ -1020,10 +1020,12 @@ export class AgentShareModel {
    * coordinator/database/runtime error) with no durable retry — if that
    * swallow fires, nothing else was ever going to re-check this run. Rather
    * than trying to never lose an interrupt (which would need a durable
-   * record AND a retry driver that actually runs — the existing
-   * `/api/workflows/agent-share/sweep` endpoint has no QStash schedule wired
-   * in production, so a fix that depended on it would silently never fire),
-   * this makes the run re-prove its own authorization every step. A missed
+   * record AND a retry driver that actually runs on every miss — the
+   * existing `/api/workflows/agent-share/sweep` endpoint IS invoked by the
+   * deployment's cron schedule, but only on its own bounded interval, so a
+   * fix that depended on it alone for per-miss recovery would still leave a
+   * run unstoppable for up to that interval), this makes the run re-prove
+   * its own authorization every step. A missed
    * interrupt then self-corrects at the very next step instead of staying
    * unstoppable under the creator's credentials/budget for the rest of the
    * run.

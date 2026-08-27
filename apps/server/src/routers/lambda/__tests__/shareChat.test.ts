@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as MessageModelModule from '@/database/models/message';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -32,13 +33,21 @@ vi.mock('@/database/models/topic', () => ({
 const mockMessageCountByTopic = vi.fn();
 const mockMessageQuery = vi.fn();
 const mockMessageQueryForVisitor = vi.fn();
-vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    countByTopic: mockMessageCountByTopic,
-    query: mockMessageQuery,
-    queryForVisitor: mockMessageQueryForVisitor,
-  })),
-}));
+vi.mock('@/database/models/message', async (importOriginal) => {
+  // Keep the real `sanitizeVisitorError` (rather than re-stubbing it) so the
+  // startup-error regression below exercises the SAME projection shareChat
+  // reuses in production — not a test-only stand-in that could silently
+  // drift from it.
+  const actual = await importOriginal<typeof MessageModelModule>();
+  return {
+    ...actual,
+    MessageModel: vi.fn(() => ({
+      countByTopic: mockMessageCountByTopic,
+      query: mockMessageQuery,
+      queryForVisitor: mockMessageQueryForVisitor,
+    })),
+  };
+});
 
 vi.mock('@/database/models/user', () => ({
   UserModel: vi.fn(() => ({ getUserSettings: vi.fn().mockResolvedValue({}) })),
@@ -195,6 +204,56 @@ describe('shareChatRouter', () => {
       );
     });
 
+    // Regression for Codex P1 (LOBE-11930, `shareChat.ts` prompt schema): a
+    // direct RPC caller (bypassing any client-side textarea limit) could
+    // previously submit an HTTP-infrastructure-limit-sized `prompt`, which
+    // `AiAgentService.execAgent` would persist verbatim into the CREATOR's
+    // messages before any topic/turn cap even runs (those gate request
+    // COUNT, not per-request SIZE). The schema now rejects an oversized
+    // prompt before any row is touched.
+    it('rejects an oversized prompt before any DB row is touched', async () => {
+      const caller = await createCaller();
+      const oversizedPrompt = 'a'.repeat(20_001);
+
+      await expect(
+        caller.execAgent({ prompt: oversizedPrompt, shareId: 'share-1' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockAccessCheck).not.toHaveBeenCalled();
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('accepts a prompt right at the size limit', async () => {
+      const caller = await createCaller();
+      const maxPrompt = 'a'.repeat(20_000);
+
+      await expect(
+        caller.execAgent({ prompt: maxPrompt, shareId: 'share-1' }),
+      ).resolves.toMatchObject({ operationId: 'op-1' });
+    });
+
+    // Regression for Codex P2 (LOBE-11930): a startup failure BEFORE Gateway
+    // streaming begins (e.g. the queue/runtime backend returning a raw
+    // diagnostic) must not reach the visitor verbatim — the run executes
+    // under the CREATOR's identity, so `error.message` here can carry
+    // provider/infra detail. `toVisitorSafeStartupError` must project it
+    // through the same `sanitizeVisitorError` classification used elsewhere
+    // in this branch, not echo it back raw.
+    it('redacts a diagnostic startup failure instead of leaking it to the visitor', async () => {
+      const diagnostic = new Error(
+        'ECONNREFUSED connecting to internal-runtime-queue.prod.internal:6379 (provider=openai, apiKey=sk-***)',
+      );
+      mockExecAgent.mockRejectedValueOnce(diagnostic);
+      const caller = await createCaller();
+
+      const rejection = caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+      await expect(rejection).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      await rejection.catch((error: any) => {
+        expect(error.message).not.toContain('internal-runtime-queue');
+        expect(error.message).not.toContain('openai');
+        expect(error.message).not.toContain('sk-');
+      });
+    });
+
     it('never sets interactiveStart, so concurrent visitor sends contend on the real runningOperation liveness instead of only the short reservation', async () => {
       // Regression for Codex P1 (LOBE-11930, `shareChat.ts:186`): `interactiveStart:
       // true` makes `TopicModel.tryReserveTaskCallback` skip its `runningOperation`
@@ -264,6 +323,29 @@ describe('shareChatRouter', () => {
         caller.interruptTask({ operationId: 'op-1', shareId: 'share-1', topicId: 'tpc_visitor' }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(mockInterruptTask).not.toHaveBeenCalled();
+    });
+
+    // Regression for Codex P2 (LOBE-11930): same startup-failure redaction as
+    // `execAgent` — `AiAgentService.interruptTask` also runs creator-scoped
+    // and can throw a raw infra/provider diagnostic before any Gateway event
+    // exists to sanitize.
+    it('redacts a diagnostic interrupt failure instead of leaking it to the visitor', async () => {
+      const diagnostic = new Error(
+        'pg driver error: relation "operations_internal" does not exist',
+      );
+      mockInterruptTask.mockRejectedValueOnce(diagnostic);
+      const caller = await createCaller();
+
+      const rejection = caller.interruptTask({
+        operationId: 'op-1',
+        shareId: 'share-1',
+        topicId: 'tpc_visitor',
+      });
+      await expect(rejection).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      await rejection.catch((error: any) => {
+        expect(error.message).not.toContain('operations_internal');
+        expect(error.message).not.toContain('pg driver');
+      });
     });
   });
 
