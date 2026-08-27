@@ -69,6 +69,7 @@ vi.mock('@lobehub/ui', () => ({
 vi.mock('@lobehub/ui/base-ui', () => ({
   Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
   Switch: () => <button />,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@/features/Settings/features/SettingHeader', () => ({

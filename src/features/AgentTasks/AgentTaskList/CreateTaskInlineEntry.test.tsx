@@ -44,6 +44,26 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
+  ActionIcon: ({
+    onClick,
+    style,
+    title,
+  }: {
+    onClick?: () => void;
+    style?: CSSProperties;
+    title?: string;
+  }) => (
+    <div
+      aria-label={title}
+      role="button"
+      style={{ height: 24, width: 24, ...style }}
+      onClick={onClick}
+    >
+      {title}
+    </div>
+  ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({

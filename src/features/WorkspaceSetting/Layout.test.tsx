@@ -10,7 +10,7 @@ vi.mock('@/features/NavHeader', () => ({
     React.createElement('header', undefined, children),
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', () => ({
   Text: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, undefined, children),
 }));

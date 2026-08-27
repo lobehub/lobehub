@@ -39,6 +39,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('antd', () => ({

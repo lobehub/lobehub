@@ -223,6 +223,27 @@ vi.mock('@lobehub/ui', async () => {
 });
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    onClick,
+    title,
+    disabled,
+  }: {
+    disabled?: boolean;
+    onClick?: (e: React.MouseEvent) => void;
+    title?: string;
+  }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? 'calendar' : 'refresh'}
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    />
+  ),
+  RadioGroup: () => null,
+  Switch: () => null,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  createModal: vi.fn(),
   Button: ({
     children,
     disabled,

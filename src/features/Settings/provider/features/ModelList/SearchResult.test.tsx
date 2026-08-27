@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import SearchResult from './SearchResult';
@@ -6,6 +7,15 @@ import SearchResult from './SearchResult';
 const mocks = vi.hoisted(() => ({
   batchToggleAiModels: vi.fn(),
   canManageProvider: false,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: (e: any) => void; title?: string }) => (
+    <button aria-label={title} onClick={onClick}>
+      {title}
+    </button>
+  ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('react-i18next', () => ({

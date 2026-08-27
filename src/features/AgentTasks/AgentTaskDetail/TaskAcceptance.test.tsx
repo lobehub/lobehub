@@ -59,11 +59,18 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+    <button type="button" onClick={onClick}>
+      {title}
+    </button>
+  ),
   Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>
       {children}
     </button>
   ),
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   confirmModal: (opts: unknown) => mocks.confirmModal(opts),
 }));
 

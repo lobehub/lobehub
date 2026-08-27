@@ -9,6 +9,7 @@ import AsyncBoundary from './index';
 // hoists this above the imports regardless of position.
 vi.mock('@lobehub/ui/base-ui', () => ({
   Button: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+  Text: ({ children }: any) => <span>{children}</span>,
 }));
 
 const DATA = <div>DATA_CONTENT</div>;

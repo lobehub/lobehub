@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { render, screen } from '@testing-library/react';
+import type { ElementType, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,6 +8,17 @@ import {
   OrganizationDetailProvider,
 } from '../DetailProvider';
 import OrganizationHeader from './index';
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: () => <button type="button" />,
+  Avatar: ({ avatar, alt }: { alt?: string; avatar?: string }) => (
+    <span>{alt ?? String(avatar ?? '')}</span>
+  ),
+  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Text: ({ as: As = 'span', children }: { as?: ElementType; children?: ReactNode }) => (
+    <As>{children}</As>
+  ),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

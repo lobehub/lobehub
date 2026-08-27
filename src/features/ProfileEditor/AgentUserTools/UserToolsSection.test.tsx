@@ -55,6 +55,7 @@ vi.mock('@lobehub/ui', () => ({
 }));
 vi.mock('@lobehub/ui/base-ui', () => ({
   Button: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+  Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
 }));
 
 // Apply the real selectors against the mock state.
