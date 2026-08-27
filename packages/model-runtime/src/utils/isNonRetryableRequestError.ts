@@ -186,15 +186,18 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
 
   if (isErrorCausedByContentFilter(error)) return true;
 
+  // Explicitly retryable HTTP statuses represent route or channel conditions.
+  // They take precedence over provider body text, which can reuse terminal
+  // request phrases such as "unable to process input image" for a 429 response.
+  const statusCodes = collectStatusCodes(error);
+  if (statusCodes.some((statusCode) => RETRYABLE_STATUS_CODES.has(statusCode))) return false;
+
   if (normalizedStrings.some((value) => RETRYABLE_ERROR_CODES.has(value))) return false;
   if (normalizedStrings.some((value) => NON_RETRYABLE_ERROR_CODES.has(value))) return true;
 
   const combined = normalizedStrings.join('\n');
   if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
   if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return true;
-
-  const statusCodes = collectStatusCodes(error);
-  if (statusCodes.some((statusCode) => RETRYABLE_STATUS_CODES.has(statusCode))) return false;
 
   return false;
 };

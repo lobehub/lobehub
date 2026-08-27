@@ -393,6 +393,39 @@ describe('MessageContentProcessor', () => {
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
 
+    it('should remove uploaded image markdown URLs before adding a media ref', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'any-model',
+        provider: 'any-provider',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const imageUrl = 'https://example.com/f/image-id?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: `Read image result\n![image/png](${imageUrl})`,
+          id: 'tool-uploaded-image',
+          pluginState: { images: [{ mediaType: 'image/png', url: imageUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_uploaded_image',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain('Read image result');
+      expect(content).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-uploaded-image', type: 'image' }),
+      );
+      expect(content).not.toContain(imageUrl);
+      expect(content).not.toContain('![image/png]');
+    });
+
     it('should keep inline tool images as structured input only for vision models', async () => {
       mockIsCanUseVision.mockReturnValue(true);
 

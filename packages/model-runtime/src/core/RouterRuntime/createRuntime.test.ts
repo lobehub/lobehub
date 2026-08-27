@@ -1135,7 +1135,7 @@ describe('createRouterRuntime', () => {
     it('should not label retryable failures as terminal image decoding errors', async () => {
       const retryableError = {
         error: {
-          message: 'Rate limit exceeded while unable to process input image',
+          message: 'Unable to process input image',
         },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         provider: 'test',

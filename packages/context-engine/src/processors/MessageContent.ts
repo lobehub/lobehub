@@ -32,6 +32,25 @@ export const VISION_DOWNGRADE_PLACEHOLDER =
   '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
 
 /**
+ * Heterogeneous-agent image uploads mirror each persisted image URL into tool
+ * text as `![mediaType](url)`. Non-vision models must receive only the opaque
+ * media ref, otherwise they can copy the signed URL into a later tool call.
+ */
+const stripUploadedImageMarkdown = (
+  content: string,
+  images: Array<{ mediaType?: unknown; url: string }>,
+): string => {
+  let sanitized = content;
+
+  for (const image of images) {
+    if (typeof image.mediaType !== 'string') continue;
+    sanitized = sanitized.replaceAll(`![${image.mediaType}](${image.url})`, '');
+  }
+
+  return sanitized.trim();
+};
+
+/**
  * Deserialize content string to message content parts
  * Returns null if content is not valid JSON array of parts
  */
@@ -509,6 +528,7 @@ export class MessageContentProcessor extends BaseProcessor {
     // The signed URL stays out of model-visible text, which prevents the model
     // from copying opaque image data between tool calls.
     if (!canUseVision) {
+      const fallbackTextContent = stripUploadedImageMarkdown(textContent, images);
       const placeholders = images
         .map(({ sourceIndex, url }) => {
           // Inline image data is safe to send as a structured vision input but
@@ -524,7 +544,9 @@ export class MessageContentProcessor extends BaseProcessor {
           return `[image omitted: native vision is not supported. Media ref: ${ref}. Do not infer or describe the image. Use an available visual-analysis tool with this ref before answering.]`;
         })
         .join('\n');
-      const content = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
+      const content = fallbackTextContent
+        ? `${fallbackTextContent}\n\n${placeholders}`
+        : placeholders;
 
       return { ...message, content };
     }

@@ -177,6 +177,14 @@ describe('isNonRetryableRequestError', () => {
   it('returns false for retryable rate limit and quota errors', () => {
     expect(
       isNonRetryableRequestError({
+        error: { message: 'Unable to process input image' },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 429,
+      }),
+    ).toBe(false);
+
+    expect(
+      isNonRetryableRequestError({
         error: { code: 'rate_limit_exceeded', message: 'Rate limit reached for requests' },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         status: 429,
