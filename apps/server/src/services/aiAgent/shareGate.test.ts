@@ -27,7 +27,7 @@ import {
 } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier, MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { DocumentApiName, PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
   SkillMaintainerApiName,
   SkillMaintainerIdentifier,
@@ -868,7 +868,6 @@ const MIRRORED_ALLOWED_IDENTIFIERS = new Set<string>([
   WebBrowsingManifest.identifier,
   UserInteractionIdentifier,
   LobeActivatorIdentifier,
-  PageAgentIdentifier,
   ImageGenerationIdentifier,
   VerifyToolIdentifier,
   AcceptanceEvidenceIdentifier,
@@ -921,6 +920,11 @@ describe('default-deny covers every registered builtin identifier not explicitly
         'agent-signal-feedback-intent',
       ]),
     );
+    // Denied for being visitor-unreachable rather than unsafe — see
+    // shareGate.ts's `lobe-page-agent` denied-bucket entry (LOBE-11930 codex
+    // P2): `execAgent` always strips it outside `appContext.scope === 'page'`,
+    // and a share visitor's `appContext` never carries that scope.
+    expect(deniedBuiltinIdentifiers).toContain(PageAgentIdentifier);
   });
 
   it.each(deniedBuiltinIdentifiers)(
@@ -1142,6 +1146,68 @@ describe('lobe-brief: unconditional persistence with no humanIntervention marker
       tools: [
         {
           function: { name: `${BriefIdentifier}____${BriefApiName.createBrief}` },
+          type: 'function',
+        },
+      ],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+});
+
+/**
+ * Regression coverage for the `lobe-page-agent` removal (codex P2 finding on
+ * `packages/builtin-tools/src/index.ts:218`): unlike every other identifier
+ * removed above, this is not a data leak — `PageAgentExecutionRuntime` only
+ * ever acts on the caller's own open page/document editor. The bug is that
+ * `AiAgentService.execAgent` (`apps/server/src/services/aiAgent/index.ts:1737-1739`)
+ * unconditionally strips `PageAgentIdentifier` from `activePluginIds` whenever
+ * `appContext?.scope !== 'page'`, and the share visitor path (`shareChat.ts`'s
+ * `execAgent` procedure) always builds `appContext` as `{ topicId }` — never
+ * `scope: 'page'` — so the strip fires on every visitor turn. Allowlisting it
+ * anyway let the owner-facing share settings picker confirm a tool grant no
+ * shared conversation could ever exercise. Asserted here against the REAL
+ * exported `DocumentApiName` enum so a future re-allowlisting attempt has to
+ * consciously re-derive reachability instead of silently reopening the gap.
+ */
+describe('lobe-page-agent: unreachable for a share visitor run (appContext never carries scope: "page"), so it stays off the allowlist', () => {
+  it('is absent from the master allowlist entirely', () => {
+    expect(MIRRORED_ALLOWED_IDENTIFIERS.has(PageAgentIdentifier)).toBe(false);
+  });
+
+  it.each(Object.values(DocumentApiName))(
+    'blocks %s unconditionally at dispatch time, even under a fully-granted share',
+    (apiName) => {
+      expect(
+        isShareBlockedDataToolCall(
+          {
+            allowReadMemory: true,
+            filePermissionConfig: { agentFiles: 'read', knowledgeBase: 'read' },
+          },
+          PageAgentIdentifier,
+          apiName,
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('strips the identifier from the assembled tool set even when the owner whitelists it', () => {
+    const gate = buildGate({ enabledToolIds: [PageAgentIdentifier] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [PageAgentIdentifier],
+      enabledToolIds: [PageAgentIdentifier],
+      executorMap: { [PageAgentIdentifier]: 'server' as any },
+      manifestMap: {
+        [PageAgentIdentifier]: { api: [], identifier: PageAgentIdentifier, type: 'default' } as any,
+      },
+      sourceMap: { [PageAgentIdentifier]: 'builtin' as any },
+      tools: [
+        {
+          function: { name: `${PageAgentIdentifier}____${DocumentApiName.getPageContent}` },
           type: 'function',
         },
       ],

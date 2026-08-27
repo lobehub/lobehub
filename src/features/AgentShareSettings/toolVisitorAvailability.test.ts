@@ -1,6 +1,7 @@
 import { BrowserIdentifier } from '@lobechat/builtin-tool-browser';
 import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
 import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
@@ -22,6 +23,10 @@ describe('isToolAvailableToVisitors', () => {
     expect(isToolAvailableToVisitors(TaskIdentifier)).toBe(false);
   });
 
+  it('denies lobe-page-agent — not unsafe, but every share-visitor run supplies only a main-topic appContext, so AiAgentService.execAgent always strips it outside scope: "page" (LOBE-11930 codex P2)', () => {
+    expect(isToolAvailableToVisitors(PageAgentIdentifier)).toBe(false);
+  });
+
   it('allows a non-builtin identifier (MCP/market/custom plugin)', () => {
     expect(isToolAvailableToVisitors('some-mcp-server-id')).toBe(true);
   });
@@ -32,6 +37,12 @@ describe('getVisitorVisibleEnabledToolIds', () => {
     expect(
       getVisitorVisibleEnabledToolIds([TopicReferenceIdentifier, TaskIdentifier, 'custom-mcp']),
     ).toEqual([TopicReferenceIdentifier, 'custom-mcp']);
+  });
+
+  it('drops a pinned lobe-page-agent grant — a pre-existing share config could still have it persisted from before this identifier was denied', () => {
+    expect(
+      getVisitorVisibleEnabledToolIds([TopicReferenceIdentifier, PageAgentIdentifier]),
+    ).toEqual([TopicReferenceIdentifier]);
   });
 
   it('handles a missing enabledToolIds list', () => {

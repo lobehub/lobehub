@@ -718,9 +718,29 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   unsafe for `lobe-skill-maintainer`) as safe, so per the default-deny rule
  *   they stay out until that verification happens.
  *
+ * - `lobe-page-agent`: not unsafe — genuinely unreachable for a share
+ *   visitor's run, so allowlisting it only let the owner-facing tool picker
+ *   confirm a grant no visitor conversation can ever exercise (LOBE-11930
+ *   codex P2). `AiAgentService.execAgent`
+ *   (`apps/server/src/services/aiAgent/index.ts:1737-1739`) unconditionally
+ *   strips `PageAgentIdentifier` from `activePluginIds` whenever
+ *   `appContext?.scope !== 'page'`, and the share visitor path
+ *   (`shareChat.ts`'s `execAgent` procedure) always builds `appContext` as
+ *   `{ topicId: input.topicId }` — it never sets `scope` at all, so this
+ *   strip fires on every single visitor turn, unconditionally. `scope:
+ *   'page'` is set only when the caller has an open page/document editor
+ *   (see `builtin-tool-page-agent`'s client executor: "scope is topic-bound,
+ *   not route-bound"), a client-side editing surface a share visitor's
+ *   plain-chat conversation has no way to open or signal server-side. Should
+ *   the share flow ever grow a page/document-editing surface for visitors,
+ *   this identifier can be re-added alongside whatever change threads a real
+ *   `scope: 'page'` `appContext` through `shareChat.ts`'s `execAgent` — not
+ *   before, since re-adding it without that plumbing would reopen the exact
+ *   same "picker promises it, no run can ever use it" gap.
+ *
  * SAFE / allowed — see `SHARE_VISITOR_ALLOWED_IDENTIFIERS`'s JSDoc above for
  * `lobe-topic-reference`, `lobe-calculator`, `lobe-web-browsing`,
- * `lobe-user-interaction`, `lobe-activator`, `lobe-page-agent`,
+ * `lobe-user-interaction`, `lobe-activator`,
  * `lobe-image-generation`, `lobe-verify`, `lobe-acceptance-evidence`,
  * `lobe-agent`, `lobe-knowledge-base`, `lobe-user-memory`,
  * `lobe-agent-documents`. `lobe-brief` was removed — see "Confirmed leak
