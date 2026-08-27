@@ -748,6 +748,7 @@ export class AiAgentService {
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
         verifyShareReservationStatus: this.verifyShareReservationStatus,
+        verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
       },
       workspaceId: wsId,
     });
@@ -5538,6 +5539,14 @@ export class AiAgentService {
               // `BuiltinToolsExecutor` can re-check the knowledge-base /
               // agent-documents tools' grant at dispatch time.
               filePermissionConfig: shareGate.shareConfig.filePermissionConfig,
+              // Snapshot of `agentShareGenerations` this run was authorized
+              // under — see `OperationCreationParams['agentShare'].generation`'s
+              // JSDoc. Re-read (not reused) on every step by
+              // `AgentRuntimeService.executeStep` via
+              // `AgentShareModel.isRunStillAuthorized` so a restrictive change
+              // committed mid-run is caught at the next step boundary instead
+              // of only at creation time.
+              generation: shareGate.generation,
               // Sourced from the agent's OWN persisted assignment
               // (`agentConfig.knowledgeBases`, already gated by
               // `applyShareGateToAgentConfig` above — empty unless
@@ -6039,6 +6048,29 @@ export class AiAgentService {
     );
     return pending ? 'pending' : 'revoked';
   };
+
+  /**
+   * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
+   * that interface member's and `AgentShareModel.isRunStillAuthorized`'s
+   * JSDoc for what "authorized" checks and why a per-step recheck (not only
+   * at step 0) is what actually closes LOBE-11930 Codex P1: a failed,
+   * unretried `interruptActiveShareRuns` interrupt no longer needs to be
+   * retried to be effective — the very next step re-proves authorization on
+   * its own and aborts if it can't.
+   *
+   * A plain top-level `db` read (not scoped to `this.userId`/workspace):
+   * `agent_shares` has no ownership predicate applicable here — this call
+   * runs from inside the CREATOR's own runtime step, so `this.db` is already
+   * the correct connection.
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  verifyShareRunStillAuthorized = async (params: {
+    agentId: string;
+    generation: number;
+    shareId: string;
+  }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**
    * Execute an agent in an isolated Thread context.
@@ -7114,12 +7146,37 @@ export class AiAgentService {
       try {
         await this.interruptTask({ operationId, topicId, topicMetadata });
       } catch (error) {
+        // One bounded, in-process retry for a transient coordinator/database/
+        // runtime hiccup — cheap because it costs nothing beyond this
+        // already-running `after()` callback and needs no durable
+        // infrastructure. This is NOT what makes a missed interrupt safe: if
+        // BOTH attempts fail (or the process dies in between), nothing here
+        // schedules a durable retry — the existing
+        // `/api/workflows/agent-share/sweep` endpoint has no QStash schedule
+        // wired in production, so leaning on it would silently never fire.
+        // The actual backstop is `AgentRuntimeService.executeStep` re-checking
+        // this run's share generation on every step
+        // (`AgentShareModel.isRunStillAuthorized`) — see LOBE-11930 Codex
+        // P1's fix there. This retry only shaves latency off remote-hetero
+        // task cancellation and Thread status settlement, which that
+        // per-step recheck does not cover (the runtime step loop is what it
+        // gates, not the remote process or the Thread row).
         log(
-          'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
+          'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s, retrying once: %O',
           operationId,
           topicId,
           error,
         );
+        try {
+          await this.interruptTask({ operationId, topicId, topicMetadata });
+        } catch (retryError) {
+          log(
+            'interruptActiveShareRuns: retry failed to interrupt operationId=%s topicId=%s: %O',
+            operationId,
+            topicId,
+            retryError,
+          );
+        }
       }
     };
 

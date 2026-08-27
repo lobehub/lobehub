@@ -1683,15 +1683,44 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(interruptTaskSpy).not.toHaveBeenCalled();
     });
 
-    it('keeps interrupting the remaining runs when one interrupt fails', async () => {
+    it('keeps interrupting the remaining runs when one interrupt fails on both attempts', async () => {
       topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
         { operationId: 'op-1', topicId: 'topic-1' },
         { operationId: 'op-2', topicId: 'topic-2' },
       ]);
       const interruptTaskSpy = vi
         .spyOn(service, 'interruptTask')
-        .mockRejectedValueOnce(new Error('device gateway unreachable'))
-        .mockResolvedValueOnce({ operationId: 'op-2', success: true });
+        .mockImplementation(async ({ operationId }) => {
+          if (operationId === 'op-1') throw new Error('device gateway unreachable');
+          return { operationId, success: true };
+        });
+
+      await expect(service.interruptActiveShareRuns('agent-1', 2)).resolves.toBeUndefined();
+
+      // op-1: initial attempt + one retry, both failing; op-2: succeeds on the
+      // first attempt. See the regression below for the retry succeeding.
+      expect(interruptTaskSpy).toHaveBeenCalledTimes(3);
+      expect(interruptTaskSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-1' }),
+      );
+      expect(interruptTaskSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-2' }),
+      );
+    });
+
+    // Regression for LOBE-11930 Codex P1: `interruptTask` rejecting on a
+    // transient failure must not be the end of the story for this run — the
+    // in-process retry here recovers it without waiting for the per-step
+    // authorization recheck in `AgentRuntimeService` (covered separately in
+    // `AgentRuntimeService.shareGeneration.test.ts`).
+    it('retries once and succeeds when the first interrupt attempt rejects', async () => {
+      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
+        { operationId: 'op-1', topicId: 'topic-1' },
+      ]);
+      const interruptTaskSpy = vi
+        .spyOn(service, 'interruptTask')
+        .mockRejectedValueOnce(new Error('transient coordinator error'))
+        .mockResolvedValueOnce({ operationId: 'op-1', success: true });
 
       await expect(service.interruptActiveShareRuns('agent-1', 2)).resolves.toBeUndefined();
 

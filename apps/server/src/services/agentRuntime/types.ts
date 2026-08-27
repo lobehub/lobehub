@@ -411,6 +411,17 @@ export interface OperationCreationParams {
     allowReadMemory?: boolean;
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+    /**
+     * The `agentShareGenerations` value this run was authorized under
+     * (`AgentShareGate.generation`, captured once at `shareChat.ts`'s
+     * `findByShareIdWithAccessCheck` and re-verified at reservation stake
+     * time). Persisted here so `AgentRuntimeService.executeStep` can re-check
+     * it against the CURRENT value on every step, not only step 0 — see
+     * `AgentShareModel.isRunStillAuthorized`'s JSDoc for why a per-step
+     * recheck is what actually closes LOBE-11930 Codex P1 (a failed,
+     * unretried `interruptActiveShareRuns` interrupt).
+     */
+    generation: number;
     knowledgeBaseIds?: string[];
     /** The `agentShares.id` this run was authorized against — see `AgentRuntimeContext.agentShare`'s JSDoc (`../../modules/AgentRuntime/context.ts`). */
     shareId: string;

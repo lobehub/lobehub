@@ -1990,3 +1990,137 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
     expect(result.state.status).toBe('interrupted');
   });
 });
+
+// Regression for LOBE-11930 Codex P1: `AiAgentService.interruptActiveShareRuns`
+// calls `interruptTask` best-effort per affected topic and swallows a
+// rejection (transient coordinator/database/runtime failure) with no durable
+// retry. Because the reservation-confirmation gate above only ever runs at
+// step 0, a swallowed failure used to leave the run unstoppable under the
+// creator's credentials/budget for the rest of its lifetime. This suite
+// covers the fix: `AgentRuntimeService.executeStep` re-checks the run's share
+// generation via `AgentRuntimeDelegate.verifyShareRunStillAuthorized` on
+// EVERY step, so a missed interrupt self-corrects at the very next step
+// instead of needing the interrupt itself to ever succeed.
+describe('AgentRuntimeService.executeStep - Agent Share per-step authorization recheck', () => {
+  const shareAgentState = (overrides?: Record<string, unknown>) => ({
+    lastModified: new Date().toISOString(),
+    metadata: {
+      agentShare: {
+        agentId: 'agent-1',
+        generation: 3,
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      topicId: 'topic-1',
+    },
+    status: 'idle',
+    stepCount: 1,
+    ...overrides,
+  });
+
+  it('re-checks authorization past step 0, unlike the reservation-confirmation gate', async () => {
+    const verifyShareRunStillAuthorized = vi.fn().mockResolvedValue(false);
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareRunStillAuthorized },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-revoked-mid-run',
+      stepIndex: 1,
+    });
+
+    expect(verifyShareRunStillAuthorized).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      generation: 3,
+      shareId: 'share-1',
+    });
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-revoked-mid-run',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.nextStepScheduled).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+
+  it('fails closed when the authorization recheck itself throws (a missed interrupt must not read as "still authorized")', async () => {
+    const verifyShareRunStillAuthorized = vi.fn().mockRejectedValue(new Error('db down'));
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareRunStillAuthorized },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-recheck-failed',
+      stepIndex: 1,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+
+  it('does not recheck ordinary (non-share) operations', async () => {
+    const verifyShareRunStillAuthorized = vi.fn();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareRunStillAuthorized },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { topicId: 'topic-1' },
+      status: 'idle',
+      stepCount: 1,
+    });
+
+    await service
+      .executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-ordinary',
+        stepIndex: 1,
+      })
+      .catch(() => undefined);
+
+    expect(verifyShareRunStillAuthorized).not.toHaveBeenCalled();
+  });
+
+  it('skips the recheck when the state predates the `generation` field (backward compatibility)', async () => {
+    const verifyShareRunStillAuthorized = vi.fn();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareRunStillAuthorized },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(
+      shareAgentState({
+        metadata: {
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          topicId: 'topic-1',
+        },
+      }),
+    );
+
+    await service
+      .executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-legacy-state',
+        stepIndex: 1,
+      })
+      .catch(() => undefined);
+
+    expect(verifyShareRunStillAuthorized).not.toHaveBeenCalled();
+  });
+});

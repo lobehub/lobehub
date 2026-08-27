@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AgentModel } from '../agent';
 import { AgentShareModel } from '../agentShare';
 import { TopicModel } from '../topic';
 
@@ -258,5 +259,117 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
       topicId: topic.id,
     });
     expect(confirmed).toBe(false);
+  });
+});
+
+// Regression for LOBE-11930 Codex P1: `AgentRuntimeService.executeStep` calls
+// `AgentShareModel.isRunStillAuthorized` on EVERY step (not only step 0) so a
+// share run self-corrects at the next step boundary even if the best-effort
+// `interruptActiveShareRuns` interrupt for it was silently lost. These tests
+// exercise the real query against Postgres because the point of the fix is
+// that a single anchor-on-`agentShares` query must catch every revocation
+// path uniformly, including one (full agent delete) that never bumps
+// `agentShareGenerations` at all.
+describe('AgentShareModel.isRunStillAuthorized (real Postgres)', () => {
+  beforeEach(async () => {
+    await cleanup();
+    await serverDB.insert(users).values([{ id: ownerId }]);
+  });
+
+  afterAll(cleanup);
+
+  it('authorizes a run whose snapshot matches the current share id, visibility, and generation', async () => {
+    const agentId = 'authorized-fresh-run';
+    await serverDB
+      .insert(agents)
+      .values({ id: agentId, model: 'gpt-4o', title: 'Authorized Fresh Run', userId: ownerId });
+    const share = await agentShareModel.create(agentId, 'link');
+
+    const authorized = await AgentShareModel.isRunStillAuthorized(serverDB, {
+      agentId,
+      generation: 1,
+      shareId: share!.id,
+    });
+    expect(authorized).toBe(true);
+  });
+
+  it('rejects a run whose generation predates a since-committed tightening', async () => {
+    const agentId = 'rejects-stale-generation';
+    await serverDB
+      .insert(agents)
+      .values({ id: agentId, model: 'gpt-4o', title: 'Rejects Stale Generation', userId: ownerId });
+    const share = await agentShareModel.create(agentId, 'link');
+    // `enabledToolIds` defaults to `[]` — granting `web-search` first (a
+    // LOOSENING, no bump) then dropping it (a genuine tightening) so the
+    // generation actually moves, mirroring the `allowReadMemory`
+    // grant-then-revoke pattern used elsewhere in this file.
+    await agentShareModel.updateConfig(agentId, { enabledToolIds: ['web-search'] });
+    await agentShareModel.updateConfig(agentId, { enabledToolIds: [] });
+
+    const authorized = await AgentShareModel.isRunStillAuthorized(serverDB, {
+      agentId,
+      // The run's snapshot predates the tightening above.
+      generation: 1,
+      shareId: share!.id,
+    });
+    expect(authorized).toBe(false);
+  });
+
+  it('rejects a run once the share is flipped back to private', async () => {
+    const agentId = 'rejects-private-visibility';
+    await serverDB.insert(agents).values({
+      id: agentId,
+      model: 'gpt-4o',
+      title: 'Rejects Private Visibility',
+      userId: ownerId,
+    });
+    const share = await agentShareModel.create(agentId, 'link');
+    const { revocationGeneration } = await agentShareModel.updateVisibility(agentId, 'private');
+
+    const authorized = await AgentShareModel.isRunStillAuthorized(serverDB, {
+      agentId,
+      generation: revocationGeneration!,
+      shareId: share!.id,
+    });
+    expect(authorized).toBe(false);
+  });
+
+  it('rejects a run whose share was disabled and re-enabled (new shareId), even if the generation happens to read back equal', async () => {
+    const agentId = 'rejects-disable-reenable';
+    await serverDB.insert(agents).values({
+      id: agentId,
+      model: 'gpt-4o',
+      title: 'Rejects Disable Re-enable',
+      userId: ownerId,
+    });
+    const firstShare = await agentShareModel.create(agentId, 'link');
+    await agentShareModel.deleteByAgentId(agentId);
+    const secondShare = await agentShareModel.create(agentId, 'link');
+
+    expect(secondShare!.id).not.toBe(firstShare!.id);
+
+    const authorized = await AgentShareModel.isRunStillAuthorized(serverDB, {
+      agentId,
+      generation: 1,
+      shareId: firstShare!.id,
+    });
+    expect(authorized).toBe(false);
+  });
+
+  it('rejects a run once the agent itself is deleted, even though deleting it never bumps `agentShareGenerations`', async () => {
+    const agentId = 'rejects-agent-deleted';
+    await serverDB
+      .insert(agents)
+      .values({ id: agentId, model: 'gpt-4o', title: 'Rejects Agent Deleted', userId: ownerId });
+    const share = await agentShareModel.create(agentId, 'link');
+
+    await new AgentModel(serverDB, ownerId).delete(agentId);
+
+    const authorized = await AgentShareModel.isRunStillAuthorized(serverDB, {
+      agentId,
+      generation: 1,
+      shareId: share!.id,
+    });
+    expect(authorized).toBe(false);
   });
 });

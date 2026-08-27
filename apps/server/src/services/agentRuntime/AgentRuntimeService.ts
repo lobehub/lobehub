@@ -391,6 +391,23 @@ export interface AgentRuntimeDelegate {
     operationId: string;
     topicId: string;
   }) => Promise<ShareReservationStatus>;
+  /**
+   * Re-check that an Agent Share visitor run is STILL authorized to continue,
+   * called on EVERY step (not only step 0) — see the call site in
+   * `executeStep` and `AgentShareModel.isRunStillAuthorized`'s JSDoc for the
+   * exact leak this closes (LOBE-11930 Codex P1: a failed, unretried
+   * `interruptActiveShareRuns` interrupt).
+   *
+   * Implemented by AiAgentService via `AgentShareModel.isRunStillAuthorized`.
+   * Returns `false` (not a throw) for an ordinary "no longer authorized"
+   * outcome; the caller treats a THROWN error the same as `false` — fail
+   * closed, never fail open.
+   */
+  verifyShareRunStillAuthorized?: (params: {
+    agentId: string;
+    generation: number;
+    shareId: string;
+  }) => Promise<boolean>;
 }
 
 /**
@@ -1788,6 +1805,56 @@ export class AgentRuntimeService {
             stepResult: null,
             success: true,
           };
+        }
+
+        // Agent Share: revalidate this run's authorization on EVERY step, not
+        // only step 0 (`abortUnconfirmedShareRun`, above, only ever runs once).
+        // Fixes LOBE-11930 Codex P1 — `AiAgentService.interruptActiveShareRuns`
+        // best-effort interrupts each affected topic and swallows a failure
+        // (transient coordinator/DB/runtime error) with no durable retry; if
+        // that swallow fires, the step-0 gate already passed and nothing else
+        // was ever going to check again, so the run kept going under the
+        // creator's credentials/budget for the rest of its (potentially very
+        // long) lifetime, unstoppable by the visitor (`shareChat.interruptTask`
+        // re-resolves the now-private share and gets `FORBIDDEN`). Re-checking
+        // here converts "we must not lose this one interrupt" into "the run
+        // cannot cross a step boundary without still being authorized" — a
+        // missed interrupt self-corrects at the very next step instead of
+        // requiring durable retry infrastructure. See
+        // `AgentShareModel.isRunStillAuthorized`'s JSDoc for why a single query
+        // catches every revocation path (visibility flip, config tightening,
+        // share delete, and full agent delete) uniformly.
+        if (this.delegate.verifyShareRunStillAuthorized) {
+          const shareMarker = agentState.metadata?.agentShare as
+            { agentId?: string; generation?: number; shareId?: string } | undefined;
+          if (
+            shareMarker?.agentId &&
+            shareMarker.shareId &&
+            typeof shareMarker.generation === 'number'
+          ) {
+            let stillAuthorized = false;
+            try {
+              stillAuthorized = await this.delegate.verifyShareRunStillAuthorized({
+                agentId: shareMarker.agentId,
+                generation: shareMarker.generation,
+                shareId: shareMarker.shareId,
+              });
+            } catch (error) {
+              // Fail closed: a read failure must not be treated as "still
+              // authorized" — same reasoning as `abortUnconfirmedShareRun`'s
+              // state-load-failure handling. Falls through to the abort below
+              // with `stillAuthorized` left `false`.
+              log(
+                '[%s][%d] Share run authorization re-check failed: %O',
+                operationId,
+                stepIndex,
+                error,
+              );
+            }
+            if (!stillAuthorized) {
+              return this.buildShareAbortResult(operationId, agentState);
+            }
+          }
         }
 
         let beforeStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
