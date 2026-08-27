@@ -41,6 +41,7 @@ const agentShare = {
   agentName: 'Alice',
   agentSlug: 'shared-agent',
   agentTitle: 'Research Assistant',
+  generation: 1,
   ownerId: 'owner-user',
   shareConfig: {
     allowReadMemory: true,

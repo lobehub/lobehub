@@ -66,6 +66,7 @@ describe('imageGenerationRuntime', () => {
   it('forwards the agentShare billing marker to every router caller', () => {
     imageGenerationRuntime.factory({
       agentShare: {
+        shareId: 'share-1',
         agentId: 'agent-1',
         allowReadMemory: false,
         enabledToolIds: ['lobe-image-generation'],

@@ -78,6 +78,7 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
             {
               agentId,
               db: serverDB,
+              expectedGeneration: 1,
               ownerId,
               visitorUserId,
             },
@@ -141,7 +142,7 @@ describe('reserveShareVisitorTurnOrThrow — visitor turn cap race (real Postgre
       const results = await Promise.allSettled(
         Array.from({ length: CONCURRENCY }, (_, n) =>
           reserveShareVisitorTurn(
-            { agentId, db: serverDB, ownerId, topicId },
+            { agentId, db: serverDB, expectedGeneration: 1, ownerId, topicId },
             { content: `turn ${n}`, role: 'user', topicId },
           ),
         ),

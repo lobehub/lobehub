@@ -326,7 +326,7 @@ describe('topicReferenceRuntime', () => {
 
     it("limits topic references to the visitor's own topics: rejects a topic outside the share", async () => {
       const context: ToolExecutionContext = {
-        agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
         serverDB: {} as any,
         toolManifestMap: {},
         userId: 'creator-1',
@@ -353,7 +353,7 @@ describe('topicReferenceRuntime', () => {
 
     it("limits topic references to the visitor's own topics: rejects a topic on a different agent", async () => {
       const context: ToolExecutionContext = {
-        agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
         serverDB: {} as any,
         toolManifestMap: {},
         userId: 'creator-1',
@@ -377,7 +377,7 @@ describe('topicReferenceRuntime', () => {
 
     it('allows a topic reference that matches the active share', async () => {
       const context: ToolExecutionContext = {
-        agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
         serverDB: {} as any,
         toolManifestMap: {},
         userId: 'creator-1',
@@ -389,6 +389,7 @@ describe('topicReferenceRuntime', () => {
         historySummary: 'Summary for the visitor own topic',
         id: 'topic-in-scope',
         senderId: 'visitor-1',
+        shareId: 'share-1',
         title: 'Visible Topic',
       });
 

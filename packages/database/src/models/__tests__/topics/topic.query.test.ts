@@ -2364,7 +2364,7 @@ describe('TopicModel - Query', () => {
         provider: 'openai',
         cost: { total: 1.23 },
         usage: { totalTokens: 999 },
-        metadata: { some: 'internal-detail' },
+        metadata: { boundDeviceId: 'internal-detail' },
       });
 
       const result = await topicModel.queryBySender({ agentId, senderId: visitorId, shareId });
