@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel, toVisitorMessage } from '../../message';
+import { MessageModel, sanitizeVisitorError, toVisitorMessage } from '../../message';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -350,5 +350,84 @@ describe('toVisitorMessage — nested blobs (Codex P2, LOBE-11930 message.ts:440
     expect(sanitized.signalCallbacks?.[0].callbacks[0].content).toBe('callback reply');
     expect((sanitized.taskCompletions?.[0] as any).usage).toBeUndefined();
     expect(sanitized.taskCompletions?.[0].content).toBe('summary of the task');
+  });
+});
+
+describe('toVisitorMessage — error projection (Codex P2, LOBE-11930 message.ts:432)', () => {
+  // `error` used to be a plain entry in `VISITOR_MESSAGE_ALLOWED_KEYS` — the
+  // same "field is safe, contents are not" mistake as `pluginState`.
+  // `formatErrorForState` (`apps/server/src/modules/AgentRuntime/formatErrorForState.ts`)
+  // deliberately copies `provider`/`budget`/the raw upstream response body
+  // onto `ChatMessageError.body` for exactly the failures a visitor can
+  // trigger on demand (bad key, exhausted quota, upstream 500).
+
+  it('projects a provider-biz error to the public bucket, dropping body entirely', () => {
+    const sanitized = toVisitorMessage({
+      content: '',
+      createdAt: 1,
+      error: {
+        body: {
+          _responseBody: { error: { message: 'Invalid Authentication' } },
+          provider: 'openai',
+        },
+        message: 'Invalid Authentication',
+        type: 'InvalidProviderAPIKey',
+      },
+      id: 'error-provider-biz',
+      role: 'assistant',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.error?.type).toBe('AgentRuntimeError');
+    expect(sanitized.error?.message).toBeUndefined();
+    expect((sanitized.error as any)?.body).toBeUndefined();
+    expect(JSON.stringify(sanitized.error)).not.toContain('openai');
+    expect(JSON.stringify(sanitized.error)).not.toContain('Invalid Authentication');
+  });
+
+  it('projects a quota/budget error to the public bucket, dropping the budget snapshot', () => {
+    const sanitized = toVisitorMessage({
+      content: '',
+      createdAt: 1,
+      error: {
+        body: { budget: { limit: 10, remaining: 0 } },
+        message: 'LobeHub Cloud balance is too low for this model.',
+        type: 'InsufficientBudgetForModel',
+      },
+      id: 'error-budget',
+      role: 'assistant',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.error?.type).toBe('AgentRuntimeError');
+    expect((sanitized.error as any)?.body).toBeUndefined();
+    expect(JSON.stringify(sanitized.error)).not.toContain('balance');
+    expect(JSON.stringify(sanitized.error)).not.toContain('remaining');
+  });
+
+  it('forwards a share-purpose-built safe error code verbatim (type + message), still dropping body', () => {
+    const sanitized = toVisitorMessage({
+      content: '',
+      createdAt: 1,
+      error: {
+        body: { internalDebugField: 'do-not-leak' },
+        message: 'You have reached the turn limit for this topic. Start a new topic to continue.',
+        type: 'ShareTurnLimitExceeded',
+      },
+      id: 'error-share-safe',
+      role: 'assistant',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.error?.type).toBe('ShareTurnLimitExceeded');
+    expect(sanitized.error?.message).toBe(
+      'You have reached the turn limit for this topic. Start a new topic to continue.',
+    );
+    expect((sanitized.error as any)?.body).toBeUndefined();
+  });
+
+  it('sanitizeVisitorError passes through null/undefined unchanged', () => {
+    expect(sanitizeVisitorError(undefined)).toBeUndefined();
+    expect(sanitizeVisitorError(null)).toBeNull();
   });
 });
