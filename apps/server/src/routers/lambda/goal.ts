@@ -111,7 +111,14 @@ export const goalRouter = router({
         projectId: z.string().optional(),
         requirement: z.string().optional(),
         title: z.string().min(1),
-        work: z.array(z.string().min(1)).optional(),
+        work: z
+          .array(
+            z.union([
+              z.string().min(1),
+              z.object({ description: z.string().optional(), title: z.string().min(1) }),
+            ]),
+          )
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -151,6 +158,16 @@ export const goalRouter = router({
       }
     }),
 
+  /**
+   * Delete a goal and, by FK cascade, its whole graph. The Work Tasks the
+   * coordinator dispatched are deliberately left in place — they are ordinary
+   * tasks with their own history and acceptance.
+   */
+  delete: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    await ctx.goalModel.delete(input.id);
+    return { message: 'Goal deleted', success: true };
+  }),
+
   graph: goalProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
       return { data: await ctx.goalService.graph(input.id), success: true };
@@ -160,9 +177,8 @@ export const goalRouter = router({
   }),
 
   /**
-   * List goals. Each item is the execution-carrier task with the goal row
-   * attached (`goal`) plus subtree run statistics (`totalRunCost` /
-   * `totalRunDuration`), shaped TaskItem-compatible for the existing goal UI.
+   * List goals with their graph roll-up: how much Work is done, how many
+   * decision gates wait on a human, and what the exploration has cost.
    */
   list: goalProcedure
     .input(

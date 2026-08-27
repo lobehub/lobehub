@@ -4,7 +4,6 @@ import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import { knowledgeBases } from '../schemas/file';
-import { goals } from '../schemas/goal';
 import {
   projectAgents,
   projectCompletionReviews,
@@ -419,25 +418,7 @@ export class ProjectModel {
       )
       .orderBy(asc(tasks.sortOrder), asc(tasks.seq));
 
-    // Attach the goal entity carried by each task so project surfaces can tell
-    // goal roots apart from plain tasks without re-querying per row.
-    const goalRows =
-      rows.length === 0
-        ? []
-        : await this.db
-            .select()
-            .from(goals)
-            .where(
-              and(
-                eq(goals.subjectType, 'task'),
-                inArray(
-                  goals.subjectId,
-                  rows.map(({ id }) => id),
-                ),
-              ),
-            );
-    const goalByTaskId = new Map(goalRows.map((row) => [row.subjectId!, row]));
-    return rows.map((row) => ({ ...row, goal: goalByTaskId.get(row.id) ?? null }));
+    return rows;
   }
 
   async getEnabledKnowledgeBaseIdsForTask(taskId: string) {

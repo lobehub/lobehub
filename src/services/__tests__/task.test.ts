@@ -103,11 +103,6 @@ describe('TaskService', () => {
       expect(lambdaClient.task.delete.mutate).toHaveBeenCalledWith({ id: 'T-1' });
     });
 
-    it('deleteGoal should call the subtree deletion endpoint', async () => {
-      await taskService.deleteGoal('GOAL-1');
-      expect(lambdaClient.task.deleteGoal.mutate).toHaveBeenCalledWith({ id: 'GOAL-1' });
-    });
-
     it('updateStatus should pass status directly', async () => {
       await taskService.updateStatus('T-1', 'running');
       expect(lambdaClient.task.updateStatus.mutate).toHaveBeenCalledWith({

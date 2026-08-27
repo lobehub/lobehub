@@ -12,7 +12,7 @@ const log = debug('lobe-server:goal-work-recovery');
 export type WorkRecoveryOutcome =
   'continued' | 'exhausted-cost' | 'exhausted-rounds' | 'spawn-failed';
 
-/** Shared retry budget and spawn boundary for task-carried goals and Goal Graph Work Tasks. */
+/** Retry budget and spawn boundary for a Goal Graph Work Task. */
 export class WorkRecoveryCoordinator {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -24,11 +24,10 @@ export class WorkRecoveryCoordinator {
     goal: GoalItem;
     spentCost?: number;
     task: TaskItem;
-    taskCarried: boolean;
   }): Promise<WorkRecoveryOutcome> => {
-    const { goal, task, taskCarried } = params;
+    const { goal, task } = params;
     const attempts = task.totalTopics || 0;
-    const attemptBudget = resolveWorkAttemptBudget(goal, taskCarried);
+    const attemptBudget = resolveWorkAttemptBudget(goal);
     if (attempts >= attemptBudget) return 'exhausted-rounds';
 
     if (typeof goal.maxTotalCost === 'number') {

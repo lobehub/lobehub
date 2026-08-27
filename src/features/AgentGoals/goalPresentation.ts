@@ -1,14 +1,8 @@
 import type { GoalStatus } from '@lobechat/const/goal';
-
-export interface GoalPresentationInput {
-  checks?: Array<{ state: string }>;
-  goalStatus: GoalStatus;
-  maxRounds?: number | null;
-  rounds: number;
-}
+import type { TaskStatus } from '@lobechat/types';
 
 /** Goal lifecycle state → i18n status key (goal list vocabulary). */
-const goalStatusKeyMap: Record<GoalStatus, string> = {
+const goalStatusKeyMap = {
   achieved: 'goalList.status.achieved',
   canceled: 'goalList.status.canceled',
   failed: 'goalList.status.error',
@@ -17,19 +11,33 @@ const goalStatusKeyMap: Record<GoalStatus, string> = {
   review: 'goalList.status.review',
   running: 'goalList.status.running',
   verifying: 'goalList.status.verifying',
-};
+} as const satisfies Record<GoalStatus, string>;
 
-export const getGoalPresentation = (input: GoalPresentationInput) => {
-  const checks = input.checks ?? [];
-  const passed = checks.filter((check) => check.state === 'passed').length;
-  const total = checks.length;
+export type GoalStatusKey = (typeof goalStatusKeyMap)[GoalStatus];
 
-  return {
-    maxRounds: input.maxRounds,
-    passed,
-    progress: total > 0 ? Math.round((passed / total) * 100) : 0,
-    rounds: input.rounds,
-    statusKey: goalStatusKeyMap[input.goalStatus],
-    total,
-  };
+export const goalStatusKey = (status: GoalStatus): GoalStatusKey => goalStatusKeyMap[status];
+
+/** Goal lifecycle state → the execution-status vocabulary the shared glyphs use. */
+export const goalStatusToTaskStatus = (goalStatus: GoalStatus): TaskStatus => {
+  switch (goalStatus) {
+    case 'achieved': {
+      return 'completed';
+    }
+    case 'canceled': {
+      return 'canceled';
+    }
+    case 'failed': {
+      return 'failed';
+    }
+    case 'paused':
+    case 'review': {
+      return 'paused';
+    }
+    case 'planning': {
+      return 'backlog';
+    }
+    default: {
+      return 'running';
+    }
+  }
 };

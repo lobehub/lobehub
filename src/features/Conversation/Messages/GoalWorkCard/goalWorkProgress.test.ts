@@ -3,53 +3,37 @@ import { describe, expect, it } from 'vitest';
 import { getGoalWorkProgress } from './goalWorkProgress';
 
 describe('getGoalWorkProgress', () => {
-  it('keeps a planned acceptance in execution while its task is running', () => {
+  it('reports how much of the graph is closed while it runs', () => {
     expect(
-      getGoalWorkProgress({
-        acceptanceStatus: 'planned',
-        criteriaCount: 4,
-        maxRounds: 3,
-        rounds: 1,
-        taskStatus: 'running',
-      }),
-    ).toEqual({
-      maxRounds: 3,
+      getGoalWorkProgress({ criteriaCount: 4, status: 'running', workDone: 2, workTotal: 3 }),
+    ).toEqual({ passed: 2, phase: 'running', progress: 67, total: 3 });
+  });
+
+  it('falls back to the drafted criteria count before the graph is seeded', () => {
+    expect(getGoalWorkProgress({ criteriaCount: 4, status: 'planning' })).toEqual({
       passed: 0,
       phase: 'running',
       progress: 0,
-      round: 1,
       total: 4,
     });
   });
 
-  it('reports the verification phase and real acceptance coverage', () => {
+  it('lets a waiting decision gate outrank the goal status', () => {
+    // A goal keeps its `running` row while a gate is open; the card must still
+    // read as blocked on the user, not as work in progress.
     expect(
-      getGoalWorkProgress({
-        acceptanceStatus: 'verifying',
-        checks: [{ state: 'passed' }, { state: 'running' }, { state: 'passed' }],
-        criteriaCount: 3,
-        maxRounds: 3,
-        rounds: 2,
-        taskStatus: 'running',
-      }),
-    ).toEqual({
-      maxRounds: 3,
-      passed: 2,
-      phase: 'verifying',
-      progress: 67,
-      round: 2,
-      total: 3,
-    });
+      getGoalWorkProgress({ criteriaCount: 1, pendingDecisions: 1, status: 'running' }).phase,
+    ).toBe('waiting');
   });
 
   it.each([
-    ['repairing', 'repairing'],
-    ['delivered', 'review'],
-    ['accepted', 'achieved'],
-    ['errored', 'error'],
-  ])('maps acceptance status %s to phase %s', (acceptanceStatus, phase) => {
-    expect(
-      getGoalWorkProgress({ acceptanceStatus, criteriaCount: 1, taskStatus: 'running' }).phase,
-    ).toBe(phase);
+    ['achieved', 'achieved'],
+    ['canceled', 'canceled'],
+    ['failed', 'error'],
+    ['paused', 'paused'],
+    ['review', 'review'],
+    ['verifying', 'verifying'],
+  ] as const)('maps goal status %s to phase %s', (status, phase) => {
+    expect(getGoalWorkProgress({ criteriaCount: 1, status }).phase).toBe(phase);
   });
 });

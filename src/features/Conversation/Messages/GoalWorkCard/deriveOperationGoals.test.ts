@@ -26,7 +26,7 @@ describe('deriveOperationGoals', () => {
             content: 'started',
             id: 'tool-1',
             state: {
-              identifier: 'T-41',
+              goalId: 'goal-41',
               name: 'San Francisco night fog',
               success: true,
               taskId: 'task-41',
@@ -38,13 +38,7 @@ describe('deriveOperationGoals', () => {
     ]);
 
     expect(goals).toEqual([
-      {
-        criteriaCount: 2,
-        identifier: 'T-41',
-        maxRounds: 3,
-        name: 'San Francisco night fog',
-        taskId: 'task-41',
-      },
+      { criteriaCount: 2, goalId: 'goal-41', name: 'San Francisco night fog' },
     ]);
   });
 
@@ -68,7 +62,7 @@ describe('deriveOperationGoals', () => {
               content: 'failed',
               error: { message: 'boom' },
               id: 'tool-failed',
-              state: { identifier: 'T-42', success: false, taskId: 'task-42' },
+              state: { goalId: 'goal-42', success: false },
             },
             type: 'builtin',
           },
@@ -80,7 +74,7 @@ describe('deriveOperationGoals', () => {
             result: {
               content: 'created',
               id: 'tool-task',
-              state: { identifier: 'T-43', success: true, taskId: 'task-43' },
+              state: { goalId: 'goal-43', success: true },
             },
             type: 'builtin',
           },

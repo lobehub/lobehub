@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalService } from '@/services/goal';
-import { taskService } from '@/services/task';
 
 import { useGoalStore } from './index';
 
 vi.mock('@/libs/swr', () => ({ mutate: vi.fn(), useClientDataSWR: vi.fn() }));
-vi.mock('@/services/goal', () => ({ goalService: { list: vi.fn() } }));
-vi.mock('@/services/task', () => ({ taskService: { deleteGoal: vi.fn() } }));
+vi.mock('@/services/goal', () => ({
+  goalService: { delete: vi.fn(), list: vi.fn() },
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -122,23 +122,18 @@ describe('GoalAction', () => {
     });
   });
 
-  it('deletes a goal subtree through the goal endpoint and removes it from local state', async () => {
+  it('deletes a goal through the goal endpoint and removes it from local state', async () => {
     useGoalStore.getState().useFetchGoals('agent-1');
     const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
-      onSuccess: (value: { goals: Array<{ id: string; identifier: string }> }) => void;
+      onSuccess: (value: { goals: Array<{ goal: { id: string } }> }) => void;
     };
-    options.onSuccess({
-      goals: [
-        { id: 'goal-1', identifier: 'GOAL-1' },
-        { id: 'goal-2', identifier: 'GOAL-2' },
-      ],
-    });
+    options.onSuccess({ goals: [{ goal: { id: 'goal-1' } }, { goal: { id: 'goal-2' } }] });
 
-    await useGoalStore.getState().deleteGoal('agent-1', 'GOAL-1');
+    await useGoalStore.getState().deleteGoal('agent-1', 'goal-1');
 
-    expect(taskService.deleteGoal).toHaveBeenCalledWith('GOAL-1');
+    expect(goalService.delete).toHaveBeenCalledWith('goal-1');
     expect(useGoalStore.getState().goalListByAgentId['agent-1']).toEqual([
-      { id: 'goal-2', identifier: 'GOAL-2' },
+      { goal: { id: 'goal-2' } },
     ]);
   });
 });

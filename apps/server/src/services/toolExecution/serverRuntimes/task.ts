@@ -22,7 +22,6 @@ import { tasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
-import { VerifyPlanGeneratorService } from '@/server/services/verify/planGenerator';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -169,7 +168,6 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
       context: origin ? { origin } : undefined,
       createdByAgentId: agentId,
-      goal: args.goal,
       instruction: args.instruction,
       name: args.name,
       parentTaskId,
@@ -235,100 +233,6 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       return identifier
         ? { ...rest, state: { identifier, success: rest.success, taskId: createdTaskId } }
         : rest;
-    },
-
-    createGoal: async (args: {
-      criteria: Array<{
-        description?: string;
-        instruction?: string;
-        onFail?: 'auto_repair' | 'manual';
-        required?: boolean;
-        title: string;
-        verifierConfig?: Record<string, unknown>;
-        verifierType?: 'agent' | 'llm' | 'program';
-      }>;
-      instruction: string;
-      maxIterations?: number | null;
-      maxTotalCost?: number | null;
-      name: string;
-    }) => {
-      if (!agentId) return { content: 'A goal needs the current agent.', success: false };
-      if (!deps.db || !deps.userId) {
-        return { content: 'Goal planning is unavailable in this runtime.', success: false };
-      }
-      const drafts = (args.criteria ?? []).filter((item) => item.title?.trim());
-      if (drafts.length === 0) {
-        return { content: 'A goal needs at least one acceptance criterion.', success: false };
-      }
-
-      const created = await createTaskImpl({
-        assigneeAgentId: agentId,
-        // The goals row is created together with the task, so the "is a goal"
-        // marker can never race the verify-config write below.
-        goal: {
-          maxRounds: args.maxIterations,
-          maxTotalCost: args.maxTotalCost ?? null,
-          requirement: args.name,
-          title: args.name,
-        },
-        instruction: args.instruction,
-        name: args.name,
-      });
-      if (!created.success || !created.identifier || !created.taskId) return created;
-
-      try {
-        const verifyCriteriaIds = await new VerifyPlanGeneratorService(
-          deps.db,
-          deps.userId,
-          deps.workspaceId,
-        ).createCriteriaFromDrafts(
-          drafts.map((item) => ({
-            description: item.description,
-            instruction: item.verifierType === 'program' ? undefined : item.instruction,
-            onFail: item.onFail ?? 'auto_repair',
-            required: item.required ?? true,
-            title: item.title,
-            verifierConfig: item.verifierConfig,
-            verifierType: item.verifierType ?? 'agent',
-          })),
-        );
-        const maxIterations = Math.min(10, Math.max(2, args.maxIterations ?? 3));
-
-        await taskCaller().updateVerifyConfig({
-          id: created.taskId,
-          verify: {
-            enabled: true,
-            maxIterations,
-            requirement: args.name,
-            verifyCriteriaIds,
-          },
-        });
-
-        const run = await taskCaller().run({ id: created.taskId });
-        const operationId = (run as { operationId?: string }).operationId;
-        const runTopicId = (run as { topicId?: string }).topicId;
-
-        return {
-          content: `Goal task ${created.identifier} created and started with ${drafts.length} acceptance criteria. Execution continues in its separate task topic; do not perform or reproduce the task in this conversation.`,
-          state: {
-            identifier: created.identifier,
-            name: args.name,
-            operationId,
-            startedAt: new Date().toISOString(),
-            success: true,
-            taskId: created.taskId,
-            topicId: runTopicId,
-          },
-          success: true,
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to start goal';
-        return {
-          content: `Goal task ${created.identifier} was created but could not be started: ${message}`,
-          state: { identifier: created.identifier, name: args.name, success: false },
-          success: false,
-        };
-      }
     },
 
     createTasks: async (args: { tasks: CreateTaskArgs[] }) => {

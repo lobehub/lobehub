@@ -31,6 +31,11 @@ const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
 const GOAL_ACCEPTANCE_WORK_TITLE = 'Complete full Goal acceptance';
 
+export interface CreateGoalWorkInput {
+  description?: string;
+  title: string;
+}
+
 export interface CreateGoalGraphInput {
   agentId?: string;
   config?: { recovery?: GoalRecoveryPolicy };
@@ -39,7 +44,8 @@ export interface CreateGoalGraphInput {
   projectId?: string;
   requirement?: string;
   title: string;
-  work?: string[];
+  /** Seed Work nodes, in dependency-free order. A plain string is title-only. */
+  work?: Array<CreateGoalWorkInput | string>;
 }
 
 export interface CreateGoalNodeInput {
@@ -108,8 +114,13 @@ export class GoalService {
       });
       if (!problem) throw new Error('Failed to seed goal problem');
 
-      for (const title of input.work ?? []) {
-        const work = await this.graphModel.createNode(goal.id, { kind: 'work', title });
+      for (const seed of input.work ?? []) {
+        const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
+        const work = await this.graphModel.createNode(goal.id, {
+          description,
+          kind: 'work',
+          title,
+        });
         if (!work) throw new Error('Failed to seed goal work');
         await this.graphModel.createEdge(goal.id, problem.id, work.id, 'decomposes');
       }
@@ -428,7 +439,7 @@ export class GoalService {
           this.db,
           this.userId,
           this.workspaceId,
-        ).recover({ goal: graph.goal, spentCost: totalCost, task, taskCarried: false });
+        ).recover({ goal: graph.goal, spentCost: totalCost, task });
         if (recovery === 'continued') {
           await this.graphModel.updateNodeStatus(
             goalId,
@@ -580,7 +591,7 @@ export class GoalService {
       this.db,
       this.userId,
       this.workspaceId,
-    ).recover({ goal: graph.goal, task, taskCarried: false });
+    ).recover({ goal: graph.goal, task });
     if (recovery === 'continued') {
       await this.graphModel.updateNodeStatus(
         graph.goal.id,

@@ -1,5 +1,10 @@
 import type { GoalStatus } from '@lobechat/const/goal';
-import type { GoalGraphSnapshot, GoalNodeKind, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalGraphSnapshot,
+  GoalNodeKind,
+  GoalRecoveryPolicy,
+  GoalTickResult,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -11,17 +16,31 @@ export interface GoalListParams {
   statuses?: GoalStatus[];
 }
 
-/**
- * Every graph method takes the `goals` row id — not the carrier task's
- * identifier the goal detail route is keyed by. Callers resolve it from
- * `task.goal.id` first.
- */
+/** Every graph method takes the `goals` row id. */
 class GoalService {
   /**
    * List goals. Each item is the execution-carrier task with the goal row
    * attached plus subtree run statistics — see `GoalModel.list` on the server.
    */
   list = async (params: GoalListParams) => lambdaClient.goal.list.query(params);
+
+  /** Create a goal and seed its graph with a problem node and the given Work. */
+  create = async (params: {
+    agentId?: string;
+    config?: { recovery?: GoalRecoveryPolicy };
+    maxRounds?: number;
+    maxTotalCost?: number;
+    projectId?: string;
+    requirement?: string;
+    title: string;
+    work?: Array<{ description?: string; title: string } | string>;
+  }): Promise<GoalGraphSnapshot> => {
+    const { data } = await lambdaClient.goal.create.mutate(params);
+    return data;
+  };
+
+  /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
+  delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });
 
   /** The whole Goal Graph in one read: nodes, edges, decisions, events, work-version links. */
   getGraph = async (id: string): Promise<GoalGraphSnapshot> => {

@@ -96,13 +96,13 @@ export interface CreateGoalParams {
 }
 
 export interface CreateGoalState {
-  identifier?: string;
+  /** The `goals` row the Goal Graph was created as — what the card opens. */
+  goalId?: string;
   name?: string;
-  operationId?: string;
   startedAt?: string;
   success: boolean;
+  /** The responsible task the first coordinator tick dispatched, when it got that far. */
   taskId?: string;
-  topicId?: string;
 }
 
 // ==================== createTasks (batch) ====================
