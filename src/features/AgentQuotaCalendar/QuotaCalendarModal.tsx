@@ -77,22 +77,18 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
+  /** The lead number of a day cell: what the day cost. */
   cost: css`
-    align-self: flex-start;
+    overflow: hidden;
 
-    padding-block: 1px;
-    padding-inline: 4px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 10px;
-    font-weight: 500;
-    line-height: 14px;
-    color: ${cssVar.colorTextSecondary};
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-overflow: ellipsis;
 
     /* "at least $404" must stay one line — a wrap pushes it out of the cell. */
     white-space: nowrap;
-
-    background: ${cssVar.colorBgContainer};
   `,
   /** Keep the content surface neutral; intensity is carried by the corner dot. */
   dayCell: css`
@@ -126,8 +122,9 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorErrorBg};
     }
 
-    /* A refused day states itself in one colour, date included. */
-    &[data-rate-limited='true'] [data-day-number] {
+    /* A refused day states itself in one colour, date and volume included. */
+    &[data-rate-limited='true'] [data-day-number],
+    &[data-rate-limited='true'] [data-day-secondary] {
       color: inherit;
     }
 
@@ -237,9 +234,13 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
+  /** Backs up the cost with the volume behind it. */
   tokens: css`
-    font-size: 11px;
+    font-size: 10px;
     font-variant-numeric: tabular-nums;
+    line-height: 14px;
+    color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
   `,
   capacityFill: css`
     height: 100%;
@@ -295,12 +296,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   windowListRow: css`
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(120px, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.1fr) minmax(110px, 1fr) minmax(0, 1fr);
     gap: 12px;
     align-items: center;
 
-    min-height: 36px;
-    padding-block: 6px;
+    /* One line per window — the row is a scannable comparison, not a card. */
+    min-height: 28px;
+    padding-block: 4px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadius};
 
@@ -679,26 +681,24 @@ const WindowHistory = memo<{
       </Flexbox>
       {stats.map((stat) => (
         <div className={styles.windowListRow} key={stat.resetsAt}>
-          <Flexbox gap={1}>
-            <Text style={{ fontSize: 11 }}>
+          <Flexbox horizontal align={'baseline'} gap={6}>
+            <Text style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
               {dayjs(stat.windowStartAt).format('M/D')} – {dayjs(stat.resetsAt).format('M/D')}
             </Text>
-            <Text style={{ fontSize: 10 }} type={'secondary'}>
-              {stat.isLive
-                ? t('heteroAgent.claudeQuota.calendar.currentWindow')
-                : t('heteroAgent.claudeQuota.calendar.pastWindow')}
-            </Text>
+            {/* Only the live window needs naming; the rest are read as history. */}
+            {stat.isLive && (
+              <Text style={{ fontSize: 10, whiteSpace: 'nowrap' }} type={'secondary'}>
+                {t('heteroAgent.claudeQuota.calendar.currentWindow')}
+              </Text>
+            )}
           </Flexbox>
-          <Flexbox gap={4}>
-            <Flexbox horizontal align={'center'} justify={'space-between'}>
-              <Text style={{ fontSize: 10 }} type={'secondary'}>
-                {t('heteroAgent.claudeQuota.calendar.capacityUsed')}
-              </Text>
-              <Text strong style={{ fontSize: 13 }}>
-                {Math.round(stat.peakUtilization)}%
-              </Text>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Flexbox flex={1} style={{ minWidth: 0 }}>
+              <CapacityMeter utilization={stat.peakUtilization} />
             </Flexbox>
-            <CapacityMeter utilization={stat.peakUtilization} />
+            <Text strong style={{ flex: 'none', fontSize: 12, textAlign: 'right', width: 34 }}>
+              {Math.round(stat.peakUtilization)}%
+            </Text>
           </Flexbox>
           {stat.tokens > 0 ? (
             <Text style={{ fontSize: 11, textAlign: 'right' }} type={'secondary'}>
@@ -876,11 +876,18 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
       </Text>
     );
 
-  const dayLabel = (spend: DaySpend | undefined, burn: number) => {
-    if (spend && spend.tokens > 0) return formatTokens(spend.tokens);
+  /**
+   * A day is read as money first: the cost leads, the token count backs it up.
+   * With no priced turn the strongest number left takes the lead instead.
+   */
+  const dayLabels = (spend: DaySpend | undefined, burn: number) => {
+    const cost =
+      spend && (spend.cost > 0 || spend.hasUnpricedTurn) ? formatTrackedCost(spend, t) : '';
+    const tokens = spend && spend.tokens > 0 ? formatTokens(spend.tokens) : '';
     // No ledger row (usage burned outside LobeHub) but the meter still moved.
-    if (burn > 0) return `${Math.round(burn)}%`;
-    return '';
+    const share = !tokens && burn > 0 ? `${Math.round(burn)}%` : '';
+    const fallback = tokens || share;
+    return cost ? { primary: cost, secondary: fallback } : { primary: fallback, secondary: '' };
   };
 
   const hasWindowColumn = Boolean(chartWindow) || windowStats.length > 0;
@@ -953,7 +960,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
               const resetsAt = resetsByDay.get(cell.key);
               const rateLimited = rateLimitedDays.has(cell.key);
               const heatLevel = dailyHeatLevels.get(cell.key) ?? 0;
-              const label = dayLabel(spend, burn);
+              const { primary, secondary } = dayLabels(spend, burn);
               const tooltipParts = [
                 spend &&
                   spend.tokens > 0 &&
@@ -983,7 +990,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
                     <span aria-hidden className={styles.heatDot} data-heat={heatLevel} />
                   )}
                   <span className={styles.dayFooter}>
-                    <span className={styles.tokens}>{label}</span>
+                    <span className={styles.cost}>{primary}</span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                       {rateLimited && <Icon color={cssVar.colorError} icon={BanIcon} size={12} />}
                       {resetsAt && (
@@ -991,8 +998,10 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
                       )}
                     </span>
                   </span>
-                  {spend && (spend.cost > 0 || spend.hasUnpricedTurn) && (
-                    <span className={styles.cost}>{formatTrackedCost(spend, t)}</span>
+                  {secondary && (
+                    <span data-day-secondary className={styles.tokens}>
+                      {secondary}
+                    </span>
                   )}
                 </div>
               );

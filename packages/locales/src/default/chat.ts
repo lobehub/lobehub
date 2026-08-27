@@ -341,7 +341,6 @@ export default {
     'On current pace this window ends around {{percent}}%',
   'heteroAgent.claudeQuota.calendar.burnout.willExhaust':
     'On current pace, quota runs out around {{time}}',
-  'heteroAgent.claudeQuota.calendar.capacityUsed': 'Capacity used',
   'heteroAgent.claudeQuota.calendar.dayShare': 'Used {{percent}}% of this window',
   'heteroAgent.claudeQuota.calendar.dayTokens': '{{tokens}} tokens · {{cost}}',
   'heteroAgent.claudeQuota.calendar.accountUnavailable':

@@ -557,7 +557,6 @@
   "heteroAgent.claudeQuota.calendar.burnout.exhausted": "已耗尽，{{time}} 重置",
   "heteroAgent.claudeQuota.calendar.burnout.safe": "按当前速度，本窗口结束时约用到 {{percent}}%",
   "heteroAgent.claudeQuota.calendar.burnout.willExhaust": "按当前速度，预计 {{time}} 前后耗尽",
-  "heteroAgent.claudeQuota.calendar.capacityUsed": "容量已用",
   "heteroAgent.claudeQuota.calendar.currentWindow": "当前窗口",
   "heteroAgent.claudeQuota.calendar.dayShare": "占本窗口 {{percent}}%",
   "heteroAgent.claudeQuota.calendar.dayTokens": "{{tokens}} tokens · {{cost}}",
