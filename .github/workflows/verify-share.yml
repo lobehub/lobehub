@@ -1,8 +1,11 @@
-# PR-time guard for the share micro app (apps/share). Builds the worker with the
-# open-source business stubs and uploads a preview version — the production
-# deploy lives in the cloud repo (deploy-share.yml there) because it needs the
-# `@/business/*` overlay, so this workflow is the only CI that compiles
-# apps/share on OSS PRs at all.
+# PR-time guard for the share micro app (apps/share). OSS changes flow into the
+# deployed worker through the cloud repo's submodule bump, so same-repo PRs
+# build with the CLOUD overlay (`@/business/*` resolved to lobehub-cloud, the
+# surfaces app.lobehub.com actually renders) and upload a preview version.
+# Fork PRs have no cloud token or upload secrets: they build with the
+# open-source stubs and dry-run the worker upload as a pure size/compile guard.
+# The production deploy stays in the cloud repo (deploy-share.yml there); the
+# cloud repo carries its own verify-share.yml for PRs on its side.
 name: Verify Share
 
 on:
@@ -20,6 +23,8 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,6 +52,11 @@ jobs:
         run: |
           if gh run download "${{ steps.base.outputs.run_id }}" --repo "${{ github.repository }}" \
             -n share-build-inputs -D /tmp/share-manifest; then
+            # An overlay build records this repo's files under the submodule
+            # prefix (`lobehub/src/...`); strip it so the manifest exact-matches
+            # this repo's own diff paths. Cloud-only entries survive unprefixed
+            # and simply never match here.
+            sed -i 's#^lobehub/##' /tmp/share-manifest/build-inputs.txt
             echo "path=/tmp/share-manifest/build-inputs.txt" >> "$GITHUB_OUTPUT"
           else
             echo "no manifest artifact on last successful run"
@@ -65,31 +75,49 @@ jobs:
               "origin/${{ github.base_ref }}" HEAD
           fi
 
+      - name: Overlay cloud repository
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO == 'true'
+        uses: ./.github/actions/cloud-overlay
+        with:
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+
       - name: Setup environment
         if: steps.detect.outputs.should_build == 'true'
         uses: ./.github/actions/setup-env
 
-      - name: Install deps
-        if: steps.detect.outputs.should_build == 'true'
+      - name: Install deps (cloud workspace)
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO == 'true'
+        # pnpm, not bun: the cloud root's `pnpm.overrides` is what redirects
+        # `@lobechat/business-*` onto the `@cloud/*` overlay packages, and its
+        # workspace list is the only one that includes `lobehub/apps/share`.
+        run: cd .. && pnpm install
+
+      - name: Install deps (open-source workspace)
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO != 'true'
         run: pnpm install
 
-      - name: Build share
-        if: steps.detect.outputs.should_build == 'true'
+      - name: Build share (cloud overlay)
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO == 'true'
         env:
           # NODE_ENV is load-bearing: vite.config.rr.mts takes its dev branch otherwise and
           # discards VITE_CDN_BASE without failing. A preview serves its own assets from its
           # own workers.dev origin, the way production serves them from the CDN — never
-          # same-origin, because the gateway routes /assets to the landing target. Empty on
-          # fork PRs, which have no secrets to upload with and only run the size guard.
+          # same-origin, because the gateway routes /assets to the landing target.
+          NODE_ENV: production
+          VITE_CDN_BASE: https://pr${{ github.event.pull_request.number }}-lobehub-share.lobeobjects-tg.workers.dev/
+        # `build:share` is the cloud repo's own build entry (SHARE_TSCONFIG_PROJECT,
+        # SSR stub list) — invoking it keeps that knowledge in the cloud repo.
+        run: |
+          cd ..
+          bun run build:share
+          printf '/*\n  Access-Control-Allow-Origin: *\n' > lobehub/apps/share/build/client/_headers
+
+      - name: Build share (open-source stubs)
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO != 'true'
+        env:
           NODE_ENV: production
           NODE_OPTIONS: --max-old-space-size=8192
-          VITE_CDN_BASE: >-
-            ${{ github.event.pull_request.head.repo.full_name == github.repository
-            && format('https://pr{0}-lobehub-share.lobeobjects-tg.workers.dev/', github.event.pull_request.number)
-            || '' }}
-        run: |
-          bun run build:rr
-          printf '/*\n  Access-Control-Allow-Origin: *\n' > build/client/_headers
+        run: bun run build:rr
         working-directory: apps/share
 
       - name: Upload build-inputs manifest
@@ -107,7 +135,6 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
-          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ "$SAME_REPO" = 'true' ]; then
@@ -129,7 +156,7 @@ jobs:
         working-directory: apps/share
 
       - name: Comment the preview URL
-        if: steps.detect.outputs.should_build == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -146,8 +173,8 @@ jobs:
           <https://pr${PR}-lobehub-share.lobeobjects-tg.workers.dev>
 
           A version, not a deployment: it takes no production traffic. Built with the
-          open-source business stubs — cloud-overlay surfaces render their fallback here;
-          the overlay build ships from the cloud repo's deploy-share workflow."
+          cloud overlay (\`@/business/*\` from lobehub-cloud @ ${CLOUD_REF:-unknown}) —
+          the same surfaces the deployed worker renders."
           id=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
             --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
           if [ -n "$id" ]; then
