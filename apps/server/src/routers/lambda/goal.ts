@@ -125,11 +125,15 @@ export const goalRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return {
-          data: await ctx.goalService.create(input),
-          message: 'Goal created',
-          success: true,
-        };
+        const data = await ctx.goalService.create(input);
+        // A goal is not a document — creating one means starting it. The
+        // coordinator takes it from here without a client holding a loop open.
+        await scheduleGoalAdvance({
+          goalId: data.goal.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Goal created', success: true };
       } catch (error) {
         mapGoalError(error, 'create');
       }

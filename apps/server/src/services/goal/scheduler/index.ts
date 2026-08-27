@@ -16,8 +16,13 @@ const log = debug('goal-scheduler');
 export const scheduleGoalAdvance = async (params: ScheduleGoalAdvanceParams): Promise<void> => {
   try {
     await createGoalSchedulerModule().scheduleAdvance(params);
+    log('queued advance for goal %s', params.goalId);
   } catch (error) {
-    log('failed to schedule advance for goal %s (non-fatal): %O', params.goalId, error);
+    // Loud on purpose: this is the only thing that makes a goal move on its
+    // own, so a broken dispatch must be visible in the logs rather than left to
+    // be inferred from goals that quietly stop progressing. The sweep still
+    // covers the goal, which is why this stays non-fatal for the caller.
+    console.error('[goal/scheduler] failed to queue advance for %s:', params.goalId, error);
   }
 };
 
