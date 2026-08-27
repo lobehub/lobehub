@@ -1095,6 +1095,11 @@ export class AgentRuntimeService {
     // standard branch (`groupId IS NULL`) and returns ZERO group messages, so
     // the step_start uiMessages snapshot would be empty and clobber the client.
     const groupId: string | undefined = agentState?.metadata?.groupId;
+    // threadId scopes a subtopic run. Without it the snapshot is the topic's
+    // MAIN conversation, and the client writes that into the thread's bucket at
+    // step_start / agent_runtime_end — wiping the turn the run just produced, so
+    // the subtopic panel falls back to showing the main conversation.
+    const threadId: string | undefined = agentState?.metadata?.threadId ?? undefined;
     if (!agentId || !topicId) return undefined;
 
     try {
@@ -1102,6 +1107,7 @@ export class AgentRuntimeService {
         agentId,
         groupId,
         skipWorks: options?.skipWorks,
+        threadId,
         topicId,
       });
     } catch (error) {

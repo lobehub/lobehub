@@ -701,6 +701,20 @@ export class GatewayActionImpl {
         messageMapKey(messageContext),
         messageMapKey(resolvedMessageContext),
       );
+
+      // Seed the persisted-thread bucket from the server, exactly as the
+      // new-topic branch below does. The Thread portal pivots to this key the
+      // moment `portalThreadId` is set, and its own fetch resolves against a
+      // thread that did not exist yet — so without this the panel renders the
+      // parent context alone and the turn the user just sent is invisible until
+      // something else revalidates. `execAgentTask` has already persisted both
+      // rows by the time it returns, so this read is authoritative.
+      try {
+        const messages = await messageService.getMessages(resolvedMessageContext);
+        this.#get().replaceMessages(messages, { context: resolvedMessageContext });
+      } catch {
+        /* non-critical */
+      }
     }
 
     if (!isCreateNewTopic && cancelledAfterPersistence) {

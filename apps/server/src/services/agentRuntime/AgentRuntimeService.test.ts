@@ -1973,6 +1973,34 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
+    it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
+      // Regression: without `threadId` the snapshot is the topic's MAIN
+      // conversation, and the client writes it into the thread's bucket at
+      // step_start / agent_runtime_end — wiping the turn the run just produced,
+      // so a freshly created subtopic renders the main conversation instead.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        metadata: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' }),
+      );
+    });
+
+    it('leaves threadId unset for a main-conversation run', async () => {
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages.mock.calls[0][0].threadId).toBeUndefined();
+    });
+
     it('returns undefined when agentId or topicId is missing (skips empty-array push)', async () => {
       const queryMessages = vi.fn();
       stubMessageService(service, queryMessages);
