@@ -1,13 +1,27 @@
 import type { DocumentCommentItem } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Markdown, Text, TextArea } from '@lobehub/ui';
+import { ChatInput, ChatInputActionBar, useEditor } from '@lobehub/editor/react';
+import { ActionIcon, Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { ChevronRight, MessageCircle, Pencil, Trash } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AttachmentMenu } from '@/features/AttachmentInput';
+import RichTextMessage from '@/features/Conversation/Messages/User/components/RichTextMessage';
+import { TypoBar } from '@/features/EditorCanvas';
+import {
+  getAttachmentFileIdsFromEditor,
+  insertExistingAttachmentsIntoEditor,
+  insertFilesIntoEditor,
+} from '@/features/EditorCanvas/editorAttachments';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { documentCommentService } from '@/services/documentComment';
 
+import DocumentCommentEditor, {
+  type DocumentCommentEditorRef,
+  type DocumentCommentEditorValue,
+} from './DocumentCommentEditor';
 import type { DocumentCommentUpdateHandler } from './optimistic';
 import { isOptimisticDocumentComment } from './optimistic';
 import { styles } from './styles';
@@ -21,12 +35,42 @@ interface CommentCardProps {
   variant?: 'reply' | 'root';
 }
 
+const hasDocumentCommentEditorData = (editorData: DocumentCommentItem['editorData']) =>
+  Boolean(
+    editorData &&
+    typeof editorData === 'object' &&
+    !Array.isArray(editorData) &&
+    Object.keys(editorData).length > 0,
+  );
+
+const CommentContent = memo<Pick<DocumentCommentItem, 'content' | 'editorData'>>(
+  ({ content, editorData }) =>
+    hasDocumentCommentEditorData(editorData) ? (
+      <RichTextMessage editorState={editorData} variant={'default'} />
+    ) : (
+      <Markdown fontSize={16} variant={'chat'}>
+        {content}
+      </Markdown>
+    ),
+);
+
+CommentContent.displayName = 'DocumentCommentContent';
+
 const CommentCard = memo<CommentCardProps>(
   ({ comment, onMutated, onReply, onUpdate, replying, variant = 'root' }) => {
     const { t } = useTranslation('file');
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
     const [editing, setEditing] = useState(false);
     const [content, setContent] = useState(comment.content);
+    const [editorData, setEditorData] = useState(comment.editorData);
+    const editEditor = useEditor();
+    const editorRef = useRef<DocumentCommentEditorRef>(null);
+    const editInputRef = useRef<HTMLDivElement>(null);
+    const [hasAttachments, setHasAttachments] = useState(false);
+    const [showTypoBar, setShowTypoBar] = useLocalStorageState(
+      'document-comment:show-formatting-toolbar',
+      false,
+    );
     const [mutating, setMutating] = useState(false);
     const deleted = Boolean(comment.deletedAt);
     const optimistic = isOptimisticDocumentComment(comment);
@@ -41,20 +85,26 @@ const CommentCard = memo<CommentCardProps>(
     const edited = new Date(comment.updatedAt).getTime() > new Date(comment.createdAt).getTime();
 
     const handleUpdate = useCallback(async () => {
-      const nextContent = content.trim();
-      if (!nextContent || mutating) return;
+      const editorValue: DocumentCommentEditorValue = editorRef.current?.getValue() ?? {
+        content,
+        editorData,
+      };
+      const nextContent = editorValue.content.trim();
+      const hasFiles = getAttachmentFileIdsFromEditor(editEditor).length > 0;
+      if ((!nextContent && !hasFiles) || mutating) return;
+      setContent(nextContent);
+      setEditorData(editorValue.editorData);
       setMutating(true);
       setEditing(false);
       try {
-        await onUpdate(comment, nextContent);
+        await onUpdate(comment, { content: nextContent, editorData: editorValue.editorData });
       } catch {
-        setContent(comment.content);
         setEditing(true);
         toast.error(t('pageEditor.comments.updateFailed'));
       } finally {
         setMutating(false);
       }
-    }, [comment, content, mutating, onUpdate, t]);
+    }, [comment, content, editEditor, editorData, mutating, onUpdate, t]);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -79,8 +129,17 @@ const CommentCard = memo<CommentCardProps>(
 
     const handleEdit = useCallback(() => {
       setContent(comment.content);
+      setEditorData(comment.editorData);
+      setHasAttachments(false);
       setEditing(true);
-    }, [comment.content]);
+    }, [comment.content, comment.editorData]);
+
+    const handleAttach = useCallback(
+      (files: File[]) => {
+        insertFilesIntoEditor(editEditor, files);
+      },
+      [editEditor],
+    );
 
     return (
       <Flexbox
@@ -124,29 +183,66 @@ const CommentCard = memo<CommentCardProps>(
           {deleted ? (
             <Text className={styles.deleted}>{t('pageEditor.comments.deleted')}</Text>
           ) : editing ? (
-            <Flexbox gap={8}>
-              <TextArea
+            <ChatInput
+              className={styles.editComposer}
+              header={showTypoBar ? <TypoBar editor={editEditor} /> : undefined}
+              minHeight={64}
+              resize={false}
+              slashMenuRef={editInputRef}
+              footer={
+                <ChatInputActionBar
+                  style={{ paddingBlock: 4, paddingInline: 8 }}
+                  left={
+                    <AttachmentMenu
+                      disabled={mutating}
+                      formatEnabled={showTypoBar}
+                      onFiles={handleAttach}
+                      onFormatEnabledChange={setShowTypoBar}
+                      onLibraryFiles={(attachments) =>
+                        insertExistingAttachmentsIntoEditor(editEditor, attachments)
+                      }
+                    />
+                  }
+                  right={
+                    <Flexbox horizontal gap={8}>
+                      <Button disabled={mutating} size={'small'} onClick={() => setEditing(false)}>
+                        {t('pageEditor.comments.cancel')}
+                      </Button>
+                      <Button
+                        disabled={!content.trim() && !hasAttachments}
+                        loading={mutating}
+                        size={'small'}
+                        type={'primary'}
+                        onClick={handleUpdate}
+                      >
+                        {t('pageEditor.comments.save')}
+                      </Button>
+                    </Flexbox>
+                  }
+                />
+              }
+              onBodyClick={() => editEditor.focus()}
+            >
+              <DocumentCommentEditor
                 autoFocus
-                autoSize={{ maxRows: 8, minRows: 2 }}
-                className={styles.editArea}
+                compact
                 disabled={mutating}
-                maxLength={10_000}
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
+                editor={editEditor}
+                entityId={comment.id}
+                getPopupContainer={() => editInputRef.current}
+                initialContent={content}
+                initialEditorData={editorData}
+                placeholder={t('pageEditor.comments.placeholder')}
+                ref={editorRef}
+                onChange={({ content: nextContent, editorData: nextEditorData }) => {
+                  setContent(nextContent);
+                  setEditorData(nextEditorData);
+                  setHasAttachments(getAttachmentFileIdsFromEditor(editEditor).length > 0);
+                }}
               />
-              <Flexbox horizontal gap={8} justify={'flex-end'}>
-                <Button disabled={mutating} size={'small'} onClick={() => setEditing(false)}>
-                  {t('pageEditor.comments.cancel')}
-                </Button>
-                <Button loading={mutating} size={'small'} type={'primary'} onClick={handleUpdate}>
-                  {t('pageEditor.comments.save')}
-                </Button>
-              </Flexbox>
-            </Flexbox>
+            </ChatInput>
           ) : (
-            <Markdown fontSize={16} variant={'chat'}>
-              {mutating ? content : comment.content}
-            </Markdown>
+            <CommentContent content={comment.content} editorData={comment.editorData} />
           )}
         </div>
 

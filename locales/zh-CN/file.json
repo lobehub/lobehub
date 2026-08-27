@@ -92,6 +92,8 @@
   "pageEditor.addIcon": "添加图标",
   "pageEditor.autoSaveMessage": "文稿会自动保存，无需手动保存",
   "pageEditor.chooseIcon": "选择图标",
+  "pageEditor.comments.attachments.add": "添加",
+  "pageEditor.comments.attachments.chooseLibrary": "从文件库选择",
   "pageEditor.comments.author.deactivated": "已停用用户",
   "pageEditor.comments.author.former": "前成员",
   "pageEditor.comments.cancel": "取消",

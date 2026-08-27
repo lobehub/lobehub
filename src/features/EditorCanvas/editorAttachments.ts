@@ -6,7 +6,20 @@ import {
 } from '@lobehub/editor';
 import type { SerializedEditorState } from 'lexical';
 
-import { getFileIdForUrl } from './attachmentRegistry';
+import { getFileIdForUrl, registerAttachment } from './attachmentRegistry';
+
+export interface ExistingEditorAttachment {
+  fileId: string;
+  fileType: string;
+  name: string;
+  size: number;
+  url: string;
+}
+
+const existingAttachmentByFile = new WeakMap<File, ExistingEditorAttachment>();
+
+export const getExistingEditorAttachment = (file: File): ExistingEditorAttachment | undefined =>
+  existingAttachmentByFile.get(file);
 
 /**
  * URLs that have no registered fileId (e.g. externally pasted image URLs)
@@ -48,6 +61,29 @@ export const insertFilesIntoEditor = (editor: IEditor | undefined, files: File[]
   }
   // File picker / Upload dropdown steals focus; restore it so the cursor
   // remains visible and the user can keep typing.
+  editor.focus?.();
+};
+
+/**
+ * Insert already-uploaded library files without downloading or uploading them again.
+ * The editor's file plugin still receives a `File`, while the upload adapter resolves
+ * that placeholder straight back to the existing resource URL and file id.
+ */
+export const insertExistingAttachmentsIntoEditor = (
+  editor: IEditor | undefined,
+  attachments: ExistingEditorAttachment[],
+): void => {
+  if (!editor || attachments.length === 0) return;
+  const lexicalEditor = editor.getLexicalEditor?.();
+  if (!lexicalEditor) return;
+
+  for (const attachment of attachments) {
+    const file = new File([], attachment.name, { type: attachment.fileType });
+    existingAttachmentByFile.set(file, attachment);
+    registerAttachment(attachment.url, attachment.fileId);
+    lexicalEditor.dispatchCommand(INSERT_FILE_COMMAND, { file });
+  }
+
   editor.focus?.();
 };
 

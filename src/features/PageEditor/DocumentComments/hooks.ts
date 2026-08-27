@@ -71,12 +71,14 @@ export const useOptimisticDocumentComment = () => {
       clientId,
       content,
       documentId,
+      editorData,
       parentCommentId,
       replyTo,
     }: {
       clientId: string;
       content: string;
       documentId: string;
+      editorData: DocumentCommentItem['editorData'];
       parentCommentId?: string;
       replyTo?: DocumentCommentItem['replyTo'];
     }) => {
@@ -93,6 +95,7 @@ export const useOptimisticDocumentComment = () => {
         clientId,
         content,
         documentId,
+        editorData,
         parentCommentId,
         replyTo,
         userId: user?.id ?? null,

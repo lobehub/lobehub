@@ -1,6 +1,7 @@
 import type {
   DocumentCommentAuthor,
   DocumentCommentItem,
+  DocumentCommentJson,
   DocumentCommentReplyPage,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
@@ -10,6 +11,7 @@ interface CreateOptimisticCommentParams {
   clientId: string;
   content: string;
   documentId: string;
+  editorData: DocumentCommentJson | null;
   parentCommentId?: string;
   replyTo?: DocumentCommentItem['replyTo'];
   userId: string | null;
@@ -19,11 +21,17 @@ interface CreateOptimisticCommentParams {
 export interface DocumentCommentSubmitInput {
   clientId: string;
   content: string;
+  editorData: DocumentCommentJson;
+}
+
+export interface DocumentCommentEditorValue {
+  content: string;
+  editorData: DocumentCommentJson;
 }
 
 export type DocumentCommentUpdateHandler = (
   comment: DocumentCommentItem,
-  content: string,
+  value: DocumentCommentEditorValue,
 ) => Promise<void>;
 
 export const isOptimisticDocumentComment = (comment: Pick<DocumentCommentItem, 'id'>) =>
@@ -79,6 +87,7 @@ export const createOptimisticComment = ({
   clientId,
   content,
   documentId,
+  editorData,
   parentCommentId,
   replyTo = null,
   userId,
@@ -96,7 +105,7 @@ export const createOptimisticComment = ({
     createdAt: now,
     deletedAt: null,
     documentId,
-    editorData: null,
+    editorData,
     id: `optimistic:${clientId}`,
     parentCommentId: parentCommentId ?? null,
     replyTo,

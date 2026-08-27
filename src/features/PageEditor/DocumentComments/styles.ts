@@ -14,35 +14,44 @@ export const styles = createStaticStyles(({ css }) => ({
   card: css`
     padding-block: 20px 12px;
   `,
+  commentEditor: css`
+    min-width: 0;
+
+    /* Rich Markdown blocks carry document margins by default. A chat input
+       keeps only inter-block rhythm so the first typed heading never jumps. */
+    & [contenteditable='true'] > :first-child {
+      margin-block-start: 0 !important;
+    }
+
+    & [contenteditable='true'] > :last-child {
+      margin-block-end: 0 !important;
+    }
+  `,
   composer: css`
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-
+    min-width: 0;
     transition:
       border-color ${cssVar.motionDurationFast},
-      background ${cssVar.motionDurationFast},
       box-shadow ${cssVar.motionDurationFast};
 
     &:focus-within {
       border-color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorBgContainer};
       box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
     }
+  `,
+  composerAvatar: css`
+    flex: none;
+    align-self: flex-start;
   `,
   deleted: css`
     font-style: italic;
     color: ${cssVar.colorTextTertiary};
   `,
-  editArea: css`
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
+  editComposer: css`
+    min-width: 0;
 
     &:focus-within {
       border-color: ${cssVar.colorPrimary};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
     }
   `,
   empty: css`

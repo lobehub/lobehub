@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
 import {
+  documentCommentMentions,
   documentComments,
   documents,
   workspaceMembers,
@@ -14,12 +15,35 @@ import { documentCommentRouter } from '../../documentComment';
 import { cleanupTestUser, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
+const notifyDocumentCommentActivity = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/business/server/document-comment/notifyActivity', () => ({
+  notifyDocumentCommentActivity,
+}));
+const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => unknown) => void afterResponseTasks.push(Promise.resolve().then(work)),
+}));
+
+const flushAfterResponse = async () => {
+  while (afterResponseTasks.length > 0) await Promise.all(afterResponseTasks.splice(0));
+};
 
 const context = (userId: string, workspaceId?: string) => ({
   jwtPayload: { userId },
   userId,
   workspaceId,
+});
+
+const mentionEditorData = (...userIds: string[]) => ({
+  root: {
+    children: userIds.map((id) => ({
+      children: [],
+      metadata: { id, type: 'member' },
+      type: 'mention',
+    })),
+    type: 'root',
+  },
 });
 
 describe('documentCommentRouter integration', () => {
@@ -32,6 +56,8 @@ describe('documentCommentRouter integration', () => {
   let workspaceId: string;
 
   beforeEach(async () => {
+    notifyDocumentCommentActivity.mockReset();
+    notifyDocumentCommentActivity.mockResolvedValue(undefined);
     db = await getTestDB();
     testDB = db;
     [ownerId, adminId, memberId, viewerId] = await Promise.all([
@@ -68,6 +94,7 @@ describe('documentCommentRouter integration', () => {
   });
 
   afterEach(async () => {
+    await flushAfterResponse();
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await Promise.all([ownerId, adminId, memberId, viewerId].map((id) => cleanupTestUser(db, id)));
   });
@@ -80,6 +107,17 @@ describe('documentCommentRouter integration', () => {
       clientId: 'member-comment',
       content: 'hello',
       documentId,
+    });
+    await flushAfterResponse();
+
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith({
+      actorUserId: memberId,
+      commentId: created.comment.id,
+      documentId,
+      kind: 'commented',
+      recipientUserId: ownerId,
+      rootCommentId: created.comment.id,
+      workspaceId,
     });
 
     expect(created.comment).toMatchObject({
@@ -141,5 +179,114 @@ describe('documentCommentRouter integration', () => {
     await expect(owner.summary({ documentId })).resolves.toEqual({ total: 0 });
     await expect(member.summary({ documentId })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(await db.select().from(documentComments)).toEqual([]);
+  });
+
+  it('notifies the direct reply target once and skips self or stale-access recipients', async () => {
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const owner = documentCommentRouter.createCaller(context(ownerId, workspaceId));
+
+    const root = await owner.create({ clientId: 'owner-root', content: 'root', documentId });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).not.toHaveBeenCalled();
+
+    const reply = await member.create({
+      clientId: 'member-reply',
+      content: 'reply',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).toHaveBeenLastCalledWith({
+      actorUserId: memberId,
+      commentId: reply.comment.id,
+      documentId,
+      kind: 'replied',
+      recipientUserId: ownerId,
+      rootCommentId: root.comment.id,
+      workspaceId,
+    });
+
+    await member.create({
+      clientId: 'member-reply',
+      content: 'duplicate retry',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+
+    await db.update(documents).set({ visibility: 'private' }).where(eq(documents.id, documentId));
+    const privateReply = await owner.create({
+      clientId: 'private-reply',
+      content: 'no leaked notification',
+      documentId,
+      parentCommentId: reply.comment.id,
+    });
+    await flushAfterResponse();
+    expect(privateReply.comment.replyTo?.author.id).toBe(memberId);
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies valid mentions once, prefers mention copy, and only sends newly added mentions', async () => {
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const created = await member.create({
+      clientId: 'mentions',
+      content: '@owner @viewer @self @outsider',
+      documentId,
+      editorData: mentionEditorData(ownerId, viewerId, memberId, 'outside-workspace'),
+    });
+    await flushAfterResponse();
+
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(2);
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commentId: created.comment.id,
+        kind: 'mentioned',
+        recipientUserId: ownerId,
+      }),
+    );
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'mentioned', recipientUserId: viewerId }),
+    );
+    expect(
+      (
+        await db
+          .select({ mentionedUserId: documentCommentMentions.mentionedUserId })
+          .from(documentCommentMentions)
+          .where(eq(documentCommentMentions.commentId, created.comment.id))
+      )
+        .map(({ mentionedUserId }) => mentionedUserId)
+        .sort(),
+    ).toEqual([ownerId, viewerId].sort());
+
+    notifyDocumentCommentActivity.mockClear();
+    await member.update({
+      content: '@owner @viewer @admin',
+      editorData: mentionEditorData(ownerId, viewerId, adminId),
+      id: created.comment.id,
+    });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'mentioned', recipientUserId: adminId }),
+    );
+    expect(
+      (
+        await db
+          .select({ mentionedUserId: documentCommentMentions.mentionedUserId })
+          .from(documentCommentMentions)
+          .where(eq(documentCommentMentions.commentId, created.comment.id))
+      )
+        .map(({ mentionedUserId }) => mentionedUserId)
+        .sort(),
+    ).toEqual([adminId, ownerId, viewerId].sort());
+
+    notifyDocumentCommentActivity.mockClear();
+    await member.update({
+      editorData: mentionEditorData(ownerId, viewerId, adminId),
+      id: created.comment.id,
+    });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).not.toHaveBeenCalled();
   });
 });

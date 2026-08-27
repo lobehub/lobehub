@@ -56,6 +56,7 @@ describe('document comment optimistic cache', () => {
       clientId: 'pending-root',
       content: 'pending',
       documentId: 'document-1',
+      editorData: null,
       userId: 'user-1',
       workspaceId: 'workspace-1',
     });

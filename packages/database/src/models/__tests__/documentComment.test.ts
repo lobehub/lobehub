@@ -3,7 +3,13 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documentComments, documents, users, workspaces } from '../../schemas';
+import {
+  documentCommentMentions,
+  documentComments,
+  documents,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
   DOCUMENT_COMMENT_DOCUMENT_NOT_FOUND,
@@ -77,6 +83,7 @@ describe('DocumentCommentModel', () => {
     const duplicate = await authorModel.create(input);
 
     expect(first.isDuplicate).toBe(false);
+    expect(first.documentAuthorUserId).toBe(authorId);
     expect(first.comment).toMatchObject({
       authorUserId: authorId,
       content: 'hello',
@@ -122,10 +129,12 @@ describe('DocumentCommentModel', () => {
       parentCommentId: root.comment.id,
       replyToCommentId: null,
     });
+    expect(reply.parentAuthorUserId).toBe(authorId);
     expect(nestedReply.comment).toMatchObject({
       parentCommentId: root.comment.id,
       replyToCommentId: reply.comment.id,
     });
+    expect(nestedReply.parentAuthorUserId).toBe(memberId);
     expect(await authorModel.listReplies({ rootCommentId: root.comment.id })).toMatchObject({
       items: [{ id: reply.comment.id }, { id: nestedReply.comment.id }],
       total: 2,
@@ -153,6 +162,100 @@ describe('DocumentCommentModel', () => {
       'hard',
     );
     expect(await authorModel.findById(created.comment.id)).toBeUndefined();
+  });
+
+  it('persists Markdown source and Lexical JSON for rendering and future edits', async () => {
+    const initialEditorData = {
+      root: {
+        children: [{ children: [{ format: 1, text: 'bold', type: 'text' }], type: 'paragraph' }],
+        type: 'root',
+      },
+    };
+    const created = await authorModel.create({
+      clientId: 'markdown',
+      content: '**bold**',
+      documentId,
+      editorData: initialEditorData,
+    });
+
+    expect(created.comment).toMatchObject({
+      content: '**bold**',
+      editorData: initialEditorData,
+    });
+
+    const nextEditorData = {
+      root: {
+        children: [{ children: [{ text: 'updated', type: 'text' }], type: 'paragraph' }],
+        type: 'root',
+      },
+    };
+    const updated = await authorModel.update(created.comment.id, {
+      content: '[updated](https://lobehub.com)',
+      editorData: nextEditorData,
+    });
+
+    expect(updated?.comment).toMatchObject({
+      content: '[updated](https://lobehub.com)',
+      editorData: nextEditorData,
+    });
+  });
+
+  it('stores validated mentions transactionally and diffs them on update', async () => {
+    const created = await authorModel.create({
+      clientId: 'mentioned',
+      content: 'hello @member',
+      documentId,
+      mentionedUserIds: [memberId, memberId],
+    });
+    const duplicate = await authorModel.create({
+      clientId: 'mentioned',
+      content: 'hello @member',
+      documentId,
+      mentionedUserIds: [memberId],
+    });
+
+    expect(created.addedMentionUserIds).toEqual([memberId]);
+    expect(duplicate.addedMentionUserIds).toEqual([]);
+    expect(
+      await serverDB
+        .select({ mentionedUserId: documentCommentMentions.mentionedUserId })
+        .from(documentCommentMentions)
+        .where(eq(documentCommentMentions.commentId, created.comment.id)),
+    ).toEqual([{ mentionedUserId: memberId }]);
+
+    const removed = await authorModel.update(
+      created.comment.id,
+      { content: 'mention removed' },
+      { mentionedUserIds: [] },
+    );
+    expect(removed?.addedMentionUserIds).toEqual([]);
+    expect(
+      await serverDB
+        .select()
+        .from(documentCommentMentions)
+        .where(eq(documentCommentMentions.commentId, created.comment.id)),
+    ).toEqual([]);
+
+    const addedAgain = await authorModel.update(
+      created.comment.id,
+      { content: 'hello again @member' },
+      { mentionedUserIds: [memberId] },
+    );
+    expect(addedAgain?.addedMentionUserIds).toEqual([memberId]);
+
+    await memberModel.create({
+      clientId: 'mentioned-reply',
+      content: 'reply',
+      documentId,
+      parentCommentId: created.comment.id,
+    });
+    expect(await authorModel.delete(created.comment.id)).toBe('soft');
+    expect(
+      await serverDB
+        .select()
+        .from(documentCommentMentions)
+        .where(eq(documentCommentMentions.commentId, created.comment.id)),
+    ).toEqual([]);
   });
 
   it('keeps a deleted root as a tombstone until its final reply is removed', async () => {

@@ -106,6 +106,8 @@ export default {
   'pageEditor.chooseIcon': 'Choose Icon',
   'pageEditor.comments.author.deactivated': 'Deactivated user',
   'pageEditor.comments.author.former': 'Former member',
+  'pageEditor.comments.attachments.add': 'Add',
+  'pageEditor.comments.attachments.chooseLibrary': 'Choose from Library',
   'pageEditor.comments.cancel': 'Cancel',
   'pageEditor.comments.createFailed': 'Failed to publish comment. Your draft is still here.',
   'pageEditor.comments.delete': 'Delete',

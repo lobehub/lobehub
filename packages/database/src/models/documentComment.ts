@@ -1,7 +1,8 @@
 import type { DocumentCommentJson } from '@lobechat/types';
 import { and, asc, count, eq, getTableColumns, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 
-import { documentComments } from '../schemas/documentComment';
+import type { DocumentCommentItem } from '../schemas/documentComment';
+import { documentCommentMentions, documentComments } from '../schemas/documentComment';
 import { documents } from '../schemas/file';
 import type { LobeChatDatabase } from '../type';
 
@@ -32,12 +33,37 @@ export interface CreateDocumentCommentParams {
   content: string;
   documentId: string;
   editorData?: DocumentCommentJson;
+  /** Validated active Workspace members parsed from editorData by the router. */
+  mentionedUserIds?: string[];
   parentCommentId?: string;
+}
+
+export interface CreateDocumentCommentResult {
+  /** Mention targets written by this create; empty for an idempotent retry. */
+  addedMentionUserIds: string[];
+  comment: DocumentCommentItem;
+  /** Author of the document; receives activity for a new root comment. */
+  documentAuthorUserId: string;
+  /** true when the idempotency key already existed and no new activity should be emitted */
+  isDuplicate: boolean;
+  /** Author of the directly targeted comment when creating a reply. */
+  parentAuthorUserId?: string | null;
 }
 
 export interface UpdateDocumentCommentParams {
   content?: string;
   editorData?: DocumentCommentJson;
+}
+
+export interface UpdateDocumentCommentOptions {
+  /** Replace the persisted mention set with these validated Workspace member ids. */
+  mentionedUserIds?: string[];
+}
+
+export interface UpdateDocumentCommentResult {
+  /** Newly added mention targets; only these should receive a notification. */
+  addedMentionUserIds: string[];
+  comment: DocumentCommentItem;
 }
 
 export interface ListDocumentCommentThreadsParams {
@@ -68,12 +94,12 @@ export class DocumentCommentModel {
     return this.workspaceId;
   };
 
-  async create(params: CreateDocumentCommentParams) {
+  async create(params: CreateDocumentCommentParams): Promise<CreateDocumentCommentResult> {
     const workspaceId = this.requireWorkspaceId();
 
     return this.db.transaction(async (tx) => {
       const [document] = await tx
-        .select({ id: documents.id, workspaceId: documents.workspaceId })
+        .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
         .from(documents)
         .where(eq(documents.id, params.documentId))
         .limit(1)
@@ -84,10 +110,12 @@ export class DocumentCommentModel {
       }
 
       let parentCommentId: string | null = null;
+      let parentAuthorUserId: string | null | undefined;
       let replyToCommentId: string | null = null;
       if (params.parentCommentId) {
         const [parent] = await tx
           .select({
+            authorUserId: documentComments.authorUserId,
             documentId: documentComments.documentId,
             id: documentComments.id,
             parentCommentId: documentComments.parentCommentId,
@@ -105,6 +133,7 @@ export class DocumentCommentModel {
         ) {
           throw new Error(DOCUMENT_COMMENT_PARENT_NOT_FOUND);
         }
+        parentAuthorUserId = parent.authorUserId;
         parentCommentId = parent.parentCommentId ?? parent.id;
         replyToCommentId = parent.parentCommentId ? parent.id : null;
       }
@@ -130,7 +159,29 @@ export class DocumentCommentModel {
         })
         .returning();
 
-      if (inserted) return { comment: inserted, isDuplicate: false };
+      if (inserted) {
+        const mentionedUserIds = [...new Set(params.mentionedUserIds ?? [])];
+        if (mentionedUserIds.length > 0) {
+          await tx
+            .insert(documentCommentMentions)
+            .values(
+              mentionedUserIds.map((mentionedUserId) => ({
+                commentId: inserted.id,
+                mentionedUserId,
+                workspaceId,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+
+        return {
+          addedMentionUserIds: mentionedUserIds,
+          comment: inserted,
+          documentAuthorUserId: document.userId,
+          isDuplicate: false,
+          parentAuthorUserId,
+        };
+      }
 
       const [existing] = await tx
         .select()
@@ -145,29 +196,78 @@ export class DocumentCommentModel {
         )
         .limit(1);
       if (!existing) throw new Error('Failed to create document comment');
-      return { comment: existing, isDuplicate: true };
+      return {
+        addedMentionUserIds: [],
+        comment: existing,
+        documentAuthorUserId: document.userId,
+        isDuplicate: true,
+        parentAuthorUserId,
+      };
     });
   }
 
-  async update(id: string, params: UpdateDocumentCommentParams) {
+  async update(
+    id: string,
+    params: UpdateDocumentCommentParams,
+    options: UpdateDocumentCommentOptions = {},
+  ): Promise<UpdateDocumentCommentResult | undefined> {
     const workspaceId = this.requireWorkspaceId();
-    const [comment] = await this.db
-      .update(documentComments)
-      .set({
-        ...(params.content === undefined ? {} : { content: params.content }),
-        ...(params.editorData === undefined ? {} : { editorData: params.editorData }),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentComments.id, id),
-          eq(documentComments.workspaceId, workspaceId),
-          eq(documentComments.authorUserId, this.userId),
-          isNull(documentComments.deletedAt),
-        ),
-      )
-      .returning();
-    return comment;
+    return this.db.transaction(async (tx) => {
+      const [comment] = await tx
+        .update(documentComments)
+        .set({
+          ...(params.content === undefined ? {} : { content: params.content }),
+          ...(params.editorData === undefined ? {} : { editorData: params.editorData }),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentComments.id, id),
+            eq(documentComments.workspaceId, workspaceId),
+            eq(documentComments.authorUserId, this.userId),
+            isNull(documentComments.deletedAt),
+          ),
+        )
+        .returning();
+      if (!comment) return undefined;
+
+      let addedMentionUserIds: string[] = [];
+      if (options.mentionedUserIds) {
+        const next = [...new Set(options.mentionedUserIds)];
+        const existingRows = await tx
+          .select({ mentionedUserId: documentCommentMentions.mentionedUserId })
+          .from(documentCommentMentions)
+          .where(eq(documentCommentMentions.commentId, id));
+        const existing = new Set(existingRows.map(({ mentionedUserId }) => mentionedUserId));
+        addedMentionUserIds = next.filter((userId) => !existing.has(userId));
+        const removedMentionUserIds = [...existing].filter((userId) => !next.includes(userId));
+
+        if (addedMentionUserIds.length > 0) {
+          await tx
+            .insert(documentCommentMentions)
+            .values(
+              addedMentionUserIds.map((mentionedUserId) => ({
+                commentId: id,
+                mentionedUserId,
+                workspaceId,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+        if (removedMentionUserIds.length > 0) {
+          await tx
+            .delete(documentCommentMentions)
+            .where(
+              and(
+                eq(documentCommentMentions.commentId, id),
+                inArray(documentCommentMentions.mentionedUserId, removedMentionUserIds),
+              ),
+            );
+        }
+      }
+
+      return { addedMentionUserIds, comment };
+    });
   }
 
   async delete(id: string, options: { overrideAuthorScope?: boolean } = {}) {
@@ -220,6 +320,7 @@ export class DocumentCommentModel {
         .where(eq(documentComments.parentCommentId, id));
 
       if ((replyCount?.total ?? 0) > 0) {
+        await tx.delete(documentCommentMentions).where(eq(documentCommentMentions.commentId, id));
         await tx
           .update(documentComments)
           .set({ content: '', deletedAt: new Date(), editorData: null, updatedAt: new Date() })

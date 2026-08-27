@@ -1,8 +1,11 @@
 import type { DocumentCommentItem as DocumentCommentDTO } from '@lobechat/types';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import type { NotifyDocumentCommentActivityParams } from '@/business/server/document-comment/notifyActivity';
+import { notifyDocumentCommentActivity } from '@/business/server/document-comment/notifyActivity';
 import { wsProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import {
   DOCUMENT_COMMENT_DOCUMENT_NOT_FOUND,
@@ -14,8 +17,13 @@ import { documentComments, users, workspaceMembers } from '@/database/schemas';
 import type { DocumentCommentItem } from '@/database/schemas/documentComment';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  assertCanPerformResourceAction,
+  canPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const MAX_EDITOR_DATA_BYTES = 128 * 1024;
 const idSchema = z.string().trim().min(1).max(255);
@@ -29,6 +37,27 @@ const pageSchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(50).optional(),
 });
+
+const extractMentionedUserIds = (editorData: unknown): string[] => {
+  const root = toRecord(editorData)?.root;
+  const pending: unknown[] = root === undefined ? [] : [root];
+  const userIds = new Set<string>();
+
+  while (pending.length > 0) {
+    const node = toRecord(pending.pop());
+    if (!node) continue;
+
+    const metadata = toRecord(node.metadata);
+    if (node.type === 'mention' && metadata?.type === 'member') {
+      const userId = pickNonEmptyString(metadata.id);
+      if (userId) userIds.add(userId);
+    }
+
+    if (Array.isArray(node.children)) pending.push(...node.children);
+  }
+
+  return [...userIds];
+};
 
 const documentCommentProcedure = wsProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   let permissionCodes: Promise<string[]> | undefined;
@@ -103,6 +132,66 @@ const assertDocumentView = async (
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+
+const validateMentionedUserIds = async (
+  ctx: PermissionContext,
+  editorData: unknown,
+): Promise<string[]> => {
+  const candidateIds = extractMentionedUserIds(editorData).filter((id) => id !== ctx.userId);
+  if (candidateIds.length === 0) return [];
+
+  const activeMemberships = await ctx.serverDB
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, ctx.workspaceId),
+        inArray(workspaceMembers.userId, candidateIds),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    );
+  const activeUserIds = new Set(activeMemberships.map(({ userId }) => userId));
+  return candidateIds.filter((id) => activeUserIds.has(id));
+};
+
+const notifyActivityBestEffort = (
+  ctx: PermissionContext,
+  params: NotifyDocumentCommentActivityParams,
+) => {
+  if (params.recipientUserId === ctx.userId) return;
+
+  after(async () => {
+    try {
+      const [meta, permissionsByUserId] = await Promise.all([
+        getResourceMeta(ctx.serverDB, 'document', params.documentId),
+        RbacModel.getWorkspaceUsersPermissions({
+          db: ctx.serverDB,
+          requireMembership: true,
+          userIds: [params.recipientUserId],
+          workspaceId: ctx.workspaceId,
+        }),
+      ]);
+      const grantedPermissions = permissionsByUserId.get(params.recipientUserId);
+      if (!meta || !grantedPermissions) return;
+
+      const canView = await canPerformResourceAction({
+        action: 'view',
+        db: ctx.serverDB,
+        grantedPermissions,
+        meta,
+        resourceId: params.documentId,
+        resourceType: 'document',
+        userId: params.recipientUserId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (!canView) return;
+
+      await notifyDocumentCommentActivity(params);
+    } catch (error) {
+      console.error('[document-comment] Failed to send activity notification', error);
+    }
+  });
+};
 
 const toNotFound = (error: unknown): never => {
   if (
@@ -241,9 +330,37 @@ export const documentCommentRouter = router({
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_CREATE');
       await assertDocumentView(ctx, input.documentId, grantedPermissions);
       try {
-        const result = await ctx.documentCommentModel.create(input);
+        const mentionedUserIds = await validateMentionedUserIds(ctx, input.editorData);
+        const result = await ctx.documentCommentModel.create({ ...input, mentionedUserIds });
+        if (!result.isDuplicate) {
+          const recipientsByUserId = new Map<string, NotifyDocumentCommentActivityParams['kind']>();
+          const recipientUserId = input.parentCommentId
+            ? result.parentAuthorUserId
+            : result.documentAuthorUserId;
+          if (recipientUserId && recipientUserId !== ctx.userId) {
+            recipientsByUserId.set(
+              recipientUserId,
+              input.parentCommentId ? 'replied' : 'commented',
+            );
+          }
+          for (const userId of result.addedMentionUserIds) {
+            recipientsByUserId.set(userId, 'mentioned');
+          }
+
+          for (const [recipientUserId, kind] of recipientsByUserId) {
+            notifyActivityBestEffort(ctx, {
+              actorUserId: ctx.userId,
+              commentId: result.comment.id,
+              documentId: result.comment.documentId,
+              kind,
+              recipientUserId,
+              rootCommentId: result.comment.parentCommentId ?? result.comment.id,
+              workspaceId: ctx.workspaceId,
+            });
+          }
+        }
         const [comment] = await enrich(ctx, [result.comment]);
-        return { ...result, comment };
+        return { comment, isDuplicate: result.isDuplicate };
       } catch (error) {
         toNotFound(error);
       }
@@ -335,8 +452,26 @@ export const documentCommentRouter = router({
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_UPDATE');
       await assertDocumentView(ctx, current.documentId, grantedPermissions);
       const { id, ...updates } = input;
-      const comment = await ctx.documentCommentModel.update(id, updates);
-      if (!comment) throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot edit comment' });
-      return (await enrich(ctx, [comment]))[0];
+      const nextMentionedUserIds =
+        input.editorData === undefined
+          ? undefined
+          : await validateMentionedUserIds(ctx, input.editorData);
+      const result = await ctx.documentCommentModel.update(id, updates, {
+        mentionedUserIds: nextMentionedUserIds,
+      });
+      if (!result) throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot edit comment' });
+
+      for (const recipientUserId of result.addedMentionUserIds) {
+        notifyActivityBestEffort(ctx, {
+          actorUserId: ctx.userId,
+          commentId: result.comment.id,
+          documentId: result.comment.documentId,
+          kind: 'mentioned',
+          recipientUserId,
+          rootCommentId: result.comment.parentCommentId ?? result.comment.id,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+      return (await enrich(ctx, [result.comment]))[0];
     }),
 });

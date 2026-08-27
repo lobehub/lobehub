@@ -92,6 +92,8 @@
   "pageEditor.addIcon": "Add Icon",
   "pageEditor.autoSaveMessage": "Your page is saved automatically. No need to save manually.",
   "pageEditor.chooseIcon": "Choose Icon",
+  "pageEditor.comments.attachments.add": "Add",
+  "pageEditor.comments.attachments.chooseLibrary": "Choose from Library",
   "pageEditor.comments.author.deactivated": "Deactivated user",
   "pageEditor.comments.author.former": "Former member",
   "pageEditor.comments.cancel": "Cancel",

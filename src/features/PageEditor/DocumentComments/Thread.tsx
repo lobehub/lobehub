@@ -49,7 +49,7 @@ const Thread = memo<ThreadProps>(
       await Promise.all([reloadReplies(), onMutated()]);
     }, [onMutated, reloadReplies]);
     const handleReplySubmit = useCallback(
-      async ({ clientId, content }: DocumentCommentSubmitInput) => {
+      async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
         const replyTarget =
           replyTargetId === root.id
             ? root
@@ -63,6 +63,7 @@ const Thread = memo<ThreadProps>(
           clientId,
           content,
           documentId: replyTarget.documentId,
+          editorData,
           parentCommentId: root.id,
           replyTo:
             replyTarget.id === root.id ? null : { author: replyTarget.author, id: replyTarget.id },
@@ -81,6 +82,7 @@ const Thread = memo<ThreadProps>(
             clientId,
             content,
             documentId: replyTarget.documentId,
+            editorData,
             parentCommentId: replyTarget.id,
           });
           if (!created) throw new Error('Document comment reply creation returned no result');
@@ -118,15 +120,15 @@ const Thread = memo<ThreadProps>(
       ],
     );
     const handleReplyUpdate: DocumentCommentUpdateHandler = useCallback(
-      async (comment, content) => {
-        const optimisticComment = { ...comment, content, updatedAt: new Date() };
+      async (comment, value) => {
+        const optimisticComment = { ...comment, ...value, updatedAt: new Date() };
         await mutateReplies((pages) => replaceReplyComment(pages, optimisticComment), {
           revalidate: false,
         });
 
         let updated: Awaited<ReturnType<typeof documentCommentService.update>>;
         try {
-          updated = await documentCommentService.update({ content, id: comment.id });
+          updated = await documentCommentService.update({ ...value, id: comment.id });
           if (!updated) throw new Error('Document comment reply update returned no result');
         } catch (error) {
           await mutateReplies((pages) => replaceReplyComment(pages, comment), {

@@ -57,8 +57,8 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
     [mutateThreads],
   );
   const handleCreate = useCallback(
-    async ({ clientId, content }: DocumentCommentSubmitInput) => {
-      const optimisticComment = createOptimistic({ clientId, content, documentId });
+    async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
+      const optimisticComment = createOptimistic({ clientId, content, documentId, editorData });
       await Promise.all([
         mutateThreads((pages) => appendOptimisticThread(pages, optimisticComment), {
           revalidate: false,
@@ -68,7 +68,12 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
 
       let created: Awaited<ReturnType<typeof documentCommentService.create>>;
       try {
-        created = await documentCommentService.create({ clientId, content, documentId });
+        created = await documentCommentService.create({
+          clientId,
+          content,
+          documentId,
+          editorData,
+        });
         if (!created) throw new Error('Document comment creation returned no result');
       } catch (error) {
         await Promise.all([
@@ -93,15 +98,15 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
     [createOptimistic, documentId, mutateThreads, reloadSummary, reloadThreads, updateSummaryTotal],
   );
   const handleUpdate: DocumentCommentUpdateHandler = useCallback(
-    async (comment, content) => {
-      const optimisticComment = { ...comment, content, updatedAt: new Date() };
+    async (comment, value) => {
+      const optimisticComment = { ...comment, ...value, updatedAt: new Date() };
       await mutateThreads((pages) => replaceThreadComment(pages, optimisticComment), {
         revalidate: false,
       });
 
       let updated: Awaited<ReturnType<typeof documentCommentService.update>>;
       try {
-        updated = await documentCommentService.update({ content, id: comment.id });
+        updated = await documentCommentService.update({ ...value, id: comment.id });
         if (!updated) throw new Error('Document comment update returned no result');
       } catch (error) {
         await mutateThreads((pages) => replaceThreadComment(pages, comment), {
