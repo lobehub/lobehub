@@ -18,6 +18,7 @@ import { DocumentModel } from '../document';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'doc-transfer-test-user';
+const otherUserId = 'doc-transfer-test-other-user';
 const wsId1 = 'doc-transfer-test-ws-1';
 const wsId2 = 'doc-transfer-test-ws-2';
 
@@ -61,7 +62,7 @@ const createPage = async (
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  await serverDB.insert(users).values([{ id: userId }]);
+  await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   await serverDB.insert(workspaces).values([
     { id: wsId1, name: 'Doc WS 1', slug: 'doc-ws-1', primaryOwnerId: userId },
     { id: wsId2, name: 'Doc WS 2', slug: 'doc-ws-2', primaryOwnerId: userId },
@@ -109,6 +110,7 @@ describe('DocumentModel.transferTo', () => {
     const ws1 = new DocumentModel(serverDB, userId, wsId1);
     const folder = await createFolder(ws1, 'Commented Folder', 'commented-folder');
     const child = await createPage(ws1, 'Commented Child', 'commented-child', folder.id);
+    const commentTimestamp = new Date('2026-01-01T00:00:00.000Z');
     const createdComments = await serverDB
       .insert(documentComments)
       .values([
@@ -116,14 +118,18 @@ describe('DocumentModel.transferTo', () => {
           authorUserId: userId,
           clientId: 'transfer-root-comment',
           content: 'root comment',
+          createdAt: commentTimestamp,
           documentId: folder.id,
+          updatedAt: commentTimestamp,
           workspaceId: wsId1,
         },
         {
           authorUserId: userId,
           clientId: 'transfer-child-comment',
           content: 'child comment',
+          createdAt: commentTimestamp,
           documentId: child.id,
+          updatedAt: commentTimestamp,
           workspaceId: wsId1,
         },
       ])
@@ -139,11 +145,14 @@ describe('DocumentModel.transferTo', () => {
     await ws1.transferTo(folder.id, wsId2, userId);
 
     const movedComments = await serverDB
-      .select({ workspaceId: documentComments.workspaceId })
+      .select({ updatedAt: documentComments.updatedAt, workspaceId: documentComments.workspaceId })
       .from(documentComments)
       .where(inArray(documentComments.documentId, [folder.id, child.id]));
     expect(movedComments).toHaveLength(2);
     expect(movedComments.every(({ workspaceId }) => workspaceId === wsId2)).toBe(true);
+    expect(
+      movedComments.every(({ updatedAt }) => updatedAt.getTime() === commentTimestamp.getTime()),
+    ).toBe(true);
 
     const movedMentions = await serverDB
       .select({ workspaceId: documentCommentMentions.workspaceId })
@@ -156,6 +165,23 @@ describe('DocumentModel.transferTo', () => {
       );
     expect(movedMentions).toHaveLength(2);
     expect(movedMentions.every(({ workspaceId }) => workspaceId === wsId2)).toBe(true);
+  });
+
+  it.each([
+    { authorUserId: otherUserId, label: 'another member' },
+    { authorUserId: null, label: 'a deleted author' },
+  ])('treats comments from $label as foreign transfer rows', async ({ authorUserId, label }) => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, `Page by ${label}`, `foreign-comment-${label}`);
+    await serverDB.insert(documentComments).values({
+      authorUserId,
+      clientId: `foreign-comment-${label}`,
+      content: 'foreign comment',
+      documentId: page.id,
+      workspaceId: wsId1,
+    });
+
+    expect(await ws1.subtreeHasForeignRows(page.id)).toBe(true);
   });
 
   it('resolves slug conflicts by suffixing', async () => {
