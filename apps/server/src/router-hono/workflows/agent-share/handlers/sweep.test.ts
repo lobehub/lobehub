@@ -65,7 +65,7 @@ describe('agent-share sweep handler', () => {
       operationId: 'op-orphaned',
       topicId: 'topic-1',
     });
-    expect(json).toHaveBeenCalledWith({ deleted: 1, success: true });
+    expect(json).toHaveBeenCalledWith({ deleted: 1, interrupted: 1, success: true });
   });
 
   it('is a no-op when nothing was swept', async () => {
@@ -77,7 +77,7 @@ describe('agent-share sweep handler', () => {
     await sweep(context);
 
     expect(interruptTask).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith({ deleted: 0, success: true });
+    expect(json).toHaveBeenCalledWith({ deleted: 0, interrupted: 0, success: true });
   });
 
   it('skips a row whose agent has since been deleted, without failing the sweep', async () => {
@@ -92,7 +92,7 @@ describe('agent-share sweep handler', () => {
     await sweep(context);
 
     expect(interruptTask).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith({ deleted: 1, success: true });
+    expect(json).toHaveBeenCalledWith({ deleted: 1, interrupted: 0, success: true });
   });
 
   it('keeps interrupting remaining rows when one interrupt fails', async () => {
@@ -110,6 +110,6 @@ describe('agent-share sweep handler', () => {
     await sweep(context);
 
     expect(interruptTask).toHaveBeenCalledTimes(2);
-    expect(json).toHaveBeenCalledWith({ deleted: 2, success: true });
+    expect(json).toHaveBeenCalledWith({ deleted: 2, interrupted: 1, success: true });
   });
 });

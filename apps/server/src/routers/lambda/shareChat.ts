@@ -1,3 +1,4 @@
+import type { ChatMessageError } from '@lobechat/types';
 import { ChatErrorType, entityIdPattern, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -5,7 +6,7 @@ import { z } from 'zod';
 
 import { getAgentShareBudgetRemaining } from '@/business/server/agent-share/agentShareBudgetGate';
 import { AgentShareModel } from '@/database/models/agentShare';
-import { MessageModel } from '@/database/models/message';
+import { MessageModel, sanitizeVisitorError } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -38,6 +39,23 @@ const log = debug('lobe-server:router:shareChat');
  * workspaceId is ever threaded into the creator-scoped models/services.
  */
 const shareChatProcedure = authedProcedure.use(serverDatabase);
+
+/**
+ * Upper bound on a visitor-submitted `prompt`. Unlike `aiAgent.execAgent`
+ * (the owner's own account, so oversized input is self-inflicted),
+ * `shareChat.execAgent` runs as the CREATOR: `AiAgentService.execAgent`
+ * persists the text verbatim into creator-owned messages before the
+ * topic/turn caps in this file even run (they gate request COUNT, not
+ * per-request SIZE). Without a size bound, any authenticated visitor with a
+ * live link could submit HTTP-infrastructure-limit-sized prompts on repeat,
+ * bloating the creator's message rows and risking the documented 10 MB
+ * Upstash gateway-payload limit on a single turn.
+ *
+ * 20,000 characters (~5-8k tokens for typical English/code text) comfortably
+ * covers legitimate long-form asks (pasted code, long questions) while
+ * keeping a single turn's contribution to that 10 MB budget negligible.
+ */
+const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;
 
 const ShareTopicScopeSchema = z.object({
   shareId: z.string(),
@@ -75,6 +93,46 @@ const findVisitorTopicOrThrow = async (
   return topic;
 };
 
+/**
+ * Convert an internal startup failure into a visitor-safe `TRPCError` —
+ * reuses `sanitizeVisitorError` (`packages/database/src/models/message.ts`)
+ * instead of a third ad-hoc redaction. `execAgent`/`interruptTask` can throw
+ * BEFORE any Gateway streaming starts (e.g. the queue or runtime backend
+ * returns a diagnostic), a failure surface neither existing visitor
+ * projection covers — `toVisitorMessage` only runs over persisted rows and
+ * `sanitizeErrorEventDataForVisitor` (`GatewayStreamNotifier.ts`) only runs
+ * over live stream events — so without this, the raw `error.message` (which
+ * can carry the creator's provider/infra diagnostic, since the run executes
+ * under the CREATOR's identity) went straight to the visitor. Logs the raw
+ * error server-side and returns only the classified `{ type }` (or `{
+ * message }` for the narrow allowlisted codes) that `sanitizeVisitorError`
+ * already deems visitor-safe (Codex P2, LOBE-11930).
+ */
+const toVisitorSafeStartupError = (context: string, error: unknown): TRPCError => {
+  log('%s failed: %O', context, error);
+
+  const raw = error as { message?: unknown; type?: unknown } | null | undefined;
+  const safe = sanitizeVisitorError(
+    raw && typeof raw === 'object'
+      ? ({
+          message: typeof raw.message === 'string' ? raw.message : undefined,
+          type: raw.type,
+        } as ChatMessageError)
+      : undefined,
+  );
+
+  // `type` widens to `string | number` (the numeric HTTP-status error codes),
+  // while `TRPCError.message` is `string | undefined` — stringify rather than
+  // drop the numeric codes, which are exactly as visitor-safe as the rest.
+  const publicMessage = safe?.message ?? safe?.type;
+
+  return new TRPCError({
+    cause: error,
+    code: 'INTERNAL_SERVER_ERROR',
+    message: publicMessage === undefined ? 'Internal error' : String(publicMessage),
+  });
+};
+
 export const shareChatRouter = router({
   /**
    * Execute a shared agent as a visitor — the gateway-transport mirror of
@@ -92,7 +150,8 @@ export const shareChatRouter = router({
             userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
           })
           .optional(),
-        prompt: z.string(),
+        /** See `SHARE_VISITOR_PROMPT_MAX_LENGTH`'s JSDoc for the size-bound rationale. */
+        prompt: z.string().max(SHARE_VISITOR_PROMPT_MAX_LENGTH),
         shareId: z.string(),
         /** Absent → the run creates a new visitor topic (counted against the topic cap). */
         topicId: z.string().nullish(),
@@ -248,11 +307,7 @@ export const shareChatRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Failed to execute shared agent: ${error.message}`,
-        });
+        throw toVisitorSafeStartupError('execAgent', error);
       }
     }),
 
@@ -369,11 +424,7 @@ export const shareChatRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Failed to interrupt shared agent task: ${error.message}`,
-        });
+        throw toVisitorSafeStartupError('interruptTask', error);
       }
     }),
 
