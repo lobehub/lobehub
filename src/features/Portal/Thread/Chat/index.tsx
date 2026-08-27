@@ -1,5 +1,6 @@
 'use client';
 
+import { type IThreadType, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
@@ -37,46 +38,47 @@ interface ThreadChatContentProps {
   composerWritable: boolean;
   isHeterogeneousAgent: boolean;
   readOnly: boolean;
+  threadType?: IThreadType;
 }
 
 const ThreadChatContent = memo<ThreadChatContentProps>(
-  ({ composerWritable, isHeterogeneousAgent, readOnly }) => {
+  ({ composerWritable, isHeterogeneousAgent, readOnly, threadType }) => {
     const inputMode = getThreadInputMode({
       isExternallyOwnedThread: readOnly,
       isHeterogeneousAgent,
     });
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-    const threadSourceInfo = useMemo(() => {
-      let sourceMessageIndex = -1;
-      let sourceMessageId: string | undefined;
+    // The thread bucket holds the inherited main-chat history plus the thread's
+    // own messages. The last inherited (threadId-less) message is the fork point.
+    const sourceMessageId = useMemo(
+      () => displayMessages.findLast((msg) => !msg.threadId)?.id,
+      [displayMessages],
+    );
 
-      for (const [i, msg] of displayMessages.entries()) {
-        if (!msg.threadId) {
-          sourceMessageIndex = i;
-          sourceMessageId = msg.id;
-        }
-      }
-
-      return { sourceMessageId, sourceMessageIndex };
-    }, [displayMessages]);
+    // Render only the fork message above the divider — the rest of the main
+    // chat is one click away and re-rendering it here just duplicates it. The
+    // data layer keeps the full history so AI context inheritance is unchanged.
+    const filterItem = useCallback(
+      (msg: UIChatMessage) => !!msg.threadId || msg.id === sourceMessageId,
+      [sourceMessageId],
+    );
 
     const itemContent = useCallback(
       (index: number, id: string) => {
-        const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
-        const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
+        const isSourceMessage = id === sourceMessageId;
 
         return (
           <MessageItem
             inPortalThread
-            disableEditing={readOnly || isParentMessage}
-            endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
+            disableEditing={readOnly || isSourceMessage}
+            endRender={isSourceMessage ? <ThreadDivider threadType={threadType} /> : undefined}
             id={id}
             index={index}
           />
         );
       },
-      [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, readOnly],
+      [sourceMessageId, readOnly, threadType],
     );
 
     return (
@@ -93,7 +95,7 @@ const ThreadChatContent = memo<ThreadChatContentProps>(
             style={{ overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
             width={'100%'}
           >
-            <ChatList itemContent={itemContent} />
+            <ChatList filterItem={filterItem} itemContent={itemContent} />
           </Flexbox>
         </Suspense>
         {composerWritable && inputMode === 'heterogeneous' && <HeterogeneousChatInput />}
@@ -264,6 +266,7 @@ const ThreadChat = memo(() => {
         composerWritable={composerTarget.writable}
         isHeterogeneousAgent={isHeterogeneousAgent}
         readOnly={!composerTarget.writable}
+        threadType={isCreatingNewThread ? newThreadMode : portalThread?.type}
       />
     </ConversationProvider>
   );

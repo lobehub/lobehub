@@ -1,5 +1,6 @@
 'use client';
 
+import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -55,6 +56,13 @@ export interface ChatListProps {
    */
   disableActionsBar?: boolean;
   /**
+   * Optional visibility filter applied to the rendered list only. Data flows
+   * (fetch cache, AI context assembly, message counts) are untouched — used
+   * e.g. by the thread portal to collapse inherited main-chat history down to
+   * the fork message.
+   */
+  filterItem?: (message: UIChatMessage) => boolean;
+  /**
    * Optional content rendered as the last item inside the virtualized list —
    * scrolls with the messages instead of being pinned to the viewport bottom.
    * Used e.g. for the SubAgent read-only hint after the last message.
@@ -87,6 +95,7 @@ const ChatList = memo<ChatListProps>(
   ({
     defaultWorkflowExpandLevel,
     disableActionsBar,
+    filterItem,
     footerSlot,
     headerSlot,
     welcome,
@@ -126,8 +135,12 @@ const ChatList = memo<ChatListProps>(
       isValidating: messagesSWR.isValidating,
       mutate: messagesSWR.mutate,
     });
-    const displayMessages = useConversationStore(dataSelectors.displayMessages);
-    const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
+    const allDisplayMessages = useConversationStore(dataSelectors.displayMessages);
+    const displayMessages = useMemo(
+      () => (filterItem ? allDisplayMessages.filter(filterItem) : allDisplayMessages),
+      [allDisplayMessages, filterItem],
+    );
+    const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
