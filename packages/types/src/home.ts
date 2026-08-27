@@ -80,7 +80,6 @@ export interface SidebarAgentItem {
    */
   name?: string | null;
   pinned: boolean;
-  sessionId?: string | null;
   /**
    * Agent slug. Builtin agents (LobeAI / agent-builder / …) are identified by
    * slug, letting the sidebar hide creator-only actions on official agents.
