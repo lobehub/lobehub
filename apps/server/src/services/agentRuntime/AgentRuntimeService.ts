@@ -80,6 +80,7 @@ import {
   CriticalAgentInterventionPersistenceError,
   extractTextFromMessage,
   findLastAssistantMessage,
+  isAgentShareRun,
   isSuccessLikeCompletionReason,
   normalizeCompletionMessages,
 } from './CompletionLifecycle';
@@ -1994,27 +1995,39 @@ export class AgentRuntimeService {
         // Dispatch beforeStep hooks
         try {
           const beforeStepMetadata = agentState?.metadata || {};
-          const beforeStepSignalEmission = await emitAgentSignalSourceEvent(
-            {
-              payload: {
-                agentId: beforeStepMetadata?.agentId,
-                operationId,
-                serializedContext: undefined,
-                stepIndex,
-                topicId: beforeStepMetadata?.topicId,
-                turnCount: agentState?.stepCount || 0,
-              },
-              sourceId: `${operationId}:before:${stepIndex}`,
-              sourceType: 'runtime.before_step',
-            },
-            {
-              agentId: beforeStepMetadata?.agentId,
-              db: this.serverDB,
-              userId: beforeStepMetadata?.userId || this.userId,
-              workspaceId: this.workspaceId,
-            },
-            { ignoreError: true },
-          );
+          // Agent Share visitor runs execute AS the creator (`userId` above
+          // resolves to the creator, never the visitor — see
+          // `isAgentShareRun`'s JSDoc), so this per-step signal would
+          // otherwise let a link visitor drive creator-scoped Agent Signal
+          // policy processing and Redis windows on every step of every share
+          // run — a much higher-frequency version of the same leak the
+          // completion-signal guard (`CompletionLifecycle.emitSignalEvents`)
+          // closes. Suppress the emission outright rather than re-scope it,
+          // for the same reason: v1 share visitors have no Agent Signal
+          // identity to attribute a `runtime.before_step` event to.
+          const beforeStepSignalEmission = isAgentShareRun(beforeStepMetadata)
+            ? undefined
+            : await emitAgentSignalSourceEvent(
+                {
+                  payload: {
+                    agentId: beforeStepMetadata?.agentId,
+                    operationId,
+                    serializedContext: undefined,
+                    stepIndex,
+                    topicId: beforeStepMetadata?.topicId,
+                    turnCount: agentState?.stepCount || 0,
+                  },
+                  sourceId: `${operationId}:before:${stepIndex}`,
+                  sourceType: 'runtime.before_step',
+                },
+                {
+                  agentId: beforeStepMetadata?.agentId,
+                  db: this.serverDB,
+                  userId: beforeStepMetadata?.userId || this.userId,
+                  workspaceId: this.workspaceId,
+                },
+                { ignoreError: true },
+              );
           beforeStepSignalEvents = toAgentSignalSnapshotEvents(beforeStepSignalEmission);
           await hookDispatcher.dispatch(
             operationId,
@@ -2341,27 +2354,32 @@ export class AgentRuntimeService {
             : undefined;
           const stepLabel = metadata?._stepLabel;
 
+          // See the matching `runtime.before_step` guard above: an Agent
+          // Share visitor run must not drive creator-scoped Agent Signal
+          // processing on `runtime.after_step` either.
           afterStepSignalEvents = toAgentSignalSnapshotEvents(
-            await emitAgentSignalSourceEvent(
-              {
-                payload: {
-                  agentId: metadata?.agentId,
-                  operationId,
-                  serializedContext: undefined,
-                  stepIndex,
-                  topicId: metadata?.topicId,
-                  turnCount: stepResult.newState?.stepCount || 0,
-                },
-                sourceId: `${operationId}:after:${stepIndex}`,
-                sourceType: 'runtime.after_step',
-              },
-              {
-                agentId: metadata?.agentId,
-                db: this.serverDB,
-                userId: metadata?.userId || this.userId,
-              },
-              { ignoreError: true },
-            ),
+            isAgentShareRun(metadata)
+              ? undefined
+              : await emitAgentSignalSourceEvent(
+                  {
+                    payload: {
+                      agentId: metadata?.agentId,
+                      operationId,
+                      serializedContext: undefined,
+                      stepIndex,
+                      topicId: metadata?.topicId,
+                      turnCount: stepResult.newState?.stepCount || 0,
+                    },
+                    sourceId: `${operationId}:after:${stepIndex}`,
+                    sourceType: 'runtime.after_step',
+                  },
+                  {
+                    agentId: metadata?.agentId,
+                    db: this.serverDB,
+                    userId: metadata?.userId || this.userId,
+                  },
+                  { ignoreError: true },
+                ),
           );
 
           await hookDispatcher.dispatch(

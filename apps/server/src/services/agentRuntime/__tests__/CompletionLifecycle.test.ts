@@ -1436,6 +1436,80 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
   });
 });
 
+describe('CompletionLifecycle.emitSignalEvents — Agent Share visitor suppression', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Agent Share visitor runs execute AS the creator (`metadata.userId` is the
+  // creator's id — see `isAgentShareRun`'s JSDoc), so completion signal
+  // emission must be suppressed for BOTH terminal outcomes, not merely the
+  // `notifyAgentRunCompleted` recall covered by the sibling `dispatchHooks`
+  // test — otherwise a link visitor can still inject workload and telemetry
+  // into the creator's Agent Signal pipeline on every run.
+  const shareState = (overrides: Record<string, unknown> = {}) => ({
+    messages: [
+      { content: 'visitor prompt', id: 'msg-user', role: 'user' },
+      { content: 'agent reply', id: 'msg-assistant', role: 'assistant' },
+    ],
+    metadata: {
+      agentId: 'agent-1',
+      agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+      topicId: 'tpc-1',
+      userId: 'user-1',
+    },
+    stepCount: 1,
+    ...overrides,
+  });
+
+  it('does not emit agent.execution.completed for a successful share visitor run', async () => {
+    const emitSpy = vi
+      .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+      .mockResolvedValue(undefined as any);
+    const lifecycle = buildLifecycle();
+
+    const events = await lifecycle.emitSignalEvents('op-1', shareState(), 'done');
+
+    expect(emitSpy).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it('does not emit agent.execution.failed for a failed share visitor run', async () => {
+    const emitSpy = vi
+      .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+      .mockResolvedValue(undefined as any);
+    const lifecycle = buildLifecycle();
+
+    const events = await lifecycle.emitSignalEvents(
+      'op-1',
+      shareState({ error: { message: 'boom' } }),
+      'error',
+    );
+
+    expect(emitSpy).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it.each(['done', 'error'] as const)(
+    'still emits for a normal (non-share) creator run — reason %s',
+    async (reason) => {
+      const emitSpy = vi
+        .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+        .mockResolvedValue(undefined as any);
+      const lifecycle = buildLifecycle();
+
+      const state = shareState({
+        error: reason === 'error' ? { message: 'boom' } : undefined,
+        metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+      });
+
+      await lifecycle.emitSignalEvents('op-1', state, reason);
+
+      expect(emitSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
 describe('CompletionLifecycle.registerFileWorks', () => {
   const mockRegister = vi.mocked(registerWorksForOperation);
 

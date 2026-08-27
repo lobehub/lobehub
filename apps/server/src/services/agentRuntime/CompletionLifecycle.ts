@@ -83,8 +83,15 @@ type SignalEvent = { [key: string]: unknown; type: string };
  * `isHeterogeneousAgentModelId` whenever `shareGate` is set), so every
  * `dispatchHooks` call for a share run carries this marker on `state.metadata`
  * — there is no completion path that reaches here with it silently dropped.
+ *
+ * Exported so every OTHER chokepoint that emits a `userId`-scoped Agent
+ * Signal source event on the runtime's `state`/operation metadata (the
+ * `runtime.before_step` / `runtime.after_step` emissions in
+ * `AgentRuntimeService`) can reuse the exact same check instead of
+ * hand-rolling their own — see that file's `beforeStep`/`afterStep` hook
+ * dispatch for the sibling guard.
  */
-const isAgentShareRun = (metadata: Record<string, unknown> | undefined | null): boolean =>
+export const isAgentShareRun = (metadata: Record<string, unknown> | undefined | null): boolean =>
   Boolean((metadata?.agentShare as { visitorUserId?: string } | undefined)?.visitorUserId);
 
 /**
@@ -474,6 +481,28 @@ export class CompletionLifecycle {
   async emitSignalEvents(operationId: string, state: any, reason: string): Promise<SignalEvent[]> {
     try {
       const { assistantMessageId, metadata } = this.buildLifecycleEvent(operationId, state, reason);
+
+      // Agent Share visitor runs execute AS the creator (`metadata.userId` is
+      // the creator's id — see `isAgentShareRun`'s JSDoc), so every completion
+      // signal below (`agent.execution.completed` / `.failed`) would otherwise
+      // run synchronous policy processing and record creator-scoped Redis
+      // windows/telemetry for a run an anonymous link visitor triggered. Same
+      // root cause and same fix shape as the `notifyAgentRunCompleted` guard
+      // in `dispatchHooks` — suppress the whole emission rather than merely
+      // re-scoping it: v1 share visitors have no Agent Signal identity of
+      // their own to attribute this to, and the underlying turn already ran
+      // through the inbound `agent.user.message` / tool-outcome share gates
+      // (`aiAgent/index.ts`, `agentSignal/procedure/emitToolOutcome.ts`), so
+      // there is no independent signal worth keeping for this turn.
+      if (isAgentShareRun(metadata)) {
+        log(
+          '[completion-lifecycle] skip agent signal emission for share visitor run op=%s reason=%s',
+          operationId,
+          reason,
+        );
+        return [];
+      }
+
       let selfIteration =
         reason === 'error' ? undefined : extractSelfIterationCompletionPayload(state);
       if (reason !== 'error' && !selfIteration) {
