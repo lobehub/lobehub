@@ -9,7 +9,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 30_000,
       description:
-        'Read the content of a text or document file (txt/md/json/source code/pdf/docx/etc.). Binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.',
+        'Read text and document files (txt/md/json/source code/pdf/docx/etc.) or local image files (PNG/JPEG/GIF/WebP). For a local image path, call readFile directly so the image is uploaded as a visual tool result. Never use shell commands to convert images to base64/data URI text or copy encoded image data between tools. Other binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Text output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.',
       humanIntervention: {
         dynamic: {
           default: 'never',

@@ -29,6 +29,27 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for provider image decoding request errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          message:
+            '400 INVALID_ARGUMENT: Failed to decode image data. Please make sure the image is valid.',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+
+    expect(
+      isNonRetryableRequestError({
+        error: { message: 'Unable to process input image' },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for invalid request payload errors', () => {
     expect(
       isNonRetryableRequestError({

@@ -1,3 +1,4 @@
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -383,9 +384,12 @@ describe('MessageContentProcessor', () => {
 
       const result = await processor.process(createContext(messages));
 
-      // Non-vision provider: image parts are dropped, a placeholder signals the
-      // tool produced an image, and the textual result + tool_call_id survive.
-      expect(result.messages[0].content).toBe(`1 result\n\n${VISION_DOWNGRADE_PLACEHOLDER}`);
+      const imageRef = createMediaFileRef({ index: 0, messageId: 'tool-1', type: 'image' });
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain(imageRef);
+      expect(content).toContain('visual-analysis tool');
+      expect(content).not.toContain('http://example.com/screenshot.png');
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
 

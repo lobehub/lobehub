@@ -61,6 +61,7 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'context_length_exceeded',
   'does not support parameter',
   'expected a string',
+  'failed to decode image data',
   'input is too long',
   'input tokens exceed',
   'invalid input',
@@ -84,6 +85,7 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'too many input tokens',
   'unsupported parameter',
   'unrecognized request argument',
+  'unable to process input image',
 ];
 
 const collectErrorStrings = (

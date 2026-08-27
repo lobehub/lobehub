@@ -1085,6 +1085,48 @@ describe('createRouterRuntime', () => {
       expect(mockChatFail).toHaveBeenCalledTimes(1);
     });
 
+    it('should mark image decoding failures as non-retryable for route observers', async () => {
+      const imageDecodeError = {
+        error: {
+          message:
+            '400 INVALID_ARGUMENT: Failed to decode image data. Please make sure the image is valid.',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: 'test',
+        status: 400,
+      };
+      const mockChatFail = vi.fn().mockRejectedValue(imageDecodeError);
+      const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt,
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gemini-vision'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gemini-vision', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(imageDecodeError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+      expect(onRouteAttempt).toHaveBeenCalledTimes(1);
+      expect(onRouteAttempt).toHaveBeenCalledWith(
+        expect.objectContaining({ error: imageDecodeError, nonRetryable: true, success: false }),
+      );
+    });
+
     it('should not retry when the response_format schema is invalid', async () => {
       const invalidSchemaError = {
         errorType: AgentRuntimeErrorType.ProviderBizError,

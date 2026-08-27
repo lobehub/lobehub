@@ -1,3 +1,4 @@
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import { filesPrompts } from '@lobechat/prompts';
 import type { ChatAudioItem, MessageContentPart } from '@lobechat/types';
 import { normalizeAudioDurationMs } from '@lobechat/utils/audio';
@@ -481,8 +482,10 @@ export class MessageContentProcessor extends BaseProcessor {
     // non-http(s) URLs (e.g. desktop-only `localfile://` previews) can't be
     // fetched by the send path.
     const images = Array.isArray(rawImages)
-      ? rawImages.filter(
-          (image: any) => typeof image?.url === 'string' && /^(?:data:|https?:)/.test(image.url),
+      ? rawImages.flatMap((image: any, index: number) =>
+          typeof image?.url === 'string' && /^https?:/i.test(image.url)
+            ? [{ ...image, sourceIndex: index }]
+            : [],
         )
       : [];
 
@@ -503,12 +506,23 @@ export class MessageContentProcessor extends BaseProcessor {
     }
 
     // Vision not supported: drop the image parts but surface a placeholder so
-    // the model still knows the tool produced an image it can't inspect.
+    // the model can pass a stable opaque ref to the visual-analysis fallback.
+    // The signed URL stays out of model-visible text, which prevents the model
+    // from copying opaque image data between tool calls.
     if (!canUseVision) {
-      const placeholders = Array.from(
-        { length: images.length },
-        () => VISION_DOWNGRADE_PLACEHOLDER,
-      ).join('\n');
+      const placeholders = images
+        .map(({ sourceIndex }) => {
+          if (!message.id) return VISION_DOWNGRADE_PLACEHOLDER;
+
+          const ref = createMediaFileRef({
+            index: sourceIndex,
+            messageId: message.id,
+            type: 'image',
+          });
+
+          return `[image omitted: native vision is not supported. Media ref: ${ref}. Do not infer or describe the image. Use an available visual-analysis tool with this ref before answering.]`;
+        })
+        .join('\n');
       const content = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
 
       return { ...message, content };

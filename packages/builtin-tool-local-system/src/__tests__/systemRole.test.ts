@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { LocalSystemManifest } from '../manifest';
 import { systemPrompt as genericPrompt } from '../systemRole';
 import { systemPrompt as desktopPrompt } from '../systemRole.desktop';
 
@@ -25,6 +26,18 @@ describe('systemRole templates', () => {
     for (const template of [genericPrompt, desktopPrompt]) {
       expect(template).toContain('{{defaultShell}}');
       expect(template).toContain('{{shellSyntaxGuidance}}');
+    }
+  });
+
+  it('teaches agents to read local images directly without copying base64', () => {
+    const readFile = LocalSystemManifest.api.find((api) => api.name === 'readFile');
+
+    expect(readFile?.description).toContain('PNG');
+    expect(readFile?.description).toContain('base64');
+
+    for (const template of [genericPrompt, desktopPrompt]) {
+      expect(template).toContain('readFile');
+      expect(template).toContain('base64');
     }
   });
 });

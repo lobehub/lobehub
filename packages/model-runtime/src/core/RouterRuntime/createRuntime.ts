@@ -110,6 +110,7 @@ export interface RouteAttemptResult {
   error?: unknown;
   metadata?: Record<string, unknown>;
   model: string;
+  nonRetryable?: boolean;
   optionIndex: number;
   providerId: string;
   remark?: string;
@@ -754,6 +755,8 @@ export const createRouterRuntime = ({
             );
           }
 
+          const nonRetryable = isNonRetryableRequestError(error);
+
           params
             .onRouteAttempt?.({
               apiType: resolvedApiType,
@@ -762,6 +765,7 @@ export const createRouterRuntime = ({
               error,
               metadata,
               model,
+              nonRetryable,
               optionIndex: index,
               providerId: id,
               remark,
@@ -773,7 +777,7 @@ export const createRouterRuntime = ({
               log('onRouteAttempt callback error: %O', e);
             });
 
-          if (isNonRetryableRequestError(error)) {
+          if (nonRetryable) {
             throw error;
           }
 
