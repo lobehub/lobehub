@@ -358,8 +358,7 @@ export interface TopicModelOptions {
    * .interruptTask` could no longer find the topic to authorize the stop, and
    * the run kept consuming the creator's tools/budget until it finished on
    * its own. Same shape as `AgentModelOptions.onShareRunsInterrupted` /
-   * `SessionModelOptions.onShareRunsInterrupted` — kept in sync. See
-   * LOBE-11930.
+   * `SessionModelOptions.onShareRunsInterrupted` — kept in sync.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -1145,8 +1144,7 @@ export class TopicModel {
    * disable → re-enable cycle (`deleteByAgentId` hard-deletes the row,
    * `create()` inserts a fresh one), so `senderId` alone would resurface a
    * returning visitor's conversations from a share instance the owner
-   * already took down. See `topics.shareId`'s JSDoc (`../schemas/topic.ts`)
-   * and LOBE-11930 codex P2.
+   * already took down. See `topics.shareId`'s JSDoc (`../schemas/topic.ts`).
    *
    * Selects a visitor-facing DTO instead of the full row: the visitor surface
    * only renders id/title, and the row also carries creator-only fields
@@ -1183,7 +1181,7 @@ export class TopicModel {
    * `queryBySender`: without it, topics from a share instance the owner
    * already disabled would count against a brand-new instance's cap,
    * potentially making it unusable immediately after re-enabling. See
-   * `topics.shareId`'s JSDoc and LOBE-11930 codex P2.
+   * `topics.shareId`'s JSDoc.
    */
   countBySender = async ({
     agentId,
@@ -1220,7 +1218,13 @@ export class TopicModel {
    * snapshot guards (e.g. `inArray(topics.id, ids)`, `matchSession(...)`,
    * `matchGroup(...)`, or omitted entirely for `deleteAll`) so the snapshot
    * and the delete never drift apart. See `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * .onShareRunsInterrupted`'s JSDoc.
+   *
+   * The "has a running operation" predicate is written as a COALESCE
+   * comparison rather than `IS NOT NULL`: an `IS [NOT] NULL` test on an
+   * *extracted* jsonb value takes the query planner down at PLAN time on
+   * bm25-indexed tables, and `topics` carries such an index.
+   * `jsonbNullTest.test.ts` guards the shape.
    */
   private findActiveVisitorRunTopicsMatching = async (
     extraMatch?: SQL,
@@ -1232,7 +1236,7 @@ export class TopicModel {
         and(
           this.mine(),
           isNotNull(topics.senderId),
-          sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+          sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
           extraMatch,
         ),
       );
@@ -1260,7 +1264,7 @@ export class TopicModel {
    * `SQL` predicate is only safe to pass from code that also owns the
    * corresponding delete's WHERE clause (this class), whereas an id list is a
    * safe, narrow contract for any caller. See `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * .onShareRunsInterrupted`'s JSDoc.
    */
   findActiveVisitorRunTopicsByIds = async (topicIds: string[]): Promise<ActiveShareRun[]> => {
     if (topicIds.length === 0) return [];
@@ -1310,7 +1314,7 @@ export class TopicModel {
           this.mine(),
           eq(topics.agentId, agentId),
           isNotNull(topics.senderId),
-          sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+          sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
           revocationGeneration === undefined
             ? undefined
             : sql`COALESCE((${topics.metadata} -> 'runningOperation' ->> 'shareGeneration')::int, 0) < ${revocationGeneration}`,
@@ -1352,8 +1356,8 @@ export class TopicModel {
    * that produced it (see `bumpAgentShareGeneration`) — not from the
    * caller's own current tenant scope — so matching on `agentId` alone,
    * with no `userId`/`workspaceId` filter at all, is both correct and
-   * sufficient regardless of how many times the agent has moved since. See
-   * LOBE-11930 (the double-transfer window).
+   * sufficient regardless of how many times the agent has moved since,
+   * including the double-transfer window.
    *
    * Also returns each row's raw `metadata` (unlike the sibling method) so
    * `interruptActiveShareRuns` can pass it straight into `interruptTask`,
@@ -1372,7 +1376,7 @@ export class TopicModel {
         and(
           eq(topics.agentId, agentId),
           isNotNull(topics.senderId),
-          sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+          sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
           revocationGeneration === undefined
             ? undefined
             : sql`COALESCE((${topics.metadata} -> 'runningOperation' ->> 'shareGeneration')::int, 0) < ${revocationGeneration}`,
@@ -1650,7 +1654,7 @@ export class TopicModel {
    *
    * Snapshots in-flight Agent Share visitor runs matching this exact session
    * scope BEFORE the delete — see `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * .onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteBySessionId = async (
     sessionId?: string | null,
@@ -1686,7 +1690,7 @@ export class TopicModel {
    *
    * Snapshots in-flight Agent Share visitor runs matching this exact group
    * scope BEFORE the delete — see `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   * .onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteByGroupId = async (
     groupId?: string | null,
@@ -1724,7 +1728,7 @@ export class TopicModel {
    * Snapshots in-flight Agent Share visitor runs on this agent BEFORE the
    * delete via the same `findActiveVisitorRunTopics` every other agent-scoped
    * deletion path uses — see `TopicModelOptions.onShareRunsInterrupted`'s
-   * JSDoc and LOBE-11930.
+   * JSDoc.
    */
   batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
     let activeShareRuns: ActiveShareRun[] = [];
@@ -1756,7 +1760,7 @@ export class TopicModel {
    *
    * Snapshots in-flight Agent Share visitor runs among this exact id set
    * BEFORE the delete — see `TopicModelOptions.onShareRunsInterrupted`'s
-   * JSDoc and LOBE-11930.
+   * JSDoc.
    */
   batchDelete = async (ids: string[]) => {
     let activeShareRuns: ActiveShareRun[] = [];
@@ -1784,8 +1788,8 @@ export class TopicModel {
    * BEFORE the delete, not just one agent's: unlike `batchDeleteByAgentId`,
    * this sweep is not scoped to a single agent, so it uses the scope-generic
    * `findActiveVisitorRunTopicsMatching` with no extra predicate — the exact
-   * bug this method previously had (LOBE-11930's "bulk topic deletion"
-   * report): a visitor's running topic was deleted with no interrupt, the
+   * bulk-topic-deletion bug this method previously had: a visitor's running
+   * topic was deleted with no interrupt, the
    * operation row survived with `topicId` set to null, and the visitor's
    * `shareChat.interruptTask` could no longer find the topic to authorize the
    * stop. See `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
