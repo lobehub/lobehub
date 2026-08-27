@@ -6,6 +6,7 @@ import {
   getEditorAttachmentStateFromJson,
   getExistingEditorAttachment,
   insertExistingAttachmentsIntoEditor,
+  preservePendingFileNodeSize,
 } from './editorAttachments';
 
 describe('getEditorAttachmentStateFromJson', () => {
@@ -62,8 +63,28 @@ describe('insertExistingAttachmentsIntoEditor', () => {
     const placeholderFile = dispatchCommand.mock.calls[0][1].file as File;
     expect(placeholderFile).toBeInstanceOf(File);
     expect(placeholderFile.name).toBe(attachment.name);
+    expect(placeholderFile.size).toBe(attachment.size);
     expect(getExistingEditorAttachment(placeholderFile)).toEqual(attachment);
     expect(getFileIdForUrl(attachment.url)).toBe(attachment.fileId);
     expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists the source size on the pending file node', () => {
+    const writable = { __size: undefined as number | undefined };
+    const fileNode = {
+      getType: () => 'file',
+      getWritable: () => writable,
+      name: 'roadmap.pdf',
+      size: undefined,
+      status: 'pending',
+    };
+    const root = {
+      getChildren: () => [fileNode],
+      getType: () => 'root',
+    };
+    const file = new File(['content'], 'roadmap.pdf', { type: 'application/pdf' });
+
+    expect(preservePendingFileNodeSize(root as never, file)).toBe(true);
+    expect(writable.__size).toBe(file.size);
   });
 });

@@ -4,7 +4,8 @@ import {
   INSERT_FILE_COMMAND,
   INSERT_IMAGE_COMMAND,
 } from '@lobehub/editor';
-import type { SerializedEditorState } from 'lexical';
+import type { ElementNode, LexicalNode, SerializedEditorState } from 'lexical';
+import { $getRoot, $getSelection, $isElementNode, $isRangeSelection } from 'lexical';
 
 import { getFileIdForUrl, registerAttachment } from './attachmentRegistry';
 
@@ -17,6 +18,14 @@ export interface ExistingEditorAttachment {
 }
 
 const existingAttachmentByFile = new WeakMap<File, ExistingEditorAttachment>();
+
+interface FileNodeWithSize {
+  __size?: number;
+  getWritable: () => FileNodeWithSize;
+  name: string;
+  size?: number;
+  status?: 'pending' | 'uploaded' | 'error';
+}
 
 export interface EditorAttachmentState {
   hasCompletedAttachments: boolean;
@@ -57,6 +66,51 @@ export const getEditorAttachmentStateFromJson = (json: unknown): EditorAttachmen
 
 export const getExistingEditorAttachment = (file: File): ExistingEditorAttachment | undefined =>
   existingAttachmentByFile.get(file);
+
+const getChildren = (node: LexicalNode): LexicalNode[] =>
+  'getChildren' in node ? (node as ElementNode).getChildren() : [];
+
+/**
+ * The editor's file command currently creates its node with only the filename.
+ * It invokes the upload handler from the same Lexical update, so persist the
+ * source File size on that newly inserted pending node before the upload starts.
+ */
+export const preservePendingFileNodeSize = (root: LexicalNode, file: File): boolean => {
+  const pending: LexicalNode[] = [root];
+
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node) continue;
+
+    if (node.getType() === 'file') {
+      const fileNode = node as unknown as FileNodeWithSize;
+      if (
+        fileNode.name === file.name &&
+        fileNode.status === 'pending' &&
+        fileNode.size === undefined
+      ) {
+        fileNode.getWritable().__size = file.size;
+        return true;
+      }
+    }
+    pending.push(...getChildren(node));
+  }
+
+  return false;
+};
+
+export const preserveInsertedFileSize = (file: File): void => {
+  const selection = $getSelection();
+  if ($isRangeSelection(selection)) {
+    const anchorNode = selection.anchor.getNode();
+    const candidate = $isElementNode(anchorNode)
+      ? anchorNode.getChildAtIndex(selection.anchor.offset - 1)
+      : anchorNode.getPreviousSibling();
+    if (candidate && preservePendingFileNodeSize(candidate, file)) return;
+  }
+
+  preservePendingFileNodeSize($getRoot(), file);
+};
 
 /**
  * URLs that have no registered fileId (e.g. externally pasted image URLs)
@@ -116,6 +170,7 @@ export const insertExistingAttachmentsIntoEditor = (
 
   for (const attachment of attachments) {
     const file = new File([], attachment.name, { type: attachment.fileType });
+    Object.defineProperty(file, 'size', { value: attachment.size });
     existingAttachmentByFile.set(file, attachment);
     registerAttachment(attachment.url, attachment.fileId);
     lexicalEditor.dispatchCommand(INSERT_FILE_COMMAND, { file });

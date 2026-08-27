@@ -11,6 +11,7 @@ import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import { shouldIgnoreResourceEvent } from './resourceEventUtils';
 import { usePageEditorStore } from './store';
 
 const buildHeaders = async (): Promise<Record<string, string>> => {
@@ -80,8 +81,9 @@ export const useResourceEvents = () => {
             } catch {
               return;
             }
-            // Ignore our own echoes.
-            if (parsed.actorId && parsed.actorId === myUserId) return;
+            // Content and lock mutations are already reflected locally, but comment
+            // events must reach another window signed in as the same account.
+            if (shouldIgnoreResourceEvent(parsed, myUserId)) return;
 
             if (parsed.type === 'doc.updated') {
               // Re-fetch; DocumentIdMode re-hydrates the editor on the new
