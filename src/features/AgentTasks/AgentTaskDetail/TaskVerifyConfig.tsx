@@ -32,8 +32,8 @@ import {
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify/CriterionList';
-import { useRubrics } from '@/features/Verify/hooks';
+} from '@/features/Acceptance/CriterionList';
+import { useRubrics } from '@/features/Acceptance/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
@@ -74,6 +74,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
   `,
   section: css`
+    padding-block: 12px;
     padding-inline: 12px;
   `,
   subtitle: css`

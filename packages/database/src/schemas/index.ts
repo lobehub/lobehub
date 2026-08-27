@@ -4,6 +4,7 @@ export * from './agentCronJob';
 export * from './agentDocuments';
 export * from './agentEvals';
 export * from './agentHistoryJob';
+export * from './agentIntervention';
 export * from './agentLabel';
 export * from './agentOperations';
 export * from './agentQuota';

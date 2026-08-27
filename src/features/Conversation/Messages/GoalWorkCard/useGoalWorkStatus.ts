@@ -1,4 +1,4 @@
-import { useAcceptanceBundle, useAcceptanceBySubject } from '@/features/Verify';
+import { useAcceptanceBundle, useAcceptanceBySubject } from '@/features/Acceptance';
 import { useTaskStore } from '@/store/task';
 
 import { getGoalWorkProgress } from './goalWorkProgress';

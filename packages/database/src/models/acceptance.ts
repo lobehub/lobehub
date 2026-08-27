@@ -75,6 +75,39 @@ export class AcceptanceModel {
   };
 
   /**
+   * Resolve an execution policy for a subject. Unlike report-facing reads,
+   * workspace policy lookup is shared by every workspace member: a private
+   * Acceptance controls the shared Task even when another member executes it.
+   * Personal scope remains owner-isolated.
+   */
+  findPolicyBySubject = async (subjectType: AcceptanceSubjectType, subjectId: string) => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+
+    return this.db.query.acceptances.findFirst({
+      where: and(
+        eq(acceptances.subjectType, subjectType),
+        eq(acceptances.subjectId, subjectId),
+        policyScope,
+      ),
+    });
+  };
+
+  /** Internal execution-policy lookup by id, independent of report visibility. */
+  findPolicyById = async (id: string) => {
+    if (!isUuid(id)) return undefined;
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.query.acceptances.findFirst({
+      where: and(eq(acceptances.id, id), policyScope),
+    });
+  };
+
+  /**
    * The status of many subjects' acceptances in one read — for list surfaces
    * that must know each row's state without a request per row. Exact where the
    * recency-capped `query()` is not: it answers about the subjects asked for,
@@ -180,6 +213,38 @@ export class AcceptanceModel {
       .where(and(eq(acceptances.id, id), this.ownership()))
       .returning();
     return row;
+  };
+
+  /** Internal policy write counterpart to `findPolicyBySubject`. */
+  updatePolicy = async (
+    id: string,
+    value: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    const [row] = await this.db
+      .update(acceptances)
+      .set(value)
+      .where(and(eq(acceptances.id, id), policyScope))
+      .returning();
+    return row;
+  };
+
+  /** Internal lifecycle transition counterpart to `updateStatus`. */
+  updatePolicyStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    await this.db
+      .update(acceptances)
+      .set({
+        completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(status) ? new Date() : null,
+        status,
+      })
+      .where(and(eq(acceptances.id, id), policyScope));
   };
 
   /**

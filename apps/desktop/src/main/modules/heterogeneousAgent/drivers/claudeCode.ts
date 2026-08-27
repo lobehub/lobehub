@@ -4,6 +4,7 @@ import {
   sanitizeClaudeCodeDirectEnv,
 } from '@lobechat/heterogeneous-agents';
 import { CLAUDE_CODE_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
+import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
@@ -59,6 +60,20 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
       env: {
         ...sanitizeClaudeCodeDirectEnv(env),
         ...direct.env,
+        CLAUDE_CONFIG_DIR: profileDir,
+      },
+    };
+  },
+  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+    const requestModel = formatServerDefaultHeterogeneousModel(model);
+    return {
+      args: [...sanitizeClaudeCodeDirectArgs(args), '--model', requestModel],
+      env: {
+        ...sanitizeClaudeCodeDirectEnv(env),
+        ANTHROPIC_BASE_URL: `${endpoint}/api/v1/anthropic`,
+        ANTHROPIC_MODEL: requestModel,
+        ANTHROPIC_SMALL_FAST_MODEL: requestModel,
+        CLAUDE_CODE_SUBAGENT_MODEL: requestModel,
         CLAUDE_CONFIG_DIR: profileDir,
       },
     };

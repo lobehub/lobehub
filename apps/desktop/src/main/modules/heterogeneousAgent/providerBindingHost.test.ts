@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   gcHostedProviderBindingProfiles,
   prepareHostedProviderBinding,
+  prepareHostedServerDefaultBinding,
 } from './providerBindingHost';
 import type { HeterogeneousAgentDriver } from './types';
 
@@ -25,7 +26,10 @@ const makeParams = async (driver: HeterogeneousAgentDriver) => {
     appStoragePath,
     args: [],
     driver,
-    reference: { apiConfig: { model: 'gpt-test', providerId: 'provider-test' } },
+    reference: {
+      apiConfig: { model: 'gpt-test', providerId: 'provider-test' },
+      kind: 'provider' as const,
+    },
     resolution: {
       agentType: 'codex' as const,
       apiConfig: { model: 'gpt-test', providerId: 'provider-test' },
@@ -81,6 +85,65 @@ describe('prepareHostedProviderBinding', () => {
     await expect(
       stat(path.join(params.appStoragePath, 'heteroAgent', 'runs', params.sessionId)),
     ).rejects.toThrow();
+  });
+});
+
+describe('prepareHostedServerDefaultBinding', () => {
+  // Mirrors claude-code: the plan writes no profileFiles, so the profile
+  // directory itself is never touched after creation (transcripts land in
+  // subdirectories, which do not update the root mtime).
+  const claudeCodeLikeDriver: HeterogeneousAgentDriver = {
+    buildSpawnPlan: async () => ({ args: [] }),
+    prepareServerDefaultBinding: ({ profileDir }) => ({
+      args: [],
+      env: { CLAUDE_CONFIG_DIR: profileDir },
+    }),
+  };
+
+  const makeServerDefaultParams = async () => {
+    const appStoragePath = await mkdtemp(path.join(tmpdir(), 'server-default-binding-host-'));
+    roots.push(appStoragePath);
+    return {
+      agentType: 'claude-code',
+      appStoragePath,
+      args: [],
+      driver: claudeCodeLikeDriver,
+      endpoint: 'https://example.com',
+      model: 'lobehub-default',
+      sessionId: 'session-test',
+    };
+  };
+
+  it('creates private profile/run directories and cleans only the run', async () => {
+    const binding = await prepareHostedServerDefaultBinding(await makeServerDefaultParams());
+
+    expect((await stat(binding.profileDir)).mode & 0o777).toBe(0o700);
+    expect((await stat(binding.runDir)).mode & 0o777).toBe(0o700);
+
+    await binding.cleanup();
+    await expect(stat(binding.runDir)).rejects.toThrow();
+    await expect(stat(binding.profileDir)).resolves.toBeDefined();
+  });
+
+  it('records last use on prepare so GC never collects an in-use profile', async () => {
+    const params = await makeServerDefaultParams();
+    const binding = await prepareHostedServerDefaultBinding(params);
+    const marker = path.join(binding.profileDir, '.lobehub-last-used');
+    await expect(stat(marker)).resolves.toBeDefined();
+
+    // Regression: the profile root mtime stays at creation for claude-code
+    // server-default profiles. Only the marker may keep them alive.
+    const staleTime = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await utimes(binding.profileDir, staleTime, staleTime);
+
+    const removed = await gcHostedProviderBindingProfiles(params.appStoragePath);
+    expect(removed).toEqual([]);
+    await expect(stat(binding.profileDir)).resolves.toBeDefined();
+
+    // The same profile, idle beyond the max age, is still collected.
+    await utimes(marker, staleTime, staleTime);
+    const collected = await gcHostedProviderBindingProfiles(params.appStoragePath);
+    expect(collected).toEqual([binding.profileDir]);
   });
 });
 

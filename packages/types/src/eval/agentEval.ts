@@ -3,6 +3,8 @@
  * Defines test cases, run configurations, and metadata for agent evaluation
  */
 
+import type { ImportedMessage } from '../export';
+
 export type { RubricType as EvalMode } from './rubric';
 
 export interface EvalConfig {
@@ -22,6 +24,8 @@ export interface EvalToolForwardingTarget {
 
 /** Per-test-case runtime configuration used only by eval trajectories. */
 export interface EvalCaseEnvironment {
+  /** Case-specific system context appended after the dataset eval prompt. */
+  envPrompt?: string;
   toolForwarding?: EvalToolForwardingConfig;
 }
 
@@ -34,6 +38,8 @@ export interface EvalTestCaseContent {
   environment?: EvalCaseEnvironment;
   expected?: string;
   input: string;
+  /** Conversation history restored into the eval topic before `input` is sent. */
+  messages?: ImportedMessage[];
 }
 
 /**

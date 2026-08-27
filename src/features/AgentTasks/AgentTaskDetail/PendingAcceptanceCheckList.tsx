@@ -5,7 +5,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleDashed } from 'lucide-react';
 import { memo } from 'react';
 
-import { CriterionList, CriterionRow, shouldGroupChecks } from '@/features/Verify';
+import { CriterionList, CriterionRow, shouldGroupChecks } from '@/features/Acceptance';
 
 const styles = createStaticStyles(({ css }) => ({
   groupHeader: css`

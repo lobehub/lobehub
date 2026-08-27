@@ -39,6 +39,13 @@ import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
+  /**
+   * The underlying `files.id` when the row is a file. The unified resource
+   * list addresses a file that backs a derived page by the PAGE id
+   * (`COALESCE(d.id, f.id)` in KnowledgeRepo), so `id` alone cannot be used
+   * for file-table lookups such as the messenger push.
+   */
+  fileId?: string | null;
   filename: string;
   fileType: string;
   id: string;
@@ -62,6 +69,7 @@ interface UseFileItemDropdownReturn {
  * Shared with folder tree and explorer
  */
 export const useFileItemDropdown = ({
+  fileId,
   id,
   libraryId,
   url,
@@ -123,10 +131,12 @@ export const useFileItemDropdown = ({
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
   // Pages/documents have no storage URL to attach, so only real files get the
-  // "Send to chat platform" entry.
+  // "Send to chat platform" entry. The server resolves the attachment by
+  // `files.id`, but a file that backs a derived page is listed under the PAGE
+  // id — always prefer the row's underlying `fileId` when it carries one.
   const sendToMessengerItem = useSendToMessengerMenuItem({
     enabled: !isFolder && !isPage && !!url,
-    file: { fileType, id, name: filename, size },
+    file: { fileType, id: fileId ?? id, name: filename, size },
   });
 
   const menuItems = useCallback(() => {

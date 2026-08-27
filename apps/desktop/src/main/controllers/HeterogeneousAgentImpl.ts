@@ -81,6 +81,7 @@ import {
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeterogeneousServerDefaultApiConfig,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -104,8 +105,14 @@ import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/provide
 import {
   gcHostedProviderBindingProfiles,
   prepareHostedProviderBinding,
+  prepareHostedServerDefaultBinding,
 } from '@/modules/heterogeneousAgent/providerBindingHost';
-import { getProviderBindingRuntime } from '@/modules/heterogeneousAgent/providerBindingPort';
+import {
+  beginServerDefaultOperation,
+  getProviderBindingRuntime,
+  getServerDefaultEndpoint,
+  settleServerDefaultOperation,
+} from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -358,6 +365,9 @@ interface AgentSession {
   resolvedCommandSearchPath?: string;
   resumeSessionId?: string;
   sdkSession?: ClaudeAgentSdkSession;
+  /** Present iff the session runs on the server-default (LobeHub) binding. */
+  serverDefaultApiConfig?: HeterogeneousServerDefaultApiConfig;
+  serverOperationToken?: string;
   sessionId: string;
   traeAcpSession?: TraeAcpSession;
   useClaudeCodeSdk?: boolean;
@@ -756,7 +766,7 @@ export default class HeterogeneousAgentCtr {
     // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
     if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
-    return {
+    const env: NodeJS.ProcessEnv = {
       ...inheritedEnv,
       ...proxyEnv,
       ...(session.agentType === 'codebuddy'
@@ -764,6 +774,12 @@ export default class HeterogeneousAgentCtr {
         : {}),
       ...session.env,
     };
+    if (session.serverOperationToken) {
+      if (session.agentType === 'claude-code')
+        env.ANTHROPIC_AUTH_TOKEN = session.serverOperationToken;
+      if (session.agentType === 'codex') env.LOBEHUB_HETERO_TOKEN = session.serverOperationToken;
+    }
+    return env;
   }
 
   private get shouldTraceCliOutput(): boolean {
@@ -1166,7 +1182,7 @@ export default class HeterogeneousAgentCtr {
     const driver = getHeterogeneousAgentDriver(agentType);
     let hostedProviderBinding: HostedProviderBinding | undefined;
 
-    if (params.providerBinding) {
+    if (params.providerBinding && params.providerBinding.kind !== 'server-default') {
       const bindingRuntime = await getProviderBindingRuntime(
         this.remoteServerAuth,
         params.providerBinding,
@@ -1205,6 +1221,17 @@ export default class HeterogeneousAgentCtr {
             logger.info('Removed stale provider-binding profiles:', removedProfiles);
         })
         .catch((error) => logger.warn('Provider-binding profile GC failed:', error));
+    } else if (params.providerBinding?.kind === 'server-default') {
+      hostedProviderBinding = await prepareHostedServerDefaultBinding({
+        agentType,
+        appStoragePath: this.app.appStoragePath,
+        args: params.args || [],
+        driver,
+        endpoint: await getServerDefaultEndpoint(this.remoteServerAuth),
+        env: params.env,
+        model: params.providerBinding.apiConfig.model,
+        sessionId,
+      });
     }
 
     const resumeSessionId =
@@ -1222,6 +1249,10 @@ export default class HeterogeneousAgentCtr {
       cwd: params.cwd,
       env: hostedProviderBinding?.env ?? params.env,
       hostedProviderBinding,
+      serverDefaultApiConfig:
+        params.providerBinding?.kind === 'server-default'
+          ? params.providerBinding.apiConfig
+          : undefined,
       model: params.initialModel,
       sessionId,
       resumeSessionId,
@@ -1246,8 +1277,44 @@ export default class HeterogeneousAgentCtr {
    */
   async sendPrompt(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
+    if (session) session.cancelledByUs = false;
+    const serverDefaultApiConfig = session?.serverDefaultApiConfig;
+    if (!session || !serverDefaultApiConfig) return this.sendPromptImpl(params);
+    if (!params.topicId) throw new Error('Server-default execution requires a topic');
+    if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
+      throw new Error(`Server-default execution does not support ${session.agentType}`);
+    }
+
+    const operation = await beginServerDefaultOperation(this.remoteServerAuth, {
+      agentType: session.agentType,
+      agentId: params.agentId,
+      model: serverDefaultApiConfig.model,
+      operationId: params.operationId,
+      topicId: params.topicId,
+    });
+    let result: 'done' | 'error' = 'error';
+    try {
+      if (session.cancelledByUs) {
+        await this.completeCancelledSessionBeforeLaunch(session);
+        return;
+      }
+
+      session.serverOperationToken = operation.token;
+      await this.sendPromptImpl(params);
+      if (!session.cancelledByUs) result = 'done';
+    } finally {
+      session.serverOperationToken = undefined;
+      await settleServerDefaultOperation(this.remoteServerAuth, {
+        cancelled: session.cancelledByUs,
+        operationId: params.operationId,
+        result,
+      }).catch((error) => logger.warn('Failed to settle server-default operation:', error));
+    }
+  }
+
+  private async sendPromptImpl(params: SendPromptParams): Promise<void> {
+    const session = this.sessions.get(params.sessionId);
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
-    session.cancelledByUs = false;
 
     let preflightError;
     try {
@@ -1255,6 +1322,10 @@ export default class HeterogeneousAgentCtr {
     } catch (error) {
       await session.hostedProviderBinding?.cleanup();
       throw error;
+    }
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
     }
     if (preflightError) {
       this.broadcast('heteroAgentSessionError', {
@@ -1442,6 +1513,15 @@ export default class HeterogeneousAgentCtr {
       await session.hostedProviderBinding?.cleanup();
       throw err;
     }
+
+    if (session.cancelledByUs) {
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after pre-launch cancellation:', cleanupError);
+      });
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const useStdin = spawnPlan.stdinPayload !== undefined;
 
     logger.info(
@@ -1500,6 +1580,11 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private async completeCancelledSessionBeforeLaunch(session: AgentSession): Promise<void> {
+    await session.hostedProviderBinding?.cleanup();
+    this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+  }
+
   private async sendPromptWithClaudeSdk(
     params: SendPromptParams,
     session: AgentSession,
@@ -1521,6 +1606,11 @@ export default class HeterogeneousAgentCtr {
     });
 
     void this.writeCliTraceFile(traceSession, 'stdin.txt', stdinPayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
 
     const sdkSession = new ClaudeAgentSdkSession({
       args: session.args,
@@ -1637,6 +1727,11 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: inputPayload,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', inputPayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return true;
+    }
 
     const clientOptions = {
       args: appServerArgs.slice(0, -1),
@@ -1814,6 +1909,12 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: traceInput,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', traceInput);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const acpSession = new GrokAcpSession({
       args: session.args,
       clientVersion: electronApp.getVersion(),
@@ -1906,6 +2007,12 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: tracePayload,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const stderrChunks: string[] = [];
     const intervention = this.setupAcpInterventionForOp(params.operationId, session.sessionId);
     const cursorAcpSession = new CursorAcpSession({
@@ -1998,6 +2105,12 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: tracePayload,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const stderrChunks: string[] = [];
 
     const traeAcpSession = new TraeAcpSession({

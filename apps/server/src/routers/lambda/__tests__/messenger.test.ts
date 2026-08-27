@@ -920,6 +920,9 @@ describe('messengerRouter.sendMessengerPush', () => {
             mimeType: 'application/pdf',
             name: 'report.pdf',
             size: 123_456,
+            // Server-generated from a row this caller owns, which is what lets
+            // the outbound guard accept our own private origins for it.
+            trustedUrl: true,
             type: 'file',
           },
         ],

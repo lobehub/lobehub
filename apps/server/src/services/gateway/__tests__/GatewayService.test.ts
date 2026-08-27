@@ -10,6 +10,7 @@ const mockGatewayClient = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   disconnectAll: vi.fn(),
+  getCapabilities: vi.fn(),
   getRegisteredIds: vi.fn(),
   getStats: vi.fn(),
   getStatus: vi.fn(),
@@ -21,6 +22,22 @@ const mockGatewayEnv = vi.hoisted(() => ({
   MESSAGE_GATEWAY_ENABLED: undefined as string | undefined,
   MESSAGE_GATEWAY_SERVICE_TOKEN: 'gateway-service-token' as string | undefined,
 }));
+
+// Second gateway host (Node). `configured` + `platforms` drive the mocked
+// host-routing helpers below, mirroring MESSAGE_GATEWAY_NODE_URL /
+// MESSAGE_GATEWAY_NODE_PLATFORMS.
+const mockNodeGatewayClient = vi.hoisted(() => ({
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  disconnectAll: vi.fn(),
+  getCapabilities: vi.fn(),
+  getRegisteredIds: vi.fn(),
+  getStats: vi.fn(),
+  getStatus: vi.fn(),
+  isConfigured: false,
+  isEnabled: false,
+}));
+const mockNodeGateway = vi.hoisted(() => ({ configured: false, platforms: [] as string[] }));
 
 const mockGatewayManager = vi.hoisted(() => ({
   isRunning: false,
@@ -49,8 +66,40 @@ vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockGatewayEnv,
 }));
 
-vi.mock('../MessageGatewayClient', () => ({
-  getMessageGatewayClient: () => mockGatewayClient,
+vi.mock('../MessageGatewayClient', () => {
+  const resolveMessageGatewayHost = (platform?: string) =>
+    mockNodeGateway.configured && platform && mockNodeGateway.platforms.includes(platform)
+      ? 'node'
+      : 'default';
+  return {
+    getConfiguredMessageGatewayHosts: () =>
+      mockNodeGateway.configured ? ['default', 'node'] : ['default'],
+    getMessageGatewayClient: (platform?: string) =>
+      resolveMessageGatewayHost(platform) === 'node' ? mockNodeGatewayClient : mockGatewayClient,
+    getMessageGatewayClientForHost: (host: string) =>
+      host === 'node' ? mockNodeGatewayClient : mockGatewayClient,
+    // Production anchors gateway mode on the DEFAULT host: every platform not
+    // routed to node falls back to it, and the node gateway cannot host those
+    // platform kinds at all.
+    isAnyMessageGatewayEnabled: () => mockGatewayClient.isEnabled,
+    isMessageGatewayHostConfigured: (host: string) => {
+      const client = host === 'node' ? mockNodeGatewayClient : mockGatewayClient;
+      // Production defines isEnabled as (ENABLED === '1' && isConfigured), so
+      // an enabled client is configured by construction. These fixtures set
+      // the two flags independently, so mirror the real implication here
+      // rather than letting a test express a state the runtime cannot reach.
+      return client.isConfigured || client.isEnabled;
+    },
+    resolveMessageGatewayHost,
+  };
+});
+
+const mockFindAllLinksByPlatform = vi.hoisted(() => vi.fn());
+
+vi.mock('@/database/models/messengerAccountLink', () => ({
+  MessengerAccountLinkModel: {
+    findAllByPlatformWithCredentials: mockFindAllLinksByPlatform,
+  },
 }));
 
 vi.mock('../GatewayManager', () => ({
@@ -119,6 +168,11 @@ vi.mock('@/server/services/messenger/platforms', () => ({
       connectionMode:
         platform === 'wechat' ? 'polling' : platform === 'discord' ? 'websocket' : 'webhook',
     }),
+    listPlatforms: () => [
+      { connectionMode: 'websocket', id: 'discord' },
+      { connectionMode: 'webhook', id: 'slack' },
+      { connectionMode: 'polling', id: 'wechat' },
+    ],
   },
 }));
 
@@ -149,10 +203,22 @@ describe('GatewayService', () => {
     mockFindByAgentId.mockResolvedValue([]);
     mockFindByIds.mockResolvedValue([]);
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
+    // Default: neither host describes itself. The Cloudflare gateway has no
+    // capabilities endpoint at all, so "makes no claim" is the normal case and
+    // must never be read as "serves nothing".
+    mockGatewayClient.getCapabilities.mockResolvedValue(null);
+    mockNodeGatewayClient.getCapabilities.mockResolvedValue(null);
     // Default: admin snapshot unavailable → sync falls back to per-connection
     // getStatus and skips stale-connection cleanup (matches pre-reconciliation behavior).
     mockGatewayClient.getStats.mockRejectedValue(new Error('stats unavailable'));
     mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registered-ids unavailable'));
+    mockNodeGateway.configured = false;
+    mockNodeGateway.platforms = [];
+    mockNodeGatewayClient.isConfigured = false;
+    mockNodeGatewayClient.isEnabled = false;
+    mockNodeGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+    mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+    mockFindAllLinksByPlatform.mockResolvedValue([]);
     mockUpdateBotRuntimeStatus.mockResolvedValue({});
     mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
     mockGetBotFeatureBlockedMessage.mockReturnValue('This bot channel requires a paid plan.');
@@ -1125,6 +1191,815 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dual-host routing (node gateway configured)', () => {
+    beforeEach(() => {
+      mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
+      mockGatewayClient.isConfigured = true;
+      mockGatewayClient.isEnabled = true;
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockNodeGatewayClient.isEnabled = true;
+      mockNodeGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+    });
+
+    it('moves a bot provider to the node host: stale-disconnects on default, connects on node', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wechat-app',
+                credentials: { botToken: 'token' },
+                id: 'wechat-provider',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      // Provider row is enabled+polling, but routed to node — the TOCTOU
+      // guard must NOT protect it on the default host.
+      mockFindByIds.mockResolvedValue([
+        {
+          enabled: true,
+          id: 'wechat-provider',
+          platform: 'wechat',
+          settings: {},
+        },
+      ]);
+      // The connection currently lives on the default (CF) host.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'wechat-provider', platform: 'wechat' }),
+        { ensure: true },
+      );
+    });
+
+    it('reconciles messenger polling links onto the node host and cleans the default host', async () => {
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'bot-1@im.bot',
+          credentials: { baseUrl: 'https://ilink.example.com', botId: 'bot-1', botToken: 'tok' },
+          tenantId: 'alice@im.wechat',
+          userId: 'user-1',
+        },
+        // No token → never connectable, must be skipped.
+        { applicationId: 'bot-2@im.bot', credentials: {}, tenantId: 'bob', userId: 'user-2' },
+      ]);
+      // A leftover per-user poller on the default host must be torn down
+      // (double-hosting a polling platform double-delivers messages)…
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+      // …while an unlinked account's connection on the owning host is stale.
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:gone:user-user-9'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith(
+        'messenger:wechat:alice@im.wechat:user-user-1',
+      );
+      expect(mockNodeGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'bot-1@im.bot',
+          connectionId: 'messenger:wechat:alice@im.wechat:user-user-1',
+          connectionMode: 'polling',
+          credentials: expect.objectContaining({
+            botToken: 'tok',
+            webhookToken: 'gateway-service-token',
+          }),
+          platform: 'wechat',
+          userId: 'user-1',
+          webhookPath: '/api/agent/messenger/webhooks/wechat',
+        }),
+        { ensure: true },
+      );
+      expect(mockNodeGatewayClient.connect).toHaveBeenCalledTimes(1);
+      expect(mockNodeGatewayClient.disconnect).toHaveBeenCalledWith(
+        'messenger:wechat:gone:user-user-9',
+      );
+    });
+
+    it('skips live messenger connections and leaves other hosts untouched without a node gateway', async () => {
+      mockNodeGateway.configured = false;
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'bot-1@im.bot',
+          credentials: { botToken: 'tok' },
+          tenantId: 'alice',
+          userId: 'user-1',
+        },
+      ]);
+      // Link already live on the default host → nothing to do.
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: { wechat: 1 },
+        connections: [
+          {
+            connectionId: 'messenger:wechat:alice:user-user-1',
+            platform: 'wechat',
+            state: { status: 'connected' },
+          },
+        ],
+        total: 1,
+      });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('routes per-user messenger registration to the node host', async () => {
+      mockResolveMessengerInstallation.mockResolvedValue({
+        applicationId: 'bot@im.wechat',
+        botToken: 'secret-token',
+      });
+
+      // Fresh key/user — the module-level LRU cache persists across tests and
+      // a cached connectionId would skip the connect this test asserts on.
+      const connectionId = await service.ensureUserMessengerConnected({
+        installationKey: 'wechat:carol@im.wechat',
+        platform: 'wechat',
+        userId: 'user-7',
+      });
+
+      expect(connectionId).toBe('messenger:wechat:carol@im.wechat:user-user-7');
+      expect(mockNodeGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionMode: 'polling', platform: 'wechat' }),
+      );
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('stays on the in-process runtime when the default host is unconfigured', async () => {
+      // Node-only deployment. Gateway mode is a whole-process switch and the
+      // Node gateway cannot host the webhook/websocket platforms that fall
+      // back to `default`, so entering it here would strand them with no
+      // in-process fallback. Out of scope by capability — see the note on
+      // `isAnyMessageGatewayEnabled`.
+      mockGatewayClient.isConfigured = false;
+      mockGatewayClient.isEnabled = false;
+      mockNodeGateway.platforms = ['wechat'];
+
+      expect(service.useMessageGateway).toBe(false);
+    });
+
+    it('defers a cross-host move while the destination host has no usable snapshot', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wechat-app',
+                credentials: { botToken: 'token' },
+                id: 'wechat-provider',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindByIds.mockResolvedValue([
+        { enabled: true, id: 'wechat-provider', platform: 'wechat', settings: {} },
+      ]);
+      // Live on the default host, routed to node — but node's admin surface is
+      // down, so its connect pass would defer. Disconnecting here first would
+      // take WeChat dark for the whole outage.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+      mockNodeGatewayClient.getStats.mockRejectedValue(new Error('node stats unavailable'));
+      mockNodeGatewayClient.getRegisteredIds.mockRejectedValue(new Error('node registry down'));
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('never connects a messenger link the capped migration left running on the old host', async () => {
+      // 60 linked users, all still polling on the default host. Cross-host
+      // cleanup is capped at 50 per round, so connecting all 60 on node would
+      // double-deliver for the 10 that were not drained.
+      const links = Array.from({ length: 60 }, (_, i) => ({
+        applicationId: 'bot-1@im.bot',
+        credentials: { baseUrl: 'https://ilink.example.com', botId: 'bot-1', botToken: 'tok' },
+        tenantId: `tenant-${i}`,
+        userId: `user-${i}`,
+      }));
+      const strayIds = links.map((l) => `messenger:wechat:${l.tenantId}:user-${l.userId}`);
+      mockFindAllLinksByPlatform.mockResolvedValue(links);
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: strayIds });
+
+      await service.ensureRunning();
+
+      const drained = mockGatewayClient.disconnect.mock.calls.map((call) => call[0] as string);
+      const connected = mockNodeGatewayClient.connect.mock.calls.map(
+        (call) => (call[0] as { connectionId: string }).connectionId,
+      );
+
+      expect(drained).toHaveLength(50);
+      // Every id connected on the new host was drained from the old one first,
+      // and the undrained remainder is left for the next round.
+      expect(connected.every((id: string) => drained.includes(id))).toBe(true);
+      expect(connected).toHaveLength(50);
+    });
+
+    it('never connects a bot provider the capped stale pass left running on the old host', async () => {
+      // 60 wechat providers all live on the default host and all routed to
+      // node. Stale disconnects are capped at 50/round, so connecting all 60
+      // on node would leave 10 running on both gateways.
+      const providers = Array.from({ length: 60 }, (_, i) => ({
+        applicationId: `wechat-app-${i}`,
+        credentials: { botToken: 'token' },
+        id: `wechat-provider-${i}`,
+        settings: {},
+        userId: `u${i}`,
+      }));
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat' ? providers : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindByIds.mockImplementation(async (_db: unknown, ids: string[]) =>
+        ids.map((id) => ({ enabled: true, id, platform: 'wechat', settings: {} })),
+      );
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: providers.map((p) => p.id),
+      });
+
+      await service.ensureRunning();
+
+      const drained = mockGatewayClient.disconnect.mock.calls.map((call) => call[0] as string);
+      const connected = mockNodeGatewayClient.connect.mock.calls.map(
+        (call) => (call[0] as { connectionId: string }).connectionId,
+      );
+
+      expect(drained).toHaveLength(50);
+      expect(connected).toHaveLength(50);
+      expect(connected.every((id: string) => drained.includes(id))).toBe(true);
+    });
+
+    it('completes a node-to-default rollback in one round, not the round after', async () => {
+      // Rollback shape: node gateway still configured, but wechat is no longer
+      // routed to it. `hosts` is ['default','node'], so a per-host sync would
+      // run the destination first (deferring everything, nothing drained yet),
+      // drain the source second, and never revisit the destination.
+      mockNodeGateway.platforms = [];
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wechat-app',
+                credentials: { botToken: 'token' },
+                id: 'wechat-provider',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindByIds.mockResolvedValue([
+        { enabled: true, id: 'wechat-provider', platform: 'wechat', settings: {} },
+      ]);
+      // Still live on node, which no longer owns it.
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'wechat-provider', platform: 'wechat' }),
+        { ensure: true },
+      );
+    });
+
+    it('makes no cross-host change when the messenger link lookup fails', async () => {
+      mockFindAllLinksByPlatform.mockRejectedValue(new Error('db unavailable'));
+      // A stray poller on the default host would normally be drained here —
+      // draining it before discovering the links are unreadable would strand
+      // that user offline until a later round.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('leaves an unusable link running on its current host instead of stranding the user', async () => {
+      // Credentials fail to decrypt, so this link cannot be rebuilt on the
+      // owning host. Draining it off the other host first would take the user
+      // offline with nothing able to bring them back.
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'bot-1@im.bot',
+          credentials: {},
+          tenantId: 'alice@im.wechat',
+          userId: 'user-1',
+        },
+      ]);
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('keeps a linked account whose credentials are undecryptable out of the stale pass', async () => {
+      // decryptRow returns `credentials: {}` on a key-vault mismatch, which is
+      // indistinguishable from "never had a token". Treating that as unlinked
+      // would tear down every healthy poller in one round.
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'bot-1@im.bot',
+          credentials: {},
+          tenantId: 'alice@im.wechat',
+          userId: 'user-1',
+        },
+      ]);
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Routing a platform to a host that cannot serve it ───
+
+  describe('platform capability guard', () => {
+    const CONNECTION_ID = 'messenger:wechat:t1:user-u1';
+
+    beforeEach(() => {
+      mockGatewayClient.isEnabled = true;
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+      mockNodeGateway.configured = true;
+      mockNodeGatewayClient.isConfigured = true;
+      mockNodeGatewayClient.isEnabled = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+    });
+
+    /** The default host is holding the WeChat poller; routing says it moves. */
+    const defaultHostHoldsIt = () => {
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: { wechat: 1 },
+        connections: [
+          {
+            connectionId: CONNECTION_ID,
+            platform: 'wechat',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [CONNECTION_ID] });
+    };
+
+    // Draining into a host that rejects the platform is worse than doing
+    // nothing: the connect meant to replace the connection fails, so it ends
+    // up on neither host. A misrouted env var must be a no-op, not an outage.
+    it('refuses to drain a platform off its host when the destination declines it', async () => {
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({
+        platforms: ['whatsapp-baileys'],
+      });
+      defaultHostHoldsIt();
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    // Same fixture, guard off — proves the case above is the guard talking and
+    // not a setup that never had a teardown to begin with.
+    it('performs the same move when the destination declares the platform', async () => {
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({ platforms: ['wechat'] });
+      defaultHostHoldsIt();
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith(CONNECTION_ID);
+    });
+
+    // The load-bearing half of the rule. The Cloudflare gateway has no
+    // capabilities endpoint, so a rollback — clearing the platform list to
+    // move connections BACK to it — targets a host that declares nothing.
+    // Reading that silence as a refusal would make rollback impossible.
+    it('does not treat a host that declares nothing as refusing anything', async () => {
+      mockNodeGateway.platforms = [];
+      mockGatewayClient.getCapabilities.mockResolvedValue(null);
+      // The node host is the one still holding it — this is the rollback.
+      mockNodeGatewayClient.getStats.mockResolvedValue({
+        byPlatform: { wechat: 1 },
+        connections: [
+          {
+            connectionId: CONNECTION_ID,
+            platform: 'wechat',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [CONNECTION_ID] });
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.disconnect).toHaveBeenCalledWith(CONNECTION_ID);
+    });
+
+    it('skips the connect for a bot-channel platform the host declines', async () => {
+      mockNodeGateway.platforms = ['discord'];
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({ platforms: ['wechat'] });
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockFindAllLinksByPlatform.mockResolvedValue([]);
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              {
+                applicationId: 'app-1',
+                credentials: { token: 'x' },
+                id: 'prov-1',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── listDesiredConnectionsForHost (restart recovery, pull side) ───
+
+  describe('listDesiredConnectionsForHost', () => {
+    beforeEach(() => {
+      mockGatewayClient.isEnabled = true;
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              {
+                applicationId: 'app-1',
+                credentials: { token: 'x' },
+                id: 'prov-1',
+                settings: { watchKeywords: [{ keyword: 'hi' }] },
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+    });
+
+    // The whole point of sharing one builder: whichever side establishes a
+    // connection, the gateway ends up holding the same config. A drifting
+    // second builder would show up here and nowhere else.
+    it('hands back exactly the payload the reconcile would have pushed', async () => {
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+
+      await service.ensureRunning();
+      const pushed = mockGatewayClient.connect.mock.calls[0][0];
+
+      const { connections } = await service.listDesiredConnectionsForHost('default');
+
+      expect(connections).toHaveLength(1);
+      expect(connections[0]).toEqual({ config: pushed, ensure: true });
+    });
+
+    // A pull changes nothing and wakes nothing. It reads another host's
+    // registry to see what is still held there — two admin requests, no
+    // fan-out — but it must never mutate a gateway, and never probe a single
+    // connection's status, which is what would drag a dormant one up.
+    it('reads, but never mutates a gateway or probes a connection', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+
+      await service.listDesiredConnectionsForHost('node');
+
+      for (const client of [mockGatewayClient, mockNodeGatewayClient]) {
+        expect(client.connect).not.toHaveBeenCalled();
+        expect(client.disconnect).not.toHaveBeenCalled();
+        expect(client.disconnectAll).not.toHaveBeenCalled();
+        expect(client.getStatus).not.toHaveBeenCalled();
+      }
+      // Its own host is never queried — the answer comes from the database.
+      expect(mockNodeGatewayClient.getStats).not.toHaveBeenCalled();
+    });
+
+    it('returns only the requested host slice', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wx-app',
+                credentials: { token: 'w' },
+                id: 'prov-wechat',
+                settings: {},
+                userId: 'u-wx',
+              },
+            ]
+          : [
+              {
+                applicationId: 'dc-app',
+                credentials: { token: 'd' },
+                id: `prov-${platform}`,
+                settings: {},
+                userId: 'u-dc',
+              },
+            ],
+      );
+
+      const node = await service.listDesiredConnectionsForHost('node');
+      const def = await service.listDesiredConnectionsForHost('default');
+
+      expect(node.connections.map((entry) => entry.config.connectionId)).toEqual(['prov-wechat']);
+      expect(def.connections.map((entry) => entry.config.connectionId)).not.toContain(
+        'prov-wechat',
+      );
+    });
+
+    // One unreadable row used to be able to fail the whole recovery. A row
+    // that can never connect is data we exclude, not a reason to leave a
+    // gateway empty.
+    it('excludes an undecryptable row without failing the call', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
+              {
+                applicationId: 'app-2',
+                credentials: { token: 'x' },
+                id: 'prov-2',
+                settings: {},
+                userId: 'u2',
+              },
+            ]
+          : [],
+      );
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.complete).toBe(true);
+      expect(result.excluded).toBe(1);
+      expect(result.connections.map((entry) => entry.config.connectionId)).toEqual(['prov-2']);
+    });
+
+    it('reports complete:false when a platform fails to load', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) => {
+        if (platform === 'telegram') throw new Error('key vault unavailable');
+        return [];
+      });
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.complete).toBe(false);
+    });
+
+    it('includes messenger polling links and excludes ones with no usable token', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+        { applicationId: 'wx-app', credentials: {}, tenantId: 't2', userId: 'u2' },
+      ]);
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.excluded).toBe(1);
+      expect(result.connections).toHaveLength(1);
+      expect(result.connections[0].config).toMatchObject({
+        connectionId: 'messenger:wechat:t1:user-u1',
+        connectionMode: 'polling',
+        credentials: {
+          baseUrl: 'https://ilink',
+          botId: 'bot-1',
+          botToken: 'tok-1',
+          webhookToken: 'gateway-service-token',
+        },
+        webhookPath: '/api/agent/messenger/webhooks/wechat',
+      });
+    });
+
+    // Routing a platform here does not mean this host can run it. Handing over
+    // credentials for a connection it will reject arms nothing and exposes
+    // them for no reason — and the reconcile already refuses to move such a
+    // platform, so leaving the gap here would put the two out of step.
+    it('withholds credentials for a platform this host says it cannot serve', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({
+        platforms: ['whatsapp-baileys'],
+      });
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toEqual([]);
+    });
+
+    // Today's production shape: the node URL is configured but no platform is
+    // routed there yet. Deploying the node gateway must not drag the other
+    // host's fleet over — it should be handed nothing at all.
+    it('hands a host nothing while no platform is routed to it', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = [];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toEqual([]);
+      expect(result.deferred).toBe(0);
+    });
+
+    // Routing a platform here does not make its connections safe to build: the
+    // host that owned them a moment ago is still polling. Handing one over
+    // before that host is drained double-delivers every message.
+    it('withholds a connection the previous host has not released yet', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      // The default host still holds it — mid-migration.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:t1:user-u1'],
+      });
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toEqual([]);
+      expect(result.deferred).toBe(1);
+      // Partial answer, so the caller keeps asking rather than settling.
+      expect(result.complete).toBe(false);
+    });
+
+    // A stats-only snapshot omits dormant registrations, so an id missing from
+    // it proves nothing about whether the other host released it. Marking the
+    // answer incomplete is not enough on its own: the caller applies what it
+    // receives and only then asks again, so the flag would land after the
+    // duplicate it was meant to prevent. The connection has to be withheld.
+    it('withholds a connection the other host cannot be proven to have released', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      // Stats answered, registered-ids did not: a live host we can only half see.
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registry unavailable'));
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toEqual([]);
+      expect(result.deferred).toBe(1);
+      expect(result.complete).toBe(false);
+    });
+
+    it('hands the connection over once the previous host has released it', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toHaveLength(1);
+      expect(result.deferred).toBe(0);
+      expect(result.complete).toBe(true);
+    });
+
+    // Same rule from the other direction: a host we could not reach shows
+    // nothing, which is no more proof of release than a half-seen one. Restart
+    // recovery is an optimisation over the reconcile, so when it cannot be done
+    // safely the right move is not to do it.
+    it('withholds when the other host cannot be read at all', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      mockGatewayClient.getStats.mockRejectedValue(new Error('admin down'));
+      mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('admin down'));
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toEqual([]);
+      expect(result.deferred).toBe(1);
+    });
+
+    it('reports complete:false when messenger links fail to load', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockRejectedValue(new Error('link listing failed'));
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.complete).toBe(false);
     });
   });
 });

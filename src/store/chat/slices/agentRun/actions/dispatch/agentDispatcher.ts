@@ -122,7 +122,14 @@ export const selectRuntimeType = (
     // in-process — `workspaceScoped` alone does not block them — so a colliding
     // personal provider id (e.g. builtin `anthropic`) would silently supply
     // different credentials. Reject before any IPC.
-    if (ctx.isWorkspaceAgent) {
+    // The deployment-default API source uses deployment-owned credentials
+    // rather than a user provider id, so this guard stays on user-provider
+    // bindings only.
+    if (
+      ctx.heterogeneousProvider.apiConfig &&
+      ctx.heterogeneousProvider.apiConfig?.source !== 'server-default' &&
+      ctx.isWorkspaceAgent
+    ) {
       throw new Error(HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR);
     }
     const target = resolveExecutionTarget(

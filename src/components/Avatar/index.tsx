@@ -8,8 +8,8 @@ import { useBrokenSrc } from './useBrokenSrc';
 
 export interface AvatarProps extends LobeAvatarProps {
   /**
-   * Seed for the fallback initials and background color. Defaults to `title`;
-   * pass it when the visible name differs from the tooltip title.
+   * Seed for the fallback initials. Defaults to `title`; pass it when the
+   * visible name differs from the tooltip title.
    */
   name?: string;
 }
@@ -19,9 +19,9 @@ export interface AvatarProps extends LobeAvatarProps {
  *
  * `@lobehub/ui`'s Avatar falls back to `String(title).slice(0, 2)`, which
  * renders a literal "UN" — the first letters of `"undefined"` — whenever the
- * image 404s and no title was passed. This wrapper derives the initials and a
- * stable hashed background from the name instead, so a missing image still
- * reads as *this* agent rather than as a broken one.
+ * image 404s and no title was passed. This wrapper derives the initials from
+ * the name instead, so a missing image still reads as *this* agent rather than
+ * as a broken one.
  *
  * The image element is rendered here rather than left to the library so this
  * component owns the `error` event. Probing the URL separately would let the

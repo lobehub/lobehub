@@ -2709,15 +2709,17 @@ export class MessageModel {
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
-    const item = await this.db.query.messagePlugins.findFirst({
-      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-    });
-    if (!item) throw new Error('Plugin not found');
-
-    await this.db
+    const updated = await this.db
       .update(messagePlugins)
-      .set({ state: merge(item.state || {}, state) })
-      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
+      .set({
+        // Plugin-state patches own complete top-level keys. Merge them in SQL so
+        // concurrent writers of different keys cannot overwrite each other.
+        state: sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(state)}::jsonb`,
+      })
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+      .returning({ id: messagePlugins.id });
+
+    if (updated.length === 0) throw new Error('Plugin not found');
   };
 
   updateMessagePlugin = async (id: string, value: Partial<MessagePluginItem>) => {
@@ -3005,13 +3007,38 @@ export class MessageModel {
    * time (e.g. the goal loop updating the `createGoal` card via
    * `task.context.origin.toolCallId`).
    */
-  findToolMessageIdByToolCallId = async (toolCallId: string): Promise<string | null> => {
-    const [row] = await this.db
-      .select({ id: messagePlugins.id })
-      .from(messagePlugins)
-      .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
-      .limit(1);
-    return row?.id ?? null;
+  findToolMessageIdByToolCallId = async (
+    toolCallId: string,
+    /**
+     * Restrict the match to calls made by one assistant message.
+     *
+     * `tool_call_id` is provider-supplied and only unique in practice — the
+     * column carries a plain index, not a unique constraint. Callers that act
+     * on the row (rather than just reading it) should scope the match, or a
+     * reused id from another turn resolves to an unrelated historical result.
+     */
+    parentId?: string,
+  ): Promise<string | null> => {
+    const rows = parentId
+      ? await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .innerJoin(messages, eq(messages.id, messagePlugins.id))
+          .where(
+            and(
+              eq(messagePlugins.toolCallId, toolCallId),
+              eq(messages.parentId, parentId),
+              this.pluginsOwnership(),
+            ),
+          )
+          .limit(1)
+      : await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
+          .limit(1);
+
+    return rows[0]?.id ?? null;
   };
 
   /**
@@ -3110,34 +3137,32 @@ export class MessageModel {
 
         // Update messagePlugins table (pluginState, pluginError)
         if (pluginState !== undefined || pluginError !== undefined) {
-          const pluginItem = await trx.query.messagePlugins.findFirst({
-            where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-          });
+          const pluginUpdateData: Record<string, any> = {};
+
+          if (pluginState !== undefined) {
+            // Snapshot writes replace the whole runtime state. Ordinary patches
+            // own complete top-level keys and merge inside the UPDATE so an
+            // answer write cannot race away an intervention-terminal write.
+            pluginUpdateData.state = heterogeneousToolState
+              ? pluginState
+              : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(pluginState)}::jsonb`;
+          }
+
+          if (pluginError !== undefined) {
+            pluginUpdateData.error = pluginError;
+          }
+
+          const [updatedPlugin] = await trx
+            .update(messagePlugins)
+            .set(pluginUpdateData)
+            .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+            .returning({ id: messagePlugins.id });
 
           // A plugin-only patch never touches `messages`, so the plugin row is
           // the only evidence the tool message exists.
-          if (matchedRow === undefined) matchedRow = !!pluginItem;
+          if (matchedRow === undefined) matchedRow = !!updatedPlugin;
 
-          if (pluginItem) {
-            const pluginUpdateData: Record<string, any> = {};
-
-            if (pluginState !== undefined) {
-              pluginUpdateData.state = heterogeneousToolState
-                ? pluginState
-                : merge(pluginItem.state || {}, pluginState);
-            }
-
-            if (pluginError !== undefined) {
-              pluginUpdateData.error = pluginError;
-            }
-
-            if (Object.keys(pluginUpdateData).length > 0) {
-              await trx
-                .update(messagePlugins)
-                .set(pluginUpdateData)
-                .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
-            }
-          } else if (heterogeneousToolState) {
+          if (!updatedPlugin && heterogeneousToolState) {
             throw new Error(`No tool plugin matched id ${id}`);
           }
         }

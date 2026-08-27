@@ -656,17 +656,26 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     vi.useFakeTimers();
     const service = createService();
     const coordinator = (service as any).coordinator;
+    const touchRunning = vi
+      .spyOn((service as any).agentOperationModel, 'touchRunning')
+      .mockResolvedValue(true);
 
     try {
       const stopHeartbeat = (service as any).startStepLockHeartbeat('op-heartbeat', 7, 'owner-1');
       await vi.advanceTimersByTimeAsync(30_000);
 
       expect(coordinator.refreshStepLock).toHaveBeenCalledWith('op-heartbeat', 7, 120, 'owner-1');
+      expect(touchRunning).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(coordinator.refreshStepLock).toHaveBeenCalledTimes(3);
+      expect(touchRunning).toHaveBeenCalledTimes(1);
 
       stopHeartbeat();
       await vi.advanceTimersByTimeAsync(30_000);
 
-      expect(coordinator.refreshStepLock).toHaveBeenCalledTimes(1);
+      expect(coordinator.refreshStepLock).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
     }

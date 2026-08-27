@@ -166,6 +166,7 @@ export const marketRouter = router({
           category: z.string().optional(),
           connectionType: z.nativeEnum(McpConnectionType).optional(),
           includeAgentGroup: z.boolean().optional(),
+          includeCategoryCounts: z.boolean().optional(),
           locale: z.string().optional(),
           order: z.enum(['asc', 'desc']).optional(),
           ownerId: z.string().optional(),

@@ -1,3 +1,5 @@
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
+
 import type { MessengerPlatform } from '@/config/messenger';
 import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
@@ -67,6 +69,7 @@ const resolveAccountLink = async (params: {
 const sendAlwaysAvailableMessage = async (params: {
   attachments?: BotMessageAttachment[];
   content?: string;
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
   platform: Exclude<MessengerPushPlatform, 'wechat'>;
   serverDB: LobeChatDatabase;
   tenantId?: string;
@@ -90,6 +93,7 @@ const sendAlwaysAvailableMessage = async (params: {
       attachments: params.attachments,
       content,
       credentials,
+      oversizeImageStrategy: params.oversizeImageStrategy,
       platformUserId: link.platformUserId,
     });
     return { status: 'sent' };
@@ -102,6 +106,11 @@ const sendAlwaysAvailableMessage = async (params: {
 export const sendMessengerPush = async (params: {
   attachments?: BotMessageAttachment[];
   content?: string;
+  /**
+   * What to do with an image over the platform's image budget: recompress it
+   * (default) or send the original as a download link.
+   */
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
   platform: MessengerPushPlatform;
   serverDB: LobeChatDatabase;
   tenantId?: string;

@@ -329,6 +329,7 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.defaultName': "{{owner}}'s {{product}}",
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
@@ -340,7 +341,6 @@ export default {
     'On current pace this window ends around {{percent}}%',
   'heteroAgent.claudeQuota.calendar.burnout.willExhaust':
     'On current pace, quota runs out around {{time}}',
-  'heteroAgent.claudeQuota.calendar.capacityUsed': 'Capacity used',
   'heteroAgent.claudeQuota.calendar.dayShare': 'Used {{percent}}% of this window',
   'heteroAgent.claudeQuota.calendar.dayTokens': '{{tokens}} tokens · {{cost}}',
   'heteroAgent.claudeQuota.calendar.accountUnavailable':
@@ -358,6 +358,7 @@ export default {
     'Token history is only recorded for runs started in LobeHub after usage tracking was enabled. Earlier usage and runs started directly from the terminal cannot be backfilled.',
   'heteroAgent.claudeQuota.calendar.noLedgerSpendShort': 'History not recorded',
   'heteroAgent.claudeQuota.calendar.partialCost': 'at least {{cost}}',
+  'heteroAgent.claudeQuota.calendar.partialCostCompact': '{{cost}}+',
   'heteroAgent.claudeQuota.calendar.pace': 'Even pace',
   'heteroAgent.claudeQuota.calendar.pastWindow': 'Last observed window',
   'heteroAgent.claudeQuota.calendar.rateLimited': 'Rate limited',
@@ -421,6 +422,9 @@ export default {
   'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
   'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
   'heteroAgent.codexQuota.doesNotExpire': 'Does not expire',
+  'heteroAgent.codexQuota.errorConnection':
+    "Couldn't reach the Codex quota endpoint. Check your network or LobeHub proxy settings.",
+  'heteroAgent.codexQuota.errorGeneric': "Couldn't load Codex quota. Try again later.",
   'heteroAgent.codexQuota.expiresIn': 'Expires in {{duration}}',
   'heteroAgent.codexQuota.expiresSoon': 'Expires soon',
   'heteroAgent.codexQuota.fiveHour': '5-hour',
@@ -526,6 +530,8 @@ export default {
   'heteroAgent.apiMode.agentUnsupported': '{{name}} does not support LobeHub Provider binding.',
   'heteroAgent.apiMode.configMissing':
     'Provider binding requires a provider and model. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.defaultProviderConfigMissing':
+    'LobeHub requires a compatible model. Open the agent profile to select one.',
   'heteroAgent.apiMode.credentialUnsupported':
     'The provider "{{providerId}}" uses an authentication method this agent does not support.',
   'heteroAgent.apiMode.credentialsMissing':
@@ -765,9 +771,9 @@ export default {
   'messages.tokenDetails.outputText': 'Text Output',
   'messages.tokenDetails.outputTitle': 'Output Details',
   'messages.tokenDetails.reasoning': 'Deep Thinking',
-  'messages.tokenDetails.speed.tps.title': 'TPS',
+  'messages.tokenDetails.speed.tps.title': 'tok/s',
   'messages.tokenDetails.speed.tps.tooltip':
-    'Tokens Per Second (TPS). This indicates the average speed of AI-generated content (Tokens/second), calculated from the moment the first Token is received.',
+    'Tokens Per Second (tok/s). This indicates the average speed of AI-generated content (Tokens/second), calculated from the moment the first Token is received.',
   'messages.tokenDetails.speed.ttft.title': 'TTFT',
   'messages.tokenDetails.speed.ttft.tooltip':
     'Time To First Token (TTFT). This refers to the time interval from when you send a message to when the client receives the first Token.',
@@ -1322,6 +1328,7 @@ export default {
   'shareModal.withRole': 'Include Message Role',
   'shareModal.withSystemRole': 'Include Agent Profile',
   'sharePage.actions.tryItYourself': 'Try it yourself',
+  'sharePage.artifact.share': 'Share',
   'sharePage.error.forbidden.subtitle': 'This share is private and not accessible.',
   'sharePage.error.forbidden.title': 'Access Denied',
   'sharePage.error.notFound.subtitle': 'This topic does not exist or has been removed.',
@@ -1333,6 +1340,7 @@ export default {
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
+  'sharePage.meta.artifactDescription': 'An artifact shared from {{appName}}.',
   'sharePage.meta.pageDescription': 'A page shared from {{appName}}.',
   'sharePage.meta.topicDescription': 'A conversation shared from {{appName}}.',
   'sharePage.pill.edit': 'Edit',
@@ -1387,6 +1395,8 @@ export default {
   'taskSchedule.every': 'Every',
   'taskSchedule.frequency': 'Frequency',
   'taskSchedule.heading': 'Automation',
+  'taskSchedule.memberAssigneeHint':
+    'Enabling automation unassigns the current member — automated tasks run through an agent.',
   'taskSchedule.hours': 'Hours',
   'taskSchedule.intervalLabel': 'Run interval',
   'taskSchedule.intervalSuffix': 'each time',
@@ -1626,6 +1636,12 @@ export default {
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed':
     'Could not draft acceptance criteria, so your goal was used as the criterion.',
+  'createGoal.generating': 'Understanding your goal…',
+  'createGoal.generatingAlmostDone': 'Almost done…',
+  'createGoal.generatingCountdown': 'About {{time}} remaining',
+  'createGoal.generatingCriteria': 'Drafting acceptance criteria…',
+  'createGoal.generatingInstruction': 'Writing the execution brief…',
+  'createGoal.generatingReview': 'Checking the complete plan…',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
   'createGoal.next': 'Next',
@@ -1658,6 +1674,8 @@ export default {
   'createTask.visibility.helperPrivate': 'Only you can see this task.',
   'createTask.visibility.helperWorkspace': 'Everyone in this workspace can see this task.',
   'createTask.visibility.label': 'Visibility',
+  'createTask.visibility.memberAssigneeLocked':
+    'A task assigned to a member stays visible to the workspace.',
   'createTask.visibility.privateAgentDisabled':
     'Private agents can only run private tasks. Pick a workspace agent or switch this task to Private.',
   'createTask.visibility.privateAgentLocked': 'Private agents can only run private tasks.',
@@ -1791,6 +1809,7 @@ export default {
   'taskList.empty': 'No tasks yet',
   'taskList.emptyHero.greeting': 'What should we tackle today?',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
+  'taskList.form.columns': 'Columns',
   'taskList.form.grouping': 'Grouping',
   'taskList.form.nestedSubTasks': 'Nested sub-tasks',
   'taskList.form.orderCompletedByRecency': 'Sort completed tasks by recency',
@@ -1803,8 +1822,10 @@ export default {
   'taskList.hiddenCompleted.show': 'Show',
   'taskList.hiddenCompleted.suffix': 'hidden by display options',
   'taskList.groupBy.assignee': 'Assignee',
+  'taskList.groupBy.heartbeat': 'Heartbeat',
   'taskList.groupBy.none': 'No grouping',
   'taskList.groupBy.priority': 'Priority',
+  'taskList.groupBy.schedule': 'Schedule',
   'taskList.groupBy.status': 'Status',
   'taskList.orderBy.assignee': 'Assignee',
   'taskList.orderBy.createdAt': 'Created at',
@@ -1812,11 +1833,15 @@ export default {
   'taskList.orderBy.status': 'Status',
   'taskList.orderBy.title': 'Title',
   'taskList.orderBy.updatedAt': 'Updated at',
+  'taskList.scheduled.empty': 'No scheduled tasks yet',
+  'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.title': 'Tasks',
   'taskList.unassigned': 'Unassigned',
   'taskList.unassignedHint': 'Lobe AI will run this task when no assignee is set',
-  'taskList.assigneeSearch.empty': 'No matching agent',
-  'taskList.assigneeSearch.placeholder': 'Search agent...',
+  'taskList.assigneeSearch.empty': 'No matching assignee',
+  'taskList.assigneeSearch.placeholder': 'Search member or agent...',
+  'taskList.assigneeSelector.agentGroup': 'Agents',
+  'taskList.assigneeSelector.memberGroup': 'Members',
   'taskList.contextMenu.copyConfirm': 'Copy',
   'taskList.contextMenu.copyDescription':
     'Clone this task (and all its subtasks) into another workspace. Status resets to backlog.',

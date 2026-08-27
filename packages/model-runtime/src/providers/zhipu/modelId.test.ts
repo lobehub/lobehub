@@ -49,6 +49,7 @@ describe('isToolStreamSupportedGLMModel', () => {
 
   it('should support future mainline GLM versions without new allowlist entries', () => {
     expect(isToolStreamSupportedGLMModel('glm-5.3')).toBe(true);
+    expect(isToolStreamSupportedGLMModel('glm-5.3-flash')).toBe(true);
     expect(isToolStreamSupportedGLMModel('glm-6')).toBe(true);
   });
 
@@ -63,6 +64,7 @@ describe('isToolStreamSupportedGLMModel', () => {
 describe('isAlwaysOnThinkingGLMModel', () => {
   it('should require thinking from GLM-5.3 onward', () => {
     expect(isAlwaysOnThinkingGLMModel('glm-5.3')).toBe(true);
+    expect(isAlwaysOnThinkingGLMModel('glm-5.3-flash')).toBe(true);
     expect(isAlwaysOnThinkingGLMModel('glm-5.4')).toBe(true);
     expect(isAlwaysOnThinkingGLMModel('glm-6')).toBe(true);
   });

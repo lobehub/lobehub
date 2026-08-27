@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { cliPackageName } from '../pkg';
+
 export interface BundledSkill {
   cliRoot: string;
   skillDir: string;
@@ -19,7 +21,7 @@ export function findCliRoot(startDir: string): string | undefined {
     if (existsSync(pkgPath)) {
       try {
         const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-        if (pkg && pkg.name === '@lobehub/cli') return dir;
+        if (pkg && pkg.name === cliPackageName) return dir;
       } catch {
         // Not a readable/valid package.json — keep walking up.
       }
@@ -40,7 +42,7 @@ export function locateBundledSkill(
   const cliRoot = findCliRoot(startDir);
   if (!cliRoot) {
     throw new Error(
-      `Could not locate the @lobehub/cli package root walking up from ${startDir}. ` +
+      `Could not locate the ${cliPackageName} package root walking up from ${startDir}. ` +
         'The CLI install may be corrupted.',
     );
   }
@@ -49,7 +51,7 @@ export function locateBundledSkill(
   if (!existsSync(skillDir)) {
     throw new Error(
       `Bundled skill "${skillName}" not found at ${skillDir}. ` +
-        'The @lobehub/cli install may be missing its skills/ directory.',
+        `The ${cliPackageName} install may be missing its skills/ directory.`,
     );
   }
 

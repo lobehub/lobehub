@@ -262,6 +262,10 @@ describe('DiscoverService', () => {
     mockMarket = {
       agents: {
         getAgentList: vi.fn().mockResolvedValue({
+          categoryCounts: [
+            { category: 'creativity', count: 1 },
+            { category: 'productivity', count: 1 },
+          ],
           items: mockMarketAssistantList,
           totalCount: mockMarketAssistantList.length,
           currentPage: 1,
@@ -312,9 +316,11 @@ describe('DiscoverService', () => {
 
   describe('Assistant Market (new source)', () => {
     it('getAssistantList should transform market SDK response', async () => {
-      const result = await service.getAssistantList();
+      const result = await service.getAssistantList({ includeCategoryCounts: true });
 
-      expect(mockMarket.agents.getAgentList).toHaveBeenCalled();
+      expect(mockMarket.agents.getAgentList).toHaveBeenCalledWith(
+        expect.objectContaining({ includeCategoryCounts: true }),
+      );
       expect(result.items[0]).toEqual(
         expect.objectContaining({
           identifier: 'market-assistant-1',
@@ -324,6 +330,10 @@ describe('DiscoverService', () => {
           pluginCount: 1,
         }),
       );
+      expect(result.categoryCounts).toEqual([
+        { category: 'creativity', count: 1 },
+        { category: 'productivity', count: 1 },
+      ]);
     });
 
     it('getAssistantList should preserve a successful empty response in strict mode', async () => {

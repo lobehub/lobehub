@@ -40,6 +40,10 @@ const activeTaskDescription = (s: TaskStoreState) => activeTaskDetail(s)?.descri
 
 const activeTaskAgentId = (s: TaskStoreState) => activeTaskDetail(s)?.agentId;
 
+// Human assignee (workspace member). `detail.userId` is populated from the
+// server-side `tasks.assignee_user_id` column.
+const activeTaskAssigneeUserId = (s: TaskStoreState) => activeTaskDetail(s)?.userId;
+
 // TODO: Once the frontend store switches to reading from detail.model / detail.provider returned by the backend getTaskDetail procedure
 const activeTaskModel = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.model as string | undefined;
@@ -124,6 +128,7 @@ const topicDrawerTitle = (s: TaskStoreState) => s.activeTopicDrawerTitle;
 
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskAssigneeUserId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
   activeTaskCreatedByUserId,

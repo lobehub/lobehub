@@ -21,6 +21,8 @@ const log = debug('task-runner');
 export interface RunTaskParams {
   continueTopicId?: string;
   extraPrompt?: string;
+  /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
+  maxSteps?: number;
   taskId: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
@@ -66,7 +68,13 @@ export class TaskRunnerService {
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
-    const { taskId: idOrIdentifier, continueTopicId, extraPrompt, trigger = 'manual' } = params;
+    const {
+      taskId: idOrIdentifier,
+      continueTopicId,
+      extraPrompt,
+      maxSteps,
+      trigger = 'manual',
+    } = params;
 
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) {
@@ -88,8 +96,23 @@ export class TaskRunnerService {
             message: 'Failed to resolve fallback inbox agent for task',
           });
         }
-        await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        // A human-assigned task still executes via the inbox agent, but the
+        // fallback must stay ephemeral — persisting it would silently replace
+        // the member assignment on the first run.
+        if (!task.assigneeUserId) {
+          await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        }
         task.assigneeAgentId = inboxAgent.id;
+      } else if (task.assigneeUserId) {
+        // Released clients persisted the inbox fallback before calling run,
+        // even when the task was assigned to a member. Recognize that exact
+        // legacy pair and restore the human assignment before execution. A
+        // non-inbox agent remains an explicit agent assignment and is left
+        // untouched.
+        const inboxAgent = await this.agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+        if (task.assigneeAgentId === inboxAgent?.id) {
+          await this.taskModel.update(task.id, { assigneeAgentId: null });
+        }
       }
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
@@ -222,6 +245,7 @@ export class TaskRunnerService {
           },
         ],
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
+        ...(maxSteps ? { maxSteps } : {}),
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,

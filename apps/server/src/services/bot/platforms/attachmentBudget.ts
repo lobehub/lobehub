@@ -1,7 +1,13 @@
-import type { MessengerAttachmentBudget } from '@lobechat/const';
-import { MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
+import type { MessengerAttachmentBudget, MessengerOversizeImageStrategy } from '@lobechat/const';
+import {
+  DEFAULT_OVERSIZE_IMAGE_STRATEGY,
+  MESSENGER_ATTACHMENT_BUDGETS,
+  MESSENGER_MAX_COMPRESSION_SOURCE_BYTES,
+} from '@lobechat/const';
 import debug from 'debug';
 
+import { loadAttachmentBuffer } from './loadAttachmentBuffer';
+import { fetchPublicUrl } from './publicUrlFetch';
 import type { BotMessageAttachment } from './types';
 
 const log = debug('bot-platform:attachment-budget');
@@ -29,6 +35,13 @@ const MB = 1024 * 1024;
 
 export interface PreparedAttachments {
   attachments: BotMessageAttachment[];
+  /**
+   * Why each degraded attachment could not go out as a file, index-aligned with
+   * `degraded`. The delivery boundary logs these once per push; nothing in this
+   * module prints, so the volume stays one line per send rather than two per
+   * attachment.
+   */
+  degradations: AttachmentDegradation[];
   /**
    * The original attachments behind `fallbackLines`. Callers with a replay
    * queue requeue these (rather than the whole input) when the link leg fails,
@@ -92,33 +105,16 @@ const toJpegFilename = (name: string | undefined): string | undefined => {
   return `${trimmed.replace(/\.[^./\\]*$/, '')}.jpg`;
 };
 
-/** Refuse to buffer arbitrarily large remote files into memory for compression. */
-const MAX_COMPRESSION_SOURCE_BYTES = 100 * MB;
+/**
+ * Refuse to buffer arbitrarily large remote files into memory for compression.
+ * Enforced as the response streams in, so an image with an absent or lying
+ * `content-length` cannot be fully allocated before it is rejected. Shared with
+ * the push modal, which must not offer a choice this cap will overrule.
+ */
+const MAX_COMPRESSION_SOURCE_BYTES = MESSENGER_MAX_COMPRESSION_SOURCE_BYTES;
 
-const loadSourceBuffer = async (attachment: BotMessageAttachment): Promise<Buffer | undefined> => {
-  if (attachment.data) {
-    try {
-      return Buffer.from(attachment.data, 'base64');
-    } catch (error) {
-      log('loadSourceBuffer: failed to decode base64: %O', error);
-    }
-  }
-  if (attachment.fetchUrl) {
-    try {
-      const response = await fetch(attachment.fetchUrl, { signal: AbortSignal.timeout(15_000) });
-      if (response.ok) {
-        const buffer = Buffer.from(await response.arrayBuffer());
-        if (buffer.length <= MAX_COMPRESSION_SOURCE_BYTES) return buffer;
-        log('loadSourceBuffer: %d bytes exceeds compression source cap', buffer.length);
-      } else {
-        log('loadSourceBuffer: HTTP %d for %s', response.status, attachment.fetchUrl);
-      }
-    } catch (error) {
-      log('loadSourceBuffer: fetch failed for %s: %O', attachment.fetchUrl, error);
-    }
-  }
-  return undefined;
-};
+const loadSourceBuffer = async (attachment: BotMessageAttachment): Promise<Buffer | undefined> =>
+  loadAttachmentBuffer(attachment, { limit: MAX_COMPRESSION_SOURCE_BYTES });
 
 /**
  * Ladder of (max dimension, JPEG quality) attempts, largest/best first. The
@@ -181,6 +177,9 @@ export const compressImageToBudget = async (
     log('compression exhausted ladder without fitting %d bytes', maxBytes);
     return undefined;
   } catch (error) {
+    // Routine input, not a system fault: plenty of things a user attaches are
+    // not images sharp can decode. The caller records `compression-failed`
+    // against the attachment, which is where the reason belongs.
     log('compressImageToBudget failed: %O', error);
     return undefined;
   }
@@ -207,31 +206,200 @@ const knownSize = (attachment: BotMessageAttachment): number | undefined => {
  *    `fallbackLines` when a `fetchUrl` exists. Without a URL the original
  *    attachment is kept as a last resort (old behavior) rather than dropped.
  */
+/** How long to wait for a size probe before giving up on it. */
+const SIZE_PROBE_TIMEOUT_MS = 5000;
+
+/**
+ * The attachment's byte size, established without downloading it.
+ *
+ * `attachmentsInputSchema` carries no `size`, so raw `botMessage` attachments
+ * arrive unmeasured — and an unmeasured attachment used to skip every budget
+ * rule, only to be refused later by the loader's in-memory cap and dropped
+ * without a trace. Inline base64 is measured directly; a remote URL is probed
+ * with a HEAD request through the same SSRF guard the download uses.
+ */
+const resolveSize = async (attachment: BotMessageAttachment): Promise<number | undefined> => {
+  const declared = knownSize(attachment);
+  if (declared !== undefined) return declared;
+
+  if (attachment.data) return Buffer.byteLength(attachment.data, 'base64');
+  if (!attachment.fetchUrl) return undefined;
+
+  const probed = await fetchPublicUrl(attachment.fetchUrl, SIZE_PROBE_TIMEOUT_MS, {
+    allowConfiguredOrigins: attachment.trustedUrl === true,
+    method: 'HEAD',
+  }).catch(() => undefined);
+  if (!probed) return undefined;
+
+  try {
+    // A 404's `content-length` describes the error page, not the file.
+    if (!probed.response.ok) return undefined;
+
+    // Absent header must stay "unknown": `Number(null)` is 0, which would read
+    // as a zero-byte file that fits every budget.
+    const header = probed.response.headers.get('content-length');
+    if (header === null) return undefined;
+
+    const length = Number(header);
+    return Number.isFinite(length) && length >= 0 ? length : undefined;
+  } finally {
+    await probed.dispose();
+  }
+};
+
+/**
+ * Why an attachment is going out as a download link instead of a file.
+ *
+ * Returned to the caller rather than printed here. Every failure in this chain
+ * collapses into the same visible outcome — a link — so without the reason the
+ * sender can only report the symptom, and "the compression failed" stays a
+ * guess. But a per-attachment print is the wrong carrier: it is unattributable
+ * prose, it scales with attachment count, and it would put routine input (an
+ * image sharp cannot decode) into the error stream. The reason travels with the
+ * result instead, and the delivery boundary decides what to record.
+ */
+export type DegradationReason =
+  /** Bytes downloaded, but no rung of the ladder produced a small enough JPEG. */
+  | 'compression-failed'
+  /** Over budget and not an image, so there is nothing smaller to send. */
+  | 'not-compressible'
+  /** The attachment's bytes could not be fetched at all. */
+  | 'source-unavailable'
+  /** The sender chose to keep the original and send it as a link. */
+  | 'strategy-link'
+  /** The server could not establish the byte size, so the budget cannot hold. */
+  | 'unverifiable-size';
+
+export interface AttachmentDegradation {
+  name?: string;
+  reason: DegradationReason;
+  size?: number;
+  type: BotMessageAttachment['type'];
+}
+
+/**
+ * Make one user-controlled string safe to put on a log line.
+ *
+ * A filename is attacker-controlled input that ends up in persistent logs. A
+ * newline in it forges a whole additional log entry — the reader cannot tell
+ * the forged line from a real one — and other control characters corrupt
+ * whatever consumes the stream. Length is capped too, so one absurd name
+ * cannot push the rest of the line out of a truncated log record.
+ *
+ * The name is sanitized rather than dropped: without it the line cannot say
+ * WHICH attachment degraded, which is the only reason it is written.
+ */
+const MAX_LOGGED_NAME_CHARS = 60;
+
+export const sanitizeForLog = (value: string): string => {
+  // Strip C0/C1 controls, DEL, and the Unicode line/paragraph separators —
+  // \u2028 and \u2029 are line breaks to plenty of log viewers.
+  const flattened = value
+    // eslint-disable-next-line no-control-regex
+    .replaceAll(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+  if (!flattened) return '(unnamed)';
+  return flattened.length <= MAX_LOGGED_NAME_CHARS
+    ? flattened
+    : `${flattened.slice(0, MAX_LOGGED_NAME_CHARS - 1)}…`;
+};
+
+/**
+ * One short clause per degraded attachment, for the boundary's single log line.
+ * Deliberately loose in `reason` so a caller can append platform detail (an
+ * iLink `errmsg`) without widening the reason union itself — which is also
+ * caller-controlled text, so it goes through the same sanitizer.
+ */
+export const summarizeDegradations = (
+  degradations: { name?: string; reason: string; type: string }[],
+): string =>
+  degradations
+    .map(
+      (d) =>
+        `${d.name ? sanitizeForLog(d.name) : `(unnamed ${d.type})`}: ${sanitizeForLog(d.reason)}`,
+    )
+    .join('; ');
+
+export interface PrepareAttachmentsOptions {
+  /**
+   * What to do with an image over `imageMaxBytes`. Defaults to `compress` —
+   * the behavior every caller had before the choice existed.
+   */
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
+}
+
 export const prepareAttachmentsForBudget = async (
   attachments: BotMessageAttachment[],
   budget: PlatformAttachmentBudget,
+  { oversizeImageStrategy = DEFAULT_OVERSIZE_IMAGE_STRATEGY }: PrepareAttachmentsOptions = {},
 ): Promise<PreparedAttachments> => {
   const kept: BotMessageAttachment[] = [];
   const keptOriginals: BotMessageAttachment[] = [];
   const degraded: BotMessageAttachment[] = [];
+  const degradations: AttachmentDegradation[] = [];
   const fallbackLines: string[] = [];
 
-  for (const attachment of attachments) {
-    const limit = attachment.type === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
-    const size = knownSize(attachment);
+  const recordDegradation = (
+    attachment: BotMessageAttachment,
+    reason: DegradationReason,
+    size?: number,
+  ) => {
+    log('degrading "%s" to a link: %s', attachment.name ?? '(unnamed)', reason);
+    degradations.push({
+      name: attachment.name,
+      reason,
+      size: size ?? attachment.size,
+      type: attachment.type,
+    });
+  };
 
-    if (size === undefined || size <= limit) {
+  // Probe every unmeasured attachment at once rather than once per loop turn:
+  // serially, N slow URLs cost N x the probe timeout before the first send.
+  const sizes = await Promise.all(attachments.map((attachment) => resolveSize(attachment)));
+
+  for (const [index, attachment] of attachments.entries()) {
+    const limit = attachment.type === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
+    const size = sizes[index];
+
+    if (size !== undefined && size <= limit) {
       kept.push(attachment);
       keptOriginals.push(attachment);
       continue;
     }
 
+    // Size still unknown after the probe: the server declared no length, so we
+    // cannot promise the bytes fit. Uploading anyway is the silent-loss case —
+    // the loader's in-memory cap would refuse it during materialization and the
+    // sender would skip it, delivering neither file nor link. Degrade instead;
+    // an attachment with no link to fall back to is kept as a last resort
+    // below.
+    if (size === undefined) {
+      if (!attachment.fetchUrl) {
+        kept.push(attachment);
+        keptOriginals.push(attachment);
+        continue;
+      }
+      recordDegradation(attachment, 'unverifiable-size');
+      degraded.push(attachment);
+      fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
+      continue;
+    }
+
     // Only images are worth downloading — and only when the declared size is
     // small enough that buffering it for re-encode is safe. A 500MB "image"
-    // goes straight to the link fallback instead of into memory.
-    if (attachment.type === 'image' && size <= MAX_COMPRESSION_SOURCE_BYTES) {
+    // goes straight to the link fallback instead of into memory. `link` is the
+    // sender's explicit choice to keep the original, so the download and
+    // re-encode are skipped entirely rather than attempted and thrown away.
+    if (
+      oversizeImageStrategy === 'compress' &&
+      attachment.type === 'image' &&
+      size <= MAX_COMPRESSION_SOURCE_BYTES
+    ) {
       const source = await loadSourceBuffer(attachment);
       const compressed = source && (await compressImageToBudget(source, budget.imageMaxBytes));
+      if (!compressed)
+        recordDegradation(attachment, source ? 'compression-failed' : 'source-unavailable', size);
       if (compressed) {
         kept.push({
           ...attachment,
@@ -247,12 +415,15 @@ export const prepareAttachmentsForBudget = async (
     }
 
     if (attachment.fetchUrl) {
-      log(
-        'attachment "%s" (%d bytes) exceeds %d-byte budget — degrading to link',
-        attachment.name ?? '(unnamed)',
-        size,
-        limit,
-      );
+      // A `link` strategy is the sender's deliberate choice, not a failure, and
+      // an image that just failed to compress has already been reported above.
+      // An image that already recorded `compression-failed` / `source-unavailable`
+      // above is not recorded twice; `link` is the sender's own choice, not a
+      // failure, and is labelled as such.
+      if (oversizeImageStrategy === 'link' && attachment.type === 'image')
+        recordDegradation(attachment, 'strategy-link', size);
+      else if (attachment.type !== 'image' || size > MAX_COMPRESSION_SOURCE_BYTES)
+        recordDegradation(attachment, 'not-compressible', size);
       fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
       degraded.push(attachment);
       continue;
@@ -264,7 +435,7 @@ export const prepareAttachmentsForBudget = async (
     keptOriginals.push(attachment);
   }
 
-  return { attachments: kept, degraded, fallbackLines, keptOriginals };
+  return { attachments: kept, degradations, degraded, fallbackLines, keptOriginals };
 };
 
 /**

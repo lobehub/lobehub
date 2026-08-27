@@ -23,14 +23,14 @@ import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:SystemCtr');
 
-interface SystemMonospaceFont {
+interface SystemFont {
   label: string;
   value: string;
 }
 
 export default class SystemController extends ControllerModule {
   static override readonly groupName = 'system';
-  private systemMonospaceFontsPromise?: Promise<SystemMonospaceFont[]>;
+  private systemFontsPromises = new Map<string, Promise<SystemFont[]>>();
   private systemThemeListenerInitialized = false;
 
   /**
@@ -236,34 +236,46 @@ export default class SystemController extends ControllerModule {
   }
 
   @IpcMethod()
-  async getSystemMonospaceFonts(): Promise<SystemMonospaceFont[]> {
-    if (!this.systemMonospaceFontsPromise) {
-      this.systemMonospaceFontsPromise = import('font-list')
-        .then(({ getFonts2 }) => getFonts2())
-        .then((fonts) => {
-          const families = new Map<string, SystemMonospaceFont>();
+  async getSystemMonospaceFonts(): Promise<SystemFont[]> {
+    return this.loadSystemFonts(true);
+  }
 
-          for (const font of fonts) {
-            const label = font.name.trim();
-            const value = font.familyName.trim();
-            if (!font.monospace || !label || !value) continue;
+  @IpcMethod()
+  async getSystemFonts(): Promise<SystemFont[]> {
+    return this.loadSystemFonts(false);
+  }
 
-            const normalizedName = label.toLocaleLowerCase();
-            if (!families.has(normalizedName)) families.set(normalizedName, { label, value });
-          }
+  private loadSystemFonts(monospaceOnly: boolean): Promise<SystemFont[]> {
+    const cacheKey = monospaceOnly ? 'monospace' : 'all';
+    let cached = this.systemFontsPromises.get(cacheKey);
+    if (cached) return cached;
 
-          return [...families.values()].sort((left, right) =>
-            left.label.localeCompare(right.label),
-          );
-        })
-        .catch((error) => {
-          this.systemMonospaceFontsPromise = undefined;
-          logger.error('Failed to enumerate system monospace fonts:', error);
-          throw error;
-        });
-    }
+    cached = import('font-list')
+      .then(({ getFonts2 }) => getFonts2())
+      .then((fonts) => {
+        const families = new Map<string, SystemFont>();
 
-    return this.systemMonospaceFontsPromise;
+        for (const font of fonts) {
+          const label = font.name.trim();
+          const value = font.familyName.trim();
+          if (!label || !value) continue;
+          if (monospaceOnly && !font.monospace) continue;
+
+          const normalizedName = label.toLocaleLowerCase();
+          if (!families.has(normalizedName)) families.set(normalizedName, { label, value });
+        }
+
+        return [...families.values()].sort((left, right) => left.label.localeCompare(right.label));
+      })
+      .catch((error) => {
+        this.systemFontsPromises.delete(cacheKey);
+        logger.error('Failed to enumerate system fonts:', error);
+        throw error;
+      });
+
+    this.systemFontsPromises.set(cacheKey, cached);
+
+    return cached;
   }
 
   @IpcMethod()

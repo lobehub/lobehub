@@ -146,6 +146,8 @@
   "updater.later": "Later",
   "updater.newVersionAvailable": "Nieuwe versie beschikbaar",
   "updater.newVersionAvailableDesc": "Er is een nieuwe versie {{version}} gevonden, wilt u deze nu downloaden?",
+  "updater.refreshToApply": "Nu vernieuwen",
+  "updater.rendererUpdateReady": "Een nieuwe versie is beschikbaar — vernieuw om toe te passen",
   "updater.restartAndInstall": "Updates installeren en herstarten",
   "updater.updateError": "Updatefout",
   "updater.updateReady": "Een nieuwe versie is beschikbaar",

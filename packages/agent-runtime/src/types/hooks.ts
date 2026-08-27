@@ -150,7 +150,8 @@ export interface ToolCallHookEvent {
   args: Record<string, any>;
   callIndex: number;
   identifier: string;
-  mock: (result: ToolRunResult) => void;
+  /** Returns false when an earlier hook already won the mock slot. */
+  mock: (result: ToolRunResult) => boolean;
   operationId: string;
   stepIndex: number;
 }

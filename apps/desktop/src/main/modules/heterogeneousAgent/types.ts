@@ -47,9 +47,17 @@ export interface PrepareProviderBindingContext {
   args: string[];
   env?: Record<string, string>;
   profileDir: string;
-  reference: HeterogeneousProviderBindingReference;
+  reference: Extract<HeterogeneousProviderBindingReference, { kind: 'provider' }>;
   resolution: HeterogeneousProviderBindingResolution;
   runDir: string;
+}
+
+export interface PrepareServerDefaultBindingContext {
+  args: string[];
+  endpoint: string;
+  env?: Record<string, string>;
+  model: string;
+  profileDir: string;
 }
 
 export interface ProviderBindingPlan {
@@ -70,5 +78,8 @@ export interface HeterogeneousAgentDriver {
   ) => Promise<HeterogeneousAgentBuildPlan>;
   prepareProviderBinding?: (
     context: PrepareProviderBindingContext,
+  ) => Promise<ProviderBindingPlan> | ProviderBindingPlan;
+  prepareServerDefaultBinding?: (
+    context: PrepareServerDefaultBindingContext,
   ) => Promise<ProviderBindingPlan> | ProviderBindingPlan;
 }

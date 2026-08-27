@@ -36,6 +36,7 @@ describe('getProviderBindingRuntime', () => {
       },
       {
         apiConfig: { model: 'claude-test', providerId: 'anthropic-custom' },
+        kind: 'provider',
       },
     );
 

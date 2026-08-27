@@ -20,8 +20,10 @@ import type {
   QoderReasoningEffort,
 } from './heteroSelectorCapabilities';
 import {
+  applyHeteroSelection,
   CODEX_REASONING_EFFORT_CONFIG_KEY,
   CODEX_SERVICE_TIER_CONFIG_KEY,
+  getHeteroSelectorCapability,
   GROK_BUILD_REASONING_EFFORT_FLAGS,
   HETERO_SELECTOR_CAPABILITIES,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
@@ -79,17 +81,69 @@ export type HeterogeneousAgentModelCatalog =
 export type HeterogeneousAuthMode = 'api' | 'subscription';
 
 /**
- * Reference-only API binding for a heterogeneous agent.
+ * Reference-only user-provider API binding for a heterogeneous agent.
  * Provider credentials are resolved at launch and are never persisted here.
  */
-export interface HeterogeneousApiConfig {
+export interface HeterogeneousProviderApiConfig {
   /** Primary model used by the CLI. */
   model: string;
-  /** LobeHub provider whose runtime credentials are resolved locally. */
+  /** User provider whose runtime credentials are resolved locally. */
   providerId: string;
   /** Optional model used for fast/background work. Defaults to the primary model. */
   smallFastModel?: string | null;
+  /** Omitted by existing records; any omitted source is a user-provider binding. */
+  source?: 'provider';
 }
+
+/** Legacy Claude Code request alias. Current CLIs send `lobehub/${catalogId}`. */
+export const SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS = 'lobehub-default';
+
+const SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE = 'lobehub/';
+
+export const formatServerDefaultHeterogeneousModel = (model: string): string =>
+  `${SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE}${model}`;
+
+export const isServerDefaultHeterogeneousModel = (
+  requestModel: unknown,
+  operationModel: string,
+): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
+
+/**
+ * Map a CLI-reported server-default model back to the catalog id.
+ *
+ * Both CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
+ * {@link SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS}. Neither is the catalog id
+ * the user picked.
+ */
+export const unwrapServerDefaultHeterogeneousModel = (
+  reportedModel: string | undefined,
+  configuredModel?: string,
+): string | undefined => {
+  const configured = configuredModel?.trim() || undefined;
+
+  if (!reportedModel) return configured;
+
+  if (reportedModel === SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS) {
+    return configured ?? reportedModel;
+  }
+
+  if (reportedModel.startsWith(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE)) {
+    const unwrapped = reportedModel.slice(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE.length);
+    return unwrapped || reportedModel;
+  }
+
+  return reportedModel;
+};
+
+/** Deployment-owned API binding whose provider and credentials stay on the server. */
+export interface HeterogeneousServerDefaultApiConfig {
+  /** Model id from the deployment's enabled model catalog. */
+  model: string;
+  source: 'server-default';
+}
+
+export type HeterogeneousApiConfig =
+  HeterogeneousProviderApiConfig | HeterogeneousServerDefaultApiConfig;
 
 /**
  * Heterogeneous agent provider configuration.
@@ -108,7 +162,7 @@ export interface HeterogeneousApiConfig {
  *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
-  /** Credential-free LobeHub Provider binding used when `authMode` is `api`. */
+  /** Credential-free API binding used when `authMode` is `api`. */
   apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];
@@ -163,6 +217,62 @@ export interface HeterogeneousProviderConfig {
   /** Agent runtime type, derived from the shared heterogeneous-agent descriptor catalog. */
   type: HeterogeneousAgentType;
 }
+
+export interface HeterogeneousTopicModel {
+  model: string;
+  provider: string;
+}
+
+/**
+ * Resolve the topic-level model snapshot for a heterogeneous provider.
+ *
+ * Server-default API models intentionally remain Agent-scoped: unlike a user-provider
+ * binding, their deployment-owned provider identity cannot be represented by the topic's
+ * model/provider pair. Their topic execution therefore ignores any stale pin from another
+ * auth mode and follows the current Agent config.
+ */
+export const resolveHeterogeneousProviderTopicModel = (
+  config: HeterogeneousProviderConfig,
+): HeterogeneousTopicModel | undefined => {
+  if (config.authMode === 'api') {
+    if (!config.apiConfig || config.apiConfig.source === 'server-default') return undefined;
+    return { model: config.apiConfig.model, provider: config.apiConfig.providerId };
+  }
+
+  const model = getHeteroSelectorCapability(config.type)?.model?.resolve(config);
+  return model ? { model, provider: config.type } : undefined;
+};
+
+export const applyTopicModelToHeterogeneousProvider = (
+  config: HeterogeneousProviderConfig,
+  topicModel: HeterogeneousTopicModel | undefined,
+): HeterogeneousProviderConfig => {
+  if (!topicModel?.model) return config;
+
+  if (config.authMode === 'api') {
+    const apiConfig = config.apiConfig;
+    // Server-default is Agent-scoped. In particular, do not turn it back into a
+    // user-provider binding when this topic retains a pin from an earlier auth mode.
+    if (apiConfig?.source === 'server-default') return config;
+    if (!topicModel.provider || topicModel.provider === config.type) return config;
+    return {
+      ...config,
+      apiConfig: {
+        model: topicModel.model,
+        providerId: topicModel.provider,
+        ...(apiConfig?.providerId === topicModel.provider
+          ? { smallFastModel: apiConfig.smallFastModel }
+          : {}),
+      },
+    };
+  }
+
+  if (topicModel.provider !== config.type) return config;
+  return {
+    ...config,
+    ...applyHeteroSelection(config, { model: topicModel.model }),
+  };
+};
 
 const HETEROGENEOUS_AGENT_TYPES = new Set<string>([
   ...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),

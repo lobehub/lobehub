@@ -381,6 +381,18 @@ export class VerifyService {
   }): Promise<VerifyCriterionDraft[]> =>
     lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
 
+  /** Draft the title, instruction, and criteria used by the create-goal review step. */
+  generateGoalPlan = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<
+    { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+  > =>
+    lambdaClient.verify.generateGoalPlan.mutate(input) as Promise<
+      { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+    >;
+
   /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
   createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>
     lambdaClient.verify.createCriteria.mutate({ drafts }) as Promise<string[]>;

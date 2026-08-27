@@ -200,3 +200,18 @@ export function formatUsageStats(stats: UsageStats): string {
       : '';
   return `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
 }
+
+/**
+ * The platform a `platformThreadId` belongs to.
+ *
+ * Thread ids are platform-prefixed (`wechat:…`, `discord:…`), which is the
+ * only thing tying a live conversation back to its platform once it is in
+ * flight — and therefore what routes gateway calls to the host that owns the
+ * connection. Passes `undefined` through so optional bot contexts can hand
+ * their thread id over without a guard at every call site.
+ */
+export function platformFromThreadId(platformThreadId: string): string;
+export function platformFromThreadId(platformThreadId: string | undefined): string | undefined;
+export function platformFromThreadId(platformThreadId?: string): string | undefined {
+  return platformThreadId?.split(':')[0];
+}

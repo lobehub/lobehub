@@ -14,6 +14,7 @@
     "build:cli": "cd ../cli && cross-env MINIFY=1 bun run build",
     "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 npm run build:main:raw",
     "build:main:raw": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.renderer.config.ts",
+    "build:renderer": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build --config vite.renderer.config.ts",
     "build:run-unpack": "electron .",
     "db:generate:local": "drizzle-kit generate --config drizzle.local.config.ts",
     "dev": "node scripts/dev.mjs",
@@ -122,7 +123,8 @@
     "uuid": "^14.0.1",
     "vite": "8.0.14",
     "vitest": "3.2.6",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zod-compiler": "^1.28.0"
   },
   "optionalDependencies": {
     "node-mac-permissions": "^2.5.0"

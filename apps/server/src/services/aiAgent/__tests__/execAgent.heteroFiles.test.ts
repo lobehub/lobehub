@@ -313,15 +313,54 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(userCall![0].files).toEqual(['file-1', 'file-2']);
   });
 
-  it('should pin the runtime type — not the agent chat model — on a server-created topic', async () => {
-    // regression: the topic-scoped model snapshot pinned the agent's chat
-    // model/provider, so a Gateway-created hetero topic came back from the
-    // server tagged with the default chat provider instead of the CLI runtime.
+  it('should pin the CLI default selection and runtime type on a server-created topic', async () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
 
     expect(topicMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({ model: undefined, provider: 'claude-code' }),
+      expect.objectContaining({ model: 'default', provider: 'claude-code' }),
       undefined,
+    );
+  });
+
+  it('should snapshot and execute a selected heterogeneous model on a server-created topic', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'opus',
+      type: 'claude-code',
+    } as any;
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Run with Opus' });
+
+    expect(topicMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'opus', provider: 'claude-code' }),
+      undefined,
+    );
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--model', 'opus'] }),
+    );
+  });
+
+  it('should execute an existing topic with its pinned heterogeneous model', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      args: ['--model', 'stale-arg-model'],
+      model: 'agent-model',
+      type: 'claude-code',
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      id: 'topic-existing',
+      metadata: undefined,
+      model: 'topic-model',
+      provider: 'claude-code',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-existing' },
+      prompt: 'Continue with the topic model',
+    } as any);
+
+    expect(topicMock.create).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--model', 'topic-model'] }),
     );
   });
 
@@ -457,6 +496,13 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           status: 'error',
           success: false,
         }),
+      );
+      expect(topicMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: type === 'codex' ? 'gpt-test' : 'claude-test',
+          provider: type === 'codex' ? 'openai' : 'anthropic',
+        }),
+        undefined,
       );
       expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
       expect(mockDispatchAgentRun).not.toHaveBeenCalled();
@@ -1027,12 +1073,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         'parent-operation',
         expect.objectContaining({ operationId: expect.stringContaining('op_') }),
       );
-      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith(
-        'topic-1',
-        expect.any(String),
-        'parent-operation',
-        undefined,
-      );
+      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', expect.any(String), {
+        allowRunningOperationId: 'parent-operation',
+        ignoreRunningOperation: undefined,
+        replacesOperationId: undefined,
+      });
       expect(mockCreateOperationMetadata).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),
@@ -1418,6 +1463,66 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       await service.interruptTask({ operationId: 'operation-1', topicId: 'topic-1' });
 
       expect(mockExecuteToolCall).not.toHaveBeenCalled();
+    });
+
+    // Regression guard: a callAgent/callSubAgent-spawned hetero
+    // child (isolation-thread, no topicStartOwnerOperationId) must still get
+    // its userId/workspaceId written to the state-manager metadata store —
+    // subAgentCallback reads it to authorize resuming the parked parent
+    // operation. Without it, the completion webhook 401s, the parent is
+    // never resumed, and it stays parked until the inactivity watchdog
+    // abandons it ~10 minutes later.
+    it('persists userId/workspaceId metadata for a callAgent-spawned hetero child', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      const call = mockCreateOperationMetadata.mock.calls.find(
+        ([, data]) => data.userId === 'test-user-id',
+      );
+      expect(call).toBeDefined();
+      // No topic-owner mirror target on this path — mirrorToOperationId must
+      // stay unset rather than being derived from parentOperationId.
+      expect(call?.[1]).not.toHaveProperty('mirrorToOperationId');
+    });
+
+    it('nests an isolation-thread child under the parent marker instead of claiming topic root', async () => {
+      // heteroIngest/heteroFinish resolve an operationId via
+      // topic.metadata.runningOperation (root or childOperations) — a plain
+      // updateMetadata() here would clobber the parent's own root marker
+      // instead of nesting under it.
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      expect(topicMock.appendRunningOperationChild).toHaveBeenCalledWith(
+        'topic-1',
+        'parent-operation',
+        expect.objectContaining({ operationId: expect.stringContaining('op_') }),
+      );
+      // Not claimed as the topic's own root marker.
+      expect(findRunningOpSeed()).toBeUndefined();
+    });
+
+    it('falls back to claiming the topic marker when the parent is not the current root (e.g. nested isolation chain)', async () => {
+      topicMock.appendRunningOperationChild.mockResolvedValueOnce(false);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      // Otherwise this child would never be recognized by
+      // heteroIngest/heteroFinish at all.
+      expect(findRunningOpSeed()).toBeDefined();
     });
   });
 });

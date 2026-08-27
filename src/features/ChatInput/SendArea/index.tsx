@@ -36,14 +36,14 @@ const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
     () =>
       canShowControls
         ? mapActionsToItems(
-            audioInputActive
-              ? ([
-                  activeAudioInputMode === 'dictation' ? 'voiceDictation' : 'voiceMessage',
-                ] as ActionKey[])
-              : resolveSendAreaActionKeys(rightActions as ActionKey[], hideContextWindow),
+            resolveSendAreaActionKeys(
+              rightActions as ActionKey[],
+              hideContextWindow,
+              activeAudioInputMode,
+            ),
           )
         : [],
-    [activeAudioInputMode, audioInputActive, canShowControls, hideContextWindow, rightActions],
+    [activeAudioInputMode, canShowControls, hideContextWindow, rightActions],
   );
 
   return (

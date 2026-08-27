@@ -21,11 +21,14 @@ const shouldTriggerFileInKnowledgeBaseTip = (s: UserStore) =>
   !(typeof s.preference.guide?.moveSettingsToAvatar === 'boolean');
 
 const isPreferenceInit = (s: UserStore) => s.isUserStateInit;
+const fontFamily = (s: UserStore): string | undefined =>
+  s.preference.fontFamily?.trim() || undefined;
 const terminalFontFamily = (s: UserStore): string | undefined =>
   s.preference.terminalFontFamily?.trim() || undefined;
 
 export const preferenceSelectors = {
   defaultOpenInApp,
+  fontFamily,
   hideSettingsMoveGuide,
   hideSyncAlert,
   isPreferenceInit,

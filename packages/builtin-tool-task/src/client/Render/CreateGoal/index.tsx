@@ -18,8 +18,8 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAcceptanceBySubject } from '@/features/Verify';
-import { acceptanceOverviewPath } from '@/features/Verify/Acceptance/routes';
+import { useAcceptanceBySubject } from '@/features/Acceptance';
+import { acceptanceOverviewPath } from '@/features/Acceptance/Viewer/routes';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import type { CreateGoalParams, CreateGoalState } from '../../../types';

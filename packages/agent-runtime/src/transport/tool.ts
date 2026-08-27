@@ -82,6 +82,12 @@ export interface ToolRunExecution {
  * adapter is constructed — NOT passed here — so this stays transport-neutral.
  */
 export interface ToolRunContext {
+  /**
+   * Forwarded from `RuntimeOperationContext.abortSignal`. Transports that reach
+   * the network (or a device) should thread it into their request so an
+   * interrupt actually stops the work, not just stops waiting for it.
+   */
+  abortSignal?: AbortSignal;
   activatedSkills?: unknown[];
   activeDeviceId?: string;
   agentId?: string;

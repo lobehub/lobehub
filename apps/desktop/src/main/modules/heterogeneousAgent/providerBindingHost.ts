@@ -71,7 +71,7 @@ export const prepareHostedProviderBinding = async (params: {
   args: string[];
   driver: HeterogeneousAgentDriver;
   env?: Record<string, string>;
-  reference: HeterogeneousProviderBindingReference;
+  reference: Extract<HeterogeneousProviderBindingReference, { kind: 'provider' }>;
   resolution: HeterogeneousProviderBindingResolution;
   sessionId: string;
 }): Promise<HostedProviderBinding> => {
@@ -133,6 +133,66 @@ export const prepareHostedProviderBinding = async (params: {
   }
 };
 
+export const prepareHostedServerDefaultBinding = async (params: {
+  agentType: string;
+  appStoragePath: string;
+  args: string[];
+  driver: HeterogeneousAgentDriver;
+  endpoint: string;
+  env?: Record<string, string>;
+  model: string;
+  sessionId: string;
+}): Promise<HostedProviderBinding> => {
+  if (!params.driver.prepareServerDefaultBinding) {
+    throw new Error(`${params.agentType} does not implement server-default binding.`);
+  }
+  const digest = hash(
+    ['server-default:v2', params.agentType, params.endpoint, params.model].join('\0'),
+  );
+  const profileDir = path.join(
+    params.appStoragePath,
+    HETERO_AGENT_BINDINGS_DIR,
+    params.agentType,
+    digest,
+  );
+  const runDir = path.join(params.appStoragePath, HETERO_AGENT_RUNS_DIR, params.sessionId);
+  await mkdir(profileDir, { mode: DIRECTORY_MODE, recursive: true });
+  await mkdir(runDir, { mode: DIRECTORY_MODE, recursive: true });
+  await chmod(profileDir, DIRECTORY_MODE);
+  await chmod(runDir, DIRECTORY_MODE);
+  // Same GC contract as provider bindings: the sweep keys off this marker, and
+  // a claude-code server-default profile writes nothing else into the profile
+  // root (transcripts land in subdirectories), so without it the directory
+  // mtime stays at creation and an in-use profile would be collected.
+  await writeFile(path.join(profileDir, LAST_USED_MARKER), new Date().toISOString(), {
+    encoding: 'utf8',
+    mode: FILE_MODE,
+  });
+  try {
+    const plan = await params.driver.prepareServerDefaultBinding({
+      args: params.args,
+      endpoint: params.endpoint,
+      env: params.env,
+      model: params.model,
+      profileDir,
+    });
+    await writeManagedFiles(profileDir, runDir, plan.profileFiles);
+    await writeManagedFiles(runDir, runDir, plan.runFiles);
+    return {
+      args: plan.args,
+      bindingKey: `server-default:v2:${digest}`,
+      cleanup: () => rm(runDir, { force: true, recursive: true }),
+      cleanupSync: () => rmSync(runDir, { force: true, recursive: true }),
+      env: plan.env,
+      profileDir,
+      runDir,
+    };
+  } catch (error) {
+    await rm(runDir, { force: true, recursive: true });
+    throw error;
+  }
+};
+
 const statMtimeMs = async (target: string): Promise<number | undefined> => {
   try {
     return (await stat(target)).mtimeMs;
@@ -148,9 +208,10 @@ const statMtimeMs = async (target: string): Promise<number | undefined> => {
  * provider, changing its endpoint, or bumping the identity version would
  * otherwise strand them (with transcripts inside) forever.
  *
- * Profiles are considered used when `prepareHostedProviderBinding` touches
- * their marker at session start; pre-marker profiles fall back to directory
- * mtime. Best-effort: failures skip the entry.
+ * Profiles are considered used when `prepareHostedProviderBinding` or
+ * `prepareHostedServerDefaultBinding` touches their marker at session start;
+ * pre-marker profiles fall back to directory mtime. Best-effort: failures skip
+ * the entry.
  *
  * @returns absolute paths of the removed profile directories
  */

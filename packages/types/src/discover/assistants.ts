@@ -76,6 +76,7 @@ export interface AssistantQueryParams {
   category?: string;
   haveSkills?: boolean;
   includeAgentGroup?: boolean;
+  includeCategoryCounts?: boolean;
   locale?: string;
   order?: 'asc' | 'desc';
   ownerId?: string;
@@ -87,6 +88,7 @@ export interface AssistantQueryParams {
 }
 
 export interface AssistantListResponse {
+  categoryCounts?: { category: string; count: number }[];
   currentPage: number;
   items: DiscoverAssistantItem[];
   pageSize: number;

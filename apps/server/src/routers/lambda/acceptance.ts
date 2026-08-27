@@ -17,7 +17,6 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ProjectModel } from '@/database/models/project';
-import { TaskModel } from '@/database/models/task';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
@@ -31,6 +30,7 @@ import {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
+  isCurrentReviewPrediction,
   mapWithConcurrency,
   REVIEW_PREDICT_CONCURRENCY,
   REVIEW_PREDICT_MODEL_CONFIG,
@@ -233,14 +233,6 @@ export const acceptanceRouter = router({
         await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
           requirement: input.requirement,
         });
-        // A Task acceptance is instantiated from tasks.config.verify. Mirror
-        // edits back to that source so the next run cannot restore an older goal.
-        if (input.subjectType === 'task') {
-          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-          const task = await taskModel.resolve(input.subjectId);
-          if (!task) throw new Error('Task not found in the current workspace');
-          await taskModel.updateVerifyConfig(task.id, { requirement: input.requirement });
-        }
         return { id: aggregate.id, requirement: input.requirement };
       } catch (error) {
         throw new TRPCError({
@@ -434,6 +426,9 @@ export const acceptanceRouter = router({
       // Newest-first from the model, so the first write per check item wins and
       // later (older) rows are ignored.
       for (const prediction of predictions) {
+        // Rows from an earlier pin (another model / prompt version) stay in
+        // the table for the comparison set but are not this page's reviewer.
+        if (!isCurrentReviewPrediction(prediction, REVIEW_PREDICT_MODEL_CONFIG)) continue;
         if (!predictionByResult.has(prediction.checkResultId)) {
           predictionByResult.set(prediction.checkResultId, prediction);
         }
@@ -468,6 +463,12 @@ export const acceptanceRouter = router({
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
             prediction:
               prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
+            // The card above is gated to actionable rejects, but the FACT that
+            // the predictor finished with this check must stay visible: an
+            // `accept`, a skip and an error all render no card, and without
+            // this the predict button's poll cannot tell "still running" from
+            // "reviewed, nothing to say" — it spins to timeout on a clean bill.
+            predictionStatus: prediction?.status ?? null,
             reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
@@ -751,6 +752,15 @@ export const acceptanceRouter = router({
       // Only checks the reviewer has not already ruled on. Re-judging a settled
       // check spends budget to argue with a decision that is already made.
       const pending = checks.filter((check) => check.result && !check.result.userDecision);
+
+      // Forget the previous batch's unanswered rows BEFORE responding: the
+      // client waits for every queued check to carry a recorded attempt, and
+      // with the old rows still in place that condition holds on the first
+      // poll — before a single new judgement has landed.
+      await predictor.resetPending(
+        pending.map((check) => check.result!.id),
+        modelConfig,
+      );
 
       // Dispatched AFTER the response, with a ceiling on how many model calls
       // are open at once.

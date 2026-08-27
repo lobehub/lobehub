@@ -133,7 +133,16 @@ const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
 
 const STEP_LOCK_TTL_SECONDS = 120;
+/**
+ * How often a live step re-reads its own operation state to notice an
+ * interrupt. Interrupts are persisted by a different invocation, so this poll
+ * is the only way a running tool learns it should stop.
+ */
+const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
+/** Cap on the exponential backoff multiplier after consecutive poll failures. */
+const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
+const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 
 const toToolForwardingFailure = (error?: unknown): ToolRunResult => ({
@@ -375,6 +384,7 @@ export interface AgentRuntimeServiceOptions {
  * ```
  */
 export class AgentRuntimeService {
+  private agentOperationModel: AgentOperationModel;
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
@@ -434,6 +444,7 @@ export class AgentRuntimeService {
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
     const workspaceId = this.workspaceId;
+    this.agentOperationModel = new AgentOperationModel(db, this.userId, workspaceId);
     this.messageModel = new MessageModel(db, this.userId, workspaceId);
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId);
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
@@ -455,13 +466,28 @@ export class AgentRuntimeService {
     stepIndex: number,
     ownerId: string,
   ): () => void {
+    let heartbeatTick = 0;
     const timer = setInterval(() => {
-      this.coordinator
-        .refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId)
-        .then((refreshed) => {
+      heartbeatTick += 1;
+      const refreshDurableLease = heartbeatTick % DURABLE_LEASE_HEARTBEAT_EVERY_TICKS === 0;
+
+      Promise.all([
+        this.coordinator.refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId),
+        refreshDurableLease
+          ? this.agentOperationModel.touchRunning(operationId)
+          : Promise.resolve(true),
+      ])
+        .then(([refreshed, leaseRefreshed]) => {
           if (!refreshed) {
             log(
               '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+          if (!leaseRefreshed) {
+            log(
+              '[%s][%d] Durable operation lease was lost; terminal persistence will be rejected',
               operationId,
               stepIndex,
             );
@@ -555,6 +581,7 @@ export class AgentRuntimeService {
       deviceAccessPolicy,
       discordContext,
       evalContext,
+      evalRuntime,
       enableExpertise,
       expertise,
       executionPlan,
@@ -656,6 +683,7 @@ export class AgentRuntimeService {
           deviceSystemInfo,
           discordContext,
           evalContext,
+          evalRuntime,
           executionPlan,
           // need be removed
           modelRuntimeConfig,
@@ -853,6 +881,40 @@ export class AgentRuntimeService {
       return this.handleGroupMemberTimeout(groupMemberTimeout);
     }
 
+    // Redis keeps the resumable step state, but the durable operation row is
+    // the authority for cancellation/recovery. A queued QStash delivery can
+    // outlive a crashed process and arrive after Goal recovery has atomically
+    // marked that operation interrupted. ACK it without touching the old
+    // topic; otherwise the abandoned attempt can finish concurrently with its
+    // replacement and submit a second Acceptance run.
+    try {
+      const durableOperation = await this.agentOperationModel.findById(operationId);
+      if (
+        durableOperation &&
+        ['done', 'error', 'interrupted', 'abandoned'].includes(durableOperation.status)
+      ) {
+        log(
+          '[%s][%d] Skipping delivery for terminal durable operation (%s)',
+          operationId,
+          stepIndex,
+          durableOperation.status,
+        );
+        return {
+          nextStepScheduled: false,
+          state: {
+            status:
+              durableOperation.status === 'abandoned' ? 'interrupted' : durableOperation.status,
+          },
+          stepResult: null,
+          success: true,
+        };
+      }
+    } catch (error) {
+      // Preserve runtime availability when the durable store has a transient
+      // read failure. The step lock and normal persistence path still apply.
+      log('[%s][%d] Durable operation status check failed: %O', operationId, stepIndex, error);
+    }
+
     // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
     // without claiming the step lock or executing anything. Idempotent — the
     // CAS guarantees at most one real resume regardless of how many checks run.
@@ -1004,11 +1066,22 @@ export class AgentRuntimeService {
       };
     }
 
+    await this.agentOperationModel.touchRunning(operationId).catch((error) => {
+      log('[%s][%d] Operation lease refresh failed: %O', operationId, stepIndex, error);
+    });
     const stopStepLockHeartbeat = this.startStepLockHeartbeat(
       operationId,
       stepIndex,
       stepLockOwner,
     );
+
+    // Hoisted so the shared `finally` can stop it on every exit path — an
+    // orphaned interval would keep polling Redis for a step that is long gone.
+    let stepAbortPoll: ReturnType<typeof setTimeout> | undefined;
+    // Clearing the timeout is not enough: a poll already awaiting the state read
+    // would schedule the next one after the step is gone, leaking a loop that
+    // re-reads the store forever for a finished operation.
+    let stepAbortPollStopped = false;
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -1189,7 +1262,43 @@ export class AgentRuntimeService {
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
+        // Interrupts arrive as a flag on the persisted state — the request that
+        // asked for the stop runs in a different invocation, so there is no
+        // in-process controller to share. Poll for it while the step is alive
+        // and cancel locally, otherwise a multi-minute tool would keep running
+        // long after the user asked it to stop.
+        const stepAbortController = new AbortController();
+        // Serialized on purpose: `setInterval` would fire a new read without
+        // waiting for the last one, so a slow or failing state store turns every
+        // concurrent run into a growing pile of overlapping requests — the load
+        // spikes exactly when the store is already struggling. Each read is
+        // scheduled only after the previous one settles, and failures back off.
+        let abortPollFailures = 0;
+        const pollForAbort = async () => {
+          try {
+            const latest = await this.coordinator.loadAgentState(operationId);
+            abortPollFailures = 0;
+            if (latest?.status === 'interrupted') {
+              stepAbortController.abort();
+              return;
+            }
+          } catch (error) {
+            abortPollFailures += 1;
+            log('[%s][%d] Abort poll failed: %O', operationId, stepIndex, error);
+          }
+
+          if (stepAbortPollStopped || stepAbortController.signal.aborted) return;
+
+          stepAbortPoll = setTimeout(
+            pollForAbort,
+            STEP_ABORT_POLL_INTERVAL_MS *
+              Math.min(2 ** abortPollFailures, STEP_ABORT_POLL_MAX_BACKOFF),
+          );
+        };
+        stepAbortPoll = setTimeout(pollForAbort, STEP_ABORT_POLL_INTERVAL_MS);
+
         const { runtime } = await this.createAgentRuntime({
+          abortSignal: stepAbortController.signal,
           agentState,
           metadata: agentState?.metadata,
           operationId,
@@ -1291,7 +1400,7 @@ export class AgentRuntimeService {
           forcedFinish: Boolean(forcedFinishState),
           stateStatus: currentState.status,
         }));
-        const stepResult = forcedFinishState
+        let stepResult = forcedFinishState
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
           : await runtime.step(currentState, currentContext);
 
@@ -1317,6 +1426,34 @@ export class AgentRuntimeService {
           interrupted: latestState?.status === 'interrupted',
         }));
         if (latestState?.status === 'interrupted') {
+          // Stop can be persisted after a client-tool executor's last local
+          // signal check but before this reconciliation read. If that executor
+          // just returned a parked state, run the agent's existing abort path
+          // once so every pending tool call gets a terminal row before the
+          // interrupted state is saved.
+          if (
+            stepResult.newState.status === 'waiting_for_async_tool' &&
+            stepResult.newState.pendingToolsCalling?.length &&
+            currentContext
+          ) {
+            const interruptedState = structuredClone(stepResult.newState);
+            interruptedState.status = 'interrupted';
+            const abortContext: AgentRuntimeContext = {
+              ...currentContext,
+              payload: {
+                ...(currentContext.payload as Record<string, unknown>),
+                hasToolsCalling: true,
+                toolsCalling: interruptedState.pendingToolsCalling,
+              },
+              phase: 'llm_result',
+            };
+            const abortResult = await runtime.step(interruptedState, abortContext);
+            stepResult = {
+              ...abortResult,
+              events: [...stepResult.events, ...abortResult.events],
+            };
+          }
+
           stepResult.newState.status = 'interrupted';
           stepResult.newState.lastModified = new Date().toISOString();
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
@@ -1745,6 +1882,8 @@ export class AgentRuntimeService {
       throw error;
     } finally {
       invokeAgentSpan.end();
+      stepAbortPollStopped = true;
+      if (stepAbortPoll) clearTimeout(stepAbortPoll);
       stopStepLockHeartbeat();
       await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
@@ -2906,12 +3045,15 @@ export class AgentRuntimeService {
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
+    abortSignal,
     agentState,
     metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
   }: {
+    /** Cancels in-flight tool work when this step's operation is interrupted. */
+    abortSignal?: AbortSignal;
     /**
      * Current runtime state, when the caller has it. Only consulted to decide
      * whether the early final-answer `visible_output_end` must be suppressed
@@ -2948,13 +3090,13 @@ export class AgentRuntimeService {
 
     if (
       metadata?.trigger === RequestTrigger.Eval &&
-      metadata.evalContext?.toolForwarding &&
+      metadata.evalRuntime?.toolForwarding &&
       !hookDispatcher.hasHook(operationId, EVAL_TOOL_FORWARDING_HOOK_ID)
     ) {
       hookDispatcher.register(operationId, [
         createEvalToolForwardingHook(
-          metadata.evalContext.toolForwarding,
-          metadata.evalContext.caseId,
+          metadata.evalRuntime.toolForwarding,
+          metadata.evalRuntime.caseId,
         ),
       ]);
     }
@@ -2965,6 +3107,7 @@ export class AgentRuntimeService {
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
+      abortSignal,
       agentConfig: metadata?.agentConfig,
       // The factory may be a Graph-aware dispatcher that still returns the
       // default agent for ordinary conversations. Keep the early visible

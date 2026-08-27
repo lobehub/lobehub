@@ -726,7 +726,10 @@ describe('HookDispatcher', () => {
   });
 
   describe('dispatchBeforeToolCall — edge cases', () => {
-    it('should use the last mock() call when multiple handlers call mock()', async () => {
+    it('should preserve the first mock() call when multiple handlers call mock()', async () => {
+      const secondHandler = vi.fn(async (event: any) => {
+        event.mock({ content: '{"second":true}', success: true });
+      });
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
@@ -736,9 +739,7 @@ describe('HookDispatcher', () => {
           type: 'beforeToolCall',
         },
         {
-          handler: async (event: any) => {
-            event.mock({ content: '{"second":true}', success: true });
-          },
+          handler: secondHandler,
           id: 'mock-2',
           type: 'beforeToolCall',
         },
@@ -754,8 +755,36 @@ describe('HookDispatcher', () => {
 
       expect(result).toEqual({
         isMocked: true,
-        result: { content: '{"second":true}', success: true },
+        result: { content: '{"first":true}', success: true },
       });
+      expect(secondHandler).not.toHaveBeenCalled();
+    });
+
+    it('should stop after a hook mocks and then throws', async () => {
+      const secondHandler = vi.fn();
+      dispatcher.register(operationId, [
+        {
+          handler: async (event: any) => {
+            event.mock({ content: '{"first":true}', success: true });
+            throw new Error('after mock');
+          },
+          id: 'mock-then-throw',
+          type: 'beforeToolCall',
+        },
+        { handler: secondHandler, id: 'must-not-run', type: 'beforeToolCall' },
+      ]);
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
+        apiName: 'search',
+        args: {},
+        callIndex: 1,
+        identifier: 'twitter',
+        stepIndex: 0,
+      });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"first":true}', success: true },
+      });
+      expect(secondHandler).not.toHaveBeenCalled();
     });
 
     it('should return mock when only one of multiple handlers calls mock()', async () => {

@@ -1,3 +1,4 @@
+import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
@@ -163,6 +164,13 @@ export const runtimeManagedToolIds = [
 ];
 
 const builtinToolRegistry: LobeBuiltinTool[] = [
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: AcceptanceEvidenceManifest.identifier,
+    manifest: AcceptanceEvidenceManifest,
+    type: 'builtin',
+  },
   {
     discoverable: false,
     hidden: true,

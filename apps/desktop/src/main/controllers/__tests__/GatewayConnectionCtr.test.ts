@@ -185,7 +185,10 @@ vi.mock('node:crypto', () => ({
 
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const executeRemotePlatformMock = vi.hoisted(() => vi.fn());
+const prepareRemotePlatformSpawnMock = vi.hoisted(() => vi.fn());
 const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcessModule>();
@@ -194,6 +197,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
   resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
 }));
 
 vi.mock('node:os', () => ({
@@ -206,10 +210,6 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 
 vi.mock('@/services/imessageBridgeSrv', () => ({
   default: class ImessageBridgeService {},
-}));
-
-vi.mock('execa', () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }));
@@ -300,6 +300,21 @@ describe('GatewayConnectionCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    resolveRemotePlatformRuntimeMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv = process.env) => ({
+        available: true,
+        execute: executeRemotePlatformMock,
+        prepareSpawn: (args: string[]) => prepareRemotePlatformSpawnMock(type, args, baseEnv),
+      }),
+    );
+    prepareRemotePlatformSpawnMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+        args,
+        command: `/resolved/bin/${type}`,
+        env: { ...baseEnv, PATH: '/resolved/bin:/usr/bin' },
+      }),
+    );
+    executeRemotePlatformMock.mockResolvedValue({ stderr: '', stdout: '' });
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
     mockStoreGet.mockImplementation((key: string) => {
@@ -1052,12 +1067,6 @@ describe('GatewayConnectionCtr', () => {
 
     beforeEach(() => {
       execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
-      resolveRemotePlatformCommandMock.mockResolvedValue({
-        available: true,
-        path: '/resolved/bin/openclaw',
-        resolvedPathEnv: '/resolved/bin:/usr/bin',
-        version: '1.2.3',
-      });
       spawnMock.mockReset();
     });
 
@@ -1439,15 +1448,6 @@ describe('GatewayConnectionCtr', () => {
     });
 
     describe('hermes', () => {
-      beforeEach(() => {
-        resolveRemotePlatformCommandMock.mockResolvedValue({
-          available: true,
-          path: '/resolved/bin/hermes',
-          resolvedPathEnv: '/resolved/bin:/usr/bin',
-          version: '0.20.0',
-        });
-      });
-
       it('relays stdout intact and saves the final session id from stderr', async () => {
         const child = makeMockChild();
         const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
@@ -1657,6 +1657,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false for unknown platform', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
+        error: 'Unknown platform: unknownBot',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest(
         'checkPlatformCapability',
@@ -1676,6 +1681,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('getAgentProfile returns empty object', async () => {
+      resolveRemotePlatformRuntimeMock.mockResolvedValue({
+        available: false,
+        error: 'openclaw was not found or failed validation',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-profile');
       await vi.advanceTimersByTimeAsync(0);
@@ -1685,6 +1695,66 @@ describe('GatewayConnectionCtr', () => {
         result: {
           content: JSON.stringify({}),
           state: {},
+          success: true,
+        },
+      });
+      expect(executeRemotePlatformMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the shared OpenClaw runtime to load its profile', async () => {
+      executeRemotePlatformMock.mockResolvedValueOnce({
+        stderr: '',
+        stdout: JSON.stringify([
+          {
+            id: 'main',
+            identityEmoji: '🦞',
+            identityName: 'Clawd',
+            isDefault: true,
+          },
+        ]),
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-openclaw');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('openclaw');
+      expect(executeRemotePlatformMock).toHaveBeenCalledWith(['agents', 'list', '--json'], {
+        timeout: 5000,
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-openclaw',
+        result: {
+          content: JSON.stringify({ avatar: '🦞', title: 'Clawd' }),
+          state: { avatar: '🦞', description: undefined, title: 'Clawd' },
+          success: true,
+        },
+      });
+    });
+
+    it('uses one shared Hermes runtime to load its profile', async () => {
+      executeRemotePlatformMock
+        .mockResolvedValueOnce({ stderr: '', stdout: '◆research\n' })
+        .mockResolvedValueOnce({ stderr: '', stdout: 'Path: /profiles/research\n' });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'hermes' }, 'req-hermes');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('hermes');
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(1, ['profile', 'list'], {
+        timeout: 5000,
+      });
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(
+        2,
+        ['profile', 'show', 'research'],
+        { timeout: 5000 },
+      );
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-hermes',
+        result: {
+          content: JSON.stringify({ avatar: '⚡', title: 'research' }),
+          state: { avatar: '⚡', description: undefined, title: 'research' },
           success: true,
         },
       });

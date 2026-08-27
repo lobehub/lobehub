@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { ReportViewer } from '@/features/Verify';
+import { ReportViewer } from '@/features/Acceptance';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 

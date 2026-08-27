@@ -1,0 +1,24 @@
+id: tool-failure
+description: A selected tool receives a deterministic provider-style failure.
+layer: L1-model-runtime
+discoveredFrom: first-phase reference scenario
+seed: tool-failure-v1
+timeoutMs: 5000
+cleanup: always
+safety:
+  allowedEnvironments: [test, ci]
+  maxInjections: 1
+target:
+  adapter: runtime
+  selector:
+    apiName: search
+    phase: tool_attempt
+trigger:
+  when: before
+  probability: 1
+effect:
+  type: throw
+  errorType: RateLimited
+oracles:
+  - name: tool-failure-observed
+    timeoutMs: 1000
