@@ -70,16 +70,23 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   dir: css`
     overflow: hidden;
+
+    /* Shrinks long before the filename does — the filename only starts
+       ellipsizing once the directory is fully collapsed. */
+    flex-shrink: 100;
+
     color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   name: css`
-    flex-shrink: 0;
+    overflow: hidden;
     color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
     white-space: nowrap;
   `,
   path: css`
+    overflow: hidden;
     min-width: 0;
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
