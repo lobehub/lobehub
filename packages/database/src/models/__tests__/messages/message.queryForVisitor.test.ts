@@ -253,3 +253,102 @@ describe('toVisitorMessage — nested messages', () => {
     expect(sanitized.content).toBe('hello human');
   });
 });
+
+describe('toVisitorMessage — nested blobs (Codex P2, LOBE-11930 message.ts:440)', () => {
+  it('redacts model/provider/usage nested inside pluginState (lobe-agent analyzeMedia)', () => {
+    // Exact shape written by `analyzeMedia`'s server runtime — see
+    // `apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts`'s
+    // `analyzeMedia` return value (`state: { files, model, provider, trigger,
+    // usage }`). `pluginState` used to be a plain allowlist entry, which
+    // forwarded this verbatim to a share visitor.
+    const sanitized = toVisitorMessage({
+      content: 'analyzed the attached image',
+      createdAt: 1,
+      id: 'tool-analyze-media',
+      pluginState: {
+        files: [{ id: 'file-1', name: 'photo.png', ref: 'img-1', type: 'image' }],
+        model: 'gpt-4o',
+        provider: 'openai',
+        trigger: 'multimodalAnalysis',
+        usage: { totalTokens: 512 },
+      },
+      role: 'tool',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.pluginState.model).toBeUndefined();
+    expect(sanitized.pluginState.provider).toBeUndefined();
+    expect(sanitized.pluginState.usage).toBeUndefined();
+    // Visitor-facing tool result metadata (which files were analyzed) survives.
+    expect(sanitized.pluginState.trigger).toBe('multimodalAnalysis');
+    expect(sanitized.pluginState.files).toEqual([
+      { id: 'file-1', name: 'photo.png', ref: 'img-1', type: 'image' },
+    ]);
+  });
+
+  it('redacts creator-private keys nested arbitrarily deep inside pluginState/pluginError', () => {
+    const sanitized = toVisitorMessage({
+      content: '',
+      createdAt: 1,
+      id: 'tool-deep-nesting',
+      pluginError: {
+        cause: { cost: 1.23, message: 'upstream failure', provider: 'anthropic' },
+        message: 'failed',
+      },
+      pluginState: {
+        nested: { deeper: { model: 'claude-4', totalTokens: 99 } },
+        ok: true,
+        steps: [{ model: 'gpt-4o', name: 'step-1' }],
+      },
+      role: 'tool',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.pluginState.nested.deeper.model).toBeUndefined();
+    expect(sanitized.pluginState.nested.deeper.totalTokens).toBeUndefined();
+    expect(sanitized.pluginState.steps[0].model).toBeUndefined();
+    expect(sanitized.pluginState.steps[0].name).toBe('step-1');
+    expect(sanitized.pluginState.ok).toBe(true);
+    expect(sanitized.pluginError.cause.cost).toBeUndefined();
+    expect(sanitized.pluginError.cause.provider).toBeUndefined();
+    expect(sanitized.pluginError.cause.message).toBe('upstream failure');
+    expect(sanitized.pluginError.message).toBe('failed');
+  });
+
+  it('redacts model/provider from signalCallbacks and usage from taskCompletions', () => {
+    // Both blocks are denormalized by `FlatListBuilder`
+    // (`packages/conversation-flow`) directly onto virtual assistantGroup/
+    // supervisor messages — never covered by the `pinnedMessages`/`children`
+    // group-snapshot fix despite carrying the same class of data.
+    const sanitized = toVisitorMessage({
+      content: '',
+      createdAt: 1,
+      id: 'assistant-group-1',
+      role: 'assistantGroup',
+      signalCallbacks: [
+        {
+          callbacks: [
+            { content: 'callback reply', id: 'cb-1', model: 'gpt-4o', provider: 'openai' },
+          ],
+          sourceToolCallId: 'call-1',
+          sourceToolMessageId: 'tool-msg-1',
+          sourceToolName: 'lobe-web-browsing',
+        },
+      ],
+      taskCompletions: [
+        {
+          content: 'summary of the task',
+          id: 'summary-1',
+          usage: { totalTokens: 321 },
+        },
+      ],
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.signalCallbacks?.[0].callbacks[0].model).toBeUndefined();
+    expect(sanitized.signalCallbacks?.[0].callbacks[0].provider).toBeUndefined();
+    expect(sanitized.signalCallbacks?.[0].callbacks[0].content).toBe('callback reply');
+    expect((sanitized.taskCompletions?.[0] as any).usage).toBeUndefined();
+    expect(sanitized.taskCompletions?.[0].content).toBe('summary of the task');
+  });
+});
