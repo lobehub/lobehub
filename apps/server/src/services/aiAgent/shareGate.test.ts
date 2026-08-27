@@ -25,7 +25,11 @@ import {
   KnowledgeBaseIdentifier,
   KnowledgeBaseManifest,
 } from '@lobechat/builtin-tool-knowledge-base';
-import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import {
+  LobeAgentApiName,
+  LobeAgentIdentifier,
+  LobeAgentManifest,
+} from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier, MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { DocumentApiName, PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
@@ -35,7 +39,11 @@ import {
 } from '@lobechat/builtin-tool-skill-maintainer';
 import { TaskApiName, TaskIdentifier, TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import {
+  UserInteractionApiName,
+  UserInteractionIdentifier,
+  UserInteractionManifest,
+} from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
@@ -204,9 +212,12 @@ describe('applyShareGateToToolSet', () => {
     // context-aware trimmed or not — this reproduces the untrimmed shape by
     // using the REAL exported builtin manifest (not a hand-written fixture),
     // so the regression also catches a future edit to the systemRole that
-    // reintroduces a callSubAgent reference. `lobe-agent`'s non-dispatch APIs
-    // (createPlan, etc.) stay available — they are genuinely self-scoped to
-    // the current agent, unlike `lobe-agent-management` (see the dedicated
+    // reintroduces a callSubAgent reference. `lobe-agent`'s `analyzeMedia`
+    // stays available — it is genuinely self-scoped to the current agent and
+    // carries no `humanIntervention` policy, unlike `createPlan` /
+    // `createTodos` / `clearTodos` / `askUserQuestion` (stripped separately
+    // by `applyShareGateToInterventionRequiredApis` — see the dedicated
+    // suite below) or `lobe-agent-management` (see the dedicated
     // "lobe-agent-management is fully blocked" suite below).
     const gate = buildGate({ enabledToolIds: ['lobe-agent'] });
     const toolSet: ShareGateToolSet = {
@@ -219,7 +230,7 @@ describe('applyShareGateToToolSet', () => {
       sourceMap: {},
       tools: [
         { function: { name: 'lobe-agent____callSubAgent' }, type: 'function' },
-        { function: { name: 'lobe-agent____createPlan' }, type: 'function' },
+        { function: { name: 'lobe-agent____analyzeMedia' }, type: 'function' },
       ],
     };
 
@@ -228,9 +239,9 @@ describe('applyShareGateToToolSet', () => {
     expect(Object.keys(toolSet.manifestMap)).toEqual(['lobe-agent']);
     const lobeAgentApiNames = toolSet.manifestMap['lobe-agent'].api.map((api) => api.name);
     expect(lobeAgentApiNames).not.toContain('callSubAgent');
-    expect(lobeAgentApiNames).toContain('createPlan');
+    expect(lobeAgentApiNames).toContain('analyzeMedia');
     expect(toolSet.tools).toEqual([
-      { function: { name: 'lobe-agent____createPlan' }, type: 'function' },
+      { function: { name: 'lobe-agent____analyzeMedia' }, type: 'function' },
     ]);
 
     // ...and the systemRole no longer instructs the model to call the
@@ -866,8 +877,6 @@ const MIRRORED_ALLOWED_IDENTIFIERS = new Set<string>([
   TopicReferenceIdentifier,
   CalculatorIdentifier,
   WebBrowsingManifest.identifier,
-  UserInteractionIdentifier,
-  LobeActivatorIdentifier,
   ImageGenerationIdentifier,
   VerifyToolIdentifier,
   AcceptanceEvidenceIdentifier,
@@ -904,6 +913,15 @@ describe('default-deny covers every registered builtin identifier not explicitly
         'lobe-group-management',
         BriefIdentifier,
       ]),
+    );
+    // Removed for the "picker promises an unusable grant" class (LOBE-11930
+    // P2, not a data leak) — every share run forces `approvalMode: 'reject'`,
+    // which blocks `lobe-user-interaction`'s only API (`askUserQuestion`,
+    // `humanIntervention: 'always'`) and `lobe-activator`'s only API
+    // (`activateTools`, `humanIntervention: 'required'`) unconditionally. See
+    // shareGate.ts's denied-bucket rationale for the full evidence.
+    expect(deniedBuiltinIdentifiers).toEqual(
+      expect.arrayContaining([UserInteractionIdentifier, LobeActivatorIdentifier]),
     );
     // Denied for lack of positive safety evidence — see shareGate.ts's
     // denied-bucket rationale comment for why each stays out.
@@ -1218,6 +1236,75 @@ describe('lobe-page-agent: unreachable for a share visitor run (appContext never
     expect(toolSet.enabledToolIds).toEqual([]);
     expect(toolSet.manifestMap).toEqual({});
     expect(toolSet.tools).toEqual([]);
+  });
+});
+
+describe('lobe-user-interaction / lobe-activator: removed for a forced-reject-approval-mode grant no visitor run can ever exercise (LOBE-11930 P2 re-audit)', () => {
+  it('are both absent from the master allowlist', () => {
+    expect(MIRRORED_ALLOWED_IDENTIFIERS.has(UserInteractionIdentifier)).toBe(false);
+    expect(MIRRORED_ALLOWED_IDENTIFIERS.has(LobeActivatorIdentifier)).toBe(false);
+  });
+
+  it('strips lobe-user-interaction from the assembled tool set even when the owner whitelists it (e.g. a share created from the Inbox agent template)', () => {
+    const gate = buildGate({ enabledToolIds: [UserInteractionIdentifier] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [UserInteractionIdentifier],
+      enabledToolIds: [UserInteractionIdentifier],
+      executorMap: { [UserInteractionIdentifier]: 'server' as any },
+      manifestMap: { [UserInteractionIdentifier]: UserInteractionManifest as any },
+      sourceMap: { [UserInteractionIdentifier]: 'builtin' as any },
+      tools: [
+        {
+          function: {
+            name: `${UserInteractionIdentifier}____${UserInteractionApiName.askUserQuestion}`,
+          },
+          type: 'function',
+        },
+      ],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+});
+
+describe('applyShareGateToInterventionRequiredApis: strips any API a forced approvalMode: "reject" run can never complete', () => {
+  it("removes lobe-agent's intervention-gated APIs (createPlan / createTodos / clearTodos / askUserQuestion) but keeps analyzeMedia", () => {
+    const gate = buildGate({ enabledToolIds: [LobeAgentIdentifier] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [LobeAgentIdentifier],
+      enabledToolIds: [LobeAgentIdentifier],
+      executorMap: { [LobeAgentIdentifier]: 'server' as any },
+      manifestMap: { [LobeAgentIdentifier]: LobeAgentManifest as any },
+      sourceMap: { [LobeAgentIdentifier]: 'builtin' as any },
+      tools: LobeAgentManifest.api.map((api) => ({
+        function: { name: `${LobeAgentIdentifier}____${api.name}` },
+        type: 'function',
+      })),
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    const remainingApiNames = toolSet.manifestMap[LobeAgentIdentifier].api.map((api) => api.name);
+    expect(remainingApiNames).toContain(LobeAgentApiName.analyzeMedia);
+    expect(remainingApiNames).not.toContain(LobeAgentApiName.createPlan);
+    expect(remainingApiNames).not.toContain(LobeAgentApiName.createTodos);
+    expect(remainingApiNames).not.toContain(LobeAgentApiName.clearTodos);
+    expect(remainingApiNames).not.toContain(LobeAgentApiName.askUserQuestion);
+    // callSubAgent is stripped by the pre-existing `stripSubAgentDispatchApis`
+    // pass, independent of this one — not a `humanIntervention` config.
+    expect(remainingApiNames).not.toContain(LobeAgentApiName.callSubAgent);
+
+    const remainingToolNames = toolSet.tools!.map((tool) => tool.function.name);
+    expect(remainingToolNames).not.toContain(
+      `${LobeAgentIdentifier}____${LobeAgentApiName.createPlan}`,
+    );
+    expect(remainingToolNames).toContain(
+      `${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`,
+    );
   });
 });
 

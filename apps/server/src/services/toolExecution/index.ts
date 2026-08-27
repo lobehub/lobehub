@@ -240,6 +240,34 @@ export class ToolExecutionService {
       const isDeviceOnlyMcp =
         mcpParams.type === 'stdio' ||
         (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
+
+      // LOBE-11930 P2 (re-audit): a share visitor's run always carries
+      // `context.userId` set to the CREATOR (see `AiAgentService` constructed
+      // with `share.ownerId` in `shareChat.ts`), never the visitor. Letting a
+      // device-only MCP call fall into the tunnel-resolution branch below
+      // would therefore route straight to the OWNER's own paired device and
+      // execute there — for real, with the owner's local machine/network
+      // access — driven entirely by an anonymous visitor's tool call, with no
+      // owner awareness or approval. The owner-facing share tool picker
+      // (`AgentShareSettings/toolVisitorAvailability.ts`) has no way to know a
+      // given plugin id resolves to a `stdio`/local-network MCP connector, so
+      // it cannot filter this out client-side; fail closed here instead,
+      // unconditionally, the same "never offer what can't be safely
+      // exercised" rule `shareGate.ts` applies to builtin tools.
+      if (isDeviceOnlyMcp && context.agentShare) {
+        const message = `MCP server '${identifier}' can only run on the agent owner's machine (stdio or local network) and is not available to share visitors.`;
+        log(
+          'Device-only MCP %s:%s blocked for share visitor (agentShare set) — refusing to tunnel to the owner device',
+          identifier,
+          apiName,
+        );
+        return {
+          content: message,
+          error: { code: 'MCP_SHARE_VISITOR_BLOCKED', message },
+          success: false,
+        };
+      }
+
       if (isDeviceOnlyMcp && deviceGateway.isConfigured) {
         const tunnelTarget = context.userId
           ? await this.resolveMcpTunnelTarget(context)
