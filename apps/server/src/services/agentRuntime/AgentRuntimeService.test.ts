@@ -7,6 +7,7 @@ import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import * as agentSignalService from '@/server/services/agentSignal';
 
 import { AgentRuntimeService, createEvalToolForwardingHook } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
@@ -1350,6 +1351,131 @@ describe('AgentRuntimeService', () => {
         undefined,
       );
 
+      dispatchSpy.mockRestore();
+    });
+  });
+
+  describe('executeStep - Agent Share visitor per-step signal suppression', () => {
+    // Agent Share visitor runs execute AS the creator (`metadata.userId` is
+    // the creator's id — see `isAgentShareRun`'s JSDoc in `CompletionLifecycle`),
+    // so the per-step `runtime.before_step` / `runtime.after_step` Agent
+    // Signal emissions must be suppressed for a share run — otherwise a link
+    // visitor drives creator-scoped Agent Signal policy processing and Redis
+    // windows on every single step, not just at completion.
+    const shareParams: AgentExecutionParams = {
+      context: { phase: 'user_input' } as any,
+      operationId: 'test-operation-share',
+      stepIndex: 1,
+    };
+
+    const shareState = {
+      events: [],
+      lastModified: new Date().toISOString(),
+      messages: [],
+      metadata: {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        topicId: 'topic-1',
+      },
+      operationId: 'test-operation-share',
+      status: 'idle',
+      stepCount: 1,
+    };
+
+    it('does not emit runtime.before_step / runtime.after_step for a share visitor run', async () => {
+      const emitSpy = vi
+        .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+        .mockResolvedValue(undefined as any);
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+      mockCoordinator.loadAgentState.mockResolvedValue(shareState);
+      mockCoordinator.getOperationMetadata.mockResolvedValue({
+        agentConfig: { name: 'test-agent' },
+        modelRuntimeConfig: { model: 'gpt-4' },
+        userId: mockUserId,
+      });
+
+      const mockStepResult = {
+        events: [],
+        newState: { ...shareState, status: 'running', stepCount: 2 },
+        nextContext: {
+          payload: {},
+          phase: 'tool_result',
+          session: {
+            messageCount: 1,
+            sessionId: shareParams.operationId,
+            status: 'running',
+            stepCount: 2,
+          },
+        },
+      };
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(shareParams);
+
+      const sourceTypes = emitSpy.mock.calls.map(([input]) => (input as any).sourceType);
+      expect(sourceTypes).not.toContain('runtime.before_step');
+      expect(sourceTypes).not.toContain('runtime.after_step');
+      // The beforeStep/afterStep user hooks themselves still fire — only the
+      // Agent Signal source event is suppressed.
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-share',
+        'beforeStep',
+        expect.anything(),
+        undefined,
+      );
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-share',
+        'afterStep',
+        expect.anything(),
+        undefined,
+      );
+
+      emitSpy.mockRestore();
+      dispatchSpy.mockRestore();
+    });
+
+    it('still emits runtime.before_step / runtime.after_step for a normal (non-share) run', async () => {
+      const emitSpy = vi
+        .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+        .mockResolvedValue(undefined as any);
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+      const ordinaryState = {
+        ...shareState,
+        metadata: { topicId: 'topic-1' },
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue(ordinaryState);
+      mockCoordinator.getOperationMetadata.mockResolvedValue({
+        agentConfig: { name: 'test-agent' },
+        modelRuntimeConfig: { model: 'gpt-4' },
+        userId: mockUserId,
+      });
+
+      const mockStepResult = {
+        events: [],
+        newState: { ...ordinaryState, status: 'running', stepCount: 2 },
+        nextContext: {
+          payload: {},
+          phase: 'tool_result',
+          session: {
+            messageCount: 1,
+            sessionId: shareParams.operationId,
+            status: 'running',
+            stepCount: 2,
+          },
+        },
+      };
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(shareParams);
+
+      const sourceTypes = emitSpy.mock.calls.map(([input]) => (input as any).sourceType);
+      expect(sourceTypes).toContain('runtime.before_step');
+      expect(sourceTypes).toContain('runtime.after_step');
+
+      emitSpy.mockRestore();
       dispatchSpy.mockRestore();
     });
   });
