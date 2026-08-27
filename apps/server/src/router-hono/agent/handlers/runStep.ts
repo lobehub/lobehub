@@ -170,6 +170,29 @@ export async function runStep(c: Context): Promise<Response> {
       });
     }
 
+    // The Agent Share step-0 gate exhausted its own retry budget WITHOUT ever
+    // reading agent state, so it has no `agentId`/`topicId` to invalidate or
+    // verify the reservation, and no state it could durably mark
+    // `interrupted` — see `AgentExecutionResult.shareGateStateUnavailable`'s
+    // JSDoc for the marker-leak this avoids (LOBE-11930 Codex P2 follow-up).
+    // Mirror the `locked` (backoff-exhausted) fallback below: return a
+    // retryable response so the queue's OWN retry budget keeps redelivering
+    // step 0 until the state store recovers and the gate can decide for real.
+    if (result.shareGateStateUnavailable) {
+      log(
+        `[${operationId}] Step ${stepIndex} share reservation gate state unavailable, returning 429`,
+      );
+      return c.json(
+        {
+          error: 'Share reservation gate state unavailable, retry later',
+          operationId,
+          stepIndex,
+        },
+        429,
+        { 'Retry-After': '2' },
+      );
+    }
+
     // A non-stale lock conflict means another delivery is still executing this
     // operation.
     if (result.locked) {

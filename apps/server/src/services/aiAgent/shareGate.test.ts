@@ -889,11 +889,73 @@ const DATA_TOOL_IDENTIFIERS = new Set<string>([
   AgentDocumentsIdentifier,
 ]);
 
+/**
+ * Fixed, hand-maintained enumeration of every builtin identifier this file's
+ * denied-bucket JSDoc (`shareGate.ts`, "Rationale for every registered
+ * builtin identifier that is DENIED") has actually reviewed and recorded
+ * evidence for — the "explicit documented deny list" half of the two-bucket
+ * contract (`MIRRORED_ALLOWED_IDENTIFIERS` ∪ `DATA_TOOL_IDENTIFIERS` is the
+ * other half).
+ *
+ * Unlike `deniedBuiltinIdentifiers` below (computed AS "everything the live
+ * registry has that isn't explicitly allowed"), this list is NOT derived from
+ * the registry — it is typed out by hand, the same way `ALLOWED_FILES` in
+ * `agentSharesWriteGuard.test.ts` / `topicBulkDeleteWriteGuard.test.ts` is a
+ * fixed set a human must edit, not a computed one. That distinction is the
+ * whole point of the exact-membership assertion right below this list: a
+ * brand-new builtin tool registered in `@lobechat/builtin-tools` without
+ * anyone updating `shareGate.ts`'s allowlist would previously fall out of
+ * `MIRRORED_ALLOWED_IDENTIFIERS`/`DATA_TOOL_IDENTIFIERS` and straight into
+ * `deniedBuiltinIdentifiers` BY CONSTRUCTION, then sail through every
+ * `it.each(deniedBuiltinIdentifiers)` assertion below since default-deny
+ * already blocks anything not on the allowlist — no human ever had to look at
+ * it. Comparing the computed set against this fixed one turns that silent
+ * pass into a failing test: the new identifier is absent from this list, so
+ * the equality check below breaks until a human adds it here (after reading
+ * its runtime and deciding whether it belongs on the allowlist instead).
+ */
+const EXPLICIT_DENY_LIST = new Set<string>([
+  // Confirmed leak paths (see shareGate.ts's denied-bucket rationale).
+  AgentManagementIdentifier,
+  AGENT_SIGNAL_REVIEW_IDENTIFIER,
+  SkillMaintainerIdentifier,
+  AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+  TaskIdentifier,
+  'lobe-goal',
+  'lobe-creds',
+  'lobe-message',
+  'lobe-skill-store',
+  'lobe-agent-builder',
+  'lobe-skills',
+  'lobe-group-agent-builder',
+  'lobe-group-management',
+  BriefIdentifier,
+  // Denied for lack of positive safety evidence.
+  'lobe-local-system',
+  'lobe-browser',
+  'lobe-remote-device',
+  'lobe-cloud-sandbox',
+  'lobe-web-onboarding',
+  'lobe-self-feedback-intent',
+  'agent-signal-reflection',
+  'agent-signal-feedback-intent',
+  // Denied for being visitor-unreachable rather than unsafe.
+  PageAgentIdentifier,
+  // Denied for promising a grant a forced approvalMode: 'reject' run can
+  // never exercise (LOBE-11930 P2).
+  UserInteractionIdentifier,
+  LobeActivatorIdentifier,
+]);
+
 describe('default-deny covers every registered builtin identifier not explicitly allowed', () => {
   const allRealBuiltinIdentifiers = builtinTools.map((tool) => tool.identifier);
   const deniedBuiltinIdentifiers = allRealBuiltinIdentifiers.filter(
     (id) => !MIRRORED_ALLOWED_IDENTIFIERS.has(id) && !DATA_TOOL_IDENTIFIERS.has(id),
   );
+
+  it('matches the hand-maintained EXPLICIT_DENY_LIST exactly — a newly registered builtin tool that lands in neither the allowlist nor this documented deny list fails here, forcing an explicit decision instead of silently defaulting to blocked', () => {
+    expect([...deniedBuiltinIdentifiers].sort()).toEqual([...EXPLICIT_DENY_LIST].sort());
+  });
 
   it('includes every tool a completed security audit found leaking creator data, plus every tool withheld for lack of positive safety evidence', () => {
     // Confirmed leak paths.

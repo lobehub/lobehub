@@ -230,6 +230,21 @@ export interface AgentExecutionResult {
    * own backoff.
    */
   shareGateDeferred?: boolean;
+  /**
+   * Set when the Agent Share step-0 gate exhausted its own bounded retry
+   * budget WITHOUT ever successfully reading agent state — so it has neither
+   * `agentId`/`topicId` to invalidate-or-verify the reservation through
+   * `resolveShareGateAbort`, nor a state object it could durably persist
+   * `interrupted` onto (its `interruptOperation` fallback would just hit the
+   * same failing read). Unlike `shareGateDeferred` (which re-queues on our
+   * own backoff and wants an ACK), callers should return a retryable (non-2xx)
+   * response here — mirroring the `locked` (without `lockRescheduled`)
+   * fallback — so the queue's OWN retry budget keeps redelivering step 0
+   * until the state store recovers and the gate can make its real decision.
+   * See `AgentRuntimeService.deferShareGateStep`'s JSDoc (LOBE-11930 Codex P2
+   * follow-up).
+   */
+  shareGateStateUnavailable?: boolean;
   state: any;
   stepResult?: any;
   success: boolean;
