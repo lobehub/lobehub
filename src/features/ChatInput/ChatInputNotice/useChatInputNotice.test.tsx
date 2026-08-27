@@ -31,6 +31,7 @@ const testState = vi.hoisted(() => ({
   },
   /** Effective (override-resolved) selection, as `useAgentModelSelection` returns it. */
   agentModelSelection: {
+    canSelectModel: true,
     isPreferenceLoading: false,
     model: undefined as string | undefined,
     provider: undefined as string | undefined,
@@ -71,6 +72,7 @@ vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
 
 vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
   useAgentModelSelection: () => ({
+    canSelectModel: testState.agentModelSelection.canSelectModel,
     isPreferenceLoading: testState.agentModelSelection.isPreferenceLoading,
     // Default to the shared agent config, matching `resolveAgentModelConfig`
     // when there is no member override.
@@ -115,6 +117,7 @@ describe('useChatInputNotice', () => {
     testState.agent.agencyConfig = undefined;
     testState.agent.isConfigLoading = false;
     testState.agentModelSelection = {
+      canSelectModel: true,
       isPreferenceLoading: false,
       model: undefined,
       provider: undefined,
@@ -284,6 +287,39 @@ describe('useChatInputNotice', () => {
       id: 'gpt-4o',
       providerId: 'openai',
       type: 'chat',
+    });
+  });
+
+  it('treats a disabled model as unavailable when a locked selection would require a provider fallback', () => {
+    testState.agent.provider = 'removed-provider';
+    testState.agentModelSelection.canSelectModel = false;
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
+  });
+
+  it('enables and selects a fallback provider when the selection is editable', async () => {
+    testState.agent.provider = 'removed-provider';
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderEnabled).toHaveBeenCalledWith('openai', true);
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+    expect(testState.agentModelSelection.selectModel).toHaveBeenCalledWith({
+      model: 'gpt-4o',
+      provider: 'openai',
     });
   });
 

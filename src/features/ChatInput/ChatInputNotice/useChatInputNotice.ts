@@ -99,7 +99,7 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
 
   // Same source as the model trigger renders, so the notice can never judge a
   // different model than the one the user sees (member overrides included).
-  const { isPreferenceLoading, model, provider, selectModel, selectionPolicy } =
+  const { canSelectModel, isPreferenceLoading, model, provider, selectModel, selectionPolicy } =
     useAgentModelSelection(agentId);
 
   // `isPreferenceLoading` is true for every workspace agent while the shared
@@ -129,6 +129,24 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
         },
       )
     : undefined;
+  const enableTargetProviderId =
+    staleModelState?.status === 'notEnabled'
+      ? resolveEnableTargetProviderId(
+          { model, provider },
+          {
+            enabledAiProviders,
+            enabledList: enabledChatModelList,
+            metaProviderId: staleModelState.meta?.providerId,
+          },
+        )
+      : undefined;
+  /**
+   * A locked Agent selection can only be repaired in place. Enabling an id-only fallback
+   * provider would mutate global model settings while leaving the persisted selection stale.
+   */
+  const canEnableModel = Boolean(
+    enableTargetProviderId && (enableTargetProviderId === provider || canSelectModel),
+  );
   const { canUseResource, isGroupContext } = useChatInputResourceAccess();
 
   const notice = resolveChatInputNotice({
@@ -136,20 +154,13 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     isAgentModelPending: isAgentConfigLoading || isMemberOverridePending,
     isGroupContext,
     isHeterogeneousAgent,
-    isModelDisabled: staleModelState?.status === 'notEnabled',
+    isModelDisabled: canEnableModel,
     isModelConfigReady,
     isResourceViewOnly: !canUseResource,
   });
 
   const handleEnableModel = useCallback(async () => {
-    const providerId = resolveEnableTargetProviderId(
-      { model, provider },
-      {
-        enabledAiProviders,
-        enabledList: enabledChatModelList,
-        metaProviderId: staleModelState?.meta?.providerId,
-      },
-    );
+    const providerId = enableTargetProviderId;
     if (!providerId) return;
 
     setActionLoading(true);
@@ -170,12 +181,11 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
       setActionLoading(false);
     }
   }, [
-    enabledAiProviders,
+    enableTargetProviderId,
     enabledChatModelList,
     model,
     provider,
     selectModel,
-    staleModelState?.meta?.providerId,
     t,
     toggleProviderEnabled,
     toggleProviderModelEnabled,
