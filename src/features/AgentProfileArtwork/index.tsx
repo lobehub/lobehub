@@ -27,7 +27,7 @@ import {
   styleReferencesForArtworkStyle,
 } from '@/features/AgentArtworkStudio';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { resolveArtworkReferenceImageUrl } from '@/services/artworkGeneration';
+import { resolveArtworkReferenceSource } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -278,16 +278,19 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       async (kind: 'avatar' | 'background', style: AgentArtworkStyle) => {
         if (!canEdit || !canGenerate) return;
 
+        const avatarSource = resolveArtworkReferenceSource(storedAvatar, appOrigin);
+        const backgroundSource = resolveArtworkReferenceSource(background, appOrigin);
+
         try {
           await generateAgentArtwork({
+            avatarIdentity: avatarSource.text,
+            backgroundIdentity: backgroundSource.text,
             description,
             id: agentId,
             kind,
             name,
-            referenceImageUrl: resolveArtworkReferenceImageUrl(
-              kind === 'background' ? storedAvatar : backgroundUrl,
-              appOrigin,
-            ),
+            referenceImageUrl:
+              kind === 'background' ? avatarSource.imageUrl : backgroundSource.imageUrl,
             style,
             styleReferenceImageUrls: styleReferencesForArtworkStyle(style, appOrigin),
             systemRole,
@@ -300,7 +303,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       [
         agentId,
         appOrigin,
-        backgroundUrl,
+        background,
         canEdit,
         canGenerate,
         description,

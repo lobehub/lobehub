@@ -1,3 +1,5 @@
+import { isFullyTransparentColor } from '@lobechat/utils/colorUtils';
+
 export interface AttachedArtworkReferences {
   referenceImageUrl?: string;
   styleReferenceImageUrls: string[];
@@ -13,8 +15,14 @@ interface ResolvedArtworkReferences extends AttachedArtworkReferences {
   imageUrls?: string[];
 }
 
+export interface ResolvedArtworkReferenceSource {
+  imageUrl?: string;
+  text?: string;
+}
+
 const DATA_IMAGE_URL_PATTERN = /^data:image\//i;
 const SUPPORTED_REMOTE_PROTOCOLS = new Set(['http:', 'https:']);
+const URL_LIKE_SOURCE_PATTERN = /^(?:\/|[a-z][\d+.a-z-]*:(?!\s))/i;
 
 /**
  * Converts a UI-facing image source into a reference that image models can read.
@@ -51,6 +59,25 @@ export const resolveArtworkReferenceImageUrl = (
   } catch {
     return;
   }
+};
+
+/**
+ * Splits a stored visual value into an attachable image or a textual identity
+ * signal. Unsupported URL-like values stay ignored instead of leaking paths or
+ * protocols into the prompt, while Emoji and CSS colors retain their meaning.
+ */
+export const resolveArtworkReferenceSource = (
+  value?: string | null,
+  appOrigin?: string,
+): ResolvedArtworkReferenceSource => {
+  const source = value?.trim();
+  if (!source) return {};
+
+  const imageUrl = resolveArtworkReferenceImageUrl(source, appOrigin);
+  if (imageUrl) return { imageUrl };
+  if (isFullyTransparentColor(source)) return {};
+
+  return URL_LIKE_SOURCE_PATTERN.test(source) ? {} : { text: source };
 };
 
 /** Keeps prompt references and attached model inputs aligned after validation. */

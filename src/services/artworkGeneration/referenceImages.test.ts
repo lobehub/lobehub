@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveArtworkReferenceImageUrl, resolveArtworkReferences } from './referenceImages';
+import {
+  resolveArtworkReferenceImageUrl,
+  resolveArtworkReferences,
+  resolveArtworkReferenceSource,
+} from './referenceImages';
 
 describe('resolveArtworkReferenceImageUrl', () => {
   it.each([
@@ -27,6 +31,45 @@ describe('resolveArtworkReferenceImageUrl', () => {
 
   it('does not resolve an app-relative image source without an app origin', () => {
     expect(resolveArtworkReferenceImageUrl('/avatars/lobe-ai.png')).toBeUndefined();
+  });
+});
+
+describe('resolveArtworkReferenceSource', () => {
+  it.each([
+    '🦄',
+    'emoji: 🦄',
+    'mascot: cat',
+    '#fff',
+    'rgb(0, 0, 0)',
+    'rgba(0, 0, 0)',
+    'rgba(12, 34, 0)',
+    'hsla(120, 100%, 0%)',
+    'linear-gradient(red, blue)',
+  ])('preserves the non-image visual signal %s as text', (source) => {
+    expect(resolveArtworkReferenceSource(source, 'https://app.example.com')).toEqual({
+      text: source,
+    });
+  });
+
+  it.each(['transparent', 'rgba(0, 0, 0, 0)', 'hsla(120, 50%, 50%, 0)', '#0000', '#00000000'])(
+    'ignores the fully transparent visual value %s',
+    (source) => {
+      expect(resolveArtworkReferenceSource(source, 'https://app.example.com')).toEqual({});
+    },
+  );
+
+  it('resolves an image without duplicating it as text', () => {
+    expect(resolveArtworkReferenceSource('/avatars/custom.png', 'https://app.example.com')).toEqual(
+      { imageUrl: 'https://app.example.com/avatars/custom.png' },
+    );
+  });
+
+  it.each([
+    '//example.com/avatar.png',
+    'blob:https://app.example.com/image-id',
+    'file:///avatar.png',
+  ])('does not reinterpret the unsupported URL-like source %s as text', (source) => {
+    expect(resolveArtworkReferenceSource(source, 'https://app.example.com')).toEqual({});
   });
 });
 

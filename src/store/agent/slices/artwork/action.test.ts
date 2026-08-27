@@ -27,6 +27,8 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 
 const input = {
+  avatarIdentity: '🦄',
+  backgroundIdentity: '#fff',
   description: 'Writes and reviews TypeScript',
   id: 'agent-a',
   kind: 'avatar' as const,
@@ -131,6 +133,13 @@ describe('AgentArtworkAction', () => {
         params: expect.objectContaining({
           aspectRatio: '3:4',
           prompt: expect.stringContaining('distinctive portrait character image'),
+        }),
+      }),
+    );
+    expect(imageService.createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          prompt: expect.stringContaining('<avatar_identity>🦄</avatar_identity>'),
         }),
       }),
     );

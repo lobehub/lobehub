@@ -6,13 +6,9 @@ import { toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { resolveAgentBackground } from '@/features/AgentProfileArtwork/utils';
 import { ArtworkStudioContent, styleReferencesForArtworkStyle } from '@/features/ArtworkStudio';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
-import {
-  cutOutFullBodyArtwork,
-  resolveArtworkReferenceImageUrl,
-} from '@/services/artworkGeneration';
+import { cutOutFullBodyArtwork, resolveArtworkReferenceSource } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -96,16 +92,17 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       // "borrow this look, invent a character"), and a model given both blends
       // them into neither.
       const customReference = useReference ? profile?.artworkReferenceImage : undefined;
+      const avatarSource = resolveArtworkReferenceSource(storedAvatar, appOrigin);
+      const backgroundSource = resolveArtworkReferenceSource(meta.backgroundColor, appOrigin);
       const commonInput = {
+        avatarIdentity: avatarSource.text,
+        backgroundIdentity: backgroundSource.text,
         description: meta.description,
         id: agentId,
         kind: 'avatar',
         name: meta.name,
         direction,
-        referenceImageUrl: resolveArtworkReferenceImageUrl(
-          resolveAgentBackground(meta.backgroundColor),
-          appOrigin,
-        ),
+        referenceImageUrl: backgroundSource.imageUrl,
         style: nextStyle,
         styleReferenceImageUrls: customReference
           ? [customReference]
@@ -119,7 +116,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       try {
         const result = await generateCharacterSet({
           composition,
-          currentAvatarUrl: resolveArtworkReferenceImageUrl(storedAvatar, appOrigin),
+          currentAvatarUrl: avatarSource.imageUrl,
           generate: generateAgentArtwork,
           input: commonInput,
         });
