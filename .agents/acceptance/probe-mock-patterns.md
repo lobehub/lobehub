@@ -425,6 +425,14 @@ the browser's own timezone, since the calendar groups by local day. After the ag
 config write, clear the SWR cache tiers before reloading or the composer keeps the
 previous execution target.
 
+One seeded value does not survive: opening the composer's quota panel makes the app
+ingest the machine's **live** CLI reading into the same account row. A seeded current
+window is therefore replaced by the real utilization (and the real `resets_at`, which
+merges with a seeded window inside the five-minute tolerance) as soon as the panel
+renders. Seed the history and the ledger, but never assert on the live window's own
+percentage — read it back from `agent_quota_snapshots` and report what the run
+actually rendered.
+
 ### Driving the UI
 
 #### The composer's slash menu needs real key events — `keyboard type` never opens it
