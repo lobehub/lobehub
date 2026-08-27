@@ -23,7 +23,6 @@ import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { parseDataUri } from '@lobechat/utils/uriParser';
-import sharp from 'sharp';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
@@ -59,15 +58,22 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
 });
 
 const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
+const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
 
 /**
  * Decode inline images before the provider boundary. Protocol and header checks
  * are insufficient because a PNG can retain a valid signature while its pixel
- * chunks or CRCs are corrupted. Decode sequentially to cap peak memory for
- * multi-image calls.
+ * chunks or CRCs are corrupted. Decode sequentially with an explicit pixel
+ * ceiling to cap peak memory for highly compressed and multi-image calls.
  */
 const findInvalidInlineImageIndexes = async (urls: string[]) => {
   const invalidIndexes: number[] = [];
+  const hasInlineImages = urls.some((url) => /^data:image\//i.test(url));
+  if (!hasInlineImages) return invalidIndexes;
+
+  // Keep the native image dependency out of server bundles that never validate
+  // inline images; the server runtime registry imports this module eagerly.
+  const { default: sharp } = await import('sharp');
 
   for (const [index, url] of urls.entries()) {
     if (!/^data:image\//i.test(url)) continue;
@@ -85,7 +91,7 @@ const findInvalidInlineImageIndexes = async (urls: string[]) => {
 
     try {
       const buffer = Buffer.from(base64, 'base64');
-      await sharp(buffer, { failOn: 'error' }).raw().toBuffer();
+      await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INLINE_IMAGE_PIXELS }).stats();
     } catch {
       invalidIndexes.push(index + 1);
     }

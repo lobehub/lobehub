@@ -248,6 +248,9 @@ export const createMediaFileItems = (
 
 export const createMediaFileItemsFromMessage = (message: MediaSourceMessage): MediaFileItem[] => {
   const toolResultImages = createToolResultImageItems(message);
+  // Tool result images and imageList entries share the same message/index ref
+  // namespace. Prefer the durable tool result to avoid duplicate refs where
+  // selectMediaFileItems would otherwise resolve the attachment first.
   const attachmentImages = toolResultImages.length > 0 ? [] : message.imageList;
 
   return [
@@ -261,7 +264,7 @@ export const hasAnalyzableMediaFiles = (message: unknown): message is MediaSourc
 
   const mediaMessage = message as MediaSourceMessage;
 
-  return hasMediaFiles(mediaMessage) || createToolResultImageItems(mediaMessage).length > 0;
+  return hasUserMediaFiles(mediaMessage) || createToolResultImageItems(mediaMessage).length > 0;
 };
 
 export const inferMediaTypeFromUrl = (url: string): MediaFileItem['type'] => {

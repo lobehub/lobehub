@@ -477,13 +477,12 @@ export class MessageContentProcessor extends BaseProcessor {
   private async processToolMessage(message: any): Promise<any> {
     const rawImages = message.pluginState?.images;
 
-    // Only forward entries with a durable, fetchable URL. Pre-upload entries
-    // (base64 `data`, no `url`) must never reach the LLM payload, and legacy
-    // non-http(s) URLs (e.g. desktop-only `localfile://` previews) can't be
-    // fetched by the send path.
+    // Forward provider-readable HTTP(S) and inline image URLs to vision models.
+    // Pre-upload entries (`data` without `url`) and legacy non-http(s) URLs
+    // (e.g. desktop-only `localfile://` previews) cannot reach the send path.
     const images = Array.isArray(rawImages)
       ? rawImages.flatMap((image: any, index: number) =>
-          typeof image?.url === 'string' && /^https?:/i.test(image.url)
+          typeof image?.url === 'string' && /^(?:data:image\/|https?:)/i.test(image.url)
             ? [{ ...image, sourceIndex: index }]
             : [],
         )
@@ -511,8 +510,10 @@ export class MessageContentProcessor extends BaseProcessor {
     // from copying opaque image data between tool calls.
     if (!canUseVision) {
       const placeholders = images
-        .map(({ sourceIndex }) => {
-          if (!message.id) return VISION_DOWNGRADE_PLACEHOLDER;
+        .map(({ sourceIndex, url }) => {
+          // Inline image data is safe to send as a structured vision input but
+          // must never be copied into text or exposed as a reusable media ref.
+          if (!message.id || !/^https?:/i.test(url)) return VISION_DOWNGRADE_PLACEHOLDER;
 
           const ref = createMediaFileRef({
             index: sourceIndex,

@@ -393,6 +393,44 @@ describe('MessageContentProcessor', () => {
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
 
+    it('should keep inline tool images as structured input only for vision models', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const dataUrl = 'data:image/png;base64,AAAA';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'inline image',
+          id: 'tool-inline',
+          pluginState: { images: [{ mediaType: 'image/png', url: dataUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_inline',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(result.messages[0].content).toEqual([
+        { text: 'inline image', type: 'text' },
+        { image_url: { detail: 'auto', url: dataUrl }, type: 'image_url' },
+      ]);
+
+      mockIsCanUseVision.mockReturnValue(false);
+      const downgraded = await processor.process(createContext(messages));
+
+      expect(downgraded.messages[0].content).toBe(
+        `inline image\n\n${VISION_DOWNGRADE_PLACEHOLDER}`,
+      );
+      expect(downgraded.messages[0].content).not.toContain(dataUrl);
+    });
+
     it('should pass through tool messages without images unchanged', async () => {
       mockIsCanUseVision.mockReturnValue(true);
 

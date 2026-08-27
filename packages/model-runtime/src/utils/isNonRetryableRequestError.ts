@@ -54,6 +54,11 @@ const RETRYABLE_MESSAGE_PATTERNS = [
   'unauthorized',
 ];
 
+const IMAGE_DECODING_MESSAGE_PATTERNS = [
+  'failed to decode image data',
+  'unable to process input image',
+];
+
 const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'assistant message prefill',
   'conversation must end with a user message',
@@ -61,7 +66,7 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'context_length_exceeded',
   'does not support parameter',
   'expected a string',
-  'failed to decode image data',
+  ...IMAGE_DECODING_MESSAGE_PATTERNS,
   'input is too long',
   'input tokens exceed',
   'invalid input',
@@ -85,7 +90,6 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'too many input tokens',
   'unsupported parameter',
   'unrecognized request argument',
-  'unable to process input image',
 ];
 
 const collectErrorStrings = (
@@ -161,6 +165,14 @@ const collectStatusCodes = (
   }
 
   return result;
+};
+
+export const isImageDecodingRequestError = (error: unknown): boolean => {
+  const combined = collectErrorStrings(error)
+    .map((value) => value.toLowerCase())
+    .join('\n');
+
+  return IMAGE_DECODING_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern));
 };
 
 export const isNonRetryableRequestError = (error: unknown): boolean => {

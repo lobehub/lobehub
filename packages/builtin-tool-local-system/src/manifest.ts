@@ -3,6 +3,9 @@ import { type BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { LocalSystemApiName, LocalSystemIdentifier } from './types';
 
+export const READ_FILE_DESCRIPTION =
+  'Read the content of a text or document file (txt/md/json/source code/pdf/docx/etc.). Binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.';
+
 export const LocalSystemManifest: BuiltinToolManifest = {
   executors: ['client', 'server'],
   api: [

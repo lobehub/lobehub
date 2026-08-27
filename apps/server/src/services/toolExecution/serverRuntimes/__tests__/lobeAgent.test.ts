@@ -14,6 +14,7 @@ const mockMessageModelQuery = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
+const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
     abilities: { audio: true, video: true, vision: true },
@@ -76,6 +77,18 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 vi.mock('model-bank', () => ({
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
 }));
+
+vi.mock('sharp', async (importOriginal) => {
+  const actual = (await importOriginal()) as { default: (...args: any[]) => any };
+
+  return {
+    ...actual,
+    default: (input: Buffer, options?: Record<string, unknown>) => {
+      mockSharpOptions(options);
+      return actual.default(input, options);
+    },
+  };
+});
 
 // Plan documents are the todo runtime's optional mirror; a topic that never ran
 // `createPlan` simply has none. Model that here so the todo tests exercise the
@@ -333,6 +346,9 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(mockSharpOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
+    );
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).toHaveBeenCalledWith(
       expect.objectContaining({

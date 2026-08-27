@@ -8,6 +8,7 @@ import {
   createUrlMediaFileItems,
   filterAllowedMediaUrls,
   formatMediaUrlValidationError,
+  hasAnalyzableMediaFiles,
   hasUserMediaFiles,
   MAX_MEDIA_URL_LENGTH,
   MAX_MEDIA_URLS,
@@ -141,6 +142,19 @@ describe('media', () => {
         uri: 'https://example.com/tool-image.png',
       },
     ]);
+  });
+
+  it('should limit analyzable message media to user attachments and durable tool images', () => {
+    const imageList = [{ url: 'https://example.com/image.png' }];
+
+    expect(hasAnalyzableMediaFiles({ imageList, role: 'user' })).toBe(true);
+    expect(hasAnalyzableMediaFiles({ imageList, role: 'assistant' })).toBe(false);
+    expect(
+      hasAnalyzableMediaFiles({
+        pluginState: { images: [{ url: 'https://example.com/tool-image.png' }] },
+        role: 'tool',
+      }),
+    ).toBe(true);
   });
 
   it('should infer URL item type and name from direct media urls', () => {

@@ -1123,7 +1123,12 @@ describe('createRouterRuntime', () => {
       expect(mockChatFail).toHaveBeenCalledTimes(1);
       expect(onRouteAttempt).toHaveBeenCalledTimes(1);
       expect(onRouteAttempt).toHaveBeenCalledWith(
-        expect.objectContaining({ error: imageDecodeError, nonRetryable: true, success: false }),
+        expect.objectContaining({
+          error: imageDecodeError,
+          nonRetryable: true,
+          nonRetryableReason: 'imageDecode',
+          success: false,
+        }),
       );
     });
 
