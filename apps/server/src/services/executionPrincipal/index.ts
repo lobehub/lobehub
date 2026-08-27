@@ -79,6 +79,46 @@ export interface ExecutionPrincipal {
   resourceOwnerUserId?: string;
 }
 
+/**
+ * An {@link ExecutionPrincipal} whose ids are known to be present.
+ *
+ * Long-lived holders (services constructed once and then used across many
+ * operations) narrow to this at their boundary so their internals can read the
+ * ids without an optional check at every use. See
+ * {@link assertResolvedPrincipal} for why the check belongs at that boundary.
+ */
+export interface ResolvedExecutionPrincipal extends ExecutionPrincipal {
+  actorUserId: string;
+  resourceOwnerUserId: string;
+}
+
+/**
+ * Narrow a principal at a boundary that cannot operate without both ids, and
+ * fail closed if it is incomplete.
+ *
+ * A service that carried a principal with a missing `resourceOwnerUserId` would
+ * construct every model it owns with `undefined`, silently widening their
+ * `WHERE user_id = ?` filters instead of erroring — so the failure must be
+ * raised here, once, rather than discovered as a data leak downstream.
+ *
+ * @param context - Named in the thrown message so the offending boundary is
+ *   identifiable from the error alone.
+ */
+export const assertResolvedPrincipal = (
+  principal: ExecutionPrincipal,
+  context: string,
+): ResolvedExecutionPrincipal => {
+  const { actorUserId, resourceOwnerUserId } = principal;
+
+  if (!actorUserId || !resourceOwnerUserId) {
+    throw new Error(
+      `${context} requires a complete execution principal (actorUserId + resourceOwnerUserId)`,
+    );
+  }
+
+  return { ...principal, actorUserId, resourceOwnerUserId };
+};
+
 /** An ordinary run: the actor owns everything it touches. */
 export const createOwnerPrincipal = (userId?: string): ExecutionPrincipal => ({
   actorUserId: userId,

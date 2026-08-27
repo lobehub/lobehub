@@ -194,7 +194,11 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
-import type { ExecutionPrincipal } from '@/server/services/executionPrincipal';
+import {
+  assertResolvedPrincipal,
+  type ExecutionPrincipal,
+  type ResolvedExecutionPrincipal,
+} from '@/server/services/executionPrincipal';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -693,8 +697,7 @@ export class AiAgentService {
    * handing over "a user id" without saying which of the two it means
    * (LOBE-13564).
    */
-  private readonly principal: ExecutionPrincipal;
-  private readonly userId: string;
+  private readonly principal: ResolvedExecutionPrincipal;
   private readonly db: LobeChatDatabase;
   private readonly agentDocumentsService: AgentDocumentsService;
   private readonly agentModel: AgentModel;
@@ -730,19 +733,17 @@ export class AiAgentService {
       workspaceId?: string;
     },
   ) {
-    // Fail closed. `ExecutionPrincipal`'s ids are optional at the type level
-    // only because the run metadata they come from is (see its JSDoc), but a
-    // service with no resource owner would construct every model below with
-    // `undefined` and silently widen their `WHERE user_id = ?` filters. The
-    // previous signature took a non-optional `userId`, so this preserves the
-    // same contract — it just can no longer be expressed in the type.
-    const userId = principal.resourceOwnerUserId;
-    if (!userId) {
-      throw new Error('AiAgentService requires an execution principal with a resourceOwnerUserId');
-    }
+    // Fail closed — see `assertResolvedPrincipal`. `ExecutionPrincipal`'s ids
+    // are optional at the type level only because the run metadata they come
+    // from is (see its JSDoc); the previous signature took a non-optional
+    // `userId`, so narrowing here preserves the same contract.
+    this.principal = assertResolvedPrincipal(principal, 'AiAgentService');
 
-    this.principal = principal;
-    this.userId = userId;
+    // Every model and sub-service below is scoped to the RESOURCE OWNER: they
+    // read and write that user's rows. The actor (`principal.actorUserId`) is
+    // deliberately not used here — on a share run it is the visitor, who owns
+    // none of this.
+    const userId = this.principal.resourceOwnerUserId;
     this.db = db;
     this.workspaceId = options?.workspaceId;
     this.withholdGatewayToken = options?.withholdGatewayToken ?? false;
@@ -796,7 +797,7 @@ export class AiAgentService {
 
     let accessToken: string | undefined;
     try {
-      const userModel = new UserModel(this.db, this.userId);
+      const userModel = new UserModel(this.db, this.principal.resourceOwnerUserId);
       const settings = await userModel.getUserSettings();
       accessToken = (settings?.market as any)?.accessToken;
     } catch {
@@ -805,7 +806,7 @@ export class AiAgentService {
 
     this._marketService = new MarketService({
       accessToken,
-      userInfo: { userId: this.userId },
+      userInfo: { userId: this.principal.resourceOwnerUserId },
     });
     return this._marketService;
   }
@@ -833,7 +834,7 @@ export class AiAgentService {
     if (!deviceId || !this.workspaceId) return undefined;
     const row = await new DeviceModel(
       this.db,
-      this.userId,
+      this.principal.resourceOwnerUserId,
       this.workspaceId,
     ).findWorkspaceDeviceById(deviceId);
     return row ? this.workspaceId : undefined;
@@ -897,7 +898,11 @@ export class AiAgentService {
     //     onComplete/onError hooks (task lifecycle → task failed + IM bot callback).
     //     `skipErrorMessageWrite` keeps the bespoke device-specific bubble written
     //     in step 1; verify is done-only, so it no-ops on this error path.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+    await new CompletionLifecycle(
+      this.db,
+      this.principal.resourceOwnerUserId,
+      this.workspaceId,
+    ).completeOperation(
       {
         agentId,
         assistantMessageId,
@@ -905,7 +910,7 @@ export class AiAgentService {
         operationId,
         serializedHooks: hookDispatcher.getSerializedHooks(operationId),
         topicId,
-        userId: this.userId,
+        userId: this.principal.resourceOwnerUserId,
       },
       'error',
       { skipErrorMessageWrite: true },
@@ -962,7 +967,11 @@ export class AiAgentService {
       // (workspace-scoped) — look up both pools so the bound cwd, project
       // skills, and AGENTS/CLAUDE instructions still resolve for a workspace
       // device. Mirrors the dispatch-side lookup (see `deviceModelForCwd`).
-      const deviceModel = new DeviceModel(this.db, this.userId, this.workspaceId);
+      const deviceModel = new DeviceModel(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        this.workspaceId,
+      );
       const personalDevice = await deviceModel.findByDeviceId(activeDeviceId);
       const workspaceDevice = personalDevice
         ? undefined
@@ -1008,7 +1017,7 @@ export class AiAgentService {
       const scanned = await deviceGateway.initWorkspace({
         deviceId: activeDeviceId,
         scope: boundCwd,
-        userId: this.userId,
+        userId: this.principal.resourceOwnerUserId,
         workspaceId: deviceWorkspaceId,
       });
       if (!scanned) {
@@ -1161,14 +1170,26 @@ export class AiAgentService {
       videoList = [];
       audioList = [];
       fileList = [];
-      const fileService = new FileService(this.db, this.userId, this.workspaceId);
-      const documentService = new DocumentService(this.db, this.userId, this.workspaceId);
+      const fileService = new FileService(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        this.workspaceId,
+      );
+      const documentService = new DocumentService(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        this.workspaceId,
+      );
 
       for (const file of files) {
         await throwIfAborted('file upload');
 
         try {
-          const result = await ingestAttachment(file, fileService, this.userId);
+          const result = await ingestAttachment(
+            file,
+            fileService,
+            this.principal.resourceOwnerUserId,
+          );
           fileIds.push(result.fileId);
 
           if (result.isImage) {
@@ -1260,7 +1281,7 @@ export class AiAgentService {
         const resolved = await resolveAttachmentsByFileIds({
           db: this.db,
           fileIds: attachedFileIds,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
           workspaceId: this.workspaceId,
         });
 
@@ -1439,7 +1460,7 @@ export class AiAgentService {
     const interventionReservationId = params.approvalResolutionRequestId
       ? deriveAgentInterventionContinuationOperationId({
           resolutionRequestId: params.approvalResolutionRequestId,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
           workspaceId: this.workspaceId,
         })
       : undefined;
@@ -1750,7 +1771,7 @@ export class AiAgentService {
       try {
         const workspaceUserSettings = new WorkspaceUserSettingsModel(
           this.db,
-          this.userId,
+          this.principal.resourceOwnerUserId,
           this.workspaceId,
         );
         const preference = await workspaceUserSettings.getPreference();
@@ -1764,7 +1785,7 @@ export class AiAgentService {
       }
     }
 
-    let canManageAgent = agentConfig.userId === this.userId;
+    let canManageAgent = agentConfig.userId === this.principal.resourceOwnerUserId;
     const agentWorkspaceId = agentConfig.workspaceId ?? this.workspaceId;
     const isPublicWorkspaceAgent = !!agentWorkspaceId && agentConfig.visibility !== 'private';
     if (isPublicWorkspaceAgent && !canManageAgent) {
@@ -1781,7 +1802,7 @@ export class AiAgentService {
             workspaceId: agentWorkspaceId,
           },
           resourceType: 'agent',
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
           workspaceId: agentWorkspaceId,
         });
       } catch (error) {
@@ -1910,7 +1931,10 @@ export class AiAgentService {
     if (agentSlug && builtinSlugs.includes(agentSlug)) {
       let userLocale: string | undefined;
       try {
-        const userInfo = await UserModel.getInfoForAIGeneration(this.db, this.userId);
+        const userInfo = await UserModel.getInfoForAIGeneration(
+          this.db,
+          this.principal.resourceOwnerUserId,
+        );
         userLocale = userInfo.responseLanguage;
       } catch (error) {
         log('execAgent: failed to load user locale for builtin runtime config: %O', error);
@@ -2382,7 +2406,7 @@ export class AiAgentService {
     const continuationIdentity = providedApprovalResolutionRequestId
       ? {
           resolutionRequestId: providedApprovalResolutionRequestId,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
           workspaceId: this.workspaceId,
         }
       : undefined;
@@ -2431,7 +2455,7 @@ export class AiAgentService {
             expectedProvenance,
           ) &&
           existingState.operationId === continuationOperationId &&
-          existingState.metadata?.userId === this.userId &&
+          existingState.metadata?.userId === this.principal.resourceOwnerUserId &&
           (existingState.metadata?.workspaceId ?? null) === (this.workspaceId ?? null) &&
           existingState.metadata?.agentId === resolvedAgentId &&
           existingState.metadata?.topicId === topicId &&
@@ -2462,7 +2486,7 @@ export class AiAgentService {
         let gatewayToken: string | undefined;
         if (!this.withholdGatewayToken) {
           try {
-            gatewayToken = await signUserJWT(this.userId);
+            gatewayToken = await signUserJWT(this.principal.resourceOwnerUserId);
           } catch {
             log('execAgent: failed to sign gateway JWT for reused intervention continuation');
           }
@@ -2599,7 +2623,7 @@ export class AiAgentService {
         model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
         provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
         // Share-visitor runs: the topic row belongs to the creator
-        // (this.userId), but stamping the visitor's id keeps it out of the
+        // (this.principal.resourceOwnerUserId), but stamping the visitor's id keeps it out of the
         // creator's listings and lets shareChat scope reads per visitor.
         senderId: shareGate?.visitorUserId,
         // Placeholder only — `reserveShareVisitorTopic` (below) overrides
@@ -2626,7 +2650,7 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               db: this.db,
               expectedGeneration: shareGate.generation,
-              ownerId: this.userId,
+              ownerId: this.principal.resourceOwnerUserId,
               visitorUserId: shareGate.visitorUserId,
               workspaceId: this.workspaceId,
             },
@@ -2799,7 +2823,7 @@ export class AiAgentService {
               agentId: shareGate.agentId,
               db: this.db,
               expectedGeneration: shareGate.generation,
-              ownerId: this.userId,
+              ownerId: this.principal.resourceOwnerUserId,
               topicId,
               workspaceId: this.workspaceId,
             },
@@ -2892,7 +2916,7 @@ export class AiAgentService {
     //
     // Share-visitor fail-closed gate (agent share C5) — never enqueue this event
     // for a share-visitor turn. `enqueueAgentSignalSourceEvent` is always called
-    // with `userId: this.userId`, which is the share **creator** (this service
+    // with `userId: this.principal.resourceOwnerUserId`, which is the share **creator** (this service
     // is instantiated with `share.ownerId` for every visitor run — see
     // `shareChat.ts`), never `shareGate.visitorUserId`. The `agent.user.message`
     // event it produces is picked up by the `analyzeIntent` feedback-satisfaction
@@ -2924,7 +2948,7 @@ export class AiAgentService {
         },
         {
           agentId: resolvedAgentId,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
         },
       ).catch((error) => {
         log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
@@ -2947,7 +2971,7 @@ export class AiAgentService {
       // mint a token or dispatch/spawn when persistence fails.
       const operationPersisted = await new CompletionLifecycle(
         this.db,
-        this.userId,
+        this.principal.resourceOwnerUserId,
         this.workspaceId,
       ).recordStart({
         agentId: persistAgentId,
@@ -2966,9 +2990,13 @@ export class AiAgentService {
       }
 
       // Read resume session id for next-turn continuity.
-      const heteroService = new HeterogeneousAgentService(this.db, this.userId, {
-        workspaceId: this.workspaceId,
-      });
+      const heteroService = new HeterogeneousAgentService(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        {
+          workspaceId: this.workspaceId,
+        },
+      );
       const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
       // Sign an operation-scoped JWT so the CLI can authenticate against
       // heteroIngest / heteroFinish without full user credentials.
@@ -2977,7 +3005,7 @@ export class AiAgentService {
         operationJwt = await signHeteroOperationJWT({
           capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
           operationId,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
           workspaceId: this.workspaceId,
         });
       } catch (err) {
@@ -3091,7 +3119,7 @@ export class AiAgentService {
         resumeSessionId,
         systemContext,
         topicId,
-        userId: this.userId,
+        userId: this.principal.resourceOwnerUserId,
       };
 
       const platformPlan = isRemoteHetero
@@ -3122,8 +3150,8 @@ export class AiAgentService {
             agentConfig.agencyConfig?.executionTargetSelectionPolicy !== 'fixed') ||
           (!canManageAgent && memberDeviceOverride?.boundDeviceId === remoteDeviceId));
       const remoteDeviceUserId = usesCallersPersonalDevice
-        ? this.userId
-        : (agentConfig.userId ?? this.userId);
+        ? this.principal.resourceOwnerUserId
+        : (agentConfig.userId ?? this.principal.resourceOwnerUserId);
 
       // Register the run's lifecycle hooks so the hetero terminal path fires
       // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -3164,7 +3192,11 @@ export class AiAgentService {
         );
         if (!attached) {
           const message = 'Group supervisor finished before this member could start.';
-          await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+          await new CompletionLifecycle(
+            this.db,
+            this.principal.resourceOwnerUserId,
+            this.workspaceId,
+          ).completeOperation(
             {
               agentId: persistAgentId,
               assistantMessageId: assistantMessageRecord.id,
@@ -3173,7 +3205,7 @@ export class AiAgentService {
               orchestrationRole: appContext?.orchestrationRole,
               serializedHooks,
               topicId,
-              userId: this.userId,
+              userId: this.principal.resourceOwnerUserId,
             },
             'error',
           );
@@ -3233,7 +3265,7 @@ export class AiAgentService {
             ...(params.topicStartOwnerOperationId && {
               mirrorToOperationId: params.topicStartOwnerOperationId,
             }),
-            userId: this.userId,
+            userId: this.principal.resourceOwnerUserId,
             workspaceId: this.workspaceId,
           });
         } catch (err) {
@@ -3340,7 +3372,7 @@ export class AiAgentService {
             heteroType,
             mirrorToOperationId: params.topicStartOwnerOperationId,
             topicId,
-            userId: this.userId,
+            userId: this.principal.resourceOwnerUserId,
           })
           .catch((err) => log('execAgent: failed to init stream for remote hetero: %O', err));
 
@@ -3440,9 +3472,16 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             heteroType,
             mirrorToOperationId: params.topicStartOwnerOperationId,
+            // Deliberately NOT `principal.actorUserId`, even though on a share
+            // run the two are the same id. Downstream treats the mere PRESENCE
+            // of this field as "this is a share-visitor run" — see
+            // `GatewayStreamNotifier.ts`'s `isShareVisitorRun` and
+            // `AgentRuntime/factory.ts`'s metadata resolver — so populating it
+            // on an ordinary run (where the actor IS the owner) would misclassify
+            // every normal run as a visitor run and scrub its `uiMessages`.
             streamOwnerUserId: shareGate?.visitorUserId,
             topicId,
-            userId: this.userId,
+            userId: this.principal.resourceOwnerUserId,
           });
         } catch (err) {
           log('execAgent: failed to init stream for local hetero: %O', err);
@@ -3493,7 +3532,11 @@ export class AiAgentService {
           // it directly rather than via deviceGateway.
           // The bound device may be personal (userId-scoped) or a workspace
           // device (workspace-scoped) — look up both so its defaultCwd resolves.
-          const deviceModelForCwd = new DeviceModel(this.db, this.userId, this.workspaceId);
+          const deviceModelForCwd = new DeviceModel(
+            this.db,
+            this.principal.resourceOwnerUserId,
+            this.workspaceId,
+          );
           const boundDevice =
             (await deviceModelForCwd.findByDeviceId(dispatchDeviceId)) ??
             (await deviceModelForCwd.findWorkspaceDeviceById(dispatchDeviceId));
@@ -3619,7 +3662,7 @@ export class AiAgentService {
           // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
           // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
           // so it outlives a multi-hour run.
-          const sandboxJwt = await signUserJWT(this.userId, '4h');
+          const sandboxJwt = await signUserJWT(this.principal.resourceOwnerUserId, '4h');
           spawnHeteroSandbox({
             ...heteroParams,
             agentType: heteroType as 'claude-code' | 'codex',
@@ -3650,9 +3693,13 @@ export class AiAgentService {
       let gatewayToken: string | undefined;
       if (!this.withholdGatewayToken) {
         try {
-          // Share-visitor runs sign for the visitor — see the non-hetero return
-          // below for why a creator-signed token must never reach the visitor.
-          gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? this.userId);
+          // The token goes to whoever is DRIVING the run, which is exactly
+          // `actorUserId` — see the non-hetero return below for why a
+          // creator-signed token must never reach a share visitor. Reading it
+          // off the principal rather than off `shareGate` means a call path
+          // that forgets to thread the gate can no longer silently downgrade
+          // this to a creator-signed token.
+          gatewayToken = await signUserJWT(this.principal.actorUserId);
         } catch {
           // non-critical
         }
@@ -3685,7 +3732,7 @@ export class AiAgentService {
     // forwarded into op metadata for the per-step context engine.
     let operationAgentGroup: AgentGroupConfig | undefined;
     try {
-      const userModel = new UserModel(this.db, this.userId);
+      const userModel = new UserModel(this.db, this.principal.resourceOwnerUserId);
       const settings = await userModel.getUserSettings();
       const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
 
@@ -3697,7 +3744,10 @@ export class AiAgentService {
       log('execAgent: failed to fetch user settings: %O', error);
     }
     try {
-      const preference = await new UserModel(this.db, this.userId).getUserPreference();
+      const preference = await new UserModel(
+        this.db,
+        this.principal.resourceOwnerUserId,
+      ).getUserPreference();
       enableExpertise = preference?.lab?.enableSelfLearning === true;
     } catch (error) {
       console.error('Failed to resolve expertise injection Lab preference:', error);
@@ -3784,8 +3834,14 @@ export class AiAgentService {
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const builtinModels = await loadModels();
     const [modelMetadataResult, providerMetadataResult] = await Promise.allSettled([
-      new AiModelModel(this.db, this.userId, this.workspaceId).findByIdAndProvider(model, provider),
-      new AiProviderModel(this.db, this.userId, this.workspaceId).findById(provider),
+      new AiModelModel(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        this.workspaceId,
+      ).findByIdAndProvider(model, provider),
+      new AiProviderModel(this.db, this.principal.resourceOwnerUserId, this.workspaceId).findById(
+        provider,
+      ),
     ]);
     if (modelMetadataResult.status === 'rejected') {
       log('execAgent: failed to load active model search metadata: %O', modelMetadataResult.reason);
@@ -3813,7 +3869,11 @@ export class AiAgentService {
       providerSearchMode: activeProviderMetadata?.settings?.searchMode,
     });
     // Resolve file URLs before visual tool activation checks and context build.
-    const fileService = new FileService(this.db, this.userId, this.workspaceId);
+    const fileService = new FileService(
+      this.db,
+      this.principal.resourceOwnerUserId,
+      this.workspaceId,
+    );
     const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
       fileService.getFileAccessUrl({ id: file.id, url: path });
     let historyMessagesCache: any[] | undefined;
@@ -3929,7 +3989,7 @@ export class AiAgentService {
       // it costs nothing in the common case. Appended to `systemRole`, which is
       // consumed by `createOperation` further below.
       try {
-        const borrowed = collectBorrowedConnectors(connectors, this.userId!);
+        const borrowed = collectBorrowedConnectors(connectors, this.principal.resourceOwnerUserId!);
         if (borrowed.length > 0) {
           const displayMap = await resolveUserDisplayMap(
             this.db,
@@ -3980,7 +4040,12 @@ export class AiAgentService {
         // same `connectorGateKeeper` used above. `this.connectorModel` has none,
         // which would decrypt to null and make an authed connector 401 → error.
         const refreshConnectorModel = connectorGateKeeper
-          ? new ConnectorModel(this.db, this.userId, this.workspaceId, connectorGateKeeper)
+          ? new ConnectorModel(
+              this.db,
+              this.principal.resourceOwnerUserId,
+              this.workspaceId,
+              connectorGateKeeper,
+            )
           : this.connectorModel;
         scheduleStaleConnectorToolsRefresh(connectorsMcp, buildLastSyncedAtMap(connectorTools), {
           connectorModel: refreshConnectorModel,
@@ -4051,7 +4116,11 @@ export class AiAgentService {
               : [];
 
           if (connectorEntries.length > 0) {
-            const toolModel = new ConnectorToolModel(this.db, this.userId, this.workspaceId);
+            const toolModel = new ConnectorToolModel(
+              this.db,
+              this.principal.resourceOwnerUserId,
+              this.workspaceId,
+            );
             const connectorToolsMap = new Map<string, Map<string, string>>();
             await Promise.all(
               connectorEntries.map(async (c) => {
@@ -4123,7 +4192,11 @@ export class AiAgentService {
           // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
           // online set.
           onlineDevices = (
-            await getScopedOnlineDevices(this.db, this.userId, this.workspaceId)
+            await getScopedOnlineDevices(
+              this.db,
+              this.principal.resourceOwnerUserId,
+              this.workspaceId,
+            )
           ).filter((d) => d.online);
           // A workspace agent whose caller pinned this desktop's personal
           // deviceId via `users.preference.agentDeviceOverrides` (
@@ -4139,9 +4212,10 @@ export class AiAgentService {
             const boundId = agentConfig.agencyConfig.boundDeviceId;
             const alreadyIncluded = onlineDevices.some((d) => d.deviceId === boundId);
             if (!alreadyIncluded) {
-              const personalPool = await getScopedOnlineDevices(this.db, this.userId).catch(
-                () => [] as DeviceAttachment[],
-              );
+              const personalPool = await getScopedOnlineDevices(
+                this.db,
+                this.principal.resourceOwnerUserId,
+              ).catch(() => [] as DeviceAttachment[]);
               const personalMatch = personalPool.find((d) => d.deviceId === boundId && d.online);
               if (personalMatch) {
                 onlineDevices = [...onlineDevices, personalMatch];
@@ -4172,7 +4246,11 @@ export class AiAgentService {
       const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
       let attachedFileTypes: string[] = [];
       if (attachedFileIds && attachedFileIds.length > 0) {
-        const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
+        const fileModel = new FileModel(
+          this.db,
+          this.principal.resourceOwnerUserId,
+          this.workspaceId,
+        );
         const fileRecords = await fileModel.findByIds(Array.from(new Set(attachedFileIds)));
         attachedFileTypes = fileRecords.map((file) => file.fileType || '');
       }
@@ -4305,7 +4383,7 @@ export class AiAgentService {
           reason: executionPlan.reason,
           requestedDeviceId,
           topicId,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
         });
       }
 
@@ -4315,7 +4393,11 @@ export class AiAgentService {
       // authorizes the group-orchestration toolset.
       let isGroupSupervisor = false;
       if (appContext?.groupId) {
-        const chatGroupModel = new ChatGroupModel(this.db, this.userId, this.workspaceId);
+        const chatGroupModel = new ChatGroupModel(
+          this.db,
+          this.principal.resourceOwnerUserId,
+          this.workspaceId,
+        );
         const [group, roster] = await Promise.all([
           chatGroupModel.findById(appContext.groupId),
           chatGroupModel.getGroupAgentsWithMeta(appContext.groupId),
@@ -4616,7 +4698,7 @@ export class AiAgentService {
       // allowlist (it's injected directly into `tools` below), so the visitor's
       // own model call can reach it even with an empty `enabledToolIds`. Its
       // execution context (`SelfFeedbackIntentExecutionRuntime`) is stamped with
-      // `this.userId` — the share **creator**, since this service always runs as
+      // `this.principal.resourceOwnerUserId` — the share **creator**, since this service always runs as
       // `share.ownerId` for visitor turns (see `shareChat.ts`) — and the
       // resulting `agent.self_feedback_intent.declared` event dispatches a full
       // autonomous background agent run under the creator's account
@@ -4629,7 +4711,10 @@ export class AiAgentService {
         !params.disableSelfFeedbackIntentTool &&
         (agentSelfIterationEnabled || isLobeAiAgent);
       if (shouldCheckUserSelfIterationGate) {
-        const featureUserEnabled = await isAgentSignalEnabledForUser(this.db, this.userId);
+        const featureUserEnabled = await isAgentSignalEnabledForUser(
+          this.db,
+          this.principal.resourceOwnerUserId,
+        );
         const effectiveAgentSelfIterationEnabled = resolveAgentSelfIterationCapability({
           agentSelfIterationEnabled,
           isAgentSelfIterationFeatureEnabled: featureUserEnabled,
@@ -4713,7 +4798,7 @@ export class AiAgentService {
         // workspace devices need workspaceId; personal devices (including a
         // workspace run routed to the caller's own machine) must not.
         const systemInfo = await deviceGateway.queryDeviceSystemInfo(
-          this.userId,
+          this.principal.resourceOwnerUserId,
           deviceId,
           activeDeviceScope === 'workspace' ? this.workspaceId : undefined,
         );
@@ -4802,7 +4887,7 @@ export class AiAgentService {
 
     if (isAgentManagementEnabled) {
       // Query user's enabled models from database
-      const aiModelModel = new AiModelModel(this.db, this.userId);
+      const aiModelModel = new AiModelModel(this.db, this.principal.resourceOwnerUserId);
       const allUserModels = await aiModelModel.getAllModels();
 
       // Filter only enabled chat models and group by provider
@@ -4913,7 +4998,7 @@ export class AiAgentService {
 
     if (globalMemoryEnabled) {
       try {
-        const personaModel = new UserPersonaModel(this.db, this.userId);
+        const personaModel = new UserPersonaModel(this.db, this.principal.resourceOwnerUserId);
         const persona = await personaModel.getLatestPersonaDocument();
 
         if (persona?.persona) {
@@ -5331,7 +5416,11 @@ export class AiAgentService {
         identifier: s.identifier,
         name: s.name,
       }));
-      const skillModel = new AgentSkillModel(this.db, this.userId, this.workspaceId);
+      const skillModel = new AgentSkillModel(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        this.workspaceId,
+      );
       const { data: dbSkills } = await skillModel.findAll();
 
       // Pinned skills need their SKILL.md body injected into context directly,
@@ -5487,7 +5576,11 @@ export class AiAgentService {
     const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
     let expertise;
     try {
-      const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+      const expertiseModel = new ExpertiseModel(
+        this.db,
+        this.principal.resourceOwnerUserId,
+        this.workspaceId,
+      );
       expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
     } catch (error) {
       console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
@@ -5508,7 +5601,9 @@ export class AiAgentService {
     // `assertRunnableForVisitor` staking it and `confirmReservation`
     // redeeming it (e.g. `createOperation` throwing) — see
     // `agentShareRunReservations`'s JSDoc.
-    const agentShareModel = shareGate ? new AgentShareModel(this.db, this.userId) : undefined;
+    const agentShareModel = shareGate
+      ? new AgentShareModel(this.db, this.principal.resourceOwnerUserId)
+      : undefined;
 
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
@@ -5697,7 +5792,7 @@ export class AiAgentService {
           tools,
         },
         operationSkillSet,
-        userId: this.userId,
+        userId: this.principal.resourceOwnerUserId,
         userInterventionConfig,
         userMemory,
         workspaceId: this.workspaceId,
@@ -5789,15 +5884,18 @@ export class AiAgentService {
         );
       }
 
-      // Generate a short-lived JWT for Gateway WebSocket authentication.
-      // Share-visitor runs sign for the VISITOR: a signUserJWT passes full
-      // oidcAuth, so a creator-signed token in the visitor's browser would be
-      // creator account access. The gateway channel is registered under the
-      // visitor's id (streamOwnerUserId), so their own sub matches.
+      // Generate a short-lived JWT for Gateway WebSocket authentication. It is
+      // signed for the ACTOR — whoever is driving the run — because a
+      // signUserJWT passes full oidcAuth, so a creator-signed token in a share
+      // visitor's browser would be creator account access. The gateway channel
+      // is registered under that same id (streamOwnerUserId), so their own sub
+      // matches. Taking it from the principal rather than `shareGate` means a
+      // call path that forgets to thread the gate can no longer silently
+      // downgrade this to a creator-signed token.
       let gatewayToken: string | undefined;
       if (!this.withholdGatewayToken) {
         try {
-          gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? this.userId);
+          gatewayToken = await signUserJWT(this.principal.actorUserId);
         } catch {
           log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
         }
@@ -6049,7 +6147,7 @@ export class AiAgentService {
    *
    * Checks the topic's `runningOperation` marker first (the same field
    * `confirmReservation` writes and `interruptTask` reads to detect a live
-   * run) — `this.topicModel.findById` scopes the lookup to `this.userId`,
+   * run) — `this.topicModel.findById` scopes the lookup to `this.principal.resourceOwnerUserId`,
    * which `runStep.ts` always constructs this service with as the CREATOR's
    * id (share runs execute under the creator's credentials), matching
    * `confirmReservation`'s own write. Only when the marker doesn't name this
@@ -6070,9 +6168,10 @@ export class AiAgentService {
     const runningOperation = (topic?.metadata as ChatTopicMetadata | undefined)?.runningOperation;
     if (runningOperation?.operationId === params.operationId) return 'confirmed';
 
-    const pending = await new AgentShareModel(this.db, this.userId).hasPendingReservation(
-      params.operationId,
-    );
+    const pending = await new AgentShareModel(
+      this.db,
+      this.principal.resourceOwnerUserId,
+    ).hasPendingReservation(params.operationId);
     return pending ? 'pending' : 'revoked';
   };
 
@@ -6104,9 +6203,10 @@ export class AiAgentService {
     operationId: string;
     topicId: string;
   }): Promise<ShareReservationInvalidationOutcome> => {
-    const invalidated = await new AgentShareModel(this.db, this.userId).invalidateReservation(
-      params.operationId,
-    );
+    const invalidated = await new AgentShareModel(
+      this.db,
+      this.principal.resourceOwnerUserId,
+    ).invalidateReservation(params.operationId);
     if (invalidated) return 'invalidated';
 
     const status = await this.verifyShareReservationStatus(params);
@@ -6122,7 +6222,7 @@ export class AiAgentService {
    * retried to be effective — the very next step re-proves authorization on
    * its own and aborts if it can't.
    *
-   * A plain top-level `db` read (not scoped to `this.userId`/workspace):
+   * A plain top-level `db` read (not scoped to `this.principal.resourceOwnerUserId`/workspace):
    * `agent_shares` has no ownership predicate applicable here — this call
    * runs from inside the CREATOR's own runtime step, so `this.db` is already
    * the correct connection.
@@ -6278,7 +6378,7 @@ export class AiAgentService {
         agentId,
         instruction: (instruction ?? '').slice(0, 200),
         operationId: parentOperationId,
-        userId: this.userId,
+        userId: this.principal.resourceOwnerUserId,
       })
       .catch(() => {});
 
@@ -6418,7 +6518,7 @@ export class AiAgentService {
           agentId,
           instruction: instruction.slice(0, 200),
           operationId: parentOperationId,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
         })
         .catch(() => {});
     }
@@ -6553,7 +6653,7 @@ export class AiAgentService {
             agentId,
             error: result.error || 'Sub-agent execution failed',
             operationId: parentOperationId,
-            userId: this.userId,
+            userId: this.principal.resourceOwnerUserId,
           })
           .catch(() => {});
       }
@@ -6566,7 +6666,7 @@ export class AiAgentService {
           subOperationId: result.operationId,
           success: true,
           threadId: thread.id,
-          userId: this.userId,
+          userId: this.principal.resourceOwnerUserId,
         })
         .catch(() => {});
     }
@@ -7081,7 +7181,7 @@ export class AiAgentService {
           .executeToolCall(
             {
               deviceId: targetOperation.deviceId,
-              userId: targetOperation.deviceUserId ?? this.userId,
+              userId: targetOperation.deviceUserId ?? this.principal.resourceOwnerUserId,
               workspaceId: cancelWorkspaceId,
             },
             {
@@ -7250,10 +7350,10 @@ export class AiAgentService {
     // interrupt each — most won't have registered with the runtime yet
     // (harmless no-op via `interruptTask`), but some may have reached that
     // point by the time this revoke wins the row-lock race.
-    const revokedReservations = await new AgentShareModel(this.db, this.userId).revokeReservations(
-      agentId,
-      revocationGeneration,
-    );
+    const revokedReservations = await new AgentShareModel(
+      this.db,
+      this.principal.resourceOwnerUserId,
+    ).revokeReservations(agentId, revocationGeneration);
     if (revokedReservations.length > 0) {
       log(
         'interruptActiveShareRuns: agentId=%s revoked %d pending reservation(s)',
