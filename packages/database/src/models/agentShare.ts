@@ -957,6 +957,76 @@ export class AgentShareModel {
     };
   };
 
+  /**
+   * Per-step re-authorization check for an Agent Share visitor run — called
+   * from `AgentRuntimeService.executeStep` on EVERY step (not only step 0)
+   * so a run cannot cross a step boundary without still being authorized.
+   *
+   * Fixes LOBE-11930 Codex P1: `AiAgentService.interruptActiveShareRuns`
+   * calls `interruptTask` best-effort and swallows a failure (transient
+   * coordinator/database/runtime error) with no durable retry — if that
+   * swallow fires, nothing else was ever going to re-check this run. Rather
+   * than trying to never lose an interrupt (which would need a durable
+   * record AND a retry driver that actually runs — the existing
+   * `/api/workflows/agent-share/sweep` endpoint has no QStash schedule wired
+   * in production, so a fix that depended on it would silently never fire),
+   * this makes the run re-prove its own authorization every step. A missed
+   * interrupt then self-corrects at the very next step instead of staying
+   * unstoppable under the creator's credentials/budget for the rest of the
+   * run.
+   *
+   * A SINGLE query anchored on `agentShares` (not `agentShareGenerations`)
+   * catches every revocation path uniformly:
+   * - `updateVisibility('private')` / `deleteByAgentId` (disableShare): both
+   *   bump `agentShareGenerations` — a generation mismatch fails this.
+   * - `updateConfig` tightening (narrower tool/memory/file grants): same,
+   *   bumps the generation.
+   * - Full agent delete (`AgentModel.delete`): CASCADEs the `agentShares` row
+   *   away WITHOUT bumping `agentShareGenerations` (there is nothing left to
+   *   bump for). Anchoring on `agentShares` means "no row" already fails
+   *   this check on its own, independent of the generation comparison — see
+   *   `AgentModel.delete`'s JSDoc and `shareDeleteInterrupt.ts` for why that
+   *   path can't reuse `interruptActiveShareRuns`'s generation cutoff at all.
+   * - Disable → re-enable cycles: `create()` mints a brand-new `agentShares.id`
+   *   on every re-enable, so comparing `shareId` (not just `agentId`) rejects
+   *   a stale run even if the generation counter (kept monotonic across
+   *   cycles precisely so a stale cutoff can't under-invalidate) happened to
+   *   read back equal.
+   *
+   * `visibility !== 'link'` is checked directly, not only inferred from the
+   * generation bump, as defense in depth against a future writer that
+   * flips visibility without going through the bump helper.
+   *
+   * Read-only, no transaction/lock: an eventual read of a monotonically
+   * increasing counter (or a row's existence) can only be stale in the SAFE
+   * direction — it might miss a revocation that committed a few milliseconds
+   * ago, and the very next step observes it instead. This is what "the run
+   * cannot continue past a step boundary without still being authorized"
+   * actually buys: it does not need the strict `FOR UPDATE` ordering
+   * `assertRunnableForVisitor` needs at stake time.
+   */
+  static isRunStillAuthorized = async (
+    db: LobeChatDatabase,
+    params: { agentId: string; generation: number; shareId: string },
+  ): Promise<boolean> => {
+    const [row] = await db
+      .select({
+        generation: sql<number>`COALESCE(${agentShareGenerations.generation}, 1)`,
+        id: agentShares.id,
+        visibility: agentShares.visibility,
+      })
+      .from(agentShares)
+      .leftJoin(agentShareGenerations, eq(agentShareGenerations.agentId, agentShares.agentId))
+      .where(eq(agentShares.agentId, params.agentId))
+      .limit(1);
+
+    if (!row) return false;
+
+    return (
+      row.id === params.shareId && row.visibility === 'link' && row.generation === params.generation
+    );
+  };
+
   /** Increment the successful page-view counter after access has been granted. */
   static incrementUserViewCount = async (db: LobeChatDatabase, shareId: string) => {
     await db
