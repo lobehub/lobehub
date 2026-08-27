@@ -699,7 +699,8 @@ export class CompletionLifecycle {
    * Dispatch `onComplete` (and `onError` for `reason='error'`) hooks via
    * the global `hookDispatcher`. On the error path, also writes the error
    * back onto the assistant message row so the frontend can render it.
-   * Fire-and-forget; always unregisters the operation from the dispatcher.
+   * Fire-and-forget; unregisters the operation after a settled lifecycle while
+   * preserving registrations across retryable critical delivery failures.
    */
   async dispatchHooks(
     operationId: string,
@@ -717,6 +718,7 @@ export class CompletionLifecycle {
     // segment; the continuation receives the serialized hooks through
     // `metadata._hooks`.
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
+    let shouldRetainHooksForRetry = false;
 
     try {
       const { assistantMessageId, event, metadata } = this.buildLifecycleEvent(
@@ -890,13 +892,19 @@ export class CompletionLifecycle {
       if (
         error instanceof CriticalHookDeliveryError ||
         error instanceof CriticalAgentInterventionPersistenceError
-      )
+      ) {
+        // A queue retry may run in this same process (local callback / warm
+        // worker). Keep the in-memory registration until that lifecycle really
+        // settles; queue mode can additionally reconstruct from metadata._hooks.
+        shouldRetainHooksForRetry = true;
         throw error;
+      }
       log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     } finally {
       // Keep hooks registered across an async-tool park so the eventual resume
-      // (same operationId) can still fire onComplete/onError.
-      if (!isAsyncToolPark) {
+      // (same operationId) can still fire onComplete/onError. Critical delivery
+      // failures likewise keep them until the provider redelivery settles.
+      if (!isAsyncToolPark && !shouldRetainHooksForRetry) {
         hookDispatcher.unregister(operationId);
         // The instantiation has settled (awaited above) or this op never opted in
         // — drop the entry so the map doesn't grow across the service's lifetime.

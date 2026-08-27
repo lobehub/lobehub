@@ -10,6 +10,7 @@ import {
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
+import { CriticalAgentInterventionPersistenceError } from '../CompletionLifecycle';
 import { hookDispatcher } from '../hooks';
 
 // Mock all heavy dependencies to isolate executeStep logic
@@ -475,6 +476,157 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
   });
 });
 
+describe('AgentRuntimeService.executeStep - durable Review lifecycle retry', () => {
+  it('keeps the operation parked and replays only Review lifecycle on the same-step retry', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+    const completionLifecycle = (service as any).completionLifecycle;
+
+    let storedState: any = {
+      cost: { currency: 'USD', total: 0 },
+      lastModified: new Date().toISOString(),
+      messages: [],
+      metadata: { _hooks: [] },
+      operationId: 'op-review-retry',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: {},
+    };
+    const parkedState = {
+      ...storedState,
+      pendingApprovalBatch: {
+        assistantMessageId: 'assistant-1',
+        id: 'op-review-retry:1:assistant-1',
+        sealed: true as const,
+        stepIndex: 1,
+      },
+      pendingToolMessageIds: { 'call-1': 'tool-1' },
+      pendingToolsCalling: [{ apiName: 'run', id: 'call-1', identifier: 'shell' }],
+      status: 'waiting_for_human' as const,
+      stepCount: 1,
+    };
+
+    coordinator.loadAgentState = vi.fn().mockImplementation(async () => storedState);
+    coordinator.saveStepResult = vi.fn().mockImplementation(async (_operationId, stepResult) => {
+      storedState = stepResult.newState;
+    });
+    coordinator.saveAgentState = vi.fn().mockImplementation(async (_operationId, state) => {
+      storedState = state;
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+
+    const runtimeStep = vi.fn().mockResolvedValue({
+      events: [],
+      newState: parkedState,
+      nextContext: undefined,
+    });
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: runtimeStep },
+    });
+    vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
+    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    const notifyPendingReview = vi
+      .spyOn(completionLifecycle as any, 'notifyPendingAgentIntervention')
+      .mockRejectedValueOnce(
+        new CriticalAgentInterventionPersistenceError(
+          'op-review-retry',
+          new Error('Review store unavailable'),
+        ),
+      )
+      .mockResolvedValueOnce(undefined);
+    const hookDispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    const finalizeTrace = vi.spyOn((service as any).traceRecorder, 'finalize');
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'agent_step' } as any,
+        operationId: 'op-review-retry',
+        stepIndex: 0,
+      }),
+    ).rejects.toBeInstanceOf(CriticalAgentInterventionPersistenceError);
+
+    expect(storedState.status).toBe('waiting_for_human');
+    expect(storedState.error).toBeUndefined();
+    expect(storedState.metadata._agentInterventionLifecycle).toEqual({
+      state: 'pending',
+      stepIndex: 0,
+    });
+    expect(coordinator.saveAgentState).not.toHaveBeenCalled();
+    expect(notifyPendingReview).toHaveBeenCalledTimes(1);
+
+    const retryResult = await service.executeStep({
+      context: { phase: 'agent_step' } as any,
+      externalRetryCount: 1,
+      operationId: 'op-review-retry',
+      stepIndex: 0,
+    });
+
+    expect(retryResult).toMatchObject({
+      nextStepScheduled: false,
+      state: { status: 'waiting_for_human' },
+      stepResult: null,
+      success: true,
+    });
+    expect(notifyPendingReview).toHaveBeenCalledTimes(2);
+    expect(runtimeStep).toHaveBeenCalledTimes(1);
+    expect(coordinator.saveStepResult).toHaveBeenCalledTimes(1);
+    expect(storedState.metadata._agentInterventionLifecycle).toEqual({
+      state: 'completed',
+      stepIndex: 0,
+    });
+    expect(
+      streamManager.publishStreamEvent.mock.calls.filter(([, event]: any) =>
+        ['step_start', 'step_complete'].includes(event.type),
+      ),
+    ).toHaveLength(2);
+    expect(
+      hookDispatch.mock.calls.filter(([, hookType]) => hookType === 'beforeStep'),
+    ).toHaveLength(1);
+    expect(hookDispatch.mock.calls.filter(([, hookType]) => hookType === 'afterStep')).toHaveLength(
+      1,
+    );
+    expect(
+      hookDispatch.mock.calls.filter(([, hookType]) => hookType === 'onComplete'),
+    ).toHaveLength(1);
+    expect(hookDispatch).toHaveBeenCalledWith(
+      'op-review-retry',
+      'onComplete',
+      expect.objectContaining({ reason: 'waiting_for_human' }),
+      [],
+    );
+    expect(finalizeTrace).toHaveBeenCalledTimes(1);
+    expect(finalizeTrace).toHaveBeenCalledWith(
+      'op-review-retry',
+      expect.objectContaining({ completionReason: 'waiting_for_human' }),
+    );
+
+    // The Review + hook finished, but the provider did not observe our HTTP
+    // response and redelivered once more. The durable completion checkpoint
+    // makes this an ordinary stale ACK: neither side effect runs again.
+    const responseLossRetry = await service.executeStep({
+      context: { phase: 'agent_step' } as any,
+      externalRetryCount: 2,
+      operationId: 'op-review-retry',
+      stepIndex: 0,
+    });
+
+    expect(responseLossRetry).toMatchObject({
+      nextStepScheduled: false,
+      state: { status: 'waiting_for_human' },
+      stepResult: null,
+      success: true,
+    });
+    expect(notifyPendingReview).toHaveBeenCalledTimes(2);
+    expect(runtimeStep).toHaveBeenCalledTimes(1);
+    expect(coordinator.saveStepResult).toHaveBeenCalledTimes(1);
+    expect(
+      hookDispatch.mock.calls.filter(([, hookType]) => hookType === 'onComplete'),
+    ).toHaveLength(1);
+  });
+});
+
 describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)', () => {
   const createService = () => {
     const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
@@ -662,6 +814,39 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     expect(result.locked).toBeUndefined();
     expect(result.stepResult).toBeNull();
     expect(result.nextStepScheduled).toBe(false);
+    expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a locked completed-step Review retry non-acknowledged for redelivery', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      metadata: {
+        _agentInterventionLifecycle: { state: 'pending', stepIndex: 0 },
+      },
+      pendingApprovalBatch: {
+        assistantMessageId: 'assistant-1',
+        id: 'op-locked-review:1:assistant-1',
+        sealed: true,
+        stepIndex: 1,
+      },
+      status: 'waiting_for_human',
+      stepCount: 1,
+    });
+
+    const result = await service.executeStep({
+      externalRetryCount: 1,
+      operationId: 'op-locked-review',
+      stepIndex: 0,
+    });
+
+    expect(result).toMatchObject({
+      locked: true,
+      nextStepScheduled: false,
+      state: { status: 'waiting_for_human' },
+      success: false,
+    });
     expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
   });
 

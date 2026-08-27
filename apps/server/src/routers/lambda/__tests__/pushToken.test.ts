@@ -6,6 +6,7 @@ import { pushTokenRouter } from '@/server/routers/lambda/pushToken';
 
 const mockUpsert = vi.fn();
 const mockUnregister = vi.fn();
+const mockUnregisterLiveActivities = vi.fn();
 const mockDeleteByExpoTokenAndDevice = vi.fn();
 const mockRegisterPushToStart = vi.fn();
 const mockRegisterLiveActivity = vi.fn();
@@ -16,6 +17,9 @@ vi.mock('@/business/server/notification/liveActivity', () => ({
 }));
 
 vi.mock('@/database/models/pushToken', () => ({
+  PushLiveActivityModel: vi.fn(() => ({
+    unregisterDevice: mockUnregisterLiveActivities,
+  })),
   PushTokenModel: vi.fn(() => ({
     unregister: mockUnregister,
     upsert: mockUpsert,
@@ -268,6 +272,7 @@ describe('pushTokenRouter', () => {
       const result = await caller.unregister({ deviceId: 'device-1' });
 
       expect(mockUnregister).toHaveBeenCalledWith('device-1');
+      expect(mockUnregisterLiveActivities).toHaveBeenCalledWith('device-1');
       expect(mockDeleteByExpoTokenAndDevice).not.toHaveBeenCalled();
       expect(result).toEqual({ success: true });
     });
@@ -282,6 +287,7 @@ describe('pushTokenRouter', () => {
 
       expect(mockDeleteByExpoTokenAndDevice).not.toHaveBeenCalled();
       expect(mockUnregister).not.toHaveBeenCalled();
+      expect(mockUnregisterLiveActivities).not.toHaveBeenCalled();
       expect(result).toEqual({ success: true });
     });
 
@@ -297,6 +303,7 @@ describe('pushTokenRouter', () => {
       expect(result).toEqual({ success: true });
       expect(mockDeleteByExpoTokenAndDevice).toHaveBeenCalled();
       expect(mockUnregister).not.toHaveBeenCalled();
+      expect(mockUnregisterLiveActivities).not.toHaveBeenCalled();
     });
 
     it('should prefer expoToken precision over the legacy userId fallback', async () => {

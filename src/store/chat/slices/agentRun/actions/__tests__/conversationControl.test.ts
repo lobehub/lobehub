@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { messageService } from '@/services/message';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -2588,6 +2589,395 @@ describe('ConversationControl actions', () => {
   });
 
   describe('submitHeteroIntervention characterization (lifecycle refactor regression net)', () => {
+    it.each([
+      {
+        actionType: 'submit' as const,
+        expectedAction: {
+          result: { 'Which color?': 'Blue' },
+          type: 'submit_answers' as const,
+        },
+        interactionKind: 'question',
+        payload: { 'Which color?': 'Blue' },
+      },
+      {
+        actionType: 'skip' as const,
+        expectedAction: { type: 'skip_interaction' as const },
+        interactionKind: 'question',
+        payload: {},
+      },
+      {
+        actionType: 'cancel' as const,
+        expectedAction: { type: 'cancel_interaction' as const },
+        interactionKind: 'question',
+        payload: {},
+      },
+      {
+        actionType: 'submit' as const,
+        expectedAction: { optionId: 'allow_once', type: 'select_provider_option' as const },
+        interactionKind: 'permission',
+        payload: { permission: 'allow_once' },
+      },
+      {
+        actionType: 'skip' as const,
+        expectedAction: { type: 'skip_interaction' as const },
+        interactionKind: 'permission',
+        payload: {},
+      },
+      {
+        actionType: 'cancel' as const,
+        expectedAction: { type: 'cancel_interaction' as const },
+        interactionKind: 'permission',
+        payload: {},
+      },
+      {
+        actionType: 'submit' as const,
+        expectedAction: { optionId: 'approve_plan', type: 'select_provider_option' as const },
+        interactionKind: 'plan',
+        payload: { plan: 'approve_plan' },
+      },
+      {
+        actionType: 'skip' as const,
+        expectedAction: { type: 'skip_interaction' as const },
+        interactionKind: 'plan',
+        payload: {},
+      },
+      {
+        actionType: 'cancel' as const,
+        expectedAction: { type: 'cancel_interaction' as const },
+        interactionKind: 'plan',
+        payload: {},
+      },
+    ])(
+      'resolves a cold-start $interactionKind $actionType through the durable source before consulting operation memory',
+      async ({ actionType, expectedAction, interactionKind, payload }) => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'remote-agent';
+        const topicId = 'remote-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: `tool-msg-${interactionKind}-${actionType}`,
+          pluginIntervention: {
+            batchId: `batch-${interactionKind}`,
+            operationId: `server-operation-${interactionKind}`,
+            status: 'pending',
+          },
+          pluginState: { heterogeneousIntervention: { interactionKind } },
+          role: 'tool',
+          tool_call_id: `call-${interactionKind}`,
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messageOperationMap: {},
+            messagesMap: { [chatKey]: [toolMessage] },
+            operations: {},
+          });
+        });
+
+        const sourceMutation = vi.mocked(
+          lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
+        );
+        sourceMutation.mockResolvedValueOnce({
+          contractVersion: 2,
+          status: 'approved',
+          success: true,
+        });
+        const pluginSpy = vi
+          .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+          .mockResolvedValue(undefined);
+        const persistAnswersSpy = vi
+          .spyOn(messageService, 'updateMessagePluginState')
+          .mockResolvedValue({ messages: [], success: true });
+        const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+        const localSubmit = vi
+          .spyOn(heterogeneousAgentService, 'submitIntervention')
+          .mockResolvedValue(undefined as any);
+
+        await act(async () => {
+          await result.current.submitHeteroIntervention(toolMessage.id, actionType, payload);
+        });
+
+        expect(sourceMutation).toHaveBeenCalledWith({
+          action: expectedAction,
+          batchId: `batch-${interactionKind}`,
+          operationId: `server-operation-${interactionKind}`,
+          resolutionRequestId: expect.any(String),
+          targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
+        });
+        expect(pluginSpy).toHaveBeenCalledWith(
+          toolMessage.id,
+          {
+            intervention: {
+              ...toolMessage.pluginIntervention,
+              resolving: true,
+              status: 'pending',
+            },
+          },
+          expect.any(Object),
+        );
+        if (actionType === 'submit') {
+          expect(persistAnswersSpy).toHaveBeenCalledWith(
+            toolMessage.id,
+            { askUserAnswers: payload },
+            expect.objectContaining({ agentId, topicId }),
+          );
+        } else {
+          expect(persistAnswersSpy).not.toHaveBeenCalled();
+        }
+        expect(legacyRemoteSubmit).not.toHaveBeenCalled();
+        expect(localSubmit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('fails closed after an unavailable durable source when operation memory is empty', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'remote-agent';
+      const topicId = 'remote-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-source-unavailable',
+        pluginIntervention: {
+          batchId: 'batch-source-unavailable',
+          operationId: 'server-operation-source-unavailable',
+          status: 'pending',
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+        role: 'tool',
+        tool_call_id: 'call-source-unavailable',
+      } as any);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messageOperationMap: {},
+          messagesMap: { [chatKey]: [toolMessage] },
+          operations: {},
+        });
+      });
+
+      const sourceMutation = vi.mocked(
+        lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
+      );
+      const pluginSpy = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+      const localSubmit = vi
+        .spyOn(heterogeneousAgentService, 'submitIntervention')
+        .mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-source-unavailable', 'submit', {
+          Question: 'Answer',
+        });
+      });
+
+      expect(sourceMutation).toHaveBeenCalledOnce();
+      expect(pluginSpy).not.toHaveBeenCalled();
+      expect(legacyRemoteSubmit).not.toHaveBeenCalled();
+      expect(localSubmit).not.toHaveBeenCalled();
+    });
+
+    it('uses the in-memory runtime identity only for the handled-false local desktop fallback', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'local-agent';
+      const topicId = 'local-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const assistantMessage = createMockMessage({ id: 'assistant-msg-local', role: 'assistant' });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-local-fallback',
+        parentId: assistantMessage.id,
+        pluginIntervention: {
+          batchId: 'batch-local-fallback',
+          operationId: 'server-operation-local-fallback',
+          status: 'pending',
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+        role: 'tool',
+        tool_call_id: 'call-local-fallback',
+      } as any);
+      const clientOperationId = 'client-local-operation';
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+        });
+        result.current.startOperation({
+          context: { agentId, threadId: null, topicId },
+          operationId: clientOperationId,
+          type: 'execHeterogeneousAgent',
+        });
+        useChatStore.setState({
+          messageOperationMap: { [assistantMessage.id]: clientOperationId },
+        });
+      });
+
+      const pluginSpy = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+        messages: [],
+        success: true,
+      });
+      const localSubmit = vi
+        .spyOn(heterogeneousAgentService, 'submitIntervention')
+        .mockResolvedValue(undefined as any);
+      const sourceMutation = vi.mocked(
+        lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
+      );
+
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-local-fallback', 'submit', {
+          Question: 'Answer',
+        });
+      });
+
+      expect(sourceMutation).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'server-operation-local-fallback' }),
+      );
+      expect(pluginSpy).toHaveBeenCalledWith(
+        'tool-msg-local-fallback',
+        { intervention: { status: 'approved' } },
+        { operationId: clientOperationId },
+      );
+      expect(localSubmit).toHaveBeenCalledWith({
+        operationId: clientOperationId,
+        result: { Question: 'Answer' },
+        toolCallId: 'call-local-fallback',
+      });
+    });
+
+    it('uses the in-memory runtime identity only for the handled-false remote legacy fallback', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'remote-agent';
+      const topicId = 'remote-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const assistantMessage = createMockMessage({ id: 'assistant-msg-remote', role: 'assistant' });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-remote-fallback',
+        parentId: assistantMessage.id,
+        pluginIntervention: {
+          batchId: 'batch-remote-fallback',
+          operationId: 'server-operation-remote-fallback',
+          status: 'pending',
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+        role: 'tool',
+        tool_call_id: 'call-remote-fallback',
+      } as any);
+      const clientOperationId = 'client-remote-operation';
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+        });
+        result.current.startOperation({
+          context: { agentId, threadId: null, topicId },
+          operationId: clientOperationId,
+          type: 'execServerAgentRuntime',
+        });
+        useChatStore.setState({
+          messageOperationMap: { [assistantMessage.id]: clientOperationId },
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+        messages: [],
+        success: true,
+      });
+      const sourceMutation = vi.mocked(
+        lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
+      );
+      const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-remote-fallback', 'submit', {
+          Question: 'Answer',
+        });
+      });
+
+      expect(sourceMutation).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'server-operation-remote-fallback' }),
+      );
+      expect(legacyRemoteSubmit).toHaveBeenCalledWith({
+        operationId: clientOperationId,
+        resolutionRequestId: expect.any(String),
+        result: { Question: 'Answer' },
+        toolCallId: 'call-remote-fallback',
+      });
+    });
+
+    it('keeps a cold-start durable card unchanged when the source request fails', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'remote-agent';
+      const topicId = 'remote-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const toolMessage = createMockMessage({
+        content: 'Pending question',
+        id: 'tool-msg-source-failure',
+        pluginIntervention: {
+          batchId: 'batch-source-failure',
+          operationId: 'server-operation-source-failure',
+          status: 'pending',
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+        role: 'tool',
+        tool_call_id: 'call-source-failure',
+      } as any);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messageOperationMap: {},
+          messagesMap: { [chatKey]: [toolMessage] },
+          operations: {},
+        });
+      });
+
+      const sourceError = new Error('source transport unavailable');
+      vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).mockRejectedValueOnce(
+        sourceError,
+      );
+      const pluginSpy = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      const contentSpy = vi
+        .spyOn(result.current, 'optimisticUpdateMessageContent')
+        .mockResolvedValue(undefined);
+      const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+
+      expect(
+        await captureActError(() =>
+          result.current.submitHeteroIntervention('tool-msg-source-failure', 'submit', {
+            Question: 'Answer',
+          }),
+        ),
+      ).toBe(sourceError);
+
+      expect(pluginSpy).not.toHaveBeenCalled();
+      expect(contentSpy).not.toHaveBeenCalled();
+      expect(legacyRemoteSubmit).not.toHaveBeenCalled();
+      expect(result.current.dbMessagesMap[chatKey][0]).toMatchObject({
+        content: 'Pending question',
+        pluginIntervention: { status: 'pending' },
+      });
+    });
+
     it('submits via IPC, persists optimistic intervention, and flips topic status to running (submit)', async () => {
       const { result } = renderHook(() => useChatStore());
 

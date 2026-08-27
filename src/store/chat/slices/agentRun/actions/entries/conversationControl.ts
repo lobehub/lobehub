@@ -1512,10 +1512,53 @@ export class ConversationControlActionImpl {
       return;
     }
 
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+    const originalIntervention = toolMessage.pluginIntervention;
+    const originalContent = toolMessage.content;
+    const interventionState = (
+      toolMessage.pluginState as
+        { heterogeneousIntervention?: { interactionKind?: unknown } } | undefined
+    )?.heterogeneousIntervention;
+    const sourceAction = toHeterogeneousSourceAction(
+      actionType,
+      interventionState?.interactionKind,
+      payload ?? {},
+    );
+
+    // A persisted v2 card carries everything the server needs to locate and
+    // authorize the intervention. Resolve it before consulting ephemeral
+    // operation memory so refresh/cold-start submissions still reach the
+    // durable first-winner claim. The message/runtime ids are locators only;
+    // the source endpoint remains responsible for ACL and token authority.
+    if (originalIntervention?.batchId && originalIntervention.operationId && sourceAction) {
+      const sourceResolution = await this.tryResolveAgentInterventionBySource({
+        action: sourceAction,
+        toolMessageIds: [toolMessageId],
+      });
+      if (sourceResolution.handled) {
+        const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
+        await this.#get().optimisticUpdateMessagePlugin(
+          toolMessageId,
+          { intervention: { ...originalIntervention, resolving: true, status: 'pending' } },
+          sourceOptimisticContext,
+        );
+        if (actionType === 'submit') {
+          await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
+        }
+        return;
+      }
+    }
+
     // Walk up to the assistant that owns this tool. `messageOperationMap` is a
     // most-granular pointer, so it may reference a transient child op
     // (`reasoning`, `toolCalling`, ...), not the runtime execution that owns
-    // the AskUser bridge.
+    // the AskUser bridge. This memory-only lookup is deliberately deferred
+    // until the durable path is unavailable or reports `handled: false`; it is
+    // provenance for local desktop IPC / legacy fallback, never server auth.
     const { messageOperationMap } = this.#get();
     const candidateOperationId =
       (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
@@ -1532,11 +1575,6 @@ export class ConversationControlActionImpl {
     const { operation, operationId } =
       this.#resolveHeteroInterventionExecutionOperation(candidateOperationId);
 
-    const effectiveContext: ConversationContext = context ?? {
-      agentId: this.#get().activeAgentId,
-      topicId: this.#get().activeTopicId,
-      threadId: this.#get().activeThreadId,
-    };
     // If the operation has already been garbage-collected (e.g. the bridge
     // timed out earlier and `runtime_end` rolled the op into `completed`
     // 30s+ ago), don't pass the stale opId into the optimistic chain — the
@@ -1553,41 +1591,6 @@ export class ConversationControlActionImpl {
     }
     const optimisticContext: OptimisticUpdateContext = operationAlive ? { operationId } : {};
     const isLocalDesktopHetero = operation?.type === 'execHeterogeneousAgent';
-    const originalIntervention = toolMessage.pluginIntervention;
-    const originalContent = toolMessage.content;
-
-    if (
-      !isLocalDesktopHetero &&
-      originalIntervention?.batchId &&
-      originalIntervention.operationId
-    ) {
-      const interventionState = (
-        toolMessage.pluginState as
-          { heterogeneousIntervention?: { interactionKind?: unknown } } | undefined
-      )?.heterogeneousIntervention;
-      const sourceAction = toHeterogeneousSourceAction(
-        actionType,
-        interventionState?.interactionKind,
-        payload ?? {},
-      );
-      if (sourceAction) {
-        const sourceResolution = await this.tryResolveAgentInterventionBySource({
-          action: sourceAction,
-          toolMessageIds: [toolMessageId],
-        });
-        if (sourceResolution.handled) {
-          await this.#get().optimisticUpdateMessagePlugin(
-            toolMessageId,
-            { intervention: { ...originalIntervention, resolving: true, status: 'pending' } },
-            optimisticContext,
-          );
-          if (actionType === 'submit') {
-            await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
-          }
-          return;
-        }
-      }
-    }
 
     if (!isLocalDesktopHetero) {
       // Publishing the user intent is not completion. Keep the interaction

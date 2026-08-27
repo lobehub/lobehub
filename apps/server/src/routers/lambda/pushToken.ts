@@ -4,7 +4,11 @@ import {
   registerAgentInterventionLiveActivity,
   registerLiveActivityPushToStartToken,
 } from '@/business/server/notification/liveActivity';
-import { deletePushTokenByExpoTokenAndDevice, PushTokenModel } from '@/database/models/pushToken';
+import {
+  deletePushTokenByExpoTokenAndDevice,
+  PushLiveActivityModel,
+  PushTokenModel,
+} from '@/database/models/pushToken';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -107,7 +111,11 @@ export const pushTokenRouter = router({
       // Path B: legacy v1.0.7 + valid session — fall back to (userId, deviceId)
       if (ctx.userId) {
         const pushTokenModel = new PushTokenModel(ctx.serverDB, ctx.userId);
-        await pushTokenModel.unregister(deviceId);
+        const liveActivityModel = new PushLiveActivityModel(ctx.serverDB, ctx.userId);
+        await Promise.all([
+          pushTokenModel.unregister(deviceId),
+          liveActivityModel.unregisterDevice(deviceId),
+        ]);
         return { success: true };
       }
 

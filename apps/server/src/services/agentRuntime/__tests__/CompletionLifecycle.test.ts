@@ -988,7 +988,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     mockNotifyAgentInterventionRequired.mockRejectedValueOnce(new Error('database unavailable'));
     stubDurablePendingRows(lifecycle);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    const unregister = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
 
     await expect(
       lifecycle.dispatchHooks(
@@ -1002,6 +1002,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     });
 
     expect(hookDispatcher.dispatch).not.toHaveBeenCalled();
+    expect(unregister).not.toHaveBeenCalled();
   });
 
   it('continues after post-create push fanout fails inside the business slot', async () => {
