@@ -447,6 +447,8 @@ export default {
     "This shared agent isn't available for visitor chat yet. Please contact its owner.",
   'share.visitor.errors.insufficientBudget':
     'This shared agent has run out of budget. Please contact its owner.',
+  'share.visitor.errors.promptTooLong':
+    'Your message is too long. Please shorten it to {{max}} characters or fewer and try again.',
   'share.visitor.errors.providerNotSupported':
     'This shared agent is not available right now. Please contact its owner.',
   'share.visitor.errors.retry': 'Retry',

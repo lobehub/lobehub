@@ -840,6 +840,31 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     },
   );
 
+  it('does not notify the creator for an Agent Share visitor completion', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+
+    // Agent Share visitor runs execute as the creator — `metadata.userId` is
+    // the creator's id, `metadata.agentShare.visitorUserId` marks the actual
+    // visitor. Notifying here would recall the creator's push/inbox for a
+    // conversation an arbitrary link visitor triggered.
+    const doneState = {
+      createdAt: new Date(Date.now() - 90_000).toISOString(),
+      messages: [{ content: 'final reply', role: 'assistant' }],
+      metadata: {
+        _hooks: [],
+        agentId: 'agt_1',
+        agentShare: { agentId: 'agt_1', visitorUserId: 'visitor-1' },
+        topicId: 'tpc_1',
+        userId: 'user-2',
+      },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
   it('does not notify on error / aborted terminals', async () => {
     const lifecycle = buildLifecycle();
     stubSideEffects(lifecycle);

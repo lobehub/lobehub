@@ -70,6 +70,24 @@ export class CriticalAgentInterventionPersistenceError extends Error {
 type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
+ * Whether a lifecycle event's `metadata` belongs to an Agent Share visitor
+ * run. `metadata.agentShare.visitorUserId` is stamped once at operation
+ * creation (`AgentRuntimeService.createOperation`'s `initialState.metadata`)
+ * and rides the state through to the terminal event — mirrors
+ * `GatewayStreamNotifier`'s `isShareVisitorEnd` check, the sibling chokepoint
+ * that scrubs the creator's `AgentState` off the visitor's WS channel.
+ *
+ * Heterogeneous/device dispatch (the only paths that terminate through
+ * `completeOperation`'s synthesized state instead of the in-process runtime's
+ * real `state`) is unavailable to share runs (`execAgent` rejects
+ * `isHeterogeneousAgentModelId` whenever `shareGate` is set), so every
+ * `dispatchHooks` call for a share run carries this marker on `state.metadata`
+ * — there is no completion path that reaches here with it silently dropped.
+ */
+const isAgentShareRun = (metadata: Record<string, unknown> | undefined | null): boolean =>
+  Boolean((metadata?.agentShare as { visitorUserId?: string } | undefined)?.visitorUserId);
+
+/**
  * Normalized terminal-completion input for {@link CompletionLifecycle.completeOperation}.
  *
  * This is the single typed shape every NON-in-process terminal path passes in —
@@ -852,13 +870,27 @@ export class CompletionLifecycle {
       // `@/business` slot; the default implementation is a no-op. Sub-agent /
       // group-member completions are internal steps of a parent run, never a
       // user-facing recall — in-group members carry `orchestrationRole: 'member'`
-      // WITHOUT `isSubAgent` (see execAgentMember), so guard both. The
-      // remaining condition — only interactive chat runs recall the user —
+      // WITHOUT `isSubAgent` (see execAgentMember), so guard both.
+      //
+      // Agent Share visitor runs execute AS the creator (`metadata.userId` is
+      // the creator's id, not the visitor's — see `AgentRuntimeService
+      // .createOperation`'s `initialState.metadata.agentShare`), so this
+      // `userId`-scoped recall would otherwise reach the creator's push/inbox
+      // for every turn an arbitrary link visitor completes — a visitor can spam
+      // the owner by repeatedly running the shared agent, and the notification
+      // would deep-link into a visitor topic (`topics.senderId` + `shareId`)
+      // that is deliberately excluded from creator-facing surfaces. Gate on
+      // `metadata.agentShare` here rather than at the `@/business` slot: this is
+      // the one chokepoint every non-in-process completion path also funnels
+      // through (`completeOperation` → `dispatchHooks`), so a future
+      // notification added at this call site inherits the guard for free.
+      // The remaining condition — only interactive chat runs recall the user —
       // lives in recallUserOnCompletion.
       if (
         isSuccessLikeCompletionReason(reason) &&
         metadata?.isSubAgent !== true &&
-        metadata?.orchestrationRole !== 'member'
+        metadata?.orchestrationRole !== 'member' &&
+        !isAgentShareRun(metadata)
       ) {
         void this.recallUserOnCompletion(operationId, event, metadata).catch((error) =>
           log('[%s] Completion notification failed (non-fatal): %O', operationId, error),

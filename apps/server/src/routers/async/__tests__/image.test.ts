@@ -4,6 +4,7 @@ import { AsyncTaskStatus } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
+import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { GenerationModel } from '@/database/models/generation';
@@ -174,5 +175,94 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
         prechargeResult: { reservationKey: 'brk-1' },
       }),
     );
+  });
+});
+
+describe('imageRouter.createImage — creator notification on successful generation', () => {
+  const userId = 'user_test';
+  let mockCtx: any;
+  let asyncTaskModelMock: any;
+  let generationBatchModelMock: any;
+  let generationModelMock: any;
+  let generationServiceMock: any;
+  let modelRuntimeMock: any;
+
+  const createInput = (overrides = {}) => ({
+    generationBatchId: 'batch-1',
+    generationId: 'gen-1',
+    generationTopicId: 'topic-1',
+    model: 'some-model',
+    params: { prompt: 'a beautiful sunset' },
+    provider: 'test-provider',
+    taskId: 'task-1',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    asyncTaskModelMock = { findById: vi.fn(), update: vi.fn() };
+    generationBatchModelMock = { findById: vi.fn() };
+    generationModelMock = { createAssetAndFile: vi.fn() };
+    generationServiceMock = {
+      transformImageForGeneration: vi.fn().mockResolvedValue({
+        image: { extension: 'png', hash: 'hash-1', height: 512, mime: 'image/png', size: 1 },
+        thumbnailImage: {},
+      }),
+      uploadImageForGeneration: vi
+        .fn()
+        .mockResolvedValue({ imageUrl: 'https://cdn.test/image.png', thumbnailImageUrl: '' }),
+    };
+    modelRuntimeMock = {
+      createImage: vi.fn().mockResolvedValue({
+        height: 512,
+        imageUrl: 'https://upstream.test/image.png',
+        modelUsage: {},
+        width: 512,
+      }),
+      getAuthHeaders: vi.fn(),
+    };
+
+    vi.mocked(AsyncTaskModel).mockImplementation(() => asyncTaskModelMock);
+    vi.mocked(GenerationBatchModel).mockImplementation(() => generationBatchModelMock);
+    vi.mocked(GenerationModel).mockImplementation(() => generationModelMock);
+    vi.mocked(GenerationService).mockImplementation(() => generationServiceMock);
+    vi.mocked(FileModel).mockImplementation(() => ({}) as any);
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue(modelRuntimeMock as any);
+    vi.mocked(resolveBusinessModelMapping).mockResolvedValue({
+      requestedModelId: 'some-model',
+      resolvedModelId: 'some-model',
+    } as any);
+
+    generationBatchModelMock.findById.mockResolvedValue({ id: 'batch-1', createdAt: new Date() });
+
+    mockCtx = { serverDB: {}, userId };
+  });
+
+  it('notifies the creator for an ordinary (non-share) generation', async () => {
+    asyncTaskModelMock.findById.mockResolvedValue({ metadata: {} });
+
+    const caller = imageRouter.createCaller(mockCtx);
+    const result = await caller.createImage(createInput());
+
+    expect(result).toMatchObject({ success: true });
+    expect(notifyImageCompleted).toHaveBeenCalledTimes(1);
+    expect(notifyImageCompleted).toHaveBeenCalledWith(expect.objectContaining({ userId }));
+  });
+
+  // Regression: a share visitor's generation runs this worker under the
+  // creator's own `ctx.userId` (see `agentShare`'s JSDoc in `../image.ts`), so
+  // notifying unconditionally would recall the creator's push/inbox for an
+  // image an arbitrary link visitor generated.
+  it('does not notify the creator for an Agent Share visitor generation', async () => {
+    const agentShare = { agentId: 'agent-1', visitorUserId: 'visitor-1' };
+    asyncTaskModelMock.findById.mockResolvedValue({ metadata: { agentShare } });
+
+    const caller = imageRouter.createCaller(mockCtx);
+    const result = await caller.createImage(createInput());
+
+    expect(result).toMatchObject({ success: true });
+    expect(notifyImageCompleted).not.toHaveBeenCalled();
+    expect(chargeAfterGenerate).toHaveBeenCalledWith(expect.objectContaining({ agentShare }));
   });
 });

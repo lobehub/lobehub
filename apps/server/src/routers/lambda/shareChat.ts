@@ -1,3 +1,4 @@
+import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
 import { ChatErrorType, entityIdPattern, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -39,23 +40,6 @@ const log = debug('lobe-server:router:shareChat');
  * workspaceId is ever threaded into the creator-scoped models/services.
  */
 const shareChatProcedure = authedProcedure.use(serverDatabase);
-
-/**
- * Upper bound on a visitor-submitted `prompt`. Unlike `aiAgent.execAgent`
- * (the owner's own account, so oversized input is self-inflicted),
- * `shareChat.execAgent` runs as the CREATOR: `AiAgentService.execAgent`
- * persists the text verbatim into creator-owned messages before the
- * topic/turn caps in this file even run (they gate request COUNT, not
- * per-request SIZE). Without a size bound, any authenticated visitor with a
- * live link could submit HTTP-infrastructure-limit-sized prompts on repeat,
- * bloating the creator's message rows and risking the documented 10 MB
- * Upstash gateway-payload limit on a single turn.
- *
- * 20,000 characters (~5-8k tokens for typical English/code text) comfortably
- * covers legitimate long-form asks (pasted code, long questions) while
- * keeping a single turn's contribution to that 10 MB budget negligible.
- */
-const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;
 
 const ShareTopicScopeSchema = z.object({
   shareId: z.string(),
