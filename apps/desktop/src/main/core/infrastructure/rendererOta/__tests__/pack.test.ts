@@ -5,7 +5,7 @@ import { sha256File } from '../manifest';
 import { decodeRendererPack } from '../pack';
 
 describe('decodeRendererPack', () => {
-  it('loads the target tree from a full pack and returns its verified objects', () => {
+  it('loads the target tree from a full pack and returns its verified objects', async () => {
     const content = Buffer.from('renderer object');
     const sha256 = sha256File(content);
     const name = `objects/${sha256}`;
@@ -19,12 +19,12 @@ describe('decodeRendererPack', () => {
       zipSync({ 'meta.json': Buffer.from(JSON.stringify(metadata)), [name]: content }),
     );
 
-    const decoded = decodeRendererPack(pack, { kind: 'full', version: 'r1' });
+    const decoded = await decodeRendererPack(pack, { kind: 'full', version: 'r1' });
     expect(decoded.metadata).toEqual(metadata);
     expect(decoded.entries.get(name)).toEqual(content);
   });
 
-  it('loads delta reconstruction metadata from the selected pack', () => {
+  it('loads delta reconstruction metadata from the selected pack', async () => {
     const content = Buffer.from('next renderer object');
     const sha256 = sha256File(content);
     const name = `objects/${sha256}`;
@@ -41,7 +41,7 @@ describe('decodeRendererPack', () => {
       zipSync({ 'meta.json': Buffer.from(JSON.stringify(metadata)), [name]: content }),
     );
 
-    const decoded = decodeRendererPack(pack, {
+    const decoded = await decodeRendererPack(pack, {
       fromVersion: 'r0',
       kind: 'delta',
       version: 'r1',
@@ -50,7 +50,7 @@ describe('decodeRendererPack', () => {
     expect(decoded.entries.get(name)).toEqual(content);
   });
 
-  it('rejects unexpected, tampered, or path-traversing pack content', () => {
+  it('rejects unexpected, tampered, or path-traversing pack content', async () => {
     const content = Buffer.from('renderer object');
     const sha256 = sha256File(content);
     const name = `objects/${sha256}`;
@@ -62,20 +62,20 @@ describe('decodeRendererPack', () => {
     } as const;
     const encodedMetadata = Buffer.from(JSON.stringify(metadata));
 
-    expect(() =>
+    await expect(
       decodeRendererPack(Buffer.from(zipSync({ 'extra': content, 'meta.json': encodedMetadata })), {
         kind: 'full',
         version: 'r1',
       }),
-    ).toThrow('entries do not match metadata');
-    expect(() =>
+    ).rejects.toThrow('entries do not match metadata');
+    await expect(
       decodeRendererPack(
         Buffer.from(zipSync({ [name]: Buffer.from('tampered'), 'meta.json': encodedMetadata })),
         { kind: 'full', version: 'r1' },
       ),
-    ).toThrow(`pack entry invalid: ${name}`);
+    ).rejects.toThrow(`pack entry invalid: ${name}`);
 
-    expect(() =>
+    await expect(
       decodeRendererPack(
         Buffer.from(
           zipSync({
@@ -90,6 +90,6 @@ describe('decodeRendererPack', () => {
         ),
         { kind: 'full', version: 'r1' },
       ),
-    ).toThrow('pack metadata invalid');
+    ).rejects.toThrow('pack metadata invalid');
   });
 });

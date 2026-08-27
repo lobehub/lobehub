@@ -1,4 +1,4 @@
-import { unzipSync } from 'fflate';
+import { unzip } from 'fflate';
 
 import { type RendererPackMetadata, rendererPackMetadataSchema, sha256File } from './manifest';
 
@@ -24,11 +24,19 @@ const matchesExpectation = (metadata: RendererPackMetadata, expected: PackExpect
   (metadata.kind === 'full' ||
     (expected.kind === 'delta' && metadata.fromVersion === expected.fromVersion));
 
-export const decodeRendererPack = (
+const unzipPack = (content: Buffer) =>
+  new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+    unzip(new Uint8Array(content), (error, unpacked) => {
+      if (error) reject(error);
+      else resolve(unpacked);
+    });
+  });
+
+export const decodeRendererPack = async (
   content: Buffer,
   expected: PackExpectation,
-): { entries: Map<string, Buffer>; metadata: RendererPackMetadata } => {
-  const unpacked = unzipSync(new Uint8Array(content));
+): Promise<{ entries: Map<string, Buffer>; metadata: RendererPackMetadata }> => {
+  const unpacked = await unzipPack(content);
   const rawMetadata = unpacked[PACK_METADATA_ENTRY];
   if (!rawMetadata) throw new Error('Renderer OTA pack metadata missing');
 
