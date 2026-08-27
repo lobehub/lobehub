@@ -552,7 +552,9 @@ describe('UserMemoryModel', () => {
           status: ['active'],
         });
 
-        expect(result.items.map(({ context }) => context?.id)).toEqual([active.id]);
+        expect(result.items).toEqual([
+          expect.objectContaining({ context: expect.objectContaining({ id: active.id }) }),
+        ]);
         expect(result.total).toBe(1);
       });
 
@@ -583,7 +585,9 @@ describe('UserMemoryModel', () => {
           status: ['active'],
         });
 
-        expect(result.items.map(({ context }) => context?.id)).toEqual([matching.id]);
+        expect(result.items).toEqual([
+          expect.objectContaining({ context: expect.objectContaining({ id: matching.id }) }),
+        ]);
         expect(result.total).toBe(1);
         expect(searchCandidates).toHaveBeenCalledWith({
           entity: 'memoryContexts',

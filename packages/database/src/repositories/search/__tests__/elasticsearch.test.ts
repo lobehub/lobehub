@@ -463,10 +463,10 @@ describe('ElasticsearchSearchBackend', () => {
       { id: 'agent-private-own', score: 8 },
       { id: 'agent-deleted', score: 7 },
     ]);
-    expect(response.items.map(({ id }) => id)).toEqual([
-      'agent-legacy-public',
-      'agent-public',
-      'agent-private-own',
+    expect(response.items).toEqual([
+      expect.objectContaining({ id: 'agent-legacy-public' }),
+      expect.objectContaining({ id: 'agent-public' }),
+      expect.objectContaining({ id: 'agent-private-own' }),
     ]);
     expect(client.search).toHaveBeenCalledWith({
       body: {
@@ -508,7 +508,10 @@ describe('ElasticsearchSearchBackend', () => {
     const publicCaller = await backend.search(
       request('agents', { scope: { callerAgentVisibility: 'public' } }),
     );
-    expect(publicCaller.items.map(({ id }) => id)).toEqual(['agent-legacy-public', 'agent-public']);
+    expect(publicCaller.items).toEqual([
+      expect.objectContaining({ id: 'agent-legacy-public' }),
+      expect.objectContaining({ id: 'agent-public' }),
+    ]);
   });
 
   it('searches chat-group content while personal hydration blocks workspace and stale hits', async () => {
@@ -538,7 +541,7 @@ describe('ElasticsearchSearchBackend', () => {
       request('chatGroups', { scope: { workspaceId: undefined } }),
     );
 
-    expect(response.items.map(({ id }) => id)).toEqual(['group-personal']);
+    expect(response.items).toEqual([expect.objectContaining({ id: 'group-personal' })]);
     expect(client.search).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({
@@ -649,7 +652,10 @@ describe('ElasticsearchSearchBackend', () => {
 
     const response = await backend.search(request('topics', { limit: 2 }));
 
-    expect(response.items.map(({ id }) => id)).toEqual(['topic-recent', 'topic-old']);
+    expect(response.items).toEqual([
+      expect.objectContaining({ id: 'topic-recent' }),
+      expect.objectContaining({ id: 'topic-old' }),
+    ]);
     expect(response.items[0]).toMatchObject({
       agentId: 'topic-agent-public',
       groupId: 'topic-group-public',
@@ -785,7 +791,10 @@ describe('ElasticsearchSearchBackend', () => {
 
     const response = await backend.search(request('messages', { limit: 2 }));
 
-    expect(response.items.map(({ id }) => id)).toEqual(['message-recent', 'message-old']);
+    expect(response.items).toEqual([
+      expect.objectContaining({ id: 'message-recent' }),
+      expect.objectContaining({ id: 'message-old' }),
+    ]);
     expect(response.items[0]).toMatchObject({
       agentId: 'message-agent-public',
       groupId: 'message-group',
