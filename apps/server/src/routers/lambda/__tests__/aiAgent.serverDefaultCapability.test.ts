@@ -6,6 +6,7 @@ import { resolveServerDefaultHeterogeneousCapability } from '../aiAgent';
 const getSupportedModels = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   getServerDefaultHeterogeneousModels: getSupportedModels,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES: [
     'claude-code',

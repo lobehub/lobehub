@@ -52,6 +52,7 @@ const mockBuiltinModels = vi.hoisted(() => [
 
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     // Emit a minimal non-empty completion so the call_llm empty-completion
     // guard doesn't treat the default mock as a "gave up" turn and

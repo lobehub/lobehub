@@ -5,6 +5,7 @@ import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { cleanupDB, serverDB, userId } from './_setup';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 

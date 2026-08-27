@@ -24,6 +24,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   getServerDefaultHeterogeneousModels: getSupportedModels,
   initModelRuntimeFromServerConfig: initRuntime,
   resolveServerDefaultHeterogeneousModel: resolveModel,

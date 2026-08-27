@@ -19,6 +19,7 @@ vi.mock('@/database/models/message', () => ({
 
 // Mock ModelRuntime
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initializeRuntimeOptions: vi.fn(),
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn(),

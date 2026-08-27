@@ -30,6 +30,7 @@ vi.mock('@/database/models/message', () => ({
   })),
 }));
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 vi.mock('@/server/modules/AgentRuntime', () => ({

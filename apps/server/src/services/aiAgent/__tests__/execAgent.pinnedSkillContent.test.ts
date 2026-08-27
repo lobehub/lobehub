@@ -174,7 +174,10 @@ vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: { isConfigured: false, queryDeviceList: vi.fn().mockResolvedValue([]) },
 }));
 
-vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
+  initModelRuntimeFromDB: vi.fn(),
+}));
 
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();

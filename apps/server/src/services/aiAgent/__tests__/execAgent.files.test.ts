@@ -152,6 +152,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 

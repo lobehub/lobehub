@@ -61,6 +61,7 @@ vi.mock('@/database/server', () => ({
   getServerDB: vi.fn().mockResolvedValue(mockServerDB),
 }));
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({ createVideo: mockCreateVideo }),
 }));
 vi.mock('@/business/server/video-generation/chargeBeforeGenerate', () => ({

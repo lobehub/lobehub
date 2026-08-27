@@ -61,6 +61,7 @@ vi.mock('@/database/models/plugin', () => ({
 
 // Mock ModelRuntime to avoid server-side env access
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initializeRuntimeOptions: vi.fn(),
   ApiKeyManager: vi.fn().mockImplementation(() => ({
     getApiKey: vi.fn(),

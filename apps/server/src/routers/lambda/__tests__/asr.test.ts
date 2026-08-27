@@ -9,6 +9,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 const transcribeMock = vi.fn();
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(async () => ({ transcribe: transcribeMock })),
 }));
 

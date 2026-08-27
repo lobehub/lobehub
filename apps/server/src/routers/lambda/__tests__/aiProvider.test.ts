@@ -25,6 +25,7 @@ vi.mock('@/database/repositories/aiInfra');
 vi.mock('@/database/models/aiProvider');
 vi.mock('@/database/models/user');
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 vi.mock('@lobechat/business-const', async () => {

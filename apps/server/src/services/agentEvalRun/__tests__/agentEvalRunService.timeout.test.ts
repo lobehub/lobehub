@@ -9,6 +9,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntime
 import { cleanupDB, serverDB, setupMultiCaseRun, userId } from './_setup';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 

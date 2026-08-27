@@ -20,7 +20,10 @@ vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/database/models/generation', () => ({ GenerationModel: vi.fn() }));
 vi.mock('@/database/models/generationBatch', () => ({ GenerationBatchModel: vi.fn() }));
 vi.mock('@/server/services/generation', () => ({ GenerationService: vi.fn() }));
-vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
+  initModelRuntimeFromDB: vi.fn(),
+}));
 
 // Business slots.
 vi.mock('@/business/server/getProviderContentPolicyErrorMessage', () => ({

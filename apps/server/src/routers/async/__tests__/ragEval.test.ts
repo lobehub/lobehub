@@ -25,6 +25,7 @@ vi.mock('@/database/models/ragEval', () => ({
   EvaluationRecordModel: vi.fn(() => ({ findById: vi.fn().mockResolvedValue(null) })),
 }));
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 vi.mock('@/server/services/chunk', () => ({

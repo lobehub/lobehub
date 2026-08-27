@@ -51,6 +51,7 @@ vi.mock('@/server/services/taskReview', () => ({
 
 // Mock initModelRuntimeFromDB
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 

@@ -19,6 +19,7 @@ vi.mock('@/database/models/message', () => ({
 
 // Mock ModelRuntime
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   ApiKeyManager: vi.fn().mockImplementation(() => ({
     getAllApiKeys: vi.fn(),
     getApiKey: vi.fn(),

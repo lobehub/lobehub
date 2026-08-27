@@ -23,6 +23,7 @@ vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(),
 }));
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  buildAgentShareModelRuntimeContext: vi.fn(() => undefined),
   initModelRuntimeFromDB: vi.fn(),
 }));
 
