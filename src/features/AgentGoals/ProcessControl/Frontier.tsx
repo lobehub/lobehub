@@ -268,7 +268,9 @@ const FrontierRow = memo<{
   item: FrontierItem;
   numbers: Map<string, number>;
   onSelect: (nodeId: string) => void;
-}>(({ actions, canEdit, item, numbers, onSelect }) => {
+  /** A gate's ledger is the ledger of the Work it was opened for. */
+  subject?: GoalNodeView;
+}>(({ actions, canEdit, item, numbers, onSelect, subject }) => {
   const { t } = useTranslation('chat');
   const optionLabel = useOptionLabel();
   const [note, setNote] = useState('');
@@ -381,7 +383,7 @@ const FrontierRow = memo<{
             </>
           )}
           {item.kind === 'stale' && <StaleBody view={view} />}
-          <AttemptLedger view={view} />
+          <AttemptLedger view={subject ?? view} />
           {item.kind === 'gate' && canEdit && (
             <Flexbox gap={4}>
               <span className={styles.label}>{t('goalProcess.gate.noteLabel')}</span>
@@ -512,6 +514,7 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect }) => 
                 canEdit={canEdit}
                 item={item}
                 numbers={numbers}
+                subject={item.view.gateSubjectId ? graph.byId[item.view.gateSubjectId] : undefined}
                 onSelect={onSelect}
               />
             </Fragment>
