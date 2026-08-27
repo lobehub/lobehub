@@ -28,7 +28,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 
 const MAX_EDITOR_DATA_BYTES = 128 * 1024;
 const idSchema = z.string().trim().min(1).max(255);
-const contentSchema = z.string().trim().min(1).max(10_000);
+const contentSchema = z.string().trim().max(10_000);
 const editorDataSchema = z
   .json()
   .refine((value) => Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_EDITOR_DATA_BYTES, {
@@ -38,6 +38,54 @@ const pageSchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(50).optional(),
 });
+
+const getAttachmentState = (editorData: unknown) => {
+  const root = toRecord(editorData)?.root;
+  const pending: unknown[] = root === undefined ? [] : [root];
+  let hasCompletedAttachments = false;
+  let hasIncompleteAttachments = false;
+
+  while (pending.length > 0) {
+    const node = toRecord(pending.pop());
+    if (!node) continue;
+
+    const isFile = node.type === 'file';
+    const isImage = node.type === 'image' || node.type === 'block-image';
+    if (isFile || isImage) {
+      const url = isFile ? node.fileUrl : node.src;
+      if (node.status === 'uploaded' && typeof url === 'string' && url.length > 0) {
+        hasCompletedAttachments = true;
+      } else {
+        hasIncompleteAttachments = true;
+      }
+    }
+
+    if (Array.isArray(node.children)) pending.push(...node.children);
+  }
+
+  return { hasCompletedAttachments, hasIncompleteAttachments };
+};
+
+const validateCommentBody = (
+  value: { content?: string; editorData?: unknown },
+  ctx: z.RefinementCtx,
+) => {
+  const attachmentState = getAttachmentState(value.editorData);
+  if (attachmentState.hasIncompleteAttachments) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Attachments must finish uploading successfully',
+      path: ['editorData'],
+    });
+  }
+  if (value.content !== undefined && !value.content && !attachmentState.hasCompletedAttachments) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Comment content or a completed attachment is required',
+      path: ['content'],
+    });
+  }
+};
 
 const extractMentionedUserIds = (editorData: unknown): string[] => {
   const root = toRecord(editorData)?.root;
@@ -354,13 +402,15 @@ const enrich = async (
 export const documentCommentRouter = router({
   create: documentCommentProcedure
     .input(
-      z.object({
-        clientId: idSchema,
-        content: contentSchema,
-        documentId: idSchema,
-        editorData: editorDataSchema.optional(),
-        parentCommentId: idSchema.optional(),
-      }),
+      z
+        .object({
+          clientId: idSchema,
+          content: contentSchema,
+          documentId: idSchema,
+          editorData: editorDataSchema.optional(),
+          parentCommentId: idSchema.optional(),
+        })
+        .superRefine(validateCommentBody),
     )
     .mutation(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_CREATE');
@@ -485,7 +535,8 @@ export const documentCommentRouter = router({
         })
         .refine((value) => value.content !== undefined || value.editorData !== undefined, {
           message: 'At least one field must be provided',
-        }),
+        })
+        .superRefine(validateCommentBody),
     )
     .mutation(async ({ ctx, input }) => {
       const current = await ctx.documentCommentModel.findById(input.id);

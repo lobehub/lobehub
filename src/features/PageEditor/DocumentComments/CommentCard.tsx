@@ -10,7 +10,7 @@ import { AttachmentMenu } from '@/features/AttachmentInput';
 import RichTextMessage from '@/features/Conversation/Messages/User/components/RichTextMessage';
 import { TypoBar } from '@/features/EditorCanvas';
 import {
-  getAttachmentFileIdsFromEditor,
+  getEditorAttachmentStateFromJson,
   insertExistingAttachmentsIntoEditor,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
@@ -66,7 +66,6 @@ const CommentCard = memo<CommentCardProps>(
     const editEditor = useEditor();
     const editorRef = useRef<DocumentCommentEditorRef>(null);
     const editInputRef = useRef<HTMLDivElement>(null);
-    const [hasAttachments, setHasAttachments] = useState(false);
     const [showTypoBar, setShowTypoBar] = useLocalStorageState(
       'document-comment:show-formatting-toolbar',
       false,
@@ -90,8 +89,13 @@ const CommentCard = memo<CommentCardProps>(
         editorData,
       };
       const nextContent = editorValue.content.trim();
-      const hasFiles = getAttachmentFileIdsFromEditor(editEditor).length > 0;
-      if ((!nextContent && !hasFiles) || mutating) return;
+      const attachmentState = getEditorAttachmentStateFromJson(editorValue.editorData);
+      if (
+        attachmentState.hasIncompleteAttachments ||
+        (!nextContent && !attachmentState.hasCompletedAttachments) ||
+        mutating
+      )
+        return;
       setContent(nextContent);
       setEditorData(editorValue.editorData);
       setMutating(true);
@@ -104,7 +108,7 @@ const CommentCard = memo<CommentCardProps>(
       } finally {
         setMutating(false);
       }
-    }, [comment, content, editEditor, editorData, mutating, onUpdate, t]);
+    }, [comment, content, editorData, mutating, onUpdate, t]);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -130,7 +134,6 @@ const CommentCard = memo<CommentCardProps>(
     const handleEdit = useCallback(() => {
       setContent(comment.content);
       setEditorData(comment.editorData);
-      setHasAttachments(false);
       setEditing(true);
     }, [comment.content, comment.editorData]);
 
@@ -140,6 +143,7 @@ const CommentCard = memo<CommentCardProps>(
       },
       [editEditor],
     );
+    const attachmentState = getEditorAttachmentStateFromJson(editorData);
 
     return (
       <Flexbox
@@ -209,10 +213,13 @@ const CommentCard = memo<CommentCardProps>(
                         {t('pageEditor.comments.cancel')}
                       </Button>
                       <Button
-                        disabled={!content.trim() && !hasAttachments}
                         loading={mutating}
                         size={'small'}
                         type={'primary'}
+                        disabled={
+                          attachmentState.hasIncompleteAttachments ||
+                          (!content.trim() && !attachmentState.hasCompletedAttachments)
+                        }
                         onClick={handleUpdate}
                       >
                         {t('pageEditor.comments.save')}
@@ -237,7 +244,6 @@ const CommentCard = memo<CommentCardProps>(
                 onChange={({ content: nextContent, editorData: nextEditorData }) => {
                   setContent(nextContent);
                   setEditorData(nextEditorData);
-                  setHasAttachments(getAttachmentFileIdsFromEditor(editEditor).length > 0);
                 }}
               />
             </ChatInput>

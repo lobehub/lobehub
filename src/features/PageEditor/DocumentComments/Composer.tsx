@@ -10,7 +10,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { AttachmentMenu } from '@/features/AttachmentInput';
 import { TypoBar } from '@/features/EditorCanvas';
 import {
-  getAttachmentFileIdsFromEditor,
+  getEditorAttachmentStateFromJson,
   insertExistingAttachmentsIntoEditor,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
@@ -50,7 +50,6 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
     `document-comment-draft:${workspaceId ?? 'personal'}:${documentId}:${parentCommentId ?? 'root'}`,
     { clientId: nanoid(), content: '', editorData: null },
   );
-  const [hasAttachments, setHasAttachments] = useState(false);
   const [showTypoBar, setShowTypoBar] = useLocalStorageState(
     'document-comment:show-formatting-toolbar',
     false,
@@ -63,15 +62,21 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
       editorData: draft.editorData,
     };
     const content = editorValue.content.trim();
-    const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
-    if (!workspaceId || !canCreate || (!content && !hasFiles) || submittingRef.current) return;
+    const attachmentState = getEditorAttachmentStateFromJson(editorValue.editorData);
+    if (
+      !workspaceId ||
+      !canCreate ||
+      attachmentState.hasIncompleteAttachments ||
+      (!content && !attachmentState.hasCompletedAttachments) ||
+      submittingRef.current
+    )
+      return;
 
     submittingRef.current = true;
     setSubmitting(true);
     const submittedDraft = { clientId: draft.clientId, ...editorValue };
     setDraft({ clientId: nanoid(), content: '', editorData: null });
     editorRef.current?.clean();
-    setHasAttachments(false);
     try {
       await onSubmit({
         clientId: submittedDraft.clientId,
@@ -82,14 +87,13 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
     } catch {
       setDraft((current) => (current.content ? current : submittedDraft));
       editorRef.current?.setValue(editorValue);
-      setHasAttachments(hasFiles);
       editorRef.current?.focus();
       toast.error(t('pageEditor.comments.createFailed'));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [canCreate, draft, editor, onSubmit, onSuccess, setDraft, t, workspaceId]);
+  }, [canCreate, draft, onSubmit, onSuccess, setDraft, t, workspaceId]);
 
   const handleAttach = useCallback(
     (files: File[]) => {
@@ -99,6 +103,8 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
   );
 
   if (!workspaceId || !canCreate || (submitting && parentCommentId)) return null;
+
+  const attachmentState = getEditorAttachmentStateFromJson(draft.editorData);
 
   return (
     <Flexbox horizontal align={'flex-start'} gap={12}>
@@ -129,10 +135,13 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
             }
             right={
               <SendButton
-                disabled={!draft.content.trim() && !hasAttachments}
                 loading={submitting}
                 shape={'round'}
                 type={'primary'}
+                disabled={
+                  attachmentState.hasIncompleteAttachments ||
+                  (!draft.content.trim() && !attachmentState.hasCompletedAttachments)
+                }
                 title={
                   parentCommentId
                     ? t('pageEditor.comments.replyAction')
@@ -161,7 +170,6 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
           }
           onChange={({ content, editorData }) => {
             setDraft((current) => ({ ...current, content, editorData }));
-            setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
           }}
           onPressEnter={(event) => {
             if (!shouldSendOnEnter(event)) return;

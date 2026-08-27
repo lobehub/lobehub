@@ -191,6 +191,59 @@ describe('documentCommentRouter integration', () => {
     expect(await db.select().from(documentComments)).toEqual([]);
   });
 
+  it('accepts attachment-only comments and rejects incomplete uploads', async () => {
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const completedFile = {
+      root: {
+        children: [
+          {
+            fileUrl: 'https://files.example.com/report.pdf',
+            name: 'report.pdf',
+            status: 'uploaded',
+            type: 'file',
+          },
+        ],
+        type: 'root',
+      },
+    };
+    const created = await member.create({
+      clientId: 'attachment-only',
+      content: '',
+      documentId,
+      editorData: completedFile,
+    });
+    expect(created.comment.content).toBe('');
+
+    const textComment = await member.create({
+      clientId: 'replace-with-attachment',
+      content: 'replace me',
+      documentId,
+    });
+    const updated = await member.update({
+      content: '',
+      editorData: completedFile,
+      id: textComment.comment.id,
+    });
+    expect(updated.content).toBe('');
+
+    await expect(
+      member.create({
+        clientId: 'pending-attachment',
+        content: 'do not publish yet',
+        documentId,
+        editorData: {
+          root: {
+            children: [{ name: 'large.zip', status: 'pending', type: 'file' }],
+            type: 'root',
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      member.create({ clientId: 'empty-comment', content: '', documentId }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('publishes one realtime invalidation after each committed mutation', async () => {
     const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
     const created = await member.create({ clientId: 'event-root', content: 'root', documentId });

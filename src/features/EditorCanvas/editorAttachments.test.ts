@@ -3,9 +3,42 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getFileIdForUrl } from './attachmentRegistry';
 import {
+  getEditorAttachmentStateFromJson,
   getExistingEditorAttachment,
   insertExistingAttachmentsIntoEditor,
 } from './editorAttachments';
+
+describe('getEditorAttachmentStateFromJson', () => {
+  it('distinguishes completed attachments from pending and failed uploads', () => {
+    expect(
+      getEditorAttachmentStateFromJson({
+        root: {
+          children: [
+            {
+              fileUrl: 'https://files.example.com/report.pdf',
+              status: 'uploaded',
+              type: 'file',
+            },
+            { src: 'blob:pending-image', status: 'loading', type: 'block-image' },
+            { message: 'upload failed', status: 'error', type: 'image' },
+          ],
+        },
+      }),
+    ).toEqual({ hasCompletedAttachments: true, hasIncompleteAttachments: true });
+  });
+
+  it('treats an uploaded image as a completed attachment', () => {
+    expect(
+      getEditorAttachmentStateFromJson({
+        root: {
+          children: [
+            { src: 'https://files.example.com/image.png', status: 'uploaded', type: 'image' },
+          ],
+        },
+      }),
+    ).toEqual({ hasCompletedAttachments: true, hasIncompleteAttachments: false });
+  });
+});
 
 describe('insertExistingAttachmentsIntoEditor', () => {
   it('marks library resources for reuse instead of uploading them again', () => {
