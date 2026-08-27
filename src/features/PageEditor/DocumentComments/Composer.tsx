@@ -1,7 +1,7 @@
 import type { DocumentCommentJson } from '@lobechat/types';
 import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
-import { Avatar, Flexbox } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, toast } from '@lobehub/ui/base-ui';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

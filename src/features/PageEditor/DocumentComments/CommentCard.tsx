@@ -1,7 +1,7 @@
 import type { DocumentCommentItem } from '@lobechat/types';
 import { ChatInput, ChatInputActionBar, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { ChevronRight, MessageCircle, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import { ChevronRight, FileUp, LibraryBig, PlusIcon, TypeIcon } from 'lucide-react';
