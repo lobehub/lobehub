@@ -94,9 +94,17 @@ export class GoalActionImpl {
   };
 
   /**
-   * One coordinator step. Graph goals have no server-side driver, so this is
-   * the only thing that moves them from the app.
+   * Ask the server to run the coordinator now. The goal keeps advancing on its
+   * own afterwards as its Work Tasks settle, so this is a nudge rather than the
+   * loop the surface used to hold open.
    */
+  advanceGoal = async (goalId: string): Promise<GoalTickResult> => {
+    const result = await goalService.advance(goalId);
+    await this.refreshGoalGraph(goalId);
+    return result;
+  };
+
+  /** Exactly one coordinator step, for a caller that wants to inspect a single move. */
   tickGoal = async (goalId: string): Promise<GoalTickResult> => {
     const result = await goalService.tick(goalId);
     await this.refreshGoalGraph(goalId);

@@ -16,7 +16,6 @@ import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
 import Graph from './Graph';
-import { runGoal } from './runGoal';
 
 /**
  * The process-control band of the goal detail page: what can move now
@@ -46,32 +45,30 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   const decideGoal = useGoalStore((s) => s.decideGoal);
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
-  const tickGoal = useGoalStore((s) => s.tickGoal);
+  const advanceGoalNow = useGoalStore((s) => s.advanceGoal);
   const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
   useFetchGoalGraph(goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
   const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
 
-  // One press carries the goal as far as it can go and stops where the user is
-  // actually needed. A single coordinator step is an implementation unit — a
-  // press that only ticked once usually looked like it did nothing at all,
-  // because the very next step is what dispatches the task.
+  // One press hands the goal to the server's coordinator, which runs it as far
+  // as it can go in one call and then keeps going on its own as each Work Task
+  // settles. A single coordinator step is an implementation unit — a press that
+  // only ticked once usually looked like it did nothing, because the very next
+  // step is what dispatches the task.
   const advance = useCallback(async () => {
     if (advancing) return;
     setAdvancing(true);
     try {
-      const { result } = await runGoal({
-        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-        tick: () => tickGoal(goalId),
-      });
+      const result = await advanceGoalNow(goalId);
       toast.info(result.message);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
       setAdvancing(false);
     }
-  }, [advancing, goalId, tickGoal]);
+  }, [advancing, advanceGoalNow, goalId]);
 
   const actions: FrontierActions = useMemo(
     () => ({

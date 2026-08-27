@@ -156,6 +156,70 @@ describe('GoalModel', () => {
     });
   });
 
+  describe('listStalled', () => {
+    const staleBefore = () => new Date(Date.now() - 15 * 60 * 1000);
+
+    it('picks up an open goal with nothing running', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Never started' });
+      await goalModel.updateStatus(goal.id, 'running');
+      await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+
+      const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
+      expect(stalled.map(({ id }) => id)).toContain(goal.id);
+    });
+
+    it('leaves a goal alone while one of its Work Tasks is freshly active', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Working' });
+      await goalModel.updateStatus(goal.id, 'running');
+      const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+      await graphModel.updateNodeStatus(goal.id, node!.id, 'active');
+
+      const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
+      expect(stalled.map(({ id }) => id)).not.toContain(goal.id);
+    });
+
+    it('reclaims a Work that outlived its operation lease', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Lost' });
+      await goalModel.updateStatus(goal.id, 'running');
+      const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+      await graphModel.updateNodeStatus(goal.id, node!.id, 'active');
+      await serverDB
+        .update(goalNodes)
+        .set({ updatedAt: new Date(Date.now() - 60 * 60 * 1000) })
+        .where(eq(goalNodes.id, node!.id));
+
+      const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
+      expect(stalled.map(({ id }) => id)).toContain(goal.id);
+    });
+
+    it('skips a goal whose next move belongs to a human', async () => {
+      // Ticking a goal parked on a decision gate only re-reports `waiting_human`
+      // on every sweep; only the user can move it.
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Gated' });
+      await goalModel.updateStatus(goal.id, 'running');
+      const gate = await graphModel.createNode(goal.id, { kind: 'decision', title: 'D1' });
+      await graphModel.createDecision(goal.id, gate!.id, {
+        authority: 'user',
+        question: 'retry?',
+      });
+
+      const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
+      expect(stalled.map(({ id }) => id)).not.toContain(goal.id);
+    });
+
+    it.each(['achieved', 'failed', 'canceled', 'paused'] as const)(
+      'never sweeps a %s goal',
+      async (status) => {
+        const goal = await goalModel.create({ subjectType: 'standalone', title: status });
+        await goalModel.updateStatus(goal.id, status);
+        await graphModel.createNode(goal.id, { kind: 'work', title: 'W1' });
+
+        const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
+        expect(stalled.map(({ id }) => id)).not.toContain(goal.id);
+      },
+    );
+  });
+
   describe('updateStatus', () => {
     it('stamps startedAt on first entry into running', async () => {
       const { id } = await goalModel.create({

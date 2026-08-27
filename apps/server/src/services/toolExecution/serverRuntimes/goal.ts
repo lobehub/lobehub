@@ -5,6 +5,7 @@ import {
 } from '@lobechat/builtin-tool-goal';
 
 import { GoalService } from '@/server/services/goal';
+import { advanceGoal } from '@/server/services/goal/advanceGoal';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -50,18 +51,23 @@ export const goalRuntime: ServerRuntimeRegistration = {
             title: args.name,
             work: [{ description: args.instruction, title: args.name }],
           });
-          // One tick dispatches the opening Work: the coordinator creates its
-          // responsible task, its acceptance contract, and starts the run.
-          const tick = await goalService.tick(graph.goal.id);
+          // Advance until the coordinator is waiting on something other than a
+          // tick — normally that is the first Work Task executing. From there
+          // the goal keeps itself moving through the queued advances.
+          const { result } = await advanceGoal({
+            goalId: graph.goal.id,
+            userId,
+            workspaceId: workspaceId ?? undefined,
+          });
 
           return {
-            content: `Goal "${graph.goal.title}" created with ${drafts.length} acceptance criteria. ${tick.message}. Execution continues in its own task; do not perform or reproduce the work in this conversation.`,
+            content: `Goal "${graph.goal.title}" created with ${drafts.length} acceptance criteria. ${result.message}. Execution continues in its own task; do not perform or reproduce the work in this conversation.`,
             state: {
               goalId: graph.goal.id,
               name: args.name,
               startedAt: new Date().toISOString(),
               success: true,
-              taskId: tick.taskId,
+              taskId: result.taskId,
             },
             success: true,
           };

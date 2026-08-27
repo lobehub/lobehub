@@ -49,9 +49,16 @@ class GoalService {
   };
 
   /**
-   * Advance the graph by one coordinator step. There is no server-side driver
-   * for graph goals: they only move while a client (or the CLI) keeps ticking.
+   * Run the coordinator now and report where it stopped. The goal also advances
+   * on its own as its Work Tasks settle — this is the explicit nudge, not the
+   * engine, so the surface never has to hold a tick loop open.
    */
+  advance = async (id: string): Promise<GoalTickResult & { ticks: number }> => {
+    const { data } = await lambdaClient.goal.advance.mutate({ id });
+    return data;
+  };
+
+  /** Advance the graph by exactly one coordinator step. */
   tick = async (id: string): Promise<GoalTickResult> => {
     const { data } = await lambdaClient.goal.tick.mutate({ id });
     return data;

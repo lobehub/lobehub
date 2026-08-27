@@ -3,9 +3,11 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
@@ -180,6 +182,23 @@ export const driveTaskFromVerify = async (
         taskOperation.taskId,
         error,
       );
+    }
+
+    // A Goal Work Task settling is the event the coordinator waits on: it
+    // decides whether to synthesize a finding, start another attempt, or open a
+    // decision gate. Queue the advance so the goal keeps moving on its own —
+    // this is the server-side driver for long-horizon goals, and without it a
+    // goal only progresses while some client keeps ticking it.
+    try {
+      const goal = await new GoalModel(db, userId, workspaceId).findByWorkTask(
+        taskOperation.taskId,
+      );
+      if (goal) {
+        await scheduleGoalAdvance({ goalId: goal.id, userId, workspaceId });
+        log('verify-settle → queued goal advance for %s', goal.id);
+      }
+    } catch (error) {
+      log('verify-settle goal advance dispatch failed (non-fatal): %O', error);
     }
 
     // The drive marker was stamped by the claim at the top of this function.

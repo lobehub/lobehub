@@ -100,6 +100,50 @@ export class GoalModel {
   };
 
   /**
+   * Open goals that nothing is currently moving — the sweep's work list.
+   *
+   * A goal qualifies when it is still open and has no Work node that is both
+   * `active` and freshly touched: either nothing was ever dispatched, the
+   * completion event that should have re-entered the coordinator was lost, or a
+   * running Work outlived its operation lease and needs reclaiming. Goals with a
+   * decision gate open are excluded — only a human moves those, and ticking them
+   * would just report `waiting_human` on every sweep.
+   *
+   * Global by design (no ownership filter): the sweep runs as infrastructure and
+   * carries each goal's own `userId` / `workspaceId` into its advance.
+   */
+  static async listStalled(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<GoalItem[]> {
+    const { limit = 200, staleBefore } = options;
+
+    return db
+      .select()
+      .from(goals)
+      .where(
+        and(
+          inArray(goals.status, ['planning', 'running', 'verifying']),
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${goalNodes}
+            WHERE ${goalNodes.goalId} = ${goals.id}
+              AND ${goalNodes.kind} = 'work'
+              AND ${goalNodes.status} = 'active'
+              AND ${goalNodes.updatedAt} > ${staleBefore}
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${goalNodeDecisions}
+            JOIN ${goalNodes} AS gate ON gate.id = ${goalNodeDecisions.nodeId}
+            WHERE gate.goal_id = ${goals.id}
+              AND ${goalNodeDecisions.status} = 'pending'
+          )`,
+        ),
+      )
+      .orderBy(desc(goals.updatedAt))
+      .limit(limit);
+  }
+
+  /**
    * List goals with the roll-up the goal surfaces render: how much of the
    * graph is done, how many decisions are waiting on a human, and what the
    * whole thing has cost so far.
