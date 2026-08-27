@@ -3,7 +3,15 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { DOCUMENT_FOLDER_TYPE, documents, files, users, workspaces } from '../../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documentCommentMentions,
+  documentComments,
+  documents,
+  files,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 
@@ -97,6 +105,59 @@ describe('DocumentModel.transferTo', () => {
     for (const row of rows) expect(row.workspaceId).toBe(wsId1);
   });
 
+  it('moves comments and mentions with a document subtree between workspaces', async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const folder = await createFolder(ws1, 'Commented Folder', 'commented-folder');
+    const child = await createPage(ws1, 'Commented Child', 'commented-child', folder.id);
+    const createdComments = await serverDB
+      .insert(documentComments)
+      .values([
+        {
+          authorUserId: userId,
+          clientId: 'transfer-root-comment',
+          content: 'root comment',
+          documentId: folder.id,
+          workspaceId: wsId1,
+        },
+        {
+          authorUserId: userId,
+          clientId: 'transfer-child-comment',
+          content: 'child comment',
+          documentId: child.id,
+          workspaceId: wsId1,
+        },
+      ])
+      .returning({ id: documentComments.id });
+    await serverDB.insert(documentCommentMentions).values(
+      createdComments.map(({ id }) => ({
+        commentId: id,
+        mentionedUserId: userId,
+        workspaceId: wsId1,
+      })),
+    );
+
+    await ws1.transferTo(folder.id, wsId2, userId);
+
+    const movedComments = await serverDB
+      .select({ workspaceId: documentComments.workspaceId })
+      .from(documentComments)
+      .where(inArray(documentComments.documentId, [folder.id, child.id]));
+    expect(movedComments).toHaveLength(2);
+    expect(movedComments.every(({ workspaceId }) => workspaceId === wsId2)).toBe(true);
+
+    const movedMentions = await serverDB
+      .select({ workspaceId: documentCommentMentions.workspaceId })
+      .from(documentCommentMentions)
+      .where(
+        inArray(
+          documentCommentMentions.commentId,
+          createdComments.map(({ id }) => id),
+        ),
+      );
+    expect(movedMentions).toHaveLength(2);
+    expect(movedMentions.every(({ workspaceId }) => workspaceId === wsId2)).toBe(true);
+  });
+
   it('resolves slug conflicts by suffixing', async () => {
     const ws1 = new DocumentModel(serverDB, userId, wsId1);
     await createPage(ws1, 'Existing', 'shared-slug');
@@ -135,11 +196,35 @@ describe('DocumentModel.transferTo', () => {
   it('transfers from workspace back to personal', async () => {
     const ws = new DocumentModel(serverDB, userId, wsId1);
     const page = await createPage(ws, 'In WS', 'in-ws');
+    const [comment] = await serverDB
+      .insert(documentComments)
+      .values({
+        authorUserId: userId,
+        clientId: 'personal-transfer-comment',
+        content: 'workspace-only comment',
+        documentId: page.id,
+        workspaceId: wsId1,
+      })
+      .returning({ id: documentComments.id });
+    await serverDB.insert(documentCommentMentions).values({
+      commentId: comment!.id,
+      mentionedUserId: userId,
+      workspaceId: wsId1,
+    });
 
     await ws.transferTo(page.id, null, userId);
 
     const updated = await serverDB.query.documents.findFirst({ where: eq(documents.id, page.id) });
     expect(updated?.workspaceId).toBeNull();
+    expect(
+      await serverDB.select().from(documentComments).where(eq(documentComments.id, comment!.id)),
+    ).toHaveLength(0);
+    expect(
+      await serverDB
+        .select()
+        .from(documentCommentMentions)
+        .where(eq(documentCommentMentions.commentId, comment!.id)),
+    ).toHaveLength(0);
   });
 });
 

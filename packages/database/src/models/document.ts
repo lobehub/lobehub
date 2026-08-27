@@ -1,7 +1,15 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, works } from '../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documentCommentMentions,
+  documentComments,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  works,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -446,6 +454,32 @@ export class DocumentModel {
         .update(documents)
         .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
         .where(inArray(documents.id, ids));
+
+      if (targetWorkspaceId) {
+        const movedComments = await (trx as LobeChatDatabase)
+          .update(documentComments)
+          .set({ workspaceId: targetWorkspaceId })
+          .where(inArray(documentComments.documentId, ids))
+          .returning({ id: documentComments.id });
+
+        if (movedComments.length > 0) {
+          await (trx as LobeChatDatabase)
+            .update(documentCommentMentions)
+            .set({ workspaceId: targetWorkspaceId })
+            .where(
+              inArray(
+                documentCommentMentions.commentId,
+                movedComments.map(({ id }) => id),
+              ),
+            );
+        }
+      } else {
+        // Comments are Workspace assets and cannot follow a document into personal scope.
+        // Mention rows are removed by the comment FK cascade.
+        await (trx as LobeChatDatabase)
+          .delete(documentComments)
+          .where(inArray(documentComments.documentId, ids));
+      }
 
       // Move files anchored to these documents; their visibility mirrors the
       // document subtree in workspace scope.
