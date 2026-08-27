@@ -1,14 +1,14 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
-import { ActionIcon, Tabs, Text } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Image, Markdown } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
+import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
-import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
+import { applyHtmlPreviewBaseUrl, InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import {
   PublishHtmlArtifactLiveBar,
@@ -30,6 +30,7 @@ import {
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
+import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
 const DocumentPreview = lazy(() => import('./DocumentPreview'));
@@ -129,31 +130,6 @@ SkillFrontmatterPreviewCard.displayName = 'SkillFrontmatterPreviewCard';
 type TextPreviewMode = 'render' | 'raw';
 
 const NO_TOPIC_KEY = '__no_topic__';
-
-const floatingControlsStyles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-end: 12px;
-
-    padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    opacity: 0.55;
-    background: ${cssVar.colorBgElevated};
-    backdrop-filter: blur(8px);
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity 0.15s ease;
-
-    &:hover,
-    &:focus-within {
-      opacity: 1;
-    }
-  `,
-}));
 
 interface TextPreviewPaneProps {
   activeTopicId?: string | null;
@@ -282,6 +258,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       await onReload?.();
       setHtmlPreviewRevision((prev) => prev + 1);
     }, [onReload]);
+    const handleOpenExternal = useCallback(() => {
+      const html = applyHtmlPreviewBaseUrl(editingValue, resourceBaseUrl);
+      const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // Revoking immediately can abort the new window's document load — defer it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }, [editingValue, resourceBaseUrl]);
 
     return (
       <PublishHtmlArtifactProvider
@@ -294,52 +277,50 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       >
         <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
           <PublishHtmlArtifactLiveBar />
-          <Flexbox
-            flex={1}
-            height={'100%'}
-            style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
-          >
-            {canRender && (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={floatingControlsStyles.container}
-                gap={4}
-              >
+          <PreviewToolbar
+            path={filePath}
+            actions={
+              <>
                 {isHtml && (
-                  <ActionIcon
+                  <ToolbarActionButton
                     icon={RefreshCwIcon}
                     loading={reloading}
-                    size={'small'}
                     title={t('workingPanel.localFile.preview.reload')}
                     onClick={handleReloadPreview}
                   />
                 )}
-
-                <Tabs
-                  activeKey={mode}
-                  size={'small'}
-                  items={[
-                    {
-                      icon: <Icon icon={EyeIcon} />,
-                      key: 'render',
-                      label: t('workingPanel.localFile.preview.render'),
-                    },
-                    {
-                      icon: <Icon icon={CodeIcon} />,
-                      key: 'raw',
-                      label: t(
+                {canRender && (
+                  <>
+                    <ToolbarActionButton
+                      active={mode === 'render'}
+                      icon={EyeIcon}
+                      label={t('workingPanel.localFile.preview.render')}
+                      onClick={() => setMode('render')}
+                    />
+                    <ToolbarActionButton
+                      active={mode === 'raw'}
+                      icon={CodeIcon}
+                      label={t(
                         isHtml
                           ? 'workingPanel.localFile.preview.source'
                           : 'workingPanel.localFile.preview.raw',
-                      ),
-                    },
-                  ]}
-                  onChange={(key) => setMode(key as TextPreviewMode)}
-                />
+                      )}
+                      onClick={() => setMode('raw')}
+                    />
+                  </>
+                )}
+                {isHtml && (
+                  <ToolbarActionButton
+                    icon={ExternalLinkIcon}
+                    title={t('workingPanel.localFile.preview.openExternal')}
+                    onClick={handleOpenExternal}
+                  />
+                )}
                 <PublishHtmlArtifactTrigger />
-              </Flexbox>
-            )}
+              </>
+            }
+          />
+          <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
             <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
               {isMarkdown && mode === 'render' ? (
                 <>

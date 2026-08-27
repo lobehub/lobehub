@@ -56,7 +56,8 @@ const PublishHtmlArtifactConfirmContent = ({
               indicatorPlacement={'start'}
               itemKey={'details'}
               paddingBlock={4}
-              paddingInline={0}
+              paddingInline={8}
+              styles={{ header: { marginInline: -8, width: 'calc(100% + 16px)' } }}
               title={
                 <Text fontSize={12} type={'secondary'} weight={500}>
                   {t('workingPanel.localFile.publish.details')}

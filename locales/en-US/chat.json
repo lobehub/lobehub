@@ -2099,6 +2099,7 @@
   "workingPanel.localFile.document.truncatedRows": "Showing the first {{count}} rows",
   "workingPanel.localFile.document.unsupported": "This document type can't be previewed in-app yet",
   "workingPanel.localFile.error": "Couldn't load this file",
+  "workingPanel.localFile.preview.openExternal": "Open in browser",
   "workingPanel.localFile.preview.raw": "Raw",
   "workingPanel.localFile.preview.reload": "Reload preview",
   "workingPanel.localFile.preview.render": "Preview",

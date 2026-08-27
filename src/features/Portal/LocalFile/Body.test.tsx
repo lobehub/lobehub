@@ -20,6 +20,7 @@ vi.mock('antd-style', () => ({
     row: 'row',
     value: 'value',
   }),
+  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
   cssVar: {
     colorBgContainer: 'var(--color-bg-container)',
     colorBorderSecondary: 'var(--color-border-secondary)',
@@ -43,6 +44,7 @@ vi.mock('@lobehub/ui', () => ({
   Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
   Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
