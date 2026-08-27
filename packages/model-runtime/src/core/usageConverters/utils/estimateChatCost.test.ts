@@ -21,9 +21,9 @@ describe('estimateChatCost', () => {
     });
 
     it('uses the effective request or model cap when provided', () => {
-      expect(estimateChatOutputTokens(100_000, 32_000)).toBe(10_000);
-      expect(estimateChatOutputTokens(100_000, 12_000)).toBe(10_000);
-      expect(estimateChatOutputTokens(100_000, 4096)).toBe(4096);
+      expect(estimateChatOutputTokens(400_000, 32_000)).toBe(32_000);
+      expect(estimateChatOutputTokens(400_000, 12_000)).toBe(12_000);
+      expect(estimateChatOutputTokens(400_000, 4096)).toBe(4096);
     });
   });
 
