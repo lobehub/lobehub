@@ -10,12 +10,14 @@ import {
   resolveStaleModelState,
 } from '@/features/ModelSelect/resolveStaleModelState';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 interface ResolveChatInputNoticeParams {
+  canEnableModel?: boolean;
   currentChatModel?: unknown;
   isAgentModelPending: boolean;
   isGroupContext?: boolean;
@@ -36,6 +38,7 @@ const findEnabledChatModel = (
 };
 
 export const resolveChatInputNotice = ({
+  canEnableModel,
   currentChatModel,
   isAgentModelPending,
   isGroupContext,
@@ -69,7 +72,11 @@ export const resolveChatInputNotice = ({
     !currentChatModel
   ) {
     if (isModelDisabled)
-      return { action: 'enableModel', key: 'input.modelDisabled', type: 'warning' } as const;
+      return {
+        action: canEnableModel ? ('enableModel' as const) : undefined,
+        key: 'input.modelDisabled',
+        type: 'warning',
+      } as const;
 
     return { action: undefined, key: 'input.modelUnavailable', type: 'warning' } as const;
   }
@@ -89,6 +96,7 @@ export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNoti
 
 export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const { t } = useTranslation('chat');
+  const { allowed: canManageAiInfra } = usePermission('manage_provider_key');
   const agentId = useAgentId();
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -144,17 +152,18 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
    * A locked Agent selection can only be repaired in place. Enabling an id-only fallback
    * provider would mutate global model settings while leaving the persisted selection stale.
    */
-  const canEnableModel = Boolean(
+  const isModelDisabled = Boolean(
     enableTargetProviderId && (enableTargetProviderId === provider || canSelectModel),
   );
   const { canUseResource, isGroupContext } = useChatInputResourceAccess();
 
   const notice = resolveChatInputNotice({
+    canEnableModel: canManageAiInfra && isModelDisabled,
     currentChatModel,
     isAgentModelPending: isAgentConfigLoading || isMemberOverridePending,
     isGroupContext,
     isHeterogeneousAgent,
-    isModelDisabled: canEnableModel,
+    isModelDisabled,
     isModelConfigReady,
     isResourceViewOnly: !canUseResource,
   });

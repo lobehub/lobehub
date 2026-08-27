@@ -48,6 +48,9 @@ const testState = vi.hoisted(() => ({
     toggleProviderModelEnabled: vi.fn(async () => {}),
   },
   isDesktop: false,
+  permission: {
+    canManageAiInfra: true,
+  },
   resourceAccess: {
     canConfigureResource: true,
     isAccessLoading: false,
@@ -89,6 +92,10 @@ vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
 
 vi.mock('@/hooks/useEnabledChatModels', () => ({
   useEnabledChatModels: () => testState.aiInfra.enabledChatModelList,
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: testState.permission.canManageAiInfra }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -134,6 +141,7 @@ describe('useChatInputNotice', () => {
     testState.aiInfra.toggleProviderEnabled.mockReset();
     testState.aiInfra.toggleProviderModelEnabled.mockReset();
     testState.isDesktop = false;
+    testState.permission.canManageAiInfra = true;
     testState.resourceAccess = {
       canConfigureResource: true,
       isAccessLoading: false,
@@ -270,6 +278,22 @@ describe('useChatInputNotice', () => {
       id: 'gpt-4o',
       providerId: 'openai',
       type: 'chat',
+    });
+  });
+
+  it('keeps the disabled-model notice without Enable when the member cannot manage AI infrastructure', () => {
+    testState.permission.canManageAiInfra = false;
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+    testState.aiInfra.enabledChatModelList = [{ children: [{ id: 'gpt-4.1' }], id: 'openai' }];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({
+      action: undefined,
+      key: 'input.modelDisabled',
+      type: 'warning',
     });
   });
 
