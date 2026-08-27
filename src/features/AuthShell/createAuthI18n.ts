@@ -3,6 +3,11 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
 import { DEFAULT_LANG } from '@/const/locale';
+import {
+  BRAND_POST_PROCESSOR,
+  brandPostProcessor,
+  isBrandPostProcessorEnabled,
+} from '@/locales/brandPostProcessor';
 import defaultAuth from '@/locales/default/auth';
 import defaultAuthError from '@/locales/default/authError';
 import defaultCommon from '@/locales/default/common';
@@ -64,10 +69,10 @@ const loadAuthNamespace = async (lng: string, ns: string) => {
 };
 
 export const createAuthI18n = (lang?: string) => {
-  const instance = i18next
-    .createInstance()
-    .use(initReactI18next)
-    .use(resourcesToBackend(loadAuthNamespace));
+  let instance = i18next.createInstance();
+  if (isBrandPostProcessorEnabled) instance = instance.use(brandPostProcessor);
+
+  instance = instance.use(initReactI18next).use(resourcesToBackend(loadAuthNamespace));
 
   // With ns: [] and the en-US fallback bundled, i18next considers every namespace
   // "loaded" and never asks the backend after a language switch — fetch explicitly.
@@ -94,6 +99,8 @@ export const createAuthI18n = (lang?: string) => {
         // retry of the initial mount re-creates this instance and the auth SPA
         // remounts forever with a blank #root.
         partialBundledLanguages: true,
+        // Rewrite brand strings baked into the locale copy (white-label only).
+        ...(isBrandPostProcessorEnabled ? { postProcess: [BRAND_POST_PROCESSOR] } : {}),
         react: {
           bindI18nStore: 'added',
           useSuspense: false,

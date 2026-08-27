@@ -23,6 +23,12 @@ import { isOnServerSide } from '@/utils/env';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
+import {
+  BRAND_POST_PROCESSOR,
+  brandPostProcessor,
+  isBrandPostProcessorEnabled,
+} from './brandPostProcessor';
+
 const mergeNamespace = (
   fallbackResources: Record<string, unknown>,
   localeResources: Record<string, unknown>,
@@ -45,7 +51,10 @@ const { I18N_DEBUG, I18N_DEBUG_BROWSER, I18N_DEBUG_SERVER } = getDebugConfig();
 const debugMode = (I18N_DEBUG ?? isOnServerSide) ? I18N_DEBUG_SERVER : I18N_DEBUG_BROWSER;
 
 export const createI18nNext = (lang?: string) => {
-  const instance = i18n
+  let instance = i18n;
+  if (isBrandPostProcessorEnabled) instance = instance.use(brandPostProcessor);
+
+  instance = instance
     .use(initReactI18next)
     .use(LanguageDetector)
     .use(
@@ -109,6 +118,8 @@ export const createI18nNext = (lang?: string) => {
         keySeparator: false,
 
         lng: initialLang,
+        // Rewrite brand strings baked into the locale copy (white-label only).
+        ...(isBrandPostProcessorEnabled ? { postProcess: [BRAND_POST_PROCESSOR] } : {}),
         // Silence the Locize promotional console.info printed on init (i18next >= 25)
         showSupportNotice: false,
       });
