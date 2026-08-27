@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Image, Markdown } from '@lobehub/ui';
 import { Text, ToggleGroup } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
@@ -295,12 +295,12 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                     variant={'outlined'}
                     options={[
                       {
-                        icon: <Icon icon={EyeIcon} size={14} />,
+                        icon: <EyeIcon size={14} />,
                         label: t('workingPanel.localFile.preview.render'),
                         value: 'render',
                       },
                       {
-                        icon: <Icon icon={CodeIcon} size={14} />,
+                        icon: <CodeIcon size={14} />,
                         label: t(
                           isHtml
                             ? 'workingPanel.localFile.preview.source'

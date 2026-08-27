@@ -18,9 +18,17 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadius};
 
     font-size: 12px;
+    line-height: 1;
     color: ${cssVar.colorTextSecondary};
 
     background: none;
+
+    /* Icon renders an inline .anticon span whose svg sits on the text
+       baseline, floating icons a few px above center — flex-normalize it. */
+    .anticon {
+      display: inline-flex;
+      align-items: center;
+    }
 
     &:hover {
       color: ${cssVar.colorText};
