@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
@@ -24,11 +25,13 @@ export const AcceptanceEvidenceManifest: BuiltinToolManifest = {
                 content: { description: 'Inline evidence content.', type: 'string' },
                 description: { description: 'What this evidence demonstrates.', type: 'string' },
                 documentId: {
-                  description:
-                    'An existing LobeHub document id from documents.id. Do not use an agent_documents.id binding id.',
+                  description: `An existing ${BRANDING_NAME} document id from documents.id. Do not use an agent_documents.id binding id.`,
                   type: 'string',
                 },
-                fileId: { description: 'An existing LobeHub artifact file id.', type: 'string' },
+                fileId: {
+                  description: `An existing ${BRANDING_NAME} artifact file id.`,
+                  type: 'string',
+                },
                 type: {
                   enum: ['markdown', 'screenshot', 'text', 'video'],
                   type: 'string',

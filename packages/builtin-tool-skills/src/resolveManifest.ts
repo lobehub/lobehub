@@ -1,7 +1,11 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinManifestResolver, BuiltinToolResolveContext } from '@lobechat/types';
 
 import { SkillsManifest } from './manifest';
 import { SkillsApiName } from './types';
+import { toWireToolIdentifier } from './wireIdentifier';
+
+const localSystemId = toWireToolIdentifier('lobe-local-system');
 
 /**
  * The exec-class APIs. Their runtime target follows the run's execution plan
@@ -50,8 +54,7 @@ const DEVICE_HIDDEN_API_NAMES = new Set<string>([
 const EXEC_ENV_PREAMBLES: Partial<
   Record<NonNullable<BuiltinToolResolveContext['executionEnv']>, string>
 > = {
-  'device':
-    "Execution environment: the user's selected device, not a cloud sandbox. The skill archive is auto-extracted on the device and the command runs in the skill directory. LobeHub-managed credentials (e.g. `GITHUB_TOKEN`) are NOT injected.",
+  'device': `Execution environment: the user's selected device, not a cloud sandbox. The skill archive is auto-extracted on the device and the command runs in the skill directory. ${BRANDING_NAME}-managed credentials (e.g. \`GITHUB_TOKEN\`) are NOT injected.`,
   'device-unrouted':
     'Fallback execution environment: an isolated cloud sandbox. The user chose local-device execution but no device is routed this run — say so before running commands that assume their machine.',
   'sandbox': "Execution environment: an isolated cloud sandbox, not the user's machine.",
@@ -67,8 +70,7 @@ const EXEC_ENV_PREAMBLES: Partial<
 const EXEC_ENV_FACTS: Partial<
   Record<NonNullable<BuiltinToolResolveContext['executionEnv']>, string>
 > = {
-  'device':
-    'A local device is routed: `execScript` runs skill scripts on the device (archive auto-extracted, cwd = skill directory); use `lobe-local-system` runCommand for other shell commands. LobeHub-managed credentials are not available on the device.',
+  'device': `A local device is routed: \`execScript\` runs skill scripts on the device (archive auto-extracted, cwd = skill directory); use \`${localSystemId}\` runCommand for other shell commands. ${BRANDING_NAME}-managed credentials are not available on the device.`,
   'device-unrouted':
     'No local device is routed; shell commands execute in the cloud sandbox this run.',
 };

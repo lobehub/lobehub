@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
@@ -142,8 +143,7 @@ export const ImageGenerationManifest: BuiltinToolManifest = {
   identifier: ImageGenerationIdentifier,
   meta: {
     avatar: '🎨',
-    description:
-      'Generate images from chat through LobeHub image generation models, including models that are not native image-output chat models.',
+    description: `Generate images from chat through ${BRANDING_NAME} image generation models, including models that are not native image-output chat models.`,
     title: 'Image Generation',
   },
   systemRole: systemPrompt,

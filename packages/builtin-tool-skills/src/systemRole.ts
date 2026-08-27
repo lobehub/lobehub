@@ -61,7 +61,7 @@ export const systemPrompt = `You have access to a Skills tool that can activate 
 
 - **runCommand (default of the two)**:
   - Use for general shell commands and CLI tools (e.g., \`lh kb list\`, \`npm install\`)
-  - Use for platform tool commands (LobeHub CLI, etc.)
+  - Use for platform tool commands (${BRANDING_NAME} CLI, etc.)
   - No skill context needed — just provide the command
   - Best for: CLI operations, system commands, tool invocations
 

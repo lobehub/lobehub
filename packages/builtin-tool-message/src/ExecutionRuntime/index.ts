@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -1053,14 +1054,14 @@ export class MessageExecutionRuntime {
             // agent must relay the "message the bot first" step to the user.
             content:
               'The WeChat send window is closed or its quota is exhausted, so the message was queued. ' +
-              'Tell the user to send any message to the LobeHub WeChat bot first — the queued push will be delivered right after their message opens a new window.',
+              `Tell the user to send any message to the ${BRANDING_NAME} WeChat bot first — the queued push will be delivered right after their message opens a new window.`,
             state,
             success: true,
           };
         }
         case 'unlinked': {
           return {
-            content: `The user has no linked ${platform} account for the LobeHub System Bot. Ask them to open Settings → Messenger and connect ${platform} first.`,
+            content: `The user has no linked ${platform} account for the ${BRANDING_NAME} System Bot. Ask them to open Settings → Messenger and connect ${platform} first.`,
             state,
             success: false,
           };

@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
@@ -6,8 +7,7 @@ import { SkillStoreApiName, SkillStoreIdentifier } from './types';
 export const SkillStoreManifest: BuiltinToolManifest = {
   api: [
     {
-      description:
-        "Search for skills in the LobeHub Market. Use this to discover available skills that can extend Claude's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).",
+      description: `Search for skills in the ${BRANDING_NAME} Market. Use this to discover available skills that can extend Claude's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).`,
       name: SkillStoreApiName.searchSkill,
       parameters: {
         properties: {
@@ -53,8 +53,7 @@ export const SkillStoreManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Import/install a skill directly from the LobeHub Market using its identifier. This is the recommended way to install skills from the market after searching with searchSkill. The skill will be downloaded and installed automatically. Requires user confirmation before installation.',
+      description: `Import/install a skill directly from the ${BRANDING_NAME} Market using its identifier. This is the recommended way to install skills from the market after searching with searchSkill. The skill will be downloaded and installed automatically. Requires user confirmation before installation.`,
       humanIntervention: 'required',
       name: SkillStoreApiName.importFromMarket,
       parameters: {
@@ -95,8 +94,7 @@ export const SkillStoreManifest: BuiltinToolManifest = {
   identifier: SkillStoreIdentifier,
   meta: {
     avatar: '🏪',
-    description:
-      'Browse and install agent skills from the LobeHub marketplace. MUST USE this tool when users mention: "SKILL.md", "LobeHub Skills", "skill store", "install skill", "search skill", or need extended capabilities.',
+    description: `Browse and install agent skills from the ${BRANDING_NAME} marketplace. MUST USE this tool when users mention: "SKILL.md", "${BRANDING_NAME} Skills", "skill store", "install skill", "search skill", or need extended capabilities.`,
     title: 'Skill Store',
   },
   systemRole: systemPrompt,

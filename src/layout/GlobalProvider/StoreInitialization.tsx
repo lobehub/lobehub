@@ -1,10 +1,11 @@
 'use client';
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { lazy, memo, Suspense } from 'react';
+import { lazy, memo, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
@@ -45,6 +46,15 @@ const StoreInitialization = memo(() => {
   // fetch server config
   const useFetchServerConfig = useServerConfigStore((s) => s.useInitServerConfig);
   useFetchServerConfig();
+
+  // Sync the deployment's tool-name-generation config (compression threshold,
+  // `lobe-` wire namespace rewrite) as soon as server config is available —
+  // the client-driven chat path, and any UI that displays a tool's raw
+  // identifier (e.g. ToolItemDetailPopover), need this before the tools panel
+  // is ever opened, not just right before the first LLM call.
+  useEffect(() => {
+    applyToolNameMaxLength();
+  }, [serverConfig]);
 
   // Update NextAuth status
   const useUserStoreUpdater = createStoreUpdater(useUserStore);

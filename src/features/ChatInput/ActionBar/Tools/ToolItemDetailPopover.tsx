@@ -1,3 +1,4 @@
+import { toWireToolIdentifier } from '@lobechat/context-engine';
 import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
@@ -65,7 +66,9 @@ const ToolItemDetailPopover = memo<ToolItemDetailPopoverProps>(
                 </Tag>
               )}
             </Flexbox>
-            {identifier && <span className={styles.identifier}>{identifier}</span>}
+            {identifier && (
+              <span className={styles.identifier}>{toWireToolIdentifier(identifier)}</span>
+            )}
           </Flexbox>
         </Flexbox>
         {description && <div className={styles.description}>{description}</div>}

@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
@@ -158,7 +159,7 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
                   {lobehubSkillProviderInfo?.label || identifier}
                 </span>
                 <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>
-                  LobeHub Skill
+                  {BRANDING_NAME} Skill
                 </span>
               </Flexbox>
               <span style={{ color: 'var(--lobe-text-secondary)', fontSize: 12 }}>

@@ -75,9 +75,9 @@ const basePrompt = `You have access to a Tools Activator that allows you to dyna
 **CRITICAL: Always activate \`${skillStoreId}\` FIRST when ANY of the following conditions are met:**
 
 **Trigger keywords/patterns (MUST activate ${skillStoreId} immediately):**
-- User mentions: "SKILL.md", "LobeHub Skills", "skill store", "install skill", "search skill"
+- User mentions: "SKILL.md", "${BRANDING_NAME} Skills", "skill store", "install skill", "search skill"
 - User provides a GitHub link to install a skill (e.g., github.com/xxx/xxx containing SKILL.md)
-- User mentions installing from LobeHub marketplace
+- User mentions installing from the ${BRANDING_NAME} marketplace
 - User provides LobeHub skill URLs like: \`https://lobehub.com/skills/{identifier}/skill.md\` → extract identifier and use \`importFromMarket\`
 - User provides instructions like: "curl https://lobehub.com/skills/..." → extract identifier from URL, use \`importFromMarket\`
 - User asks to "follow instructions to set up/install a skill"
@@ -135,7 +135,7 @@ When sandbox mode is false (\`${cloudSandboxId}\` does not exist in this session
 
 <best_practices>
 - **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
-- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or LobeHub marketplace → activate \`${skillStoreId}\` FIRST, no exceptions.**
+- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or the ${BRANDING_NAME} marketplace → activate \`${skillStoreId}\` FIRST, no exceptions.**
 - **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`${credsId}\` FIRST to manage credentials securely.**
 - Check the \`<available_tools>\` list before activating tools
 - For specialized tasks, search the Skill Marketplace first — a dedicated skill is almost always better than a generic approach
