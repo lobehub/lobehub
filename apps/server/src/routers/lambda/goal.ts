@@ -8,6 +8,8 @@ import { GoalModel } from '@/database/models/goal';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
+import { advanceGoal } from '@/server/services/goal/advanceGoal';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   opts.next({
@@ -143,20 +145,43 @@ export const goalRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return {
-          data: await ctx.goalService.decide(
-            input.id,
-            input.decisionId,
-            input.optionId,
-            input.resolution,
-          ),
-          message: 'Decision resolved',
-          success: true,
-        };
+        const data = await ctx.goalService.decide(
+          input.id,
+          input.decisionId,
+          input.optionId,
+          input.resolution,
+        );
+        // Answering the gate is what unblocks the Work; carry on from here.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
       }
     }),
+
+  /**
+   * Run the coordinator now and report where it stopped.
+   *
+   * The goal advances on its own — this is the "don't wait for the next event"
+   * nudge, so the surface can hand off in one call instead of holding a tick
+   * loop open in the browser.
+   */
+  advance: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const { result, ticks } = await advanceGoal({
+        goalId: input.id,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { data: { ...result, ticks }, message: result.message, success: true };
+    } catch (error) {
+      mapGoalError(error, 'advance');
+    }
+  }),
 
   /**
    * Delete a goal and, by FK cascade, its whole graph. The Work Tasks the
@@ -202,11 +227,13 @@ export const goalRouter = router({
 
   resume: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
-      return {
-        data: await ctx.goalService.resume(input.id),
-        message: 'Goal resumed',
-        success: true,
-      };
+      const data = await ctx.goalService.resume(input.id);
+      await scheduleGoalAdvance({
+        goalId: input.id,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { data, message: 'Goal resumed', success: true };
     } catch (error) {
       mapGoalError(error, 'resume');
     }
@@ -221,11 +248,15 @@ export const goalRouter = router({
     )
     .mutation(async ({ ctx, input: { id, ...budget } }) => {
       try {
-        return {
-          data: await ctx.goalService.setBudget(id, budget),
-          message: 'Goal budget updated',
-          success: true,
-        };
+        const data = await ctx.goalService.setBudget(id, budget);
+        // Raising a budget is how a user un-sticks a goal that stopped on one;
+        // it should start moving again without a second gesture.
+        await scheduleGoalAdvance({
+          goalId: id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Goal budget updated', success: true };
       } catch (error) {
         mapGoalError(error, 'setBudget');
       }
