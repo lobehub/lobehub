@@ -1,5 +1,6 @@
 import type { GoalNodeKind } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleHelp, GitBranch, Lightbulb, ListChecks, type LucideIcon } from 'lucide-react';
 import { memo } from 'react';

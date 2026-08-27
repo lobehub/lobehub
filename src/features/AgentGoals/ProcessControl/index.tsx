@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Pause, Play, StepForward } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';

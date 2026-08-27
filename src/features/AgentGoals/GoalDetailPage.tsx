@@ -9,12 +9,6 @@ import { useTranslation } from 'react-i18next';
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
-import {
-  checkHeadMeta,
-  CriterionList,
-  CriterionRequiredChip,
-  CriterionRow,
-} from '@/features/Acceptance';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
