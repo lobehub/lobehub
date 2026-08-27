@@ -1420,7 +1420,9 @@ describe('ConversationControl actions', () => {
     const topicId = 'server-topic';
     const chatKey = messageMapKey({ agentId, topicId });
 
-    const seedDurableTerminalCard = (result: { current: ReturnType<typeof useChatStore> }) => {
+    const seedDurableTerminalCard = (result: {
+      current: ReturnType<typeof useChatStore.getState>;
+    }) => {
       const toolMessage = createMockMessage({
         id: 'tool-msg-terminal-source',
         pluginIntervention: {
