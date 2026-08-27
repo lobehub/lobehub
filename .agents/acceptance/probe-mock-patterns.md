@@ -1404,6 +1404,49 @@ acceptance by the task's INTERNAL id — the page then renders an empty state ev
 though ingest succeeded. Use the internal id in `--subject` (or fix the
 `subject_id` row afterwards) when the evidence must render in the local app UI.
 
+#### Driving a builtin tool from the browser chat needs BOTH a user key vault and the tool on the agent
+
+**Situation:** verifying a builtin tool whose entry point is a chat message (`/goal`,
+and any other prompt-triggered builtin), against the seeded `agent-testing` user.
+
+**Doesn't work:** sending the message and waiting. The seeded user has no provider
+key of its own, so the browser chat runtime — which uses the _user's_ key vault, not
+the server env's `model-keys.env` — dies with `InvalidProviderAPIKey` and persists an
+empty assistant row. Driving it through `lh agent run` instead does not rescue it:
+the CLI is headless, so any tool declaring `humanIntervention: 'always'` comes back
+as `Blocked by security/privacy`. And even with a key, a seeded agent whose
+`agents.plugins` is empty makes the model report `工具 <id> 未找到，无法激活` — the
+prompt-triggered exclusive-tool switch selects the identifier but cannot resolve a
+tool the agent has not installed, and the agent then wanders off into whatever
+sandbox tool it does have.
+
+**Works:** seed both, then drive the real composer.
+
+```bash
+# 1) user key vault — AES-GCM `iv:authTag:ciphertext` hex under KEY_VAULTS_SECRET
+eval "$(.agents/acceptance/scripts/init-dev-env.sh env)"
+set -a
+source .records/env/model-keys.env
+set +a
+node -e '
+const c=require("node:crypto");(async()=>{const raw=Buffer.from(process.env.KEY_VAULTS_SECRET,"base64");
+const k=await c.webcrypto.subtle.importKey("raw",raw,{length:256,name:"AES-GCM"},false,["encrypt"]);
+const v={openai:{apiKey:process.env.OPENAI_API_KEY,baseURL:process.env.OPENAI_PROXY_URL}};
+const iv=c.webcrypto.getRandomValues(new Uint8Array(12));
+const e=Buffer.from(await c.webcrypto.subtle.encrypt({iv,name:"AES-GCM"},k,new TextEncoder().encode(JSON.stringify(v))));
+console.log(`${Buffer.from(iv).toString("hex")}:${e.slice(-16).toString("hex")}:${e.slice(0,-16).toString("hex")}`)})()' > /tmp/kv.txt
+psql -c "insert into user_settings (id,key_vaults) values ('user_agent_testing_001','$(cat /tmp/kv.txt)')
+         on conflict (id) do update set key_vaults = excluded.key_vaults;"
+
+# 2) install the builtin on the agent under test
+psql -c "update agents set plugins='[\"lobe-goal\"]'::jsonb where id='<agentId>';"
+```
+
+Then fill the composer with `agent-browser fill` (`type` does not land in the Lexical
+editor) and approve the intervention through its 提交 button. Gate on the persisted
+side effect (a new row, the tool's `message_plugins.state`), not on page text —
+the tool card renders after the write.
+
 #### Production-backend web runs have no seeded agent-browser session
 
 **Situation:** verifying frontend-only work against real production data through
