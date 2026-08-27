@@ -928,7 +928,7 @@ describe('AgentModel', () => {
 
       await serverDB.insert(agentShares).values({
         agentId: agent.id,
-        shareConfig: {},
+        shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
         visibility: 'link',
       });
 
@@ -952,7 +952,7 @@ describe('AgentModel', () => {
 
       await serverDB.insert(agentShares).values({
         agentId: agent.id,
-        shareConfig: {},
+        shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
         visibility: 'link',
       });
 
@@ -1706,7 +1706,7 @@ describe('AgentModel', () => {
 
       await serverDB.insert(agentShares).values({
         agentId: agent.id,
-        shareConfig: {},
+        shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
         visibility: 'link',
       });
 
@@ -1732,7 +1732,7 @@ describe('AgentModel', () => {
 
       await serverDB.insert(agentShares).values({
         agentId: agent.id,
-        shareConfig: {},
+        shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
         visibility: 'link',
       });
 

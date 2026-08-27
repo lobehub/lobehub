@@ -126,6 +126,7 @@ describe('activatorRuntime', () => {
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
         agentShare: {
+          shareId: 'share-1',
           agentId: 'agent-1',
           enabledToolIds: ['some-other-skill-identifier'],
           visitorUserId: 'visitor-1',
@@ -144,7 +145,12 @@ describe('activatorRuntime', () => {
       const { activatorRuntime } = await import('../activator');
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
-        agentShare: { agentId: 'agent-1', enabledToolIds: [], visitorUserId: 'visitor-1' },
+        agentShare: {
+          shareId: 'share-1',
+          agentId: 'agent-1',
+          enabledToolIds: [],
+          visitorUserId: 'visitor-1',
+        },
         serverDB: {} as never,
         toolManifestMap: {},
         userId: 'creator-1',
@@ -160,6 +166,7 @@ describe('activatorRuntime', () => {
       const runtime = await activatorRuntime.factory({
         agentId: 'agent-1',
         agentShare: {
+          shareId: 'share-1',
           agentId: 'agent-1',
           enabledToolIds: ['user-skill-identifier'],
           visitorUserId: 'visitor-1',
@@ -216,6 +223,7 @@ describe('activatorRuntime', () => {
       const agentShare = {
         agentId: 'agent-1',
         enabledToolIds: ['user-skill-identifier'],
+        shareId: 'share-1',
         visitorUserId: 'visitor-1',
       };
       const runtime = await activatorRuntime.factory({

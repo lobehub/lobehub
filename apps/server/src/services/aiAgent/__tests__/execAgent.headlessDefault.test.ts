@@ -240,7 +240,9 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     // by a future execAgent call site that forgets to set it explicitly.
     const shareGate = {
       agentId: 'agent-1',
+      generation: 1,
       shareConfig: {} as any,
+      shareId: 'share-1',
       visitorUserId: 'visitor-1',
     };
 

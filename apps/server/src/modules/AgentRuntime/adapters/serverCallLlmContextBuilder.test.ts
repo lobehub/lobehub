@@ -204,7 +204,7 @@ describe("buildServerCallLlmContext — refer_topic share gate limits topic refe
 
     await buildServerCallLlmContext({
       ctx: baseCtx({
-        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+        agentShare: { shareId: 'share-1', agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
       }),
       llmPayload: buildPayload('<refer_topic id="topic-private" name="Creator private topic" />hi'),
       model: 'gpt-4',
@@ -232,7 +232,7 @@ describe("buildServerCallLlmContext — refer_topic share gate limits topic refe
 
     await buildServerCallLlmContext({
       ctx: baseCtx({
-        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+        agentShare: { shareId: 'share-1', agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
       }),
       llmPayload: buildPayload('<refer_topic id="topic-other-visitor" />hi'),
       model: 'gpt-4',
@@ -253,12 +253,13 @@ describe("buildServerCallLlmContext — refer_topic share gate limits topic refe
       historySummary: 'Visitor own summary',
       id: 'topic-own',
       senderId: VISITOR_USER_ID,
+      shareId: 'share-1',
       title: 'My own topic',
     });
 
     await buildServerCallLlmContext({
       ctx: baseCtx({
-        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+        agentShare: { shareId: 'share-1', agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
       }),
       llmPayload: buildPayload('<refer_topic id="topic-own" />hi'),
       model: 'gpt-4',
@@ -306,7 +307,7 @@ describe('buildServerCallLlmContext — agent context documents share gate (fail
 
     await buildServerCallLlmContext({
       ctx: baseCtx({
-        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+        agentShare: { shareId: 'share-1', agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
       }),
       llmPayload: buildPayload('hello'),
       model: 'gpt-4',
@@ -326,6 +327,7 @@ describe('buildServerCallLlmContext — agent context documents share gate (fail
     await buildServerCallLlmContext({
       ctx: baseCtx({
         agentShare: {
+          shareId: 'share-1',
           agentId: AGENT_ID,
           filePermissionConfig: { agentFiles: 'read' },
           visitorUserId: VISITOR_USER_ID,
@@ -349,6 +351,7 @@ describe('buildServerCallLlmContext — agent context documents share gate (fail
     await buildServerCallLlmContext({
       ctx: baseCtx({
         agentShare: {
+          shareId: 'share-1',
           agentId: AGENT_ID,
           filePermissionConfig: { agentFiles: 'none' },
           visitorUserId: VISITOR_USER_ID,
@@ -388,7 +391,7 @@ describe('buildServerCallLlmContext — onboarding context share gate (fail clos
     await buildServerCallLlmContext({
       ctx: baseCtx({
         agentConfig: onboardingAgentConfig as any,
-        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+        agentShare: { shareId: 'share-1', agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
       }),
       llmPayload: buildPayload('hello'),
       model: 'gpt-4',
@@ -407,6 +410,7 @@ describe('buildServerCallLlmContext — onboarding context share gate (fail clos
     await buildServerCallLlmContext({
       ctx: baseCtx({
         agentShare: {
+          shareId: 'share-1',
           agentId: AGENT_ID,
           filePermissionConfig: { agentFiles: 'read' },
           visitorUserId: VISITOR_USER_ID,

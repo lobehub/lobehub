@@ -70,7 +70,7 @@ describe('webBrowsingRuntime', () => {
 
   it("does NOT persist crawled pages for a share visitor run — the creator's own credentials execute the run, and v1 share grants have no write grant to authorize it", async () => {
     const runtime = webBrowsingRuntime.factory(
-      buildContext({ agentId: 'agent-1', visitorUserId: 'visitor-1' }),
+      buildContext({ agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' }),
     ) as WebBrowsingExecutionRuntime;
 
     const result = await runtime.crawlSinglePage({ url: 'https://example.com' });

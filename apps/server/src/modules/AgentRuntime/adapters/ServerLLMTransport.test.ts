@@ -19,7 +19,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
         "Share-visitor model runtime billing context is incomplete (missing agentId/visitorUserId); refusing to fall back to the creator's ordinary billing.",
       );
     }
-    return { agentShare: { agentId, visitorUserId } };
+    return { agentShare: { agentId, shareId: 'share-1', visitorUserId } };
   },
   initModelRuntimeFromDB: mockInitModelRuntimeFromDB,
 }));
@@ -41,7 +41,7 @@ const baseCtx = (overrides: Partial<RuntimeExecutorContext>): RuntimeExecutorCon
 describe('ServerLLMTransport createModelRuntime', () => {
   it('forwards both the agentId and the real visitorUserId for a share run', async () => {
     const ctx = baseCtx({
-      agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+      agentShare: { shareId: 'share-1', agentId: 'agent-1', visitorUserId: 'visitor-1' },
       userId: 'creator-1',
     });
     const transport = new ServerLLMTransport(ctx);
@@ -53,7 +53,7 @@ describe('ServerLLMTransport createModelRuntime', () => {
       'creator-1',
       'lobehub',
       undefined,
-      { agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' } },
+      { agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' } },
     );
   });
 
