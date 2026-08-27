@@ -49,6 +49,8 @@ vi.mock('@lobehub/ui', () => ({
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   Tabs: () => null,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  ToggleGroup: () => null,
 }));
 
 vi.mock('@/components/CodeEditorPane', () => ({

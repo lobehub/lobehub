@@ -43,6 +43,13 @@ const styles = createStaticStyles(({ css }) => ({
       display: none;
     }
   `,
+  actions: css`
+    @container (max-width: 300px) {
+      .toggle-group-item-label {
+        display: none;
+      }
+    }
+  `,
   bar: css`
     container-type: inline-size;
     flex-shrink: 0;
@@ -127,6 +134,7 @@ const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, path }) => {
         <Flexbox
           horizontal
           align={'center'}
+          className={styles.actions}
           flex={'none'}
           gap={2}
           style={{ marginInlineStart: 'auto' }}

@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { Center, Empty, Flexbox, Image, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
+import { Text, ToggleGroup } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -290,24 +290,27 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                   />
                 )}
                 {canRender && (
-                  <>
-                    <ToolbarActionButton
-                      active={mode === 'render'}
-                      icon={EyeIcon}
-                      label={t('workingPanel.localFile.preview.render')}
-                      onClick={() => setMode('render')}
-                    />
-                    <ToolbarActionButton
-                      active={mode === 'raw'}
-                      icon={CodeIcon}
-                      label={t(
-                        isHtml
-                          ? 'workingPanel.localFile.preview.source'
-                          : 'workingPanel.localFile.preview.raw',
-                      )}
-                      onClick={() => setMode('raw')}
-                    />
-                  </>
+                  <ToggleGroup
+                    value={mode}
+                    variant={'borderless'}
+                    options={[
+                      {
+                        icon: <Icon icon={EyeIcon} size={14} />,
+                        label: t('workingPanel.localFile.preview.render'),
+                        value: 'render',
+                      },
+                      {
+                        icon: <Icon icon={CodeIcon} size={14} />,
+                        label: t(
+                          isHtml
+                            ? 'workingPanel.localFile.preview.source'
+                            : 'workingPanel.localFile.preview.raw',
+                        ),
+                        value: 'raw',
+                      },
+                    ]}
+                    onChange={(value) => setMode(value as TextPreviewMode)}
+                  />
                 )}
                 {isHtml && (
                   <ToolbarActionButton
