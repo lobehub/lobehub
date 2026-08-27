@@ -242,6 +242,36 @@ const stepLockRetryDelayMs = (attempt: number): number =>
   );
 
 /**
+ * How many times the Agent Share step-0 confirmation gate re-queues itself
+ * after finding its signal not yet resolvable — either a transient
+ * state-store read failure, or a reservation whose row still exists but
+ * hasn't been confirmed yet — before failing closed.
+ *
+ * `confirmReservation` commits synchronously inside the SAME originating
+ * request, right after `createOperation` returns (see
+ * `AgentRuntimeDelegate.verifyShareReservationStatus`'s JSDoc for the exact
+ * race this closes), so it normally lands within milliseconds. The bound
+ * below (~5s across all attempts) covers a slow commit or a brief store
+ * hiccup without leaving a share run's fate undecided for long.
+ */
+const SHARE_GATE_RETRY_MAX_ATTEMPTS = 6;
+/** Base delay for the first share-gate re-check. */
+const SHARE_GATE_RETRY_BASE_DELAY_MS = 100;
+/** Ceiling on a single share-gate backoff. */
+const SHARE_GATE_RETRY_MAX_DELAY_MS = 2000;
+
+/**
+ * Exponential backoff delay for the Nth (1-based) share-gate re-check:
+ * 100ms, 200ms, 400ms, 800ms, 1600ms, then capped at
+ * {@link SHARE_GATE_RETRY_MAX_DELAY_MS}.
+ */
+const shareGateRetryDelayMs = (attempt: number): number =>
+  Math.min(
+    SHARE_GATE_RETRY_BASE_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
+    SHARE_GATE_RETRY_MAX_DELAY_MS,
+  );
+
+/**
  * Exponential backoff delay for the Nth (1-based) watchdog re-check:
  * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
  */
@@ -333,9 +363,8 @@ export interface AgentRuntimeDelegate {
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
-   * Report whether an Agent Share visitor run's reservation was ever confirmed,
-   * i.e. whether the topic still carries this operation's `runningOperation`
-   * marker.
+   * Report whether an Agent Share visitor run's reservation is confirmed,
+   * still pending, or resolved without ever being confirmed.
    *
    * Closes a real process-death window: `createOperation` schedules the first
    * queue message BEFORE `execAgent` reaches `confirmReservation`. If the
@@ -345,15 +374,36 @@ export interface AgentRuntimeDelegate {
    * visitor nor the creator can stop it. Gating step 0 on confirmation makes
    * execution conditional instead of cleaning up after the fact.
    *
+   * A tri-state, not a boolean: the `agent_share_run_reservations` row is
+   * deleted on every terminal path (confirmed, revoked, or swept), so its mere
+   * absence cannot tell "confirmed and running" apart from "orphaned and never
+   * confirmed" — the topic's `runningOperation` marker distinguishes the
+   * former, and the reservation row's continued EXISTENCE distinguishes
+   * "still pending" (the row is not yet deleted either way) from the latter.
+   * See `AgentRuntimeService.abortUnconfirmedShareRun`'s JSDoc for how the
+   * caller uses `'pending'` — it is bounded-retried, not treated as an abort.
+   *
    * Implemented by AiAgentService (which owns the topic model); returning
-   * `false` — or throwing — aborts the run.
+   * `'revoked'` — or throwing — aborts the run.
    */
-  verifyShareReservationConfirmed?: (params: {
+  verifyShareReservationStatus?: (params: {
     agentId: string;
     operationId: string;
     topicId: string;
-  }) => Promise<boolean>;
+  }) => Promise<ShareReservationStatus>;
 }
+
+/**
+ * Outcome of {@link AgentRuntimeDelegate.verifyShareReservationStatus}:
+ * - `confirmed` — the topic's `runningOperation` marker names this operation;
+ *   the run may proceed.
+ * - `pending` — the reservation row still exists but `confirmReservation`
+ *   hasn't landed yet (or hasn't been observed yet); defer and re-check.
+ * - `revoked` — the reservation row is gone and the marker doesn't name this
+ *   operation: revoked, swept as abandoned, or released after a failed
+ *   `createOperation` on this same operation id. Nothing left to wait for.
+ */
+export type ShareReservationStatus = 'confirmed' | 'pending' | 'revoked';
 
 export interface AgentRuntimeServiceOptions {
   /**
@@ -757,30 +807,44 @@ export class AgentRuntimeService {
 
   /**
    * Step-0 gate for Agent Share visitor runs: abort the run unless its
-   * reservation was confirmed (the topic still carries this operation's
-   * `runningOperation` marker).
+   * reservation is confirmed (the topic still carries this operation's
+   * `runningOperation` marker), deferring (bounded) instead of deciding when
+   * the signal isn't resolvable yet.
    *
-   * Fails closed — a confirmation check that throws aborts the run too, since
-   * an unstoppable creator-credentialed run is strictly worse than a visitor
-   * turn that errors out and can simply be re-sent.
+   * Fails closed on a confirmation-check throw — see the `catch` below — and
+   * on `'revoked'`: an unstoppable creator-credentialed run is strictly worse
+   * than a visitor turn that errors out and can simply be re-sent.
    *
-   * A state-load failure is NOT treated as an abort: without the state we
-   * cannot tell a share run from an ordinary one, and blocking every run on a
-   * transient state-store hiccup would take the whole runtime down. Ordinary
-   * runs are unaffected either way — they carry no `agentShare` marker.
+   * A state-load failure here is NOT treated as "proceed" (fixes LOBE-11930
+   * Codex P1(b)). The old reasoning — "we cannot tell a share run from an
+   * ordinary one, and blocking every run on a transient hiccup would take the
+   * runtime down" — does not hold up: `executeStep` reloads this exact same
+   * state a few lines below (`agentState = await
+   * coordinator.loadAgentState(operationId)`) to actually run the step, so an
+   * ordinary run whose state truly cannot be read fails there anyway —
+   * deferring here costs it nothing it wasn't already going to pay. What it
+   * WAS costing is the gate itself: returning "proceed" let a share run whose
+   * reservation was never confirmed execute under the creator's credentials
+   * whenever this read failed once and that same later read succeeded.
+   * Deferring (retryable, not allow-all) closes that leak while still letting
+   * a genuinely transient blip resolve on redelivery. Ordinary runs are
+   * otherwise unaffected — they carry no `agentShare` marker, so a successful
+   * load skips the gate at the very next check.
    *
    * @returns the terminal result to return from `executeStep`, or `undefined`
    * when the run may proceed.
    */
   private async abortUnconfirmedShareRun(
     operationId: string,
+    context: AgentRuntimeContext | undefined,
+    shareGateRetryAttempt: number,
   ): Promise<AgentExecutionResult | undefined> {
     let state: AgentState | null | undefined;
     try {
       state = await this.coordinator.loadAgentState(operationId);
     } catch (error) {
-      log('[%s] Share reservation gate skipped — state load failed: %O', operationId, error);
-      return undefined;
+      log('[%s] Share reservation gate state read failed: %O', operationId, error);
+      return this.deferShareGateStep(operationId, context, shareGateRetryAttempt, undefined);
     }
 
     const metadata = state?.metadata as
@@ -789,26 +853,120 @@ export class AgentRuntimeService {
     const topicId = metadata?.topicId;
     if (!state || !agentId || !topicId) return undefined;
 
-    let confirmed = false;
+    let status: ShareReservationStatus;
     try {
-      confirmed = await this.delegate.verifyShareReservationConfirmed!({
+      status = await this.delegate.verifyShareReservationStatus!({
         agentId,
         operationId,
         topicId,
       });
     } catch (error) {
       log('[%s] Share reservation confirmation check failed: %O', operationId, error);
-      confirmed = false;
+      return this.buildShareAbortResult(operationId, state);
     }
 
-    if (confirmed) return undefined;
+    if (status === 'confirmed') return undefined;
 
+    if (status === 'pending') {
+      // Fixes LOBE-11930 Codex P1(a): `createOperation` schedules this very
+      // step-0 delivery with only a 50ms delay and returns before `execAgent`
+      // reaches `confirmReservation` — a fast delivery can land here while
+      // the reservation is still valid but not yet redeemed. The reservation
+      // row's mere existence cannot prove it will eventually confirm (a row
+      // also exists while orphaned, until the 30-minute sweep), so this
+      // defers rather than trusting it — the confirming write is a
+      // synchronous step of the SAME originating request and normally lands
+      // within milliseconds.
+      return this.deferShareGateStep(operationId, context, shareGateRetryAttempt, state);
+    }
+
+    // status === 'revoked': the reservation row is gone (revoked, swept as
+    // abandoned, or released after `createOperation` failed) and the marker
+    // doesn't name this operation. Nothing left to wait for.
+    return this.buildShareAbortResult(operationId, state);
+  }
+
+  /**
+   * Re-queue the step-0 delivery on a short bounded backoff so a
+   * not-yet-resolvable share-reservation signal gets another look instead of
+   * either running unconfirmed or aborting on the first miss. Exhausts to
+   * {@link buildShareAbortResult} — fail closed, never fail open — once
+   * {@link SHARE_GATE_RETRY_MAX_ATTEMPTS} is reached or re-queueing itself
+   * fails.
+   */
+  private async deferShareGateStep(
+    operationId: string,
+    context: AgentRuntimeContext | undefined,
+    attempt: number,
+    state: AgentState | null | undefined,
+  ): Promise<AgentExecutionResult> {
+    const nextAttempt = attempt + 1;
+    if (this.queueService && nextAttempt <= SHARE_GATE_RETRY_MAX_ATTEMPTS) {
+      const delay = shareGateRetryDelayMs(nextAttempt);
+      log(
+        '[%s] Share reservation gate deferred (attempt %d/%d) in %dms',
+        operationId,
+        nextAttempt,
+        SHARE_GATE_RETRY_MAX_ATTEMPTS,
+        delay,
+      );
+
+      try {
+        await this.queueService.scheduleMessage({
+          context,
+          delay,
+          endpoint: `${this.baseURL}/run`,
+          operationId,
+          payload: { shareGateRetryAttempt: nextAttempt },
+          priority: 'high',
+          stepIndex: 0,
+        });
+
+        return {
+          nextStepScheduled: true,
+          shareGateDeferred: true,
+          state: {},
+          success: true,
+        };
+      } catch (error) {
+        log('[%s] Failed to re-queue share reservation gate check: %O', operationId, error);
+      }
+    }
+
+    log('[%s] Share reservation gate retry budget exhausted — failing closed', operationId);
+    return this.buildShareAbortResult(operationId, state);
+  }
+
+  /**
+   * Terminal "abort" result for the Agent Share step-0 gate. Persists
+   * `interrupted` on the loaded state when we have one; falls back to the
+   * public `interruptOperation` (which does its own load/guard) when the
+   * gate never managed to load state at all — e.g. the retry budget in
+   * {@link deferShareGateStep} exhausted on a state-load failure.
+   */
+  private async buildShareAbortResult(
+    operationId: string,
+    state: AgentState | null | undefined,
+  ): Promise<AgentExecutionResult> {
     log('[%s] Aborting share run with an unconfirmed reservation', operationId);
-    await this.coordinator.saveAgentState(operationId, {
-      ...state,
-      lastModified: new Date().toISOString(),
-      status: 'interrupted',
-    });
+
+    try {
+      if (state) {
+        await this.coordinator.saveAgentState(operationId, {
+          ...state,
+          lastModified: new Date().toISOString(),
+          status: 'interrupted',
+        });
+      } else {
+        await this.interruptOperation(operationId);
+      }
+    } catch (error) {
+      log(
+        '[%s] Failed to persist interrupted state for an aborted share run: %O',
+        operationId,
+        error,
+      );
+    }
 
     return {
       nextStepScheduled: false,
@@ -1227,6 +1385,7 @@ export class AgentRuntimeService {
       asyncToolVerifyAttempt,
       externalRetryCount = 0,
       lockRetryAttempt = 0,
+      shareGateRetryAttempt = 0,
     } = params;
 
     // Group member timeout watchdog: enforce a member's deadline without claiming
@@ -1271,11 +1430,15 @@ export class AgentRuntimeService {
     }
 
     // Agent Share: refuse to start a visitor run whose reservation was never
-    // confirmed. See `AgentRuntimeDelegate.verifyShareReservationConfirmed`'s
+    // confirmed. See `AgentRuntimeDelegate.verifyShareReservationStatus`'s
     // JSDoc for the process-death window this closes. Step 0 only — later
     // steps continue an already-confirmed run and inherit this guarantee.
-    if (stepIndex === 0 && this.delegate.verifyShareReservationConfirmed) {
-      const abortResult = await this.abortUnconfirmedShareRun(operationId);
+    if (stepIndex === 0 && this.delegate.verifyShareReservationStatus) {
+      const abortResult = await this.abortUnconfirmedShareRun(
+        operationId,
+        context,
+        shareGateRetryAttempt,
+      );
       if (abortResult) return abortResult;
     }
 

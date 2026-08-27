@@ -161,6 +161,7 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   EvalRuntimeContext,
+  ShareReservationStatus,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -746,7 +747,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
-        verifyShareReservationConfirmed: this.verifyShareReservationConfirmed,
+        verifyShareReservationStatus: this.verifyShareReservationStatus,
       },
       workspaceId: wsId,
     });
@@ -6006,31 +6007,37 @@ export class AiAgentService {
   }
 
   /**
-   * `AgentRuntimeDelegate.verifyShareReservationConfirmed` implementation —
-   * see that interface member's JSDoc for the exact process-death window
-   * this closes at step-0 pickup.
+   * `AgentRuntimeDelegate.verifyShareReservationStatus` implementation — see
+   * that interface member's JSDoc for the exact process-death window this
+   * closes at step-0 pickup, and for why the result is a tri-state.
    *
-   * Reads the topic's `runningOperation` marker directly (the same field
+   * Checks the topic's `runningOperation` marker first (the same field
    * `confirmReservation` writes and `interruptTask` reads to detect a live
-   * run) rather than the `agent_share_run_reservations` row: that row is
-   * DELETED on every terminal path (confirmed, revoked, or swept), so its
-   * mere absence cannot distinguish "confirmed and running" from "orphaned
-   * and never confirmed" — the marker can. `this.topicModel.findById` scopes
-   * the lookup to `this.userId`, which `runStep.ts` always constructs this
-   * service with as the CREATOR's id (share runs execute under the
-   * creator's credentials), matching `confirmReservation`'s own write.
+   * run) — `this.topicModel.findById` scopes the lookup to `this.userId`,
+   * which `runStep.ts` always constructs this service with as the CREATOR's
+   * id (share runs execute under the creator's credentials), matching
+   * `confirmReservation`'s own write. Only when the marker doesn't name this
+   * operation does it fall back to the `agent_share_run_reservations` row's
+   * existence (`hasPendingReservation`) to tell "still pending" apart from
+   * "revoked/swept/released" — the row alone cannot do this distinction
+   * because it is deleted on every terminal path, confirmed included.
    *
    * Arrow field (not a method) so it stays bound when handed to
    * AgentRuntimeService.
    */
-  verifyShareReservationConfirmed = async (params: {
+  verifyShareReservationStatus = async (params: {
     agentId: string;
     operationId: string;
     topicId: string;
-  }): Promise<boolean> => {
+  }): Promise<ShareReservationStatus> => {
     const topic = await this.topicModel.findById(params.topicId);
     const runningOperation = (topic?.metadata as ChatTopicMetadata | undefined)?.runningOperation;
-    return runningOperation?.operationId === params.operationId;
+    if (runningOperation?.operationId === params.operationId) return 'confirmed';
+
+    const pending = await new AgentShareModel(this.db, this.userId).hasPendingReservation(
+      params.operationId,
+    );
+    return pending ? 'pending' : 'revoked';
   };
 
   /**

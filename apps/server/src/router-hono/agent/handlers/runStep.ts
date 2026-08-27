@@ -91,6 +91,7 @@ export async function runStep(c: Context): Promise<Response> {
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
       lockRetryAttempt,
+      shareGateRetryAttempt,
     } = { ...body, ...body.payload };
 
     if (!operationId) {
@@ -147,10 +148,27 @@ export async function runStep(c: Context): Promise<Response> {
       rejectAndContinue,
       rejectionReason,
       resumeAsyncTool,
+      shareGateRetryAttempt,
       stepIndex,
       toolMessageId,
       verifyAsyncToolBarrier,
     });
+
+    // The Agent Share step-0 gate already re-queued its own bounded retry on
+    // its own backoff (see `AgentRuntimeService.deferShareGateStep`) — ACK so
+    // QStash doesn't ALSO retry this delivery on top of that and burn its own
+    // (much shorter) retry budget, mirroring the `lockRescheduled` handling
+    // below.
+    if (result.shareGateDeferred) {
+      log(`[${operationId}] Step ${stepIndex} share reservation gate deferred, re-queued`);
+      return c.json({
+        nextStepScheduled: true,
+        operationId,
+        shareGateDeferred: true,
+        stepIndex,
+        success: true,
+      });
+    }
 
     // A non-stale lock conflict means another delivery is still executing this
     // operation.

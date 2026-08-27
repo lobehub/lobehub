@@ -30,7 +30,7 @@ const log = debug('lobe-server:workflows:agent-share:sweep');
  * that window — bounded by `maxAgeMs` (default 30 minutes), see
  * `sweepAbandonedReservations`'s JSDoc for why a proactive, unconditional
  * confirmation gate at step-0 pickup (`AgentRuntimeService.executeStep`'s
- * `verifyShareReservationConfirmed` delegate call) is the primary defense and
+ * `verifyShareReservationStatus` delegate call) is the primary defense and
  * this sweep is the bounded backstop for any other failure shape that skips
  * that gate (e.g. a `maxAgeMs`-tuned deploy racing an in-flight
  * `createOperation`).
