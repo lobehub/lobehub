@@ -493,6 +493,74 @@ describe('MessageModel Update Tests', () => {
       expect(result[0].state).toEqual({ key1: 'value1' });
     });
 
+    it('atomically preserves independent top-level keys across concurrent writers', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'concurrent-plugin-state',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'concurrent-plugin-state',
+        identifier: 'codex',
+        state: { executionProgress: { completed: 1, total: 2 } },
+        toolCallId: 'concurrent-tool-call',
+        userId,
+      });
+
+      await Promise.all([
+        messageModel.updatePluginState('concurrent-plugin-state', {
+          askUserAnswers: { environment: 'production' },
+        }),
+        messageModel.updatePluginState('concurrent-plugin-state', {
+          heterogeneousIntervention: {
+            action: 'approve_once',
+            status: 'resolved',
+          },
+        }),
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'concurrent-plugin-state'));
+
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        executionProgress: { completed: 1, total: 2 },
+        heterogeneousIntervention: {
+          action: 'approve_once',
+          status: 'resolved',
+        },
+      });
+    });
+
+    it('does not update plugin state outside the owner scope', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'other-owner-plugin-state',
+        role: 'tool',
+        userId: otherUserId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'other-owner-plugin-state',
+        identifier: 'codex',
+        state: { preserved: true },
+        toolCallId: 'other-owner-tool-call',
+        userId: otherUserId,
+      });
+
+      await expect(
+        messageModel.updatePluginState('other-owner-plugin-state', { overwritten: true }),
+      ).rejects.toThrowError('Plugin not found');
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'other-owner-plugin-state'));
+      expect(plugin.state).toEqual({ preserved: true });
+    });
+
     it('should throw an error if plugin does not exist', async () => {
       // Call updatePluginState method
       await expect(messageModel.updatePluginState('1', { key: 'value' })).rejects.toThrowError(
@@ -652,6 +720,88 @@ describe('MessageModel Update Tests', () => {
       expect(pluginResult[0].state).toEqual({
         existingState: 'value1',
         newState: 'value2',
+      });
+    });
+
+    it('preserves independent pluginState patches across concurrent tool-message updates', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-msg-concurrent-patches',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-concurrent-patches',
+        identifier: 'codex',
+        state: { executionProgress: { completed: 1, total: 2 } },
+        toolCallId: 'tool-call-concurrent-patches',
+        userId,
+      });
+
+      const results = await Promise.all([
+        messageModel.updateToolMessage('tool-msg-concurrent-patches', {
+          pluginState: { askUserAnswers: { environment: 'production' } },
+        }),
+        messageModel.updateToolMessage('tool-msg-concurrent-patches', {
+          pluginState: {
+            heterogeneousIntervention: {
+              action: 'approve_once',
+              status: 'resolved',
+            },
+          },
+        }),
+      ]);
+
+      expect(results).toEqual([
+        { applied: true, success: true },
+        { applied: true, success: true },
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-msg-concurrent-patches'));
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        executionProgress: { completed: 1, total: 2 },
+        heterogeneousIntervention: {
+          action: 'approve_once',
+          status: 'resolved',
+        },
+      });
+    });
+
+    it('replaces a patched top-level pluginState key while preserving its siblings', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-msg-top-level-patch',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-top-level-patch',
+        identifier: 'codex',
+        state: {
+          askUserAnswers: { environment: 'production' },
+          heterogeneousIntervention: { resolving: true, status: 'pending' },
+        },
+        toolCallId: 'tool-call-top-level-patch',
+        userId,
+      });
+
+      await messageModel.updateToolMessage('tool-msg-top-level-patch', {
+        pluginState: {
+          heterogeneousIntervention: { action: 'approve_once', status: 'resolved' },
+        },
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-msg-top-level-patch'));
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        heterogeneousIntervention: { action: 'approve_once', status: 'resolved' },
       });
     });
 
