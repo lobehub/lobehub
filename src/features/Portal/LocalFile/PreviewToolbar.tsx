@@ -76,8 +76,12 @@ const styles = createStaticStyles(({ css }) => ({
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
 
+    /* Yield to the actions only when they actually rendered something —
+       an all-hidden actions slot (e.g. plain code files) keeps the path. */
     @container (max-width: 440px) {
-      display: none;
+      &:has(~ [data-toolbar-actions] > *) {
+        display: none;
+      }
     }
   `,
 }));
@@ -132,6 +136,7 @@ const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, path }) => {
       </Tooltip>
       {actions && (
         <Flexbox
+          data-toolbar-actions
           horizontal
           align={'center'}
           className={styles.actions}

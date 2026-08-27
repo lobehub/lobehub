@@ -292,7 +292,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 {canRender && (
                   <ToggleGroup
                     value={mode}
-                    variant={'borderless'}
+                    variant={'outlined'}
                     options={[
                       {
                         icon: <Icon icon={EyeIcon} size={14} />,
