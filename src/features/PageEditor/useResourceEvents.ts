@@ -4,6 +4,7 @@ import { fetchEventSource } from '@lobechat/utils/client';
 import { useEffect } from 'react';
 
 import { mutate } from '@/libs/swr';
+import { isDocumentCommentKeyForEvent } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
 import { pageSelectors, usePageStore } from '@/store/page';
@@ -70,6 +71,7 @@ export const useResourceEvents = () => {
                 expiresAt?: string | null;
                 holderId?: string | null;
                 ownerId?: string | null;
+                rootCommentId?: string;
               };
               type?: string;
             };
@@ -85,6 +87,14 @@ export const useResourceEvents = () => {
               // Re-fetch; DocumentIdMode re-hydrates the editor on the new
               // version when the local editor isn't dirty.
               void mutate(documentSWRKeys.editor(documentId));
+            } else if (parsed.type === 'document.commentsChanged' && workspaceId) {
+              void mutate((key) =>
+                isDocumentCommentKeyForEvent(key, {
+                  documentId,
+                  rootCommentId: parsed.data?.rootCommentId,
+                  workspaceId,
+                }),
+              );
             } else if (parsed.type === 'lock.changed') {
               // Store the holder verbatim; "locked by other" is derived against
               // the current user/session at read time (usePageLockedByOther).

@@ -20,6 +20,7 @@ import {
   replaceReplyComment,
 } from './optimistic';
 import { styles } from './styles';
+import { useAutoLoadReplies } from './useAutoLoadReplies';
 
 interface ThreadProps extends DocumentCommentThread {
   documentId: string;
@@ -41,7 +42,8 @@ const Thread = memo<ThreadProps>(
   }) => {
     const { t } = useTranslation('file');
     const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
-    const replies = useDocumentCommentReplies(root.id, replyCount > 0 || Boolean(replyTargetId));
+    const { containerRef, shouldLoad } = useAutoLoadReplies(replyCount > 0);
+    const replies = useDocumentCommentReplies(root.id, shouldLoad || Boolean(replyTargetId));
     const createOptimistic = useOptimisticDocumentComment();
     const mutateReplies = replies.mutate;
     const reloadReplies = replies.reload;
@@ -154,7 +156,7 @@ const Thread = memo<ThreadProps>(
     }, []);
 
     return (
-      <Flexbox className={styles.thread}>
+      <Flexbox className={styles.thread} ref={containerRef}>
         <CommentCard
           comment={root}
           replying={replyTargetId === root.id}

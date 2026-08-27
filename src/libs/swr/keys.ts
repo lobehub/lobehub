@@ -198,6 +198,21 @@ export const documentCommentKeys = {
   ),
 };
 
+export const isDocumentCommentKeyForEvent = (
+  key: unknown,
+  event: { documentId: string; rootCommentId?: string; workspaceId: string },
+): boolean => {
+  if (!Array.isArray(key)) return false;
+
+  if (key[0] === documentCommentKeys.summary.root) return key[1] === event.documentId;
+  if (key[1] !== event.workspaceId) return false;
+  if (key[0] === documentCommentKeys.threads.root) return key[2] === event.documentId;
+  if (key[0] === documentCommentKeys.replies.root) {
+    return !event.rootCommentId || key[2] === event.rootCommentId;
+  }
+  return false;
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */

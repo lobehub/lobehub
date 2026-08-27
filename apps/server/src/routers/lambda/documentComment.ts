@@ -17,6 +17,7 @@ import { documentComments, users, workspaceMembers } from '@/database/schemas';
 import type { DocumentCommentItem } from '@/database/schemas/documentComment';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
   assertCanPerformResourceAction,
   canPerformResourceAction,
@@ -154,43 +155,78 @@ const validateMentionedUserIds = async (
   return candidateIds.filter((id) => activeUserIds.has(id));
 };
 
-const notifyActivityBestEffort = (
+const notifyActivitiesBestEffort = (
   ctx: PermissionContext,
-  params: NotifyDocumentCommentActivityParams,
+  activities: NotifyDocumentCommentActivityParams[],
 ) => {
-  if (params.recipientUserId === ctx.userId) return;
+  const pending = activities.filter(({ recipientUserId }) => recipientUserId !== ctx.userId);
+  if (pending.length === 0) return;
 
   after(async () => {
     try {
+      const documentId = pending[0].documentId;
+      const recipientUserIds = [...new Set(pending.map(({ recipientUserId }) => recipientUserId))];
       const [meta, permissionsByUserId] = await Promise.all([
-        getResourceMeta(ctx.serverDB, 'document', params.documentId),
+        getResourceMeta(ctx.serverDB, 'document', documentId),
         RbacModel.getWorkspaceUsersPermissions({
           db: ctx.serverDB,
           requireMembership: true,
-          userIds: [params.recipientUserId],
+          userIds: recipientUserIds,
           workspaceId: ctx.workspaceId,
         }),
       ]);
-      const grantedPermissions = permissionsByUserId.get(params.recipientUserId);
-      if (!meta || !grantedPermissions) return;
+      if (!meta) return;
 
-      const canView = await canPerformResourceAction({
-        action: 'view',
-        db: ctx.serverDB,
-        grantedPermissions,
-        meta,
-        resourceId: params.documentId,
-        resourceType: 'document',
-        userId: params.recipientUserId,
-        workspaceId: ctx.workspaceId,
-      });
-      if (!canView) return;
+      const accessibleUserIds = new Set(
+        (
+          await Promise.all(
+            recipientUserIds.map(async (userId) => {
+              const grantedPermissions = permissionsByUserId.get(userId);
+              if (!grantedPermissions) return null;
 
-      await notifyDocumentCommentActivity(params);
+              const canView = await canPerformResourceAction({
+                action: 'view',
+                db: ctx.serverDB,
+                effectiveAccessLevel: 'view',
+                grantedPermissions,
+                meta,
+                resourceId: documentId,
+                resourceType: 'document',
+                userId,
+                workspaceId: ctx.workspaceId,
+              });
+              return canView ? userId : null;
+            }),
+          )
+        ).filter((userId): userId is string => Boolean(userId)),
+      );
+
+      await Promise.all(
+        pending
+          .filter(({ recipientUserId }) => accessibleUserIds.has(recipientUserId))
+          .map((params) => notifyDocumentCommentActivity(params)),
+      );
     } catch (error) {
       console.error('[document-comment] Failed to send activity notification', error);
     }
   });
+};
+
+const publishCommentsChanged = (
+  ctx: Pick<PermissionContext, 'userId'>,
+  documentId: string,
+  rootCommentId: string,
+) => {
+  after(() =>
+    publishResourceEvent(
+      { id: documentId, type: 'document' },
+      {
+        actorId: ctx.userId,
+        data: { rootCommentId },
+        type: 'document.commentsChanged',
+      },
+    ),
+  );
 };
 
 const toNotFound = (error: unknown): never => {
@@ -347,8 +383,9 @@ export const documentCommentRouter = router({
             recipientsByUserId.set(userId, 'mentioned');
           }
 
-          for (const [recipientUserId, kind] of recipientsByUserId) {
-            notifyActivityBestEffort(ctx, {
+          notifyActivitiesBestEffort(
+            ctx,
+            [...recipientsByUserId].map(([recipientUserId, kind]) => ({
               actorUserId: ctx.userId,
               commentId: result.comment.id,
               documentId: result.comment.documentId,
@@ -356,13 +393,18 @@ export const documentCommentRouter = router({
               recipientUserId,
               rootCommentId: result.comment.parentCommentId ?? result.comment.id,
               workspaceId: ctx.workspaceId,
-            });
-          }
+            })),
+          );
+          publishCommentsChanged(
+            ctx,
+            result.comment.documentId,
+            result.comment.parentCommentId ?? result.comment.id,
+          );
         }
         const [comment] = await enrich(ctx, [result.comment]);
         return { comment, isDuplicate: result.isDuplicate };
       } catch (error) {
-        toNotFound(error);
+        return toNotFound(error);
       }
     }),
 
@@ -382,6 +424,7 @@ export const documentCommentRouter = router({
         overrideAuthorScope: matches.hasAllScope,
       });
       if (!mode) throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot delete comment' });
+      publishCommentsChanged(ctx, current.documentId, current.parentCommentId ?? current.id);
       return { mode };
     }),
 
@@ -461,8 +504,9 @@ export const documentCommentRouter = router({
       });
       if (!result) throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot edit comment' });
 
-      for (const recipientUserId of result.addedMentionUserIds) {
-        notifyActivityBestEffort(ctx, {
+      notifyActivitiesBestEffort(
+        ctx,
+        result.addedMentionUserIds.map((recipientUserId) => ({
           actorUserId: ctx.userId,
           commentId: result.comment.id,
           documentId: result.comment.documentId,
@@ -470,8 +514,13 @@ export const documentCommentRouter = router({
           recipientUserId,
           rootCommentId: result.comment.parentCommentId ?? result.comment.id,
           workspaceId: ctx.workspaceId,
-        });
-      }
+        })),
+      );
+      publishCommentsChanged(
+        ctx,
+        result.comment.documentId,
+        result.comment.parentCommentId ?? result.comment.id,
+      );
       return (await enrich(ctx, [result.comment]))[0];
     }),
 });

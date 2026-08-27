@@ -9,7 +9,9 @@ import {
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { RbacModel } from '@/database/models/rbac';
 
 import { documentCommentRouter } from '../../documentComment';
 import { cleanupTestUser, createTestUser } from './setup';
@@ -20,6 +22,8 @@ vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) 
 vi.mock('@/business/server/document-comment/notifyActivity', () => ({
   notifyDocumentCommentActivity,
 }));
+const publishResourceEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent }));
 const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: (work: () => unknown) => void afterResponseTasks.push(Promise.resolve().then(work)),
@@ -47,6 +51,7 @@ const mentionEditorData = (...userIds: string[]) => ({
 });
 
 describe('documentCommentRouter integration', () => {
+  const getWorkspaceUsersPermissions = vi.spyOn(RbacModel, 'getWorkspaceUsersPermissions');
   let adminId: string;
   let db: LobeChatDatabase;
   let documentId: string;
@@ -56,8 +61,11 @@ describe('documentCommentRouter integration', () => {
   let workspaceId: string;
 
   beforeEach(async () => {
+    getWorkspaceUsersPermissions.mockClear();
     notifyDocumentCommentActivity.mockReset();
     notifyDocumentCommentActivity.mockResolvedValue(undefined);
+    publishResourceEvent.mockReset();
+    publishResourceEvent.mockResolvedValue(undefined);
     db = await getTestDB();
     testDB = db;
     [ownerId, adminId, memberId, viewerId] = await Promise.all([
@@ -98,6 +106,8 @@ describe('documentCommentRouter integration', () => {
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await Promise.all([ownerId, adminId, memberId, viewerId].map((id) => cleanupTestUser(db, id)));
   });
+
+  afterAll(() => getWorkspaceUsersPermissions.mockRestore());
 
   it('allows members to discuss, viewers to read, and admins to delete any comment', async () => {
     const admin = documentCommentRouter.createCaller(context(adminId, workspaceId));
@@ -181,6 +191,34 @@ describe('documentCommentRouter integration', () => {
     expect(await db.select().from(documentComments)).toEqual([]);
   });
 
+  it('publishes one realtime invalidation after each committed mutation', async () => {
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const created = await member.create({ clientId: 'event-root', content: 'root', documentId });
+    await flushAfterResponse();
+
+    expect(publishResourceEvent).toHaveBeenCalledOnce();
+    expect(publishResourceEvent).toHaveBeenLastCalledWith(
+      { id: documentId, type: 'document' },
+      {
+        actorId: memberId,
+        data: { rootCommentId: created.comment.id },
+        type: 'document.commentsChanged',
+      },
+    );
+
+    await member.create({ clientId: 'event-root', content: 'duplicate', documentId });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledOnce();
+
+    await member.update({ content: 'updated', id: created.comment.id });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(2);
+
+    await member.delete({ id: created.comment.id });
+    await flushAfterResponse();
+    expect(publishResourceEvent).toHaveBeenCalledTimes(3);
+  });
+
   it('notifies the direct reply target once and skips self or stale-access recipients', async () => {
     const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
     const owner = documentCommentRouter.createCaller(context(ownerId, workspaceId));
@@ -237,6 +275,13 @@ describe('documentCommentRouter integration', () => {
     });
     await flushAfterResponse();
 
+    const recipientAccessLookups = getWorkspaceUsersPermissions.mock.calls.filter(
+      ([{ userIds }]) => userIds.includes(ownerId) || userIds.includes(viewerId),
+    );
+    expect(recipientAccessLookups).toHaveLength(1);
+    expect(recipientAccessLookups[0][0].userIds).toEqual(
+      expect.arrayContaining([ownerId, viewerId]),
+    );
     expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(2);
     expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
       expect.objectContaining({
