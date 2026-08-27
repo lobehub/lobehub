@@ -59,6 +59,7 @@ describe('prepareHostedProviderBinding', () => {
     };
     const binding = await prepareHostedProviderBinding(await makeParams(driver));
 
+    expect(binding.bindingKey).toMatch(/^provider-binding:v1:/);
     expect((await stat(binding.profileDir)).mode & 0o777).toBe(0o700);
     expect((await stat(binding.runDir)).mode & 0o777).toBe(0o700);
     expect((await stat(path.join(binding.profileDir, 'config.toml'))).mode & 0o777).toBe(0o600);
@@ -85,6 +86,53 @@ describe('prepareHostedProviderBinding', () => {
     await expect(
       stat(path.join(params.appStoragePath, 'heteroAgent', 'runs', params.sessionId)),
     ).rejects.toThrow();
+  });
+
+  it('isolates Pi profiles by model while reusing an identity after API-key rotation', async () => {
+    const driver: HeterogeneousAgentDriver = {
+      buildSpawnPlan: async () => ({ args: [] }),
+      prepareProviderBinding: ({ resolution }) => ({
+        args: [],
+        env: {},
+        profileFiles: [{ content: resolution.apiConfig.model, path: 'models.json' }],
+      }),
+    };
+    const base = await makeParams(driver);
+    const piParams = (model: string, sessionId: string, apiKey = 'secret') => ({
+      ...base,
+      agentType: 'pi',
+      reference: {
+        apiConfig: { model, providerId: 'provider-test' },
+        kind: 'provider' as const,
+      },
+      resolution: {
+        ...base.resolution,
+        agentType: 'pi' as const,
+        apiConfig: { model, providerId: 'provider-test' },
+        protocol: 'openai-chat-completions' as const,
+        runtimeConfig: {
+          ...base.resolution.runtimeConfig,
+          keyVaults: { apiKey, baseURL: 'https://example.com/v1' },
+        },
+      },
+      sessionId,
+    });
+
+    const [first, second] = await Promise.all([
+      prepareHostedProviderBinding(piParams('model-a', 'session-a')),
+      prepareHostedProviderBinding(piParams('model-b', 'session-b')),
+    ]);
+    const rotated = await prepareHostedProviderBinding(
+      piParams('model-a', 'session-c', 'rotated-secret'),
+    );
+
+    expect(first.bindingKey).toMatch(/^provider-binding:v2:/);
+    expect(first.profileDir).not.toBe(second.profileDir);
+    expect(first.bindingKey).not.toBe(second.bindingKey);
+    expect(rotated.profileDir).toBe(first.profileDir);
+    expect(rotated.bindingKey).toBe(first.bindingKey);
+    expect(await readFile(path.join(first.profileDir, 'models.json'), 'utf8')).toBe('model-a');
+    expect(await readFile(path.join(second.profileDir, 'models.json'), 'utf8')).toBe('model-b');
   });
 });
 

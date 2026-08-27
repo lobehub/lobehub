@@ -83,6 +83,117 @@ describe('heterogeneous provider binding protocol resolver', () => {
     });
   });
 
+  it.each([
+    {
+      endpoint: 'https://chat.example.com/v1',
+      expectedEndpoint: 'https://chat.example.com/v1',
+      expectedProtocol: 'openai-chat-completions',
+      providerId: 'custom-chat',
+      sdkType: 'openai',
+    },
+    {
+      endpoint: 'https://responses.example.com/v1/',
+      expectedEndpoint: 'https://responses.example.com/v1',
+      expectedProtocol: 'openai-responses',
+      providerId: 'custom-responses',
+      responses: true,
+      sdkType: 'openai',
+    },
+    {
+      endpoint: 'https://messages.example.com',
+      expectedEndpoint: 'https://messages.example.com',
+      expectedProtocol: 'anthropic-messages',
+      providerId: 'custom-anthropic',
+      sdkType: 'anthropic',
+    },
+    {
+      endpoint: 'https://google.example.com/gemini/',
+      expectedEndpoint: 'https://google.example.com/gemini/v1beta',
+      expectedProtocol: 'google-generative-ai',
+      providerId: 'custom-google',
+      sdkType: 'google',
+    },
+  ] as const)(
+    'binds Pi to $expectedProtocol',
+    ({ endpoint, expectedEndpoint, expectedProtocol, providerId, responses, sdkType }) => {
+      const result = resolveHeterogeneousProviderBinding({
+        agentType: 'pi',
+        apiConfig: { model: 'model-test', providerId },
+        providerEnabled: true,
+        runtimeConfig: runtime(sdkType, {
+          config: responses ? { enableResponseApi: true } : {},
+          keyVaults: { apiKey: 'test-key', baseURL: endpoint },
+          settings: {
+            sdkType,
+            ...(responses ? { supportResponsesApi: true } : {}),
+          },
+        }),
+      });
+
+      expect(result.resolution).toMatchObject({
+        endpoint: expectedEndpoint,
+        protocol: expectedProtocol,
+      });
+    },
+  );
+
+  it.each([
+    ['openai', 'openai', 'openai-responses', 'https://api.openai.com/v1'],
+    ['anthropic', 'anthropic', 'anthropic-messages', 'https://api.anthropic.com'],
+    [
+      'google',
+      'google',
+      'google-generative-ai',
+      'https://generativelanguage.googleapis.com/v1beta',
+    ],
+  ] as const)(
+    'uses the canonical %s endpoint when no provider base URL is configured',
+    (providerId, sdkType, protocol, endpoint) => {
+      const result = resolveHeterogeneousProviderBinding({
+        agentType: 'pi',
+        apiConfig: { model: 'model-test', providerId },
+        providerEnabled: true,
+        runtimeConfig: runtime(sdkType),
+      });
+
+      expect(result.resolution).toMatchObject({ endpoint, protocol });
+    },
+  );
+
+  it('requires a concrete endpoint for non-canonical Pi providers', () => {
+    const result = resolveHeterogeneousProviderBinding({
+      agentType: 'pi',
+      apiConfig: { model: 'model-test', providerId: 'custom-openai' },
+      providerEnabled: true,
+      runtimeConfig: runtime('openai'),
+    });
+
+    expect(result.error).toEqual({ code: 'endpointMissing', providerId: 'custom-openai' });
+  });
+
+  it('carries server-resolved model capabilities into the binding resolution', () => {
+    const modelMetadata = {
+      abilities: { reasoning: true, vision: true },
+      contextWindowTokens: 200_000,
+      displayName: 'Bound model',
+      id: 'model-test',
+      maxOutput: 32_000,
+      providerId: 'custom-openai',
+      type: 'chat',
+    };
+    const result = resolveHeterogeneousProviderBinding({
+      agentType: 'pi',
+      apiConfig: { model: 'model-test', providerId: 'custom-openai' },
+      enabledModels: [modelMetadata],
+      providerEnabled: true,
+      runtimeConfig: runtime('openai', {
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://example.com/v1' },
+      }),
+    });
+
+    expect(result.resolution?.modelMetadata).toEqual(modelMetadata);
+  });
+
   it('validates credentials only inside the trusted host boundary', () => {
     const input = {
       agentType: 'claude-code',
@@ -96,10 +207,19 @@ describe('heterogeneous provider binding protocol resolver', () => {
     ).toBe('credentialsMissing');
   });
 
-  it('rejects API bindings for agents without an implemented driver capability', () => {
+  it('rejects unsupported protocols and agents without an implemented driver capability', () => {
     expect(
       resolveHeterogeneousProviderBinding({
         agentType: 'pi',
+        apiConfig: { model: 'model', providerId: 'bedrock' },
+        providerEnabled: true,
+        runtimeConfig: runtime('bedrock'),
+      }).error?.code,
+    ).toBe('protocolMismatch');
+
+    expect(
+      resolveHeterogeneousProviderBinding({
+        agentType: 'amp',
         apiConfig: { model: 'model', providerId: 'anthropic' },
         providerEnabled: true,
         runtimeConfig: runtime('anthropic'),

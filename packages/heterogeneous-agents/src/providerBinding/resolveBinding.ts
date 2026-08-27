@@ -3,11 +3,12 @@ import type {
   HeterogeneousProviderBindingCapability,
   HeterogeneousProviderBindingError,
   HeterogeneousProviderBindingProtocol,
+  HeterogeneousProviderBindingResolution,
   ResolveHeterogeneousProviderBindingInput,
   ResolveHeterogeneousProviderBindingResult,
 } from './types';
 
-export const HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES = ['claude-code', 'codex'] as const;
+export const HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES = ['claude-code', 'codex', 'pi'] as const;
 
 const CAPABILITIES: Partial<
   Record<LocalHeterogeneousAgentType, HeterogeneousProviderBindingCapability>
@@ -20,6 +21,26 @@ const CAPABILITIES: Partial<
     agentType: 'codex',
     protocols: ['openai-responses'],
   },
+  'pi': {
+    agentType: 'pi',
+    protocols: [
+      'openai-responses',
+      'openai-chat-completions',
+      'anthropic-messages',
+      'google-generative-ai',
+    ],
+  },
+};
+
+const DEFAULT_PROVIDER_ENDPOINTS: Partial<
+  Record<HeterogeneousProviderBindingProtocol, Record<string, string>>
+> = {
+  'anthropic-messages': { anthropic: 'https://api.anthropic.com' },
+  'google-generative-ai': {
+    google: 'https://generativelanguage.googleapis.com/v1beta',
+  },
+  'openai-chat-completions': { openai: 'https://api.openai.com/v1' },
+  'openai-responses': { openai: 'https://api.openai.com/v1' },
 };
 
 const nonEmptyString = (value: unknown): string | undefined => {
@@ -33,7 +54,10 @@ const stripTrailingSlashes = (value: string): string => {
   return value.slice(0, end);
 };
 
-const normalizeEndpoint = (value: unknown): string | undefined => {
+const normalizeEndpoint = (
+  value: unknown,
+  protocol: HeterogeneousProviderBindingProtocol,
+): string | undefined => {
   const raw = nonEmptyString(value);
   if (!raw) return;
 
@@ -43,7 +67,14 @@ const normalizeEndpoint = (value: unknown): string | undefined => {
     // User info and query/hash values can contain credentials. They are not a
     // supported provider endpoint shape and must never reach profile files or metadata.
     if (url.username || url.password || url.search || url.hash) return;
-    return stripTrailingSlashes(url.toString());
+    const endpoint = stripTrailingSlashes(url.toString());
+    // LobeHub's Google runtime accepts a host root and lets the SDK append its
+    // default v1beta version. Pi custom providers instead set apiVersion=""
+    // and require the configured baseUrl to include the version path.
+    if (protocol === 'google-generative-ai' && !/\/v\d+(?:beta\d*)?\/?$/.test(url.pathname)) {
+      return `${endpoint}/v1beta`;
+    }
+    return endpoint;
   } catch {
     return;
   }
@@ -89,21 +120,27 @@ export const resolveProviderBindingProtocol = (
 };
 
 const resolveEndpointError = (
+  agentType: string,
   providerId: string,
   rawEndpoint: unknown,
   protocol: HeterogeneousProviderBindingProtocol,
 ): { endpoint?: string; error?: HeterogeneousProviderBindingError } => {
   const raw = nonEmptyString(rawEndpoint);
-  const endpoint = normalizeEndpoint(raw);
+  const endpoint = normalizeEndpoint(raw, protocol);
   if (raw && !endpoint) return { error: { code: 'endpointUnsupported', providerId } };
+  if (endpoint) return { endpoint };
 
-  if (protocol === 'openai-responses') {
-    if (endpoint) return { endpoint };
-    if (providerId === 'openai') return { endpoint: 'https://api.openai.com/v1' };
+  const defaultEndpoint =
+    agentType === 'pi' || protocol === 'openai-responses'
+      ? DEFAULT_PROVIDER_ENDPOINTS[protocol]?.[providerId]
+      : undefined;
+  if (defaultEndpoint) return { endpoint: defaultEndpoint };
+
+  if (protocol === 'openai-responses' || agentType === 'pi') {
     return { error: { code: 'endpointMissing', providerId } };
   }
 
-  return { endpoint };
+  return {};
 };
 
 export const resolveHeterogeneousProviderBinding = ({
@@ -140,12 +177,14 @@ export const resolveHeterogeneousProviderBinding = ({
   }
 
   const endpointResult = resolveEndpointError(
+    agentType,
     apiConfig.providerId,
     runtimeConfig.keyVaults?.baseURL,
     protocol,
   );
   if (endpointResult.error) return { error: endpointResult.error };
 
+  let modelMetadata: HeterogeneousProviderBindingResolution['modelMetadata'];
   if (enabledModels) {
     const boundModels = [apiConfig.model, apiConfig.smallFastModel].filter(
       (model): model is string => !!model,
@@ -168,6 +207,12 @@ export const resolveHeterogeneousProviderBinding = ({
         },
       };
     }
+    modelMetadata = enabledModels.find(
+      (model) =>
+        model.providerId === apiConfig.providerId &&
+        model.id === apiConfig.model &&
+        model.type === 'chat',
+    );
   }
 
   return {
@@ -175,6 +220,7 @@ export const resolveHeterogeneousProviderBinding = ({
       agentType: capability.agentType,
       apiConfig: { ...apiConfig, model: apiConfig.model.trim() },
       endpoint: endpointResult.endpoint,
+      modelMetadata,
       protocol,
       providerId: apiConfig.providerId,
       runtimeConfig,
