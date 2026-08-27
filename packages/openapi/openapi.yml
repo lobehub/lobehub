@@ -2334,6 +2334,83 @@ paths:
           description: Internal server error
       tags:
         - agents
+  /api/v1/anthropic/v1/messages:
+    post:
+      operationId: postApiV1AnthropicV1Messages
+      description: "Anthropic Messages-compatible relay for a server-default
+        heterogeneous agent (Claude Code). Authenticated by an internal
+        operation token rather than an API key: the token carries the provider
+        and model selection, and the request `model` must match it. `stream`
+        must be `true` — the response is an Anthropic SSE stream, not a JSON
+        body."
+      summary: Relay an Anthropic Messages request
+      tags:
+        - anthropic
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
   /api/v1/api-keys:
     get:
       operationId: getApiV1ApiKeys
@@ -7741,6 +7818,82 @@ paths:
           description: Internal server error
       tags:
         - models
+  /api/v1/openai/v1/responses:
+    post:
+      operationId: postApiV1OpenaiV1Responses
+      description: "OpenAI Responses-compatible relay for a server-default
+        heterogeneous agent (Codex). Authenticated by an internal operation
+        token rather than an API key: the token carries the provider and model
+        selection, and the request `model` must match it. `stream` must be
+        `true` — the response is a Responses SSE stream, not a JSON body."
+      summary: Relay an OpenAI Responses request
+      tags:
+        - openai
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
   /api/v1/permissions:
     get:
       operationId: getApiV1Permissions

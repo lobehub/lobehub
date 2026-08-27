@@ -6,6 +6,7 @@ import { isRecord } from '@lobechat/utils/object';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { describeRoute } from 'hono-openapi';
 
 import type { HeteroOperationJwtClaims } from '@/libs/trpc/utils/internalJwt';
 
@@ -20,46 +21,56 @@ import {
 
 const app = new Hono();
 
-app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
-  const request = await c.req.json().catch(() => null);
-  if (!isRecord(request)) throw new HTTPException(400, { message: 'Invalid JSON request' });
-  const context = c as Context;
-  const claims = context.get('heteroOperationClaims') as HeteroOperationJwtClaims;
-  if (!claims.provider_id || !claims.model) {
-    throw new HTTPException(403, { message: 'Operation token has no server model selection' });
-  }
-  if (!isServerDefaultHeterogeneousModel(request.model, claims.model)) {
-    throw new HTTPException(400, { message: 'model must match the server operation selection' });
-  }
-  if (request.stream !== true) {
-    throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
-  }
-  const workspaceId = context.get('workspaceId');
-  const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
+app.post(
+  '/v1/responses',
+  describeRoute({
+    description:
+      'OpenAI Responses-compatible relay for a server-default heterogeneous agent (Codex). Authenticated by an internal operation token rather than an API key: the token carries the provider and model selection, and the request `model` must match it. `stream` must be `true` — the response is a Responses SSE stream, not a JSON body.',
+    summary: 'Relay an OpenAI Responses request',
+    tags: ['openai'],
+  }),
+  requireHeteroModelInvocation,
+  async (c) => {
+    const request = await c.req.json().catch(() => null);
+    if (!isRecord(request)) throw new HTTPException(400, { message: 'Invalid JSON request' });
+    const context = c as Context;
+    const claims = context.get('heteroOperationClaims') as HeteroOperationJwtClaims;
+    if (!claims.provider_id || !claims.model) {
+      throw new HTTPException(403, { message: 'Operation token has no server model selection' });
+    }
+    if (!isServerDefaultHeterogeneousModel(request.model, claims.model)) {
+      throw new HTTPException(400, { message: 'model must match the server operation selection' });
+    }
+    if (request.stream !== true) {
+      throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
+    }
+    const workspaceId = context.get('workspaceId');
+    const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
 
-  // Same reasoning as the Anthropic relay: an escaping runtime rejection reaches
-  // the client as a bodyless 500. See `describeRelayFailure`.
-  let body: ReadableStream<Uint8Array> | null;
-  try {
-    const { response } = await invokeServerDefaultModel({
-      agentType: 'codex',
-      model: claims.model,
-      payload: normalizeResponsesRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
-      signal: c.req.raw.signal,
-      userId: String(context.get('userId')),
-      workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
+    // Same reasoning as the Anthropic relay: an escaping runtime rejection reaches
+    // the client as a bodyless 500. See `describeRelayFailure`.
+    let body: ReadableStream<Uint8Array> | null;
+    try {
+      const { response } = await invokeServerDefaultModel({
+        agentType: 'codex',
+        model: claims.model,
+        payload: normalizeResponsesRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
+        signal: c.req.raw.signal,
+        userId: String(context.get('userId')),
+        workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
+      });
+      body = response.body;
+    } catch (error) {
+      const { message, status } = describeRelayFailure(error);
+      return c.json({ error: { message, type: 'api_error' } }, status);
+    }
+    if (!body) {
+      return c.json({ error: { message: 'Upstream returned no stream', type: 'api_error' } }, 502);
+    }
+    return new Response(encodeResponsesStream(body, requestModel), {
+      headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'text/event-stream' },
     });
-    body = response.body;
-  } catch (error) {
-    const { message, status } = describeRelayFailure(error);
-    return c.json({ error: { message, type: 'api_error' } }, status);
-  }
-  if (!body) {
-    return c.json({ error: { message: 'Upstream returned no stream', type: 'api_error' } }, 502);
-  }
-  return new Response(encodeResponsesStream(body, requestModel), {
-    headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'text/event-stream' },
-  });
-});
+  },
+);
 
 export default app;
