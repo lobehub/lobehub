@@ -6,6 +6,7 @@ import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  CreateThreadWithMessageSchema,
   entityIdPattern,
   LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
@@ -895,6 +896,13 @@ const ExecAgentSchema = z
             workingDirectoryConfig: workingDirConfigSchema.optional(),
           })
           .optional(),
+        /**
+         * Branch this run into a new thread (subtopic) under the resolved topic.
+         * The gateway path never calls `aiChat.sendMessageInServer`, so this is
+         * the only way the composer's "start a new subtopic" intent reaches the
+         * server — without it the turn lands on the topic's main spine.
+         */
+        newThread: CreateThreadWithMessageSchema.optional(),
         /**
          * Group orchestration role of the run, stamped onto the assistant
          * message's `metadata.orchestrationRole` so the supervisor/member
@@ -2066,6 +2074,9 @@ export const aiAgentRouter = router({
         messageIds: [
           ...existingMessageIds,
           parentMessageId,
+          // A new subtopic branches off an existing message — authorize that
+          // anchor too, or a caller could fork a thread off someone else's turn.
+          appContext?.newThread?.sourceMessageId,
           resumeApproval?.parentMessageId,
           // Every batch target is authorized too — a caller must not be able to
           // slip a message it doesn't own into the list behind an owned anchor.

@@ -419,6 +419,13 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * set by the callSubAgent thread-run path, never client-passable.
    */
   chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
+  /**
+   * Thread `execAgent` materialised from `appContext.newThread` for THIS turn.
+   * Internal-only: set by the wrapper after it creates the row, never
+   * client-passable. Tells the turn its thread is brand new, so the first
+   * message anchors on the branch point instead of a (non-existent) spine head.
+   */
+  createdThreadId?: string;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
@@ -1370,7 +1377,17 @@ export class AiAgentService {
    *   → ServerMechaModule.ContextEngineering(input, config, messages)
    *   → AgentRuntimeService.createOperation(...)
    */
-  async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
+  async execAgent(inputParams: InternalExecAgentParams): Promise<ExecAgentResult> {
+    // Creating the thread here (rather than inside the turn) means a run that
+    // asked for one is already a thread run by the time the reservation check
+    // below reads `appContext.threadId` — same isolation as a follow-up inside
+    // an existing thread.
+    const { createdThreadId, params } = await this.resolveNewThread(inputParams);
+    // The client needs the id back to pivot its optimistic `_new` thread bucket
+    // and refresh the sidebar; every return path below must carry it.
+    const withCreatedThread = (result: ExecAgentResult): ExecAgentResult =>
+      createdThreadId ? { ...result, createdThreadId } : result;
+
     const topicId = params.appContext?.topicId;
     const interventionReservationId = params.approvalResolutionRequestId
       ? deriveAgentInterventionContinuationOperationId({
@@ -1399,7 +1416,7 @@ export class AiAgentService {
     // operation owns `runningOperation` (for example callAgent/callSubAgent),
     // so making them wait for the topic-start claim deadlocks the child start.
     if (!topicId || (params.appContext?.threadId && !isInterventionThreadStart)) {
-      return this.execAgentWithApprovalRollback(params);
+      return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     }
 
     const reserved = await acquireTopicStartReservation({
@@ -1419,7 +1436,7 @@ export class AiAgentService {
     }
 
     try {
-      return await this.execAgentWithApprovalRollback(params);
+      return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     } finally {
       await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
     }
@@ -1457,6 +1474,65 @@ export class AiAgentService {
     }
   }
 
+  /**
+   * Materialise an `appContext.newThread` intent into a real thread row.
+   *
+   * The composer stages a subtopic client-side and the non-gateway send path
+   * creates it inside `sendMessageInServer` (`newThread`). The gateway path
+   * never makes that call, so the intent arrives here instead — without this
+   * the turn would persist onto the topic's main spine, no thread row would
+   * exist, and the subtopic would silently collapse back into the main
+   * conversation.
+   *
+   * Returns the params to run with: `appContext.threadId` rebound to the new
+   * thread so every downstream read (message writes, history queries, operation
+   * context) lands inside it. A no-op for every caller that doesn't ask for one.
+   */
+  private async resolveNewThread(params: InternalExecAgentParams): Promise<{
+    createdThreadId?: string;
+    params: InternalExecAgentParams;
+  }> {
+    const { appContext } = params;
+    const newThread = appContext?.newThread;
+
+    // `threadId` wins: that is a follow-up inside a thread that already exists,
+    // and creating a second row would orphan the earlier turns.
+    if (!newThread || appContext?.threadId) return { params };
+
+    // A subtopic branches off a persisted message, so its topic always exists by
+    // the time the send reaches here. Refusing is better than silently creating
+    // a thread on a topic this run is about to mint under a different id.
+    if (!appContext?.topicId) {
+      throw new Error('appContext.newThread requires an existing appContext.topicId');
+    }
+
+    const thread = await this.threadModel.create({
+      parentThreadId: newThread.parentThreadId,
+      sourceMessageId: newThread.sourceMessageId,
+      title: newThread.title,
+      topicId: appContext.topicId,
+      type: newThread.type,
+    });
+
+    // `ThreadModel.create` swallows insert conflicts and returns undefined.
+    // Falling through would persist the turn to the main spine — exactly the
+    // failure this path exists to prevent — so fail loudly instead.
+    if (!thread) {
+      throw new Error(`Failed to create thread on topic ${appContext.topicId}`);
+    }
+
+    log('execAgent: created thread %s on topic %s', thread.id, appContext.topicId);
+
+    return {
+      createdThreadId: thread.id,
+      params: {
+        ...params,
+        appContext: { ...appContext, threadId: thread.id },
+        createdThreadId: thread.id,
+      },
+    };
+  }
+
   private async execAgentWithReservation(
     params: InternalExecAgentParams,
     approvalClaim: {
@@ -1474,6 +1550,7 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      createdThreadId,
       clientIp,
       userAgent,
       deviceId: requestedDeviceId,
@@ -2542,6 +2619,12 @@ export class AiAgentService {
     const resolveUserMessageParentId = async () => {
       if (runFromHistory) return undefined;
       if (parentMessageId) return parentMessageId;
+      // A thread created for THIS turn is empty, so there is no spine head to
+      // anchor on. Its branch point is the source message — the same anchor the
+      // non-gateway path keeps for a brand-new thread. Without it the first turn
+      // persists as a second root and the renderer's parentId walk emits it out
+      // of order.
+      if (createdThreadId) return appContext?.newThread?.sourceMessageId;
 
       const threadId = appContext?.threadId ?? null;
       const spineId = await this.messageModel.getLatestSpineMessageId({ threadId, topicId });

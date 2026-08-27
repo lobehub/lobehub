@@ -42,6 +42,7 @@ import {
 } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
+import { resolveNewThreadIntent } from '../../dispatch/newThreadIntent';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
@@ -527,6 +528,11 @@ export class GatewayActionImpl {
     // adopted it up front so the streamed messages land in the on-screen
     // bucket) while the topic still has no server row.
     const isCreateNewTopic = !executionContext.topicId;
+    // "Start a new subtopic": the composer stages the thread client-side and the
+    // server materialises it as part of this run. Without forwarding the intent
+    // the turn persists onto the topic's main spine and the subtopic collapses
+    // back into the main chat.
+    const newThread = resolveNewThreadIntent(executionContext);
     const taskId =
       executionContext.viewedTask?.type === 'detail'
         ? executionContext.viewedTask.taskId
@@ -619,6 +625,7 @@ export class GatewayActionImpl {
             }),
             groupId: executionContext.groupId,
             ...(initialTopicMetadata && { initialTopicMetadata }),
+            ...(newThread && { newThread }),
             // Forward the group orchestration role so the server can stamp it onto
             // the assistant message metadata. Without this the gateway-created
             // supervisor turn loses its role on the step_start snapshot / refetch
@@ -672,9 +679,29 @@ export class GatewayActionImpl {
 
     // Keep execution identity separate from the conversation bucket that owns
     // the streamed messages. They differ for callAgent/sub-agent runs.
-    const resolvedExecutionContext = { ...executionContext, topicId: result.topicId };
-    const resolvedMessageContext = { ...messageContext, topicId: result.topicId };
+    // Pivot the optimistic `thread_..._new` bucket onto the persisted thread the
+    // server just created: with `threadId` set, `messageMapKey` ignores `isNew`
+    // and both contexts resolve to the real thread key.
+    const resolveThread = <T extends ConversationContext>(context: T): T =>
+      result.createdThreadId
+        ? { ...context, isNew: false, threadId: result.createdThreadId }
+        : context;
+    const resolvedExecutionContext = resolveThread({
+      ...executionContext,
+      topicId: result.topicId,
+    });
+    const resolvedMessageContext = resolveThread({ ...messageContext, topicId: result.topicId });
     this.#get().moveVoiceMessages(messageContext, resolvedMessageContext);
+
+    if (result.createdThreadId) {
+      // Attachments picked in the subtopic composer were staged under the
+      // `_new` key; carry them over so the next turn in the thread still sees
+      // them (mirrors the new-topic handoff below).
+      getFileStoreState().moveChatContextSelections(
+        messageMapKey(messageContext),
+        messageMapKey(resolvedMessageContext),
+      );
+    }
 
     if (!isCreateNewTopic && cancelledAfterPersistence) {
       try {

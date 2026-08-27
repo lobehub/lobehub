@@ -8,7 +8,6 @@ import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
   ChatImageItem,
-  ChatThreadType,
   ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
@@ -62,6 +61,7 @@ import {
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
+import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import {
@@ -273,6 +273,38 @@ export class ConversationLifecycleActionImpl {
     };
   };
 
+  /**
+   * Land a thread the server created for this send: record it on the operation,
+   * pivot the portal from the staged `isNew` thread to the persisted one, and
+   * refresh the sidebar's nested list. Shared by both send transports — the
+   * gateway path creates the thread through `execAgentTask.appContext.newThread`
+   * and the client path through `sendMessageInServer.newThread`, but everything
+   * downstream of "the row now exists" is identical.
+   */
+  #syncCreatedThread = (
+    operationId: string,
+    createdThreadId: string,
+    sourceMessageId?: string,
+  ): void => {
+    this.#get().updateOperationMetadata(operationId, { createdThreadId });
+
+    // When the active portal view is already the Thread surface (the
+    // main-page "create subtopic" flow staged it before sending), pivot it
+    // from `isNew` → persisted thread id. Otherwise the thread was started
+    // by a panel-hosted ConversationProvider (e.g. FloatingChatPanel inside
+    // the Document portal) and we must NOT push a Thread view — doing so
+    // would cover the host view the user is still reading.
+    const currentPortalViewType = chatPortalSelectors.currentViewType(this.#get());
+    if (currentPortalViewType === PortalViewType.Thread) {
+      this.#get().openThreadInPortal(createdThreadId, sourceMessageId);
+    } else {
+      this.#get().syncThreadInPortal(createdThreadId, sourceMessageId);
+    }
+
+    // Refresh threads list to update the sidebar
+    void Promise.resolve(this.#get().refreshThreads()).catch(console.error);
+  };
+
   sendMessage = async ({
     message,
     editorData: inputEditorData,
@@ -346,15 +378,9 @@ export class ConversationLifecycleActionImpl {
     // Use context from params (required)
     // If creating new thread (isNew + scope='thread'), threadId will be created by server
     const isCreatingNewThread = context.isNew && context.scope === 'thread';
-    // Build newThread params for server from new context format
-    // Only create newThread if we have both sourceMessageId and threadType
-    const newThread =
-      isCreatingNewThread && context.sourceMessageId && context.threadType
-        ? {
-            sourceMessageId: context.sourceMessageId,
-            type: context.threadType as ChatThreadType,
-          }
-        : undefined;
+    // Shared with the gateway transport so both send paths materialise a staged
+    // subtopic the same way.
+    const newThread = resolveNewThreadIntent(context);
 
     if (!ownerAgentId) {
       onPreflightFailure?.();
@@ -1680,6 +1706,11 @@ export class ConversationLifecycleActionImpl {
         });
         const cancelledAfterPersistence = abortController.signal.aborted;
 
+        // Record created threadId in operation metadata
+        if (result.createdThreadId) {
+          this.#syncCreatedThread(operationId, result.createdThreadId, context.sourceMessageId);
+        }
+
         // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to
         // the new topic, so the shared hook reads the persisted conversation from
@@ -1696,7 +1727,17 @@ export class ConversationLifecycleActionImpl {
             void sendRunLifecycle
               .afterUserMessagePersisted({
                 assistantMessageId: result.assistantMessageId,
-                context: { ...operationContext, topicId: result.topicId },
+                context: {
+                  ...operationContext,
+                  // The turn was persisted inside the thread the server just
+                  // created, so the lifecycle must read that bucket — not the
+                  // topic's main spine — when it loads the conversation.
+                  ...(result.createdThreadId && {
+                    isNew: false,
+                    threadId: result.createdThreadId,
+                  }),
+                  topicId: result.topicId,
+                },
                 isCreateNewTopic: willCreateNewTopic,
                 operationId,
                 runId: operationId,
@@ -1714,6 +1755,7 @@ export class ConversationLifecycleActionImpl {
 
         return {
           assistantMessageId: result.assistantMessageId,
+          createdThreadId: result.createdThreadId,
           userMessageId: result.userMessageId,
         };
       } catch (e) {
@@ -1892,23 +1934,7 @@ export class ConversationLifecycleActionImpl {
 
       // Record created threadId in operation metadata
       if (data.createdThreadId) {
-        this.#get().updateOperationMetadata(operationId, { createdThreadId: data.createdThreadId });
-
-        // When the active portal view is already the Thread surface (the
-        // main-page "create subtopic" flow staged it before sending), pivot it
-        // from `isNew` → persisted thread id. Otherwise the thread was started
-        // by a panel-hosted ConversationProvider (e.g. FloatingChatPanel inside
-        // the Document portal) and we must NOT push a Thread view — doing so
-        // would cover the host view the user is still reading.
-        const currentPortalViewType = chatPortalSelectors.currentViewType(this.#get());
-        if (currentPortalViewType === PortalViewType.Thread) {
-          this.#get().openThreadInPortal(data.createdThreadId, context.sourceMessageId);
-        } else {
-          this.#get().syncThreadInPortal(data.createdThreadId, context.sourceMessageId);
-        }
-
-        // Refresh threads list to update the sidebar
-        this.#get().refreshThreads();
+        this.#syncCreatedThread(operationId, data.createdThreadId, context.sourceMessageId);
       }
 
       // Create final context with updated topicId/threadId from server response
