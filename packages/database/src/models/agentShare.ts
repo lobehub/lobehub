@@ -665,6 +665,59 @@ export class AgentShareModel {
   };
 
   /**
+   * Atomically claim (delete) a still-`pending` reservation BEFORE giving up
+   * on its run — the step-0 gate's (`AgentRuntimeService.buildShareAbortResult`,
+   * via its `AiAgentService.invalidatePendingShareReservation` delegate call)
+   * counterpart to `revokeReservations`, which does the same thing in bulk,
+   * scoped by generation, when the OWNER revokes.
+   *
+   * WHY this exists: `verifyShareReservationStatus` returning `'pending'` (row
+   * still exists) or the gate's bounded retries exhausting on that status does
+   * NOT mean the reservation is dead — `confirmReservation` is a SEPARATE,
+   * unbounded-duration step of the SAME originating request (it can be
+   * arbitrarily paused/slow) and might still land after the gate decides to
+   * abort. Without this method, the gate used to mark the operation
+   * `interrupted` WITHOUT touching the row, so a later `confirmReservation`
+   * could still delete it and write the topic's `runningOperation` marker —
+   * returning success to the visitor's original request for a run that was
+   * already dead, and leaving the topic's Stop button targeting a corpse
+   * operation forever (LOBE-11930 Codex P2). See
+   * `AgentRuntimeService.buildShareAbortResult`'s JSDoc for the full race.
+   *
+   * DELETEs the SAME row, under the SAME predicate
+   * (`id = operationId AND revoked_at IS NULL`), that `confirmReservation`
+   * deletes — not a new lock or mechanism. Ordinary Postgres row locking is
+   * what makes the two calls race correctly with no window between them: a
+   * `DELETE` that finds this row already locked by a concurrent
+   * `confirmReservation` transaction BLOCKS until that transaction commits or
+   * rolls back, then re-evaluates its `WHERE` clause — by the time either
+   * call returns, the other has unconditionally already been decided. There
+   * is no state where both "confirm succeeds" and "this invalidation wins"
+   * are simultaneously true.
+   *
+   * Returns `true` only when THIS call actually removed the row — i.e. it won
+   * the race (or there was no contention). Returns `false` when the row was
+   * already gone: either a concurrent `confirmReservation` won and already
+   * committed the topic marker (the caller must re-check
+   * `verifyShareReservationStatus`/the marker to tell that apart from a
+   * plain revoke/sweep — see `AiAgentService.invalidatePendingShareReservation`),
+   * or it was never there to begin with.
+   */
+  invalidateReservation = async (operationId: string): Promise<boolean> => {
+    const [row] = await this.db
+      .delete(agentShareRunReservations)
+      .where(
+        and(
+          eq(agentShareRunReservations.id, operationId),
+          isNull(agentShareRunReservations.revokedAt),
+        ),
+      )
+      .returning({ id: agentShareRunReservations.id });
+
+    return Boolean(row);
+  };
+
+  /**
    * Cheap existence check on `confirmReservation`'s DELETE target, used by
    * the step-0 share gate (`AgentRuntimeDelegate.verifyShareReservationStatus`)
    * to tell a reservation that is still pending confirmation apart from one

@@ -1991,6 +1991,192 @@ describe('AgentRuntimeService.executeStep - Agent Share reservation confirmation
   });
 });
 
+// Regression for LOBE-11930 Codex P2: every abort decision above used to go
+// straight to `buildShareAbortResult`, which marks the operation
+// `interrupted` WITHOUT touching the `agent_share_run_reservations` row.
+// `confirmReservation` is a SEPARATE, unbounded-duration step of the SAME
+// originating request — it can be paused for arbitrarily long between
+// `createOperation` returning and this gate deciding to abort — so it could
+// still land AFTER the abort, delete the row, and write the topic's
+// `runningOperation` marker for an operation that will never run another
+// step. `resolveShareGateAbort` (`AgentRuntimeService.ts`) closes this by
+// atomically invalidating the reservation, via the
+// `invalidatePendingShareReservation` delegate, before ever recording the
+// abort — see that method's JSDoc for why sharing `confirmReservation`'s own
+// DELETE predicate makes this race-free.
+describe('AgentRuntimeService.executeStep - Agent Share reservation invalidate-before-abort', () => {
+  const shareAgentState = (overrides?: Record<string, unknown>) => ({
+    lastModified: new Date().toISOString(),
+    metadata: {
+      agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      topicId: 'topic-1',
+    },
+    status: 'idle',
+    stepCount: 0,
+    ...overrides,
+  });
+
+  it('invalidates the still-pending reservation before aborting once retries are exhausted', async () => {
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('pending');
+    const invalidatePendingShareReservation = vi.fn().mockResolvedValue('invalidated');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { invalidatePendingShareReservation, verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-pending-invalidated',
+      shareGateRetryAttempt: 6,
+      stepIndex: 0,
+    });
+
+    expect(invalidatePendingShareReservation).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'op-pending-invalidated',
+      topicId: 'topic-1',
+    });
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-pending-invalidated',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+
+  it('proceeds instead of aborting when a racing confirmReservation already committed after retries were exhausted', async () => {
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('pending');
+    const invalidatePendingShareReservation = vi.fn().mockResolvedValue('confirmed');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { invalidatePendingShareReservation, verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    // The rest of the (unmocked) step pipeline is irrelevant to this
+    // assertion — only whether the gate itself decided to abort matters.
+    await service
+      .executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-pending-confirmed-race',
+        shareGateRetryAttempt: 6,
+        stepIndex: 0,
+      })
+      .catch(() => undefined);
+
+    expect(invalidatePendingShareReservation).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'op-pending-confirmed-race',
+      topicId: 'topic-1',
+    });
+    expect(coordinator.saveAgentState).not.toHaveBeenCalledWith(
+      'op-pending-confirmed-race',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+  });
+
+  it('proceeds when invalidation discovers the reservation was actually confirmed despite a revoked read', async () => {
+    // `verifyShareReservationStatus` reads the topic marker and the
+    // reservation row with two SEPARATE (non-transactional) queries — a
+    // `confirmReservation` commit landing between them can make a
+    // genuinely-confirmed run read back as `'revoked'`. This is a residual
+    // non-atomicity of that first read; `resolveShareGateAbort`'s atomic
+    // recheck is what actually decides.
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('revoked');
+    const invalidatePendingShareReservation = vi.fn().mockResolvedValue('confirmed');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { invalidatePendingShareReservation, verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    await service
+      .executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-revoked-confirmed-race',
+        stepIndex: 0,
+      })
+      .catch(() => undefined);
+
+    expect(invalidatePendingShareReservation).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'op-revoked-confirmed-race',
+      topicId: 'topic-1',
+    });
+    expect(coordinator.saveAgentState).not.toHaveBeenCalledWith(
+      'op-revoked-confirmed-race',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+  });
+
+  it('proceeds when invalidation discovers a confirm that raced the confirmation-check throw', async () => {
+    const verifyShareReservationStatus = vi.fn().mockRejectedValue(new Error('db down'));
+    const invalidatePendingShareReservation = vi.fn().mockResolvedValue('confirmed');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { invalidatePendingShareReservation, verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    await service
+      .executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-check-throws-confirmed-race',
+        stepIndex: 0,
+      })
+      .catch(() => undefined);
+
+    expect(invalidatePendingShareReservation).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'op-check-throws-confirmed-race',
+      topicId: 'topic-1',
+    });
+    expect(coordinator.saveAgentState).not.toHaveBeenCalledWith(
+      'op-check-throws-confirmed-race',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+  });
+
+  it('fails closed when invalidation itself throws', async () => {
+    const verifyShareReservationStatus = vi.fn().mockResolvedValue('revoked');
+    const invalidatePendingShareReservation = vi.fn().mockRejectedValue(new Error('db down'));
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { invalidatePendingShareReservation, verifyShareReservationStatus },
+      queueService: null,
+    });
+
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(shareAgentState());
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-invalidate-throws',
+      stepIndex: 0,
+    });
+
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-invalidate-throws',
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.state.status).toBe('interrupted');
+  });
+});
+
 // Regression for LOBE-11930 Codex P1: `AiAgentService.interruptActiveShareRuns`
 // calls `interruptTask` best-effort per affected topic and swallows a
 // rejection (transient coordinator/database/runtime failure) with no durable

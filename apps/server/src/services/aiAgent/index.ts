@@ -161,6 +161,7 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   EvalRuntimeContext,
+  ShareReservationInvalidationOutcome,
   ShareReservationStatus,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
@@ -749,6 +750,7 @@ export class AiAgentService {
         execGroupMember: this.execGroupMember,
         verifyShareReservationStatus: this.verifyShareReservationStatus,
         verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
+        invalidatePendingShareReservation: this.invalidatePendingShareReservation,
       },
       workspaceId: wsId,
     });
@@ -6047,6 +6049,43 @@ export class AiAgentService {
       params.operationId,
     );
     return pending ? 'pending' : 'revoked';
+  };
+
+  /**
+   * `AgentRuntimeDelegate.invalidatePendingShareReservation` implementation —
+   * see that interface member's JSDoc for the confirm-after-abort race this
+   * closes (LOBE-11930 Codex P2) and why sharing `confirmReservation`'s own
+   * DELETE predicate is what makes this atomic.
+   *
+   * Two steps, in this order:
+   * 1. Try to delete the row while it is still `pending`
+   *    (`AgentShareModel.invalidateReservation`). If that succeeds, THIS call
+   *    won the race against any concurrent `confirmReservation` — the run is
+   *    genuinely being aborted, so `'invalidated'`.
+   * 2. If the row was already gone, the deleting transaction (whichever it
+   *    was) has already committed — re-run the SAME marker/row check
+   *    `verifyShareReservationStatus` uses to find out which. `'pending'`
+   *    cannot come back here (the row cannot un-delete itself), so only
+   *    `'confirmed'` / `'revoked'` are possible; the latter is reported as
+   *    `'gone'` to keep the two share-gate delegate methods' vocabularies
+   *    distinct (`'gone'` always means "nothing left to invalidate", never
+   *    "keep waiting").
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  invalidatePendingShareReservation = async (params: {
+    agentId: string;
+    operationId: string;
+    topicId: string;
+  }): Promise<ShareReservationInvalidationOutcome> => {
+    const invalidated = await new AgentShareModel(this.db, this.userId).invalidateReservation(
+      params.operationId,
+    );
+    if (invalidated) return 'invalidated';
+
+    const status = await this.verifyShareReservationStatus(params);
+    return status === 'confirmed' ? 'confirmed' : 'gone';
   };
 
   /**
