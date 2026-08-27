@@ -4,6 +4,7 @@ import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
 import { styles } from './style';
 
@@ -26,7 +27,7 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
           <Skeleton.Avatar
             active
             shape={'square'}
-            size={20}
+            size={RECOMMENDATION_ICON_SIZE.compact}
             style={{ borderRadius: cssVar.borderRadius, flex: 'none' }}
           />
           <Skeleton.Button active style={{ height: 16, width: '70%' }} />
@@ -52,7 +53,7 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
             <Skeleton.Avatar
               active
               shape={'square'}
-              size={28}
+              size={RECOMMENDATION_ICON_SIZE.regular}
               style={{ borderRadius: cssVar.borderRadius, flex: 'none' }}
             />
             <Flexbox

@@ -103,8 +103,8 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
           ctaKey={action.ctaKey}
           descriptionKey={action.descriptionKey}
           i18nValues={action.i18nValues}
-          icon={action.icon}
           key={action.id}
+          renderIcon={action.renderIcon}
           tagKey={action.tagKey}
           titleKey={action.titleKey}
           onAction={action.run}
