@@ -11,6 +11,7 @@ import type {
 export const HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES = [
   'claude-code',
   'codex',
+  'grok-build',
   'kimi-code',
   'pi',
 ] as const;
@@ -25,6 +26,10 @@ const CAPABILITIES: Partial<
   'codex': {
     agentType: 'codex',
     protocols: ['openai-responses'],
+  },
+  'grok-build': {
+    agentType: 'grok-build',
+    protocols: ['openai-responses', 'openai-chat-completions', 'anthropic-messages'],
   },
   'kimi-code': {
     agentType: 'kimi-code',
@@ -140,12 +145,12 @@ const resolveEndpointError = (
   if (endpoint) return { endpoint };
 
   const defaultEndpoint =
-    agentType === 'pi' || protocol === 'openai-responses'
+    agentType === 'pi' || agentType === 'grok-build' || protocol === 'openai-responses'
       ? DEFAULT_PROVIDER_ENDPOINTS[protocol]?.[providerId]
       : undefined;
   if (defaultEndpoint) return { endpoint: defaultEndpoint };
 
-  if (protocol === 'openai-responses' || agentType === 'pi') {
+  if (protocol === 'openai-responses' || agentType === 'pi' || agentType === 'grok-build') {
     return { error: { code: 'endpointMissing', providerId } };
   }
 

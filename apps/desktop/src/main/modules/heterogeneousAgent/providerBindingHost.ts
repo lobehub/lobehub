@@ -102,18 +102,19 @@ export const prepareHostedProviderBinding = async (params: {
     throw new Error(`${params.agentType} does not implement LobeHub Provider binding.`);
   }
 
-  // Pi persists its custom model definition in the reusable profile. Include
-  // the selected upstream model so concurrent sessions cannot overwrite one
-  // another's models.json or strand a resumable session without its model.
-  // Other drivers retain their v1 identity and existing resume keys.
+  // Pi and Grok persist a custom model definition in the reusable profile.
+  // Include the selected upstream model so concurrent sessions cannot
+  // overwrite one another's model catalog or strand a resumable session
+  // without its model. Other drivers retain their v1 identity and resume keys.
   const identityVersion = params.agentType === 'pi' ? 'v2' : 'v1';
+  const modelScopedProfile = params.agentType === 'pi' || params.agentType === 'grok-build';
   const identity = [
     identityVersion,
     params.agentType,
     params.reference.apiConfig.providerId,
     params.resolution.protocol,
     params.resolution.endpoint ?? '',
-    ...(params.agentType === 'pi' ? [params.resolution.apiConfig.model] : []),
+    ...(modelScopedProfile ? [params.resolution.apiConfig.model] : []),
   ].join('\0');
   const digest = hash(identity);
   const bindingKey = `provider-binding:${identityVersion}:${digest}`;
@@ -235,11 +236,10 @@ const statMtimeMs = async (target: string): Promise<number | undefined> => {
 /**
  * Remove binding profiles that have not been used for `maxAgeMs` (default 30
  * days). Stable profiles are normally keyed by `(agentType, providerId,
- * protocol, endpoint)`; Pi profiles additionally include the model because
- * models.json contains a model-specific catalog entry. Profiles are never
- * cleaned by the per-run cleanup, so deleting a provider, changing its
- * endpoint, or bumping the identity version would otherwise strand them (with
- * transcripts inside) forever.
+ * protocol, endpoint)` plus model when the agent stores a model catalog in its
+ * profile. They are never cleaned by the per-run cleanup, so deleting a provider,
+ * changing its endpoint, or bumping the identity version would otherwise strand
+ * them (with transcripts inside) forever.
  *
  * Profiles are considered used when `prepareHostedProviderBinding` or
  * `prepareHostedServerDefaultBinding` touches their marker at session start;

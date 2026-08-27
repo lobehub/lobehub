@@ -1513,6 +1513,68 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
+    it('launches provider-bound Grok with a managed secret-free profile', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        args: ['--model', 'stale-model', '--effort', 'high'],
+        command: 'grok',
+        env: {
+          GROK_CODE_XAI_API_KEY: 'stale-legacy-key',
+          GROK_CONFIG: 'untrusted',
+          XAI_API_KEY: 'stale-key',
+        },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
+      });
+
+      const originalLegacyApiKey = process.env.GROK_CODE_XAI_API_KEY;
+      const originalXaiApiKey = process.env.XAI_API_KEY;
+      process.env.GROK_CODE_XAI_API_KEY = 'inherited-legacy-key';
+      process.env.XAI_API_KEY = 'inherited-xai-key';
+      try {
+        await ctr.sendPrompt({ operationId: 'op-grok-provider', prompt: 'hello', sessionId });
+      } finally {
+        if (originalLegacyApiKey === undefined) delete process.env.GROK_CODE_XAI_API_KEY;
+        else process.env.GROK_CODE_XAI_API_KEY = originalLegacyApiKey;
+        if (originalXaiApiKey === undefined) delete process.env.XAI_API_KEY;
+        else process.env.XAI_API_KEY = originalXaiApiKey;
+      }
+
+      const options = grokAcpSessionConstructMock.mock.calls.at(-1)?.[0];
+      expect(options.args).toEqual([
+        '--effort',
+        'high',
+        '--model',
+        expect.stringMatching(/^lobehub-provider-[\da-f]{16}$/),
+      ]);
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          GROK_CONFIG: '',
+          GROK_DEFAULT_MODEL: '',
+          GROK_HOME: expect.stringContaining('/heteroAgent/bindings/grok-build/'),
+          LOBEHUB_GROK_API_KEY: 'provider-secret',
+        }),
+      );
+      expect(options.env).not.toHaveProperty('GROK_CODE_XAI_API_KEY');
+      expect(options.env).not.toHaveProperty('XAI_API_KEY');
+
+      const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'grok-build');
+      const [bindingDir] = await readdir(bindingsDir);
+      const config = await readFile(path.join(bindingsDir, bindingDir, 'config.toml'), 'utf8');
+      expect(config).toContain('model = "gpt-test"');
+      expect(config).toContain('base_url = "https://api.openai.com/v1"');
+      expect(config).toContain('api_backend = "responses"');
+      expect(config).not.toContain('provider-secret');
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('provider-secret');
+      expect(await readdir(path.join(appStoragePath, 'heteroAgent', 'runs'))).toEqual([]);
+    });
+
     it.each([
       ['cancelSession', grokAcpSessionInterruptMock],
       ['stopSession', grokAcpSessionCloseMock],

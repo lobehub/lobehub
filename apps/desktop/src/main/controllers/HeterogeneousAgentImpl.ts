@@ -817,6 +817,13 @@ export default class HeterogeneousAgentCtr {
     ) {
       appendLoopbackNoProxy(env);
     }
+    if (session.agentType === 'grok-build' && session.hostedProviderBinding) {
+      // Empty XAI_API_KEY values still count as configured in Grok and can
+      // trigger an empty-key probe. Remove both current and legacy inherited
+      // credentials so the managed model's env_key is the only BYOK source.
+      delete env.GROK_CODE_XAI_API_KEY;
+      delete env.XAI_API_KEY;
+    }
     return env;
   }
 
@@ -2028,6 +2035,7 @@ export default class HeterogeneousAgentCtr {
         cause: error,
       });
     } finally {
+      await session.hostedProviderBinding?.cleanup();
       if (session.grokAcpSession === acpSession) session.grokAcpSession = undefined;
     }
   }

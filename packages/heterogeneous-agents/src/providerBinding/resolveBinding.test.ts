@@ -226,6 +226,76 @@ describe('heterogeneous provider binding protocol resolver', () => {
     expect(result.resolution?.modelMetadata).toEqual(modelMetadata);
   });
 
+  it.each([
+    [
+      'anthropic-messages',
+      'anthropic-custom',
+      runtime('anthropic', {
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://anthropic.example.com' },
+      }),
+    ],
+    [
+      'openai-chat-completions',
+      'chat-provider',
+      runtime('openai', {
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://chat.example.com/v1' },
+      }),
+    ],
+    [
+      'openai-responses',
+      'responses-provider',
+      runtime('openai', {
+        config: { enableResponseApi: true },
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://responses.example.com/v1' },
+        settings: { sdkType: 'openai', supportResponsesApi: true },
+      }),
+    ],
+  ] as const)('allows Grok Build on %s', (protocol, providerId, runtimeConfig) => {
+    const result = resolveHeterogeneousProviderBinding({
+      agentType: 'grok-build',
+      apiConfig: { model: 'bound-model', providerId },
+      providerEnabled: true,
+      runtimeConfig,
+    });
+
+    expect(result.resolution?.protocol).toBe(protocol);
+  });
+
+  it('uses official endpoints for Grok Build and rejects Google or missing custom endpoints', () => {
+    expect(
+      resolveHeterogeneousProviderBinding({
+        agentType: 'grok-build',
+        apiConfig: { model: 'gpt-test', providerId: 'openai' },
+        providerEnabled: true,
+        runtimeConfig: runtime('openai'),
+      }).resolution,
+    ).toMatchObject({ endpoint: 'https://api.openai.com/v1', protocol: 'openai-responses' });
+    expect(
+      resolveHeterogeneousProviderBinding({
+        agentType: 'grok-build',
+        apiConfig: { model: 'claude-test', providerId: 'anthropic' },
+        providerEnabled: true,
+        runtimeConfig: runtime('anthropic'),
+      }).resolution,
+    ).toMatchObject({ endpoint: 'https://api.anthropic.com', protocol: 'anthropic-messages' });
+    expect(
+      resolveHeterogeneousProviderBinding({
+        agentType: 'grok-build',
+        apiConfig: { model: 'gemini-test', providerId: 'google' },
+        providerEnabled: true,
+        runtimeConfig: runtime('google'),
+      }).error?.code,
+    ).toBe('protocolMismatch');
+    expect(
+      resolveHeterogeneousProviderBinding({
+        agentType: 'grok-build',
+        apiConfig: { model: 'chat-test', providerId: 'custom-openai' },
+        providerEnabled: true,
+        runtimeConfig: runtime('openai'),
+      }).error?.code,
+    ).toBe('endpointMissing');
+  });
+
   it('validates credentials only inside the trusted host boundary', () => {
     const input = {
       agentType: 'claude-code',
