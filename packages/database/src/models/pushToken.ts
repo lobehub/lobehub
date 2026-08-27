@@ -145,6 +145,35 @@ export class PushLiveActivityModel {
         ),
       );
   }
+
+  /**
+   * Remove exactly the registration that supplied a stale callback.
+   *
+   * The push-token predicate fences a concurrent ActivityKit token rotation:
+   * a late cleanup for the previous token must not delete the newer row that
+   * won the same (owner, device, activity) upsert identity.
+   */
+  async unregisterIfPushToken(activityKey: string, deviceId: string, pushToken: string) {
+    return this.db
+      .delete(pushLiveActivities)
+      .where(
+        and(
+          eq(pushLiveActivities.userId, this.userId),
+          eq(pushLiveActivities.activityKey, activityKey),
+          eq(pushLiveActivities.deviceId, deviceId),
+          eq(pushLiveActivities.pushToken, pushToken),
+        ),
+      );
+  }
+
+  /** Remove every stale activity registration for one owned device. */
+  async unregisterDevice(deviceId: string) {
+    return this.db
+      .delete(pushLiveActivities)
+      .where(
+        and(eq(pushLiveActivities.userId, this.userId), eq(pushLiveActivities.deviceId, deviceId)),
+      );
+  }
 }
 
 /**
@@ -164,12 +193,27 @@ export async function deletePushTokensByExpoTokens(
  * client clean up its own token without a session, by presenting the
  * (expoToken, deviceId) pair it received at registration. Both fields must
  * match so a stale row for a different device can't be deleted by accident.
+ * Matching owner/device Live Activity registrations are removed atomically.
  */
 export async function deletePushTokenByExpoTokenAndDevice(
   db: LobeChatDatabase,
   args: { deviceId: string; expoToken: string },
 ): Promise<void> {
-  await db
-    .delete(pushTokens)
-    .where(and(eq(pushTokens.expoToken, args.expoToken), eq(pushTokens.deviceId, args.deviceId)));
+  await db.transaction(async (tx) => {
+    const deletedTokens = await tx
+      .delete(pushTokens)
+      .where(and(eq(pushTokens.expoToken, args.expoToken), eq(pushTokens.deviceId, args.deviceId)))
+      .returning({ userId: pushTokens.userId });
+    const userIds = [...new Set(deletedTokens.map(({ userId }) => userId))];
+    if (userIds.length === 0) return;
+
+    await tx
+      .delete(pushLiveActivities)
+      .where(
+        and(
+          inArray(pushLiveActivities.userId, userIds),
+          eq(pushLiveActivities.deviceId, args.deviceId),
+        ),
+      );
+  });
 }

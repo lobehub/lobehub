@@ -66,20 +66,91 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-const canonicalJson = (value: unknown): string => {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-      .join(',')}}`;
+interface CanonicalJsonOptions {
+  omitUndefinedObjectProperties?: boolean;
+}
+
+const canonicalJson = (
+  value: unknown,
+  options: CanonicalJsonOptions = {},
+  ancestors = new Set<object>(),
+): string => {
+  if (value === null) return 'null';
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('Value is not JSON-safe');
+    return JSON.stringify(value);
   }
-  return JSON.stringify(value);
+  if (typeof value !== 'object') throw new TypeError('Value is not JSON-safe');
+  if (ancestors.has(value)) throw new TypeError('Cyclic value is not JSON-safe');
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (
+        Object.getPrototypeOf(value) !== Array.prototype ||
+        Object.keys(value).length !== value.length ||
+        Reflect.ownKeys(value).length !== value.length + 1
+      ) {
+        throw new TypeError('Non-standard array is not JSON-safe');
+      }
+      const items: string[] = [];
+      for (let index = 0; index < value.length; index++) {
+        if (!Object.hasOwn(value, index)) throw new TypeError('Sparse array is not JSON-safe');
+        items.push(canonicalJson(value[index], options, ancestors));
+      }
+      return `[${items.join(',')}]`;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError('Non-plain object is not JSON-safe');
+    }
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record);
+    if (Reflect.ownKeys(record).length !== keys.length) {
+      throw new TypeError('Hidden or symbol properties are not JSON-safe');
+    }
+    const serializedKeys = options.omitUndefinedObjectProperties
+      ? keys.filter((key) => record[key] !== undefined)
+      : keys;
+    return `{${serializedKeys
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key], options, ancestors)}`)
+      .join(',')}}`;
+  } finally {
+    ancestors.delete(value);
+  }
 };
 
 const sameJson = (left: unknown, right: unknown): boolean =>
   canonicalJson(left) === canonicalJson(right);
+
+const canonicalDtoJson = (value: unknown): string =>
+  canonicalJson(value, { omitUndefinedObjectProperties: true });
+
+const sameDtoJson = (left: unknown, right: unknown): boolean =>
+  canonicalDtoJson(left) === canonicalDtoJson(right);
+
+const normalizeDtoJson = <T>(value: T): T => JSON.parse(canonicalDtoJson(value)) as T;
+
+const isCanonicalJsonSafe = (value: unknown): boolean => {
+  try {
+    canonicalJson(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const isCanonicalDtoJsonSafe = (value: unknown): boolean => {
+  try {
+    canonicalDtoJson(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const uniqueSorted = (values: readonly string[]): string[] => [...new Set(values)].sort();
 
@@ -90,7 +161,8 @@ const isCustomExecutionResult = (value: unknown): value is AgentInterventionCust
   isPlainRecord(value) &&
   hasOnlyKeys(value, ['content', 'pluginState']) &&
   typeof value.content === 'string' &&
-  isPlainRecord(value.pluginState);
+  isPlainRecord(value.pluginState) &&
+  isCanonicalJsonSafe(value);
 
 const hasOnlyKeys = (record: Record<string, unknown>, allowedKeys: readonly string[]): boolean => {
   const allowed = new Set(allowedKeys);
@@ -129,7 +201,8 @@ const providerOptionIds = (request: AgentInterventionSanitizedRequest): Set<stri
 };
 
 const isBoundedFormValue = (value: unknown): boolean => {
-  if (value === null || typeof value === 'boolean' || typeof value === 'number') return true;
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
   if (typeof value === 'string') return value.length <= 10_000;
   return (
     Array.isArray(value) &&
@@ -769,7 +842,7 @@ export class AgentInterventionModel {
     if (!supersedes) {
       return this.db.transaction(async (tx) => {
         const [ownedOperation] = await tx
-          .select({ id: agentOperations.id })
+          .select({ id: agentOperations.id, status: agentOperations.status })
           .from(agentOperations)
           .where(
             and(
@@ -795,7 +868,14 @@ export class AgentInterventionModel {
           )
           .limit(1)
           .for('update');
-        const interventions = await this.createBatchInTransaction(tx, batch, true);
+        if (
+          existing.length === 0 &&
+          batch.source === 'runtime' &&
+          ownedOperation.status !== 'waiting_for_human'
+        ) {
+          throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+        }
+        const interventions = await this.createBatchInTransaction(tx, batch, ownedOperation.status);
         return {
           interventions,
           outcome: existing.length > 0 ? 'idempotent' : 'applied',
@@ -851,7 +931,7 @@ export class AgentInterventionModel {
         !oldOperation ||
         !newOperation ||
         !['waiting_for_human', 'done'].includes(oldOperation.status) ||
-        newOperation.status !== 'waiting_for_human' ||
+        !['waiting_for_human', 'done'].includes(newOperation.status) ||
         !this.hasSameOperationContext(oldOperation, newOperation)
       ) {
         throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
@@ -937,6 +1017,14 @@ export class AgentInterventionModel {
             operationId: supersedes.operationId,
           },
         };
+      }
+
+      // A replacement may only be created while its new runtime operation is
+      // still parked. The broader status allowance above exists solely so an
+      // exact, already-created replacement can be replayed idempotently after
+      // its continuation has advanced the operation to done.
+      if (newOperation.status !== 'waiting_for_human') {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
       }
 
       if (
@@ -1039,7 +1127,7 @@ export class AgentInterventionModel {
           ),
         );
 
-      const interventions = await this.createBatchInTransaction(tx, batch, true);
+      const interventions = await this.createBatchInTransaction(tx, batch, newOperation.status);
       const supersededRows = await tx
         .select()
         .from(agentInterventions)
@@ -1138,6 +1226,9 @@ export class AgentInterventionModel {
   ): Promise<AgentInterventionBatchMutationResult> => {
     if (!UUID_PATTERN.test(params.resolutionRequestId)) {
       throw new Error(AGENT_INTERVENTION_INVALID_BATCH);
+    }
+    if (!isCanonicalJsonSafe(params.action)) {
+      throw new Error(AGENT_INTERVENTION_INVALID_ACTION);
     }
 
     const existingRequest = await this.findResolutionByRequestId(params.resolutionRequestId);
@@ -1567,11 +1658,12 @@ export class AgentInterventionModel {
   private createBatchInTransaction = async (
     tx: Transaction,
     params: CreateAgentInterventionBatchParams,
-    operationAlreadyLocked = false,
+    lockedOperationStatus?: AgentInterventionOperationIdentity['status'],
   ): Promise<AgentInterventionItem[]> => {
-    if (!operationAlreadyLocked) {
+    let operationStatus = lockedOperationStatus;
+    if (operationStatus === undefined) {
       const [ownedOperation] = await tx
-        .select({ id: agentOperations.id })
+        .select({ id: agentOperations.id, status: agentOperations.status })
         .from(agentOperations)
         .where(
           and(
@@ -1585,6 +1677,7 @@ export class AgentInterventionModel {
         .limit(1)
         .for('update');
       if (!ownedOperation) throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      operationStatus = ownedOperation.status;
     }
 
     const existing = await tx
@@ -1606,6 +1699,9 @@ export class AgentInterventionModel {
       }
       return existing;
     }
+    if (params.source === 'runtime' && operationStatus !== 'waiting_for_human') {
+      throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    }
 
     try {
       return await tx
@@ -1622,6 +1718,9 @@ export class AgentInterventionModel {
             itemIndex,
             operationId: params.operationId,
             provider: item.provider ?? params.provider ?? null,
+            reviewContext: normalizeDtoJson(item.reviewContext),
+            risk: item.risk === undefined ? null : normalizeDtoJson(item.risk),
+            sanitizedRequest: normalizeDtoJson(item.sanitizedRequest),
             sealed: true,
             source: params.source,
             stepIndex: params.stepIndex,
@@ -1666,9 +1765,9 @@ export class AgentInterventionModel {
         row.toolCallId === item.toolCallId &&
         row.toolMessageId === (item.toolMessageId ?? null) &&
         sameJson(uniqueSorted(row.allowedActions), uniqueSorted(item.allowedActions)) &&
-        sameJson(row.reviewContext, item.reviewContext) &&
-        sameJson(row.risk, item.risk ?? null) &&
-        sameJson(row.sanitizedRequest, item.sanitizedRequest)
+        sameDtoJson(row.reviewContext, item.reviewContext) &&
+        sameDtoJson(row.risk, item.risk ?? null) &&
+        sameDtoJson(row.sanitizedRequest, item.sanitizedRequest)
       );
     });
 
@@ -1739,6 +1838,9 @@ export class AgentInterventionModel {
       const unsafeRequest = item.sanitizedRequest as AgentInterventionSanitizedRequest &
         Record<string, unknown>;
       if (
+        !isCanonicalDtoJsonSafe(item.reviewContext) ||
+        !isCanonicalDtoJsonSafe(item.risk ?? null) ||
+        !isCanonicalDtoJsonSafe(item.sanitizedRequest) ||
         'arguments' in unsafeRequest ||
         'rawArguments' in unsafeRequest ||
         'metadata' in unsafeRequest ||

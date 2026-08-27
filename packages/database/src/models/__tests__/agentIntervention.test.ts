@@ -245,6 +245,12 @@ const seedToolMessage = async (params: {
   return assistantId;
 };
 
+const parkOperation = (id = operationId) =>
+  serverDB
+    .update(agentOperations)
+    .set({ completedAt: null, completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+    .where(eq(agentOperations.id, id));
+
 const createRuntimeApprovalBatch = async (params?: {
   batchId?: string;
   canonicalToolKey?: string;
@@ -254,10 +260,7 @@ const createRuntimeApprovalBatch = async (params?: {
 }) => {
   const count = params?.count ?? 1;
   const op = params?.operationId ?? operationId;
-  await serverDB
-    .update(agentOperations)
-    .set({ completedAt: null, completionReason: 'waiting_for_human', status: 'waiting_for_human' })
-    .where(eq(agentOperations.id, op));
+  await parkOperation(op);
   const items = [];
   for (let index = 0; index < count; index++) {
     const toolCallId = `${op}-tool-${hashSequence + index + 1}`;
@@ -421,6 +424,106 @@ describe('AgentInterventionModel', () => {
     ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
   });
 
+  it('normalizes optional undefined fields from durable Review DTOs before persistence', async () => {
+    const item = questionItem({
+      canonicalToolKey: undefined,
+      provider: undefined,
+      reviewContext: {
+        agentLabel: undefined,
+        resourceLabel: undefined,
+        summary: undefined,
+        title: 'Optional Review fields',
+      },
+      risk: { level: 'low', summary: undefined, warnings: undefined },
+      sanitizedRequest: {
+        apiName: 'askUserQuestion',
+        identifier: undefined,
+        questions: [
+          {
+            header: undefined,
+            id: 'mode',
+            options: [
+              {
+                description: undefined,
+                id: 'safe',
+                label: 'Safe',
+                recommended: undefined,
+              },
+            ],
+            question: 'Which mode?',
+          },
+        ],
+      },
+      toolCallId: 'optional-review-tool',
+      toolMessageId: undefined,
+    });
+    const params: Parameters<typeof model.createBatch>[0] = {
+      activityKey: 'optional-review-activity',
+      batchId: 'optional-review-batch',
+      deadline: new Date(Date.now() + 60_000),
+      items: [item],
+      operationId,
+      provider: 'claude-code',
+      source: 'heterogeneous',
+      stepIndex: 0,
+      systemActionEligibility: 'review_only',
+    };
+
+    const created = await model.createBatch(params);
+
+    expect(created[0]).toMatchObject({
+      canonicalToolKey: null,
+      provider: 'claude-code',
+      reviewContext: { title: 'Optional Review fields' },
+      risk: { level: 'low' },
+      sanitizedRequest: {
+        apiName: 'askUserQuestion',
+        questions: [
+          {
+            id: 'mode',
+            options: [{ id: 'safe', label: 'Safe' }],
+            question: 'Which mode?',
+          },
+        ],
+      },
+      toolMessageId: null,
+    });
+    expect(await model.createBatch(params)).toEqual(created);
+  });
+
+  it('rejects non-JSON-safe values from durable Review metadata', async () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    const sparseArray: unknown[] = [];
+    sparseArray.length = 1;
+    const unsafeValues: [string, unknown][] = [
+      ['date', new Date()],
+      ['bigint', 1n],
+      ['function', () => true],
+      ['symbol', Symbol('unsafe')],
+      ['nan', Number.NaN],
+      ['infinity', Number.POSITIVE_INFINITY],
+      ['negative-infinity', Number.NEGATIVE_INFINITY],
+      ['array-undefined', [undefined]],
+      ['sparse-array', sparseArray],
+      ['cycle', cyclic],
+    ];
+
+    for (const [name, value] of unsafeValues) {
+      await expect(
+        createQuestionBatch({
+          batchId: `unsafe-review-${name}`,
+          items: [
+            questionItem({
+              reviewContext: { title: 'Unsafe Review', value } as never,
+              toolCallId: `unsafe-review-tool-${name}`,
+            }),
+          ],
+        }),
+      ).rejects.toThrow(AGENT_INTERVENTION_INVALID_BATCH);
+    }
+  });
+
   it('reports applied then idempotent when the atomic create has no predecessor', async () => {
     const params: Parameters<typeof model.createBatch>[0] = {
       activityKey: 'atomic-create-activity',
@@ -440,6 +543,77 @@ describe('AgentInterventionModel', () => {
     expect(await model.createBatchWithSupersession({ batch: params })).toMatchObject({
       outcome: 'idempotent',
     });
+  });
+
+  it('creates a new runtime batch only while its locked operation is waiting for human', async () => {
+    const params: Parameters<typeof model.createBatch>[0] = {
+      activityKey: 'runtime-state-activity',
+      batchId: 'runtime-state-batch',
+      deadline: new Date(Date.now() + 60_000),
+      items: [questionItem({ toolCallId: 'runtime-state-tool' })],
+      operationId,
+      source: 'runtime',
+      stepIndex: 0,
+      systemActionEligibility: 'review_only',
+    };
+    await serverDB
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, operationId));
+
+    await expect(model.createBatch(params)).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    expect((await model.findBatch(operationId, params.batchId)).interventions).toEqual([]);
+
+    await parkOperation();
+    const created = await model.createBatch(params);
+    await serverDB
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, operationId));
+    expect(await model.createBatch(params)).toEqual(created);
+  });
+
+  it('closes the terminal-operation race for atomic runtime create without a predecessor', async () => {
+    const params: Parameters<typeof model.createBatch>[0] = {
+      activityKey: 'atomic-runtime-state-activity',
+      batchId: 'atomic-runtime-state-batch',
+      deadline: new Date(Date.now() + 60_000),
+      items: [questionItem({ toolCallId: 'atomic-runtime-state-tool' })],
+      operationId,
+      source: 'runtime',
+      stepIndex: 0,
+      systemActionEligibility: 'review_only',
+    };
+    await serverDB
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, operationId));
+
+    await expect(model.createBatchWithSupersession({ batch: params })).rejects.toThrow(
+      AGENT_INTERVENTION_IDENTITY_CONFLICT,
+    );
+    expect((await model.findBatch(operationId, params.batchId)).interventions).toEqual([]);
+
+    await parkOperation();
+    expect(await model.createBatchWithSupersession({ batch: params })).toMatchObject({
+      outcome: 'applied',
+    });
+    await serverDB
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, operationId));
+    expect(await model.createBatchWithSupersession({ batch: params })).toMatchObject({
+      outcome: 'idempotent',
+    });
+  });
+
+  it('allows heterogeneous batches regardless of the owner operation status', async () => {
+    await serverDB
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, operationId));
+
+    expect(await createQuestionBatch({ batchId: 'terminal-heterogeneous-batch' })).toHaveLength(1);
   });
 
   it('keeps identical batch ids isolated by operation id', async () => {
@@ -492,6 +666,7 @@ describe('AgentInterventionModel', () => {
   });
 
   it('allows a partial custom item without claiming the rest of a mixed batch', async () => {
+    await parkOperation();
     const rows = await model.createBatch({
       activityKey: 'custom-activity',
       batchId: 'custom-batch',
@@ -995,6 +1170,7 @@ describe('AgentInterventionModel', () => {
       }),
     ).rejects.toThrow(AGENT_INTERVENTION_INVALID_BATCH);
 
+    await parkOperation();
     const rows = await model.createBatch({
       activityKey: 'marketplace-activity',
       batchId: 'marketplace-batch',
@@ -1371,7 +1547,10 @@ describe('AgentInterventionModel', () => {
     const originalArguments = JSON.stringify({ path: 'file-0.txt' });
     const claimed = await claim(
       rows,
-      { editedArguments: { path: 'edited.txt' }, type: 'approve' },
+      {
+        editedArguments: { a: { x: 1, y: 2 }, path: 'edited.txt', z: 1 },
+        type: 'approve',
+      },
       { actorId: ownerId },
     );
     if (claimed.outcome !== 'applied') throw new Error('claim failed');
@@ -1380,10 +1559,10 @@ describe('AgentInterventionModel', () => {
       .select()
       .from(messagePlugins)
       .where(eq(messagePlugins.id, rows[0].toolMessageId!));
-    expect(pluginAfterEdit.arguments).toBe('{"path":"edited.txt"}');
+    expect(pluginAfterEdit.arguments).toBe('{"a":{"x":1,"y":2},"path":"edited.txt","z":1}');
     expect(claimed.resolution).toMatchObject({
       argumentEffectStatus: 'applied',
-      editedArguments: '{"path":"edited.txt"}',
+      editedArguments: '{"a":{"x":1,"y":2},"path":"edited.txt","z":1}',
       originalArguments,
     });
 
@@ -1398,6 +1577,41 @@ describe('AgentInterventionModel', () => {
       requestRevisionHash: hashAgentInterventionRequestRevision(originalArguments),
       status: 'pending',
     });
+  });
+
+  it('rejects non-JSON-safe edited arguments before mutating the tool message', async () => {
+    const rows = await createRuntimeApprovalBatch({ batchId: 'unsafe-edit-batch' });
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    const sparseArray: unknown[] = [];
+    sparseArray.length = 1;
+    const unsafeValues: [string, unknown][] = [
+      ['undefined', undefined],
+      ['date', new Date()],
+      ['bigint', 1n],
+      ['function', () => true],
+      ['symbol', Symbol('unsafe')],
+      ['nan', Number.NaN],
+      ['infinity', Number.POSITIVE_INFINITY],
+      ['negative-infinity', Number.NEGATIVE_INFINITY],
+      ['sparse-array', sparseArray],
+      ['cycle', cyclic],
+    ];
+
+    for (const [, value] of unsafeValues) {
+      await expect(
+        claim(rows, { editedArguments: { value }, type: 'approve' } as never, { actorId: ownerId }),
+      ).rejects.toThrow(AGENT_INTERVENTION_INVALID_ACTION);
+    }
+
+    const [plugin] = await serverDB
+      .select({ arguments: messagePlugins.arguments })
+      .from(messagePlugins)
+      .where(eq(messagePlugins.id, rows[0].toolMessageId!));
+    expect(plugin.arguments).toBe('{"path":"file-0.txt"}');
+    expect((await model.findBatch(operationId, rows[0].batchId)).interventions[0].status).toBe(
+      'pending',
+    );
   });
 
   it('fails closed when authoritative arguments no longer match the Review revision', async () => {
@@ -1537,6 +1751,10 @@ describe('AgentInterventionModel', () => {
     expect(
       (await model.completeRuntimeResolution(claimed.resolution.resolutionRequestId)).outcome,
     ).toBe('idempotent');
+    await serverDB
+      .update(agentOperations)
+      .set({ completionReason: 'done', status: 'done' })
+      .where(eq(agentOperations.id, secondOperationId));
     expect((await model.createBatchWithSupersession({ batch, supersedes })).outcome).toBe(
       'idempotent',
     );
