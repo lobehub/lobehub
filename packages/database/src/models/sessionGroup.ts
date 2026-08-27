@@ -28,6 +28,7 @@ export class SessionGroupModel {
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
+        isDeleted: sessionGroups.isDeleted,
         userId: sessionGroups.userId,
         workspaceId: sessionGroups.workspaceId,
         visibility: sessionGroups.visibility,
