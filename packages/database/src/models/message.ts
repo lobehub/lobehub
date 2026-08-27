@@ -1,6 +1,7 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { parse } from '@lobechat/conversation-flow';
 import type {
+  AssistantContentBlock,
   ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
@@ -22,6 +23,7 @@ import type {
   TaskDetail,
   ThreadStatus,
   UIChatMessage,
+  UISignalCallbacksBlock,
   UpdateMessageParams,
   UpdateMessageRAGParams,
   WorkSummaryItem,
@@ -493,9 +495,7 @@ const VISITOR_MESSAGE_ALLOWED_KEYS = [
   'audioList',
   'chunksList',
   'plugin',
-  'pluginError',
   'pluginIntervention',
-  'pluginState',
   'tool_call_id',
   'tools',
   'reasoning',
@@ -512,8 +512,6 @@ const VISITOR_MESSAGE_ALLOWED_KEYS = [
   'sessionId',
   'quotaId',
   'branch',
-  'signalCallbacks',
-  'taskCompletions',
   'tasks',
   'performance',
   'observationId',
@@ -544,8 +542,38 @@ const VISITOR_MESSAGE_DENIED_KEYS = ['sender', 'usage', 'model', 'provider', 'wo
  * Fields that reach a visitor but need transformation rather than a plain
  * allow/deny: nested full messages (recursively sanitized by
  * {@link toVisitorMessage} itself), narrow model-snapshot projections
- * (`pinnedMessages`, `children`), and payloads carrying creator cost data
- * that isn't the top-level `usage` field.
+ * (`pinnedMessages`, `children`, `signalCallbacks`), payloads carrying
+ * creator cost data that isn't the top-level `usage` field (`taskDetail`,
+ * `taskCompletions`), and unbounded per-tool blobs whose contents are
+ * entirely up to the tool's own server runtime (`pluginState`,
+ * `pluginError`).
+ *
+ * `pluginState`/`pluginError` were previously plain entries in
+ * {@link VISITOR_MESSAGE_ALLOWED_KEYS}, which only proves the FIELD is safe
+ * to forward, not its CONTENTS — `pluginState?: any` on `UIChatMessage`
+ * means a builtin tool's server runtime controls everything inside it. Codex
+ * P2 (LOBE-11930): `lobe-agent`'s `analyzeMedia` API writes
+ * `model`/`provider`/`usage` straight into its `pluginState`
+ * (`apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts`'s
+ * `analyzeMedia`, `state: { model, provider, usage, ... }`) — the exact
+ * runtime identifiers and creator-billed token snapshot this file's
+ * top-level `usage`/`model`/`provider` denial exists to keep from visitors,
+ * reintroduced through a field the allowlist admitted wholesale.
+ * {@link redactCreatorPrivateBlob} closes this recursively rather than
+ * per-tool: `pluginState`'s shape is not enumerable the way `UIChatMessage`'s
+ * own keys are (a new tool, or a new
+ * field on an existing tool's `state`, ships with no signal that it needs
+ * classifying here), so a fixed set of creator-identity/spend key names is
+ * stripped at ANY nesting depth instead of allowlisting every tool's output
+ * shape by hand.
+ *
+ * `signalCallbacks`/`taskCompletions` are virtual, denormalized-at-query-time
+ * blocks built by `FlatListBuilder` (`packages/conversation-flow`) for
+ * `assistantGroup`/`supervisor` messages — `signalCallbacks[].callbacks[]`
+ * carries a bare `model`/`provider` snapshot per callback turn, and
+ * `taskCompletions[]` carries a per-block `usage` snapshot, the same class of
+ * leak as the `pinnedMessages`/`children` projections but never covered by
+ * that fix.
  */
 const VISITOR_MESSAGE_SPECIAL_KEYS = [
   'extra',
@@ -554,7 +582,11 @@ const VISITOR_MESSAGE_SPECIAL_KEYS = [
   'pinnedMessages',
   'children',
   'taskDetail',
+  'taskCompletions',
+  'signalCallbacks',
   'metadata',
+  'pluginState',
+  'pluginError',
 ] as const;
 
 export const VISITOR_MESSAGE_CLASSIFIED_KEYS: readonly string[] = [
@@ -612,6 +644,104 @@ const sanitizeVisitorTaskDetail = (taskDetail: TaskDetail | undefined): TaskDeta
 };
 
 /**
+ * Key names that identify the CREATOR's model/provider choice or spend/token
+ * data wherever they occur inside an unbounded per-tool blob
+ * (`pluginState`/`pluginError`). A builtin tool's server runtime writes
+ * whatever shape it wants into `state`/error payloads — see
+ * `serverRuntimes/lobeAgent.ts`'s `analyzeMedia` (`state: { model, provider,
+ * usage, ... }`) — so unlike `VISITOR_MESSAGE_DENIED_KEYS` (a short, fully
+ * enumerable list of top-level `UIChatMessage` fields), there is no finite
+ * set of "every tool's state shape" to allowlist by hand: a new tool, or a
+ * new field on an existing tool's `state`, must be safe BY DEFAULT, not
+ * after someone remembers to re-audit it. Recursing this fixed key set is
+ * the fail-closed trade-off: it strips a field with one of these names
+ * wherever it appears, at the cost of also stripping it in the rare case a
+ * tool legitimately means something else by e.g. `model` (no such case
+ * exists in the current registry — see `redactCreatorPrivateBlob`'s call
+ * sites for the full per-tool audit).
+ */
+const CREATOR_PRIVATE_BLOB_KEYS = new Set([
+  'model',
+  'provider',
+  'usage',
+  'cost',
+  'totalCost',
+  'totalTokens',
+  'promptTokens',
+  'completionTokens',
+  'inputTokens',
+  'outputTokens',
+]);
+
+/**
+ * Recursively strip {@link CREATOR_PRIVATE_BLOB_KEYS} from an unbounded
+ * JSON-like value at ANY nesting depth — the structural fix for the
+ * `pluginState`/`pluginError` class of leak (see
+ * {@link VISITOR_MESSAGE_SPECIAL_KEYS}'s JSDoc). Only descends into plain
+ * objects/arrays (`isPlainRecord` already excludes `Date`/`Error`/class
+ * instances, matching this file's other blob handling) — anything else
+ * (string, number, boolean, `Date`, etc.) is returned as-is, since it cannot
+ * itself carry a nested creator-identity field.
+ */
+const redactCreatorPrivateBlob = <T>(value: T): T => {
+  if (Array.isArray(value)) return value.map((item) => redactCreatorPrivateBlob(item)) as T;
+  if (!isPlainRecord(value)) return value;
+
+  const result: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (CREATOR_PRIVATE_BLOB_KEYS.has(key)) continue;
+    result[key] = redactCreatorPrivateBlob(nested);
+  }
+  return result as T;
+};
+
+/** See {@link CREATOR_PRIVATE_BLOB_KEYS} / {@link redactCreatorPrivateBlob}. */
+const sanitizeVisitorPluginState = (pluginState: unknown): unknown =>
+  redactCreatorPrivateBlob(pluginState);
+
+/**
+ * `pluginError` is typed `any` on `UIChatMessage` for the same reason as
+ * `pluginState` (a tool runtime's own error shape) and is populated from the
+ * same `messagePlugins` write path (`updateToolMessage`'s `pluginError`
+ * param) — treated identically rather than assumed harmless because it is
+ * "just an error."
+ */
+const sanitizeVisitorPluginError = (pluginError: unknown): unknown =>
+  redactCreatorPrivateBlob(pluginError);
+
+/**
+ * `signalCallbacks[].callbacks[]` is a denormalized per-callback snapshot
+ * built by `FlatListBuilder` (`result.signalCallbacks = signalCallbackBlocks
+ * .map(...)` in `packages/conversation-flow`), carrying a bare
+ * `model`/`provider` pair per callback turn — same leak class as
+ * `pinnedMessages`/`children`'s group-node snapshots, just never covered by
+ * that fix since this field didn't exist yet when it shipped.
+ */
+const sanitizeVisitorSignalCallbacks = (
+  signalCallbacks: UISignalCallbacksBlock[] | undefined,
+): UISignalCallbacksBlock[] | undefined =>
+  signalCallbacks?.map((block) => ({
+    ...block,
+    callbacks: block.callbacks.map((callback) => ({
+      ...callback,
+      model: undefined,
+      provider: undefined,
+    })),
+  }));
+
+/**
+ * `taskCompletions[]` blocks are denormalized post-task-summary snapshots
+ * built by `FlatListBuilder` (`result.taskCompletions = taskCompletionMessages
+ * .map(...)` in `packages/conversation-flow`), each carrying its own
+ * `usage` — the same class of creator spend data as the top-level `usage`
+ * field this file already denies.
+ */
+const sanitizeVisitorTaskCompletions = (
+  taskCompletions: AssistantContentBlock[] | undefined,
+): AssistantContentBlock[] | undefined =>
+  taskCompletions?.map(({ usage: _usage, ...rest }) => rest);
+
+/**
  * `metadata.usage` / `metadata.cost` are the pre-migration duplicates of the
  * (denied) top-level `usage` field — kept on the type only so legacy rows
  * written before the dedicated `usage` column still type-check (see
@@ -647,7 +777,14 @@ export const toVisitorMessage = (message: UIChatMessage): UIChatMessage =>
     ...pickAllowedKeys(message),
     extra: sanitizeVisitorExtra(message.extra),
     metadata: sanitizeVisitorMetadata(message.metadata),
+    // Unbounded per-tool blobs — see `pluginState`/`pluginError`'s entry in
+    // `VISITOR_MESSAGE_SPECIAL_KEYS`'s JSDoc for why these need recursive
+    // redaction rather than a plain allow.
+    pluginError: sanitizeVisitorPluginError(message.pluginError),
+    pluginState: sanitizeVisitorPluginState(message.pluginState),
     sender: null,
+    signalCallbacks: sanitizeVisitorSignalCallbacks(message.signalCallbacks),
+    taskCompletions: sanitizeVisitorTaskCompletions(message.taskCompletions),
     taskDetail: sanitizeVisitorTaskDetail(message.taskDetail),
     usage: undefined,
     works: undefined,
