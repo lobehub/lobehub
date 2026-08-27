@@ -33,14 +33,9 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('antd', () => ({

@@ -83,6 +83,32 @@ vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
 vi.mock('@/services/chat'); // Too broad
 ```
 
+## UI Library Mocks (@lobehub/ui/base-ui)
+
+**Default: do NOT mock `@lobehub/ui/base-ui` — render the real components.**
+`vitest.config.mts` redirects the library's internal MotionProvider to a static
+stub (`tests/mocks/lobehubUiMotionProvider.tsx`), so base-ui components render in
+tests without the app-level ConfigProvider. `Please wrap your app with <ConfigProvider> (or <MotionProvider>)` in a test means that redirect is not in
+effect (e.g. a package-local vitest config) — do not fix it by hand-mocking every
+component.
+
+When a test genuinely wants simplified DOM, compose the canonical stubs over the
+real module instead of writing a closed factory (closed factories break whenever
+the library migrates a component's import path):
+
+```typescript
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+```
+
+`~base-ui-stubs` (`tests/mocks/baseUiStubs.tsx`) covers ActionIcon / Button /
+Text / Tag / Avatar / Alert / toast / confirmModal / createModal with standard
+aria semantics. A per-file factory is still fine when assertions need bespoke
+testid conventions — but keep it composed over `importOriginal` so unknown
+exports never go missing.
+
 ## Detailed Guides
 
 See `references/` for specific testing scenarios:

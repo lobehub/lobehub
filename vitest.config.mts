@@ -40,17 +40,18 @@ const alias = {
   // that reports no active workspace so workspace-aware nav helpers behave
   // like plain react-router.
   '@/store/workspace': resolve(__dirname, './tests/mocks/storeWorkspace.ts'),
+  '~base-ui-stubs': resolve(__dirname, './tests/mocks/baseUiStubs.tsx'),
   '~test-utils': resolve(__dirname, './tests/utils.tsx'),
   'lru_map': resolve(__dirname, './tests/mocks/lru_map'),
 };
 
 export default defineConfig({
   define: {
-    '__CI__': process.env.CI === 'true' ? 'true' : 'false',
-    '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
-    '__ELECTRON__': 'false',
-    '__MOBILE__': 'false',
-    '__TEST__': 'true',
+    __CI__: process.env.CI === 'true' ? 'true' : 'false',
+    __DEV__: process.env.NODE_ENV !== 'production' ? 'true' : 'false',
+    __ELECTRON__: 'false',
+    __MOBILE__: 'false',
+    __TEST__: 'true',
   },
   optimizeDeps: {
     exclude: ['crypto', 'util', 'tty'],
@@ -63,8 +64,7 @@ export default defineConfig({
     {
       name: 'raw-md',
       transform(_, id) {
-        if (id.endsWith('.md'))
-          return { code: 'export default ""', map: null };
+        if (id.endsWith('.md')) return { code: 'export default ""', map: null };
       },
     },
     /**
@@ -74,6 +74,24 @@ export default defineConfig({
      * In app bundlers this can be tolerated/rewritten, but Vite/Vitest resolves it strictly and
      * fails the whole test run. Redirect it to the real file.
      */
+    /**
+     * base-ui components resolve their motion implementation through
+     * `@lobehub/ui`'s internal MotionProvider module via relative imports, and
+     * its hook throws without the app-level ConfigProvider. Redirect that one
+     * module to a static stub so real base-ui components render in tests
+     * without per-file mocks. The module has no package subpath export, so an
+     * alias/vi.mock on a specifier cannot intercept it — only resolveId can.
+     */
+    {
+      enforce: 'pre',
+      name: 'stub-lobehub-ui-motion-provider',
+      resolveId(id, importer) {
+        if (!importer || !importer.includes('/@lobehub/ui/')) return null;
+        if (id.endsWith('/MotionProvider/index.mjs') || id.endsWith('/MotionProvider/index.js'))
+          return resolve(__dirname, './tests/mocks/lobehubUiMotionProvider.tsx');
+        return null;
+      },
+    },
     {
       enforce: 'pre',
       name: 'fix-lobehub-fluent-emoji-style-import',
