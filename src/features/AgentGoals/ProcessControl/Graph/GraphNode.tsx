@@ -22,7 +22,6 @@ import { useElapsed } from '../useElapsed';
 
 export interface GraphNodeData extends Record<string, unknown> {
   dim: boolean;
-  isFrontier: boolean;
   isGate: boolean;
   running: boolean;
   selected: boolean;
@@ -39,34 +38,24 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
 
     transition:
       opacity 0.2s,
-      box-shadow 0.15s,
       border-color 0.15s;
   `,
-  chip: css`
-    position: absolute;
-    inset-block-start: -9px;
-    inset-inline-end: 10px;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border: 1px solid;
-    border-radius: 999px;
-
-    font-size: 10px;
-    line-height: 14px;
-
-    background: ${cssVar.colorBgContainer};
+  chipDot: css`
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  `,
+  chipText: css`
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
   `,
   dim: css`
     opacity: 0.45;
-  `,
-  frontier: css`
-    border-color: ${cssVar.colorPrimaryBorder};
-    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   gate: css`
     border-color: ${cssVar.colorWarningBorder};
@@ -100,23 +89,20 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 12px;
   `,
   human: css`
-    position: absolute;
-    inset-block-start: -9px;
-    inset-inline-start: 10px;
-
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
 
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
 
     font-size: 9px;
     font-weight: 600;
-    color: ${cssVar.colorBgContainer};
+    color: ${cssVar.colorTextTertiary};
 
-    background: ${cssVar.colorText};
+    background: ${cssVar.colorFillTertiary};
   `,
   metric: css`
     display: flex;
@@ -138,7 +124,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   selected: css`
-    border-color: ${cssVar.colorPrimary};
+    border-color: ${cssVar.colorPrimaryBorder};
   `,
   stale: css`
     border-color: ${cssVar.colorErrorBorder};
@@ -191,7 +177,7 @@ RunningClock.displayName = 'GoalGraphRunningClock';
 const GraphNodeView = memo<NodeProps>(({ data }) => {
   const { t } = useTranslation('chat');
   const nodeData = data as GraphNodeData;
-  const { dim, isFrontier, isGate, running, selected, stale, subtitle, view } = nodeData;
+  const { dim, isGate, running, selected, stale, subtitle, view } = nodeData;
   const { node } = view;
   const chip = useStateChip(nodeData);
   const palette = KIND_COLOR[node.kind];
@@ -209,23 +195,12 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
       <div
         className={cx(
           styles.card,
-          isFrontier && !isGate && styles.frontier,
           isGate && styles.gate,
           stale && styles.stale,
           dim && styles.dim,
           selected && styles.selected,
         )}
       >
-        {chip && (
-          <span className={styles.chip} style={{ borderColor: chip.color, color: chip.color }}>
-            {chip.text}
-          </span>
-        )}
-        {view.humanTouches.length > 0 && (
-          <Tooltip title={t('goalProcess.node.humanTouched')}>
-            <span className={styles.human}>@</span>
-          </Tooltip>
-        )}
         <div className={styles.head}>
           <div className={styles.glyph} style={{ background: palette.soft, color: palette.line }}>
             <Icon icon={KIND_ICON[node.kind]} size={16} />
@@ -233,6 +208,24 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
           <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
             <span className={styles.title}>{node.title}</span>
             {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
+          </Flexbox>
+          {/* State and human participation sit inside the card, on the header's
+              trailing edge. Floating them on the card's outline collided with
+              the edges and arrowheads routed around it. */}
+          <Flexbox horizontal align={'center'} gap={6} style={{ flex: 'none' }}>
+            {view.humanTouches.length > 0 && (
+              <Tooltip title={t('goalProcess.node.humanTouched')}>
+                <span className={styles.human}>@</span>
+              </Tooltip>
+            )}
+            {chip && (
+              <Flexbox horizontal align={'center'} gap={4}>
+                <span className={styles.chipDot} style={{ background: chip.color }} />
+                <span className={styles.chipText} style={{ color: chip.color }}>
+                  {chip.text}
+                </span>
+              </Flexbox>
+            )}
           </Flexbox>
         </div>
         {isWork && (

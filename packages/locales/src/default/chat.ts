@@ -1818,6 +1818,7 @@ export default {
   'goalProcess.attempts.title': 'Previous attempts',
   'goalProcess.attempts.nth': 'Attempt {{index}}',
   'goalProcess.attempts.passed': 'Passed',
+  'goalProcess.advance.running': 'Advancing…',
   'goalProcess.attempts.failed': 'Did not pass',
   'goalProcess.attempts.retired': 'Retired',
   'goalProcess.attempts.running': 'Running',

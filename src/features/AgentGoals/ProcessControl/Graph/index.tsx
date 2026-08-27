@@ -43,7 +43,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     .react-flow__edge-path {
       stroke: ${cssVar.colorBorder};
-      stroke-width: 1.5;
+      stroke-width: 1.25;
     }
 
     .react-flow__edge.goal-dep .react-flow__edge-path {
@@ -52,7 +52,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     .react-flow__edge.goal-hot .react-flow__edge-path {
       stroke: ${cssVar.colorPrimary};
-      stroke-width: 2;
+      stroke-width: 1.75;
     }
 
     .react-flow__edge-textbg {
@@ -184,8 +184,8 @@ const useEdgeLabel = () => {
 
 const nodeTypes = { goalNode: GraphNodeView };
 
-const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
-  ({ className, graph, onSelect, selectedId, view }) => {
+const Canvas = memo<GraphProps & { className: string; interactive: boolean; view: GraphViewMode }>(
+  ({ className, graph, interactive, onSelect, selectedId, view }) => {
     const { fitView } = useReactFlow();
     const subtitleOf = useSubtitle();
     const edgeLabel = useEdgeLabel();
@@ -195,11 +195,6 @@ const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
         view === 'all' ? new Set(graph.nodes.map((item) => item.node.id)) : stageNodeIds(graph),
       [graph, view],
     );
-    const frontierIds = useMemo(
-      () => new Set(graph.frontier.map((item) => item.view.node.id)),
-      [graph],
-    );
-
     const positions = useMemo(() => {
       const nodes: GoalGraphNode[] = graph.nodes
         .filter((item) => visibleIds.has(item.node.id))
@@ -218,8 +213,8 @@ const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
             const box = positions[item.node.id];
             const isGate = item.node.kind === 'decision' && item.node.status === 'waiting';
             const data: GraphNodeData = {
-              dim: item.node.status === 'proposed' && !frontierIds.has(item.node.id),
-              isFrontier: frontierIds.has(item.node.id),
+              // Not started and still blocked — it is context, not the story.
+              dim: item.node.status === 'proposed' && item.blockers.length > 0,
               isGate,
               running: item.node.status === 'active' && !item.isStale,
               selected: selectedId === item.node.id,
@@ -236,7 +231,7 @@ const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
               width: NODE_WIDTH[item.node.kind],
             } satisfies FlowNode;
           }),
-      [graph, visibleIds, positions, frontierIds, selectedId, subtitleOf],
+      [graph, visibleIds, positions, selectedId, subtitleOf],
     );
 
     const flowEdges: FlowEdge[] = useMemo(
@@ -259,7 +254,7 @@ const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
               },
               source,
               target,
-              type: 'smoothstep',
+              type: 'default',
             } satisfies FlowEdge;
           }),
       [graph, visibleIds, selectedId, edgeLabel],
@@ -275,16 +270,26 @@ const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
 
     return (
       <div className={className}>
+        {/* Inline, the map is a picture: it settles on `fitView` and stays
+            there. Panning or zooming it inside a scrolling page moves the graph
+            under the cursor while the page moves too, and leaves no way back to
+            the framing the layout chose. Fullscreen is where it is navigable. */}
         <ReactFlow
           fitView
           edges={flowEdges}
-          maxZoom={1.5}
+          maxZoom={interactive ? 1.5 : 1}
           minZoom={0.3}
           nodeTypes={nodeTypes}
           nodes={flowNodes}
           nodesConnectable={false}
           nodesDraggable={false}
+          panOnDrag={interactive}
+          panOnScroll={false}
+          preventScrolling={interactive}
           proOptions={{ hideAttribution: true }}
+          zoomOnDoubleClick={interactive}
+          zoomOnPinch={interactive}
+          zoomOnScroll={interactive}
           onNodeClick={(_, node) => onSelect(node.id)}
         >
           <Background
@@ -293,7 +298,7 @@ const Canvas = memo<GraphProps & { className: string; view: GraphViewMode }>(
             size={1}
             variant={BackgroundVariant.Dots}
           />
-          <Controls position={'bottom-right'} showInteractive={false} />
+          {interactive && <Controls position={'bottom-right'} showInteractive={false} />}
         </ReactFlow>
       </div>
     );
@@ -349,7 +354,7 @@ const Graph = memo<GraphProps>((props) => {
       <div className={styles.overlay}>
         {head}
         <ReactFlowProvider>
-          <Canvas {...props} className={cx(styles.canvas, styles.full)} view={view} />
+          <Canvas {...props} interactive className={cx(styles.canvas, styles.full)} view={view} />
         </ReactFlowProvider>
       </div>
     );
@@ -358,7 +363,7 @@ const Graph = memo<GraphProps>((props) => {
     <Flexbox gap={4}>
       {head}
       <ReactFlowProvider>
-        <Canvas {...props} className={styles.canvas} view={view} />
+        <Canvas {...props} className={styles.canvas} interactive={false} view={view} />
       </ReactFlowProvider>
     </Flexbox>
   );
