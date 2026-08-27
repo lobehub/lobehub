@@ -9,6 +9,7 @@ import {
 import { getTestDB } from '../../core/getTestDB';
 import { agents, messages, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AgentShareModel } from '../agentShare';
 
 // Real-Postgres reproduction of the agent-share visitor abuse-cap race
 // described in LOBE-11930 (Codex P1 on `shareChat.ts:129`).
@@ -61,6 +62,13 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
     for (let i = 0; i < TRIALS; i++) {
       const agentId = `share-topic-race-agent-${i}`;
       await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId: ownerId });
+      // The cap is read fresh from the real `agentShares.shareConfig` inside
+      // the guard's own locked transaction (`AgentShareModel
+      // .readCurrentVisitorCaps`) — no longer a caller-supplied parameter.
+      await new AgentShareModel(serverDB, ownerId).create(agentId, 'link');
+      await new AgentShareModel(serverDB, ownerId).updateConfig(agentId, {
+        maxTopicsPerVisitor: CAP,
+      });
 
       // Simulate CONCURRENCY visitor tabs/scripts all sending a first message
       // to a brand-new topic at the same time.
@@ -70,7 +78,6 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
             {
               agentId,
               db: serverDB,
-              maxTopicsPerVisitor: CAP,
               ownerId,
               visitorUserId,
             },
@@ -118,15 +125,23 @@ describe('reserveShareVisitorTurnOrThrow — visitor turn cap race (real Postgre
       const agentId = `share-turn-race-agent-${i}`;
       const topicId = `share-turn-race-topic-${i}`;
       await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId: ownerId });
-      await serverDB
-        .insert(topics)
-        .values({ agentId, id: topicId, senderId: visitorUserId, userId: ownerId });
+      const share = await new AgentShareModel(serverDB, ownerId).create(agentId, 'link');
+      await new AgentShareModel(serverDB, ownerId).updateConfig(agentId, {
+        maxTurnsPerTopic: CAP,
+      });
+      await serverDB.insert(topics).values({
+        agentId,
+        id: topicId,
+        senderId: visitorUserId,
+        shareId: share.id,
+        userId: ownerId,
+      });
 
       // Simulate CONCURRENCY sends to the SAME existing topic at the same time.
       const results = await Promise.allSettled(
         Array.from({ length: CONCURRENCY }, (_, n) =>
           reserveShareVisitorTurn(
-            { db: serverDB, maxTurnsPerTopic: CAP, ownerId, topicId },
+            { agentId, db: serverDB, ownerId, topicId },
             { content: `turn ${n}`, role: 'user', topicId },
           ),
         ),

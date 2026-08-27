@@ -2346,6 +2346,8 @@ describe('TopicModel - Query', () => {
   });
 
   describe('queryBySender', () => {
+    const shareId = '11111111-1111-1111-1111-111111111111';
+
     it('returns only the visitor-facing DTO, never creator-only fields', async () => {
       const agentId = 'share-agent';
       const visitorId = 'share-visitor';
@@ -2356,6 +2358,7 @@ describe('TopicModel - Query', () => {
         userId,
         agentId,
         senderId: visitorId,
+        shareId,
         status: 'completed',
         model: 'gpt-4',
         provider: 'openai',
@@ -2364,7 +2367,7 @@ describe('TopicModel - Query', () => {
         metadata: { some: 'internal-detail' },
       });
 
-      const result = await topicModel.queryBySender({ agentId, senderId: visitorId });
+      const result = await topicModel.queryBySender({ agentId, senderId: visitorId, shareId });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
@@ -2387,14 +2390,92 @@ describe('TopicModel - Query', () => {
       const agentId = 'share-agent-2';
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 2' });
       await serverDB.insert(topics).values([
-        { id: 'visitor-a-topic', title: 'A', userId, agentId, senderId: 'visitor-a' },
-        { id: 'visitor-b-topic', title: 'B', userId, agentId, senderId: 'visitor-b' },
+        { id: 'visitor-a-topic', title: 'A', userId, agentId, senderId: 'visitor-a', shareId },
+        { id: 'visitor-b-topic', title: 'B', userId, agentId, senderId: 'visitor-b', shareId },
       ]);
 
-      const result = await topicModel.queryBySender({ agentId, senderId: 'visitor-a' });
+      const result = await topicModel.queryBySender({ agentId, senderId: 'visitor-a', shareId });
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('visitor-a-topic');
+    });
+
+    // Regression for LOBE-11930 codex P2: `AgentShareModel.create()` mints a
+    // brand-new `agentShares.id` every disable → re-enable cycle. A returning
+    // visitor opening the REPLACEMENT link must not see (or have counted)
+    // conversations from the share instance the owner already took down —
+    // see `topics.shareId`'s JSDoc (`../../schemas/topic.ts`).
+    it('excludes topics created under a different (e.g. disabled-and-replaced) share instance', async () => {
+      const agentId = 'share-agent-3';
+      const visitorId = 'returning-visitor';
+      const oldShareId = '22222222-2222-2222-2222-222222222222';
+      const newShareId = '33333333-3333-3333-3333-333333333333';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 3' });
+      await serverDB.insert(topics).values([
+        {
+          id: 'old-share-topic',
+          title: 'From the disabled share',
+          userId,
+          agentId,
+          senderId: visitorId,
+          shareId: oldShareId,
+        },
+        {
+          id: 'new-share-topic',
+          title: 'From the new share',
+          userId,
+          agentId,
+          senderId: visitorId,
+          shareId: newShareId,
+        },
+      ]);
+
+      const result = await topicModel.queryBySender({
+        agentId,
+        senderId: visitorId,
+        shareId: newShareId,
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('new-share-topic');
+    });
+  });
+
+  describe('countBySender', () => {
+    // Regression for LOBE-11930 codex P2: without `shareId` scoping, stale
+    // topics from a share instance the owner already disabled would count
+    // against a brand-new share's `maxTopicsPerVisitor`, potentially making
+    // it unusable immediately after re-enabling.
+    it('does not count topics created under a different share instance toward the cap', async () => {
+      const agentId = 'share-agent-4';
+      const visitorId = 'returning-visitor-2';
+      const oldShareId = '44444444-4444-4444-4444-444444444444';
+      const newShareId = '55555555-5555-5555-5555-555555555555';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 4' });
+      await serverDB.insert(topics).values([
+        {
+          id: 'old-share-topic-2',
+          title: 'From the disabled share',
+          userId,
+          agentId,
+          senderId: visitorId,
+          shareId: oldShareId,
+        },
+      ]);
+
+      const staleCount = await topicModel.countBySender({
+        agentId,
+        senderId: visitorId,
+        shareId: newShareId,
+      });
+      expect(staleCount).toBe(0);
+
+      const oldShareCount = await topicModel.countBySender({
+        agentId,
+        senderId: visitorId,
+        shareId: oldShareId,
+      });
+      expect(oldShareCount).toBe(1);
     });
   });
 

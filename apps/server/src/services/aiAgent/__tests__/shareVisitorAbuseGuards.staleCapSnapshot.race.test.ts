@@ -77,8 +77,8 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
       Array.from({ length: CONCURRENT_REQUESTS }, (_, i) =>
         reserveShareVisitorTopicOrThrow({
           agentId,
-          create: (topicModel) =>
-            topicModel.create({ agentId, senderId: visitorId, title: `topic-${i}` }),
+          create: (topicModel, shareId) =>
+            topicModel.create({ agentId, senderId: visitorId, shareId, title: `topic-${i}` }),
           db: serverDB,
           ownerId,
           visitorUserId: visitorId,
@@ -153,12 +153,20 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
     await agentShareModel.create(agentId, 'link');
 
     const initial = await AgentShareModel.readCurrentVisitorCaps(serverDB, agentId);
-    expect(initial).toEqual({ maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 });
+    expect(initial).toEqual({
+      maxTopicsPerVisitor: 5,
+      maxTurnsPerTopic: 20,
+      shareId: expect.any(String),
+    });
 
     await agentShareModel.updateConfig(agentId, { maxTopicsPerVisitor: 1, maxTurnsPerTopic: 2 });
 
     const afterLowering = await AgentShareModel.readCurrentVisitorCaps(serverDB, agentId);
-    expect(afterLowering).toEqual({ maxTopicsPerVisitor: 1, maxTurnsPerTopic: 2 });
+    expect(afterLowering).toEqual({
+      maxTopicsPerVisitor: 1,
+      maxTurnsPerTopic: 2,
+      shareId: initial.shareId,
+    });
 
     // Raising is symmetric — no special handling needed, just reflected.
     await agentShareModel.updateConfig(agentId, { maxTopicsPerVisitor: 99 });

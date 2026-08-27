@@ -87,6 +87,7 @@ const visitorTopic = {
   id: 'tpc_visitor',
   metadata: { runningOperation: { operationId: 'op-1' } },
   senderId: VISITOR,
+  shareId: share.shareId,
 };
 
 const createCaller = async () =>
@@ -187,6 +188,7 @@ describe('shareChatRouter', () => {
           shareGate: {
             agentId: share.agentId,
             shareConfig: share.shareConfig,
+            shareId: share.shareId,
             visitorUserId: VISITOR,
           },
         }),
@@ -266,15 +268,17 @@ describe('shareChatRouter', () => {
   });
 
   describe('getTopics', () => {
-    it("returns only the visitor's own topics via senderId scoping", async () => {
+    it("returns only the visitor's own topics via senderId + shareId scoping", async () => {
       const caller = await createCaller();
       await caller.getTopics({ shareId: 'share-1' });
 
-      // Topic model is creator-scoped; the query narrows to this visitor.
+      // Topic model is creator-scoped; the query narrows to this visitor AND
+      // this share instance — see LOBE-11930 codex P2.
       expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
       expect(mockQueryBySender).toHaveBeenCalledWith({
         agentId: share.agentId,
         senderId: VISITOR,
+        shareId: share.shareId,
       });
     });
   });
@@ -282,6 +286,20 @@ describe('shareChatRouter', () => {
   describe('getMessages', () => {
     it('rejects a topic on a different agent of the same creator', async () => {
       mockFindById.mockResolvedValue({ ...visitorTopic, agentId: 'agt_other' });
+      const caller = await createCaller();
+
+      await expect(
+        caller.getMessages({ shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockMessageQueryForVisitor).not.toHaveBeenCalled();
+    });
+
+    // Regression for LOBE-11930 codex P2: `AgentShareModel.create()` mints a
+    // brand-new `agentShares.id` every disable → re-enable cycle. A topic
+    // stamped with a PREVIOUS share instance's id must be rejected even
+    // though `senderId`/`agentId` still match the returning visitor.
+    it('rejects a topic created under a different (disabled-and-replaced) share instance', async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, shareId: 'old-share-1' });
       const caller = await createCaller();
 
       await expect(

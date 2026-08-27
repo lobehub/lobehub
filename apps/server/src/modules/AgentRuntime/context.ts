@@ -51,6 +51,15 @@ export interface RuntimeExecutorContext {
    * assignment so `isShareBlockedDataToolCall` can id-scope
    * `viewKnowledgeBase`'s `id` argument to what the agent is actually
    * mounted with, instead of any knowledge base the creator owns.
+   *
+   * `shareId` is the `agentShares.id` this run was authorized against
+   * (`AgentShareGate.shareId`) — forwarded so cross-topic reads within the
+   * run (e.g. `serverCallLlmContextBuilder`'s `<refer_topic>` resolution,
+   * `lobe-topic-reference`'s `getTopicContext`) can reject a topic stamped
+   * with a DIFFERENT `shareId`: it belongs to a share instance the owner has
+   * since disabled and replaced, even though `senderId`/`agentId` still
+   * match. See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`)
+   * and LOBE-11930 codex P2.
    */
   agentShare?: {
     agentId: string;
@@ -58,6 +67,7 @@ export interface RuntimeExecutorContext {
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     knowledgeBaseIds?: string[];
+    shareId: string;
     visitorUserId: string;
   };
   /**

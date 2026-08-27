@@ -394,6 +394,8 @@ export interface OperationCreationParams {
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     knowledgeBaseIds?: string[];
+    /** The `agentShares.id` this run was authorized against — see `AgentRuntimeContext.agentShare`'s JSDoc (`../../modules/AgentRuntime/context.ts`). */
+    shareId: string;
     visitorUserId: string;
   };
   appContext: {

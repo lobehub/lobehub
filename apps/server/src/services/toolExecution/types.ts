@@ -197,6 +197,8 @@ export interface ToolExecutionContext {
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     /** Agent's assigned (`enabled`) knowledge-base ids; scopes `viewKnowledgeBase`'s `id` arg. */
     knowledgeBaseIds?: string[];
+    /** The `agentShares.id` this run was authorized against (`AgentShareGate.shareId`, `modules/AgentRuntime/context.ts`'s `agentShare` field). Used to reject cross-share-instance topic reads (e.g. `lobe-topic-reference`). */
+    shareId: string;
     /** The signed-in visitor driving this run. */
     visitorUserId: string;
   };
