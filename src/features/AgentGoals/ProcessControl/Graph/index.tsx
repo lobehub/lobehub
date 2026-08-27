@@ -3,8 +3,8 @@
 import '@xyflow/react/dist/style.css';
 
 import type { GoalGraphEdge, GoalGraphNode } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Segmented, Text } from '@lobehub/ui/base-ui';
 import {
   Background,
   BackgroundVariant,

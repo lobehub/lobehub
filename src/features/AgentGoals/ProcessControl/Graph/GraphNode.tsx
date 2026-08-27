@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FileBox, Repeat2, ShieldCheck } from 'lucide-react';
