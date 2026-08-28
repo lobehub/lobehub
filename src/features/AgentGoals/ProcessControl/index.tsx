@@ -88,12 +88,17 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   if (!graph || graph.nodes.length === 0) return null;
 
   const paused = graph.goal.status === 'paused';
+  // A closed goal cannot move: the coordinator returns immediately for these,
+  // so Advance would report nothing happened and a Work added here would sit
+  // `proposed` forever. Stop offering actions that cannot land.
+  const closed = ['achieved', 'canceled', 'failed'].includes(graph.goal.status);
+  const canAct = canEdit && !closed;
 
   return (
     <Flexbox gap={20}>
       <Flexbox gap={12}>
         <Flexbox horizontal align={'center'} gap={8}>
-          {canEdit && (
+          {canAct && (
             <>
               <Tooltip title={t('goalProcess.advance.tooltip')}>
                 <Button
@@ -122,7 +127,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
           )}
         </Flexbox>
 
-        <Frontier actions={actions} canEdit={canEdit} graph={graph} onSelect={setSelectedId} />
+        <Frontier actions={actions} canEdit={canAct} graph={graph} onSelect={setSelectedId} />
       </Flexbox>
 
       <Graph graph={graph} selectedId={selectedId} onSelect={setSelectedId} />

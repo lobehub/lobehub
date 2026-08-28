@@ -122,6 +122,32 @@ describe('GoalService', () => {
     expect(task?.visibility).toBe('private');
   });
 
+  it('retries a failed verification once when advances race on recovery', async () => {
+    // The dispatch claim only covers starting a backlog Work; the automatic
+    // retry path spawns its own run, so without the same claim two overlapping
+    // advances would each pay for an attempt.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockImplementation(async ({ taskId }) => ({ taskId }) as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { maxAttemptsPerWork: 3 } },
+      title: 'Raced recovery',
+      work: ['Retry me once'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    runSpy.mockClear();
+
+    await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the overall requirement as background while making the current work authoritative', async () => {
     const service = new GoalService(serverDB, userId);
     const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;

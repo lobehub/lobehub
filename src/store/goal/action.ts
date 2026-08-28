@@ -28,6 +28,20 @@ const GOAL_STATUSES: GoalStatus[] = [...goalStatuses];
 const HOME_GOAL_STATUSES: GoalStatus[] = ['planning', 'running', 'verifying', 'review'];
 const HOME_GOAL_FETCH_LIMIT = 100;
 
+/**
+ * Statuses in which the *server* is the one making progress. A goal now
+ * advances from server events, so nothing tells an open page to re-read: the
+ * frontier, activity and findings would sit frozen — a spinner still turning
+ * on a goal that already finished — until the tab lost and regained focus.
+ *
+ * `review` and `paused` are deliberately out: those wait on a person, and the
+ * action that moves them refreshes the snapshot itself.
+ */
+const SERVER_ADVANCING_STATUSES = new Set<GoalStatus>(['planning', 'running', 'verifying']);
+
+/** Kept coarse on purpose — this is liveness, not a progress bar. */
+const GOAL_GRAPH_POLL_INTERVAL = 5000;
+
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
 
@@ -121,6 +135,8 @@ export class GoalActionImpl {
           'useFetchGoalGraph/success',
         );
       },
+      refreshInterval: (graph) =>
+        graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status) ? GOAL_GRAPH_POLL_INTERVAL : 0,
       revalidateOnFocus: true,
     });
 
