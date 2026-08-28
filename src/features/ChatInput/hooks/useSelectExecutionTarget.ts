@@ -2,6 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceExecutionTarget } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 import { useCallback } from 'react';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
@@ -206,12 +208,26 @@ export const useSelectExecutionTarget = (agentId: string) => {
         (prevOverride.executionTarget !== undefined || prevOverride.boundDeviceId !== undefined)
       ) {
         const { boundDeviceId: _device, executionTarget: _target, ...dormant } = prevOverride;
-        await updateWorkspaceUserPreference({
-          agentDeviceOverrides: {
-            ...workspaceUserPreference.agentDeviceOverrides,
-            [agentId]: dormant,
-          },
-        });
+        try {
+          await updateWorkspaceUserPreference({
+            agentDeviceOverrides: {
+              ...workspaceUserPreference.agentDeviceOverrides,
+              [agentId]: dormant,
+            },
+          });
+        } catch {
+          // The preference store rolled the override back, so the old `local`
+          // pick would keep shadowing the shared target that DID persist —
+          // split state. Compensate by restoring the previous shared config
+          // (best effort, no double toast) so the surviving override shadows
+          // the same target the user had before this pick.
+          await updateAgentConfigById(
+            agentId,
+            { agencyConfig: { ...agencyConfig } },
+            { showErrorMessage: false },
+          );
+          if (!options?.silent) toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
       }
     },
     [

@@ -16,7 +16,10 @@ import type {
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
-import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
+import {
+  ensureAgentManagementAccess,
+  getRuntimeCanManageAgent,
+} from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import {
   aiAgentService,
@@ -86,7 +89,16 @@ const resolveDesktopDeviceHints = async (
   const currentUserId = userProfileSelectors.userId(userState);
   // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
   // server (`isResourceAuthorOrAdmin`) — an admin's own override must survive
-  // a `fixed` selection policy just like the author's does.
+  // a `fixed` selection policy just like the author's does. Resolve from the
+  // server first when the picker's hook never primed the cache (cold load /
+  // direct mention); no-op for authors and cached answers.
+  await ensureAgentManagementAccess({
+    agentId,
+    agentUserId: agent?.userId,
+    currentUserId,
+    visibility: agent?.visibility,
+    workspaceId: agent?.workspaceId,
+  });
   const canManage = getRuntimeCanManageAgent({
     agentId,
     agentUserId: agent?.userId,

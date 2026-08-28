@@ -16,7 +16,10 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
 import { getEffectiveConversationModel } from '@/features/Conversation/store/utils/effectiveModel';
-import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
+import {
+  ensureAgentManagementAccess,
+  getRuntimeCanManageAgent,
+} from '@/helpers/agentManagementAccess';
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
@@ -98,6 +101,25 @@ const settleGenerationEntry = (
 ) => {
   chatStore.completeOperation(operationId);
   notify?.();
+};
+
+/**
+ * Resolve management access from the server before `getEffectiveAgencyConfig`
+ * runs on a cold cache (page reload straight into regenerate/continue) — an
+ * admin must not be downgraded to member just because the picker's hook never
+ * mounted. No-ops for authors, members-with-resolved-answers, and non-workspace
+ * agents; a failed fetch falls back to authorship for this run.
+ */
+const ensureEffectiveAgencyAccess = async (agentId: string) => {
+  const agentState = getAgentStoreState();
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  await ensureAgentManagementAccess({
+    agentId,
+    agentUserId: agent?.userId,
+    currentUserId: userProfileSelectors.userId(getUserStoreState()),
+    visibility: agent?.visibility,
+    workspaceId: agent?.workspaceId,
+  });
 };
 
 const getEffectiveAgencyConfig = (agentId: string) => {
@@ -219,6 +241,7 @@ const runHeterogeneousFromExistingMessage = async (
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
+  await ensureEffectiveAgencyAccess(agentId);
   const { cwdChanged, reason, resumeBindingKey, resumeSessionId, workingDirectory } =
     resolveHeteroRunContext(chatStore, context, agentId);
   if (cwdChanged) toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
@@ -395,6 +418,7 @@ const regenerateUserMessageFromSource = async (
     const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
     if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
+    await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
     );
@@ -784,6 +808,7 @@ export const generationSlice: StateCreator<
       if (shouldProceed === false) return false;
     }
 
+    await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
     );
@@ -874,6 +899,7 @@ export const generationSlice: StateCreator<
     // tool/provider error on a grouped reply is not resumable this way.
     if (!isHeterogeneousAgentStatusGuideError(erroredStep.error?.body)) return;
 
+    await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
     );

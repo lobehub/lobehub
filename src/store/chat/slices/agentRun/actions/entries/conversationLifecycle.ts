@@ -27,7 +27,10 @@ import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
-import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
+import {
+  ensureAgentManagementAccess,
+  getRuntimeCanManageAgent,
+} from '@/helpers/agentManagementAccess';
 import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
@@ -410,7 +413,17 @@ export class ConversationLifecycleActionImpl {
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
     // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and
     // the server (`isResourceAuthorOrAdmin`) — an admin's own override must
-    // survive a `fixed` selection policy just like the author's does.
+    // survive a `fixed` selection policy just like the author's does. On a
+    // cold load or a direct mention the picker's hook may never have run, so
+    // resolve access from the server first (no-op for authors and members
+    // whose answer is already cached).
+    await ensureAgentManagementAccess({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    });
     const canManage = getRuntimeCanManageAgent({
       agentId,
       agentUserId: agent?.userId,

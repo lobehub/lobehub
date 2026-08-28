@@ -47,6 +47,14 @@ vi.mock('@lobechat/const', () => ({
   },
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: vi.fn() },
+}));
+
+vi.mock('i18next', () => ({
+  t: (key: string) => key,
+}));
+
 vi.mock('@/services/electron/gatewayConnection', () => ({
   gatewayConnectionService: {
     getDeviceInfo: () => testState.getDeviceInfo(),
@@ -513,6 +521,48 @@ describe('useSelectExecutionTarget', () => {
 
       expect(testState.agent.updateAgentConfigById).toHaveBeenCalledTimes(1);
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+    });
+
+    it('restores the shared config when clearing the override fails after a successful save', async () => {
+      // The shared save persisted but the override clear rolled back — the old
+      // `local` override would shadow the new shared target (split state), so
+      // the hook compensates by writing the previous shared config back.
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      testState.agent.agencyConfig = { executionTarget: 'device', boundDeviceId: 'ws-device' };
+      testState.user.updateWorkspaceUserPreference = vi
+        .fn()
+        .mockRejectedValue(new Error('clear failed'));
+      testState.user.workspaceUserPreference = {
+        agentDeviceOverrides: {
+          'agent-id': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+        },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenNthCalledWith(
+        1,
+        'agent-id',
+        {
+          agencyConfig: {
+            boundDeviceId: 'ws-device',
+            executionTarget: 'sandbox',
+          },
+        },
+        { rethrow: true },
+      );
+      expect(testState.agent.updateAgentConfigById).toHaveBeenNthCalledWith(
+        2,
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'ws-device', executionTarget: 'device' },
+        },
+        { showErrorMessage: false },
+      );
     });
 
     it('leaves the preference untouched when a manager picks a shared target with no override', async () => {

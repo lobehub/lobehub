@@ -17,9 +17,51 @@
  * historical behavior, and the correct one for every non-admin.
  */
 
+import { resourcePermissionService } from '@/services/resourcePermission';
+
 const resolvedAccess = new Map<string, boolean>();
+const inflight = new Map<string, Promise<void>>();
 
 const cacheKey = (userId: string, agentId: string) => `${userId}:${agentId}`;
+
+/**
+ * Resolve management access from the server before a dispatch that has to
+ * decide manager-vs-member — the cold-load / direct-mention path where the
+ * picker's hook never ran and the cache is still empty. No-ops (and costs no
+ * request) for authors, personal or private agents, unauthenticated callers,
+ * and already-resolved entries; concurrent callers share one in-flight fetch.
+ * A failed fetch is swallowed and left uncached — the caller falls back to
+ * authorship for this run and the next dispatch retries.
+ */
+export const ensureAgentManagementAccess = async (params: {
+  agentId: string;
+  agentUserId?: string | null;
+  currentUserId?: string | null;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
+}): Promise<void> => {
+  const { agentId, agentUserId, currentUserId, visibility, workspaceId } = params;
+  if (!workspaceId || visibility === 'private') return;
+  if (!currentUserId) return;
+  if (!!agentUserId && agentUserId === currentUserId) return;
+
+  const key = cacheKey(currentUserId, agentId);
+  if (resolvedAccess.has(key)) return;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const request = resourcePermissionService
+    .getGeneralAccess('agent', agentId)
+    .then((access) => {
+      resolvedAccess.set(key, access?.canManage === true);
+    })
+    .catch(() => {})
+    .finally(() => {
+      inflight.delete(key);
+    });
+  inflight.set(key, request);
+  return request;
+};
 
 /** Record a server-resolved management-access answer for this user + agent. */
 export const rememberAgentManagementAccess = (

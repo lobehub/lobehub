@@ -51,6 +51,11 @@ vi.mock('../transports/hetero/heterogeneousAgentExecutor', () => ({
   executeHeterogeneousAgent: (...args: any[]) => executeHeterogeneousAgentMock(...args),
 }));
 
+const getGeneralAccessMock = vi.hoisted(() => vi.fn());
+vi.mock('@/services/resourcePermission', () => ({
+  resourcePermissionService: { getGeneralAccess: getGeneralAccessMock },
+}));
+
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: mockLocalFileService,
 }));
@@ -3938,6 +3943,76 @@ describe('ConversationLifecycle actions', () => {
           expect(executeGatewayAgent).not.toHaveBeenCalled();
         } finally {
           clearAgentManagementAccessCache();
+          useUserStore.setState({ user: undefined as any });
+        }
+      });
+
+      // Same scenario on a COLD cache: the picker's hook never ran, so the
+      // send path must resolve management access from the server itself
+      // before choosing a runtime.
+      it("resolves an unprimed admin's access from the server before dispatch", async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () =>
+            ({ userId: 'author-user', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
+        const { clearAgentManagementAccessCache } = await import('@/helpers/agentManagementAccess');
+        clearAgentManagementAccessCache();
+        getGeneralAccessMock.mockResolvedValue({ canManage: true });
+        useUserStore.setState({
+          user: { id: 'admin-user' } as any,
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'admin-desktop',
+                executionTarget: 'local',
+              },
+            },
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        try {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              message: TEST_CONTENT.USER_MESSAGE,
+              context: createTestContext(),
+            });
+          });
+
+          expect(getGeneralAccessMock).toHaveBeenCalledWith('agent', TEST_IDS.SESSION_ID);
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+          expect(executeGatewayAgent).not.toHaveBeenCalled();
+        } finally {
+          clearAgentManagementAccessCache();
+          getGeneralAccessMock.mockReset();
           useUserStore.setState({ user: undefined as any });
         }
       });
