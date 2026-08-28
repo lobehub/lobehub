@@ -2,6 +2,7 @@ import { ARTIFACT_TAG } from '@lobechat/const';
 import { escapeXmlAttr } from '@lobechat/prompts';
 
 import { hostedPath, packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
+import { WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './readWorkspaceAsset';
 import type {
   WorkspaceHtmlArtifactFile,
   WorkspaceHtmlArtifactPublishInput,
@@ -23,7 +24,11 @@ export interface PublishWorkspaceHtmlSiteParams {
   artifactIdentifier: string;
   files: WorkspaceHtmlArtifactFile[];
   html: string;
+  onPhase?: WorkspaceHtmlArtifactPublishInput['onUploadPhase'];
+  onProgress?: WorkspaceHtmlArtifactPublishInput['onUploadProgress'];
   requestedSlug?: string;
+  signal?: AbortSignal;
+  title?: string;
   topicId: string;
 }
 
@@ -47,10 +52,6 @@ export const publishWorkspaceHtmlArtifact = async (
     ) => Promise<{ id?: string; latestRevisionNumber?: number; publicUrl?: string }>;
   },
 ): Promise<WorkspaceHtmlArtifactPublishResult> => {
-  if (!input.agentId) {
-    throw new Error('unavailable');
-  }
-
   const packed =
     input.packed ??
     (() => {
@@ -64,7 +65,10 @@ export const publishWorkspaceHtmlArtifact = async (
       return fresh;
     })();
 
-  if (packed.sidecars.length > 0) {
+  if (
+    packed.sidecars.length > 0 ||
+    new TextEncoder().encode(packed.html).byteLength > WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES
+  ) {
     if (!deps.publishSite) {
       throw new Error('unavailable');
     }
@@ -76,7 +80,11 @@ export const publishWorkspaceHtmlArtifact = async (
         path: hostedPath(file.path),
       })),
       html: packed.html,
+      onPhase: input.onUploadPhase,
+      onProgress: input.onUploadProgress,
       requestedSlug: input.title,
+      signal: input.signal,
+      title: input.title,
       topicId: input.topicId,
     });
 
@@ -85,6 +93,10 @@ export const publishWorkspaceHtmlArtifact = async (
       publicUrl: deployment.publicUrl,
       revision: deployment.latestRevisionNumber,
     };
+  }
+
+  if (!input.agentId) {
+    throw new Error('unavailable');
   }
 
   const message = await deps.createMessage({

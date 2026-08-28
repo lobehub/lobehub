@@ -10,7 +10,15 @@ export interface WorkspaceHtmlArtifactPublishInput {
   entryPath: string;
   files: WorkspaceHtmlArtifactFile[];
   identifier: string;
+  onUploadPhase?: (phase: 'finalizing' | 'preparing' | 'uploading') => void;
+  onUploadProgress?: (progress: {
+    completedFiles: number;
+    loadedBytes: number;
+    totalBytes: number;
+    totalFiles: number;
+  }) => void;
   packed?: { html: string; sidecars: WorkspaceHtmlArtifactFile[] };
+  signal?: AbortSignal;
   title: string;
   topicId: string;
 }

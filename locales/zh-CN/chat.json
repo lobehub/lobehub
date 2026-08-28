@@ -2126,6 +2126,7 @@
   "workingPanel.localFile.publish.unresolvedLocals": "此页面仍引用未打包的本地文件，发布后这些资源会失效。",
   "workingPanel.localFile.publish.upload_one": "1 个较大的文件会与页面一起上传。",
   "workingPanel.localFile.publish.upload_other": "{{count}} 个较大的文件会与页面一起上传。",
+  "workingPanel.localFile.publish.uploadingProgress": "正在上传 {{completed}} / {{total}} · {{percent}}%",
   "workingPanel.localFile.publish.version": "发布此版本",
   "workingPanel.localFile.sandboxUnavailable": "此文件已不可用——所在的沙盒环境已被回收",
   "workingPanel.localFile.truncated": "文件预览被截断至 {{limit}} 个字符",
