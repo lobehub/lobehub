@@ -1,0 +1,105 @@
+import { reconstructGraphAt } from './delta';
+import type {
+  FrontierCandidate,
+  GoalBudgetState,
+  GoalFrontierTaskState,
+  GoalGraphState,
+  GoalTickBranch,
+  GoalTickOutcome,
+  GoalTrajectory,
+} from './types';
+
+/**
+ * Everything the coordinator's decision depends on. Anything not in here must
+ * not change what it picks, or the trace is not a replayable record.
+ */
+export interface GoalDecisionInput {
+  budget: GoalBudgetState;
+  /** State of the chosen work node's responsible task, when it already has one. */
+  frontierTask?: GoalFrontierTaskState;
+  graph: GoalGraphState;
+  now: number;
+}
+
+export interface GoalDecision {
+  branch: GoalTickBranch;
+  /** Every eligible work node, in the order the coordinator ranked them. */
+  candidates: FrontierCandidate[];
+  chosenNodeId?: string;
+  outcome: GoalTickOutcome;
+}
+
+export type GoalDecider = (input: GoalDecisionInput) => GoalDecision;
+
+export interface ReplayDivergence {
+  advanceSeq: number;
+  field: 'branch' | 'outcome' | 'chosenNodeId' | 'candidates';
+  recorded: string;
+  replayed: string;
+  tickIndex: number;
+}
+
+export interface ReplayResult {
+  divergences: ReplayDivergence[];
+  goalId: string;
+  matched: number;
+  ticks: number;
+}
+
+const candidateOrder = (candidates: FrontierCandidate[]): string =>
+  candidates.map((candidate) => candidate.nodeId).join(',');
+
+/**
+ * Re-run a decider over a recorded trajectory and report where it now decides
+ * differently.
+ *
+ * Feeding the current implementation its own history is how a coordinator rule
+ * change gets a regression signal: an empty `divergences` means the change was
+ * inert on this run, and every entry is a real behavioural difference with the
+ * exact input that produced it. No database and no environment — the trajectory
+ * carries the whole decision surface.
+ */
+export const replayTrajectory = (trajectory: GoalTrajectory, decide: GoalDecider): ReplayResult => {
+  const divergences: ReplayDivergence[] = [];
+  let ticks = 0;
+  let matched = 0;
+
+  for (const advance of trajectory.advances) {
+    for (const tick of advance.ticks) {
+      ticks += 1;
+      const graph: GoalGraphState = reconstructGraphAt(trajectory, advance.seq, tick.index);
+      const replayed = decide({
+        budget: tick.budget,
+        frontierTask: tick.frontierTask,
+        graph,
+        now: tick.at,
+      });
+
+      const before = divergences.length;
+      const record = (
+        field: ReplayDivergence['field'],
+        recordedValue: string,
+        replayedValue: string,
+      ) => {
+        if (recordedValue !== replayedValue) {
+          divergences.push({
+            advanceSeq: advance.seq,
+            field,
+            recorded: recordedValue,
+            replayed: replayedValue,
+            tickIndex: tick.index,
+          });
+        }
+      };
+
+      record('branch', tick.branch, replayed.branch);
+      record('outcome', tick.outcome, replayed.outcome);
+      record('chosenNodeId', tick.chosenNodeId ?? '', replayed.chosenNodeId ?? '');
+      record('candidates', candidateOrder(tick.candidates), candidateOrder(replayed.candidates));
+
+      if (divergences.length === before) matched += 1;
+    }
+  }
+
+  return { divergences, goalId: trajectory.goalId, matched, ticks };
+};
