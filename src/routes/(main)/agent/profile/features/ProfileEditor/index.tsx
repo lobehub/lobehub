@@ -4,6 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import {
   isHeterogeneousProviderBindingSupported,
   isRemoteHeterogeneousType,
+  isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
@@ -140,10 +141,10 @@ const ProfileEditor = memo(() => {
   const useFetchServerDefaultCapability = useAgentStore(
     (s) => s.useFetchServerDefaultHeterogeneousCapability,
   );
-  // V1 wires only these two native protocol paths. Future client drivers may widen this gate,
-  // while model/runtime compatibility must continue to come from the server capability below.
+  // The shared matrix owns which native drivers can reach the deployment relay;
+  // model/runtime compatibility continues to come from the server capability below.
   const serverDefaultAgentType =
-    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
       ? heterogeneousProvider.type
       : undefined;
   // Labs-gated with the rest of API mode: with the flag off we never fetch the

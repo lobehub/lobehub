@@ -1973,9 +1973,102 @@ describe('HeterogeneousAgentCtr', () => {
         topicId: 'topic-1',
       });
       expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/gpt-5.4']));
+      expect(spawnCalls[0].options.env.LOBEHUB_HETERO_TOKEN).toBe('operation-token');
       expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
         cancelled: false,
         operationId: 'op-server-default',
+        result: 'done',
+      });
+    });
+
+    it('injects a Kimi operation token into its Anthropic credential env', async () => {
+      nextFakeProc = createFakeProc().proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k2.6', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: undefined,
+        agentType: 'kimi-code',
+        model: 'kimi-k2.6',
+        operationId: 'op-server-default-kimi',
+        topicId: 'topic-1',
+      });
+      expect(spawnCalls[0]).toMatchObject({
+        command: 'kimi',
+        options: {
+          env: {
+            KIMI_MODEL_API_KEY: 'operation-token',
+            KIMI_MODEL_BASE_URL: 'https://app.example.com/api/v1/anthropic',
+            KIMI_MODEL_NAME: 'lobehub/kimi-k2.6',
+            KIMI_MODEL_PROVIDER_TYPE: 'anthropic',
+          },
+        },
+      });
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-server-default-kimi',
+        result: 'done',
+      });
+    });
+
+    it('injects a Pi operation token into its Responses credential env', async () => {
+      nextFakeProc = createFakeProc().proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k2.6', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-pi',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: undefined,
+        agentType: 'pi',
+        model: 'kimi-k2.6',
+        operationId: 'op-server-default-pi',
+        topicId: 'topic-1',
+      });
+      expect(spawnCalls[0].args).toEqual(
+        expect.arrayContaining([
+          '--provider',
+          'lobehub-server-default',
+          '--model',
+          'lobehub/kimi-k2.6',
+        ]),
+      );
+      expect(spawnCalls[0].options.env.LOBEHUB_PI_API_KEY).toBe('operation-token');
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-server-default-pi',
         result: 'done',
       });
     });

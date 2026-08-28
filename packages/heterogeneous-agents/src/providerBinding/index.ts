@@ -8,6 +8,18 @@ export {
   resolveProviderBindingProtocol,
 } from './resolveBinding';
 export type {
+  ServerDefaultHeterogeneousAgentType,
+  ServerDefaultHeterogeneousIngress,
+  ServerDefaultHeterogeneousModelPolicy,
+  ServerDefaultHeterogeneousTokenHeader,
+} from './serverDefault';
+export {
+  getServerDefaultHeterogeneousAgentConfig,
+  isServerDefaultHeterogeneousAgentType,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
+} from './serverDefault';
+export type {
   EnabledProviderBindingModelRef,
   HeterogeneousProviderBindingCapability,
   HeterogeneousProviderBindingError,

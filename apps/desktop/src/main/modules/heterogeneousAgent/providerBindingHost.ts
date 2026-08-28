@@ -84,6 +84,7 @@ export interface HostedProviderBinding {
   cleanup: () => Promise<void>;
   cleanupSync: () => void;
   env: Record<string, string>;
+  operationTokenEnvKey?: string;
   profileDir: string;
   runDir: string;
 }
@@ -155,6 +156,7 @@ export const prepareHostedProviderBinding = async (params: {
       cleanup: () => cleanupBindingRun(runDir, plan),
       cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,
+      operationTokenEnvKey: plan.operationTokenEnvKey,
       profileDir,
       runDir,
     };
@@ -216,6 +218,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
       cleanup: () => cleanupBindingRun(runDir, plan),
       cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,
+      operationTokenEnvKey: plan.operationTokenEnvKey,
       profileDir,
       runDir,
     };

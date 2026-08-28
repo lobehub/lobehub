@@ -11,6 +11,7 @@ import {
   isHeterogeneousAgentAuthRequired,
   isHeterogeneousProviderBindingSupported,
   isLocalHeterogeneousType,
+  isServerDefaultHeterogeneousAgentType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
   type MainAgentRunState,
@@ -1892,8 +1893,7 @@ export const executeHeterogeneousAgent = async (
 
   if (
     serverDefaultBindingActive &&
-    (!serverDefaultApiConfig.model.trim() ||
-      (adapterType !== 'claude-code' && adapterType !== 'codex'))
+    (!serverDefaultApiConfig.model.trim() || !isServerDefaultHeterogeneousAgentType(adapterType))
   ) {
     await persistTerminalError(
       toHeterogeneousAgentMessageError(

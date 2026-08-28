@@ -1,5 +1,6 @@
 'use client';
 
+import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
 import { TooltipGroup } from '@lobehub/ui';
@@ -38,7 +39,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
   const serverDefaultAgentType =
-    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
       ? heterogeneousProvider.type
       : undefined;
   const apiConfig = heterogeneousProvider?.apiConfig;

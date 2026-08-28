@@ -111,7 +111,7 @@ export const isServerDefaultHeterogeneousModel = (
 /**
  * Map a CLI-reported server-default model back to the catalog id.
  *
- * Both CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
+ * Supported CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
  * {@link SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS}. Neither is the catalog id
  * the user picked.
  */

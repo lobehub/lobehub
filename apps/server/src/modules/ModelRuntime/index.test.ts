@@ -166,6 +166,9 @@ describe('getServerDefaultHeterogeneousModels', () => {
     await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [{ model: 'gpt-5.4' }],
+      'grok-build': [{ model: 'claude-sonnet-4-6' }],
+      'kimi-code': [{ model: 'claude-sonnet-4-6' }],
+      'pi': [{ model: 'claude-sonnet-4-6' }],
     });
   });
 
@@ -202,10 +205,13 @@ describe('getServerDefaultHeterogeneousModels', () => {
     await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [{ model: 'gpt-5.4' }],
+      'grok-build': [{ model: 'claude-sonnet-4-6' }],
+      'kimi-code': [{ model: 'claude-sonnet-4-6' }],
+      'pi': [{ model: 'claude-sonnet-4-6' }],
     });
   });
 
-  it('offers tool-capable relay models to Claude Code and only explicit custom models to Codex', async () => {
+  it('offers tool-capable relay models to compatible agents and keeps Codex narrow', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
@@ -253,6 +259,27 @@ describe('getServerDefaultHeterogeneousModels', () => {
         { model: 'gemini-3.1-pro-preview' },
       ],
       'codex': [{ model: 'deepseek-v4-flash' }, { model: 'deepseek-v4-pro' }, { model: 'glm-5.2' }],
+      'grok-build': [
+        { model: 'kimi-k2.6' },
+        { model: 'deepseek-v4-flash' },
+        { model: 'deepseek-v4-pro' },
+        { model: 'glm-5.2' },
+        { model: 'gemini-3.1-pro-preview' },
+      ],
+      'kimi-code': [
+        { model: 'kimi-k2.6' },
+        { model: 'deepseek-v4-flash' },
+        { model: 'deepseek-v4-pro' },
+        { model: 'glm-5.2' },
+        { model: 'gemini-3.1-pro-preview' },
+      ],
+      'pi': [
+        { model: 'kimi-k2.6' },
+        { model: 'deepseek-v4-flash' },
+        { model: 'deepseek-v4-pro' },
+        { model: 'glm-5.2' },
+        { model: 'gemini-3.1-pro-preview' },
+      ],
     });
   });
 
@@ -272,6 +299,9 @@ describe('getServerDefaultHeterogeneousModels', () => {
     await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [],
+      'grok-build': [{ model: 'claude-sonnet-4-6' }],
+      'kimi-code': [{ model: 'claude-sonnet-4-6' }],
+      'pi': [{ model: 'claude-sonnet-4-6' }],
     });
   });
 });
@@ -343,7 +373,7 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     });
   });
 
-  it('accepts a tool-capable third-party relay model for Claude Code only', async () => {
+  it('accepts a tool-capable third-party relay model for all non-Codex agents', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
@@ -363,6 +393,16 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
       provider: 'lobehub',
       supportsAdaptiveThinking: false,
     });
+    await expect(
+      resolveServerDefaultHeterogeneousModel('kimi-code', 'kimi-k2.6'),
+    ).resolves.toMatchObject({ model: 'kimi-k2.6', provider: 'lobehub' });
+    await expect(resolveServerDefaultHeterogeneousModel('pi', 'kimi-k2.6')).resolves.toMatchObject({
+      model: 'kimi-k2.6',
+      provider: 'lobehub',
+    });
+    await expect(
+      resolveServerDefaultHeterogeneousModel('grok-build', 'kimi-k2.6'),
+    ).resolves.toMatchObject({ model: 'kimi-k2.6', provider: 'lobehub' });
 
     await expect(resolveServerDefaultHeterogeneousModel('codex', 'kimi-k2.6')).rejects.toThrow(
       'not compatible with this heterogeneous agent',

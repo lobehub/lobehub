@@ -102,15 +102,23 @@ export type {
   HeterogeneousProviderBindingRuntime,
   ResolveHeterogeneousProviderBindingInput,
   ResolveHeterogeneousProviderBindingResult,
+  ServerDefaultHeterogeneousAgentType,
+  ServerDefaultHeterogeneousIngress,
+  ServerDefaultHeterogeneousModelPolicy,
+  ServerDefaultHeterogeneousTokenHeader,
 } from './providerBinding';
 export {
   formatHeterogeneousProviderBindingError,
   getHeterogeneousProviderBindingCapability,
   getProviderInferenceProtocols,
+  getServerDefaultHeterogeneousAgentConfig,
   HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
   isHeterogeneousProviderBindingSupported,
+  isServerDefaultHeterogeneousAgentType,
   resolveHeterogeneousProviderBinding,
   resolveProviderBindingProtocol,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from './providerBinding';
 export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';

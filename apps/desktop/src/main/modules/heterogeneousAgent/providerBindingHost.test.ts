@@ -207,6 +207,7 @@ describe('prepareHostedServerDefaultBinding', () => {
     prepareServerDefaultBinding: ({ profileDir }) => ({
       args: [],
       env: { CLAUDE_CONFIG_DIR: profileDir },
+      operationTokenEnvKey: 'ANTHROPIC_AUTH_TOKEN',
     }),
   };
 
@@ -229,6 +230,7 @@ describe('prepareHostedServerDefaultBinding', () => {
 
     expect((await stat(binding.profileDir)).mode & 0o777).toBe(0o700);
     expect((await stat(binding.runDir)).mode & 0o777).toBe(0o700);
+    expect(binding.operationTokenEnvKey).toBe('ANTHROPIC_AUTH_TOKEN');
 
     await binding.cleanup();
     await expect(stat(binding.runDir)).rejects.toThrow();

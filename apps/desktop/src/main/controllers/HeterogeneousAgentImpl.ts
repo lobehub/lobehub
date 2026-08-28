@@ -23,6 +23,7 @@ import {
   formatHeterogeneousProviderBindingError,
   getHeterogeneousAgentConfigOrThrow,
   isHeterogeneousAgentAuthRequired,
+  isServerDefaultHeterogeneousAgentType,
   resolveHeterogeneousAgentCommand,
   resolveHeterogeneousProviderBinding,
 } from '@lobechat/heterogeneous-agents';
@@ -805,10 +806,9 @@ export default class HeterogeneousAgentCtr {
         : {}),
       ...session.env,
     };
-    if (session.serverOperationToken) {
-      if (session.agentType === 'claude-code')
-        env.ANTHROPIC_AUTH_TOKEN = session.serverOperationToken;
-      if (session.agentType === 'codex') env.LOBEHUB_HETERO_TOKEN = session.serverOperationToken;
+    const operationTokenEnvKey = session.hostedProviderBinding?.operationTokenEnvKey;
+    if (session.serverOperationToken && operationTokenEnvKey) {
+      env[operationTokenEnvKey] = session.serverOperationToken;
     }
     if (
       session.agentType === 'kimi-code' &&
@@ -1335,7 +1335,7 @@ export default class HeterogeneousAgentCtr {
     const serverDefaultApiConfig = session?.serverDefaultApiConfig;
     if (!session || !serverDefaultApiConfig) return this.sendPromptImpl(params);
     if (!params.topicId) throw new Error('Server-default execution requires a topic');
-    if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
+    if (!isServerDefaultHeterogeneousAgentType(session.agentType)) {
       throw new Error(`Server-default execution does not support ${session.agentType}`);
     }
 

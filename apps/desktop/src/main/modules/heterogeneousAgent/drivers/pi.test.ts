@@ -75,6 +75,43 @@ const bindingContext = (
 });
 
 describe('piDriver', () => {
+  it('writes a secret-free server-default Responses profile', async () => {
+    const plan = await piDriver.prepareServerDefaultBinding!({
+      args: ['--provider', 'stale', '--thinking', 'high'],
+      endpoint: 'https://app.example.com',
+      env: { LOBEHUB_PI_API_KEY: 'stale-token' },
+      model: 'kimi-k2.6',
+      profileDir: '/managed/pi',
+    });
+    const content = plan.profileFiles?.[0]?.content ?? '';
+    const config = JSON.parse(content);
+    const provider = config.providers['lobehub-server-default'];
+
+    expect(plan.args).toEqual([
+      '--provider',
+      'lobehub-server-default',
+      '--model',
+      'lobehub/kimi-k2.6',
+      '--thinking',
+      'high',
+    ]);
+    expect(plan.env).toEqual({ PI_CODING_AGENT_DIR: '/managed/pi' });
+    expect(plan.operationTokenEnvKey).toBe('LOBEHUB_PI_API_KEY');
+    expect(provider).toMatchObject({
+      api: 'openai-responses',
+      apiKey: '$LOBEHUB_PI_API_KEY',
+      baseUrl: 'https://app.example.com/api/v1/openai/v1',
+      models: [
+        {
+          contextWindow: 128_000,
+          id: 'lobehub/kimi-k2.6',
+          maxTokens: 16_384,
+        },
+      ],
+    });
+    expect(content).not.toContain('stale-token');
+  });
+
   it('is registered and composes base, resume, configured, and input args in order', async () => {
     expect(getHeterogeneousAgentDriver('pi')).toBe(piDriver);
 

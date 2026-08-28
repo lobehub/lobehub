@@ -1,3 +1,5 @@
+import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { eq } from 'drizzle-orm';
 
 import { RbacModel } from '@/database/models/rbac';
@@ -22,6 +24,7 @@ export class HeteroOperationPrincipalError extends Error {
 }
 
 export interface ActiveHeteroOperationPrincipal {
+  agentType?: ServerDefaultHeterogeneousAgentType;
   operationId: string;
   userId: string;
   workspaceId?: string;
@@ -46,6 +49,7 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
   const [operation] = await db
     .select({
       id: agentOperations.id,
+      metadata: agentOperations.metadata,
       model: agentOperations.model,
       provider: agentOperations.provider,
       status: agentOperations.status,
@@ -69,6 +73,20 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
     throw new HeteroOperationPrincipalError('Operation has already ended', 409);
   }
 
+  const metadataAgentType = operation.metadata?.agentType;
+  const agentType =
+    operation.metadata?.serverDefaultHeterogeneous === true &&
+    typeof metadataAgentType === 'string' &&
+    isServerDefaultHeterogeneousAgentType(metadataAgentType)
+      ? metadataAgentType
+      : undefined;
+  if (capability === 'model:invoke' && (!claims.model || !claims.provider_id || !agentType)) {
+    throw new HeteroOperationPrincipalError(
+      'Operation token has no valid server model selection',
+      403,
+    );
+  }
+
   const workspaceId = operation.workspaceId ?? undefined;
   if (
     workspaceId &&
@@ -85,5 +103,5 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
     throw new HeteroOperationPrincipalError('Model invocation is no longer permitted', 403);
   }
 
-  return { operationId, userId: claims.sub, workspaceId };
+  return { agentType, operationId, userId: claims.sub, workspaceId };
 };
