@@ -1,8 +1,7 @@
 import type { HomeNewModelItem } from '@/business/client/hooks/useHomeNewModels';
 
-// Chat — this deployment routes chat through Volcengine, not LobeHub's own
-// hosted "lobehub" provider, so both the models and the provider here differ
-// from upstream's commercial defaults below.
+// Chat — this deployment offers different models than upstream's commercial
+// defaults below, but still routes them through the same "lobehub" provider.
 export const NEW_GLM_MODEL = 'glm-5.2';
 export const NEW_GLM_MODEL_NAME = 'GLM-5.2';
 export const NEW_KIMI_MODEL = 'kimi-k2.7-code';
@@ -12,7 +11,7 @@ export const BUSINESS_CHAT_PROVIDER = 'lobehub';
 export const OSS_GLM_PROVIDER = 'zhipu';
 export const OSS_KIMI_PROVIDER = 'moonshot';
 
-export const CPC_CHAT_PROVIDER = 'volcengine';
+export const CPC_CHAT_PROVIDER = 'lobehub';
 export const CPC_DEEPSEEK_MODEL = 'deepseek-v4-flash';
 export const CPC_DEEPSEEK_MODEL_NAME = 'V4 Flash';
 export const CPC_DOUBAO_MODEL = 'doubao-seed-2.1-pro';
