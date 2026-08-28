@@ -49,6 +49,13 @@ def parse_args() -> argparse.Namespace:
         default=Path(os.environ.get("LOBEHUB_STORAGE_ROOT", DEFAULT_STORAGE_ROOT)),
         help="Path containing local-database.sqlite3 and heteroAgent/",
     )
+    trace_root = os.environ.get("LOBEHUB_HETERO_TRACE_ROOT")
+    parser.add_argument(
+        "--trace-root",
+        type=Path,
+        default=Path(trace_root) if trace_root else None,
+        help="Override the trace directory, for example <cwd>/.heerogeneous-tracing in development",
+    )
     parser.add_argument(
         "--log-file",
         type=Path,
@@ -86,6 +93,19 @@ def safe_error_text(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     return redact_log_line(value[:2_000])
+
+
+def safe_error_value(value: Any) -> str | None:
+    if isinstance(value, str):
+        return safe_error_text(value)
+    if isinstance(value, list):
+        messages = [message for item in value if (message := safe_error_value(item))]
+        return safe_error_text("\n".join(messages)) if messages else None
+    if isinstance(value, dict):
+        for key in ("message", "error", "detail", "details", "reason"):
+            if message := safe_error_value(value.get(key)):
+                return message
+    return None
 
 
 def summarize_error(value: Any) -> dict[str, Any] | str | None:
@@ -129,6 +149,13 @@ def sqlite_read_only(path: Path) -> sqlite3.Connection:
     return connection
 
 
+def entity_freshness(value: dict[str, Any]) -> datetime:
+    for key in ("updatedAt", "completedAt", "createdAt"):
+        if timestamp := parse_iso(value.get(key)):
+            return timestamp
+    return datetime.min
+
+
 def collect_topic_cache(database: Path, topic_id: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "database": str(database),
@@ -145,14 +172,14 @@ def collect_topic_cache(database: Path, topic_id: str) -> dict[str, Any]:
     try:
         with sqlite_read_only(database) as connection:
             rows = connection.execute(
-                "SELECT value FROM local_records WHERE id LIKE ? OR value LIKE ?",
-                (f"%{topic_id}%", f"%{topic_id}%"),
+                "SELECT value FROM local_records WHERE instr(id, ?) > 0 OR instr(value, ?) > 0",
+                (topic_id, topic_id),
             ).fetchall()
     except sqlite3.Error as error:
         result["readError"] = str(error)
         return result
 
-    topics: list[dict[str, Any]] = []
+    topic: dict[str, Any] | None = None
     messages: dict[str, dict[str, Any]] = {}
     native_ids: set[str] = set()
     for (raw_value,) in rows:
@@ -166,11 +193,13 @@ def collect_topic_cache(database: Path, topic_id: str) -> dict[str, Any]:
                 and node.get("role") is None
                 and any(key in node for key in ("provider", "status", "metadata"))
             ):
-                topics.append(node)
+                if topic is None or entity_freshness(node) > entity_freshness(topic):
+                    topic = node
             if node.get("topicId") == topic_id and isinstance(node.get("id"), str):
-                messages[node["id"]] = node
+                existing = messages.get(node["id"])
+                if existing is None or entity_freshness(node) > entity_freshness(existing):
+                    messages[node["id"]] = node
 
-    topic = topics[-1] if topics else None
     if topic:
         native_ids.update(collect_native_session_ids(topic))
         metadata = topic.get("metadata") if isinstance(topic.get("metadata"), dict) else {}
@@ -223,10 +252,10 @@ def collect_topic_cache(database: Path, topic_id: str) -> dict[str, Any]:
     return result
 
 
-def collect_inventory(hetero_root: Path) -> dict[str, Any]:
+def collect_inventory(hetero_root: Path, trace_root: Path) -> dict[str, Any]:
     inventory: dict[str, Any] = {"root": str(hetero_root)}
     for name in HETERO_DIRS:
-        path = hetero_root / name
+        path = trace_root if name == "tracing" else hetero_root / name
         entry: dict[str, Any] = {"exists": path.is_dir(), "path": str(path)}
         if path.is_dir():
             try:
@@ -250,8 +279,27 @@ def collect_inventory(hetero_root: Path) -> dict[str, Any]:
     return inventory
 
 
-def terminal_results(stdout_path: Path) -> list[dict[str, Any]]:
+def event_session_ids(event: dict[str, Any]) -> list[str]:
+    session_ids: list[str] = []
+    for key in ("session_id", "thread_id", "sessionId", "sessionID"):
+        value = event.get(key)
+        if isinstance(value, str) and value and value not in session_ids:
+            session_ids.append(value)
+    return session_ids
+
+
+def terminal_error(event: dict[str, Any]) -> str | None:
+    if event.get("type") == "result":
+        candidates = (event.get("error"), event.get("result"), event.get("errors"))
+    else:
+        candidates = (event.get("message"), event.get("error"), event.get("result"))
+    return next((message for value in candidates if (message := safe_error_value(value))), None)
+
+
+def protocol_summary(stdout_path: Path) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
+    session_ids: set[str] = set()
+    current_session_id: str | None = None
     try:
         with stdout_path.open(encoding="utf-8", errors="replace") as stream:
             for line_number, line in enumerate(stream, 1):
@@ -259,22 +307,39 @@ def terminal_results(stdout_path: Path) -> list[dict[str, Any]]:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if not isinstance(event, dict) or event.get("type") != "result":
+                if not isinstance(event, dict):
                     continue
+                event_type = event.get("type")
+                discovered_ids = event_session_ids(event)
+                session_ids.update(discovered_ids)
+                if event_type == "thread.started" and discovered_ids:
+                    current_session_id = discovered_ids[0]
+                elif current_session_id is None and discovered_ids:
+                    current_session_id = discovered_ids[0]
+
+                if event_type not in {"result", "error", "turn.failed", "turn.completed"}:
+                    continue
+                is_error = (
+                    bool(event.get("is_error"))
+                    if event_type == "result"
+                    else event_type in {"error", "turn.failed"}
+                )
+                event_session_id = discovered_ids[0] if discovered_ids else current_session_id
                 results.append(
                     {
                         "line": line_number,
-                        "subtype": event.get("subtype"),
-                        "isError": event.get("is_error"),
-                        "error": safe_error_text(event.get("error")),
+                        "eventType": event_type,
+                        "subtype": event.get("subtype") or event_type,
+                        "isError": is_error,
+                        "error": terminal_error(event) if is_error else None,
                         "durationMs": event.get("duration_ms"),
                         "numTurns": event.get("num_turns"),
-                        "sessionId": event.get("session_id"),
+                        "sessionId": event_session_id,
                     }
                 )
     except OSError:
         pass
-    return results
+    return {"streamSessionIds": sorted(session_ids), "terminalResults": results}
 
 
 def is_under(path: Path, root: Path) -> bool:
@@ -314,12 +379,8 @@ def discover_trace_dirs(
             needle and any(needle in value for value in searchable) for needle in needles
         )
         stdout_path = meta_path.parent / str(meta.get("stdoutFile") or "stdout.jsonl")
-        terminal_session_ids = {
-            result["sessionId"]
-            for result in terminal_results(stdout_path)
-            if isinstance(result.get("sessionId"), str)
-        }
-        if metadata_matches or needles.intersection(terminal_session_ids):
+        stream_session_ids = set(protocol_summary(stdout_path)["streamSessionIds"])
+        if metadata_matches or needles.intersection(stream_session_ids):
             matches.append(meta_path.parent)
     return sorted(set(matches), key=str)
 
@@ -333,6 +394,7 @@ def collect_trace(trace_dir: Path) -> dict[str, Any]:
         stderr_bytes = stderr_path.stat().st_size
     except OSError:
         stderr_bytes = None
+    protocol = protocol_summary(stdout_path)
     return {
         "directory": str(trace_dir),
         "agentType": meta.get("agentType"),
@@ -352,7 +414,8 @@ def collect_trace(trace_dir: Path) -> dict[str, Any]:
             "signal": exit_data.get("signal"),
             "finishedAt": exit_data.get("finishedAt"),
         },
-        "terminalResults": terminal_results(stdout_path),
+        "streamSessionIds": protocol["streamSessionIds"],
+        "terminalResults": protocol["terminalResults"],
         "stderrBytes": stderr_bytes,
     }
 
@@ -418,7 +481,7 @@ def main() -> int:
     args = parse_args()
     storage_root = args.storage_root.expanduser()
     hetero_root = storage_root / "heteroAgent"
-    trace_root = hetero_root / "tracing"
+    trace_root = args.trace_root.expanduser() if args.trace_root else hetero_root / "tracing"
     target = args.target.strip()
     if not target:
         print("target must not be empty", file=sys.stderr)
@@ -447,7 +510,7 @@ def main() -> int:
         "target": target,
         "generatedAt": datetime.now().astimezone().isoformat(),
         "readOnly": True,
-        "inventory": collect_inventory(hetero_root),
+        "inventory": collect_inventory(hetero_root, trace_root),
         "topicCache": topic_cache,
         "traces": traces,
         "mainLog": collect_log_evidence(args.log_file.expanduser(), identifiers, traces),

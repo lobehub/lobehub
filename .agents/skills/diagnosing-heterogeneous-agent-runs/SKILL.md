@@ -101,6 +101,14 @@ python3 .agents/skills/diagnosing-heterogeneous-agent-runs/scripts/collect-local
   --log-file /path/to/main.log
 ```
 
+For a development run that writes beside the working directory, point directly at that trace root:
+
+```bash
+python3 .agents/skills/diagnosing-heterogeneous-agent-runs/scripts/collect-local-run.py \
+  latest \
+  --trace-root "$PWD/.heerogeneous-tracing"
+```
+
 If the script finds no trace, do not conclude that the run never happened. Check whether packaged tracing was enabled, whether the app used the dev trace root, and whether retention or cleanup removed the evidence.
 
 ### 3. Build one timeline across evidence planes
