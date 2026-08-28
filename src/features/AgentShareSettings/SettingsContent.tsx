@@ -2,8 +2,8 @@
 
 import { AGENT_SHARE_MAX_TOPICS_PER_VISITOR } from '@lobechat/const';
 import { getActivePluginIds } from '@lobechat/types';
-import { Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Button, Select, Switch, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton, Tooltip } from '@lobehub/ui';
+import { Button, Select, Switch, Text, toast } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useState } from 'react';
 
 const SEED_SIGN_IN_PATH = '/api/dev/seed-sign-in';

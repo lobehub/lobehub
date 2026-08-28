@@ -60,6 +60,7 @@ vi.mock('@/server/services/bot/platforms', async (importOriginal) => {
 
 const { AgentBridgeService } = await import('../AgentBridgeService');
 const { AiAgentService } = await import('@/server/services/aiAgent');
+const { createOwnerPrincipal } = await import('@/server/services/executionPrincipal');
 
 const FAKE_DB = {} as any;
 const USER_ID = 'user-123';
@@ -216,7 +217,7 @@ describe('AgentBridgeService', () => {
       client,
     });
 
-    expect(AiAgentService).toHaveBeenCalledWith(FAKE_DB, USER_ID, {
+    expect(AiAgentService).toHaveBeenCalledWith(FAKE_DB, createOwnerPrincipal(USER_ID), {
       workspaceId: 'workspace-1',
     });
     expect(mockExecAgent).toHaveBeenCalledWith(

@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { subAgentCallback } from '../subAgentCallback';
 
 const mockCompleteSubAgentBridge = vi.fn();
@@ -113,9 +115,13 @@ describe('subAgentCallback handler', () => {
     });
     // Workspace-scoped like the /run step worker — a personal-scoped runtime
     // would miss workspace rows in the backfill / barrier queries.
-    expect(mockAiAgentService).toHaveBeenCalledWith(expect.anything(), 'user-1', {
-      workspaceId: 'ws-1',
-    });
+    expect(mockAiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      createOwnerPrincipal('user-1'),
+      {
+        workspaceId: 'ws-1',
+      },
+    );
   });
 
   it('defaults reason to done and threadId to empty string when absent', async () => {

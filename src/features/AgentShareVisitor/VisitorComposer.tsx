@@ -1,8 +1,8 @@
 'use client';
 
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
-import { ActionIcon, Flexbox, TextArea } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleStop, SendHorizonal } from 'lucide-react';
 import { memo, useState } from 'react';

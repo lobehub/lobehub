@@ -1,8 +1,8 @@
 'use client';
 
 import type { SharedAgentData } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
-import { Drawer } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Avatar, Drawer, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

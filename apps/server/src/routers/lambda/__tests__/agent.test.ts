@@ -335,7 +335,14 @@ describe('agentRouter', () => {
       ]);
       await Promise.all(afterTasks);
 
-      expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'operation-1' });
+      // The snapshotted topic (and its metadata) ride along so `interruptTask`
+      // can skip re-reading the already-deleted `topics` row — see
+      // `interruptSnapshottedShareRuns`.
+      expect(mockInterruptTask).toHaveBeenCalledWith({
+        operationId: 'operation-1',
+        topicId: 'topic-1',
+        topicMetadata: undefined,
+      });
     });
   });
 

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 import { GET } from './route';
 
 const { mockInterruptTask, mockInterruptActiveShareRuns, mockFetch, AiAgentServiceCtor } =
@@ -63,7 +65,10 @@ describe('agent share delete signal handling', () => {
     await Promise.all(afterTasks);
 
     expect(response.headers.get('x-lobehub-agent-share-delete')).toBeNull();
-    expect(AiAgentServiceCtor).toHaveBeenCalledWith(expect.anything(), 'owner-1');
+    expect(AiAgentServiceCtor).toHaveBeenCalledWith(
+      expect.anything(),
+      createOwnerPrincipal('owner-1'),
+    );
     expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
     expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-2' });
     // Not the reset-signal helper — the delete path bypasses it on purpose,
