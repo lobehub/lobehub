@@ -1,7 +1,8 @@
 'use client';
 
 import { useSortable } from '@dnd-kit/sortable';
-import { ActionIcon, ContextMenuTrigger, type GenericItemType, Icon, Tooltip } from '@lobehub/ui';
+import { ContextMenuTrigger, type GenericItemType, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { useMotionValue, useSpring, useTransform } from 'motion/react';

@@ -1,7 +1,13 @@
 'use client';
 
-import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { t } from 'i18next';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

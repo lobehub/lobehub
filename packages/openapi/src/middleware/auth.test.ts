@@ -1,3 +1,4 @@
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -121,6 +122,20 @@ describe('OpenAPI auth middleware', () => {
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(mockServerDB, 'oidc-user');
   });
 
+  it('does not accept an operation token on ordinary OpenAPI routes', async () => {
+    mockValidateOIDCJWT.mockResolvedValueOnce({
+      tokenData: { purpose: 'hetero-operation', sub: 'oidc-user' },
+      userId: 'oidc-user',
+    });
+
+    const response = await createApp().request('/protected', {
+      headers: { Authorization: 'Bearer operation-token' },
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockAssertOIDCUserActive).not.toHaveBeenCalled();
+  });
+
   it('should reject an inactive OIDC bearer token without authenticating the request', async () => {
     const app = createApp();
     const inactiveError = Object.assign(new Error('OIDC user is no longer active'), {
@@ -141,7 +156,7 @@ describe('OpenAPI auth middleware', () => {
   });
 
   it('should expose the workspace scope of an API Key to downstream middleware', async () => {
-    mockExtractBearerToken.mockReturnValueOnce('sk-lh-workspacekey01');
+    mockExtractBearerToken.mockReturnValueOnce(`${API_KEY_PREFIX}workspacekey01`);
     mockValidateApiKeyFormat.mockReturnValueOnce(true);
     mockApiKeyFindByKey.mockResolvedValueOnce({
       enabled: true,
@@ -153,7 +168,7 @@ describe('OpenAPI auth middleware', () => {
     });
 
     const response = await createApp().request('/protected', {
-      headers: { Authorization: 'Bearer sk-lh-workspacekey01' },
+      headers: { Authorization: `Bearer ${API_KEY_PREFIX}workspacekey01` },
     });
 
     await expect(response.json()).resolves.toEqual({
@@ -165,7 +180,7 @@ describe('OpenAPI auth middleware', () => {
   });
 
   it('should expose a null workspace scope for a personal API Key', async () => {
-    mockExtractBearerToken.mockReturnValueOnce('sk-lh-personalkey001');
+    mockExtractBearerToken.mockReturnValueOnce(`${API_KEY_PREFIX}personalkey001`);
     mockValidateApiKeyFormat.mockReturnValueOnce(true);
     mockApiKeyFindByKey.mockResolvedValueOnce({
       enabled: true,
@@ -177,7 +192,7 @@ describe('OpenAPI auth middleware', () => {
     });
 
     const response = await createApp().request('/protected', {
-      headers: { Authorization: 'Bearer sk-lh-personalkey001' },
+      headers: { Authorization: `Bearer ${API_KEY_PREFIX}personalkey001` },
     });
 
     await expect(response.json()).resolves.toEqual({
@@ -189,7 +204,7 @@ describe('OpenAPI auth middleware', () => {
   });
 
   it('should re-read API Key authorization changes on every request', async () => {
-    mockExtractBearerToken.mockReturnValue('sk-lh-workspacekey01');
+    mockExtractBearerToken.mockReturnValue(`${API_KEY_PREFIX}workspacekey01`);
     mockValidateApiKeyFormat.mockReturnValue(true);
     mockApiKeyFindByKey
       .mockResolvedValueOnce({
@@ -215,14 +230,14 @@ describe('OpenAPI auth middleware', () => {
     expect(
       (
         await app.request('/protected', {
-          headers: { Authorization: 'Bearer sk-lh-workspacekey01' },
+          headers: { Authorization: `Bearer ${API_KEY_PREFIX}workspacekey01` },
         })
       ).status,
     ).toBe(200);
     expect(
       (
         await app.request('/protected', {
-          headers: { Authorization: 'Bearer sk-lh-workspacekey01' },
+          headers: { Authorization: `Bearer ${API_KEY_PREFIX}workspacekey01` },
         })
       ).status,
     ).toBe(401);

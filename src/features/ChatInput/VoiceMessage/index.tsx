@@ -252,6 +252,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorError};
     }
 
+    &[data-expanded='true'] {
+      cursor: wait;
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorBgContainer};
+    }
+
+    &[data-expanded='true']::before {
+      background: ${cssVar.colorFill};
+    }
+
     &[data-hover-expanded='true']::before,
     &:focus-visible::before,
     &[data-expanded='true']::before {
@@ -265,11 +275,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 1;
     }
 
+    &[data-expanded='true'] > span:first-child {
+      gap: 8px;
+      padding-inline: 14px;
+      font-size: ${cssVar.fontSizeSM};
+      font-weight: normal;
+    }
+
     &[data-hover-expanded='true'] > span:last-child,
     &:focus-visible > span:last-child,
     &[data-expanded='true'] > span:last-child {
       transform: translateY(-50%) translateX(6px);
       opacity: 0;
+    }
+
+    &[data-expanded='true'] > span:first-child > span:last-child {
+      display: none;
+    }
+
+    &[data-expanded='true'] > span:first-child > span:nth-child(2) {
+      display: none;
+    }
+
+    &[data-expanded='true'] > span:first-child > span:first-child > i {
+      animation: voice-message-busy-dot 900ms ease-in-out infinite;
+    }
+
+    &[data-expanded='true'] > span:first-child > span:first-child > i:nth-child(2) {
+      animation-delay: 120ms;
+    }
+
+    &[data-expanded='true'] > span:first-child > span:first-child > i:nth-child(3) {
+      animation-delay: 240ms;
+    }
+
+    &[data-expanded='true'] > span:first-child > span:first-child > i:last-child {
+      display: none;
     }
 
     &:focus-visible {
@@ -285,9 +326,35 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 0.45;
     }
 
+    &[data-expanded='true']:disabled {
+      cursor: wait;
+    }
+
+    &[data-expanded='true']:disabled::before {
+      opacity: 1;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       &::before {
         transition: none;
+      }
+
+      &[data-expanded='true'] > span:first-child > span:first-child > i {
+        animation: none;
+      }
+    }
+
+    @keyframes voice-message-busy-dot {
+      0%,
+      60%,
+      100% {
+        transform: scale(0.72);
+        opacity: 0.38;
+      }
+
+      30% {
+        transform: scale(1);
+        opacity: 1;
       }
     }
   `,
@@ -314,8 +381,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
+    min-width: 0;
+    padding-inline: 10px;
+
     font-size: ${cssVar.fontSize};
     font-weight: ${cssVar.fontWeightStrong};
+    white-space: nowrap;
 
     opacity: 0;
 
@@ -326,6 +397,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
+  `,
+  sendText: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   waveform: css`
     pointer-events: none;
@@ -461,7 +538,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
             >
               <span className={styles.sendLabel}>
                 <SendDots />
-                <span>{actionText}</span>
+                <span className={styles.sendText}>{actionText}</span>
                 <SendDots />
               </span>
               <span className={styles.sendArrow}>
@@ -487,7 +564,7 @@ const VoiceMessage = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
-  const fallbackCanRecordVoiceMessage = useVoiceMessageCapability(model, provider);
+  const fallbackCanRecordVoiceMessage = useVoiceMessageCapability(model, provider, agentId);
   const storeApi = useStoreApi();
   const [
     activeAudioInputMode,

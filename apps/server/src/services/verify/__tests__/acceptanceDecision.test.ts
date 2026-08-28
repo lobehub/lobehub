@@ -6,6 +6,7 @@ import { AcceptanceService } from '../acceptanceService';
 const mocks = vi.hoisted(() => ({
   attachToAcceptance: vi.fn(),
   findById: vi.fn(),
+  findPolicyById: vi.fn(),
   findReportByRun: vi.fn(),
   findRunById: vi.fn(),
   ensureForSubject: vi.fn(),
@@ -15,12 +16,15 @@ const mocks = vi.hoisted(() => ({
   setDecision: vi.fn(),
   taskResolve: vi.fn(),
   updateStatus: vi.fn(),
+  updatePolicyStatus: vi.fn(),
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
   AcceptanceModel: vi.fn(() => ({
     ensureForSubject: mocks.ensureForSubject,
     findById: mocks.findById,
+    findPolicyById: mocks.findPolicyById,
+    updatePolicyStatus: mocks.updatePolicyStatus,
     updateStatus: mocks.updateStatus,
   })),
 }));
@@ -66,6 +70,7 @@ const acceptance = (status: string) => ({
 describe('AcceptanceService decision gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.findPolicyById.mockImplementation((...args) => mocks.findById(...args));
     mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1 }]);
   });
 
@@ -131,6 +136,21 @@ describe('AcceptanceService decision gating', () => {
 
     await expect(service().attachRun('run-1', 'acc-1')).resolves.toBe(existing);
     expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('attaches a workspace task run through internal policy scope', async () => {
+    mocks.findPolicyById.mockResolvedValue(acceptance('planned'));
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2' });
+    mocks.attachToAcceptance.mockResolvedValue({
+      acceptanceId: 'acc-1',
+      id: 'run-2',
+      roundIndex: 2,
+    });
+
+    await expect(service().attachPolicyRun('run-2', 'acc-1')).resolves.toMatchObject({
+      acceptanceId: 'acc-1',
+    });
+    expect(mocks.attachToAcceptance).toHaveBeenCalledWith('run-2', 'acc-1', undefined);
   });
 
   it.each(['delivered', 'errored'])('accepts a settled (%s) delivery', async (status) => {

@@ -60,30 +60,6 @@ const serializeSize = (size: unknown) =>
   size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    disabled,
-    icon,
-    onClick,
-    size,
-    title,
-  }: {
-    disabled?: boolean;
-    icon?: { name?: string };
-    onClick?: () => void;
-    size?: unknown;
-    title?: string;
-  }) => (
-    <button
-      data-icon={icon?.name}
-      data-size={serializeSize(size)}
-      data-testid="header-action-icon"
-      disabled={disabled}
-      title={title}
-      onClick={onClick}
-    >
-      {title}
-    </button>
-  ),
   copyToClipboard: vi.fn(),
   DropdownMenu: ({
     children,
@@ -113,12 +89,46 @@ vi.mock('@lobehub/ui', () => ({
     style?: CSSProperties;
   }) => <div style={{ flex, ...style }}>{children}</div>,
   Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    disabled,
+    icon,
+    onClick,
+    size,
+    title,
+  }: {
+    disabled?: boolean;
+    icon?: { name?: string };
+    onClick?: () => void;
+    size?: unknown;
+    title?: string;
+  }) => (
+    <button
+      data-icon={icon?.name}
+      data-size={serializeSize(size)}
+      data-testid="header-action-icon"
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+    >
+      {title}
+    </button>
+  ),
+  Tag: ({ children, title }: { children?: ReactNode; title?: string }) => (
+    <span title={title}>{children}</span>
+  ),
+  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
+    <span style={style}>{children}</span>
+  ),
+  confirmModal: vi.fn(),
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
   FloatingPanel: ({
     actions,
     children,

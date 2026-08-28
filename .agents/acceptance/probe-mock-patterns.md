@@ -217,6 +217,41 @@ before schema parsing.
 return a standard JSON chat completion for `stream: false`; set `STUB_TEXT` to the
 schema-valid JSON required by the check.
 
+#### Driving the Acceptance AI-review predictor locally: pinned Gemini, image fetch-back, and stub JSON
+
+**Situation:** verifying the ✨ "ask AI to review" round on `/acceptance/<id>` (the
+`review_predict` generation, its toast, the proposal cards) without a real vision key.
+
+**Doesn't work:** three separate things, each of which reads as "the predictor never
+ran" — the button spins, no card, no error.
+
+- Pointing any provider at `llm-stub.mjs`. The predictor does not follow the verifier's
+  model: it is pinned to `DEFAULT_REVIEW_PREDICT_{MODEL,PROVIDER}` in
+  `packages/business/const/src/llm.ts` (Gemini native protocol, which the OpenAI-shaped
+  stub cannot serve), so the provider you configured is simply never called.
+- Running the dev server without `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`. The OpenAI context
+  builder fetches every `image_url` back and inlines it as base64; the local s3rver
+  presigned URL is `127.0.0.1`, so the fetch is refused and the attempt lands as an
+  `errored` row with no model call (the "SSRF protection blocked request" entry above).
+- Expecting a `pending` state in `verify_review_predictions`. There is none: a check is
+  "awaiting" only while it has NO row for the current (provider, model, promptVersion);
+  `predictReviews` deletes the previous unadjudicated rows before dispatch, so reading
+  the table mid-batch shows gaps, not placeholders.
+
+**Works:** (1) temporarily pin the constants to `gpt-4o` / `openai` with an
+`[AGENT-TEST]` marker (snapshot the file first, restore byte-identically at teardown —
+the model-bank vision test guards the real value), then
+`aiInfra().updateAiProviderConfig('openai', { keyVaults: { apiKey: 'sk-stub', baseURL:
+'http://localhost:41100/v1' } })`; (2) start the dev server with
+`SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`; (3) set `STUB_TEXT` to a `ReviewPredictionSchema`
+JSON (`{"action":"reject","regions":[{"imageIndex":0,...}]}`) — the runtime sends
+`response_format: json_schema` with `stream: false`, which the stub answers as a plain
+completion whose `content` is parsed as the object. A text-only evidence check is
+`skipped` without a call; `STUB_FAIL=500` yields `errored` — note the SDK retries a
+5xx three times, so any delay you put in front of the stub is paid ×3 on that path.
+Assert the round from three places together: the toast copy (a MutationObserver on
+`document.body`), the rows' `status`/`action`/`created_at`, and the card count.
+
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
@@ -349,6 +384,54 @@ Then open `/agent/<agentId>/goals`. In the create-Goal dialog, "start from blank
 skips AI generation of the acceptance criteria (required when there is no local LLM
 key); the criteria editor and budget field are ordinary inputs, while the goal
 description is contenteditable (use `fill`; `type` does not support contenteditable).
+
+#### Reaching the Claude Code usage calendar: a local-execution agent, a live-CLI identity, and a four-table ledger fixture
+
+**Situation:** verifying the quota usage calendar (`AgentQuotaCalendar`), which needs
+both a way to open it and quota history to render.
+
+**Doesn't work:** three separate dead ends.
+
+- Opening the conversation of a heterogeneous agent whose `executionTarget` is
+  `device`. A bound-but-offline device renders the 设备未连接 state and the composer
+  never shows the quota badge, so the panel that owns the calendar entry does not
+  exist. Reads as "this build has no quota UI".
+- Seeding only `agent_quota_windows`. The window rows carry `observed_tokens`, but
+  the UI does not read them: `buildWindowStats` sums the **usage ledger** turns that
+  fall inside each window, and the day cells come from the same ledger. Windows
+  without ledger rows render as 历史未记录，which looks like a broken read model.
+- Assuming the DB account is the one the modal opens. The composer badge reads the
+  **live** identity from the local Claude Code CLI over Electron IPC and passes its
+  `externalAccountId` down; the modal then resolves that against
+  `agent_provider_accounts`. A fixture account whose `external_account_id` differs
+  from the machine's real Claude login yields 账号不可用 with no other signal.
+
+**Works:** set the agent to local execution, then seed four tables against the
+account row the app itself created when it first ingested the live snapshot.
+
+```bash
+# 1. the composer only mounts the quota panel for a local-execution hetero agent
+update agents set agency_config = '{"executionTarget":"local","heterogeneousProvider":{"type":"claude-code","command":"claude"}}'::jsonb where id='<agentId>';
+# 2. reuse the existing account row — its external_account_id already matches the live CLI identity
+select id, external_account_id from agent_provider_accounts where provider='claude-code';
+```
+
+Then insert `agent_quota_usage_ledger` turns (they drive both the day cells and the
+per-window totals), `agent_quota_windows` rows for the concrete reset windows, and
+`agent_quota_snapshots` readings — a reading whose `resets_at` is in the future is
+what makes a window "live" and draws the burn-down curve, and a model-scoped
+`weekly_scoped` reading is what adds the third segment. Derive every timestamp from
+the browser's own timezone, since the calendar groups by local day. After the agent
+config write, clear the SWR cache tiers before reloading or the composer keeps the
+previous execution target.
+
+One seeded value does not survive: opening the composer's quota panel makes the app
+ingest the machine's **live** CLI reading into the same account row. A seeded current
+window is therefore replaced by the real utilization (and the real `resets_at`, which
+merges with a seeded window inside the five-minute tolerance) as soon as the panel
+renders. Seed the history and the ledger, but never assert on the live window's own
+percentage — read it back from `agent_quota_snapshots` and report what the run
+actually rendered.
 
 ### Driving the UI
 
@@ -1190,6 +1273,23 @@ outside the harness's remit: mark the dark case untested and say why, rather tha
 flipping a device-level preference. Note the setting write is not free — it syncs to
 the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
 
+#### A cold desktop boot renders English copy while `status.language` already says zh-CN
+
+**Situation:** asserting anything about localized UI copy on a freshly started
+`electron-dev.sh` instance — a label's text, or that a settings section rendered at all.
+
+**Doesn't work:** grepping the rendered text for the Chinese label while
+`window.__LOBE_STORES.global().status.language` reports `zh-CN`. The persisted language is
+restored into the store, but i18next is still on English until `switchLocale` runs once, so every
+Chinese-text assertion comes back false and reads as "the section never rendered". A full-reload
+`goto` puts it back into that state, so it recurs mid-run after each navigation.
+
+**Works:** never infer the rendered language from `status.language`. Decide from the DOM
+(test for both the Chinese and English label, or read a known-localized node), or normalize first
+by calling `window.__LOBE_STORES.global().switchLocale('<locale>')` — the same action the language
+select calls — and only then assert. When the check under test IS the language, drive the real
+select, and re-read `status.language` plus the DOM copy after every switch: the two can disagree.
+
 #### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
 
 **Situation:** driving the Electron shell to the Home route (`/`) to check the nav
@@ -1236,6 +1336,16 @@ agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electr
 On `cloud`, verify open / render / close only, treat every submit as a user-owned decision, and
 prove afterwards that nothing was written (re-read the relevant store count). Note this also makes
 the whole local-server bring-up unnecessary — check the target before spending minutes on it.
+
+**Corollary — a preference key your branch ADDS cannot be proven to persist here.** The cloud
+server validates `user.updatePreference` against its own deployed `UserPreferenceSchema`, so a key
+that exists only in your working tree is accepted with HTTP 200 and then silently dropped: the
+next `user.getUserState` comes back without it and a reload shows the setting reverted, which
+reads exactly like a broken write path. Attribute it before reporting a defect — wrap `fetch`,
+confirm the request body carries the key, and confirm an ALREADY-shipped sibling key
+(`terminalFontFamily`) round-trips in the same response. Then mark persistence blocked on the
+server schema version rather than failing the change; only a local full stack running the branch's
+schema can close that loop.
 
 #### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
 
@@ -1421,6 +1531,22 @@ helper's Ready line. Beware that `init-dev-env.sh dev` / `stop-dev` can SIGTERM 
 pool instance along the way (the log shows
 `GPU process exited unexpectedly: exit_code=15`), so the order is: fix the port and
 start the server first, then start Electron.
+
+### Renderer OTA: creating a real download delta in dev
+
+**Situation:** verifying renderer OTA incremental download in dev, where the
+"builtin" renderer (`apps/desktop/dist/renderer`) is the same directory the build
+writes to.
+
+**Doesn't work:** rebuild + publish the manifest from `dist/renderer`, then
+trigger a check — the manager diffs against the builtin tree, which now equals
+the manifest tree, so every file is hardlink-reused and 0 files download.
+
+**Works:** snapshot `dist/renderer` before the new build; publish the manifest
+from the fresh build output; then restore the snapshot over `dist/renderer` so
+the local tree differs from the manifest. The check then downloads only the real
+delta. Also: read the feed server's 404 line after boot to learn the exact
+`<channel>/<mainHash>` path the running app expects instead of recomputing it.
 
 ### Dev server, install, and ports
 

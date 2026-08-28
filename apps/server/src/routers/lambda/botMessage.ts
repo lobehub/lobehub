@@ -56,15 +56,20 @@ const botMessageWriteProcedure = botMessageProcedure.use(withScopedPermission('m
  * three procedures stay in lockstep — the platform-specific helpers
  * downstream only see one shape.
  */
-const attachmentsInputSchema = z.array(
-  z.object({
-    data: z.string().optional(),
-    fetchUrl: z.string().url().optional(),
-    mimeType: z.string().optional(),
-    name: z.string().optional(),
-    type: z.enum(['image', 'file', 'video', 'audio']),
-  }),
-);
+const attachmentsInputSchema = z
+  .array(
+    z.object({
+      data: z.string().optional(),
+      fetchUrl: z.string().url().optional(),
+      mimeType: z.string().optional(),
+      name: z.string().optional(),
+      type: z.enum(['image', 'file', 'video', 'audio']),
+    }),
+  )
+  // Bounded like the push path: an unmeasured `fetchUrl` costs a size probe
+  // before anything is sent, so an unbounded array is unbounded latency inside
+  // one serverless request.
+  .max(10);
 
 // ── Service Factory ──────────────────────────────────────
 

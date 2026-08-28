@@ -1,3 +1,7 @@
+import type {
+  HeterogeneousProviderBindingReference,
+  HeterogeneousProviderBindingResolution,
+} from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
 
 export interface HeterogeneousAgentImageAttachment {
@@ -33,6 +37,40 @@ export interface HeterogeneousAgentBuildPlanParams {
   resumeSessionId?: string;
 }
 
+export interface ProviderBindingFilePlan {
+  content: string;
+  /** Path relative to the host-owned profile or run directory. */
+  path: string;
+}
+
+export interface PrepareProviderBindingContext {
+  args: string[];
+  env?: Record<string, string>;
+  profileDir: string;
+  reference: Extract<HeterogeneousProviderBindingReference, { kind: 'provider' }>;
+  resolution: HeterogeneousProviderBindingResolution;
+  runDir: string;
+}
+
+export interface PrepareServerDefaultBindingContext {
+  args: string[];
+  endpoint: string;
+  env?: Record<string, string>;
+  model: string;
+  profileDir: string;
+}
+
+export interface ProviderBindingPlan {
+  args: string[];
+  /** Release transient resources created while preparing the binding. */
+  cleanup?: () => Promise<void>;
+  /** Best-effort synchronous release for app shutdown. */
+  cleanupSync?: () => void;
+  env: Record<string, string>;
+  profileFiles?: ProviderBindingFilePlan[];
+  runFiles?: ProviderBindingFilePlan[];
+}
+
 /**
  * Per-agent CLI flag composition + stdin shape. Stream framing is no longer the
  * driver's concern — `AgentStreamPipeline` (`@lobechat/heterogeneous-agents/spawn`)
@@ -42,4 +80,10 @@ export interface HeterogeneousAgentDriver {
   buildSpawnPlan: (
     params: HeterogeneousAgentBuildPlanParams,
   ) => Promise<HeterogeneousAgentBuildPlan>;
+  prepareProviderBinding?: (
+    context: PrepareProviderBindingContext,
+  ) => Promise<ProviderBindingPlan> | ProviderBindingPlan;
+  prepareServerDefaultBinding?: (
+    context: PrepareServerDefaultBindingContext,
+  ) => Promise<ProviderBindingPlan> | ProviderBindingPlan;
 }

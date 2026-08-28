@@ -6,6 +6,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const analyticsTrack = vi.fn();
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    onClick,
+    title,
+    ...rest
+  }: {
+    onClick?: (e: any) => void;
+    title?: string;
+    [key: string]: unknown;
+  }) => (
+    <button
+      aria-label={(rest as any)['aria-label'] ?? title}
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {title}
+    </button>
+  ),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US' },
@@ -176,13 +197,13 @@ describe('Footer help menu tracking', () => {
     expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }, 20000);
 
-  it('does not show Get App in desktop builds', async () => {
+  it('shows Get App in desktop builds too', async () => {
     const user = userEvent.setup();
     await renderFooter({ desktop: true, hideGitHub: false });
 
     await user.click(screen.getByRole('button', { name: 'Help' }));
 
-    expect(screen.queryByRole('link', { name: 'Get App' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Get App' })).toHaveAttribute('href', '/apps');
   }, 20000);
 
   it('tracks menu open with the visible item keys', async () => {

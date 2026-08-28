@@ -3,8 +3,8 @@
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -21,24 +21,22 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
-import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
-import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
-import { EditorCanvas } from '@/features/EditorCanvas';
-import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify';
+} from '@/features/Acceptance';
+import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
+import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
+import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
+import { EditorCanvas } from '@/features/EditorCanvas';
+import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
+import { shinyTextStyles } from '@/styles';
 
 import { buildGoalTaskConfig } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
@@ -79,6 +77,59 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px;
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  generatingStatus: css`
+    min-height: 36px;
+    padding-block: 6px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  generatingTextItem: css`
+    display: flex;
+    align-items: center;
+
+    height: 22px;
+
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    white-space: nowrap;
+  `,
+  generatingTextTrack: css`
+    animation: goal-generation-roll 16s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+
+    @keyframes goal-generation-roll {
+      0%,
+      20% {
+        transform: translateY(0);
+      }
+
+      25%,
+      45% {
+        transform: translateY(-22px);
+      }
+
+      50%,
+      70% {
+        transform: translateY(-44px);
+      }
+
+      75%,
+      95% {
+        transform: translateY(-66px);
+      }
+
+      100% {
+        transform: translateY(-88px);
+      }
+    }
+  `,
+  generatingTextViewport: css`
+    overflow: hidden;
+    height: 22px;
   `,
   head: css`
     position: relative;
@@ -203,6 +254,14 @@ const GoalBorderFlowStyle = createGlobalStyle`
   }
 `;
 
+const GENERATION_ESTIMATE_SECONDS = 90;
+
+export const formatGoalGenerationRemainingTime = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}:${rest.toString().padStart(2, '0')}`;
+};
+
 const criterionRequirement = (drafts: GoalCriterionDraft[]) =>
   drafts
     .map((draft) => draft.title.trim())
@@ -240,16 +299,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const activeWorkspaceId = useActiveWorkspaceId();
-  const model = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentModelById(agentId)(s)
-      : agentSelectors.currentAgentModel(s),
-  );
-  const provider = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentModelProviderById(agentId)(s)
-      : agentSelectors.currentAgentModelProvider(s),
-  );
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -262,6 +311,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   // Default to private in workspace mode so sharing is opt-in; personal mode
   // ignores the field and hides the chip.
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+  const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
 
   // A private agent can only run a private task, goals included.
   const isPrivateAgent = useAgentVisibility(agentId) === 'private';
@@ -271,8 +321,17 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const editor = useEditor();
   const instructionRef = useRef(plan.instruction);
-  const assigneeMeta = useAgentDisplayMeta(agentId);
   const requirement = useMemo(() => criterionRequirement(plan.criteria), [plan.criteria]);
+
+  useEffect(() => {
+    if (step !== 'preparing') return;
+    setRemainingSeconds(GENERATION_ESTIMATE_SECONDS);
+    const timer = window.setInterval(
+      () => setRemainingSeconds((value) => Math.max(0, value - 1)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [step]);
 
   const handleContentChange = useCallback(() => {
     if (!canCreate || !editor) return;
@@ -286,7 +345,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const handleNext = useCallback(async () => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
-    if (!canCreate || !instruction || !model || !provider) return;
+    if (!canCreate || !instruction) return;
     const name = plan.name.trim() || deriveGoalTitle(instruction);
     setPlan((current) => ({
       ...current,
@@ -298,13 +357,14 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     try {
       const generated = await generateGoalCriteria({
         context: name ? `Goal: ${name}` : undefined,
-        goal: initialRequirement?.trim() || instruction,
-        model,
-        provider,
+        goal: instruction,
       });
+      instructionRef.current = generated.instruction;
       setPlan((current) => ({
         ...current,
-        criteria: generated,
+        criteria: generated.criteria,
+        instruction: generated.instruction,
+        name: generated.title,
       }));
       setStep('review');
     } catch (error) {
@@ -318,7 +378,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
-  }, [canCreate, initialRequirement, model, plan.instruction, plan.name, provider, t]);
+  }, [canCreate, plan.instruction, plan.name, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
@@ -433,6 +493,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;
   const handleSubmitRef = useRef(handlePrimaryAction);
+  const generatingMessages = [
+    t('createGoal.generating'),
+    t('createGoal.generatingInstruction'),
+    t('createGoal.generatingCriteria'),
+    t('createGoal.generatingReview'),
+    t('createGoal.generating'),
+  ];
   useEffect(() => {
     handleSubmitRef.current = handlePrimaryAction;
   }, [handlePrimaryAction]);
@@ -490,7 +557,44 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   onContentChange={handleContentChange}
                 />
               </div>
-              <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>
+              {step === 'preparing' ? (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={styles.generatingStatus}
+                  gap={10}
+                  justify={'space-between'}
+                >
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <NeuralNetworkLoading size={18} />
+                    <div
+                      aria-label={t('createGoal.generating')}
+                      className={styles.generatingTextViewport}
+                      role={'status'}
+                    >
+                      <div aria-hidden className={styles.generatingTextTrack}>
+                        {generatingMessages.map((message, index) => (
+                          <div
+                            className={`${styles.generatingTextItem} ${shinyTextStyles.shinyText}`}
+                            key={index}
+                          >
+                            {message}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </Flexbox>
+                  <Text fontSize={12} type={'secondary'}>
+                    {remainingSeconds > 0
+                      ? t('createGoal.generatingCountdown', {
+                          time: formatGoalGenerationRemainingTime(remainingSeconds),
+                        })
+                      : t('createGoal.generatingAlmostDone')}
+                  </Text>
+                </Flexbox>
+              ) : (
+                <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>
+              )}
             </>
           )}
         </Flexbox>
@@ -633,10 +737,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          <Flexbox horizontal align={'center'} gap={6}>
-            <AssigneeAvatar agentId={agentId} size={18} />
-            <Text fontSize={12}>{assigneeMeta?.title}</Text>
-          </Flexbox>
           {activeWorkspaceId && (
             <TaskVisibilityTag
               visibility={visibility}

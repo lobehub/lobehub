@@ -1,5 +1,5 @@
-import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { Ban, Loader2, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

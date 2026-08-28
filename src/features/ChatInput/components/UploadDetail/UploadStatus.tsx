@@ -1,5 +1,6 @@
 import { CheckCircleFilled } from '@ant-design/icons';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleAlertIcon, Loader2Icon } from 'lucide-react';

@@ -8,7 +8,13 @@ const mocks = vi.hoisted(() => ({
   toggleTerminalPanel: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ active, onClick }: { active?: boolean; onClick?: () => void }) => (
+    <button data-active={String(active)} data-testid="terminal-panel-toggle" onClick={onClick} />
+  ),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
   ActionIcon: ({ active, onClick }: { active?: boolean; onClick?: () => void }) => (
     <button data-active={String(active)} data-testid="terminal-panel-toggle" onClick={onClick} />
   ),

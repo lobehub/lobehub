@@ -352,11 +352,25 @@ describe('heterogeneous agent model discovery', () => {
   it('keeps the resolver login-shell PATH when the caller also provides PATH', async () => {
     const originalShell = process.env.SHELL;
     process.env.SHELL = '/bin/zsh';
-    rejectExecFile(new Error('not on inherited PATH'));
-    resolveExecFile('/login/bin:/usr/bin');
-    resolveExecFile('/login/bin/opencode\n');
-    resolveExecFile('1.18.3');
-    resolveExecFile('openai/gpt-5.6\n');
+    execFileMock.mockImplementation(((
+      file: string,
+      args: string[],
+      options: any,
+      callback: any,
+    ) => {
+      if (file === '/bin/zsh') {
+        callback(null, { stderr: '', stdout: '/login/bin:/usr/bin' });
+      } else if (file === 'which' && options.env?.PATH?.includes('/login/bin')) {
+        callback(null, { stderr: '', stdout: '/login/bin/opencode\n' });
+      } else if (file === '/login/bin/opencode' && args.includes('--version')) {
+        callback(null, { stderr: '', stdout: '1.18.3' });
+      } else if (file === '/login/bin/opencode' && args.includes('models')) {
+        callback(null, { stderr: '', stdout: 'openai/gpt-5.6\n' });
+      } else {
+        callback(new Error('unavailable in inherited environment'), { stderr: '', stdout: '' });
+      }
+      return {} as any;
+    }) as any);
 
     try {
       const { listHeterogeneousAgentModels } = await importModule();

@@ -57,6 +57,12 @@ describe('chatTopicMetadataUpdateSchema', () => {
     expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
   });
 
+  it('preserves the operation-scoped terminal correction marker', () => {
+    const metadata = { lastSettledOperationId: 'operation-1' };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+  });
+
   it('rejects a delayed start with no user message — the persisted turn IS the prompt', () => {
     const result = chatTopicMetadataUpdateSchema.safeParse({
       scheduledRun: {

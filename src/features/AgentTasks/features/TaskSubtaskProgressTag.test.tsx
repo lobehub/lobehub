@@ -33,6 +33,13 @@ vi.mock('@lobehub/ui', () => ({
     </div>
   ),
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 

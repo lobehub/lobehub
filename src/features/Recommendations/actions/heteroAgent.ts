@@ -45,11 +45,6 @@ export const buildHeteroAgentAction = (
     descriptionKey: 'recommendations.heteroAgent.description',
     execute: (ctx) => ctx.createHeteroAgent(config),
     i18nValues: { name: config.title },
-    icon: createElement(Avatar, {
-      shape: 'square',
-      size: 28,
-      style: { borderRadius: 8 },
-    }),
     id: `hetero-agent:${config.type}`,
     isEligible: (ctx) => {
       if (!ctx.isDesktop) return false;
@@ -57,6 +52,12 @@ export const buildHeteroAgentAction = (
       return !ctx.agents.some((a) => a.heterogeneousType === config.type);
     },
     priority: 10,
+    renderIcon: (size) =>
+      createElement(Avatar, {
+        shape: 'square',
+        size,
+        style: { borderRadius: 8 },
+      }),
     tagKey: 'recommendations.heteroAgent.tag',
     titleKey: 'recommendations.heteroAgent.title',
   };

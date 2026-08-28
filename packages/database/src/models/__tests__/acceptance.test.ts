@@ -84,6 +84,26 @@ describe('AcceptanceModel', () => {
     expect((await model.findById(grouped.id))?.projectId).toBeNull();
   });
 
+  it('files an acceptance under a project and takes it back out', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const project = await projectModel.create({ identifier: 'MOVE', name: 'Move target' });
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('topic', topicId);
+
+    await model.update(acceptance.id, { projectId: project.id });
+    expect((await model.findById(acceptance.id))?.projectId).toBe(project.id);
+
+    // Ungrouping is the same write with a null — the aggregate itself stays put.
+    await model.update(acceptance.id, { projectId: null });
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+
+    // Another user's model cannot re-file it: ownership scopes the update.
+    await new AcceptanceModel(serverDB, otherUserId).update(acceptance.id, {
+      projectId: project.id,
+    });
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+  });
+
   it('keeps the first standalone display title and backfills one when initially absent', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const subjectId = 'standalone-external-delivery';
@@ -126,6 +146,36 @@ describe('AcceptanceModel', () => {
 
     const otherModel = new AcceptanceModel(serverDB, otherUserId);
     expect(await otherModel.findBySubject('topic', topicId)).toBeUndefined();
+  });
+
+  it('shares workspace execution policies without exposing private reports', async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'policy-ws', primaryOwnerId: userId, slug: 'policy-ws' })
+      .returning();
+    const creatorModel = new AcceptanceModel(serverDB, userId, workspace.id);
+    const acceptance = await creatorModel.ensureForSubject('topic', topicId, {
+      config: { enabled: true },
+    });
+    const collaboratorModel = new AcceptanceModel(serverDB, otherUserId, workspace.id);
+
+    expect(await collaboratorModel.findBySubject('topic', topicId)).toBeUndefined();
+    expect(await collaboratorModel.findPolicyBySubject('topic', topicId)).toMatchObject({
+      id: acceptance.id,
+    });
+    expect(await collaboratorModel.findPolicyById(acceptance.id)).toMatchObject({
+      id: acceptance.id,
+    });
+    await collaboratorModel.updatePolicy(acceptance.id, { requirement: 'Shared task contract' });
+    await collaboratorModel.updatePolicyStatus(acceptance.id, 'verifying');
+    expect((await creatorModel.findBySubject('topic', topicId))?.requirement).toBe(
+      'Shared task contract',
+    );
+    expect((await creatorModel.findBySubject('topic', topicId))?.status).toBe('verifying');
+
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).findPolicyBySubject('topic', topicId),
+    ).toBeUndefined();
   });
 
   it('reads many subjects statuses in one call, however old they are', async () => {

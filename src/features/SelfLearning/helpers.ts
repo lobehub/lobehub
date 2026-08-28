@@ -74,3 +74,39 @@ export const earlyPassRate = (series: { rate: number }[], k = 4) => {
   if (head.length === 0) return null;
   return head.reduce((a, b) => a + b.rate, 0) / head.length;
 };
+
+/**
+ * Section labels per polarity: `bad` writes wrong/why/breaks/correct, `good` good/works/dont,
+ * `rule` rule/why/how/limits. One map covers all three so every surface labels them the same.
+ */
+export const LESSON_SECTION_LABELS = {
+  breaks: 'rules.section.breaks',
+  correct: 'rules.section.correct',
+  dont: 'rules.section.dont',
+  good: 'rules.section.good',
+  how: 'rules.section.how',
+  limits: 'rules.section.limits',
+  rule: 'rules.section.rule',
+  why: 'rules.section.why',
+  works: 'rules.section.works',
+  wrong: 'rules.section.wrong',
+} as const;
+
+export type LessonSectionKey = keyof typeof LESSON_SECTION_LABELS;
+
+/** `undefined` for a section key no polarity declares; callers fall back to the raw key. */
+export const lessonSectionLabel = (key: string) =>
+  LESSON_SECTION_LABELS[key as LessonSectionKey] as
+    (typeof LESSON_SECTION_LABELS)[LessonSectionKey] | undefined;
+
+/** Worth reading at a glance; `rule` only restates the title the surface already shows. */
+const PREVIEW_SECTION_KEYS = new Set(['why', 'how', 'works', 'breaks', 'correct', 'limits']);
+
+/**
+ * The sections a hover preview shows, already paired with their label key.
+ * Empty bodies are dropped so the card never renders a labelled blank row.
+ */
+export const previewSections = (sections: { body: string; key: string }[] = []) =>
+  sections
+    .filter((section) => PREVIEW_SECTION_KEYS.has(section.key) && section.body.trim().length > 0)
+    .map((section) => ({ ...section, label: lessonSectionLabel(section.key) }));

@@ -85,6 +85,16 @@ export const portraitStyles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  previewTarget: css`
+    cursor: pointer;
+    text-align: start;
+
+    &:focus-visible {
+      border-radius: 4px;
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 2px;
+    }
+  `,
   viewAll: css`
     font-size: 12.5px;
     color: ${cssVar.colorTextSecondary};

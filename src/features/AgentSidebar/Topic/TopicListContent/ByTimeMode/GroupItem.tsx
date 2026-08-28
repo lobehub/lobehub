@@ -1,4 +1,5 @@
-import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import { AccordionItem, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';

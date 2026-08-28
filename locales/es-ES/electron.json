@@ -146,6 +146,8 @@
   "updater.later": "Más tarde",
   "updater.newVersionAvailable": "Nueva versión disponible",
   "updater.newVersionAvailableDesc": "Se ha encontrado una nueva versión {{version}}, ¿quieres descargarla ahora?",
+  "updater.refreshToApply": "Actualizar ahora",
+  "updater.rendererUpdateReady": "Una nueva versión está lista: actualiza para aplicar",
   "updater.restartAndInstall": "Instalar actualizaciones y reiniciar",
   "updater.updateError": "Error de actualización",
   "updater.updateReady": "Una nueva versión está disponible",

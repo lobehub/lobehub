@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button, confirmModal, Switch, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Button, confirmModal, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';

@@ -97,10 +97,12 @@ describe('defineConfig Share SPA rewrite', () => {
     );
     const desktopTopic = await run('http://localhost:3010/share/t/topic-1?hl=en-US');
     const desktopPage = await run('http://localhost:3010/share/page/docs_1?hl=en-US');
+    const desktopArtifact = await run('http://localhost:3010/share/artifact/42?hl=en-US');
 
     expect(new URL(mobileTopic!).pathname).toBe('/spa-share/en-US/share/t/topic-1');
     expect(new URL(desktopTopic!).pathname).toBe('/spa-share/en-US/share/t/topic-1');
     expect(new URL(desktopPage!).pathname).toBe('/spa-share/en-US/share/page/docs_1');
+    expect(new URL(desktopArtifact!).pathname).toBe('/spa-share/en-US/share/artifact/42');
   });
 
   it('leaves non-share paths that merely start with the prefix in the main SPA', async () => {

@@ -3,9 +3,10 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { goals, users } from '../../schemas';
+import { agents, goals, tasks, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
+import { TaskModel } from '../task';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -90,6 +91,68 @@ describe('GoalModel', () => {
 
     it('returns empty for an empty id list', async () => {
       expect(await goalModel.listBySubjects('task', [])).toEqual([]);
+    });
+  });
+
+  describe('list', () => {
+    it('applies the carrier task visibility boundary in a workspace', async () => {
+      const workspaceId = 'goal-list-visibility-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Goal list visibility',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      const ownerTasks = new TaskModel(serverDB, userId, workspaceId);
+      const ownerGoals = new GoalModel(serverDB, userId, workspaceId);
+      const privateTask = await ownerTasks.create({
+        instruction: 'private',
+        visibility: 'private',
+      });
+      const publicTask = await ownerTasks.create({ instruction: 'public', visibility: 'public' });
+      await ownerGoals.create({
+        subjectId: privateTask.id,
+        subjectType: 'task',
+        title: 'Private goal',
+      });
+      await ownerGoals.create({
+        subjectId: publicTask.id,
+        subjectType: 'task',
+        title: 'Public goal',
+      });
+
+      const memberGoals = new GoalModel(serverDB, otherUserId, workspaceId);
+      const result = await memberGoals.list();
+
+      expect(result.total).toBe(1);
+      expect(result.goals.map(({ id }) => id)).toEqual([publicTask.id]);
+    });
+
+    it('filters by the carrier task current assignee instead of the goal snapshot', async () => {
+      const oldAgentId = 'goal-list-old-agent';
+      const newAgentId = 'goal-list-new-agent';
+      await serverDB.insert(agents).values([
+        { id: oldAgentId, slug: oldAgentId, userId },
+        { id: newAgentId, slug: newAgentId, userId },
+      ]);
+      const task = await new TaskModel(serverDB, userId).create({
+        assigneeAgentId: oldAgentId,
+        instruction: 'reassign me',
+      });
+      await goalModel.create({
+        agentId: oldAgentId,
+        subjectId: task.id,
+        subjectType: 'task',
+        title: 'Reassigned goal',
+      });
+      await serverDB
+        .update(tasks)
+        .set({ assigneeAgentId: newAgentId })
+        .where(eq(tasks.id, task.id));
+
+      expect((await goalModel.list({ agentId: oldAgentId })).total).toBe(0);
+      expect((await goalModel.list({ agentId: newAgentId })).goals[0]?.id).toBe(task.id);
     });
   });
 

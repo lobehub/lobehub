@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRightIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';

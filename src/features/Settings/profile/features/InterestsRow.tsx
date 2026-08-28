@@ -2,7 +2,8 @@
 
 import type { InterestAreaKey } from '@lobechat/const';
 import { normalizeInterestsForStorage, resolveInterestAreaKey } from '@lobechat/const';
-import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import HeaderActions from './index';
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', () => ({
   ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
     <button
       aria-label={title}
@@ -12,11 +12,24 @@ vi.mock('@lobehub/ui', () => ({
       onClick={onClick}
     />
   ),
+}));
+
+vi.mock('@lobehub/ui', () => ({
   DropdownMenu: ({ children, header }: { children?: ReactNode; header?: ReactNode }) => (
     <div>
       {header}
       {children}
     </div>
+  ),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? undefined : 'overflow-menu-button'}
+      onClick={onClick}
+    />
   ),
 }));
 

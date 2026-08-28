@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Checkbox, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Checkbox, Text, toast } from '@lobehub/ui/base-ui';
 import { List } from 'antd';
 import { cssVar } from 'antd-style';
 import { Package, Wrench } from 'lucide-react';

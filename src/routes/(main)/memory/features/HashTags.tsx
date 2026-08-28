@@ -1,4 +1,5 @@
-import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { HashIcon } from 'lucide-react';
 import { memo } from 'react';

@@ -13,8 +13,8 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
+  | 'agentProviderBinding'
   | 'artifactDeployment'
-  | 'claudeCodeApiMode'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
@@ -111,9 +111,9 @@ export const LAB_FEATURES: LabFeatureItem[] = [
   },
   {
     desktopOnly: true,
-    flag: 'enableClaudeCodeApiMode',
-    i18nKey: 'claudeCodeApiMode',
-    searchKeywords: ['claude code api', 'api provider', 'api mode'],
+    flag: 'enableAgentProviderBinding',
+    i18nKey: 'agentProviderBinding',
+    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
     stage: 'alpha',
   },
   {

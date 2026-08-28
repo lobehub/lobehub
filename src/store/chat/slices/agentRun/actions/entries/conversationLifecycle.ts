@@ -18,13 +18,13 @@ import type {
   UIChatMessage,
 } from '@lobechat/types';
 import {
+  applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
-import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
@@ -64,7 +64,10 @@ import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
-import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
+import {
+  getNativeHeteroSessionBindingKey,
+  resolveHeteroResume,
+} from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import type { QueuedFile } from '@/store/chat/slices/operation/types';
 import {
   isQueueBlockingOperation,
@@ -408,11 +411,12 @@ export class ConversationLifecycleActionImpl {
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode,
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent: !!agent?.workspaceId,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
       parentRuntime: forceRuntime,
+      workspaceScoped,
     });
 
     // ── Command Bus: extract and process built-in commands from editorData ──
@@ -813,6 +817,39 @@ export class ConversationLifecycleActionImpl {
     const cleanupTempMessages = (options?: { preserveOptimisticUser?: boolean }) => {
       const ids = options?.preserveOptimisticUser ? [tempAssistantId] : [tempId, tempAssistantId];
       this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
+    };
+    /**
+     * Put the typed message back in the composer when a send fails before the
+     * user message was persisted. The composer is cleared the instant Enter is
+     * pressed, so without this the text is gone for good — the run never
+     * happened, and there is no persisted row to recover it from.
+     *
+     * Shared by all three runtime branches. Gateway and hetero previously only
+     * logged and deleted the optimistic pair, so a server-side start refusal
+     * (e.g. the topic-start reservation reporting the topic busy) was
+     * indistinguishable from the message being silently swallowed.
+     */
+    const restoreComposerAfterFailedSend = (error: unknown) => {
+      if (preserveComposer || hasNotifiedMessageAccepted) return;
+
+      // Cancellation is a deliberate user action with its own restore path
+      // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
+      // composer here would fight it.
+      const isAbort =
+        error instanceof Error &&
+        (error.message.includes('aborted') || error.name === 'AbortError');
+      if (isAbort) return;
+
+      this.#get().updateOperationMetadata(operationId, {
+        inputSendErrorMsg: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      const op = this.#get().operations[operationId];
+      if (op?.metadata.inputEditorTempState) {
+        targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+      } else {
+        targetInputEditor?.setDocument('markdown', message);
+      }
     };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;
@@ -1316,6 +1353,7 @@ export class ConversationLifecycleActionImpl {
             message: e instanceof Error ? e.message : 'Unknown error',
             type: 'HeterogeneousAgentError',
           });
+          restoreComposerAfterFailedSend(e);
         }
         cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
         detachUnacceptedCallerAbort();
@@ -1499,7 +1537,8 @@ export class ConversationLifecycleActionImpl {
         // Read heterogeneous-agent session id from topic metadata for multi-turn
         // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
         // doesn't match the current one, so CC doesn't emit
-        // "No conversation found with session ID".
+        // "No conversation found with session ID". Pre-binding native rows
+        // retain the old cwd-only behavior, independent of the Labs flag.
         // Store lookup first (freshest optimistic edits), but fall back to the
         // server row resolved above — the paginated store misses deep-linked
         // older topics, and a miss here silently dropped `--resume` even when
@@ -1508,23 +1547,37 @@ export class ConversationLifecycleActionImpl {
           (heteroContext.topicId
             ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
             : undefined) ?? existingTopic;
-        const { cwdChanged, resumeSessionId } = resolveHeteroResume(
+        const providerBinding = heterogeneousProvider.authMode === 'api';
+        const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
           topic?.metadata,
           workingDirectory,
+          {
+            currentBindingKey: providerBinding
+              ? undefined
+              : getNativeHeteroSessionBindingKey(heterogeneousProvider.type),
+            providerBinding,
+          },
         );
         if (cwdChanged) {
           toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+        } else if (reason === 'binding_changed') {
+          toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
         }
+        const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
+          heterogeneousProvider,
+          topic?.model ? { model: topic.model, provider: topic.provider || '' } : undefined,
+        );
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroExecutionAssistantId,
           context: heteroExecutionContext,
           contextSelections: effectiveContextSelections,
-          heterogeneousProvider,
+          heterogeneousProvider: effectiveHeterogeneousProvider,
           imageList: persistedImageList?.length ? persistedImageList : undefined,
           message,
           operationId: heteroOpId,
           pageSelections: effectivePageSelections,
+          resumeBindingKey,
           resumeSessionId,
           workingDirectory,
           workingDirectoryConfig,
@@ -1683,6 +1736,7 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'GatewayError',
         });
+        restoreComposerAfterFailedSend(e);
         cleanupTempMessages({
           preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
         });
@@ -1920,19 +1974,7 @@ export class ConversationLifecycleActionImpl {
         });
       }
 
-      if (!preserveComposer && e instanceof TRPCClientError) {
-        const isAbort = e.message.includes('aborted') || e.name === 'AbortError';
-        // Check if error is due to cancellation
-        if (!isAbort) {
-          this.#get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
-          const op = this.#get().operations[operationId];
-          if (op?.metadata.inputEditorTempState) {
-            targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
-          } else {
-            targetInputEditor?.setDocument('markdown', message);
-          }
-        }
-      }
+      restoreComposerAfterFailedSend(e);
     } finally {
       // Roll the optimistic pair back only when the send did not land (cancel or
       // failure). On success there is nothing to clean up: the rows were created

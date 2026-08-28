@@ -2,8 +2,8 @@
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIconGroup, Block, Flexbox, Grid, Image, Markdown, Tag, Text } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { ActionIconGroup, Block, Flexbox, Grid, Image, Markdown } from '@lobehub/ui';
+import { Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { omit } from 'es-toolkit/compat';

@@ -1,5 +1,5 @@
-import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, createModal, type ModalInstance, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Blocks, CheckCircle2, Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';

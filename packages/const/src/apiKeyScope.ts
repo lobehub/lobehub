@@ -188,6 +188,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
+  artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',
   brief: rw('chat:read', 'chat:write'),
@@ -200,6 +201,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   connector: 'blocked',
   device: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
+  documentComment: rw('knowledge:read', 'knowledge:write'),
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
@@ -208,6 +210,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   generation: { any: 'model:invoke' },
   generationBatch: { any: 'model:invoke' },
   generationTopic: { any: 'model:invoke' },
+  goal: rw('agent:read', 'agent:write'),
   group: rw('agent:read', 'agent:write'),
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),

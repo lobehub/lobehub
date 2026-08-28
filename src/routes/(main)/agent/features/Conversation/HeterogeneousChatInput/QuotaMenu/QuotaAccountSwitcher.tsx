@@ -1,8 +1,8 @@
 'use client';
 
 import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';

@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
@@ -24,7 +25,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   Select: ({
     disabled,
     loading,
@@ -40,6 +42,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       role="combobox"
     />
   ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@/features/DeviceManager/useDeviceList', () => ({

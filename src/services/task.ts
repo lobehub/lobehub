@@ -31,7 +31,10 @@ class TaskService {
 
   groupList = async (params: {
     assigneeAgentId?: string;
-    groups: Array<{
+    automated?: boolean;
+    excludeStatuses?: TaskStatus[];
+    groupBy?: 'assignee' | 'priority';
+    groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;

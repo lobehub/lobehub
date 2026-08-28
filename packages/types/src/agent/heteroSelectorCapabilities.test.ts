@@ -4,8 +4,10 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import { buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
+  CODEX_SERVER_DEFAULT_CUSTOM_MODELS,
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  isCodexServerDefaultCustomModel,
   isHeteroSelectorAvailable,
 } from './heteroSelectorCapabilities';
 
@@ -51,6 +53,16 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('codebuddy')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('qoder')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('trae')?.model?.source).toBe('catalog');
+  });
+
+  it('keeps non-OpenAI Codex relay support on an explicit allowlist', () => {
+    expect(CODEX_SERVER_DEFAULT_CUSTOM_MODELS).toEqual([
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+      'glm-5.2',
+    ]);
+    expect(isCodexServerDefaultCustomModel('deepseek-v4-pro')).toBe(true);
+    expect(isCodexServerDefaultCustomModel('kimi-k2.6')).toBe(false);
   });
 
   it('reports codex effort levels per model', () => {

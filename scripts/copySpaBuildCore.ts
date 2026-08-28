@@ -17,6 +17,10 @@ const targets = [
   { distDir: 'share', publicDir: 'public/_spa-share' },
 ] as const;
 
+export const spaPublicDirNames = [
+  ...new Set(targets.map(({ publicDir }) => publicDir.split('/')[1])),
+];
+
 export const copySpaBuild = (root = path.resolve(import.meta.dirname, '..')) => {
   for (const { distDir, publicDir } of targets) {
     const distRoot = path.resolve(root, `dist/${distDir}`);

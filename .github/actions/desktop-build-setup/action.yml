@@ -6,9 +6,11 @@ inputs:
     description: Node.js version
     required: true
   cloud-repository:
-    description: Cloud repository to overlay for commercial desktop builds
+    description: >-
+      Overlay repository (owner/name) for commercial desktop builds — pass the
+      OVERLAY_REPOSITORY repository variable; deliberately no hardcoded default.
     required: false
-    default: lobehub/lobehub-cloud
+    default: ''
   cloud-ref:
     description: Optional Cloud repository ref
     required: false
@@ -37,18 +39,24 @@ runs:
         CLOUD_TOKEN: ${{ inputs.cloud-token }}
       run: |
         set -euo pipefail
+        # Fail loudly rather than silently shipping an OSS-only commercial build.
+        : "${CLOUD_REPOSITORY:?cloud-repository input is empty — pass the OVERLAY_REPOSITORY repository variable}"
 
         cloud_root="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
         cloud_checkout="$RUNNER_TEMP/lobehub-cloud"
 
         rm -rf "$cloud_checkout"
 
-        clone_args=(--depth 1)
+        git clone --depth 1 --no-checkout "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" "$cloud_checkout"
         if [ -n "$CLOUD_REF" ]; then
-          clone_args+=(--branch "$CLOUD_REF")
+          git -C "$cloud_checkout" fetch --depth 1 origin "$CLOUD_REF"
+          git -C "$cloud_checkout" checkout --detach FETCH_HEAD
+        else
+          git -C "$cloud_checkout" checkout --detach
         fi
 
-        git clone "${clone_args[@]}" "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" "$cloud_checkout"
+        resolved_cloud_ref="$(git -C "$cloud_checkout" rev-parse HEAD)"
+        echo "CLOUD_REF=$resolved_cloud_ref" >> "$GITHUB_ENV"
 
         node <<'NODE'
         const fs = require('node:fs');
@@ -87,7 +95,7 @@ runs:
         NODE
 
         echo "CLOUD_DESKTOP=1" >> "$GITHUB_ENV"
-        echo "✅ Cloud repository overlaid at $cloud_root"
+        echo "✅ Cloud repository $resolved_cloud_ref overlaid at $cloud_root"
 
     - name: Install dependencies
       shell: bash

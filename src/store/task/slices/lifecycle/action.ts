@@ -203,30 +203,35 @@ export class TaskLifecycleSliceActionImpl {
   };
 
   #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
-    const { taskGroups, tasks } = this.#get();
+    const { listGroupBy, taskGroups, tasks } = this.#get();
     const listTask = tasks.find((task) => task.identifier === id);
     const groupedTask = taskGroups
       .flatMap((group) => group.tasks)
       .find((task) => task.identifier === id);
     if (!listTask && !groupedTask) return;
 
-    const targetGroupKey = taskGroupKeyByStatus[status];
     const nextTasks = listTask
       ? tasks.map((item) => (item.identifier === id ? { ...item, status } : item))
       : tasks;
     const nextTaskGroups = groupedTask
-      ? taskGroups.map((group) => {
-          const containsTask = group.tasks.some((item) => item.identifier === id);
-          const belongsToTarget = group.key === targetGroupKey;
-          const filteredTasks = group.tasks.filter((item) => item.identifier !== id);
-          const patchedGroupedTask = { ...groupedTask, status };
+      ? listGroupBy === 'status'
+        ? taskGroups.map((group) => {
+            const targetGroupKey = taskGroupKeyByStatus[status];
+            const containsTask = group.tasks.some((item) => item.identifier === id);
+            const belongsToTarget = group.key === targetGroupKey;
+            const filteredTasks = group.tasks.filter((item) => item.identifier !== id);
+            const patchedGroupedTask = { ...groupedTask, status };
 
-          return {
+            return {
+              ...group,
+              tasks: belongsToTarget ? [...filteredTasks, patchedGroupedTask] : filteredTasks,
+              total: group.total - (containsTask ? 1 : 0) + (belongsToTarget ? 1 : 0),
+            };
+          })
+        : taskGroups.map((group) => ({
             ...group,
-            tasks: belongsToTarget ? [...filteredTasks, patchedGroupedTask] : filteredTasks,
-            total: group.total - (containsTask ? 1 : 0) + (belongsToTarget ? 1 : 0),
-          };
-        })
+            tasks: group.tasks.map((item) => (item.identifier === id ? { ...item, status } : item)),
+          }))
       : taskGroups;
 
     this.#set(

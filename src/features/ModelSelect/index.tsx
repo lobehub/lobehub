@@ -1,7 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { Button, Select, type SelectProps, Switch } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button, Select, type SelectProps, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -79,7 +78,14 @@ interface ModelOption {
 
 interface ModelSelectProps extends Pick<
   SelectProps,
-  'allowClear' | 'disabled' | 'loading' | 'placeholder' | 'size' | 'style' | 'variant'
+  | 'allowClear'
+  | 'disabled'
+  | 'labelRender'
+  | 'loading'
+  | 'placeholder'
+  | 'size'
+  | 'style'
+  | 'variant'
 > {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
@@ -107,6 +113,7 @@ const ModelSelect = memo<ModelSelectProps>(
     requiredAbilities,
     loading,
     disabled,
+    labelRender,
     size,
     style,
     variant,
@@ -147,6 +154,7 @@ const ModelSelect = memo<ModelSelectProps>(
           ...model,
           label: <ModelItemRender {...model} {...model.abilities} showInfoTag={false} />,
           provider: provider.id,
+          title: model.displayName || model.id,
           value: `${provider.id}/${model.id}`,
         }));
       };
@@ -348,6 +356,7 @@ const ModelSelect = memo<ModelSelectProps>(
           className={styles.select}
           defaultValue={value ? `${value.provider}/${value.model}` : null}
           disabled={disabled}
+          labelRender={labelRender}
           loading={loading || enabling}
           options={finalOptions}
           placeholder={placeholder}

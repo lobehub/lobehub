@@ -1,6 +1,6 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';

@@ -1026,4 +1026,114 @@ describe('createGatewayEventHandler', () => {
 
     expect(lifecycle.afterRunComplete).not.toHaveBeenCalled();
   });
+
+  it('keeps a modern intervention resolving until the producer ACK arrives', async () => {
+    const key = messageMapKey(context);
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const updateMessagePlugin = vi.spyOn(messageService, 'updateMessagePlugin');
+    const store = createStore({
+      [key]: [
+        {
+          content: '',
+          id: 'permission-message',
+          parentId: 'answer-msg',
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'permission-1',
+        } as UIChatMessage,
+      ],
+    });
+    store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+
+    handler(
+      makeEvent('agent_intervention_request', {
+        apiName: 'askUserQuestion',
+        arguments: '{"questions":[]}',
+        deadline: Date.now() + 60_000,
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'cursor',
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+
+    vi.mocked(store.updateTopicStatus!).mockClear();
+    getMessages.mockClear();
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: false,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'permission-message',
+        type: 'updateMessage',
+        value: {
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'answer-msg',
+        tool_call_id: 'permission-1',
+        type: 'updateMessageTools',
+        value: {
+          intervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+    expect(updateMessagePlugin).not.toHaveBeenCalled();
+    expect(getMessages).not.toHaveBeenCalled();
+
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: true,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'running', topicId: 'topic-1' }),
+    );
+  });
 });

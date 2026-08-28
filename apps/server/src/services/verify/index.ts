@@ -1,4 +1,10 @@
 export {
+  type AcceptanceMergeSummary,
+  collectCheckIds,
+  mergeAcceptanceRounds,
+  planCheckIdRemap,
+} from './acceptanceMerge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,
@@ -43,6 +49,7 @@ export {
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
+  isCurrentReviewPrediction,
   type PredictReviewParams,
   REVIEW_PREDICT_CONCURRENCY,
   shouldSurfaceProposal,

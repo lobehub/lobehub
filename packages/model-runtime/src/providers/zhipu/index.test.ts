@@ -422,6 +422,7 @@ describe('LobeZhipuAI - custom features', () => {
         ['glm-5.1', true, true],
         ['glm-5.2', true, true],
         ['glm-5.3', true, true],
+        ['glm-5.3-flash', true, true],
         ['glm-6', true, true],
         ['glm-4.5', true, undefined],
         ['glm-5-turbo', true, undefined],
@@ -546,19 +547,22 @@ describe('LobeZhipuAI - custom features', () => {
     });
 
     describe('GLM-5.3 always-on thinking', () => {
-      it('should coerce disabled thinking to enabled', () => {
-        const payload = params.chatCompletion.handlePayload({
-          max_tokens: 4096,
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-5.3',
-          reasoning_effort: 'low',
-          temperature: 1,
-          thinking: { type: 'disabled' },
-        });
+      it.each(['glm-5.3', 'glm-5.3-flash'])(
+        'should coerce disabled thinking to enabled for %s',
+        (model) => {
+          const payload = params.chatCompletion.handlePayload({
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model,
+            reasoning_effort: 'low',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          });
 
-        expect(payload.reasoning_effort).toBe('low');
-        expect(payload.thinking).toEqual({ type: 'enabled' });
-      });
+          expect(payload.reasoning_effort).toBe('low');
+          expect(payload.thinking).toEqual({ type: 'enabled' });
+        },
+      );
 
       it('should enable thinking when the payload omits it', () => {
         const payload = params.chatCompletion.handlePayload({

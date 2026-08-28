@@ -1,3 +1,4 @@
+import type { GoalStatus } from '@lobechat/const/goal';
 import type { TaskDetailActivity } from '@lobechat/types';
 
 interface GoalDescriptionSource {
@@ -43,29 +44,29 @@ export const getGoalRunMetrics = (activities?: TaskDetailActivity[]) =>
     { cost: 0, duration: 0 },
   );
 
-export const shouldShowGoal = (statusKey: string, filter: 'active' | 'all') =>
-  filter === 'all' || statusKey !== 'goalList.status.achieved';
+export const shouldShowGoal = (goalStatus: GoalStatus, filter: 'active' | 'all') =>
+  filter === 'all' || goalStatus !== 'achieved';
 
-export const goalStatusToTaskStatus = (statusKey: string) => {
-  switch (statusKey) {
-    case 'goalList.status.achieved': {
+export const goalStatusToTaskStatus = (goalStatus: GoalStatus) => {
+  switch (goalStatus) {
+    case 'achieved': {
       return 'completed';
     }
-    case 'goalList.status.error': {
+    case 'failed': {
       return 'failed';
     }
-    case 'goalList.status.canceled': {
+    case 'canceled': {
       return 'canceled';
     }
-    case 'goalList.status.paused':
-    case 'goalList.status.review': {
+    case 'paused':
+    case 'review': {
       return 'paused';
     }
-    case 'goalList.status.planning': {
+    case 'planning': {
       return 'backlog';
     }
-    case 'goalList.status.waiting': {
-      return 'scheduled';
+    case 'verifying': {
+      return 'running';
     }
     default: {
       return 'running';

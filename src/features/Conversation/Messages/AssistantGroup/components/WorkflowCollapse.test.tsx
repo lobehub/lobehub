@@ -81,6 +81,23 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    icon: IconComponent,
+    onClick,
+    title,
+  }: {
+    icon?: ComponentType;
+    onClick?: (e: unknown) => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} type="button" onClick={onClick}>
+      {IconComponent ? <IconComponent /> : null}
+    </button>
+  ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+}));
+
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
   m: {

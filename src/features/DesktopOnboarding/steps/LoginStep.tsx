@@ -2,8 +2,8 @@
 
 import { type AuthorizationPhase, type AuthorizationProgress } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Alert, Button, Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { Cloud, LogOutIcon, Server, Undo2Icon } from 'lucide-react';

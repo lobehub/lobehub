@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS（每秒權杖數）：每秒輸出的權杖數量",
+  "duration.TPS": "tok/s（每秒權杖數）：每秒輸出的權杖數量",
   "duration.TTFT": "TTFT（首次權杖時間）：第一個權杖的延遲時間",
   "duration.completion": "輸出完成時間",
   "duration.latency": "耗時",

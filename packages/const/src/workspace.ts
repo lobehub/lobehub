@@ -8,3 +8,11 @@
  * `lobehub/src/locales/default/setting.ts` (`workspace.members.invite.modal.expiryWarning`).
  */
 export const INVITATION_EXPIRY_DAYS = 7;
+
+/**
+ * Most members that one "add collaborators" call may grant at a time. Shared
+ * by the `addCollaborators` procedure (rejects longer arrays) and the member
+ * picker (stops selecting past it), so the UI can never assemble a selection
+ * the server is going to refuse wholesale.
+ */
+export const MAX_RESOURCE_COLLABORATORS_PER_ADD = 100;

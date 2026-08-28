@@ -24,13 +24,20 @@ const useParamsMock = vi.hoisted(() => vi.fn());
 const documentExplorerShouldThrow = vi.hoisted(() => ({ current: false }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: (e: React.MouseEvent) => void; title?: string }) => (
+    <button aria-label={title} onClick={onClick}>
+      {title}
+    </button>
+  ),
   Alert: ({ message, title }: { message?: ReactNode; title?: ReactNode }) => (
     <div role="alert">
       <div>{title}</div>
       <div>{message}</div>
     </div>
   ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   confirmModal: modalConfirm,
+  createModal: vi.fn(),
   toast: { error: messageError, success: messageSuccess },
 }));
 

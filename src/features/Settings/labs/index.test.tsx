@@ -69,6 +69,7 @@ vi.mock('@lobehub/ui', () => ({
 vi.mock('@lobehub/ui/base-ui', () => ({
   Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
   Switch: () => <button />,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@/features/Settings/features/SettingHeader', () => ({
@@ -172,8 +173,8 @@ describe('Labs settings page', () => {
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
     renderPage();
 
-    const claudeCodeApiMode = screen.getByText('features.claudeCodeApiMode.title');
-    expect(within(claudeCodeApiMode).getByText('stage.alpha.label')).toBeDefined();
+    const agentProviderBinding = screen.getByText('features.agentProviderBinding.title');
+    expect(within(agentProviderBinding).getByText('stage.alpha.label')).toBeDefined();
 
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();

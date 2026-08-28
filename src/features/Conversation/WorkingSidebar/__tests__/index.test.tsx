@@ -279,10 +279,15 @@ vi.mock('@lobehub/ui', () => ({
   Skeleton: () => <div data-testid="params-loading" />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async () => {
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const { useState } = await import('react');
+  const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {
+    ...actual,
+    ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+      <button aria-label={title} type="button" onClick={onClick} />
+    ),
     ContextMenuTrigger: ({ children, items }: { children: ReactNode; items: any[] }) => {
       const [open, setOpen] = useState(false);
       const menuItems = items.filter((item) => item && item.type !== 'divider');
@@ -334,9 +339,13 @@ vi.mock('@lobehub/ui/base-ui', async () => {
   };
 });
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => () => ({}),
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    createStaticStyles: () => () => ({}),
+  };
+});
 
 beforeEach(() => {
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {

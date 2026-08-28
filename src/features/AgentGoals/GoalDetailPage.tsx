@@ -1,8 +1,8 @@
 'use client';
 
 import type { TaskDetailSubtask, TaskStatus } from '@lobechat/types';
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BotIcon } from 'lucide-react';
@@ -13,6 +13,12 @@ import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import {
+  checkHeadMeta,
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+} from '@/features/Acceptance';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useActiveTaskDetail } from '@/features/AgentTasks/AgentTaskDetail';
 import TaskDetailTitleInput from '@/features/AgentTasks/AgentTaskDetail/TaskDetailTitleInput';
@@ -21,12 +27,6 @@ import TopicCard from '@/features/AgentTasks/AgentTaskDetail/TopicCard';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavHeader from '@/features/NavHeader';
-import {
-  checkHeadMeta,
-  CriterionList,
-  CriterionRequiredChip,
-  CriterionRow,
-} from '@/features/Verify';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
@@ -154,13 +154,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const recentRuns = useMemo(() => getRecentGoalRuns(task?.activities), [task?.activities]);
   const runMetrics = useMemo(() => getGoalRunMetrics(task?.activities), [task?.activities]);
   const { text: rootUpdatedAt, title: rootUpdatedAtTitle } = useActivityTime(task?.updatedAt);
+  const goalStatus = task?.goal?.status ?? 'planning';
   const presentation = getGoalPresentation({
-    acceptanceStatus: bundle?.acceptance.status,
     checks: bundle?.checks,
-    goalStatus: task?.goal?.status,
-    maxRounds: task?.goal?.maxRounds,
+    goalStatus,
+    maxRounds: task?.goal?.maxRounds ?? null,
     rounds: task?.topicCount ?? 0,
-    taskStatus: task?.status ?? 'backlog',
   });
   const title = task?.name?.trim() || task?.instruction.trim() || goalId;
 
@@ -183,7 +182,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <WideScreenContainer gap={20} paddingBlock={16}>
           {isInitialLoading || !task ? (
-            <GoalDetailSkeleton showHeader={false} />
+            <GoalDetailSkeleton chrome={'body'} />
           ) : (
             <>
               <Flexbox className={styles.header} gap={8}>
@@ -341,7 +340,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   </Flexbox>
                   <Flexbox gap={4}>
                     <Flexbox horizontal align={'center'} className={styles.treeRow} gap={8}>
-                      <GoalStatusGlyph size={14} statusKey={presentation.statusKey} />
+                      <GoalStatusGlyph size={14} status={goalStatus} />
                       <Text fontSize={12} type={'secondary'}>
                         {task.identifier}
                       </Text>

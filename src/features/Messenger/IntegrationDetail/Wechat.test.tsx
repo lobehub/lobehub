@@ -41,7 +41,8 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   Button: ({
     children,
     disabled,
@@ -72,6 +73,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       ))}
     </select>
   ),
+  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
@@ -97,7 +100,8 @@ vi.mock('antd', () => ({
   ),
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({ error: 'error', qrSlot: 'qrSlot', setup: 'setup' }),
 }));
 

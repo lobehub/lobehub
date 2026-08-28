@@ -1,5 +1,6 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { LockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -12,6 +13,7 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
+import AssigneeUserAvatar from './AssigneeUserAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
@@ -134,10 +136,18 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
   const assigneeNode = (
     <AssigneeAgentSelector
       currentAgentId={task.assigneeAgentId}
+      currentUserId={task.assigneeUserId}
       disabled={status === 'running'}
+      hideMembers={Boolean(task.automationMode)}
+      taskCreatorId={task.createdByUserId}
       taskIdentifier={task.identifier}
+      taskVisibility={task.visibility}
     >
-      <AssigneeAvatar agentId={task.assigneeAgentId} />
+      {!task.assigneeAgentId && task.assigneeUserId ? (
+        <AssigneeUserAvatar userId={task.assigneeUserId} />
+      ) : (
+        <AssigneeAvatar agentId={task.assigneeAgentId} />
+      )}
     </AssigneeAgentSelector>
   );
 

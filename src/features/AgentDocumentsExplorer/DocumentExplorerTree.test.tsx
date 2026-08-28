@@ -45,7 +45,21 @@ vi.mock('@lobehub/ui/icons', () => ({
   SkillsIcon: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({
+    icon,
+    onClick,
+    title,
+  }: {
+    icon?: { displayName?: string; name?: string };
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} data-icon={icon?.displayName ?? icon?.name} onClick={onClick}>
+      {title}
+    </button>
+  ),
   confirmModal: modalConfirm,
   DropdownMenu: ({
     children,

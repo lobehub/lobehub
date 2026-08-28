@@ -190,7 +190,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 30_000,
       description:
-        'Perform exact string replacements in files. Must read the file first before editing.',
+        'Perform exact string replacements in files. Must read the file first before editing. old_string must match exactly once unless replace_all is set.',
       humanIntervention: {
         dynamic: {
           default: 'never',
@@ -210,7 +210,8 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             type: 'string',
           },
           old_string: {
-            description: 'The exact text to replace',
+            description:
+              'The exact text to replace. Must be unique in the file — include surrounding lines to disambiguate — unless replace_all is true',
             type: 'string',
           },
           replace_all: {

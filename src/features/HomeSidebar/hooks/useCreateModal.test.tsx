@@ -100,6 +100,12 @@ vi.mock('@/services/skill', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: (e: React.MouseEvent) => void; title?: string }) => (
+    <button aria-label={title} onClick={onClick}>
+      {title}
+    </button>
+  ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
     disabled,

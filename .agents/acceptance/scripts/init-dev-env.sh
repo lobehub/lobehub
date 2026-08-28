@@ -168,12 +168,14 @@ guard_no_root_env() {
 }
 
 apply_env() {
+  export AGENT_GATEWAY_SERVICE_TOKEN="${AGENT_GATEWAY_SERVICE_TOKEN:-agent-testing-local-gateway-service-token}"
   export AGENT_RUNTIME_MODE="${AGENT_RUNTIME_MODE:-queue}"
   export APP_URL="${APP_URL:-http://localhost:${SERVER_PORT}}"
   export AUTH_EMAIL_VERIFICATION="${AUTH_EMAIL_VERIFICATION:-0}"
   export AUTH_SECRET="${AUTH_SECRET:-agent-testing-local-auth-secret-32chars}"
   export DATABASE_DRIVER="${DATABASE_DRIVER:-node}"
   export DATABASE_URL
+  export DEVICE_GATEWAY_SERVICE_TOKEN="${DEVICE_GATEWAY_SERVICE_TOKEN:-agent-testing-local-device-gateway-token}"
   export FEATURE_FLAGS="${FEATURE_FLAGS:--agent_self_iteration}"
   export KEY_VAULTS_SECRET="${KEY_VAULTS_SECRET:-r2gbBPKyJ8ZRKCLKt+I3DImfcL+wGxaQyRC56xtm9Uk=}"
   export NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION="${NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION:-0}"
@@ -212,12 +214,14 @@ apply_env() {
 
 env_keys() {
   printf '%s\n' \
+    AGENT_GATEWAY_SERVICE_TOKEN \
     APP_URL \
     AGENT_RUNTIME_MODE \
     AUTH_EMAIL_VERIFICATION \
     AUTH_SECRET \
     DATABASE_DRIVER \
     DATABASE_URL \
+    DEVICE_GATEWAY_SERVICE_TOKEN \
     FEATURE_FLAGS \
     KEY_VAULTS_SECRET \
     NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION \

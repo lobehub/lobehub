@@ -127,9 +127,11 @@ export class ToolNameResolver {
    * @param manifests - Available tool manifests mapped by identifier
    * @param offeredToolNames - Tool names actually sent to the LLM in this turn
    *   (e.g. `lobe-activator____activateTools`). When provided, the
-   *   missing-prefix fallback only considers tools in this list, so a model
-   *   can't trigger tools that weren't enabled for the current call and
-   *   disabled duplicates can't shadow enabled ones.
+   *   missing-prefix fallback only considers tools in this list, so an
+   *   ambiguous bare name cannot resolve to a disabled duplicate. Explicitly
+   *   namespaced, manifest-backed calls are still parsed; the agent's allow-list
+   *   guard turns out-of-scope calls into tool results instead of silently
+   *   dropping them. Unknown namespace/API pairs remain rejected here.
    * @returns Resolved tool payloads
    */
   resolve(
@@ -189,15 +191,6 @@ export class ToolNameResolver {
           }
         }
 
-        const payload: ChatToolPayload = {
-          apiName,
-          arguments: toolCall.function.arguments,
-          id: toolCall.id,
-          identifier,
-          thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? manifests[identifier]?.type ?? 'builtin') as any,
-        };
-
         // Step 2: Resolve hashed apiName if needed
         if (apiName.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX) && manifests[identifier]) {
           const md5 = apiName.replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
@@ -207,9 +200,30 @@ export class ToolNameResolver {
             (api: LobeChatPluginApi) => this.genHash(api.name) === md5,
           );
           if (api) {
-            payload.apiName = api.name;
+            apiName = api.name;
           }
         }
+
+        const manifest = manifests[identifier];
+        const matchedApi = manifest?.api.find((api: LobeChatPluginApi) => api.name === apiName);
+
+        // A tool explicitly offered by the server is already authoritative and
+        // may not have a prompt manifest. A stale namespaced call that was not
+        // offered this turn must still match a known manifest entry before it
+        // can be preserved for the downstream scope guard. This prevents a
+        // fabricated namespace/API pair from becoming a synthetic tool result.
+        if (offeredSet && !offeredSet.has(toolCall.function.name) && (!manifest || !matchedApi)) {
+          return null;
+        }
+
+        const payload: ChatToolPayload = {
+          apiName,
+          arguments: toolCall.function.arguments,
+          id: toolCall.id,
+          identifier,
+          thoughtSignature: toolCall.thoughtSignature,
+          type: (type ?? manifest?.type ?? 'builtin') as any,
+        };
 
         return payload;
       })

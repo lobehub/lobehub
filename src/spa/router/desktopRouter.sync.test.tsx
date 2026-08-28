@@ -12,14 +12,16 @@ import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layou
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
-import GroupLayoutSkeleton from '@/components/Skeleton/GroupLayout';
 import MemorySkeleton from '@/components/Skeleton/Memory';
-import ProfileSkeleton from '@/components/Skeleton/Profile';
+import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
+import TasksSkeleton from '@/components/Skeleton/Tasks';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
 import { createTabRouter } from '@/spa/router/tabRouter';
+import { resolveRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
 import {
   createMainAreaChildren as createWebMainAreaChildren,
@@ -330,18 +332,7 @@ describe('desktop router shared definition', () => {
       expect(fallbacks.length).toBeGreaterThan(0);
       expect(fallbacks).not.toContain(BrandTextLoading);
       expect(new Set(fallbacks)).toEqual(
-        new Set([
-          AppsSkeleton,
-          RouteSegmentSkeleton,
-          ConversationLayoutSkeleton,
-          ConversationSegmentSkeleton,
-          GoalSkeleton,
-          GoalDetailSkeleton,
-          GroupLayoutSkeleton,
-          MemorySkeleton,
-          ProfileSkeleton,
-          SettingsPageSkeleton,
-        ]),
+        new Set([ConversationLayoutSkeleton, ConversationSegmentSkeleton, RouteSegmentSkeleton]),
       );
     },
   );
@@ -357,7 +348,7 @@ describe('desktop router shared definition', () => {
           '/agent/agent-1/topic-1',
           [RouteSegmentSkeleton, ConversationLayoutSkeleton, ConversationSegmentSkeleton],
         ],
-        ['/group/group-1/topic-1', [GroupLayoutSkeleton, ConversationLayoutSkeleton]],
+        ['/group/group-1/topic-1', [RouteSegmentSkeleton, ConversationLayoutSkeleton]],
       ] as const) {
         const matches = matchRoutes(createRuntimeRoutes(pathname), pathname);
         const fallbackTypes = matches
@@ -378,21 +369,25 @@ describe('desktop router shared definition', () => {
   it.each([
     ['Web', (_pathname: string) => webDesktopRoutes],
     ['Electron', (pathname: string) => createTabRouter(pathname).routes],
-  ])('%s keeps profile and goal detail route boundaries on semantic skeletons', (_, getRoutes) => {
-    for (const [pathname, expectedFallbacks] of [
-      ['/group/group-1/profile', [GroupLayoutSkeleton, ProfileSkeleton]],
-      ['/agent/agent-1/goal/goal-1', [RouteSegmentSkeleton, GoalDetailSkeleton]],
+  ])('%s resolves specialized skeletons from the deepest route meta', (_, getRoutes) => {
+    for (const [pathname, expectedSkeleton] of [
+      ['/agent/agent-1/topics', TopicsSkeleton],
+      ['/agent/agent-1/tasks', TasksSkeleton],
+      ['/agent/agent-1/goals', GoalSkeleton],
+      ['/agent/agent-1/goal/goal-1', GoalDetailSkeleton],
+      ['/agent/agent-1/profile', ProfileSkeleton],
+      ['/agent/agent-1/topic-1', ConversationLayoutSkeleton],
+      ['/group/group-1/profile', GroupProfileRouteSkeleton],
+      ['/group/group-1/topic-1', ConversationLayoutSkeleton],
+      ['/settings/profile', SettingsPageSkeleton],
+      ['/apps', AppsSkeleton],
+      ['/memory', MemorySkeleton],
     ] as const) {
       const matches = matchRoutes(getRoutes(pathname), pathname);
-      const fallbackTypes = matches
-        ?.map(
-          ({ route }) =>
-            (route.element as ReactElement<{ fallback?: ReactElement }> | undefined)?.props.fallback
-              ?.type,
-        )
-        .filter(Boolean);
-
-      expect(fallbackTypes?.slice(-expectedFallbacks.length), pathname).toEqual(expectedFallbacks);
+      expect(
+        resolveRouteSkeleton(matches?.map(({ route }) => ({ handle: route.handle })) ?? []),
+        pathname,
+      ).toBe(expectedSkeleton);
     }
   });
 
@@ -411,12 +406,15 @@ describe('desktop router shared definition', () => {
         )
         .filter(Boolean);
 
-      expect(fallbackTypes?.slice(-2)).toEqual([SettingsPageSkeleton, SettingsPageSkeleton]);
+      expect(fallbackTypes?.slice(-2)).toEqual([RouteSegmentSkeleton, RouteSegmentSkeleton]);
     },
   );
 
-  it.each(mainAreaVariants)('%s keeps /apps on the apps sheet skeleton', (_, factory) => {
-    const matches = matchRoutes(createMainAreaRoutes(factory), '/apps');
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])('%s keeps /apps on the route-segment fallback', (_, getRoutes) => {
+    const matches = matchRoutes(getRoutes('/apps'), '/apps');
     const fallbackTypes = matches
       ?.map(
         ({ route }) =>
@@ -425,7 +423,7 @@ describe('desktop router shared definition', () => {
       )
       .filter(Boolean);
 
-    expect(fallbackTypes?.at(-1)).toBe(AppsSkeleton);
+    expect(fallbackTypes?.at(-1)).toBe(RouteSegmentSkeleton);
   });
 
   it('injects Home only into Electron per-tab content routes', () => {

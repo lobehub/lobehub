@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TaskSubtasks from './TaskSubtasks';
 
 const mocks = vi.hoisted(() => ({
+  buildContextMenuItems: vi.fn(() => []),
+  installKeyboardHandlers: vi.fn(),
   navigate: vi.fn(),
   runReadySubtasks: vi.fn(),
   showContextMenu: vi.fn(),
@@ -107,7 +109,19 @@ vi.mock('antd-style', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>
+      action
+    </button>
+  ),
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   confirmModal: vi.fn(),
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -144,6 +158,10 @@ vi.mock('../features/AssigneeAvatar', () => ({
   default: () => <span>assignee</span>,
 }));
 
+vi.mock('../features/AssigneeUserAvatar', () => ({
+  default: () => <span>member assignee</span>,
+}));
+
 vi.mock('../features/TaskPriorityTag', () => ({
   default: () => <span>priority</span>,
 }));
@@ -164,8 +182,8 @@ vi.mock('../features/TaskTriggerTag', () => ({
 
 vi.mock('../features/useTaskItemContextMenu', () => ({
   useTaskContextMenuActions: () => ({
-    buildItems: vi.fn(() => []),
-    installKeyboardHandlers: vi.fn(),
+    buildItems: mocks.buildContextMenuItems,
+    installKeyboardHandlers: mocks.installKeyboardHandlers,
   }),
 }));
 
@@ -187,6 +205,8 @@ vi.mock('./TopicStatusIcon', () => ({
 
 describe('TaskSubtasks', () => {
   beforeEach(() => {
+    mocks.buildContextMenuItems.mockClear();
+    mocks.installKeyboardHandlers.mockClear();
     mocks.navigate.mockClear();
     mocks.showContextMenu.mockClear();
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
@@ -217,6 +237,27 @@ describe('TaskSubtasks', () => {
     fireEvent.contextMenu(screen.getByTestId('subtask-tree-node'));
 
     expect(mocks.showContextMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards a member assignee to both subtask context-menu actions', () => {
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assigneeUserId: 'member-1',
+        identifier: 'T-child',
+        name: 'Child task',
+        status: 'backlog',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+    fireEvent.contextMenu(screen.getByTestId('subtask-tree-node'));
+
+    const expectedTarget = expect.objectContaining({
+      assigneeUserId: 'member-1',
+      identifier: 'T-child',
+    });
+    expect(mocks.buildContextMenuItems).toHaveBeenCalledWith(expectedTarget);
+    expect(mocks.installKeyboardHandlers).toHaveBeenCalledWith(expectedTarget);
   });
 
   it('falls back to the global task route when the selected subtask has no assignee', () => {

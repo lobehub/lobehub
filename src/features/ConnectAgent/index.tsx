@@ -9,7 +9,7 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
@@ -17,9 +17,9 @@ import {
   createModal,
   type ModalInstance,
   ScrollArea,
+  Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import {
@@ -35,15 +35,18 @@ import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import CommandLine from '@/components/CommandLine';
 import { DOWNLOAD_URL } from '@/const/url';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
+import { heteroAgentDefaultName } from '@/store/agent/utils/heteroAgentDefaultName';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
 
+import { getDeviceListState } from './deviceListState';
 import type { ConnectableProvider, ConnectAgentProfile } from './providers';
 import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
 import type { ScanTarget } from './useAgentScan';
@@ -62,17 +65,21 @@ const styles = createStaticStyles(({ css }) => ({
     overscroll-behavior: contain;
     max-height: min(50dvh, 400px);
   `,
-  cmd: css`
-    user-select: all;
+  commandHint: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
 
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusSM};
+    min-width: 0;
+    padding-inline: 4px;
 
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-
-    background: ${cssVar.colorFillTertiary};
+    > span {
+      overflow: hidden;
+      min-width: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   `,
   dot: css`
     flex: none;
@@ -124,23 +131,10 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 28px;
     margin-block-start: auto;
 
-    > a {
+    > a,
+    > div {
       width: 100%;
     }
-  `,
-  emptyOptionCode: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    box-sizing: border-box;
-    width: 100%;
-    height: 32px;
-    padding-inline: 10px 4px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillTertiary};
   `,
   emptyOptions: css`
     display: grid;
@@ -259,6 +253,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     animation: lobe-connect-agent-pulse 1.4s ease-in-out infinite;
   `,
+  skeletonSquare: css`
+    width: 36px;
+    height: 36px;
+    border-radius: ${cssVar.borderRadius};
+  `,
 }));
 
 interface CreatedAgent {
@@ -275,9 +274,13 @@ const SectionLabel = memo<{ children: ReactNode }>(({ children }) => (
   </Text>
 ));
 
-const SkeletonRow = memo<{ width: number }>(({ width }) => (
+const SkeletonRow = memo<{ squareIcon?: boolean; width: number }>(({ squareIcon, width }) => (
   <div className={`${styles.row} ${styles.rowStatic}`}>
-    <div className={styles.skeletonCircle} />
+    <div
+      className={
+        squareIcon ? `${styles.skeletonCircle} ${styles.skeletonSquare}` : styles.skeletonCircle
+      }
+    />
     {/* Column height matches a real row's two-line text block so the
         scanning → done swap doesn't shift the modal */}
     <Flexbox flex={1} gap={10} justify={'center'} style={{ height: 42 }}>
@@ -498,10 +501,14 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const goConfirm = useCallback(() => {
       if (!single) return;
       const profile = isRemoteHeterogeneousType(single.type) ? profiles[single.type] : undefined;
-      setName(profile?.title ?? single.title);
+      const productTitle = profile?.title ?? single.title;
+      setName(
+        heteroAgentDefaultName({ productTitle, visibility, workspaceId: activeWorkspaceId }) ??
+          productTitle,
+      );
       setDescription(profile?.description ?? '');
       setStep(2);
-    }, [profiles, single]);
+    }, [activeWorkspaceId, profiles, single, visibility]);
 
     const buildCreateParams = useCallback(
       (provider: ConnectableProvider, overrides?: { description?: string; name?: string }) => {
@@ -539,7 +546,16 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 agentId: result.agentId,
                 locationLabel: targetLabel,
                 provider,
-                title: agentDisplayName(params.config, provider.title) ?? provider.title,
+                // Mirror the default-name seeding in createAgent so the done
+                // screen shows the same label the sidebar will.
+                title:
+                  params.config.name?.trim() ||
+                  heteroAgentDefaultName({
+                    productTitle: params.config.title,
+                    visibility,
+                    workspaceId: activeWorkspaceId,
+                  }) ||
+                  agentDisplayName(params.config, provider.title),
                 version: scanState.agents?.[provider.type]?.version,
               } satisfies CreatedAgent;
             }),
@@ -558,6 +574,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         }
       },
       [
+        activeWorkspaceId,
         buildCreateParams,
         onTitleChange,
         refreshAgentList,
@@ -568,6 +585,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         t,
         target,
         targetLabel,
+        visibility,
       ],
     );
 
@@ -616,6 +634,10 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     // ── Step 1: choose the machine ──
     if (step === 0) {
       const isRefreshing = loadingDevices || fetchingDevices;
+      const deviceListState = getDeviceListState({
+        hasDevices: listedDevices.length > 0,
+        isFetching: isRefreshing,
+      });
       const showEmpty = !isDesktop && !isRefreshing && onlineDevices.length === 0;
 
       return (
@@ -668,10 +690,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     </Text>
                   </Flexbox>
                   <div className={styles.emptyOptionAction}>
-                    <div className={styles.emptyOptionCode}>
-                      <code>{t('connectAgent.create.noDevicesCmd')}</code>
-                      <CopyButton content={t('connectAgent.create.noDevicesCmd')} size={'small'} />
-                    </div>
+                    <CommandLine command={t('connectAgent.create.noDevicesCmd')} />
                   </div>
                 </div>
               </div>
@@ -703,7 +722,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                   </div>
                 </Flexbox>
               )}
-              {listedDevices.length > 0 && (
+              {deviceListState !== 'empty' && (
                 <Flexbox gap={6}>
                   <Flexbox horizontal align={'center'} justify={'space-between'}>
                     <SectionLabel>{t('connectAgent.create.connectedDevices')}</SectionLabel>
@@ -718,31 +737,33 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     </Button>
                   </Flexbox>
                   <div className={styles.groupList}>
-                    {listedDevices.map((device) => (
-                      <DeviceRow
-                        icon={getDeviceIcon(device.platform, 18)}
-                        key={device.deviceId}
-                        offline={!device.online}
-                        subtitle={device.hostname || device.deviceId}
-                        title={deviceLabel(device)}
-                        statusText={
-                          device.online
-                            ? t('connectAgent.create.online')
-                            : t('connectAgent.create.offline')
-                        }
-                        onClick={() => pickTarget({ device, kind: 'device' })}
-                      />
-                    ))}
+                    {deviceListState === 'loading'
+                      ? [96, 140, 112].map((width) => (
+                          <SkeletonRow squareIcon key={width} width={width} />
+                        ))
+                      : listedDevices.map((device) => (
+                          <DeviceRow
+                            icon={getDeviceIcon(device.platform, 18)}
+                            key={device.deviceId}
+                            offline={!device.online}
+                            subtitle={device.hostname || device.deviceId}
+                            title={deviceLabel(device)}
+                            statusText={
+                              device.online
+                                ? t('connectAgent.create.online')
+                                : t('connectAgent.create.offline')
+                            }
+                            onClick={() => pickTarget({ device, kind: 'device' })}
+                          />
+                        ))}
                   </div>
                 </Flexbox>
               )}
-              {isDesktop && listedDevices.length === 0 && (
-                <Flexbox gap={4}>
-                  <span>{t('connectAgent.create.noDevicesCliHint')}</span>
-                  <Typography.Text code copyable>
-                    {t('connectAgent.create.noDevicesCmd')}
-                  </Typography.Text>
-                </Flexbox>
+              {isDesktop && deviceListState === 'empty' && (
+                <div className={styles.commandHint}>
+                  <Text type={'secondary'}>{t('connectAgent.create.noDevicesCliHint')}</Text>
+                  <CommandLine command={t('connectAgent.create.noDevicesCmd')} />
+                </div>
               )}
             </Flexbox>
           )}

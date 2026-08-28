@@ -209,18 +209,20 @@ export class AgentDocumentsService {
       litexml: true,
     });
 
-    // Hydration of stale editorData (older Lexical schemas) can silently fail
-    // and leave the editor empty. When that happens, hydrate from the markdown
-    // column directly so readDocument never returns an empty doc for a row that
-    // actually has content.
-    if (snapshot.content.trim().length === 0 && doc.content.trim().length > 0) {
-      const fromMarkdown = await exportEditorDataSnapshot({
-        editorData: undefined,
-        fallbackContent: doc.content,
-        litexml: true,
+    if (snapshot.recoveredFromMarkdown) {
+      // Persist the repaired snapshot before exposing its LiteXML IDs. A later
+      // node edit must hydrate this exact state or the IDs can no longer target it.
+      await this.agentDocumentModel.update(doc.id, {
+        content: snapshot.content,
+        editorData: snapshot.editorData,
       });
-      const content = fromMarkdown.content.trim().length > 0 ? fromMarkdown.content : doc.content;
-      return { ...doc, content, litexml: fromMarkdown.litexml };
+
+      return {
+        ...doc,
+        content: snapshot.content,
+        editorData: snapshot.editorData,
+        litexml: snapshot.litexml,
+      };
     }
 
     return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
@@ -768,13 +770,19 @@ export class AgentDocumentsService {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
 
-    await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
-
     const snapshot = await applyLiteXMLOperations({
       editorData: doc.editorData,
       fallbackContent: doc.content,
       operations,
     });
+
+    // History must capture the successfully hydrated pre-edit state. Persisted
+    // editorData may be the stale payload that forced Markdown recovery.
+    await this.documentService.trySaveCurrentDocumentHistory(
+      doc.documentId,
+      'llm_call',
+      snapshot.previousEditorData,
+    );
 
     await this.agentDocumentModel.update(documentId, {
       content: snapshot.content,

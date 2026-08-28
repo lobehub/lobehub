@@ -1,8 +1,9 @@
 'use client';
 
-import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
-import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
+import { resolveConnectorCatalogItem } from '@lobechat/const';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Tag } from '@lobehub/ui/base-ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -208,38 +209,31 @@ const PluginTag = memo<PluginTagProps>(
         : undefined;
       const agentInstalled = !!agentConn;
 
-      // Check if it's a Composio server type
-      if (isComposioEnabledInEnv) {
-        const composioType = COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier);
-        if (composioType) {
-          // Check if this Composio server is connected
-          const connectedServer = allComposioServers.find((s) => s.identifier === identifier);
-          return {
-            availableInWeb: true,
-            icon: composioType.icon,
-            isInstalled: !!connectedServer || agentInstalled,
-            label: composioType.label,
-            title: composioType.label,
-            type: 'composio' as const,
-          };
-        }
+      const connector = resolveConnectorCatalogItem(identifier, {
+        composio: isComposioEnabledInEnv,
+        lobehub: isLobehubSkillEnabled,
+      });
+      if (connector?.type === 'lobehub') {
+        const connectedServer = allLobehubSkillServers.find((s) => s.identifier === identifier);
+        return {
+          availableInWeb: true,
+          icon: connector.provider.icon,
+          isInstalled: !!connectedServer || agentInstalled,
+          label: connector.provider.label,
+          title: connector.provider.label,
+          type: 'lobehub-skill' as const,
+        };
       }
-
-      // Check if it's a LobeHub Skill provider
-      if (isLobehubSkillEnabled) {
-        const lobehubSkillProvider = LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === identifier);
-        if (lobehubSkillProvider) {
-          // Check if this LobehubSkill provider is connected
-          const connectedServer = allLobehubSkillServers.find((s) => s.identifier === identifier);
-          return {
-            availableInWeb: true,
-            icon: lobehubSkillProvider.icon,
-            isInstalled: !!connectedServer || agentInstalled,
-            label: lobehubSkillProvider.label,
-            title: lobehubSkillProvider.label,
-            type: 'lobehub-skill' as const,
-          };
-        }
+      if (connector?.type === 'composio') {
+        const connectedServer = allComposioServers.find((s) => s.identifier === identifier);
+        return {
+          availableInWeb: true,
+          icon: connector.serverType.icon,
+          isInstalled: !!connectedServer || agentInstalled,
+          label: connector.serverType.label,
+          title: connector.serverType.label,
+          type: 'composio' as const,
+        };
       }
 
       // Check if it's a custom connector

@@ -90,6 +90,7 @@ export async function runStep(c: Context): Promise<Response> {
       toolMessageId,
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
+      lockRetryAttempt,
     } = { ...body, ...body.payload };
 
     if (!operationId) {
@@ -141,6 +142,7 @@ export async function runStep(c: Context): Promise<Response> {
       humanInput,
       finishAfterAsyncTool,
       groupMemberTimeout,
+      lockRetryAttempt,
       operationId,
       rejectAndContinue,
       rejectionReason,
@@ -151,8 +153,25 @@ export async function runStep(c: Context): Promise<Response> {
     });
 
     // A non-stale lock conflict means another delivery is still executing this
-    // operation. Keep the response retryable so QStash redelivers this step.
+    // operation.
     if (result.locked) {
+      // The runtime already re-queued this step on its own backoff, which can
+      // outlast a step that holds the lock for minutes. ACK so QStash doesn't
+      // retry on top of that and dead-letter the delivery once its (much
+      // shorter) retry budget runs out.
+      if (result.lockRescheduled) {
+        log(`[${operationId}] Step ${stepIndex} locked by another instance, re-queued`);
+        return c.json({
+          locked: true,
+          nextStepScheduled: true,
+          operationId,
+          stepIndex,
+          success: true,
+        });
+      }
+
+      // Backoff exhausted (or re-queueing failed) — fall back to a retryable
+      // response so the delivery still gets whatever retries the queue offers.
       log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
       return c.json(
         { error: 'Step is currently being executed, retry later', operationId, stepIndex },

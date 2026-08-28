@@ -121,11 +121,24 @@ export const gatherWorkspaceHtmlArtifact = async ({
     else if (totalBytes > WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES) blocked = 'too-large';
   };
 
+  const registerReadFailure = (
+    asset: Extract<ReadWorkspaceAssetResult, { ok: false }>,
+    href: string,
+  ) => {
+    if (asset.reason !== 'oversized') {
+      missing.push(href);
+      return;
+    }
+
+    oversized.push(href);
+    totalBytes += asset.sizeBytes ?? WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES + 1;
+    blocked = 'too-large';
+  };
+
   const readLeafAsset = async (ref: CollectedLocalResourceRef) => {
     const asset = await readAsset(ref.absolutePath);
     if (!asset.ok) {
-      if (asset.reason === 'oversized') oversized.push(ref.href);
-      else missing.push(ref.href);
+      registerReadFailure(asset, ref.href);
       return;
     }
 
@@ -145,8 +158,7 @@ export const gatherWorkspaceHtmlArtifact = async ({
 
     const asset = await readAsset(walkRef.absolutePath);
     if (!asset.ok) {
-      if (asset.reason === 'oversized') oversized.push(walkRef.href);
-      else missing.push(walkRef.href);
+      registerReadFailure(asset, walkRef.href);
       continue;
     }
 

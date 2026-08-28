@@ -5,8 +5,16 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { ActionIcon, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';

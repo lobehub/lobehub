@@ -1,7 +1,21 @@
 import type { AiProviderSDKType } from '@lobechat/types';
 
-export const CLAUDE_CODE_API_LOCAL_ONLY_ERROR =
-  'Claude Code API mode is only supported for Desktop local execution.';
+export const HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR =
+  'Heterogeneous agent provider binding is only supported for Desktop local execution.';
+
+/**
+ * Desktop main resolves the binding's providerId in the PERSONAL scope only
+ * (deliberately no workspace header — see `providerBindingPort`). A workspace
+ * agent's binding would have been configured against workspace-scoped
+ * providers, so running it locally could silently resolve a personal provider
+ * that shares the same id (builtin ids like `anthropic` collide across scopes)
+ * and bill the wrong account. Blocked before IPC for every entry point.
+ */
+export const HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR =
+  'Heterogeneous agent provider binding is not supported for workspace agents.';
+
+/** @deprecated Use HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR. */
+export const CLAUDE_CODE_API_LOCAL_ONLY_ERROR = HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR;
 
 export interface BuildClaudeCodeDirectEnvInput {
   /** Decrypted provider credentials. This function is for trusted local execution only. */
@@ -35,9 +49,10 @@ const pickNonEmptyString = (value: unknown): string | undefined => {
 };
 
 /**
- * Claude Code appends `/v1/messages` to `ANTHROPIC_BASE_URL`.
- * LobeHub provider settings often store the SDK-style host (`…/v1` or `…/v1/messages`).
- * Strip with linear string ops; quantified-slash regexes are ReDoS on user URLs.
+ * Anthropic SDK clients append `/v1/messages` to their base URL. LobeHub
+ * provider settings often store the SDK-style host (`…/v1` or
+ * `…/v1/messages`). Strip with linear string ops; quantified-slash regexes
+ * are ReDoS on user URLs.
  */
 const ANTHROPIC_SDK_BASE_URL_SUFFIXES = ['/v1/messages', '/v1'] as const;
 const FIRST_PARTY_ANTHROPIC_HOSTS = new Set(['api.anthropic.com']);
@@ -48,7 +63,7 @@ const stripTrailingSlashes = (value: string): string => {
   return value.slice(0, end);
 };
 
-const normalizeClaudeCodeBaseURL = (baseURL: string): string | undefined => {
+export const normalizeAnthropicSdkBaseURL = (baseURL: string): string | undefined => {
   let normalized = stripTrailingSlashes(baseURL);
   for (const suffix of ANTHROPIC_SDK_BASE_URL_SUFFIXES) {
     if (!normalized.endsWith(suffix)) continue;
@@ -76,18 +91,26 @@ export const sanitizeClaudeCodeDirectEnv = (
   return env;
 };
 
-/** Remove every persisted model override before applying the API-bound model. */
+/** Remove persisted model/session overrides before applying a host-authoritative binding. */
 export const sanitizeClaudeCodeDirectArgs = (source: string[] | undefined): string[] => {
   const sourceArgs = source ?? [];
   const args: string[] = [];
 
   for (let index = 0; index < sourceArgs.length; index += 1) {
     const arg = sourceArgs[index];
-    if (arg === '--model') {
+    if (arg === '--model' || arg === '--resume' || arg === '--session-id') {
       index += 1;
       continue;
     }
-    if (arg.startsWith('--model=')) continue;
+    if (
+      arg === '--continue' ||
+      arg === '-c' ||
+      arg.startsWith('--model=') ||
+      arg.startsWith('--resume=') ||
+      arg.startsWith('--session-id=')
+    ) {
+      continue;
+    }
     args.push(arg);
   }
 
@@ -119,7 +142,7 @@ export const buildClaudeCodeDirectEnv = (
   }
 
   const baseURL = pickNonEmptyString(input.keyVaults?.baseURL);
-  const normalizedBaseURL = baseURL ? normalizeClaudeCodeBaseURL(baseURL) : undefined;
+  const normalizedBaseURL = baseURL ? normalizeAnthropicSdkBaseURL(baseURL) : undefined;
   const useFirstPartyApiKey = isFirstPartyAnthropicBaseURL(normalizedBaseURL);
 
   const env: Record<string, string> = {
