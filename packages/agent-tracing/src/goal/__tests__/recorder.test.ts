@@ -53,11 +53,12 @@ describe('appendAdvanceToPartial', () => {
   it('seeds the baseline from the first tick and leaves its delta empty', async () => {
     const state = graph({ nodes: [node('a')] });
 
-    const advance = await appendAdvanceToPartial(store, 'goal_1', {
+    const trajectory = await appendAdvanceToPartial(store, 'goal_1', {
       startedAt: 0,
       ticks: [tick(state)],
       trigger: 'create',
     });
+    const advance = trajectory?.advances.at(-1);
 
     expect(advance?.seq).toBe(0);
     expect(advance?.ticks[0].graphDelta).toBeUndefined();
@@ -74,11 +75,13 @@ describe('appendAdvanceToPartial', () => {
       ticks: [tick(first), tick(second)],
       trigger: 'create',
     });
-    const next = await appendAdvanceToPartial(store, 'goal_1', {
-      startedAt: 5,
-      ticks: [tick(third)],
-      trigger: 'settle',
-    });
+    const next = (
+      await appendAdvanceToPartial(store, 'goal_1', {
+        startedAt: 5,
+        ticks: [tick(third)],
+        trigger: 'settle',
+      })
+    )?.advances.at(-1);
 
     expect(next?.seq).toBe(1);
     expect(next?.ticks[0].graphDelta).toEqual({
@@ -95,11 +98,13 @@ describe('appendAdvanceToPartial', () => {
 
     // A work node added from the UI, with no advance in between.
     const withExtra = graph({ nodes: [node('a'), node('b')] });
-    const next = await appendAdvanceToPartial(store, 'goal_1', {
-      startedAt: 5,
-      ticks: [tick(withExtra)],
-      trigger: 'manual',
-    });
+    const next = (
+      await appendAdvanceToPartial(store, 'goal_1', {
+        startedAt: 5,
+        ticks: [tick(withExtra)],
+        trigger: 'manual',
+      })
+    )?.advances.at(-1);
 
     expect(next?.ticks[0].graphDelta).toEqual({ nodesUpserted: [node('b')] });
   });
@@ -116,11 +121,13 @@ describe('appendAdvanceToPartial', () => {
   });
 
   it('computes shape per tick', async () => {
-    const advance = await appendAdvanceToPartial(store, 'goal_1', {
-      startedAt: 0,
-      ticks: [tick(graph({ nodes: [node('a'), node('b', { kind: 'finding' })] }))],
-      trigger: 'create',
-    });
+    const advance = (
+      await appendAdvanceToPartial(store, 'goal_1', {
+        startedAt: 0,
+        ticks: [tick(graph({ nodes: [node('a'), node('b', { kind: 'finding' })] }))],
+        trigger: 'create',
+      })
+    )?.advances.at(-1);
 
     expect(advance?.ticks[0].graphShape).toMatchObject({ findings: 1, nodesTotal: 2, workOpen: 1 });
   });

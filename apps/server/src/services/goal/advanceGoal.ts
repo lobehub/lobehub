@@ -60,7 +60,7 @@ export const advanceGoal = async ({
 }: AdvanceGoalParams): Promise<AdvanceGoalOutcome> => {
   const db = await getServerDB();
   const service = new GoalService(db, userId, workspaceId);
-  const recorder = new GoalAdvanceRecorder(goalId, trigger);
+  const recorder = new GoalAdvanceRecorder(db, goalId, trigger);
 
   let result: GoalTickResult | undefined;
   try {

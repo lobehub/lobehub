@@ -44,7 +44,7 @@ export const appendAdvanceToPartial = async (
   store: IGoalTraceStore,
   goalId: string,
   input: RecordAdvanceInput,
-): Promise<GoalAdvanceSnapshot | null> => {
+): Promise<GoalTrajectory | null> => {
   if (input.ticks.length === 0) return null;
 
   const partial = (await store.loadPartial(goalId)) ?? {};
@@ -79,7 +79,7 @@ export const appendAdvanceToPartial = async (
     trigger: input.trigger,
   };
 
-  await store.savePartial(goalId, {
+  const updated: Partial<GoalTrajectory> = {
     ...partial,
     advances: [...advances, advance],
     goalId,
@@ -87,9 +87,13 @@ export const appendAdvanceToPartial = async (
     startedAt: partial.startedAt ?? input.startedAt,
     title: partial.title ?? previousState.goal.title,
     traceId: partial.traceId ?? goalId,
-  });
+  };
+  await store.savePartial(goalId, updated);
 
-  return advance;
+  // Returned whole rather than as the appended advance alone: the caller needs
+  // the accumulated run to derive the observation row, and re-reading the
+  // object it just wrote would cost another round trip to storage.
+  return partialToTrajectory(goalId, updated);
 };
 
 export interface FinalizeGoalTraceInput {

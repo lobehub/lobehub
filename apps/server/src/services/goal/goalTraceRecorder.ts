@@ -1,11 +1,17 @@
 import {
   appendAdvanceToPartial,
+  buildGoalTraceRollup,
   finalizeGoalTrace,
   type GoalAdvanceTrigger,
+  type GoalTrajectory,
   type IGoalTraceStore,
   type RecordTickInput,
 } from '@lobechat/agent-tracing';
 import debug from 'debug';
+
+import { GoalTraceModel } from '@/database/models/goalTrace';
+import type { LobeChatDatabase } from '@/database/type';
+import { buildGoalTraceKey } from '@/server/modules/GoalTracing';
 
 import type { GoalTickObservation } from './traceObservation';
 import { createDefaultGoalTraceStore } from './traceStore';
@@ -26,6 +32,7 @@ export class GoalAdvanceRecorder {
   private readonly operationIds = new Set<string>();
 
   constructor(
+    private readonly db: LobeChatDatabase,
     private readonly goalId: string,
     private readonly trigger: GoalAdvanceTrigger,
     private readonly store: IGoalTraceStore | null = createDefaultGoalTraceStore(),
@@ -51,7 +58,7 @@ export class GoalAdvanceRecorder {
     if (!this.store || this.ticks.length === 0) return;
 
     try {
-      await appendAdvanceToPartial(this.store, this.goalId, {
+      const trajectory = await appendAdvanceToPartial(this.store, this.goalId, {
         childOperationIds: [...this.operationIds],
         error: error
           ? { message: error instanceof Error ? error.message : String(error), type: 'advance' }
@@ -60,9 +67,43 @@ export class GoalAdvanceRecorder {
         ticks: this.ticks,
         trigger: this.trigger,
       });
+      if (trajectory) await this.writeObservationRow(trajectory);
     } catch (writeError) {
       log('failed to record advance for %s: %O', this.goalId, writeError);
     }
+  }
+
+  /**
+   * Re-derive the observation row from the whole trajectory on every advance.
+   *
+   * Rewriting rather than incrementing is what makes it exact however often it
+   * runs — an advance can be retried by the queue, and an additive counter
+   * would drift. It also keeps the row queryable while the goal is still
+   * running, which is when a stalling goal is worth finding.
+   */
+  private async writeObservationRow(trajectory: GoalTrajectory): Promise<void> {
+    const rollup = buildGoalTraceRollup(trajectory);
+
+    await new GoalTraceModel(this.db).upsert({
+      advancesByOutcome: rollup.advancesByOutcome,
+      advancesByTrigger: rollup.advancesByTrigger,
+      advancesTotal: rollup.advancesTotal,
+      completedAt: rollup.completedAt ? new Date(rollup.completedAt) : null,
+      finalStatus: rollup.completionReason ?? null,
+      findingsTotal: rollup.findingsTotal,
+      gatesOpened: rollup.gatesOpened,
+      gatesResolved: rollup.gatesResolved,
+      goalId: this.goalId,
+      humanWaitingMs: rollup.humanWaitingMs,
+      nodesTotal: rollup.nodesTotal,
+      startedAt: new Date(rollup.startedAt),
+      ticksByBranch: rollup.ticksByBranch,
+      ticksTotal: rollup.ticksTotal,
+      traceS3Key: buildGoalTraceKey(this.goalId),
+      workOperations: rollup.workOperations,
+      workResolved: rollup.workResolved,
+      workRetired: rollup.workRetired,
+    });
   }
 
   /**
@@ -73,7 +114,8 @@ export class GoalAdvanceRecorder {
   async finalize(completionReason: string): Promise<void> {
     if (!this.store) return;
     try {
-      await finalizeGoalTrace(this.store, this.goalId, { completionReason });
+      const trajectory = await finalizeGoalTrace(this.store, this.goalId, { completionReason });
+      if (trajectory) await this.writeObservationRow(trajectory);
     } catch (error) {
       log('failed to finalize trajectory for %s: %O', this.goalId, error);
     }

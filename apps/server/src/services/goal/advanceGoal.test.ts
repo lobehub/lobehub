@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   createStore: vi.fn(() => null as unknown),
   status: vi.fn(),
   tick: vi.fn(),
+  upsert: vi.fn(),
 }));
 
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
@@ -12,6 +13,9 @@ vi.mock('./index', () => ({
   GoalService: vi.fn(() => ({ status: mocks.status, tick: mocks.tick })),
 }));
 vi.mock('./traceStore', () => ({ createDefaultGoalTraceStore: mocks.createStore }));
+vi.mock('@/database/models/goalTrace', () => ({
+  GoalTraceModel: vi.fn(() => ({ upsert: mocks.upsert })),
+}));
 
 const { advanceGoal, MAX_TICKS_PER_ADVANCE } = await import('./advanceGoal');
 
@@ -128,6 +132,7 @@ describe('advanceGoal trajectory recording', () => {
     mocks.tick.mockReset();
     mocks.status.mockReset();
     mocks.createStore.mockReset();
+    mocks.upsert.mockReset();
   });
 
   it('records the ticks it observed, tagged with what triggered the advance', async () => {
@@ -149,6 +154,30 @@ describe('advanceGoal trajectory recording', () => {
     });
     expect(state.partial.advances[0].ticks[0]).toMatchObject({ branch: 'dispatch_task', index: 0 });
     expect(state.saved).toBeUndefined();
+  });
+
+  it('writes the observation row while the goal is still running, not only at the end', async () => {
+    const { store } = memoryStore();
+    mocks.createStore.mockReturnValue(store);
+    mocks.status.mockResolvedValue('running');
+    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
+      options?.onDecision?.(observation('waiting_external'));
+      return tickResult('waiting_external');
+    });
+
+    await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
+
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        advancesByTrigger: { sweep: 1 },
+        advancesTotal: 1,
+        finalStatus: null,
+        goalId: 'goal-1',
+        ticksTotal: 1,
+        traceS3Key: 'goal-traces/goal-1.json.zst',
+        workOperations: 1,
+      }),
+    );
   });
 
   it('closes the trajectory once the goal itself is terminal', async () => {
