@@ -112,6 +112,18 @@ export interface TopicListItem extends TopicItem {
 export interface VisitorTopicItem {
   createdAt: Date;
   id: string;
+  /**
+   * Sanitized marker of the topic's in-flight Gateway run, so a visitor who
+   * reloads mid-run can reconnect to the stream. Only the reconnect essentials
+   * survive — device routing, lifecycle hooks, and child-operation internals
+   * from the full `metadata.runningOperation` stay creator-private.
+   */
+  runningOperation?: {
+    assistantMessageId: string;
+    operationId: string;
+    scope?: string;
+    threadId?: string | null;
+  } | null;
   title: string | null;
   updatedAt: Date;
 }
@@ -1131,10 +1143,11 @@ export class TopicModel {
     { agentId, shareId }: { agentId: string; shareId: string },
     { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
   ): Promise<VisitorTopicItem[]> => {
-    return this.db
+    const rows = await this.db
       .select({
         createdAt: topics.createdAt,
         id: topics.id,
+        metadata: topics.metadata,
         title: topics.title,
         updatedAt: topics.updatedAt,
       })
@@ -1142,6 +1155,22 @@ export class TopicModel {
       .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.shareId, shareId)))
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
+
+    return rows.map(({ metadata, ...row }) => {
+      const running = (metadata as ChatTopicMetadata | null)?.runningOperation;
+      return {
+        ...row,
+        // Sanitized on purpose — see the `VisitorTopicItem.runningOperation` JSDoc.
+        runningOperation: running
+          ? {
+              assistantMessageId: running.assistantMessageId,
+              operationId: running.operationId,
+              scope: running.scope,
+              threadId: running.threadId,
+            }
+          : null,
+      };
+    });
   };
 
   /**
@@ -1453,6 +1482,15 @@ export class TopicModel {
 
       if (!originalTopic) {
         throw new Error(`Topic with id ${topicId} not found`);
+      }
+
+      // Share-provenance topics are quota-capped per visitor (maxTopicsPerTopic /
+      // maxTurnsPerTopic in shareChat's abuse guards, both counting live rows).
+      // Duplicating one would spread its `shareId` onto a fresh row with a fresh
+      // turn allowance, letting a visitor mint unlimited creator-funded topics
+      // through the generic clone API — refuse instead.
+      if (originalTopic.shareId) {
+        throw new Error(`Topic ${topicId} belongs to an agent share and cannot be duplicated`);
       }
 
       // copy topic

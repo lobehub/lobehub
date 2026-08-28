@@ -908,6 +908,20 @@ describe('TopicModel', () => {
     it('throws when the source topic does not exist', async () => {
       await expect(topicModel.duplicate('nope')).rejects.toThrow('not found');
     });
+
+    it('refuses to duplicate a share-provenance topic', async () => {
+      // A visitor cloning their own share topic would carry `shareId` onto a
+      // fresh row with a fresh turn allowance, bypassing the per-visitor topic
+      // cap and minting unlimited creator-funded executions.
+      await serverDB.insert(topics).values({
+        id: 'share-topic',
+        shareId: '11111111-1111-1111-1111-111111111111',
+        title: 'visitor conversation',
+        userId,
+      });
+
+      await expect(topicModel.duplicate('share-topic')).rejects.toThrow('cannot be duplicated');
+    });
   });
 
   describe('batchMoveToAgent', () => {
