@@ -3,7 +3,6 @@ import '@testing-library/jest-dom';
 // refs: https://github.com/dumbmatter/fakeIndexedDB#dexie-and-other-indexeddb-api-wrappers
 import 'fake-indexeddb/auto';
 
-import { theme } from 'antd';
 import i18n from 'i18next';
 import { enableMapSet, enablePatches } from 'immer';
 import type { ButtonHTMLAttributes, ComponentType, ElementType, ReactNode } from 'react';
@@ -259,9 +258,6 @@ if (typeof globalThis.window === 'undefined') {
 
 installTestStorage();
 beforeEach(installTestStorage);
-
-// remove antd hash on test
-theme.defaultConfig.hashed = false;
 
 // init i18n for non-React modules (stores/utils) using i18next.t(...)
 // Use in-memory resources to avoid interfering with Vitest module mocking.
