@@ -1211,12 +1211,15 @@ describe('AgentModel', () => {
         .insert(agents)
         .values({ userId, title: 'Shared Agent' })
         .returning();
+      // The visitor topic belongs to userId2 (a distinct user, not the
+      // creator), with `shareId` as its only provenance marker — proving the
+      // creator's delete reaches a run owned by someone else.
       await serverDB.insert(topics).values({
         id: 'delete-visitor-topic',
         title: 'Visitor',
-        userId,
+        userId: userId2,
         agentId: agent.id,
-        senderId: 'visitor-1',
+        shareId: '00000000-0000-4000-8000-000000000003',
         metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
       });
 
@@ -1228,7 +1231,11 @@ describe('AgentModel', () => {
       await modelWithCallback.delete(agent.id);
 
       expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'delete-visitor-topic' },
+        {
+          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+          operationId: 'op-1',
+          topicId: 'delete-visitor-topic',
+        },
       ]);
 
       // Cascade still ran — nothing left to re-discover afterward.
@@ -1266,10 +1273,10 @@ describe('AgentModel', () => {
       await serverDB.insert(topics).values({
         id: 'workspace-visitor-topic',
         title: 'Visitor',
-        userId,
+        userId: userId2,
         agentId: agent.id,
         workspaceId: workspace.id,
-        senderId: 'visitor-1',
+        shareId: '00000000-0000-4000-8000-000000000001',
         metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
       });
 
@@ -2405,12 +2412,15 @@ describe('AgentModel', () => {
         .insert(agents)
         .values({ userId, title: 'Shared Agent' })
         .returning();
+      // The visitor topic belongs to userId2 (a distinct user, not the
+      // creator), with `shareId` as its only provenance marker — proving the
+      // creator's batch delete reaches a run owned by someone else.
       await serverDB.insert(topics).values({
         id: 'batch-delete-visitor-topic',
         title: 'Visitor',
-        userId,
+        userId: userId2,
         agentId: agent.id,
-        senderId: 'visitor-1',
+        shareId: '00000000-0000-4000-8000-000000000004',
         metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
       });
 
@@ -2422,7 +2432,11 @@ describe('AgentModel', () => {
       await modelWithCallback.batchDelete([agent.id]);
 
       expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'batch-delete-visitor-topic' },
+        {
+          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+          operationId: 'op-1',
+          topicId: 'batch-delete-visitor-topic',
+        },
       ]);
 
       // Cascade still ran — nothing left to re-discover afterward.
@@ -3549,9 +3563,13 @@ describe('AgentModel', () => {
     });
 
     it('excludes agent-share visitor topics from the count and ranking order', async () => {
-      // Agent-share visitor topics keep the creator's userId, but a non-null
-      // `senderId` marks them as visitor traffic — they must not inflate or
-      // reorder the creator's own assistant usage ranking.
+      // An agent-share visitor topic belongs to the VISITOR (`topics.userId`
+      // is the visitor's id, `topics.shareId` records the share it came
+      // through), not the creator — the `rank` join pins `topics.userId` to
+      // the caller, so these rows are structurally unreachable from the
+      // creator's own ranking. userId2 stands in for the visitor here to
+      // prove the join reaches a run owned by someone else, not just a
+      // differently-tagged row of the creator's own.
       await serverDB.insert(agents).values([
         { id: 'rv1', title: 'Popular Shared Agent', userId },
         { id: 'rv2', title: 'Personally Used Agent', userId },
@@ -3560,11 +3578,36 @@ describe('AgentModel', () => {
         // rv1: 1 creator topic + 5 visitor topics — should rank behind rv2
         // once visitor topics are excluded, not ahead of it.
         { agentId: 'rv1', id: 'rv1-creator', userId },
-        { agentId: 'rv1', id: 'rv1-visitor-1', userId, senderId: 'visitor-a' },
-        { agentId: 'rv1', id: 'rv1-visitor-2', userId, senderId: 'visitor-a' },
-        { agentId: 'rv1', id: 'rv1-visitor-3', userId, senderId: 'visitor-b' },
-        { agentId: 'rv1', id: 'rv1-visitor-4', userId, senderId: 'visitor-b' },
-        { agentId: 'rv1', id: 'rv1-visitor-5', userId, senderId: 'visitor-c' },
+        {
+          agentId: 'rv1',
+          id: 'rv1-visitor-1',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000001',
+        },
+        {
+          agentId: 'rv1',
+          id: 'rv1-visitor-2',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000001',
+        },
+        {
+          agentId: 'rv1',
+          id: 'rv1-visitor-3',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000001',
+        },
+        {
+          agentId: 'rv1',
+          id: 'rv1-visitor-4',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000001',
+        },
+        {
+          agentId: 'rv1',
+          id: 'rv1-visitor-5',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000001',
+        },
         // rv2: 3 creator topics
         { agentId: 'rv2', id: 'rv2-creator-1', userId },
         { agentId: 'rv2', id: 'rv2-creator-2', userId },
@@ -3580,10 +3623,23 @@ describe('AgentModel', () => {
     });
 
     it('excludes an agent whose only topics are agent-share visitor topics', async () => {
+      // Same isolation as above: both topics belong to userId2 (the
+      // visitor), so rv3 has zero topics from the caller's own perspective
+      // and must not surface at all.
       await serverDB.insert(agents).values({ id: 'rv3', title: 'Visitor Only Agent', userId });
       await serverDB.insert(topics).values([
-        { agentId: 'rv3', id: 'rv3-visitor-1', userId, senderId: 'visitor-a' },
-        { agentId: 'rv3', id: 'rv3-visitor-2', userId, senderId: 'visitor-b' },
+        {
+          agentId: 'rv3',
+          id: 'rv3-visitor-1',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000002',
+        },
+        {
+          agentId: 'rv3',
+          id: 'rv3-visitor-2',
+          userId: userId2,
+          shareId: '00000000-0000-4000-8000-000000000002',
+        },
       ]);
 
       const result = await agentModel.rank();

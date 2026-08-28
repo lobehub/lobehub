@@ -689,10 +689,15 @@ export class AiAgentService {
   /**
    * Who this service instance executes as.
    *
-   * Every model and sub-service constructed below is scoped to
-   * `principal.resourceOwnerUserId` — the identity whose rows, credentials and
-   * balance the run reads, writes and spends. On a shared-agent run that is the
-   * share CREATOR, while `principal.actorUserId` is the visitor driving it.
+   * The models and sub-services constructed below split along the two ids:
+   *
+   * - `principal.resourceOwnerUserId` scopes everything the run CONSUMES —
+   *   agent config, connectors, plugins, documents, credentials, budget. On a
+   *   shared-agent run that is the share CREATOR.
+   * - `principal.actorUserId` scopes everything it PRODUCES — the topic, its
+   *   messages and threads. On a shared-agent run that is the VISITOR, who
+   *   owns the conversation (see `packages/database/src/schemas/topic.ts`).
+   *
    * Taking a principal instead of a bare `userId` is what stops a caller from
    * handing over "a user id" without saying which of the two it means.
    */
@@ -738,11 +743,21 @@ export class AiAgentService {
     // `userId`, so narrowing here preserves the same contract.
     this.principal = assertResolvedPrincipal(principal, 'AiAgentService');
 
-    // Every model and sub-service below is scoped to the RESOURCE OWNER: they
-    // read and write that user's rows. The actor (`principal.actorUserId`) is
-    // deliberately not used here — on a share run it is the visitor, who owns
-    // none of this.
+    // Two scopes, and which one a model gets is the whole point of the split
+    // principal.
+    //
+    // `userId` (the RESOURCE OWNER) scopes everything the run *consumes*: the
+    // agent and its config, connectors, plugins, documents. On a share run the
+    // visitor owns none of that and must still be able to use it.
+    //
+    // `conversationUserId` (the ACTOR) scopes everything the run *produces*:
+    // the topic, its messages and threads. On a share run those are the
+    // visitor's own conversation, so they belong under the visitor — that is
+    // what keeps them out of the creator's home, unread counts and memory
+    // extraction by construction instead of by a filter every future feature
+    // has to remember to apply.
     const userId = this.principal.resourceOwnerUserId;
+    const conversationUserId = this.principal.actorUserId;
     this.db = db;
     this.workspaceId = options?.workspaceId;
     this.withholdGatewayToken = options?.withholdGatewayToken ?? false;
@@ -751,16 +766,23 @@ export class AiAgentService {
     this.agentModel = new AgentModel(db, userId, wsId);
     this.agentOperationModel = new AgentOperationModel(db, userId, wsId);
     this.agentService = new AgentService(db, userId, wsId);
-    this.messageModel = new MessageModel(db, userId, wsId);
+    this.messageModel = new MessageModel(db, conversationUserId, wsId);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
     this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
-    this.threadModel = new ThreadModel(db, userId, wsId);
-    this.topicModel = new TopicModel(db, userId, wsId);
+    this.threadModel = new ThreadModel(db, conversationUserId, wsId);
+    this.topicModel = new TopicModel(db, conversationUserId, wsId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
       agentFactory: createGraphAwareAgentFactory(options?.runtimeOptions?.agentFactory),
+      // The same actor/owner split as above, carried INTO the runtime: it
+      // writes the assistant turn and every tool message itself, and then
+      // re-reads them (parent-message preflight, UI message snapshots). Left
+      // creator-scoped it writes the visitor's turn under the creator and
+      // then cannot find it again — the run fails with
+      // `ConversationParentMissing`.
+      conversationUserId,
       // ── Runtime delegate ─────────────────────────────────────────────────
       // Operations the runtime delegates back UP to this layer. The dependency
       // arrow is one-way (AiAgentService → AgentRuntimeService), so the runtime
@@ -2643,10 +2665,6 @@ export class AiAgentService {
         // Snapshot the effective model as the topic's pinned model (config).
         model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
         provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
-        // Share-visitor runs: the topic row belongs to the creator
-        // (this.principal.resourceOwnerUserId), but stamping the visitor's id keeps it out of the
-        // creator's listings and lets shareChat scope reads per visitor.
-        senderId: shareGate?.visitorUserId,
         // Placeholder only — `reserveShareVisitorTopic` (below) overrides
         // this with the FRESH `agentShares.id` it reads under its own row
         // lock, since this `shareGate.shareId` snapshot can predate a
@@ -2846,6 +2864,7 @@ export class AiAgentService {
               expectedGeneration: shareGate.generation,
               ownerId: this.principal.resourceOwnerUserId,
               topicId,
+              visitorUserId: shareGate.visitorUserId,
               workspaceId: this.workspaceId,
             },
             userMessageParams,
@@ -5706,7 +5725,7 @@ export class AiAgentService {
               // The share instance this run was authorized against — see
               // `AgentShareGate.shareId`'s JSDoc for why cross-topic reads
               // within the run must reject a topic stamped with a different
-              // `shareId` even when `senderId`/`agentId` still match.
+              // `shareId` even when `agentId` still matches.
               shareId: shareGate.shareId,
               visitorUserId: shareGate.visitorUserId,
             }
@@ -6166,11 +6185,13 @@ export class AiAgentService {
    * closes at step-0 pickup, and for why the result is a tri-state.
    *
    * Checks the topic's `runningOperation` marker first (the same field
-   * `confirmReservation` writes and `interruptTask` reads to detect a live
-   * run) — `this.topicModel.findById` scopes the lookup to `this.principal.resourceOwnerUserId`,
-   * which `runStep.ts` always constructs this service with as the CREATOR's
-   * id (share runs execute under the creator's credentials), matching
-   * `confirmReservation`'s own write. Only when the marker doesn't name this
+   * run) — `this.topicModel.findById` scopes the lookup to
+   * `this.principal.actorUserId`, the VISITOR who owns the share conversation
+   * (see `packages/database/src/schemas/topic.ts`), matching
+   * `confirmReservation`'s own write. This is why `runStep.ts` rebuilds the
+   * full split principal from `state.metadata.agentShare` rather than an
+   * owner-only one: a creator-scoped `findById` would find nothing here and
+   * every step would read as "reservation gone". Only when the marker doesn't name this
    * operation does it fall back to the `agent_share_run_reservations` row's
    * existence (`hasPendingReservation`) to tell "still pending" apart from
    * "revoked/swept/released" — the row alone cannot do this distinction
@@ -7108,12 +7129,13 @@ export class AiAgentService {
      * for remote-hetero cancellation detection). `undefined` (the default
      * for every OTHER caller) keeps the normal scoped re-fetch.
      *
-     * WHY a caller would need this: `this.topicModel` is scoped to
-     * whichever `workspaceId` this `AiAgentService` was constructed with.
-     * `interruptActiveShareRuns`'s deferred post-commit sweep can run after
-     * the agent has been transferred into a DIFFERENT workspace than the one
-     * the service was built for (see `TopicModel
-     * .findActiveVisitorRunTopicsByAgentId`'s JSDoc for the exact window) —
+     * WHY a caller would need this: `this.topicModel` is scoped to the
+     * actor, and to whichever `workspaceId` this `AiAgentService` was
+     * constructed with. `interruptActiveShareRuns`'s deferred post-commit
+     * sweep runs as the CREATOR over conversations owned by VISITORS, and
+     * can also run after the agent has been transferred into a different
+     * workspace than the one the service was built for (see `TopicModel
+     * .findActiveVisitorRunTopics`'s JSDoc for both windows) —
      * a scoped re-fetch there would silently find nothing and skip the
      * remote SIGINT dispatch for a heterogeneous (Codex/Claude Code sandbox)
      * run, even though the LOCAL `interruptOperation` call below still
@@ -7388,14 +7410,11 @@ export class AiAgentService {
     // operations THAT PREDATE THIS REVOCATION — safe per this method's
     // JSDoc.
     //
-    // `findActiveVisitorRunTopicsByAgentId`, NOT the sibling
-    // `findActiveVisitorRunTopics` (which every other caller of this pattern
-    // uses): this call runs from `after()`, so the agent may have been
-    // transferred AGAIN since `this.topicModel` was constructed for the
-    // FIRST transfer's target workspace — a workspace-scoped query would
-    // silently miss the topic in its new home. See that method's JSDoc for
-    // the exact double-transfer window this closes.
-    const activeRuns = await this.topicModel.findActiveVisitorRunTopicsByAgentId(
+    // `findActiveVisitorRunTopics` matches on `agentId` alone — no user or
+    // workspace scope. It has to: the conversations being stopped belong to
+    // their VISITORS, and this call runs from `after()`, by which time the
+    // agent may also have been transferred again. See that method's JSDoc.
+    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(
       agentId,
       revocationGeneration,
     );

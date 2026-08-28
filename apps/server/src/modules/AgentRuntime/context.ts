@@ -80,7 +80,7 @@ export interface RuntimeExecutorContext {
    * that lets cross-topic reads (`serverCallLlmContextBuilder`'s
    * `<refer_topic>` resolution, `lobe-topic-reference`'s `getTopicContext`)
    * reject a topic stamped with a DIFFERENT share instance — one the owner has
-   * since disabled and replaced, even though `senderId`/`agentId` still match.
+   * since disabled and replaced, even though `agentId` still matches.
    * See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
    */
   principal: ExecutionPrincipal;

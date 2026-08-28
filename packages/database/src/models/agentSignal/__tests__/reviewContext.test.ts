@@ -204,12 +204,15 @@ describe('AgentSignalReviewContextModel', () => {
     });
 
     it('excludes share-visitor topic tool activity from self-iteration context', async () => {
-      // Share-visitor topics carry the creator's `userId` (billing) plus a
-      // non-null `senderId` (the visitor). Nightly self-iteration must never
+      // A share-visitor topic belongs to the VISITOR (`topics.userId` is the
+      // visitor, `topics.shareId` records the share it came through). The
+      // model is scoped to the creator's own `userId`, so a visitor's rows
+      // are structurally unreachable — nightly self-iteration must never
       // ingest a visitor's tool arguments or failures as the creator's own.
       const visitorTopicId = 'agent-signal-review-context-visitor-topic';
+      const visitorUserId = 'agent-signal-review-context-visitor';
 
-      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(users).values([{ id: userId }, { id: visitorUserId }]);
       await serverDB.insert(agents).values([
         {
           chatConfig: { selfIteration: { enabled: true } },
@@ -221,9 +224,9 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(topics).values({
         agentId,
         id: visitorTopicId,
-        senderId: 'agent-signal-review-context-visitor',
+        shareId: '00000000-0000-4000-8000-000000000006',
         title: 'Visitor tool activity topic',
-        userId,
+        userId: visitorUserId,
       });
       await serverDB.insert(messages).values({
         agentId,
@@ -232,7 +235,7 @@ describe('AgentSignalReviewContextModel', () => {
         id: 'agent-signal-review-context-visitor-tool',
         role: 'assistant',
         topicId: visitorTopicId,
-        userId,
+        userId: visitorUserId,
       });
       await serverDB.insert(messagePlugins).values({
         apiName: 'createDocument',
@@ -240,7 +243,7 @@ describe('AgentSignalReviewContextModel', () => {
         id: 'agent-signal-review-context-visitor-tool',
         identifier: 'lobe-agent-documents',
         toolCallId: 'tool-call-review-context-visitor',
-        userId,
+        userId: visitorUserId,
       });
 
       const model = new AgentSignalReviewContextModel(serverDB, userId);
@@ -421,12 +424,15 @@ describe('AgentSignalReviewContextModel', () => {
     });
 
     it('excludes share-visitor topics from the nightly digest', async () => {
-      // Share-visitor topics carry the creator's `userId` (billing) plus a
-      // non-null `senderId` (the visitor). The nightly digest must never
-      // surface a visitor's title, summary, or failures as the creator's own.
+      // A share-visitor topic belongs to the VISITOR (`topics.userId` is the
+      // visitor, `topics.shareId` records the share it came through). The
+      // model is scoped to the creator's own `userId`, so the nightly digest
+      // must never surface a visitor's title, summary, or failures as the
+      // creator's own — it is structurally unreachable.
       const visitorTopicId = 'agent-signal-review-context-visitor-digest-topic';
+      const visitorUserId = 'agent-signal-review-context-visitor';
 
-      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(users).values([{ id: userId }, { id: visitorUserId }]);
       await serverDB.insert(agents).values([
         {
           chatConfig: { selfIteration: { enabled: true } },
@@ -438,9 +444,9 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(topics).values({
         agentId,
         id: visitorTopicId,
-        senderId: 'agent-signal-review-context-visitor',
+        shareId: '00000000-0000-4000-8000-000000000007',
         title: 'Visitor digest topic',
-        userId,
+        userId: visitorUserId,
       });
       await serverDB.insert(messages).values({
         agentId,
@@ -450,7 +456,7 @@ describe('AgentSignalReviewContextModel', () => {
         id: 'agent-signal-review-context-visitor-digest-message',
         role: 'assistant',
         topicId: visitorTopicId,
-        userId,
+        userId: visitorUserId,
       });
 
       const model = new AgentSignalReviewContextModel(serverDB, userId);
@@ -691,10 +697,14 @@ describe('AgentSignalReviewContextModel', () => {
 
     it('excludes a share-visitor topic even when explicitly scoped by id', async () => {
       // A visitor could hand back a scopeId/topicId that resolves to their own
-      // share topic. Self-reflection must fail closed rather than ingest it.
+      // share topic (`topics.userId` is the visitor, not the creator running
+      // self-reflection). Because the model is scoped to the caller's own
+      // `userId`, that topic is structurally unreachable — self-reflection
+      // fails closed rather than ingest it.
       const visitorTopicId = 'agent-signal-review-context-visitor-reflection-topic';
+      const visitorUserId = 'agent-signal-review-context-visitor';
 
-      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(users).values([{ id: userId }, { id: visitorUserId }]);
       await serverDB.insert(agents).values([
         {
           chatConfig: { selfIteration: { enabled: true } },
@@ -706,9 +716,9 @@ describe('AgentSignalReviewContextModel', () => {
       await serverDB.insert(topics).values({
         agentId,
         id: visitorTopicId,
-        senderId: 'agent-signal-review-context-visitor',
+        shareId: '00000000-0000-4000-8000-000000000008',
         title: 'Visitor reflection topic',
-        userId,
+        userId: visitorUserId,
       });
       await serverDB.insert(messages).values({
         agentId,
@@ -718,7 +728,7 @@ describe('AgentSignalReviewContextModel', () => {
         id: 'agent-signal-review-context-visitor-reflection-message',
         role: 'assistant',
         topicId: visitorTopicId,
-        userId,
+        userId: visitorUserId,
       });
 
       const model = new AgentSignalReviewContextModel(serverDB, userId);

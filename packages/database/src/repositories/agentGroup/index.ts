@@ -139,7 +139,7 @@ export interface AgentGroupRepositoryOptions {
    * NO `targetWorkspaceId` parameter — matches `AgentModelOptions.onShareReset`'s
    * signature exactly. The post-commit `interruptActiveShareRuns` re-query
    * this callback schedules matches on `agentId` alone
-   * (`TopicModel.findActiveVisitorRunTopicsByAgentId`), not on the workspace
+   * (`TopicModel.findActiveVisitorRunTopics`), not on the workspace
    * `transferToWorkspace` just moved the group's topics into: a SECOND
    * transfer landing before the deferred callback runs would move them again
    * while scheduling no new callback of its own (the share is already

@@ -169,13 +169,17 @@ beforeEach(() => {
   getLatestPersonaDocumentMock.mockResolvedValue({ persona: 'Creator persona' });
 });
 
-describe("buildServerCallLlmContext — refer_topic share gate limits topic references to the visitor's own topics", () => {
+// The topic lookup is ACTOR-scoped (see `serverCallLlmContextBuilder.ts`), so
+// on a share run it already can only reach the visitor's own rows. What these
+// cases pin down is the SECOND half of the gate: a referenced topic must also
+// carry this run's `agentId` + `shareId`, so a visitor cannot pull one of their
+// unrelated conversations into a run funded by the creator.
+describe("buildServerCallLlmContext — refer_topic share gate limits topic references to this share's own topics", () => {
   it('injects the referenced topic content for a non-share run', async () => {
     topicFindByIdMock.mockResolvedValue({
       agentId: AGENT_ID,
       historySummary: 'Some prior summary',
       id: 'topic-x',
-      senderId: CREATOR_USER_ID,
       title: 'My topic',
     });
 
@@ -194,13 +198,13 @@ describe("buildServerCallLlmContext — refer_topic share gate limits topic refe
     ]);
   });
 
-  it('does not inject content for a topic the visitor does not own in a share run', async () => {
-    // The creator's own private topic — not owned by the visitor.
+  it('does not inject content for a topic that did not come from a share in a share run', async () => {
+    // A plain topic with no `shareId` at all — it did not come from this
+    // share, so the run must not read it even if the lookup returned it.
     topicFindByIdMock.mockResolvedValue({
       agentId: AGENT_ID,
       historySummary: 'Private creator content',
       id: 'topic-private',
-      senderId: CREATOR_USER_ID,
       title: 'Creator private topic',
     });
 
@@ -226,12 +230,14 @@ describe("buildServerCallLlmContext — refer_topic share gate limits topic refe
     expect(messageQueryMock).not.toHaveBeenCalled();
   });
 
-  it('does not inject content for another visitor topic in a share run', async () => {
+  it('does not inject content for a topic from a different share instance', async () => {
+    // Same visitor, same agent, but a share the owner has since taken down
+    // and republished — `shareId` is what tells the two apart.
     topicFindByIdMock.mockResolvedValue({
       agentId: AGENT_ID,
       historySummary: 'Other visitor content',
       id: 'topic-other-visitor',
-      senderId: 'other-visitor',
+      shareId: 'share-0',
       title: 'Other visitor topic',
     });
 
@@ -260,7 +266,6 @@ describe("buildServerCallLlmContext — refer_topic share gate limits topic refe
       agentId: AGENT_ID,
       historySummary: 'Visitor own summary',
       id: 'topic-own',
-      senderId: VISITOR_USER_ID,
       shareId: 'share-1',
       title: 'My own topic',
     });

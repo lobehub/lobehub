@@ -91,7 +91,6 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
-import { notShareVisitorMessage } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { type ActiveShareRun, TopicModel } from './topic';
 import { recomputeTopicUsage } from './topicUsage';
@@ -933,25 +932,25 @@ export const toVisitorMessage = (message: UIChatMessage): UIChatMessage =>
 
 export interface MessageModelOptions {
   /**
-   * Called with the snapshot of Agent Share visitor runs that were still
-   * in-flight on a message-level bulk/batch delete (`deleteMessage` /
-   * `deleteMessages` / `deleteMessagesBySession` / `deleteAllMessages` /
-   * `batchDeleteByAgentId`) — AFTER the deleting transaction has committed.
+   * Called with the snapshot of Agent Share runs that were still in-flight on
+   * a message-level bulk/batch delete (`deleteMessage` / `deleteMessages` /
+   * `deleteMessagesBySession` / `deleteAllMessages` / `batchDeleteByAgentId`)
+   * — AFTER the deleting transaction has committed.
    *
    * WHY message-level deletes need their OWN copy of this contract instead of
    * relying on `TopicModelOptions.onShareRunsInterrupted`: none of these
-   * methods ever delete the `topics` row (they only ever touch `messages`),
-   * so `TopicModel`'s own delete-time snapshot never fires for them — a
-   * share-visitor topic (`topics.senderId` set, see `notShareVisitorTopic`)
-   * can have every one of its messages wiped out from under an in-flight run
-   * while the topic row (and its `runningOperation` marker) survives
-   * untouched. Message rows carry no `senderId` of their own — messages
-   * persist under the CREATOR's account regardless of who sent them (see
-   * `toVisitorMessage`'s JSDoc) — so a creator-scoped `this.ownership()`
-   * predicate matches a visitor's messages exactly like any other message
-   * the creator owns, the same shape as the topic-level bug this mirrors.
-   * Same contract, same reason, as `TopicModelOptions
-   * .onShareRunsInterrupted` — kept in sync.
+   * methods ever delete the `topics` row (they only touch `messages`), so
+   * `TopicModel`'s delete-time snapshot never fires for them. A share
+   * conversation can therefore have every one of its messages wiped out from
+   * under an in-flight run while the topic row — and its `runningOperation`
+   * marker — survives untouched, leaving the run writing turns onto a parent
+   * that no longer exists.
+   *
+   * Reachable because a share conversation belongs to the VISITOR
+   * (`topics.userId` = visitor — see `../schemas/topic.ts`), so it sits in
+   * their ordinary message list and `this.ownership()` matches its messages
+   * exactly like any other message they own. Same contract, same reason, as
+   * `TopicModelOptions.onShareRunsInterrupted` — kept in sync.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
@@ -990,8 +989,8 @@ export class MessageModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
 
   /**
-   * Snapshot any in-flight Agent Share visitor run among the given topic ids,
-   * BEFORE a message-level bulk/batch delete removes rows from them — see
+   * Snapshot any in-flight Agent Share run among the given topic ids, BEFORE a
+   * message-level bulk/batch delete removes rows from them — see
    * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc for why every
    * message-level delete method needs this instead of relying on
    * `TopicModel`'s own delete-time snapshot.
@@ -1012,9 +1011,7 @@ export class MessageModel {
     const ids = [...new Set(topicIds.filter((id): id is string => !!id))];
     if (ids.length === 0) return [];
 
-    return new TopicModel(trx as LobeChatDatabase, this.userId).findActiveVisitorRunTopicsByIds(
-      ids,
-    );
+    return new TopicModel(trx as LobeChatDatabase, this.userId).findActiveShareRunsByIds(ids);
   };
 
   // **************** Query *************** //
@@ -1193,10 +1190,12 @@ export class MessageModel {
   /**
    * Visitor-facing twin of {@link query} for agent-share reads.
    *
-   * Share messages persist under the CREATOR's account (see shareChat.ts),
-   * so `query()`'s joined `sender` and the billing/model-snapshot fields
-   * describe the creator, not the visitor reading them. Visitor-facing
-   * message DTO: creator account identity never crosses the share boundary.
+   * The rows themselves are the visitor's, but the RUN that produced them was
+   * the creator's: `query()`'s joined `sender` resolves to whoever the row
+   * records, and the model/provider snapshot plus usage/cost describe the
+   * creator's inference on the creator's budget. None of that belongs on a
+   * visitor-facing surface, so this twin strips it — see
+   * `VISITOR_MESSAGE_DENIED_KEYS`.
    */
   queryForVisitor = async (
     params: QueryMessageParams = {},
@@ -2604,7 +2603,7 @@ export class MessageModel {
       // Full creator-facing export (lambda `message.listAll`, CLI `message list`),
       // so agent-share visitor messages must stay excluded — same reasoning as
       // `analyticsConditions()` above.
-      .where(and(this.ownership(), notShareVisitorMessage()))
+      .where(this.ownership())
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);
@@ -2628,9 +2627,7 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(
-        and(this.ownership(), notShareVisitorMessage(), sql`${messages.content} @@@ ${bm25Query}`),
-      )
+      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];
@@ -2645,7 +2642,6 @@ export class MessageModel {
    */
   private analyticsConditions = (params?: MessageAnalyticsFilters) => [
     this.ownership(),
-    notShareVisitorMessage(),
     params?.agentId ? eq(messages.agentId, params.agentId) : undefined,
     params?.topicId ? eq(messages.topicId, params.topicId) : undefined,
     params?.role ? eq(messages.role, params.role) : undefined,
@@ -2744,7 +2740,6 @@ export class MessageModel {
       .where(
         genWhere([
           this.ownership(),
-          notShareVisitorMessage(),
           params?.range
             ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
             : undefined,
@@ -2767,14 +2762,7 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(
-        and(
-          this.ownership(),
-          notShareVisitorMessage(),
-          isNotNull(messages.model),
-          notCopiedTranscript(),
-        ),
-      )
+      .where(and(this.ownership(), isNotNull(messages.model), notCopiedTranscript()))
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -2794,7 +2782,6 @@ export class MessageModel {
       .where(
         genWhere([
           this.ownership(),
-          notShareVisitorMessage(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,
@@ -2862,7 +2849,6 @@ export class MessageModel {
       .where(
         genWhere([
           this.ownership(),
-          notShareVisitorMessage(),
           eq(messages.role, 'assistant'),
           notCopiedTranscript(),
           genRangeWhere(
@@ -2916,19 +2902,16 @@ export class MessageModel {
   /**
    * Exact per-topic turn count for one role, used by `maxTurnsPerTopic`.
    *
-   * MUST NOT reuse {@link MessageModel.count}: its `analyticsConditions()`
-   * ANDs in `notShareVisitorMessage()`, which excludes every message whose
-   * topic has a non-null `senderId` — i.e. every agent-share visitor topic.
-   * That predicate is correct for personal analytics (visitor usage is
-   * reported separately by the Cloud share usage center), but it makes
-   * `count()` return 0 forever for a share topic, silently disabling the
-   * turn cap.
+   * MUST NOT reuse {@link MessageModel.count}: that method is the personal
+   * analytics counter and carries `analyticsConditions()`, a set of filters
+   * tuned for "what did this user actually say" rather than "how many turns
+   * has this topic had". The cap needs the literal turn count.
    *
-   * Safe without a visitor/ownership check here: the caller (shareChat
+   * Safe without an extra ownership check here: the caller (shareChat
    * router) already resolved and authorized the topic via
-   * `findVisitorTopicOrThrow` before calling this, and `this.ownership()`
-   * matches because share messages carry the creator's `userId` (the model
-   * is constructed with `share.ownerId`).
+   * `findVisitorTopicOrThrow`, and `this.ownership()` matches because a share
+   * conversation's messages are the visitor's own rows and this model is
+   * constructed with the visitor's id.
    */
   countByTopic = async ({ role, topicId }: { role: string; topicId: string }): Promise<number> => {
     const result = await this.db
@@ -2952,16 +2935,17 @@ export class MessageModel {
   /**
    * Count messages up to a limit, useful for avoiding full table scans.
    *
-   * Excludes agent-share visitor messages: the sole current caller
-   * (`user.getUserState`) uses this to gate onboarding UI (PWA guide, trace)
-   * on the creator's own engagement, and a popular shared agent's visitor
-   * traffic isn't the creator's own activity (see `../utils/shareVisitor`).
+   * The sole current caller (`user.getUserState`) uses this to gate
+   * onboarding UI (PWA guide, trace) on this user's own engagement. A shared
+   * agent's visitor traffic is naturally out of scope: those messages are the
+   * VISITOR's rows (see `../schemas/topic.ts`), so `ownership()` never
+   * matches them for the creator.
    */
   countUpTo = async (n: number): Promise<number> => {
     const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(and(this.ownership(), notShareVisitorMessage()))
+      .where(this.ownership())
       .limit(n);
 
     return result.length;
@@ -4380,13 +4364,10 @@ export class MessageModel {
   };
 
   /**
-   * Snapshots any in-flight Agent Share visitor run on this exact message's
-   * topic BEFORE the delete — same bug shape as `TopicModel.delete`'s single-
-   * topic delete (see that method's JSDoc): a creator's normal "delete this
-   * message" action never surfaces a visitor topic to click on, but the
-   * underlying id-scoped delete has no such guard, so fail closed rather than
-   * rely on that UI gap. See `MessageModelOptions.onShareRunsInterrupted`'s
-   * JSDoc.
+   * Snapshots any in-flight Agent Share run on this exact message's topic
+   * BEFORE the delete — same bug shape as `TopicModel.delete`'s single-topic
+   * delete (see that method's JSDoc). See `MessageModelOptions
+   * .onShareRunsInterrupted`'s JSDoc.
    */
   deleteMessage = async (id: string) => {
     let activeShareRuns: ActiveShareRun[] = [];
@@ -4456,8 +4437,8 @@ export class MessageModel {
   };
 
   /**
-   * Snapshots in-flight Agent Share visitor runs among the topics touched by
-   * this exact id set BEFORE the delete — see `MessageModelOptions
+   * Snapshots in-flight Agent Share runs among the topics touched by this
+   * exact id set BEFORE the delete — see `MessageModelOptions
    * .onShareRunsInterrupted`'s JSDoc.
    */
   deleteMessages = async (ids: string[]) => {
@@ -4611,11 +4592,9 @@ export class MessageModel {
    * `message.removeMessagesByAssistant` / `message.removeMessagesByGroup`
    * router paths.
    *
-   * Snapshots in-flight Agent Share visitor runs among the topics this exact
-   * scope touches BEFORE the delete — this is the message-level twin of
-   * `TopicModel.batchDeleteBySessionId` / `batchDeleteByGroupId`'s bug: a
-   * visitor topic's messages could be wiped out from under an active run
-   * while the topic row (and its `runningOperation` marker) survives. See
+   * Snapshots in-flight Agent Share runs among the topics this exact scope
+   * touches BEFORE the delete — the message-level twin of
+   * `TopicModel.batchDeleteBySessionId` / `batchDeleteByGroupId`'s guard. See
    * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   deleteMessagesBySession = async (
@@ -4630,24 +4609,7 @@ export class MessageModel {
       this.matchGroup(groupId),
     );
 
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (tx) => {
-      const affectedTopics = await tx
-        .selectDistinct({ topicId: messages.topicId })
-        .from(messages)
-        .where(where);
-      activeShareRuns = await this.snapshotActiveShareRunsForTopics(
-        tx,
-        affectedTopics.map((row) => row.topicId),
-      );
-
-      return tx.delete(messages).where(where);
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+    return this.deleteMessagesWithShareRunSnapshot(where);
   };
 
   /**
@@ -4658,24 +4620,7 @@ export class MessageModel {
    * .onShareRunsInterrupted`'s JSDoc.
    */
   deleteAllMessages = async () => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (tx) => {
-      const affectedTopics = await tx
-        .selectDistinct({ topicId: messages.topicId })
-        .from(messages)
-        .where(this.ownership());
-      activeShareRuns = await this.snapshotActiveShareRunsForTopics(
-        tx,
-        affectedTopics.map((row) => row.topicId),
-      );
-
-      return tx.delete(messages).where(and(this.ownership()));
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+    return this.deleteMessagesWithShareRunSnapshot(this.ownership());
   };
 
   /**
@@ -4706,6 +4651,16 @@ export class MessageModel {
 
     const where = and(this.ownership(), agentCondition);
 
+    return this.deleteMessagesWithShareRunSnapshot(where);
+  };
+
+  /**
+   * Run a scope-based message delete with the share-run snapshot taken inside
+   * the SAME transaction, handing it to `onShareRunsInterrupted` only after
+   * that transaction commits — never before, so a rolled-back delete cannot
+   * interrupt a run that is still perfectly alive.
+   */
+  private deleteMessagesWithShareRunSnapshot = async (where: SQL | undefined) => {
     let activeShareRuns: ActiveShareRun[] = [];
 
     const result = await this.db.transaction(async (tx) => {

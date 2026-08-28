@@ -19,12 +19,12 @@ vi.mock('@/business/server/agent-share/agentShareBudgetGate', () => ({
 }));
 
 const mockFindById = vi.fn();
-const mockCountBySender = vi.fn();
-const mockQueryBySender = vi.fn();
+const mockCountVisitorShareTopics = vi.fn();
+const mockQueryVisitorShareTopics = vi.fn();
 const TopicModelMock = vi.fn(() => ({
-  countBySender: mockCountBySender,
+  countVisitorShareTopics: mockCountVisitorShareTopics,
   findById: mockFindById,
-  queryBySender: mockQueryBySender,
+  queryVisitorShareTopics: mockQueryVisitorShareTopics,
 }));
 vi.mock('@/database/models/topic', () => ({
   TopicModel: TopicModelMock,
@@ -112,12 +112,17 @@ const expectedVisitorPrincipal = {
   resourceOwnerUserId: OWNER,
 };
 
+/**
+ * A share conversation as it is actually stored: the VISITOR's own row
+ * (`TopicModel` is constructed with their id, so `findById` returning it is
+ * itself the ownership proof), stamped with the share instance it came from.
+ */
 const visitorTopic = {
   agentId: share.agentId,
   id: 'tpc_visitor',
   metadata: { runningOperation: { operationId: 'op-1' } },
-  senderId: VISITOR,
   shareId: share.shareId,
+  userId: VISITOR,
 };
 
 const createCaller = async () =>
@@ -130,8 +135,8 @@ describe('shareChatRouter', () => {
     // Not gated by default (mirrors the OSS stub) — existing cases stay unaffected.
     mockGetAgentShareBudgetRemaining.mockResolvedValue(null);
     mockFindById.mockResolvedValue(visitorTopic);
-    mockCountBySender.mockResolvedValue(0);
-    mockQueryBySender.mockResolvedValue([]);
+    mockCountVisitorShareTopics.mockResolvedValue(0);
+    mockQueryVisitorShareTopics.mockResolvedValue([]);
     mockMessageCountByTopic.mockResolvedValue(0);
     mockMessageQuery.mockResolvedValue([]);
     mockExecAgent.mockResolvedValue({ operationId: 'op-1', success: true });
@@ -149,7 +154,7 @@ describe('shareChatRouter', () => {
         message: 'InsufficientBudgetForModel',
       });
       expect(mockGetAgentShareBudgetRemaining).toHaveBeenCalledWith({ agentId: share.agentId });
-      expect(mockCountBySender).not.toHaveBeenCalled();
+      expect(mockCountVisitorShareTopics).not.toHaveBeenCalled();
       expect(mockMessageCountByTopic).not.toHaveBeenCalled();
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
@@ -165,7 +170,7 @@ describe('shareChatRouter', () => {
     });
 
     it('rejects a new-topic run once the visitor topic cap is reached', async () => {
-      mockCountBySender.mockResolvedValue(2);
+      mockCountVisitorShareTopics.mockResolvedValue(2);
       const caller = await createCaller();
 
       await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
@@ -192,8 +197,12 @@ describe('shareChatRouter', () => {
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
-    it("fails closed when the topic is not the visitor's own share topic", async () => {
-      mockFindById.mockResolvedValue({ ...visitorTopic, senderId: 'someone-else' });
+    // A topic the visitor genuinely owns but which did NOT come from this
+    // share: ownership scoping alone would let it through, so the `shareId`
+    // half of the check is the only thing stopping the visitor from having
+    // their own private conversation executed on the creator's resources.
+    it("fails closed on one of the visitor's own topics that is not from this share", async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, shareId: null });
       const caller = await createCaller();
 
       await expect(
@@ -202,15 +211,28 @@ describe('shareChatRouter', () => {
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
-    it('dispatches a creator-scoped run carrying the share gate', async () => {
+    // A topic that is not the caller's at all never even reaches the
+    // `shareId` comparison: the visitor-scoped `TopicModel` cannot see it.
+    it('fails closed when the topic is not the visitor’s', async () => {
+      mockFindById.mockResolvedValue(undefined);
+      const caller = await createCaller();
+
+      await expect(
+        caller.execAgent({ prompt: 'hi', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('dispatches a run under the split principal, carrying the share gate', async () => {
       const caller = await createCaller();
 
       await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).resolves.toMatchObject({
         operationId: 'op-1',
       });
 
-      // Service reads/writes/bills as the CREATOR, while recording the VISITOR
-      // as the actor driving the run.
+      // The run acts as the VISITOR and consumes the CREATOR's resources —
+      // asserting the whole principal is what keeps a future refactor from
+      // quietly collapsing the two halves back together.
       expect(AiAgentServiceMock).toHaveBeenCalledWith(
         expect.anything(),
         expectedVisitorPrincipal,
@@ -355,7 +377,7 @@ describe('shareChatRouter', () => {
     });
 
     it("fails closed when the topic is not the visitor's own share topic", async () => {
-      mockFindById.mockResolvedValue({ ...visitorTopic, senderId: 'someone-else' });
+      mockFindById.mockResolvedValue(undefined);
       const caller = await createCaller();
 
       await expect(
@@ -412,16 +434,15 @@ describe('shareChatRouter', () => {
   });
 
   describe('getTopics', () => {
-    it("returns only the visitor's own topics via senderId + shareId scoping", async () => {
+    it("returns only the visitor's own topics from this share instance", async () => {
       const caller = await createCaller();
       await caller.getTopics({ shareId: 'share-1' });
 
-      // Topic model is creator-scoped; the query narrows to this visitor AND
-      // this share instance.
-      expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
-      expect(mockQueryBySender).toHaveBeenCalledWith({
+      // Topic model is VISITOR-scoped — that is the ownership half of the
+      // boundary; the query narrows the rest to this share instance.
+      expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), VISITOR);
+      expect(mockQueryVisitorShareTopics).toHaveBeenCalledWith({
         agentId: share.agentId,
-        senderId: VISITOR,
         shareId: share.shareId,
       });
     });
@@ -441,7 +462,7 @@ describe('shareChatRouter', () => {
     // Regression test: `AgentShareModel.create()` mints a
     // brand-new `agentShares.id` every disable → re-enable cycle. A topic
     // stamped with a PREVIOUS share instance's id must be rejected even
-    // though `senderId`/`agentId` still match the returning visitor.
+    // though the returning visitor still owns it and `agentId` still matches.
     it('rejects a topic created under a different (disabled-and-replaced) share instance', async () => {
       mockFindById.mockResolvedValue({ ...visitorTopic, shareId: 'old-share-1' });
       const caller = await createCaller();

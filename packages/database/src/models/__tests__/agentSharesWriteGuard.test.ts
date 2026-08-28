@@ -15,11 +15,11 @@ import { describe, expect, it } from 'vitest';
  * free to confirm/keep running after the share becomes unresolvable, with no
  * way for the visitor to stop it.
  *
- * This has bypassed the contract THREE separate times across this PR's
- * review rounds (`writeAgentConfigWithShareReset`'s own reset, then
+ * This has bypassed the contract THREE separate times
+ * (`writeAgentConfigWithShareReset`'s own reset, then
  * `AgentModel.transferAgents`, then `AgentGroupRepository.transferToWorkspace`)
- * — each fix closed only the site a reviewer had just named, and a sibling
- * site kept the bug alive one round longer. This test does not verify the
+ * — each fix closed only the site that had just been named, and a sibling
+ * site kept the bug alive. This test does not verify the
  * CONTRACT itself is followed correctly (`agentShare.generation.test.ts` /
  * `agentShare.transferRace.test.ts` and friends do that) — it only makes sure
  * a FUTURE raw `agentShares` visibility/delete write cannot land silently: a

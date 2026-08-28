@@ -2,7 +2,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, topics, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AgentShareModel } from '@/database/models/agentShare';
@@ -44,13 +44,15 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const agentShareModel = new AgentShareModel(serverDB, ownerId);
 
 const cleanup = async () => {
-  await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(inArray(users.id, [ownerId, visitorId]));
 };
 
 describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — stale authorization (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    // The visitor is a real user row now: a share conversation is THEIR
+    // topic, so it cannot be inserted without one.
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);
@@ -74,7 +76,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
       reserveShareVisitorTopicOrThrow({
         agentId,
         create: (topicModel, shareId) =>
-          topicModel.create({ agentId, senderId: visitorId, shareId, title: 'stale-topic' }),
+          topicModel.create({ agentId, shareId, title: 'stale-topic' }),
         db: serverDB,
         expectedGeneration: generationObservedByVisitor,
         ownerId,
@@ -101,7 +103,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
 
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: '00000000-0000-4000-8000-000000000001', userId: visitorId })
       .returning();
 
     await agentShareModel.updateVisibility(agentId, 'private');
@@ -120,6 +122,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
         expectedGeneration: generationObservedByVisitor,
         ownerId,
         topicId: topic.id,
+        visitorUserId: visitorId,
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
@@ -154,7 +157,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
       reserveShareVisitorTopicOrThrow({
         agentId,
         create: (topicModel, shareId) =>
-          topicModel.create({ agentId, senderId: visitorId, shareId, title: 'stale-topic' }),
+          topicModel.create({ agentId, shareId, title: 'stale-topic' }),
         db: serverDB,
         expectedGeneration: generationObservedByVisitor,
         ownerId,
@@ -173,7 +176,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
     const freshTopic = await reserveShareVisitorTopicOrThrow({
       agentId,
       create: (topicModel, shareId) =>
-        topicModel.create({ agentId, senderId: visitorId, shareId, title: 'fresh-topic' }),
+        topicModel.create({ agentId, shareId, title: 'fresh-topic' }),
       db: serverDB,
       expectedGeneration: currentGeneration,
       ownerId,
@@ -196,7 +199,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
 
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: '00000000-0000-4000-8000-000000000001', userId: visitorId })
       .returning();
 
     await agentShareModel.deleteByAgentId(agentId);
@@ -216,6 +219,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
         expectedGeneration: generationObservedByVisitor,
         ownerId,
         topicId: topic.id,
+        visitorUserId: visitorId,
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });

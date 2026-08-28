@@ -1328,17 +1328,18 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
     });
   });
 
-  // Regression guard: agent-share visitor topics/messages carry the creator's
-  // userId (so the ownership predicate matches them), but they must never
-  // surface in the creator's own command-palette search — visitor usage is
-  // reported separately by the Cloud share usage center.
+  // Regression guard: an agent-share visitor topic belongs to the VISITOR
+  // (`topics.userId` is the visitor, `shareId` marks where it came from), so
+  // the creator's command-palette search must never surface it. The isolation
+  // is structural now — the creator's own ownership predicate simply cannot
+  // reach the row — and these cases pin that it stays that way.
   describe('search - excludes agent-share visitor data', () => {
     beforeEach(async () => {
       await serverDB.insert(topics).values({
         content: 'Visitor-only discussion about zephyrwatt',
-        senderId: 'visitor-user-zephyrwatt',
+        shareId: '00000000-0000-4000-8000-000000000001',
         title: 'Zephyrwatt visitor topic',
-        userId,
+        userId: otherUserId,
       });
     });
 
@@ -1358,7 +1359,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
         content: 'Zephyrwatt visitor message inside topic',
         role: 'user',
         topicId: visitorTopic.id,
-        userId,
+        userId: otherUserId,
       });
 
       const results = await searchRepo.search({ query: 'zephyrwatt', type: 'message' });

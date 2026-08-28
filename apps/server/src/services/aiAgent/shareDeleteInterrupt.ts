@@ -38,9 +38,14 @@ export const interruptSnapshottedShareRuns =
       const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(ownerId));
 
       await Promise.all(
-        activeShareRuns.map(({ operationId }) =>
+        activeShareRuns.map(({ metadata, operationId, topicId }) =>
           aiAgentService
-            .interruptTask({ operationId })
+            // Hand the snapshotted topic straight through. `interruptTask`
+            // would otherwise re-read the `topics` row to decide whether a
+            // remote heterogeneous (Codex / Claude Code sandbox) process needs
+            // a SIGINT — and by the time this runs the row is deleted, so the
+            // re-read finds nothing and the remote process is left running.
+            .interruptTask({ operationId, topicId, topicMetadata: metadata })
             .catch((error) => console.error('[shareDeleteInterrupt] interruptTask failed', error)),
         ),
       );

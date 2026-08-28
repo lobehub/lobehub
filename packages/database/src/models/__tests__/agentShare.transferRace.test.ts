@@ -46,6 +46,7 @@ const targetScopedTopicModel = new TopicModel(serverDB, ownerId, targetWsId);
 
 const cleanup = async () => {
   await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(eq(users.id, visitorId));
 };
 
 /** Mirrors `execAgentWithReservation`'s ordering: recheck+reserve, then (only if that passed) confirm+mark-running. */
@@ -127,7 +128,7 @@ const transferAndCollectSurvivors = async (
 describe('AgentModel.transferAgents share reset x visitor run reservation (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
     await serverDB.insert(workspaces).values([
       {
         id: targetWsId,
@@ -153,10 +154,12 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
       const agentModel = new AgentModel(serverDB, ownerId);
       const agentShareModel = new AgentShareModel(serverDB, ownerId);
       const agent = await agentModel.create({ id: agentId, title: 'Transfer Race Agent' });
-      await agentShareModel.create(agent.id, 'link');
+      const share = await agentShareModel.create(agent.id, 'link');
+      // The conversation belongs to the VISITOR — `userId` is the visitor's
+      // own id, `shareId` is the sole provenance marker.
       const [topic] = await serverDB
         .insert(topics)
-        .values({ agentId: agent.id, senderId: visitorId, userId: ownerId })
+        .values({ agentId: agent.id, shareId: share!.id, userId: visitorId })
         .returning();
 
       const [startResult, survivors] = await Promise.all([
@@ -201,10 +204,11 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
     const agentModel = new AgentModel(serverDB, ownerId);
     const agentShareModel = new AgentShareModel(serverDB, ownerId);
     const agent = await agentModel.create({ id: agentId, title: 'Delayed Start Agent' });
-    await agentShareModel.create(agent.id, 'link');
+    const share = await agentShareModel.create(agent.id, 'link');
+    // The conversation belongs to the VISITOR — see the previous test's note.
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId: agent.id, senderId: visitorId, userId: ownerId })
+      .values({ agentId: agent.id, shareId: share!.id, userId: visitorId })
       .returning();
 
     // 1. Visitor's recheck passes and stakes the reservation while the agent
@@ -276,7 +280,7 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
   // own — the ONE callback that will ever exist for this revocation must
   // still find the run wherever the SECOND transfer left it (workspace B),
   // not the workspace the callback was originally scoped to (A). See
-  // `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc and
+  // `TopicModel.findActiveVisitorRunTopics`'s JSDoc and
   // `shareResetInterrupt.ts`'s JSDoc for the full rationale.
   it('finds an already-running visitor operation after a SECOND transfer moves it again before the deferred sweep runs', async () => {
     const secondWsId = 'agent-share-transfer-race-ws-2';
@@ -294,10 +298,12 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
     const agentModel = new AgentModel(serverDB, ownerId);
     const agentShareModel = new AgentShareModel(serverDB, ownerId);
     const agent = await agentModel.create({ id: agentId, title: 'Double Transfer Agent' });
-    await agentShareModel.create(agent.id, 'link');
+    const share = await agentShareModel.create(agent.id, 'link');
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId: agent.id, senderId: visitorId, userId: ownerId })
+      .values({ agentId: agent.id, shareId: share.id, userId: visitorId })
       .returning();
 
     // The run confirms (starts) while the agent is still personal-scoped.
@@ -359,13 +365,16 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
     expect(revoked).toEqual([]); // already confirmed, nothing left to revoke
 
     const unscopedTopicModel = new TopicModel(serverDB, ownerId);
-    const active = await unscopedTopicModel.findActiveVisitorRunTopicsByAgentId(
+    const active = await unscopedTopicModel.findActiveVisitorRunTopics(
       agent.id,
       revocationGeneration!,
     );
-    // Found by `agentId` alone, in its ACTUAL current workspace (B) — a
-    // workspace-A-scoped query (the pre-fix behavior) would have found
-    // nothing here.
+    // Found by `agentId` alone, in its ACTUAL current workspace (B).
+    // `findActiveVisitorRunTopics` is deliberately unscoped by workspace AND
+    // by user (see its JSDoc): a workspace-scoped variant would miss the topic
+    // after a second transfer, and a user-scoped one could not see it at all
+    // now that a share conversation belongs to the visitor rather than the
+    // creator running this sweep.
     expect(active).toEqual([
       {
         metadata: expect.objectContaining({ runningOperation: expect.anything() }),
@@ -373,14 +382,5 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
         topicId: topic.id,
       },
     ]);
-
-    // And the pre-fix, workspace-A-scoped query genuinely WOULD have missed
-    // it — demonstrating exactly what this fix closes.
-    const staleWorkspaceScopedTopicModel = new TopicModel(serverDB, ownerId, targetWsId);
-    const staleActive = await staleWorkspaceScopedTopicModel.findActiveVisitorRunTopics(
-      agent.id,
-      revocationGeneration!,
-    );
-    expect(staleActive).toEqual([]);
   }, 15_000);
 });

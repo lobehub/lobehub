@@ -67,7 +67,7 @@ const assertShareStillAuthorized = async (
  * Atomically enforce `maxTopicsPerVisitor` at the exact moment a share
  * visitor's new topic is written.
  *
- * `shareChat.ts` runs a `TopicModel.countBySender` pre-check before ever
+ * `shareChat.ts` runs a `TopicModel.countVisitorShareTopics` pre-check before ever
  * dispatching to `AiAgentService.execAgent` (a fast, UX-only reject that
  * skips wasted agent-config/tool-resolution work for an obviously-over-cap
  * request — see that router's JSDoc), but that read and the actual `topics`
@@ -172,12 +172,13 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
     }
 
-    const txTopicModel = new TopicModel(tx, ownerId, workspaceId);
-    const currentCount = await txTopicModel.countBySender({
-      agentId,
-      senderId: visitorUserId,
-      shareId,
-    });
+    // Visitor-scoped: the topic being reserved is the VISITOR's row (see
+    // `shareChat.ts`'s module JSDoc), so both the recount and the INSERT
+    // `create` performs must run under the visitor's identity. `ownerId`
+    // stays in play only for the `agents.id` row lock above, which is a
+    // creator-owned row.
+    const txTopicModel = new TopicModel(tx, visitorUserId, workspaceId);
+    const currentCount = await txTopicModel.countVisitorShareTopics({ agentId, shareId });
 
     // Fail closed: a visitor already at (or somehow past) the cap never gets
     // another topic, even if `create`'s own params disagree with `agentId`.
@@ -223,8 +224,8 @@ export const reserveShareVisitorTopic = (
  * `execAgentWithReservation`, on a separate statement with nothing
  * serializing the two. A burst of concurrent sends to the SAME topic can all
  * pass the pre-check and all insert, exceeding `maxTurnsPerTopic` by an
- * arbitrary amount (same review round, requirement to fix the whole class of
- * count-then-act guards, not just the one Codex named).
+ * arbitrary amount. Fixed as a class — every count-then-act guard here takes
+ * the lock — rather than one site at a time.
  *
  * Locked via `AgentShareModel.lockOwnedAgentRow` — the SAME `agents.id FOR
  * UPDATE` row {@link reserveShareVisitorTopicOrThrow} and every other
@@ -260,9 +261,12 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
   expectedGeneration: number;
   ownerId: string;
   topicId: string;
+  /** See {@link reserveShareVisitorTopicOrThrow}'s `visitorUserId` — the message row is theirs. */
+  visitorUserId: string;
   workspaceId?: string;
 }): Promise<DBMessageItem | undefined> => {
-  const { agentId, create, db, expectedGeneration, ownerId, topicId, workspaceId } = params;
+  const { agentId, create, db, expectedGeneration, ownerId, topicId, visitorUserId, workspaceId } =
+    params;
 
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
@@ -283,7 +287,9 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
     // function's JSDoc for the stale-cap flood this closes.
     const { maxTurnsPerTopic } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);
 
-    const txMessageModel = new MessageModel(tx, ownerId, workspaceId);
+    // Visitor-scoped for the same reason as the topic guard: the user-turn
+    // message being counted and inserted is the visitor's own row.
+    const txMessageModel = new MessageModel(tx, visitorUserId, workspaceId);
     const turnCount = await txMessageModel.countByTopic({ role: 'user', topicId });
 
     if (turnCount >= maxTurnsPerTopic) {
@@ -305,6 +311,7 @@ export const reserveShareVisitorTurn = (
     expectedGeneration: number;
     ownerId: string;
     topicId: string;
+    visitorUserId: string;
     workspaceId?: string;
   },
   createParams: CreateMessageParams,

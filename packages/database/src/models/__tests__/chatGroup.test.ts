@@ -1170,7 +1170,9 @@ describe('ChatGroupModel', () => {
       const groupId = 'share-cleanup-group';
       const supervisorId = 'share-cleanup-supervisor';
 
-      await serverDB.insert(users).values([{ id: shareOwnerId }]);
+      // The visitor topic below belongs to `visitorId` — a distinct user
+      // row, not the group/share owner — so it needs its own `users` row.
+      await serverDB.insert(users).values([{ id: shareOwnerId }, { id: visitorId }]);
 
       await serverDB.transaction(async (trx) => {
         await trx
@@ -1190,12 +1192,16 @@ describe('ChatGroupModel', () => {
       });
 
       const agentShareModel = new AgentShareModel(serverDB, shareOwnerId);
-      await agentShareModel.create(supervisorId, 'link');
+      const share = await agentShareModel.create(supervisorId, 'link');
 
       const operationId = 'op-share-cleanup-group';
+      // The topic belongs to the VISITOR (`userId: visitorId`); `shareId` is
+      // its only provenance marker back to the creator's agent — proving the
+      // group delete reaches a run owned by someone else, not the owner's
+      // own row.
       const [topic] = await serverDB
         .insert(topics)
-        .values({ agentId: supervisorId, senderId: visitorId, userId: shareOwnerId })
+        .values({ agentId: supervisorId, shareId: share.id, userId: visitorId })
         .returning();
       await agentShareModel.assertRunnableForVisitor({
         agentId: supervisorId,
@@ -1204,12 +1210,13 @@ describe('ChatGroupModel', () => {
         topicId: topic.id,
         visitorUserId: visitorId,
       });
+      const startedAt = new Date().toISOString();
       const confirmed = await agentShareModel.confirmReservation({
         operationId,
         runningOperation: {
           assistantMessageId: 'msg',
           operationId,
-          startedAt: new Date().toISOString(),
+          startedAt,
         },
         topicId: topic.id,
       });
@@ -1223,9 +1230,23 @@ describe('ChatGroupModel', () => {
       await modelWithCallback.delete(groupId);
 
       expect(onShareRunsInterrupted).toHaveBeenCalledTimes(1);
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([{ operationId, topicId: topic.id }]);
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        {
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'msg',
+              operationId,
+              shareGeneration: 1,
+              startedAt,
+            },
+          },
+          operationId,
+          topicId: topic.id,
+        },
+      ]);
 
       await serverDB.delete(users).where(eq(users.id, shareOwnerId));
+      await serverDB.delete(users).where(eq(users.id, visitorId));
     });
 
     it('rolls back group deletion when an owned-agent deletion guard rejects', async () => {

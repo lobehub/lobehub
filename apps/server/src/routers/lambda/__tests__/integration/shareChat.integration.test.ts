@@ -5,13 +5,16 @@
  * other test either mocks the database or drives a single layer directly.
  *
  * What this file is actually guarding is the SPLIT IDENTITY of a share run.
- * The visitor drives it (`actorUserId`) while every row it touches belongs to
- * the creator (`resourceOwnerUserId`), and no single layer can prove that
- * split holds — the router resolves the share, `AiAgentService` builds the
- * principal, and `TopicModel`/`MessageModel` are the only things that
- * actually write `user_id` / `sender_id` / `share_id`. A mocked seam anywhere
- * in that chain would let a run that persists rows under the VISITOR's id
- * pass, which is precisely the failure the whole refactor exists to prevent.
+ * The visitor drives it and OWNS the conversation it produces
+ * (`actorUserId`), while everything the run consumes — agent config,
+ * credentials, budget — belongs to the creator (`resourceOwnerUserId`). No
+ * single layer can prove that split holds: the router resolves the share,
+ * `AiAgentService` builds the principal, and `TopicModel`/`MessageModel` are
+ * the only things that actually write `user_id` / `share_id`. A mocked seam
+ * anywhere in that chain would let a run that persists the conversation under
+ * the CREATOR pass — which is precisely the leak the whole refactor exists to
+ * prevent, since a creator-owned row is one forgotten filter away from the
+ * creator's home, unread counts and memory extraction.
  */
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, messages, topics } from '@lobechat/database/schemas';
@@ -97,7 +100,7 @@ afterEach(async () => {
 });
 
 describe('shareChat end-to-end (real Postgres)', () => {
-  it('persists a visitor run under the creator, stamped with the visitor as sender', async () => {
+  it('persists a visitor run under the visitor, stamped with the share instance', async () => {
     const caller = shareChatRouter.createCaller(visitorContext());
 
     const result = await caller.execAgent({ prompt: 'Hello from a visitor', shareId });
@@ -107,19 +110,19 @@ describe('shareChat end-to-end (real Postgres)', () => {
 
     const [topic] = await serverDB.select().from(topics).where(eq(topics.agentId, sharedAgentId));
 
-    // The whole point of the split principal: the row is the CREATOR's, and
-    // `senderId`/`shareId` are the only things scoping it to this visitor.
-    expect(topic.userId).toBe(creatorId);
-    expect(topic.senderId).toBe(visitorId);
+    // The whole point of the split principal: the conversation is the
+    // VISITOR's row, and `shareId` is what marks where it came from.
+    expect(topic.userId).toBe(visitorId);
     expect(topic.shareId).toBe(shareId);
 
     const rows = await serverDB.select().from(messages).where(eq(messages.topicId, topic.id));
 
-    // The visitor's own prompt and the assistant placeholder both land under
-    // the creator too — a run that wrote them under `visitorId` would leave
-    // the creator unable to see (or be billed for) its own conversation.
+    // The visitor's own prompt and the assistant placeholder land under the
+    // visitor too — a run that wrote them under `creatorId` would put the
+    // visitor's words inside the creator's account, where every
+    // creator-facing surface would have to remember to filter them back out.
     expect(rows.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(rows.map((row) => row.userId))).toEqual(new Set([creatorId]));
+    expect(new Set(rows.map((row) => row.userId))).toEqual(new Set([visitorId]));
     expect(rows.some((row) => row.role === 'user' && row.content === 'Hello from a visitor')).toBe(
       true,
     );
@@ -137,7 +140,16 @@ describe('shareChat end-to-end (real Postgres)', () => {
       // the first is still live is REJECTED rather than allowed to displace it
       // (see `shareChat.execAgent`'s `interactiveStart: false` comment). Wait
       // the first run out, exactly as a visitor's own client would.
-      await waitForOperationComplete(inMemoryAgentStateManager, first.operationId!);
+      const firstState = await waitForOperationComplete(
+        inMemoryAgentStateManager,
+        first.operationId!,
+      );
+      // `waitForOperationComplete` treats `error` as terminal too, so without
+      // this the whole flow can fail and still read as "the run finished".
+      // A share run that errors out is exactly how an identity-scoping
+      // regression surfaces (the runtime looking for the visitor's rows under
+      // the creator's id), so pin the status explicitly.
+      expect(firstState.status).toBe('done');
 
       await caller.execAgent({ prompt: 'Second turn', shareId, topicId: topic.id });
 
@@ -170,7 +182,7 @@ describe('shareChat end-to-end (real Postgres)', () => {
   });
 
   it('hides a creator topic that was never shared with this visitor', async () => {
-    // A creator-owned topic on the SAME agent, with no `senderId` — the shape
+    // A creator-owned topic on the SAME agent, with no `shareId` — the shape
     // an ordinary (non-share) conversation has.
     const [creatorTopic] = await serverDB
       .insert(topics)
@@ -183,6 +195,25 @@ describe('shareChat end-to-end (real Postgres)', () => {
     await expect(caller.getMessages({ shareId, topicId: creatorTopic.id })).rejects.toThrow();
     await expect(
       caller.execAgent({ prompt: 'Sneaking in', shareId, topicId: creatorTopic.id }),
+    ).rejects.toThrow();
+  });
+
+  it("refuses one of the visitor's own topics that did not come from this share", async () => {
+    // Ownership alone is satisfied here — the row IS the visitor's. What must
+    // still reject it is `topics.shareId`: without that half, a visitor could
+    // aim any private conversation of their own at this endpoint and have it
+    // executed with the creator's agent, credentials and budget.
+    const [ownTopic] = await serverDB
+      .insert(topics)
+      .values({ agentId: sharedAgentId, title: 'My own topic', userId: visitorId })
+      .returning();
+
+    const caller = shareChatRouter.createCaller(visitorContext());
+
+    expect(await caller.getTopics({ shareId })).toEqual([]);
+    await expect(caller.getMessages({ shareId, topicId: ownTopic.id })).rejects.toThrow();
+    await expect(
+      caller.execAgent({ prompt: 'Sneaking in', shareId, topicId: ownTopic.id }),
     ).rejects.toThrow();
   });
 

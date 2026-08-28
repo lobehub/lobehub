@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -196,22 +196,30 @@ describe('writeAgentConfigWithShareReset — in-flight visitor run during a conf
   const inFlightAgentId = 'agent-config-share-reset-in-flight-agent';
   const visitorId = 'agent-config-share-reset-in-flight-visitor';
 
+  const cleanupWithVisitor = async () => {
+    await serverDB.delete(users).where(inArray(users.id, [userId, visitorId]));
+  };
+
   beforeEach(async () => {
-    await cleanup();
-    await serverDB.insert(users).values([{ id: userId }]);
+    await cleanupWithVisitor();
+    // The visitor is a real user row: a share conversation belongs to THEM,
+    // so the topic below cannot be inserted without one.
+    await serverDB.insert(users).values([{ id: userId }, { id: visitorId }]);
     await serverDB
       .insert(agents)
       .values({ id: inFlightAgentId, model: 'gpt-4o', title: 'In-Flight Agent', userId });
   });
 
-  afterAll(cleanup);
+  afterAll(cleanupWithVisitor);
 
   it('clears the in-flight operation marker via onShareReset when the config write revokes the share', async () => {
-    await agentShareModel.create(inFlightAgentId, 'link');
+    const share = await agentShareModel.create(inFlightAgentId, 'link');
 
+    // The visitor's own topic, linked back to the share only by `shareId` —
+    // the reset sweep has to reach it across ownership, keying on `agentId`.
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId: inFlightAgentId, senderId: visitorId, userId })
+      .values({ agentId: inFlightAgentId, shareId: share.id, userId: visitorId })
       .returning();
 
     // Simulate a visitor run already in flight, mirroring what

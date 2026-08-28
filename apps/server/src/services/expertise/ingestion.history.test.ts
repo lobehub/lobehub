@@ -11,6 +11,7 @@ import { ExpertiseIngestionService } from './ingestion';
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'expertise-history-user';
 const otherUserId = 'expertise-history-other-user';
+const visitorId = 'expertise-history-visitor';
 
 const seed = async () => {
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -126,16 +127,18 @@ describe('ExpertiseIngestionService historical topic resolution', () => {
   });
 
   it('excludes share-visitor topics from the historical backfill', async () => {
-    // Share-visitor topics carry the creator's `userId` (billing) plus a
-    // non-null `senderId` (the visitor). The historical backfill must never
-    // ingest a visitor's conversation into the creator's durable expertise
-    // lessons.
+    // A share conversation on THIS agent, owned by the visitor who had it.
+    // The backfill is scoped to the creator, so it must not reach the
+    // visitor's words even though they were spoken to the creator's agent —
+    // otherwise a stranger's conversation ends up in the creator's durable
+    // expertise lessons.
+    await serverDB.insert(users).values({ id: visitorId });
     await serverDB.insert(topics).values({
       agentId: 'hist-agent',
       id: 'topic-visitor',
-      senderId: 'expertise-history-visitor',
+      shareId: '00000000-0000-4000-8000-000000000001',
       title: 'visitor',
-      userId,
+      userId: visitorId,
     });
     await serverDB.insert(messages).values({
       agentId: 'hist-agent',
@@ -144,7 +147,7 @@ describe('ExpertiseIngestionService historical topic resolution', () => {
       id: 'msg-visitor-1',
       role: 'user',
       topicId: 'topic-visitor',
-      userId,
+      userId: visitorId,
     });
 
     const service = new ExpertiseIngestionService(serverDB, userId);

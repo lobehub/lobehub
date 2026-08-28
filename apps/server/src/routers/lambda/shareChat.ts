@@ -25,8 +25,9 @@ import { FileService } from '@/server/services/file';
 const log = debug('lobe-server:router:shareChat');
 
 /**
- * The identity a shared-agent run executes under: the visitor drives it, but
- * every row, credential and balance it touches belongs to the creator.
+ * The identity a shared-agent run executes under: the visitor drives it and
+ * owns the conversation it produces, while everything it consumes — agent
+ * config, credentials, balance — belongs to the creator.
  *
  * Note this is deliberately NOT a replacement for `AgentShareGate` — the gate
  * is the authorization SNAPSHOT (`generation` plus the full `shareConfig`) that
@@ -60,22 +61,26 @@ const toVisitorPrincipal = (
 /**
  * Visitor-facing execution chain for shared agents (Agent Share).
  *
- * All procedures authenticate the VISITOR (ctx.userId) but operate on
- * CREATOR-owned rows: topics/messages of a share conversation carry the
- * creator's userId (so runtime, billing, and tool paths behave exactly as a
- * creator-owned chat) plus `topics.senderId = visitor` AND `topics.shareId =`
- * the live `agentShares.id` for scoping. Every read/write here is therefore
- * manually authorized: resolve the share via `findByShareIdWithAccessCheck`,
- * then require `topic.senderId === visitor && topic.shareId === share.shareId`
- * (`findVisitorTopicOrThrow`). The `shareId` half matters because
- * `AgentShareModel.create()` mints a brand-new share UUID every disable →
- * re-enable cycle — without it, a returning visitor's `senderId` match alone
- * would resurface (and cap-count) conversations from a share instance the
- * owner already took down. See `topics.shareId`'s JSDoc
- * (`packages/database/src/schemas/topic.ts`).
+ * The conversation belongs to the VISITOR: `topics` / `messages` carry
+ * `ctx.userId`, so the ordinary ownership predicate every model already
+ * applies is what keeps a visitor inside their own rows and a creator out of
+ * them — no exclusion filter, no second identity column. What the run
+ * CONSUMES (agent config, credentials, connectors, budget) still belongs to
+ * the creator; that split is carried by the execution principal
+ * (`toVisitorPrincipal` above), not by the row ownership.
+ *
+ * On top of ownership, every topic-scoped procedure additionally requires
+ * `topic.shareId === share.shareId` (`findVisitorTopicOrThrow`): ownership
+ * alone would let a visitor point any of their OWN topics at this endpoint
+ * and run it under the creator's resources. Pinning the share INSTANCE (not
+ * merely "came from some share") also matters because `AgentShareModel
+ * .create()` mints a brand-new share UUID on every disable → re-enable cycle
+ * — without it, a returning visitor would resurface (and cap-count)
+ * conversations from a share instance the owner already took down. See
+ * `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
  *
  * Agent sharing is personal-only (workspace agents cannot be shared), so no
- * workspaceId is ever threaded into the creator-scoped models/services.
+ * workspaceId is ever threaded into these models/services.
  */
 const shareChatProcedure = authedProcedure.use(serverDatabase);
 
@@ -85,30 +90,27 @@ const ShareTopicScopeSchema = z.object({
 });
 
 /**
- * Resolve a visitor-owned share topic or fail closed. The topic row belongs to
- * the creator (creator-scoped TopicModel), so the senderId + agentId + shareId
- * match is the ONLY thing standing between a visitor and the creator's other
- * topics.
+ * Resolve one of this visitor's share topics or fail closed.
+ *
+ * `topicModel` is scoped to the VISITOR, so ownership is already settled by
+ * the time this runs; the `agentId` + `shareId` match is what stops a visitor
+ * from aiming one of their own ordinary topics at this endpoint and having it
+ * executed with the creator's agent, credentials and budget.
  *
  * `shareId` is required, not optional: without it, a returning visitor could
  * reach a topic created under a share instance the owner has since disabled
  * and replaced (`AgentShareModel.create()` mints a new `agentShares.id` every
  * disable → re-enable cycle) simply by remembering/bookmarking its topicId —
- * `senderId`/`agentId` alone still match. See `topics.shareId`'s JSDoc
+ * `agentId` alone still matches. See `topics.shareId`'s JSDoc
  * (`packages/database/src/schemas/topic.ts`).
  */
 const findVisitorTopicOrThrow = async (
   topicModel: TopicModel,
-  params: { agentId: string; shareId: string; topicId: string; visitorUserId: string },
+  params: { agentId: string; shareId: string; topicId: string },
 ) => {
   const topic = await topicModel.findById(params.topicId);
 
-  if (
-    !topic ||
-    topic.senderId !== params.visitorUserId ||
-    topic.agentId !== params.agentId ||
-    topic.shareId !== params.shareId
-  ) {
+  if (!topic || topic.agentId !== params.agentId || topic.shareId !== params.shareId) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
 
@@ -205,8 +207,10 @@ export const shareChatRouter = router({
       }
 
       const { maxTopicsPerVisitor, maxTurnsPerTopic } = share.shareConfig;
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
-      const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
+      // Visitor-scoped: the conversation rows these two read are the
+      // visitor's own (see the module doc above).
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+      const messageModel = new MessageModel(ctx.serverDB, ctx.userId);
 
       // Fast, UX-only pre-check for both caps — mirrors the budget precheck
       // above, and for the same reason: reject an obviously-over-cap request
@@ -224,12 +228,8 @@ export const shareChatRouter = router({
           agentId: share.agentId,
           shareId: share.shareId,
           topicId: input.topicId,
-          visitorUserId: ctx.userId,
         });
 
-        // `messageModel.count()` excludes agent-share visitor messages by
-        // design (personal analytics predicate) — see `countByTopic` JSDoc
-        // for why the turn cap must use the exact per-topic counter instead.
         const turnCount = await messageModel.countByTopic({
           role: 'user',
           topicId: input.topicId,
@@ -241,9 +241,8 @@ export const shareChatRouter = router({
           });
         }
       } else {
-        const topicCount = await topicModel.countBySender({
+        const topicCount = await topicModel.countVisitorShareTopics({
           agentId: share.agentId,
-          senderId: ctx.userId,
           shareId: share.shareId,
         });
         if (topicCount >= maxTopicsPerVisitor) {
@@ -254,10 +253,11 @@ export const shareChatRouter = router({
         }
       }
 
-      // Creator-scoped service: the run executes under the creator's identity
-      // (their agent config, connectors, billing context). The shareGate strips
-      // everything the share config doesn't grant; `agentShare` billing context
-      // routes model spend to the creator's share budget.
+      // The run acts as the visitor but consumes the creator's resources
+      // (agent config, connectors, billing context) — see `toVisitorPrincipal`.
+      // The shareGate strips everything the share config doesn't grant;
+      // `agentShare` billing context routes model spend to the creator's share
+      // budget.
       const shareGate: AgentShareGate = {
         agentId: share.agentId,
         // See `AgentShareGate.generation`'s JSDoc — carried forward from this
@@ -373,21 +373,22 @@ export const shareChatRouter = router({
       ctx.userId,
     );
 
-    const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+    const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
     await findVisitorTopicOrThrow(topicModel, {
       agentId: share.agentId,
       shareId: share.shareId,
       topicId: input.topicId,
-      visitorUserId: ctx.userId,
     });
 
-    const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
+    const messageModel = new MessageModel(ctx.serverDB, ctx.userId);
+    // Files referenced by these messages were resolved under the CREATOR's
+    // account (the run reads the creator's knowledge base), so URL signing
+    // stays creator-scoped even though the message rows are the visitor's.
     const fileService = new FileService(ctx.serverDB, share.ownerId);
 
-    // queryForVisitor strips the creator's `sender`/spend/model-snapshot
-    // fields — share messages persist under the CREATOR's account (see the
-    // module doc above), so the raw `query()` result would otherwise leak
-    // the creator's account identity to the visitor.
+    // queryForVisitor strips the model/provider snapshot and spend the run
+    // recorded — those describe the CREATOR's execution and their costs, and
+    // are none of the visitor's business even on the visitor's own rows.
     return messageModel.queryForVisitor(
       // skipWorks: Work summaries join live task/version state of the
       // CREATOR's account — never serve them to a visitor surface.
@@ -408,29 +409,27 @@ export const shareChatRouter = router({
         ctx.userId,
       );
 
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
-      return topicModel.queryBySender({
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+      return topicModel.queryVisitorShareTopics({
         agentId: share.agentId,
-        senderId: ctx.userId,
         shareId: share.shareId,
       });
     }),
 
   /**
    * Interrupt a running share operation — the visitor counterpart of
-   * `aiAgent.interruptTask`. Visitors have no owner-scoped access to
-   * `aiAgent.interruptTask` (its models are scoped to the caller, and share
-   * runs execute under the CREATOR's identity), so without this endpoint a
-   * visitor's Stop / tab-close cannot reach the server: the run keeps
-   * streaming and consuming the creator's share budget until it finishes on
-   * its own (see gateway.ts `onOperationCancel` for the client-side symptom).
+   * `aiAgent.interruptTask`. That endpoint cannot serve visitors — the run's
+   * operation rows were created under the creator as resource owner, which
+   * its caller-scoped models cannot reach — so without this one a visitor's
+   * Stop / tab-close never reaches the server: the run keeps streaming and
+   * consuming the creator's share budget until it finishes on its own (see
+   * gateway.ts `onOperationCancel` for the client-side symptom).
    *
    * Authorization is intentionally stricter than `execAgent`/`getMessages`:
-   * it is not enough that the topic belongs to this visitor — the
-   * `operationId` must also match the operation CURRENTLY recorded as
-   * running on that topic. Without that check a visitor could pass an
-   * arbitrary operationId (topics/operations are creator-owned rows) and
-   * interrupt an unrelated run on the creator's account.
+   * it is not enough that the topic is this visitor's — the `operationId`
+   * must also match the operation CURRENTLY recorded as running on that
+   * topic. Without that check a visitor could pass an arbitrary operationId
+   * and interrupt an unrelated run executing under the creator's account.
    */
   interruptTask: shareChatProcedure
     .input(ShareTopicScopeSchema.extend({ operationId: z.string() }))
@@ -441,12 +440,11 @@ export const shareChatRouter = router({
         ctx.userId,
       );
 
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
       const topic = await findVisitorTopicOrThrow(topicModel, {
         agentId: share.agentId,
         shareId: share.shareId,
         topicId: input.topicId,
-        visitorUserId: ctx.userId,
       });
 
       const runningOperationId = topic.metadata?.runningOperation?.operationId;
@@ -457,9 +455,8 @@ export const shareChatRouter = router({
         });
       }
 
-      // Creator-scoped service, same as `execAgent` — the run's operation /
-      // thread rows were written under the creator's identity, so the
-      // underlying `interruptTask` implementation must resolve them there.
+      // Same principal as `execAgent` — `interruptTask` must resolve the
+      // run's rows through the exact identity split that created them.
       const aiAgentService = new AiAgentService(
         ctx.serverDB,
         toVisitorPrincipal(share, ctx.userId),
@@ -487,9 +484,10 @@ export const shareChatRouter = router({
 
   /**
    * Refresh the Gateway WS JWT for a running share operation — the visitor
-   * counterpart of `aiAgent.refreshGatewayToken` (which cannot serve visitors:
-   * its TopicModel is scoped to the caller, and share topics belong to the
-   * creator). Signs for the VISITOR — the gateway channel is registered under
+   * counterpart of `aiAgent.refreshGatewayToken` (which cannot serve
+   * visitors: it has no share instance to authorize the topic against, and
+   * would happily run a share topic outside every cap and grant). Signs for
+   * the VISITOR — the gateway channel is registered under
    * their id (`streamOwnerUserId`), and a creator-signed token in the
    * visitor's browser would be creator account access.
    */
@@ -502,12 +500,11 @@ export const shareChatRouter = router({
         ctx.userId,
       );
 
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
       const topic = await findVisitorTopicOrThrow(topicModel, {
         agentId: share.agentId,
         shareId: share.shareId,
         topicId: input.topicId,
-        visitorUserId: ctx.userId,
       });
 
       if (!topic.metadata?.runningOperation) {

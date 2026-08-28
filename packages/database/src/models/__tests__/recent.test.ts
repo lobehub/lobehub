@@ -166,17 +166,19 @@ describe('RecentModel', () => {
       });
 
       it('excludes agent-share visitor topics', async () => {
-        // Agent-share visitor topics keep the creator's userId, but a non-null
-        // senderId marks them as visitor traffic that must not surface in the
-        // creator's own Recent feed.
+        // An agent-share visitor's topic belongs to the VISITOR (`topics.userId`
+        // is the visitor's id, `topics.shareId` records the share it came
+        // through). It is therefore never reachable from the creator's own
+        // user-scoped Recent query — isolation holds structurally, not via a
+        // filter.
         await serverDB.insert(agents).values({ id: 'agent-share-recent', userId, virtual: false });
 
         await serverDB.insert(topics).values([
           {
             id: 'topic-visitor-recent',
-            userId,
+            userId: otherUserId,
             agentId: 'agent-share-recent',
-            senderId: 'visitor-user-x',
+            shareId: '00000000-0000-4000-8000-000000000001',
             title: 'visitor topic',
             updatedAt: minutesAgo(1),
           },

@@ -40,13 +40,11 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * `interruptActiveShareRuns` runs are workspace-independent by design instead:
  * `revokeReservations` matches on `agentShareRunReservations.agentId` (no
  * workspace column exists on that table), and
- * `TopicModel.findActiveVisitorRunTopicsByAgentId` — used here instead of the
- * workspace-scoped `findActiveVisitorRunTopics` — matches on `topics.agentId`
- * alone. `agentId` is the one identity that survives any number of transfers,
- * so a `workspaceId` was never actually load-bearing for this path; passing
- * one in was the accidental coupling that caused this bug class in the first
- * place. See `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc for the
- * double-transfer window this closes.
+ * `TopicModel.findActiveVisitorRunTopics` matches on `topics.agentId` alone.
+ * `agentId` is the one identity that survives any number of transfers, so a
+ * `workspaceId` was never actually load-bearing for this path; passing one in
+ * was the accidental coupling that caused this bug class in the first place.
+ * See that method's JSDoc for the double-transfer window this closes.
  */
 export const scheduleShareRunInterruptOnReset =
   (serverDB: LobeChatDatabase, ownerId: string) =>

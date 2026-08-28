@@ -47,8 +47,8 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
   // `onShareRunsInterrupted` covers every message-level bulk/batch delete
   // below (`removeMessage`, `removeMessages`, `removeMessagesByAssistant`,
-  // `removeMessagesByGroup`) — each snapshots in-flight Agent Share visitor
-  // runs itself, BEFORE its own delete, and hands the snapshot here once its
+  // `removeMessagesByGroup`) — each snapshots in-flight Agent Share runs
+  // itself, BEFORE its own delete, and hands the snapshot here once its
   // transaction has committed. See `MessageModelOptions
   // .onShareRunsInterrupted`'s JSDoc.
   const messageModelOptions = {

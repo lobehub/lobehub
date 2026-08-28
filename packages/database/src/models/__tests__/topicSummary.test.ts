@@ -165,17 +165,25 @@ describe('TopicSummaryModel', () => {
   });
 
   it('excludes share-visitor topics even when auto-summary is enabled for the creator', async () => {
-    // Share-visitor topics carry the creator's `userId` (billing) plus a
-    // non-null `senderId` (the visitor). A plain ownership scan would
-    // generate a creator-billed auto-summary for a conversation the creator
-    // never had.
+    // A share-visitor topic now belongs to the VISITOR (`topics.userId` is the
+    // visitor, `topics.shareId` records the share it came through). Because
+    // `listCandidates` is a SYSTEM-scoped scan across every user's topics, it
+    // would otherwise reach this row under the visitor's own opted-in setting
+    // and auto-summarize — and bill — a conversation the shared agent's
+    // creator is supposed to be funding. `notShareTopic()` (matching on
+    // `shareId`) is what keeps it out; the visitor here is opted in too, to
+    // prove exclusion comes from provenance, not from the opt-in check.
+    await db.insert(userSettings).values({
+      id: otherUserId,
+      systemAgent: { topicAutoSummary: { enabled: true } },
+    });
     await db.insert(topics).values([
       { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'creator-topic', userId },
       {
         createdAt: new Date('2026-07-31T00:00:00Z'),
         id: 'visitor-topic',
-        senderId: 'visitor-user',
-        userId,
+        shareId: '00000000-0000-4000-8000-000000000002',
+        userId: otherUserId,
       },
     ]);
     await db.insert(messages).values([
@@ -193,7 +201,7 @@ describe('TopicSummaryModel', () => {
         role: 'user',
         topicId: 'visitor-topic',
         updatedAt: new Date('2026-07-31T10:00:00Z'),
-        userId,
+        userId: otherUserId,
       },
     ]);
 

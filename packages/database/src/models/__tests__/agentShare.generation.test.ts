@@ -35,12 +35,13 @@ const topicModel = new TopicModel(serverDB, ownerId);
 
 const cleanup = async () => {
   await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(eq(users.id, visitorId));
 };
 
 describe('AgentShareModel restrictive-change generation (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);
@@ -50,11 +51,16 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
     await serverDB
       .insert(agents)
       .values({ id: agentId, model: 'gpt-4o', title: 'Tighten During Run', userId: ownerId });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
     await agentShareModel.updateConfig(agentId, { enabledToolIds: ['web-search'] });
+    // The conversation belongs to the VISITOR — `userId` is the visitor's own
+    // id, and `shareId` (the live `agentShares.id`) is the only provenance
+    // marker back to this share instance. `findActiveVisitorRunTopics` below
+    // must reach across the owner/visitor boundary to find this topic, since
+    // the creator revoking never owns the rows it is trying to stop.
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share!.id, userId: visitorId })
       .returning();
 
     // Visitor's request read the share while `enabledToolIds` still included
@@ -98,7 +104,13 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
     // caught by the topic-metadata sweep, because `confirmReservation`
     // stamped the OLD generation (1) onto `runningOperation.shareGeneration`.
     expect(revokedReservations).toEqual([]);
-    expect(activeRuns).toEqual([{ operationId, topicId: topic.id }]);
+    expect(activeRuns).toEqual([
+      {
+        metadata: expect.objectContaining({ runningOperation: expect.anything() }),
+        operationId,
+        topicId: topic.id,
+      },
+    ]);
   });
 
   it('tighten-then-start: a request that snapshotted the config before a tightening fails closed on startup', async () => {
@@ -106,10 +118,12 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
     await serverDB
       .insert(agents)
       .values({ id: agentId, model: 'gpt-4o', title: 'Tighten Then Start', userId: ownerId });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share.id, userId: visitorId })
       .returning();
 
     // Visitor's `findByShareIdWithAccessCheck` read happens BEFORE the
@@ -150,10 +164,12 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
       title: 'Revoke Republish Stale Callback',
       userId: ownerId,
     });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share.id, userId: visitorId })
       .returning();
 
     // 1. Owner flips the share private — bumps the generation and is the
@@ -222,10 +238,12 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
     await serverDB
       .insert(agents)
       .values({ id: agentId, model: 'gpt-4o', title: 'Revoke Mid Startup', userId: ownerId });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share.id, userId: visitorId })
       .returning();
 
     // Visitor's recheck+reserve lands first, while the share is still `link`
@@ -273,7 +291,7 @@ describe('AgentShareModel restrictive-change generation (real Postgres)', () => 
 describe('AgentShareModel.isRunStillAuthorized (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);

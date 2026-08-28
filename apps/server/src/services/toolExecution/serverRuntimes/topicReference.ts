@@ -17,14 +17,13 @@ interface TopicReferenceShareContext {
   agentId: string;
   /**
    * The `agentShares.id` this run was authorized against. Checked alongside
-   * `visitorUserId`/`agentId` in `isTopicVisibleToRun` so a topic from a
-   * share instance the owner has since disabled and replaced
-   * (`AgentShareModel.create()` mints a new UUID every disable → re-enable
-   * cycle) is rejected even though the visitor/agent pairing still matches.
-   * See `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
+   * `agentId` in `isTopicVisibleToRun` so a topic from a share instance the
+   * owner has since disabled and replaced (`AgentShareModel.create()` mints a
+   * new UUID every disable → re-enable cycle) is rejected even though the
+   * agent still matches. See `topics.shareId`'s JSDoc
+   * (`packages/database/src/schemas/topic.ts`).
    */
   shareId: string;
-  visitorUserId: string;
 }
 
 class TopicReferenceExecutionRuntime {
@@ -46,23 +45,21 @@ class TopicReferenceExecutionRuntime {
   }
 
   /**
-   * A shared-agent visitor run reads the database as the creator, so
-   * ownership-only filtering on `TopicModel` is not enough to keep a topic
-   * reference scoped to the visitor: it must also match the topic to this
-   * specific share (visitor + agent), mirroring the same check applied to
-   * automatic topic-reference injection in `buildServerCallLlmContext`.
+   * `TopicModel`'s ownership filter already pins reads to the ACTOR — on a
+   * share run that is the visitor, whose conversations are their own rows.
+   * What ownership cannot say is whether a given topic belongs to THIS share:
+   * without the extra match, a visitor could `<refer_topic>` one of their own
+   * private conversations (or one from a share instance the owner has since
+   * taken down) into a run executing on the creator's resources. Mirrors the
+   * same check applied to automatic topic-reference injection in
+   * `buildServerCallLlmContext`.
    */
   private isTopicVisibleToRun = (
-    topic:
-      | { agentId?: string | null; senderId?: string | null; shareId?: string | null }
-      | null
-      | undefined,
+    topic: { agentId?: string | null; shareId?: string | null } | null | undefined,
   ): boolean => {
     if (!this.shareContext) return true;
     return (
-      topic?.senderId === this.shareContext.visitorUserId &&
-      topic?.agentId === this.shareContext.agentId &&
-      topic?.shareId === this.shareContext.shareId
+      topic?.agentId === this.shareContext.agentId && topic?.shareId === this.shareContext.shareId
     );
   };
 
@@ -131,21 +128,17 @@ export const topicReferenceRuntime: ServerRuntimeRegistration = {
     if (!context.serverDB) {
       throw new Error('serverDB is required for TopicReference execution');
     }
-    const { delegation } = context.principal;
-    if (!context.principal.resourceOwnerUserId) {
+    const { actorUserId, delegation } = context.principal;
+    if (!actorUserId) {
       throw new Error('userId is required for TopicReference execution');
     }
+    // Actor-scoped, not resource-owner-scoped: topics and messages are
+    // conversation rows, and on a share run those belong to the visitor.
     return new TopicReferenceExecutionRuntime(
       context.serverDB,
-      context.principal.resourceOwnerUserId,
+      actorUserId,
       context.workspaceId,
-      delegation && context.principal.actorUserId
-        ? {
-            agentId: delegation.agentId,
-            shareId: delegation.shareId,
-            visitorUserId: context.principal.actorUserId,
-          }
-        : undefined,
+      delegation ? { agentId: delegation.agentId, shareId: delegation.shareId } : undefined,
     );
   },
   identifier: TopicReferenceIdentifier,

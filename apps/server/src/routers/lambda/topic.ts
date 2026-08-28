@@ -76,13 +76,14 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
-      // `onShareRunsInterrupted` covers every bulk/batch topic sweep below
-      // (`removeAllTopics`, `batchDelete`, `batchDeleteByAgentId`,
-      // `batchDeleteByGroupId`, `batchDeleteBySessionId`) and `removeTopic`'s
-      // single delete — each snapshots in-flight Agent Share visitor runs
+      // `onShareRunsInterrupted` covers `removeTopic`'s single delete and
+      // every bulk/batch sweep below (`removeAllTopics`, `batchDelete`,
+      // `batchDeleteByAgentId`, `batchDeleteByGroupId`,
+      // `batchDeleteBySessionId`). Each snapshots in-flight Agent Share runs
       // itself, BEFORE its own delete, and hands the snapshot here once its
-      // transaction has committed. See `TopicModelOptions
-      // .onShareRunsInterrupted`'s JSDoc.
+      // transaction has committed. The caller reaching these paths with a
+      // share conversation is the VISITOR deleting their own — see
+      // `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, {
         onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
       }),

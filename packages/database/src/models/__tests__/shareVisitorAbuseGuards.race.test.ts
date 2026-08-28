@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { and, count, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -40,15 +41,18 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const cleanup = async () => {
   await serverDB.delete(messages).where(eq(messages.userId, ownerId));
+  await serverDB.delete(messages).where(eq(messages.userId, visitorUserId));
   await serverDB.delete(topics).where(eq(topics.userId, ownerId));
+  await serverDB.delete(topics).where(eq(topics.userId, visitorUserId));
   await serverDB.delete(agents).where(eq(agents.userId, ownerId));
   await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(eq(users.id, visitorUserId));
 };
 
 describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorUserId }]);
   });
 
   afterAll(cleanup);
@@ -82,7 +86,7 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
               ownerId,
               visitorUserId,
             },
-            { agentId, senderId: visitorUserId, title: `visitor topic ${n}`, trigger: 'chat' },
+            { agentId, title: `visitor topic ${n}`, trigger: 'chat' },
           ),
         ),
       );
@@ -91,10 +95,12 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
       const rejected = results.filter((r) => r.status === 'rejected').length;
       expect(fulfilled + rejected).toBe(CONCURRENCY);
 
+      // The visitor topic now belongs to the visitor's own `userId` — see
+      // `reserveShareVisitorTopicOrThrow`'s JSDoc.
       const [{ value: actualTopicCount }] = await serverDB
         .select({ value: count(topics.id) })
         .from(topics)
-        .where(and(eq(topics.agentId, agentId), eq(topics.senderId, visitorUserId)));
+        .where(and(eq(topics.agentId, agentId), eq(topics.userId, visitorUserId)));
 
       // The reservation's own return value and the real row count must agree
       // — a lost race would show up as more rows than reservations reported,
@@ -111,7 +117,7 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
 describe('reserveShareVisitorTurnOrThrow — visitor turn cap race (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorUserId }]);
   });
 
   afterAll(cleanup);
@@ -130,19 +136,20 @@ describe('reserveShareVisitorTurnOrThrow — visitor turn cap race (real Postgre
       await new AgentShareModel(serverDB, ownerId).updateConfig(agentId, {
         maxTurnsPerTopic: CAP,
       });
+      // The topic belongs to the visitor — `userId` IS the visitor, `shareId`
+      // is the sole provenance marker back to this share instance.
       await serverDB.insert(topics).values({
         agentId,
         id: topicId,
-        senderId: visitorUserId,
         shareId: share.id,
-        userId: ownerId,
+        userId: visitorUserId,
       });
 
       // Simulate CONCURRENCY sends to the SAME existing topic at the same time.
       const results = await Promise.allSettled(
         Array.from({ length: CONCURRENCY }, (_, n) =>
           reserveShareVisitorTurn(
-            { agentId, db: serverDB, expectedGeneration: 1, ownerId, topicId },
+            { agentId, db: serverDB, expectedGeneration: 1, ownerId, topicId, visitorUserId },
             { content: `turn ${n}`, role: 'user', topicId },
           ),
         ),

@@ -62,7 +62,7 @@ export interface AgentShareGate {
    * DIFFERENT share id belongs to a share instance the owner has since
    * disabled and replaced (`AgentShareModel.create()` mints a new UUID every
    * disable → re-enable cycle), so it must be treated as out of scope for
-   * this run even though `senderId`/`agentId` still match. See
+   * this run even though `agentId` still matches. See
    * `topics.shareId`'s JSDoc (`packages/database/src/schemas/topic.ts`).
    *
    * NOT used to stamp a newly-created topic's `shareId` column —
@@ -74,8 +74,9 @@ export interface AgentShareGate {
    */
   shareId: string;
   /**
-   * The signed-in visitor driving this run. Recorded on `topics.senderId` and
-   * spend-log metadata; the run itself executes as the creator.
+   * The signed-in visitor driving this run — the owner of every conversation
+   * row it writes, and the actor recorded in spend-log metadata. The
+   * resources the run consumes still belong to the creator.
    */
   visitorUserId: string;
 }
@@ -138,7 +139,7 @@ interface ShareDataToolPermissions {
  * and nothing about a builtin tool's manifest or registration signals whether
  * its runtime happens to re-derive its scope from a model-suppliable
  * argument (unsafe for a visitor) or purely from server-side context like
- * `context.agentId` / `context.operationId` (safe). Five review rounds each
+ * `context.agentId` / `context.operationId` (safe). Repeated audits each
  * surfaced one more tool that leaked the creator's whole account under the
  * previous denylist (`SHARE_VISITOR_BLOCKED_IDENTIFIERS` — removed, see the
  * bottom of this file for what replaced it) precisely because "not yet

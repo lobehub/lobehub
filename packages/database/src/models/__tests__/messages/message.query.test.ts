@@ -33,6 +33,9 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'message-query-test';
 const otherUserId = 'message-query-test-other';
+// Owns rows created by an agent-share visitor: a visitor conversation now
+// belongs to the visitor's own userId, not the creator's — see topics.shareId.
+const visitorUserId = 'message-query-test-visitor';
 const messageModel = new MessageModel(serverDB, userId);
 const embeddingsId = uuid();
 
@@ -41,7 +44,8 @@ beforeEach(async () => {
   await serverDB.transaction(async (trx) => {
     await trx.delete(users).where(eq(users.id, userId));
     await trx.delete(users).where(eq(users.id, otherUserId));
-    await trx.insert(users).values([{ id: userId }, { id: otherUserId }]);
+    await trx.delete(users).where(eq(users.id, visitorUserId));
+    await trx.insert(users).values([{ id: userId }, { id: otherUserId }, { id: visitorUserId }]);
 
     await trx.insert(sessions).values([
       // { id: 'session1', userId },
@@ -69,6 +73,7 @@ afterEach(async () => {
   // Clear tables after each test case
   await serverDB.delete(users).where(eq(users.id, userId));
   await serverDB.delete(users).where(eq(users.id, otherUserId));
+  await serverDB.delete(users).where(eq(users.id, visitorUserId));
 });
 
 describe('MessageModel Query Tests', () => {
@@ -1545,20 +1550,23 @@ describe('MessageModel Query Tests', () => {
     });
 
     it('excludes messages inside an agent-share visitor topic', async () => {
-      // Agent-share visitor topics keep the creator's userId, but a non-null
-      // topics.senderId marks the topic (and its messages) as visitor traffic.
+      // An agent-share visitor topic now belongs to the VISITOR's own userId
+      // (topics.shareId is the provenance marker), so it is naturally outside
+      // the creator's own user-scoped `queryAll` without any explicit filter.
       // `queryAll` backs the creator-facing `message.listAll` lambda route and
       // the CLI `message list` command, so visitor messages must not leak in.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-query-all', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-query-all',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-query-all',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-msg-query-all',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor message',
           topicId: 'topic-visitor-query-all',

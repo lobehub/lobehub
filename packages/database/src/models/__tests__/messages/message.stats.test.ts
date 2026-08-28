@@ -14,6 +14,9 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'message-stats-test';
 const otherUserId = 'message-stats-test-other';
+// Owns rows created by an agent-share visitor: a visitor conversation now
+// belongs to the visitor's own userId, not the creator's — see topics.shareId.
+const visitorUserId = 'message-stats-test-visitor';
 const messageModel = new MessageModel(serverDB, userId);
 const embeddingsId = uuid();
 
@@ -22,7 +25,8 @@ beforeEach(async () => {
   await serverDB.transaction(async (trx) => {
     await trx.delete(users).where(eq(users.id, userId));
     await trx.delete(users).where(eq(users.id, otherUserId));
-    await trx.insert(users).values([{ id: userId }, { id: otherUserId }]);
+    await trx.delete(users).where(eq(users.id, visitorUserId));
+    await trx.insert(users).values([{ id: userId }, { id: otherUserId }, { id: visitorUserId }]);
 
     await trx.insert(sessions).values([{ id: '1', userId }]);
     await trx.insert(files).values({
@@ -46,6 +50,7 @@ afterEach(async () => {
   // Clear tables after each test case
   await serverDB.delete(users).where(eq(users.id, userId));
   await serverDB.delete(users).where(eq(users.id, otherUserId));
+  await serverDB.delete(users).where(eq(users.id, visitorUserId));
 });
 
 describe('MessageModel Statistics Tests', () => {
@@ -66,19 +71,21 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('excludes messages inside an agent-share visitor topic', async () => {
-      // Agent-share visitor topics keep the creator's userId, but a non-null
-      // topics.senderId marks the topic (and its messages) as visitor traffic
-      // that must not count toward the creator's own analytics.
+      // An agent-share visitor topic now belongs to the VISITOR's own userId
+      // (topics.shareId is the provenance marker), so it is naturally outside
+      // the creator's own user-scoped `count()` — no filter needed.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-count', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-count',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-count',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-msg-1',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor message',
           topicId: 'topic-visitor-count',
@@ -299,16 +306,20 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('excludes messages inside an agent-share visitor topic', async () => {
+      // The visitor topic belongs to visitorUserId, so it falls outside the
+      // creator's own user-scoped `countWords()` without any explicit filter.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-words', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-words',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-words',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-words-1',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor words here',
           topicId: 'topic-visitor-words',
@@ -564,16 +575,20 @@ describe('MessageModel Statistics Tests', () => {
       const today = dayjs(fixedDate);
       const oneDayAgoDate = today.subtract(1, 'day').format('YYYY-MM-DD');
 
+      // The visitor topic belongs to visitorUserId, so it falls outside the
+      // creator's own user-scoped `getHeatmaps()` without any explicit filter.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-heatmap', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-heatmap',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-heatmap',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-heatmap-1',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor message',
           topicId: 'topic-visitor-heatmap',
@@ -776,16 +791,20 @@ describe('MessageModel Statistics Tests', () => {
       const dayKey = today.subtract(2, 'day').format('YYYY-MM-DD');
       const createdAt = today.subtract(2, 'day').toDate();
 
+      // The visitor topic belongs to visitorUserId, so it falls outside the
+      // creator's own user-scoped `getTokenHeatmaps()` without any explicit filter.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-token-heatmap', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-token-heatmap',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-token-heatmap',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-token-1',
-          userId,
+          userId: visitorUserId,
           role: 'assistant',
           metadata: { usage: { totalTokens: 500 } },
           topicId: 'topic-visitor-token-heatmap',
@@ -880,16 +899,20 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('excludes messages inside an agent-share visitor topic', async () => {
+      // The visitor topic belongs to visitorUserId, so it falls outside the
+      // creator's own user-scoped `rankModels()` without any explicit filter.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-rank', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-rank',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-rank',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-rank-1',
-          userId,
+          userId: visitorUserId,
           role: 'assistant',
           content: 'visitor message',
           model: 'gpt-4',
@@ -1098,14 +1121,14 @@ describe('MessageModel Statistics Tests', () => {
     it('excludes messages inside an agent-share visitor topic', async () => {
       await serverDB.insert(topics).values({
         id: 'topic-visitor-keyword',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        shareId: '00000000-0000-4000-8000-000000000001',
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-keyword-1',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'searchterm from visitor',
           topicId: 'topic-visitor-keyword',
@@ -1121,55 +1144,51 @@ describe('MessageModel Statistics Tests', () => {
   });
 
   describe('countByTopic', () => {
-    it('counts an agent-share visitor topic that count() would report as 0', async () => {
-      // Regression test for the shareChat `maxTurnsPerTopic` bypass: a share
-      // topic carries the creator's userId (so `ownership()` matches) plus a
-      // non-null senderId (the visitor). `count()` ANDs in
-      // `notShareVisitorMessage()` for personal analytics, so it always
-      // returns 0 for this topic — silently disabling the turn cap.
-      // `countByTopic()` is the exact counter the share router must use
-      // instead.
+    it('returns the real turn count for an agent-share visitor topic', async () => {
+      // Regression test for the shareChat `maxTurnsPerTopic` cap: a share
+      // visitor's topic and messages live under the VISITOR's own userId
+      // (topics.shareId is the provenance marker), so the share router must
+      // construct `MessageModel` with the visitor's id to reach them.
+      // `countByTopic()` is the exact per-topic turn counter it relies on.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-turns', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-turns',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-turns',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-turn-1',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor message 1',
           topicId: 'topic-visitor-turns',
         },
         {
           id: 'visitor-turn-2',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor message 2',
           topicId: 'topic-visitor-turns',
         },
         {
           id: 'visitor-turn-assistant',
-          userId,
+          userId: visitorUserId,
           role: 'assistant',
           content: 'assistant reply',
           topicId: 'topic-visitor-turns',
         },
       ]);
 
-      const byTopic = await messageModel.countByTopic({
-        role: 'user',
-        topicId: 'topic-visitor-turns',
-      });
-      const viaAnalyticsCount = await messageModel.count({
+      const visitorMessageModel = new MessageModel(serverDB, visitorUserId);
+      const byTopic = await visitorMessageModel.countByTopic({
         role: 'user',
         topicId: 'topic-visitor-turns',
       });
 
       expect(byTopic).toBe(2);
-      expect(viaAnalyticsCount).toBe(0);
     });
 
     it('scopes by role and topicId', async () => {
@@ -1289,17 +1308,20 @@ describe('MessageModel Statistics Tests', () => {
       // `countUpTo` backs `user.getUserState`'s `hasMoreThan4Messages` /
       // `hasAnyMessages` onboarding gates. A popular shared agent's visitor
       // traffic must not unlock those gates for a creator who never
-      // personally sent a message.
+      // personally sent a message — it can't, since the visitor's topic and
+      // messages now live under the visitor's own userId.
+      await serverDB.insert(agents).values({ id: 'agent-visitor-count-up-to', userId });
       await serverDB.insert(topics).values({
         id: 'topic-visitor-count-up-to',
-        userId,
-        senderId: 'visitor-user-x',
+        userId: visitorUserId,
+        agentId: 'agent-visitor-count-up-to',
+        shareId: uuid(),
         title: 'visitor topic',
       });
       await serverDB.insert(messages).values([
         {
           id: 'visitor-msg-count-up-to',
-          userId,
+          userId: visitorUserId,
           role: 'user',
           content: 'visitor message',
           topicId: 'topic-visitor-count-up-to',

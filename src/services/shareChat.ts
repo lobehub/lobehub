@@ -15,7 +15,7 @@ export interface ShareChatExecParams {
  * Visitor-facing chat APIs for shared agents. Mirrors the slice of
  * `aiAgentService` the gateway transport needs (exec + token refresh) plus the
  * visitor-scoped topic/message reads — all keyed by shareId, authorized
- * server-side against `topics.senderId`.
+ * server-side against the caller's own row ownership plus `topics.shareId`.
  */
 class ShareChatService {
   async execAgentTask(

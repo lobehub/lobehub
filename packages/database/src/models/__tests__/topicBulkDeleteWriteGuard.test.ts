@@ -6,24 +6,26 @@ import { describe, expect, it } from 'vitest';
 /**
  * Structural guard against bulk deletes bypassing visitor-run interruption.
  *
- * A share-visitor topic is owned by the creator (`topics.userId` = creator,
- * `topics.senderId` = visitor — see `utils/shareVisitor.ts`), so ANY raw bulk
- * delete against the `topics` (or `messages`) table that matches on the
- * creator's own scope (`userId` / `workspaceId`) — as opposed to a single
- * already-authorized row — matches a visitor's row too, unless it first
- * snapshots the visitor's in-flight `runningOperation` and hands it to
- * `AiAgentService.interruptTask`. `TopicModel.deleteAll()` (the checked
- * `topic.removeAllTopics` router path) shipped exactly that bug: a visitor's
- * running topic was deleted with no interrupt, the operation row survived
- * with `topicId` set to null, and the visitor's `shareChat.interruptTask`
- * could no longer find the topic to authorize the stop — see
- * `TopicModelOptions.onShareRunsInterrupted`'s JSDoc for the fix.
+ * A share conversation belongs to the VISITOR (`topics.userId` = visitor,
+ * `topics.shareId` marking where it came from — see `schemas/topic.ts`), which
+ * means it sits in the visitor's OWN topic and message lists. Two different
+ * deletes can therefore remove it out from under a live run:
  *
- * `agents`, `chatGroups` and `sessions` are covered by the SAME pattern for
- * the SAME reason: `topics.agentId` / `topics.groupId` / `topics.sessionId`
- * all cascade off those tables (see `schemas/topic.ts`), so a raw bulk delete
- * against any of them removes a visitor's topic just as directly as deleting
- * `topics` itself. `AgentGroupRepository.removeAgentsFromGroup`'s raw
+ * 1. The visitor's own user-scoped delete (`topic.removeTopic` /
+ *    `removeAllTopics`, `message.removeMessage(s)`) — the row is theirs, so
+ *    every ownership predicate matches it.
+ * 2. A delete against a table the topic cascades off: `topics.agentId` /
+ *    `topics.groupId` / `topics.sessionId` all reference CREATOR-owned rows
+ *    (see `schemas/topic.ts`), so the creator can destroy the visitor's topic
+ *    without ever naming it.
+ *
+ * Either way the delete must first snapshot the in-flight `runningOperation`
+ * and hand it to `AiAgentService.interruptTask`; otherwise the operation
+ * survives with a dangling topic, `shareChat.interruptTask` can no longer
+ * authorize a stop, and the run keeps spending the creator's budget.
+ *
+ * That is why `agents`, `chatGroups` and `sessions` are scanned alongside
+ * `topics` and `messages`. `AgentGroupRepository.removeAgentsFromGroup`'s raw
  * `trx.delete(agents)` on a group's owned virtual members shipped exactly
  * that bug — a published agent's topic (and its `agentShares` row) was
  * cascaded away mid-run with no snapshot or interrupt, so the run kept
@@ -43,11 +45,10 @@ import { describe, expect, it } from 'vitest';
  * below why this particular delete cannot reach a share-visitor row.
  */
 const ALLOWED_FILES = new Set([
-  // TopicModel: the contract's own home for `topics`
-  // (`delete`/`batchDelete`/`batchDeleteByAgentId`/`batchDeleteByGroupId`/
-  // `batchDeleteBySessionId`/`deleteAll` all snapshot via
-  // `findActiveVisitorRunTopics(Matching)` and call `onShareRunsInterrupted`
-  // after commit).
+  // TopicModel: every raw `topics` delete goes through
+  // `deleteWithShareRunSnapshot`, which snapshots the in-flight share runs
+  // matching that delete's own predicate before it runs. See
+  // `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
   'models/topic.ts',
   // AgentCopyJobModel.deleteEmptyTargetTopic: deletes only a copy-TARGET
   // shell that the drain has not written to yet (`hasNo(messages)` guards
@@ -57,16 +58,11 @@ const ALLOWED_FILES = new Set([
   // from, which this delete never touches — so there is no in-flight run this
   // delete could silently orphan.
   'models/agentCopyJob.ts',
-  // MessageModel: the contract's own home for `messages`
-  // (`deleteMessage`/`deleteMessages`/`deleteMessagesBySession`/
-  // `deleteAllMessages`/`batchDeleteByAgentId` all snapshot in-flight
-  // visitor runs via `TopicModel.findActiveVisitorRunTopicsByIds` and call
-  // `onShareRunsInterrupted` after commit — see `MessageModelOptions
-  // .onShareRunsInterrupted`'s JSDoc). File-level allowlisting (rather than a
-  // per-method check) mirrors `models/topic.ts` above: this guard's scope is
-  // "did a NEW raw delete bypass the contract", not "is every raw delete in
-  // an audited file individually re-verified here" — the model-level tests
-  // (`messages/message.delete.test.ts`) cover per-method correctness.
+  // MessageModel: message-level deletes never touch the `topics` row, so
+  // `TopicModel`'s snapshot never fires for them — each carries its own via
+  // `snapshotActiveShareRunsForTopics` /
+  // `deleteMessagesWithShareRunSnapshot`. See
+  // `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
   'models/message.ts',
   // AgentModel: `delete()` and `batchDelete()` both raw-delete `agents`
   // (`batchDelete()` snapshots per agent id, matching `delete()`'s single-id

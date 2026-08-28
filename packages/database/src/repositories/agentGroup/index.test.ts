@@ -1006,12 +1006,16 @@ describe('AgentGroupRepository', () => {
       await serverDB.insert(users).values([{ id: visitorId }]);
 
       const agentShareModel = new AgentShareModel(serverDB, userId);
-      await agentShareModel.create('remove-virtual', 'link');
+      const share = await agentShareModel.create('remove-virtual', 'link');
 
       const operationId = 'op-remove-agents-from-group';
+      // The topic belongs to the VISITOR (`userId: visitorId`); `shareId` is
+      // its only provenance marker back to the owner's agent — proving the
+      // group removal reaches a run owned by someone else, not the owner's
+      // own row.
       const [topic] = await serverDB
         .insert(topics)
-        .values({ agentId: 'remove-virtual', senderId: visitorId, userId })
+        .values({ agentId: 'remove-virtual', shareId: share.id, userId: visitorId })
         .returning();
       await agentShareModel.assertRunnableForVisitor({
         agentId: 'remove-virtual',
@@ -1020,12 +1024,13 @@ describe('AgentGroupRepository', () => {
         topicId: topic.id,
         visitorUserId: visitorId,
       });
+      const startedAt = new Date().toISOString();
       const confirmed = await agentShareModel.confirmReservation({
         operationId,
         runningOperation: {
           assistantMessageId: 'msg',
           operationId,
-          startedAt: new Date().toISOString(),
+          startedAt,
         },
         topicId: topic.id,
       });
@@ -1042,7 +1047,20 @@ describe('AgentGroupRepository', () => {
 
       expect(result.deletedVirtualAgentIds).toEqual(['remove-virtual']);
       expect(onShareRunsInterrupted).toHaveBeenCalledTimes(1);
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([{ operationId, topicId: topic.id }]);
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        {
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'msg',
+              operationId,
+              shareGeneration: 1,
+              startedAt,
+            },
+          },
+          operationId,
+          topicId: topic.id,
+        },
+      ]);
 
       await serverDB.delete(users).where(eq(users.id, visitorId));
     });

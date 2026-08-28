@@ -478,6 +478,19 @@ export interface AgentRuntimeServiceOptions {
    */
   agentFactory?: (config: GeneralAgentConfig) => Agent;
   /**
+   * Who owns the conversation rows (topic / messages) this run produces.
+   * Defaults to the `userId` constructor argument.
+   *
+   * The two differ only on a shared-agent visitor run: `userId` is the
+   * creator, whose agent config, credentials and balance the run CONSUMES,
+   * while the conversation it PRODUCES belongs to the visitor
+   * (`topics.userId` — see `packages/database/src/schemas/topic.ts`). Passing
+   * the creator here would write the visitor's words into the creator's
+   * account, and — because the runtime re-reads its own rows through the same
+   * scope — would make the very next parent-message lookup miss.
+   */
+  conversationUserId?: string;
+  /**
    * Coordinator configuration options
    * Allows injection of custom stateManager and streamEventManager
    */
@@ -547,6 +560,8 @@ export class AgentRuntimeService {
   }
   private serverDB: LobeChatDatabase;
   private userId: string;
+  /** See {@link AgentRuntimeServiceOptions.conversationUserId}. */
+  private conversationUserId: string;
   private workspaceId?: string;
   private messageModel: MessageModel;
   // Lazily constructed because MessageService instantiates a FileService
@@ -558,7 +573,7 @@ export class AgentRuntimeService {
     if (!this.messageServiceInstance) {
       this.messageServiceInstance = new MessageService(
         this.serverDB,
-        this.userId,
+        this.conversationUserId,
         this.workspaceId,
       );
     }
@@ -588,11 +603,17 @@ export class AgentRuntimeService {
     this.delegate = options?.delegate ?? {};
     this.serverDB = db;
     this.userId = userId;
+    this.conversationUserId = options?.conversationUserId ?? userId;
     this.workspaceId = options?.workspaceId;
     const workspaceId = this.workspaceId;
     this.agentOperationModel = new AgentOperationModel(db, this.userId, workspaceId);
-    this.messageModel = new MessageModel(db, this.userId, workspaceId);
-    this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId);
+    this.messageModel = new MessageModel(db, this.conversationUserId, workspaceId);
+    this.completionLifecycle = new CompletionLifecycle(
+      db,
+      userId,
+      workspaceId,
+      this.conversationUserId,
+    );
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
     // Initialize ToolExecutionService with dependencies

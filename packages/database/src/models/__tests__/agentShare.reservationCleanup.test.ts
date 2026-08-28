@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -33,13 +33,13 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const agentShareModel = new AgentShareModel(serverDB, ownerId);
 
 const cleanup = async () => {
-  await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(inArray(users.id, [ownerId, visitorId]));
 };
 
 describe('AgentShareModel abandoned reservation cleanup (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);
@@ -49,10 +49,12 @@ describe('AgentShareModel abandoned reservation cleanup (real Postgres)', () => 
     await serverDB
       .insert(agents)
       .values({ id: agentId, model: 'gpt-4o', title: 'Revoke Deletes', userId: ownerId });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share.id, userId: visitorId })
       .returning();
 
     const operationId = 'op-revoke-deletes';
@@ -104,10 +106,12 @@ describe('AgentShareModel abandoned reservation cleanup (real Postgres)', () => 
     await serverDB
       .insert(agents)
       .values({ id: agentId, model: 'gpt-4o', title: 'Abandoned Pending', userId: ownerId });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share.id, userId: visitorId })
       .returning();
 
     const operationId = 'op-abandoned-pending';
@@ -137,10 +141,10 @@ describe('AgentShareModel abandoned reservation cleanup (real Postgres)', () => 
       title: 'Not Abandoned Yet',
       userId: ownerId,
     });
-    await agentShareModel.create(tooRecentAgentId, 'link');
+    const recentShare = await agentShareModel.create(tooRecentAgentId, 'link');
     const [recentTopic] = await serverDB
       .insert(topics)
-      .values({ agentId: tooRecentAgentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId: tooRecentAgentId, shareId: recentShare.id, userId: visitorId })
       .returning();
     const recentOperationId = 'op-not-abandoned-yet';
     await agentShareModel.assertRunnableForVisitor({

@@ -1077,16 +1077,19 @@ describe('TopicModel', () => {
       expect(result).toEqual(['filter-mine']);
     });
 
-    it('excludes agent-share visitor topics even though they carry the caller userId', async () => {
+    it('excludes agent-share visitor topics, which belong to a different user entirely', async () => {
       // Explicit-topicIds requests must never let a visitor topic id feed the
       // creator's memory extraction — see `MemoryExtractionExecutor.filterTopicIdsForUser`.
+      // A share-visitor topic's `userId` is the VISITOR's id (not the
+      // creator's), with `shareId` as the only provenance marker, so the
+      // creator's own user-scoped filter can no longer reach it at all.
       await serverDB.insert(topics).values([
         { id: 'filter-creator-topic', title: 'creator', userId },
         {
           id: 'filter-visitor-topic',
           title: 'visitor',
-          userId,
-          senderId: 'visitor-user-x',
+          userId: otherUserId,
+          shareId: '11111111-1111-1111-1111-111111111111',
         },
       ]);
 

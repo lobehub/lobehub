@@ -88,7 +88,6 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
-import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -234,7 +233,7 @@ export interface AgentModelOptions {
    * NO `targetWorkspaceId` parameter, even though `transferAgents` fires this
    * from inside a scope change: the post-commit `interruptActiveShareRuns`
    * re-query this callback schedules matches purely on `agentId`
-   * (`TopicModel.findActiveVisitorRunTopicsByAgentId`) rather than on the
+   * (`TopicModel.findActiveVisitorRunTopics`) rather than on the
    * caller's current workspace. An earlier version threaded the transfer's
    * `targetWorkspaceId` through so the re-query could scope `TopicModel` to
    * it — but a SECOND transfer landing before the deferred callback fires
@@ -243,7 +242,7 @@ export interface AgentModelOptions {
    * 'private')` guard below finds nothing to reset), leaving the one
    * scheduled callback scoped to a now-stale workspace. `agentId` is the
    * only identity that survives any number of transfers, so the re-query
-   * must key on it instead. See `TopicModel.findActiveVisitorRunTopicsByAgentId`'s
+   * must key on it instead. See `TopicModel.findActiveVisitorRunTopics`'s
    * JSDoc for the double-transfer window this avoids.
    */
   onShareReset?: (agentId: string, revocationGeneration: number) => void;
@@ -304,9 +303,11 @@ export class AgentModel {
    * directly via `topics.agentId`, so it is agent-native — no sessionId. Mirrors
    * the recents filter: real agents plus the inbox, excluding other virtual agents.
    *
-   * Excludes share-visitor topics via `notShareVisitorTopic()` — otherwise a
-   * heavily-visited shared agent would inflate the creator's own usage ranking
-   * with traffic that isn't theirs (see `../utils/shareVisitor`).
+   * The join pins `topics.userId` to the caller. Without it a heavily-visited
+   * SHARED agent would inflate the creator's own usage ranking with traffic
+   * that isn't theirs: a share visitor's topics point at the creator's
+   * `agents.id` while belonging to the visitor, and this join reaches them
+   * through `agents.id` alone.
    */
   rank = async (limit: number = 10): Promise<AgentRankItem[]> => {
     const rows = await this.db
@@ -320,7 +321,7 @@ export class AgentModel {
         title: agents.title,
       })
       .from(agents)
-      .leftJoin(topics, and(eq(topics.agentId, agents.id), notShareVisitorTopic()))
+      .leftJoin(topics, and(eq(topics.agentId, agents.id), eq(topics.userId, this.userId)))
       .where(and(this.ownership(), or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true))))
       .groupBy(agents.id)
       .having(({ count }) => gt(count, 0))

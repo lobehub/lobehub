@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -48,7 +48,7 @@ const agentShareModel = new AgentShareModel(serverDB, ownerId);
 const topicModel = new TopicModel(serverDB, ownerId);
 
 const cleanup = async () => {
-  await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(inArray(users.id, [ownerId, visitorId]));
 };
 
 /** Mirrors `execAgentWithReservation`'s ordering: recheck+reserve, then (only if that passed) confirm+mark-running. */
@@ -107,7 +107,7 @@ const revokeAndCollectSurvivors = async (
 describe('AgentShareModel visitor run reservation × revocation (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);
@@ -128,10 +128,12 @@ describe('AgentShareModel visitor run reservation × revocation (real Postgres)'
       await serverDB
         .insert(agents)
         .values({ id: agentId, model: 'gpt-4o', title: 'Race Agent', userId: ownerId });
-      await agentShareModel.create(agentId, 'link');
+      const share = await agentShareModel.create(agentId, 'link');
+      // The share conversation belongs to the VISITOR; `shareId` links it
+      // back to the share instance it came from (see `schemas/topic.ts`).
       const [topic] = await serverDB
         .insert(topics)
-        .values({ agentId, senderId: visitorId, userId: ownerId })
+        .values({ agentId, shareId: share.id, userId: visitorId })
         .returning();
 
       const [startResult, survivors] = await Promise.all([
@@ -181,10 +183,10 @@ describe('AgentShareModel visitor run reservation × revocation (real Postgres)'
     await serverDB
       .insert(agents)
       .values({ id: agentId, model: 'gpt-4o', title: 'Delayed Start Agent', userId: ownerId });
-    await agentShareModel.create(agentId, 'link');
+    const share = await agentShareModel.create(agentId, 'link');
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: share.id, userId: visitorId })
       .returning();
 
     // 1. Visitor's recheck passes and stakes the reservation while the share

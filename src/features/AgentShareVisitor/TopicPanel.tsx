@@ -16,8 +16,8 @@ import { useVisitorTopics } from './useVisitorTopics';
 const LOADING_ROW_WIDTHS = ['80%', '55%', '68%'];
 
 /**
- * The visitor's topic list under the current share (server-scoped by
- * senderId). Selecting a topic drives the chat store's activeTopicId — the
+ * The visitor's topic list under the current share (scoped server-side to
+ * this share). Selecting a topic drives the chat store's activeTopicId — the
  * same signal the conversation surface and composer key off.
  */
 const TopicPanel = memo<{ onSelect?: () => void; shareId: string; showTitle?: boolean }>(

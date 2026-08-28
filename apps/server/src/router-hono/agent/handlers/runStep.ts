@@ -6,7 +6,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
-import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+import { resolveRunPrincipal } from '@/server/services/executionPrincipal';
 
 const log = debug('lobe-server:agent:run-step');
 
@@ -123,6 +123,20 @@ export async function runStep(c: Context): Promise<Response> {
       return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
 
+    // A shared-agent run has TWO identities and the operation metadata only
+    // carries one of them (`userId`, the creator who owns the resources). The
+    // visitor driving the run — and owning the conversation rows every step
+    // reads and writes — is named by `state.metadata.agentShare`, the same
+    // source `AgentRuntimeService` resolves its own principal from. Rebuilding
+    // from it here keeps the QStash worker on the identical split; a bare
+    // `createOwnerPrincipal(metadata.userId)` would put step 2 onward under the
+    // creator and lose the visitor's turn → ConversationParentMissing.
+    const agentState = await coordinator.loadAgentState(operationId);
+    const principal = resolveRunPrincipal({
+      agentShare: (agentState?.metadata as any)?.agentShare,
+      userId: metadata.userId,
+    });
+
     const serverDB = await getServerDB();
     // Step through AiAgentService so the runtime keeps its `execSubAgent`
     // fork callback (needed by `lobe-agent.callSubAgent`). In QStash mode every
@@ -132,7 +146,7 @@ export async function runStep(c: Context): Promise<Response> {
     // Thread the operation's workspace through so the runtime's models stay
     // workspace-scoped. Without it the worker is personal-scoped and the
     // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
-    const aiAgentService = new AiAgentService(serverDB, createOwnerPrincipal(metadata.userId), {
+    const aiAgentService = new AiAgentService(serverDB, principal, {
       workspaceId: metadata.workspaceId,
     });
 

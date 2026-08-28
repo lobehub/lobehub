@@ -348,9 +348,11 @@ describe('HomeRepository', () => {
     });
 
     it('should not count agent-share visitor unread topics in agent sidebar badges', async () => {
-      // Agent-share visitor topics keep the creator's userId, but a non-null
-      // senderId marks them as visitor traffic that must not bump the
-      // creator's own unread badge.
+      // An agent-share visitor's topic belongs to the VISITOR (`topics.userId`
+      // is the visitor's id, `topics.shareId` records the share it came
+      // through), so the creator's own user-scoped sidebar query can never
+      // reach it — isolation holds structurally, not via a filter, and the
+      // creator's unread badge must not bump for it.
       const agentId = 'agent-with-visitor-unread';
 
       await clientDB.transaction(async (tx) => {
@@ -366,9 +368,9 @@ describe('HomeRepository', () => {
             agentId,
             id: 'visitor-unread-topic',
             status: 'unread',
-            senderId: 'visitor-user-x',
+            shareId: '00000000-0000-4000-8000-000000000003',
             title: 'Visitor unread topic',
-            userId,
+            userId: otherUserId,
           },
           {
             agentId,
@@ -388,6 +390,9 @@ describe('HomeRepository', () => {
     });
 
     it('should not count agent-share visitor unread topics in chat group unread badges', async () => {
+      // Same isolation invariant as the agent sidebar case above, applied to
+      // a chat group: the visitor's topic (`userId` = visitor, `shareId` set)
+      // is not reachable from the creator's own group unread query.
       const groupId = 'group-with-visitor-unread';
 
       await clientDB.transaction(async (tx) => {
@@ -402,9 +407,9 @@ describe('HomeRepository', () => {
             groupId,
             id: 'visitor-unread-group-topic',
             status: 'unread',
-            senderId: 'visitor-user-x',
+            shareId: '00000000-0000-4000-8000-000000000004',
             title: 'Visitor unread topic',
-            userId,
+            userId: otherUserId,
           },
           {
             groupId,

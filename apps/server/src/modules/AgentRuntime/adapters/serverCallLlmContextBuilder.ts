@@ -113,44 +113,28 @@ export const buildServerCallLlmContext = async ({
       typeof message.content === 'string' && message.content.includes('topic_reference_context'),
   );
 
-  if (!alreadyHasTopicRefs && ctx.serverDB && ctx.principal.resourceOwnerUserId) {
-    const topicModel = new TopicModel(
-      ctx.serverDB,
-      ctx.principal.resourceOwnerUserId,
-      ctx.workspaceId,
-    );
-    const messageModel = new MessageModelClass(
-      ctx.serverDB,
-      ctx.principal.resourceOwnerUserId,
-      ctx.workspaceId,
-    );
+  if (!alreadyHasTopicRefs && ctx.serverDB && ctx.principal.actorUserId) {
     const { actorUserId, delegation } = ctx.principal;
-    // Topic references are limited to the visitor's own topics in shared runs.
-    // `TopicModel`'s built-in ownership scoping is not sufficient here — it
-    // must also be checked against the visitor/agent pairing of the active
-    // share, not just the DB row's owner.
+    // Actor-scoped, not resource-owner-scoped: topics and messages are
+    // conversation rows, and on a share run those belong to the visitor.
+    const topicModel = new TopicModel(ctx.serverDB, actorUserId, ctx.workspaceId);
+    const messageModel = new MessageModelClass(ctx.serverDB, actorUserId, ctx.workspaceId);
+    // Ownership scoping above already pins reads to the actor. On a share run
+    // that is not enough on its own: the actor's OWN private conversations
+    // are equally in scope, and a `<refer_topic>` tag naming one would pull
+    // it into a run executing on the creator's resources. So a delegated run
+    // additionally requires the topic to belong to this exact share instance.
     //
-    // `shareId` is checked too, not just `senderId`/`agentId`: a topic
-    // created under a share instance the owner has since disabled and
-    // replaced (`AgentShareModel.create()` mints a new `agentShares.id` every
-    // disable → re-enable cycle) still matches `senderId`/`agentId` for a
-    // returning visitor — without this check, a `<refer_topic>` tag naming an
-    // old topicId could pull that stale conversation's content into a
-    // supposedly-fresh new-share run. See `topics.shareId`'s JSDoc
+    // `shareId`, not just `agentId`: a topic created under a share instance
+    // the owner has since disabled and replaced (`AgentShareModel.create()`
+    // mints a new `agentShares.id` every disable → re-enable cycle) still
+    // matches `agentId` for a returning visitor. See `topics.shareId`'s JSDoc
     // (`packages/database/src/schemas/topic.ts`).
     const isTopicVisibleToRun = (
-      topic:
-        | { agentId?: string | null; senderId?: string | null; shareId?: string | null }
-        | null
-        | undefined,
+      topic: { agentId?: string | null; shareId?: string | null } | null | undefined,
     ): boolean => {
       if (!delegation) return true;
-      return (
-        !!actorUserId &&
-        topic?.senderId === actorUserId &&
-        topic?.agentId === delegation.agentId &&
-        topic?.shareId === delegation.shareId
-      );
+      return topic?.agentId === delegation.agentId && topic?.shareId === delegation.shareId;
     };
     topicReferences = await resolveTopicReferences(
       messagesForContext as Array<{ content: string | unknown }>,

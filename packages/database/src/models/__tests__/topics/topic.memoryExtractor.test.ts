@@ -6,13 +6,14 @@ import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 
 const userId = 'topic-memory-extractor-user';
+const visitorId = 'topic-memory-extractor-visitor';
 const serverDB: LobeChatDatabase = await getTestDB();
 const topicModel = new TopicModel(serverDB, userId);
 
 describe('TopicModel - countTopicsForMemoryExtractor', () => {
   beforeEach(async () => {
     await serverDB.delete(users);
-    await serverDB.insert(users).values({ id: userId });
+    await serverDB.insert(users).values([{ id: userId }, { id: visitorId }]);
   });
 
   afterEach(async () => {
@@ -84,14 +85,15 @@ describe('TopicModel - countTopicsForMemoryExtractor', () => {
         metadata: {},
         userId,
       },
-      // agent-share visitor topic: userId is still the creator, but senderId
-      // marks it as a visitor conversation that must not feed memory extraction
+      // agent-share visitor topic: it belongs to the VISITOR (`topics.userId`
+      // is the visitor's id, `shareId` is the provenance marker), so the
+      // creator's own user-scoped query can no longer reach it at all.
       {
         id: 't2-visitor',
         createdAt: new Date('2023-01-02'),
         metadata: {},
-        senderId: 'visitor-user-x',
-        userId,
+        shareId: '11111111-1111-1111-1111-111111111111',
+        userId: visitorId,
       },
     ]);
 
@@ -106,7 +108,7 @@ describe('TopicModel - countTopicsForMemoryExtractor', () => {
 describe('TopicModel - listTopicsForMemoryExtractor', () => {
   beforeEach(async () => {
     await serverDB.delete(users);
-    await serverDB.insert(users).values({ id: userId });
+    await serverDB.insert(users).values([{ id: userId }, { id: visitorId }]);
   });
 
   afterEach(async () => {
@@ -122,14 +124,15 @@ describe('TopicModel - listTopicsForMemoryExtractor', () => {
         metadata: {},
         userId,
       },
-      // agent-share visitor topic: userId is still the creator, but senderId
-      // marks it as a visitor conversation that must not feed memory extraction
+      // agent-share visitor topic: it belongs to the VISITOR (`topics.userId`
+      // is the visitor's id, `shareId` is the provenance marker), so the
+      // creator's own user-scoped query can no longer reach it at all.
       {
         id: 't2-visitor',
         createdAt: new Date('2023-01-02'),
         metadata: {},
-        senderId: 'visitor-user-x',
-        userId,
+        shareId: '11111111-1111-1111-1111-111111111111',
+        userId: visitorId,
       },
     ]);
 

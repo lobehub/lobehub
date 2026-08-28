@@ -98,12 +98,15 @@ describe('ProjectModel', () => {
   // coverage in `agent.test.ts` for the snapshot behavior itself.
   it('reports in-flight Agent Share visitor runs on the coordinator agent through onShareRunsInterrupted', async () => {
     const project = await createProject(model, { name: 'Shared coordinator' });
+    // The visitor topic belongs to otherUserId (a distinct user, not the
+    // project owner), with `shareId` as its only provenance marker — proving
+    // the coordinator's delete reaches a run owned by someone else.
     await serverDB.insert(topics).values({
       id: `visitor-topic-${project.id}`,
       title: 'Visitor',
-      userId,
+      userId: otherUserId,
       agentId: project.coordinatorAgentId,
-      senderId: 'visitor-1',
+      shareId: '00000000-0000-4000-8000-000000000007',
       metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
     });
     const onShareRunsInterrupted = vi.fn();
@@ -111,7 +114,11 @@ describe('ProjectModel', () => {
     await model.delete(project.id, undefined, onShareRunsInterrupted);
 
     expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-      { operationId: 'op-1', topicId: `visitor-topic-${project.id}` },
+      {
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+        operationId: 'op-1',
+        topicId: `visitor-topic-${project.id}`,
+      },
     ]);
   });
 

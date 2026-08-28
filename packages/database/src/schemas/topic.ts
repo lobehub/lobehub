@@ -44,7 +44,7 @@ export const topics = pgTable(
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
     // Topic creation trigger source. Note: agent-share visitor topics are NOT
-    // tagged here (they use 'chat') — a non-null `senderId` is their marker.
+    // tagged here (they use 'chat') — a non-null `shareId` is their marker.
     trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' | ...
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     status: text('status', {
@@ -76,26 +76,38 @@ export const topics = pgTable(
     provider: text('provider'),
 
     /**
-     * Visitor identity for agent-share originated topics.
-     * Unauthenticated: browser-generated UUID stored in localStorage.
-     * After login: overwritten with the user's actual userId by the application layer.
-     * NULL for regular (non-share) conversations.
+     * @deprecated Written for compatibility only; never read as an ownership
+     * or provenance signal. Use `shareId` instead.
+     *
+     * This column existed because an agent-share visitor topic used to be
+     * stored under the CREATOR's `userId` (so the run could reach the
+     * creator's config, credentials and budget), which left `userId` unable
+     * to answer "whose conversation is this" — `senderId` carried the real
+     * visitor. A visitor topic now belongs to the visitor: `userId` IS the
+     * visitor, so nothing needs a second identity column.
+     *
+     * What is still occasionally needed is PROVENANCE — "did this
+     * conversation come from a share, and from which share instance" — and
+     * that is exactly what `shareId` answers. The column is kept rather than
+     * dropped only because it already shipped; it holds no production data.
      */
     senderId: text('sender_id'),
 
     /**
      * The `agentShares.id` (share UUID) live at the moment this visitor topic
-     * was created. `senderId` alone identifies the VISITOR, but not which
-     * share INSTANCE granted them access: `AgentShareModel.create()`
-     * generates a brand-new random UUID every time an owner disables
-     * (`deleteByAgentId` hard-deletes the `agentShares` row) and re-enables
-     * (`create()` inserts a fresh row) sharing for the same agent. Without
-     * this column, `(agentId, senderId)` alone matched the SAME returning
-     * visitor's topics across that boundary, letting them see conversation
-     * history from a share instance the owner explicitly took down — and
-     * `TopicModel.countBySender` would count those stale topics against the
-     * brand-new share's `maxTopicsPerVisitor` cap, potentially making it
-     * unusable immediately. See `topic.ts:1144`.
+     * was created — the topic's PROVENANCE marker, and the only one: it says
+     * both "this conversation came from a share" and "from which share
+     * instance".
+     *
+     * The instance half matters because `AgentShareModel.create()` generates
+     * a brand-new random UUID every time an owner disables (`deleteByAgentId`
+     * hard-deletes the `agentShares` row) and re-enables (`create()` inserts a
+     * fresh row) sharing for the same agent. `(agentId, visitor)` alone
+     * matched the SAME returning visitor's topics across that boundary,
+     * letting them see conversation history from a share instance the owner
+     * explicitly took down — and the `maxTopicsPerVisitor` cap would count
+     * those stale topics against the brand-new share, potentially making it
+     * unusable immediately.
      *
      * Deliberately NOT `agentShareGenerations.generation`: that counter is
      * bumped by ANY restrictive `shareConfig` change on a still-`link` share

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -32,17 +32,19 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const agentShareModel = new AgentShareModel(serverDB, ownerId);
 
 const cleanup = async () => {
-  await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(inArray(users.id, [ownerId, visitorId]));
 };
 
 const setupAgentAndTopic = async (agentId: string) => {
   await serverDB
     .insert(agents)
     .values({ id: agentId, model: 'gpt-4o', title: 'Invalidate Race Agent', userId: ownerId });
-  await agentShareModel.create(agentId, 'link');
+  const share = await agentShareModel.create(agentId, 'link');
+  // The share conversation belongs to the VISITOR; `shareId` is what links it
+  // back to the share instance it came from (see `schemas/topic.ts`).
   const [topic] = await serverDB
     .insert(topics)
-    .values({ agentId, senderId: visitorId, userId: ownerId })
+    .values({ agentId, shareId: share.id, userId: visitorId })
     .returning();
   return topic;
 };
@@ -50,7 +52,7 @@ const setupAgentAndTopic = async (agentId: string) => {
 describe('AgentShareModel.invalidateReservation × confirmReservation race (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);

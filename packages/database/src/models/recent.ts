@@ -5,7 +5,6 @@ import removeMarkdown from 'remove-markdown';
 
 import { agents, DOCUMENT_FOLDER_TYPE, documents, messages, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
@@ -102,7 +101,6 @@ export class RecentModel {
           ? sql`false`
           : and(
               buildWorkspaceWhere(scope, topics),
-              notShareVisitorTopic(),
               mineTopicWhere,
               or(
                 isNotNull(topics.groupId),

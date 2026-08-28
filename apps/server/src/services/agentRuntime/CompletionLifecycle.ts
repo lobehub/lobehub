@@ -184,14 +184,27 @@ export class CompletionLifecycle {
    * (instantiation is fire-and-forget at start and may not have settled yet).
    */
   private readonly verifyPlanInstantiations = new Map<string, Promise<void>>();
+  /**
+   * Who owns the conversation rows (topic / messages) this run writes.
+   *
+   * Equals {@link userId} on an ordinary run. On a shared-agent visitor run it
+   * is the VISITOR: the conversation is their row (`topics.userId` — see
+   * `packages/database/src/schemas/topic.ts`), while `userId` stays the
+   * creator, who owns the operation row, the credentials and the balance.
+   * Anything reading or writing a message must use this id; anything reading
+   * an `agent_operations` row, billing or notifying must use `userId`.
+   */
+  private readonly conversationUserId: string;
 
   constructor(
     private readonly serverDB: LobeChatDatabase,
     private readonly userId: string,
     workspaceId?: string,
+    conversationUserId?: string,
   ) {
     this.workspaceId = workspaceId;
-    this.messageModel = new MessageModel(serverDB, userId, workspaceId);
+    this.conversationUserId = conversationUserId ?? userId;
+    this.messageModel = new MessageModel(serverDB, this.conversationUserId, workspaceId);
     this.agentOperationModel = new AgentOperationModel(serverDB, userId, workspaceId);
   }
 
@@ -422,7 +435,9 @@ export class CompletionLifecycle {
     if (topicId) {
       try {
         await this.serverDB.transaction((trx) =>
-          recomputeTopicUsage(trx, this.userId, topicId, this.workspaceId),
+          // Scoped to the conversation's owner, not the resource owner: the
+          // rollup is a projection over the topic's own rows.
+          recomputeTopicUsage(trx, this.conversationUserId, topicId, this.workspaceId),
         );
       } catch (error) {
         log('[%s] Failed to recompute topic usage rollup (non-fatal): %O', operationId, error);
@@ -482,8 +497,9 @@ export class CompletionLifecycle {
     try {
       const { assistantMessageId, metadata } = this.buildLifecycleEvent(operationId, state, reason);
 
-      // Agent Share visitor runs execute AS the creator (`metadata.userId` is
-      // the creator's id — see `isAgentShareRun`'s JSDoc), so every completion
+      // An Agent Share run spends the creator's resources (`metadata.userId`
+      // is the creator's id — see `isAgentShareRun`'s JSDoc) even though a
+      // visitor drives it and owns the conversation, so every completion
       // signal below (`agent.execution.completed` / `.failed`) would otherwise
       // run synchronous policy processing and record creator-scoped Redis
       // windows/telemetry for a run an anonymous link visitor triggered. Same
@@ -881,10 +897,12 @@ export class CompletionLifecycle {
         !event.lastAssistantContent?.trim() &&
         !event.attachments?.length
       ) {
+        // The assistant row belongs to whoever owns the conversation, which on
+        // a share run is the visitor rather than `metadata.userId`.
         const recovered = await this.recoverLastAssistantContent(
           operationId,
           assistantMessageId,
-          metadata?.userId || this.userId,
+          this.conversationUserId,
         );
         if (recovered) event.lastAssistantContent = recovered;
       }
@@ -901,14 +919,15 @@ export class CompletionLifecycle {
       // user-facing recall — in-group members carry `orchestrationRole: 'member'`
       // WITHOUT `isSubAgent` (see execAgentMember), so guard both.
       //
-      // Agent Share visitor runs execute AS the creator (`metadata.userId` is
-      // the creator's id, not the visitor's — see `AgentRuntimeService
-      // .createOperation`'s `initialState.metadata.agentShare`), so this
-      // `userId`-scoped recall would otherwise reach the creator's push/inbox
-      // for every turn an arbitrary link visitor completes — a visitor can spam
-      // the owner by repeatedly running the shared agent, and the notification
-      // would deep-link into a visitor topic (`topics.senderId` + `shareId`)
-      // that is deliberately excluded from creator-facing surfaces. Gate on
+      // An Agent Share run's operation belongs to the RESOURCE OWNER, the
+      // creator (`metadata.userId` is their id, not the visitor's — the
+      // visitor is named by `initialState.metadata.agentShare`, see
+      // `AgentRuntimeService.createOperation`), so this `userId`-scoped recall
+      // would otherwise reach the creator's push/inbox for every turn an
+      // arbitrary link visitor completes — a visitor can spam the owner by
+      // repeatedly running the shared agent, and the notification would
+      // deep-link into a conversation that belongs to the visitor and which
+      // the creator cannot open at all. Gate on
       // `metadata.agentShare` here rather than at the `@/business` slot: this is
       // the one chokepoint every non-in-process completion path also funnels
       // through (`completeOperation` → `dispatchHooks`), so a future
@@ -1060,7 +1079,7 @@ export class CompletionLifecycle {
 
     try {
       const messageModel =
-        userId === this.userId
+        userId === this.conversationUserId
           ? this.messageModel
           : new MessageModel(this.serverDB, userId, this.workspaceId);
       const row = await messageModel.findById(assistantMessageId);

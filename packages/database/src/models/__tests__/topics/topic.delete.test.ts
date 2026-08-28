@@ -62,32 +62,6 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(1);
       expect(await serverDB.select().from(messages)).toHaveLength(1);
     });
-
-    // Regression test: a single-topic delete has the same bug shape
-    // as the bulk sweeps below — see `TopicModel.delete`'s JSDoc.
-    it('reports an in-flight Agent Share visitor run on the deleted topic', async () => {
-      const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
-        onShareRunsInterrupted,
-      });
-      const agentId = 'single-delete-share-agent';
-
-      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent' });
-      await serverDB.insert(topics).values({
-        id: 'single-delete-visitor-topic',
-        title: 'Visitor',
-        userId,
-        agentId,
-        senderId: 'visitor-single',
-        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
-      });
-
-      await modelWithCallback.delete('single-delete-visitor-topic');
-
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'single-delete-visitor-topic' },
-      ]);
-    });
   });
 
   describe('batchDeleteBySessionId', () => {
@@ -126,29 +100,6 @@ describe('TopicModel - Delete', () => {
       ).toHaveLength(2);
       expect(await serverDB.select().from(topics)).toHaveLength(2);
     });
-
-    it('reports an in-flight Agent Share visitor run scoped to the deleted session', async () => {
-      const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
-        onShareRunsInterrupted,
-      });
-
-      await serverDB.insert(sessions).values({ id: 'visitor-session', userId });
-      await serverDB.insert(topics).values({
-        id: 'session-visitor-topic',
-        title: 'Visitor',
-        userId,
-        sessionId: 'visitor-session',
-        senderId: 'visitor-session-1',
-        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
-      });
-
-      await modelWithCallback.batchDeleteBySessionId('visitor-session');
-
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'session-visitor-topic' },
-      ]);
-    });
   });
 
   describe('batchDeleteByGroupId', () => {
@@ -186,29 +137,6 @@ describe('TopicModel - Delete', () => {
         2,
       );
       expect(await serverDB.select().from(topics)).toHaveLength(2);
-    });
-
-    it('reports an in-flight Agent Share visitor run scoped to the deleted group', async () => {
-      const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
-        onShareRunsInterrupted,
-      });
-
-      await serverDB.insert(chatGroups).values({ id: 'visitor-group', userId, title: 'Group' });
-      await serverDB.insert(topics).values({
-        id: 'group-visitor-topic',
-        title: 'Visitor',
-        userId,
-        groupId: 'visitor-group',
-        senderId: 'visitor-group-1',
-        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
-      });
-
-      await modelWithCallback.batchDeleteByGroupId('visitor-group');
-
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'group-visitor-topic' },
-      ]);
     });
   });
 
@@ -356,30 +284,6 @@ describe('TopicModel - Delete', () => {
         .where(eq(messages.userId, userId));
       expect(remainingMessages).toHaveLength(0);
     });
-
-    it('reports an in-flight Agent Share visitor run on the deleted agent', async () => {
-      const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
-        onShareRunsInterrupted,
-      });
-      const agentId = 'batch-agent-share-agent';
-
-      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent' });
-      await serverDB.insert(topics).values({
-        id: 'batch-agent-visitor-topic',
-        title: 'Visitor',
-        userId,
-        agentId,
-        senderId: 'visitor-batch-agent',
-        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
-      });
-
-      await modelWithCallback.batchDeleteByAgentId(agentId);
-
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'batch-agent-visitor-topic' },
-      ]);
-    });
   });
 
   describe('batchDelete', () => {
@@ -403,27 +307,6 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(1);
       expect(await serverDB.select().from(messages)).toHaveLength(1);
     });
-
-    it('reports an in-flight Agent Share visitor run among the deleted ids', async () => {
-      const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
-        onShareRunsInterrupted,
-      });
-
-      await serverDB.insert(topics).values({
-        id: 'batch-ids-visitor-topic',
-        title: 'Visitor',
-        userId,
-        senderId: 'visitor-batch-ids',
-        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
-      });
-
-      await modelWithCallback.batchDelete(['batch-ids-visitor-topic']);
-
-      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'batch-ids-visitor-topic' },
-      ]);
-    });
   });
 
   describe('deleteAll', () => {
@@ -444,65 +327,118 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics).where(eq(topics.userId, userId))).toHaveLength(0);
       expect(await serverDB.select().from(topics)).toHaveLength(1);
     });
+  });
 
-    // Regression test: this is the exact bug —
-    // `topic.removeAllTopics` deleted a visitor's running topic with
-    // no interrupt, leaving the operation row orphaned and the visitor unable
-    // to stop it. `deleteAll` is not scoped to one agent, so this covers a
-    // visitor run on an agent the caller never names explicitly.
-    it('reports every in-flight Agent Share visitor run across every agent', async () => {
-      const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
-        onShareRunsInterrupted,
+  // Regression guard for the in-flight share run a delete can orphan.
+  //
+  // A share conversation belongs to the VISITOR (`topics.userId` = visitor,
+  // `topics.shareId` = the share it came from — see `schemas/topic.ts`), so it
+  // sits in the visitor's own topic list and the ORDINARY `topic.removeTopic`
+  // / `topic.removeAllTopics` endpoints reach it. Once the row is gone,
+  // `shareChat.interruptTask` — the only endpoint that can stop a share run —
+  // can no longer resolve the topic to authorize the stop, so the run keeps
+  // spending the CREATOR's tools and budget until it finishes on its own.
+  // `userId` here plays the visitor; `creatorId` owns the shared agent.
+  describe('in-flight Agent Share runs', () => {
+    const creatorId = 'topic-delete-share-creator';
+    const agentId = 'topic-delete-share-agent';
+    const shareId = '00000000-0000-4000-8000-000000000001';
+
+    const seedVisitorShareTopic = async (topicId: string) => {
+      await serverDB.insert(users).values({ id: creatorId });
+      await serverDB.insert(agents).values({ id: agentId, userId: creatorId, title: 'Shared' });
+      await serverDB.insert(topics).values({
+        agentId,
+        id: topicId,
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+        shareId,
+        title: 'Visitor',
+        userId,
       });
+    };
 
-      await serverDB.insert(agents).values([
-        { id: 'delete-all-agent-1', userId, title: 'Agent 1' },
-        { id: 'delete-all-agent-2', userId, title: 'Agent 2' },
+    it('reports the run when the visitor deletes that one share topic', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const model = new TopicModel(serverDB, userId, undefined, { onShareRunsInterrupted });
+      await seedVisitorShareTopic('visitor-share-topic');
+
+      await model.delete('visitor-share-topic');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        expect.objectContaining({ operationId: 'op-1', topicId: 'visitor-share-topic' }),
       ]);
-      await serverDB.insert(topics).values([
-        {
-          id: 'delete-all-visitor-topic-1',
-          title: 'Visitor 1',
-          userId,
-          agentId: 'delete-all-agent-1',
-          senderId: 'visitor-delete-all-1',
-          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
-        },
-        {
-          id: 'delete-all-visitor-topic-2',
-          title: 'Visitor 2',
-          userId,
-          agentId: 'delete-all-agent-2',
-          senderId: 'visitor-delete-all-2',
-          metadata: { runningOperation: { assistantMessageId: 'msg-2', operationId: 'op-2' } },
-        },
-      ]);
-
-      await modelWithCallback.deleteAll();
-
-      expect(onShareRunsInterrupted).toHaveBeenCalledTimes(1);
-      const [reported] = onShareRunsInterrupted.mock.calls[0];
-      expect(reported).toEqual(
-        expect.arrayContaining([
-          { operationId: 'op-1', topicId: 'delete-all-visitor-topic-1' },
-          { operationId: 'op-2', topicId: 'delete-all-visitor-topic-2' },
-        ]),
-      );
-      expect(reported).toHaveLength(2);
+      expect(await serverDB.select().from(topics)).toHaveLength(0);
     });
 
-    it('does not call onShareRunsInterrupted when there is no in-flight visitor run', async () => {
+    it('reports the run when the visitor clears their whole topic list', async () => {
       const onShareRunsInterrupted = vi.fn();
-      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+      const model = new TopicModel(serverDB, userId, undefined, { onShareRunsInterrupted });
+      await seedVisitorShareTopic('visitor-share-topic');
+      await serverDB.insert(topics).values({ id: 'ordinary-topic', title: 'Mine', userId });
+
+      await model.deleteAll();
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        expect.objectContaining({ operationId: 'op-1', topicId: 'visitor-share-topic' }),
+      ]);
+    });
+
+    it('hands the topic metadata through so a remote hetero run can still be cancelled', async () => {
+      // `interruptTask` reads `runningOperation.deviceId` / `heteroType` to
+      // decide whether a remote sandbox process needs a SIGINT. Post-commit
+      // the row is gone, so the snapshot must carry the metadata itself.
+      const onShareRunsInterrupted = vi.fn();
+      const model = new TopicModel(serverDB, userId, undefined, { onShareRunsInterrupted });
+      await serverDB.insert(users).values({ id: creatorId });
+      await serverDB.insert(agents).values({ id: agentId, userId: creatorId, title: 'Shared' });
+      await serverDB.insert(topics).values({
+        agentId,
+        id: 'visitor-hetero-topic',
+        metadata: {
+          runningOperation: { deviceId: 'device-1', heteroType: 'codex', operationId: 'op-2' },
+        },
+        shareId,
+        title: 'Visitor',
+        userId,
+      });
+
+      await model.delete('visitor-hetero-topic');
+
+      const [reported] = onShareRunsInterrupted.mock.calls[0];
+      expect(reported[0].metadata?.runningOperation).toMatchObject({
+        deviceId: 'device-1',
+        heteroType: 'codex',
+      });
+    });
+
+    it('does not report an ordinary topic, nor a share topic with no live run', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const model = new TopicModel(serverDB, userId, undefined, { onShareRunsInterrupted });
+      await serverDB.insert(users).values({ id: creatorId });
+      await serverDB.insert(agents).values({ id: agentId, userId: creatorId, title: 'Shared' });
+      await serverDB.insert(topics).values([
+        { id: 'ordinary-topic', title: 'Mine', userId },
+        { agentId, id: 'idle-share-topic', shareId, title: 'Visitor', userId },
+      ]);
+
+      await model.deleteAll();
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
+    });
+
+    it("cannot be reached by the creator, whose sweep never matches the visitor's row", async () => {
+      const onShareRunsInterrupted = vi.fn();
+      await seedVisitorShareTopic('visitor-share-topic');
+      const creatorModel = new TopicModel(serverDB, creatorId, undefined, {
         onShareRunsInterrupted,
       });
 
-      await serverDB.insert(topics).values({ id: 'quiet-delete-all-topic', userId });
+      await creatorModel.deleteAll();
 
-      await modelWithCallback.deleteAll();
-
+      // Nothing to report because nothing was deleted: ownership, not a
+      // filter, is what keeps the visitor's conversation out of reach here.
       expect(onShareRunsInterrupted).not.toHaveBeenCalled();
+      expect(await serverDB.select().from(topics)).toHaveLength(1);
     });
   });
 

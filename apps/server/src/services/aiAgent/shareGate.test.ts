@@ -1073,8 +1073,8 @@ describe('default-deny covers every registered builtin identifier not explicitly
 });
 
 /**
- * Regression coverage for the `agent-signal-review` removal (codex review
- * finding on `shareGate.ts:192`): a completed trace of
+ * Regression coverage for the `agent-signal-review` removal
+ * (`shareGate.ts:192`): a completed trace of
  * `createReviewRuntimePrimitives` (`apps/server/src/services/agentSignal/services/
  * selfIteration/review/server.ts`) found this identifier was previously
  * allowlisted on an unverified "scoped by `context.operationId`, fails

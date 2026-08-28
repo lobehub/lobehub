@@ -6,12 +6,19 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { runStep, runStepHealth } from '../runStep';
 
 const mockGetOperationMetadata = vi.fn();
+/**
+ * The handler reads `state.metadata.agentShare` to rebuild a share run's split
+ * principal (visitor as actor, creator as resource owner). Defaults to a plain
+ * non-share run; the share test below overrides it.
+ */
+const mockLoadAgentState = vi.fn();
 const mockExecuteStep = vi.fn();
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
     getOperationMetadata: mockGetOperationMetadata,
+    loadAgentState: mockLoadAgentState,
   })),
 }));
 
@@ -75,6 +82,8 @@ const validBody = {
 describe('runStep handler', () => {
   beforeEach(() => {
     mockGetOperationMetadata.mockReset();
+    mockLoadAgentState.mockReset();
+    mockLoadAgentState.mockResolvedValue({ metadata: {} });
     mockExecuteStep.mockReset();
     mockGetServerDB.mockResolvedValue({} as any);
   });
@@ -183,11 +192,50 @@ describe('runStep handler', () => {
 
     expect(AiAgentService).toHaveBeenCalledWith(
       expect.anything(),
-      'user-1',
+      { actorUserId: 'user-1', resourceOwnerUserId: 'user-1' },
       expect.objectContaining({ workspaceId: 'ws-1' }),
     );
     expect(mockExecuteStep).toHaveBeenCalledWith(
       expect.objectContaining({ operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
+  // The operation metadata carries only ONE id (`userId`, the creator whose
+  // resources the run spends). The visitor who drives a share run — and who
+  // OWNS the conversation rows every step reads and writes (`topics.userId`,
+  // see `packages/database/src/schemas/topic.ts`) — is named only by
+  // `state.metadata.agentShare`. Rebuilding an owner-only principal here put
+  // step 2 onward under the creator, where it could not find the visitor's own
+  // turn, and the whole run died with ConversationParentMissing.
+  it('rebuilds the split principal for a share run from the agent state', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'creator-1', workspaceId: 'ws-1' });
+    mockLoadAgentState.mockResolvedValue({
+      metadata: {
+        agentShare: {
+          agentId: 'agent-1',
+          enabledToolIds: ['lobe-web-browsing'],
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      },
+    });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(AiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUserId: 'visitor-1',
+        delegation: expect.objectContaining({ agentId: 'agent-1', shareId: 'share-1' }),
+        resourceOwnerUserId: 'creator-1',
+      }),
+      expect.objectContaining({ workspaceId: 'ws-1' }),
     );
   });
 

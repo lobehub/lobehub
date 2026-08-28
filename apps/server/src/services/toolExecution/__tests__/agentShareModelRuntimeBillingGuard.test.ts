@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
  * the creator's ordinary billing instead and lets a visitor bypass the
  * configured share-spend limit.
  *
- * This exact bug has resurfaced across independent call sites in this PR's
- * review rounds — each fixed only after a reviewer named that specific file
+ * This exact bug has resurfaced across independent call sites — each fixed
+ * only once that specific file was named
  * (`serverRuntimes/lobeAgent.ts`'s `analyzeMedia`), while sibling nested
  * model-runtime calls (`serverRuntimes/memory.ts`'s `searchMemory`,
  * `services/knowledgeBase/index.ts`'s `semanticSearchForChat`) kept the leak

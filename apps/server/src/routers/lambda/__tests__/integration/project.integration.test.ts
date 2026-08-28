@@ -31,6 +31,8 @@ describe('Project Router Integration', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
   let caller: ReturnType<typeof projectRouter.createCaller>;
+  /** Users other than the caller (e.g. an Agent Share visitor), cleaned up per test. */
+  const extraUserIds: string[] = [];
 
   beforeEach(async () => {
     serverDB = await getTestDB();
@@ -43,6 +45,8 @@ describe('Project Router Integration', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    for (const extra of extraUserIds) await cleanupTestUser(serverDB, extra);
+    extraUserIds.length = 0;
   });
 
   it('serves the complete project management and human review flow', async () => {
@@ -144,19 +148,33 @@ describe('Project Router Integration', () => {
   // `ProjectModel.delete` reaching the coordinator's `AgentModel.delete`.
   it('interrupts an in-flight visitor run on the coordinator agent when the project is deleted', async () => {
     const created = await caller.create({ identifier: 'apolo2', name: 'Apollo 2' });
+    // The visitor topic belongs to the VISITOR, not the project owner —
+    // `shareId` is its only link back to the share it came from. The delete
+    // sweep must therefore reach across ownership to find this run.
+    const visitorId = await createTestUser(serverDB);
+    extraUserIds.push(visitorId);
     await serverDB.insert(topics).values({
       id: `visitor-topic-${created.data.id}`,
       title: 'Visitor',
-      userId,
+      userId: visitorId,
       agentId: created.data.coordinatorAgentId,
-      senderId: 'visitor-1',
+      shareId: '00000000-0000-4000-8000-000000000001',
       metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
     });
 
     await caller.delete({ id: created.data.id });
     await Promise.all(afterTasks);
 
-    expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
+    // The snapshotted topic id and metadata ride along: post-commit the row is
+    // gone, so `interruptTask` cannot re-read it to decide whether a remote
+    // hetero process still needs a SIGINT.
+    expect(mockInterruptTask).toHaveBeenCalledWith({
+      operationId: 'op-1',
+      topicId: `visitor-topic-${created.data.id}`,
+      topicMetadata: {
+        runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' },
+      },
+    });
   });
 
   it('accepts underscores in project slugs', async () => {

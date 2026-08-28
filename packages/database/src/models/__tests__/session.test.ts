@@ -716,12 +716,17 @@ describe('SessionModel', () => {
       await serverDB
         .insert(agentsToSessions)
         .values([{ agentId: 'shared-orphan', sessionId: '1', userId }]);
+      // The visitor topic belongs to a distinct user (not the creator),
+      // with `shareId` as its only provenance marker — proving the
+      // creator's orphan-delete reaches a run owned by someone else.
+      const orphanVisitorId = 'orphan-visitor-user';
+      await serverDB.insert(users).values({ id: orphanVisitorId });
       await serverDB.insert(topics).values({
         id: 'orphan-visitor-topic',
         title: 'Visitor',
-        userId,
+        userId: orphanVisitorId,
         agentId: 'shared-orphan',
-        senderId: 'visitor-1',
+        shareId: '00000000-0000-4000-8000-000000000005',
         metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
       });
 
@@ -729,7 +734,11 @@ describe('SessionModel', () => {
 
       expect(orphanedAgentIds).toEqual(['shared-orphan']);
       expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'orphan-visitor-topic' },
+        {
+          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+          operationId: 'op-1',
+          topicId: 'orphan-visitor-topic',
+        },
       ]);
     });
 
@@ -954,19 +963,28 @@ describe('SessionModel', () => {
       await serverDB
         .insert(agentsToSessions)
         .values([{ agentId: 'delete-all-share-agent', sessionId: '1', userId }]);
+      // The visitor topic belongs to a distinct user (not the creator),
+      // with `shareId` as its only provenance marker — proving `deleteAll`
+      // reaches a run owned by someone else.
+      const deleteAllVisitorId = 'delete-all-visitor-user';
+      await serverDB.insert(users).values({ id: deleteAllVisitorId });
       await serverDB.insert(topics).values({
         id: 'delete-all-visitor-topic',
         title: 'Visitor',
-        userId,
+        userId: deleteAllVisitorId,
         agentId: 'delete-all-share-agent',
-        senderId: 'visitor-delete-all',
+        shareId: '00000000-0000-4000-8000-000000000006',
         metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
       });
 
       await modelWithCallback.deleteAll();
 
       expect(onShareRunsInterrupted).toHaveBeenCalledWith([
-        { operationId: 'op-1', topicId: 'delete-all-visitor-topic' },
+        {
+          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+          operationId: 'op-1',
+          topicId: 'delete-all-visitor-topic',
+        },
       ]);
     });
 

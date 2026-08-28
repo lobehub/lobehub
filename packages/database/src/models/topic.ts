@@ -49,7 +49,6 @@ import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
-import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -136,19 +135,13 @@ export interface CreateTopicParams {
   /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
   model?: string | null;
   provider?: string | null;
-  /**
-   * Visitor identity for agent-share originated topics (see `topics.senderId`).
-   * Always resolved server-side from the visitor's authenticated session —
-   * never trusted from client input. NULL for regular conversations.
-   */
-  senderId?: string | null;
   sessionId?: string | null;
   /**
    * The live `agentShares.id` at creation time, for agent-share visitor
-   * topics only (see `topics.shareId`'s JSDoc in `../schemas/topic.ts` for
-   * why this must be persisted alongside `senderId`). Always resolved
-   * server-side from the share the run was authorized against — never
-   * trusted from client input. NULL for regular conversations.
+   * topics only (see `topics.shareId`'s JSDoc in `../schemas/topic.ts`).
+   * Always resolved server-side from the share the run was authorized
+   * against — never trusted from client input. NULL for regular
+   * conversations.
    */
   shareId?: string | null;
   /**
@@ -329,11 +322,10 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * path snapshots before it cascades the underlying topic row away and hands
  * off to `AiAgentService.interruptTask`. See `findActiveVisitorRunTopics`.
  *
- * `metadata`, when populated (`findActiveVisitorRunTopicsByAgentId` only),
- * lets `interruptTask` skip its own workspace-scoped `topicModel.findById`
- * re-fetch for remote-hetero cancellation dispatch — see that method's
- * `findActiveVisitorRunTopicsByAgentId` JSDoc for why a re-fetch scoped to a
- * stale workspace would silently drop the dispatch.
+ * `metadata` lets `interruptTask` skip its own scoped `topicModel.findById`
+ * re-fetch for remote-hetero cancellation dispatch — see
+ * `findActiveVisitorRunTopics`'s JSDoc for why a re-fetch scoped to the
+ * caller's own tenant would silently drop the dispatch.
  */
 export type ActiveShareRun = {
   metadata?: ChatTopicMetadata | null;
@@ -344,20 +336,24 @@ export type ActiveShareRun = {
 export interface TopicModelOptions {
   /**
    * Called with the snapshot of Agent Share visitor runs that were still
-   * in-flight on a creator-initiated bulk topic sweep (`deleteAll` /
-   * `batchDelete` / `batchDeleteByAgentId` / `batchDeleteByGroupId` /
-   * `batchDeleteBySessionId`) — AFTER the deleting transaction has committed.
+   * in-flight on a topic sweep this model just committed (`delete` /
+   * `deleteAll` / `batchDelete` / `batchDeleteByAgentId` /
+   * `batchDeleteByGroupId` / `batchDeleteBySessionId`) — AFTER the deleting
+   * transaction has committed.
    *
-   * WHY every one of those sweeps needs this: a share-visitor topic is owned
-   * by the creator (`topics.userId` = creator, `topics.senderId` = visitor —
-   * see `notShareVisitorTopic`), so `this.mine()` matches it exactly like any
-   * other topic the creator owns. Before this option existed, `deleteAll()`
-   * (the checked `topic.removeAllTopics` router path) deleted a visitor's
-   * running topic without ever interrupting the run: the operation row
-   * survived with `topicId` set to null, the visitor's `shareChat
-   * .interruptTask` could no longer find the topic to authorize the stop, and
-   * the run kept consuming the creator's tools/budget until it finished on
-   * its own. Same shape as `AgentModelOptions.onShareRunsInterrupted` /
+   * WHY this is still needed now that a share conversation belongs to the
+   * VISITOR (`topics.userId` = visitor, `topics.shareId` marking the share it
+   * came from — see `../schemas/topic.ts`): ownership moved the row out of the
+   * creator's reach, but it moved it INTO the visitor's own account, where it
+   * shows up in their ordinary topic list. So the visitor can delete their own
+   * running share topic through the generic `topic.removeTopic` /
+   * `topic.removeAllTopics` router paths — and once the row is gone,
+   * `shareChat.interruptTask` (the only endpoint that can stop a share run)
+   * can no longer resolve the topic to authorize the stop. The operation
+   * survives with a dangling `topicId` and keeps consuming the CREATOR's tools
+   * and budget until it finishes on its own.
+   *
+   * Same shape as `AgentModelOptions.onShareRunsInterrupted` /
    * `SessionModelOptions.onShareRunsInterrupted` — kept in sync.
    */
   onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
@@ -395,13 +391,6 @@ export class TopicModel {
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
-  /**
-   * See `notShareVisitorTopic` in `../utils/shareVisitor` — shared with the
-   * repositories/models that query `topics` outside this class. Every
-   * workspace-facing listing/aggregation must AND this in; share-scoped access
-   * goes through the dedicated `*BySender` methods instead.
-   */
-  private notShareVisitor = () => notShareVisitorTopic();
   // **************** Query *************** //
 
   query = async ({
@@ -511,7 +500,6 @@ export class TopicModel {
     if (groupId) {
       const whereCondition = and(
         this.ownership(),
-        this.notShareVisitor(),
         eq(topics.groupId, groupId),
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -591,7 +579,6 @@ export class TopicModel {
 
       const agentWhere = and(
         this.ownership(),
-        this.notShareVisitor(),
         agentCondition,
         editingTargetCondition,
         includeTriggerCondition,
@@ -663,7 +650,6 @@ export class TopicModel {
     // Fallback to containerId-based query (backward compatibility)
     const whereCondition = and(
       this.ownership(),
-      this.notShareVisitor(),
       this.matchContainer(containerId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -761,12 +747,14 @@ export class TopicModel {
   };
 
   /**
-   * Filters topic ids down to ones this caller owns, excluding agent-share
-   * visitor topics. Used by the memory-extraction "explicit topicIds" path
-   * (see `MemoryExtractionExecutor.filterTopicIdsForUser`) so a topic id
-   * reachable by callers can never make a share-visitor's conversation feed
-   * the creator's own memory extraction — visitor speech is not the
-   * creator's own (see `../utils/shareVisitor`).
+   * Filters topic ids down to ones this caller owns. Used by the
+   * memory-extraction "explicit topicIds" path (see
+   * `MemoryExtractionExecutor.filterTopicIdsForUser`) so an arbitrary topic id
+   * can never feed someone else's conversation into this user's memory.
+   *
+   * A share conversation is excluded from the creator's extraction for free
+   * here: it belongs to the VISITOR (`topics.userId` — see
+   * `../schemas/topic.ts`), so `ownership()` simply does not match it.
    */
   filterOwnedTopicIds = async (ids: string[]): Promise<string[]> => {
     if (ids.length === 0) return [];
@@ -774,7 +762,7 @@ export class TopicModel {
     const rows = await this.db
       .select({ id: topics.id })
       .from(topics)
-      .where(and(inArray(topics.id, ids), this.ownership(), this.notShareVisitor()));
+      .where(and(inArray(topics.id, ids), this.ownership()));
 
     return rows.map((row) => row.id);
   };
@@ -827,7 +815,6 @@ export class TopicModel {
   } = {}): Promise<TopicListItem[]> => {
     const where = and(
       this.ownership(),
-      this.notShareVisitor(),
       statuses && statuses.length > 0
         ? inArray(topics.status, statuses as ChatTopicStatus[])
         : undefined,
@@ -966,14 +953,7 @@ export class TopicModel {
       this.db
         .select()
         .from(topics)
-        .where(
-          and(
-            this.ownership(),
-            this.notShareVisitor(),
-            scopeCondition,
-            sql`${topics.title} @@@ ${bm25Query}`,
-          ),
-        )
+        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
@@ -985,7 +965,6 @@ export class TopicModel {
             this.messageOwnership(),
             sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
-            this.notShareVisitor(),
             scopeCondition,
           ),
         )
@@ -1041,7 +1020,6 @@ export class TopicModel {
       .where(
         genWhere([
           this.ownership(),
-          this.notShareVisitor(),
           agentCondition,
           params?.containerId ? this.matchContainer(params.containerId) : undefined,
           params?.range
@@ -1068,7 +1046,7 @@ export class TopicModel {
         title: topics.title,
       })
       .from(topics)
-      .where(and(this.ownership(), this.notShareVisitor()))
+      .where(this.ownership())
       .leftJoin(messages, eq(topics.id, messages.topicId))
       .groupBy(topics.id)
       .orderBy(desc(sql`count`))
@@ -1109,7 +1087,6 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
-          this.notShareVisitor(),
           or(
             // Group topics: has groupId
             not(isNull(topics.groupId)),
@@ -1130,29 +1107,28 @@ export class TopicModel {
     }));
   };
 
-  // **************** Agent Share (visitor-scoped) *************** //
+  // **************** Agent Share *************** //
 
   /**
-   * Share-visitor topic list for one visitor on one shared agent. The model is
-   * constructed with the creator's userId (visitor topics carry it), so the
-   * caller — the shareChat router — must have already authorized the visitor
-   * via the share access check; `senderId` + `shareId` together are the
-   * per-visitor boundary.
+   * Share-visitor topic list for one visitor on one shared agent.
    *
-   * `shareId` scopes to the CURRENT `agentShares` instance, not just the
-   * visitor: `AgentShareModel.create()` mints a brand-new share UUID every
-   * disable → re-enable cycle (`deleteByAgentId` hard-deletes the row,
-   * `create()` inserts a fresh one), so `senderId` alone would resurface a
-   * returning visitor's conversations from a share instance the owner
-   * already took down. See `topics.shareId`'s JSDoc (`../schemas/topic.ts`).
+   * The model is constructed with the VISITOR's userId — a share conversation
+   * belongs to the visitor who had it — so `mine()` is already the
+   * per-visitor boundary and `shareId` narrows it to one share instance.
    *
-   * Selects a visitor-facing DTO instead of the full row: the visitor surface
-   * only renders id/title, and the row also carries creator-only fields
-   * (owning userId, model/provider snapshot, cost/usage, internal status and
-   * metadata) that must never reach a share visitor.
+   * `shareId` scopes to the CURRENT `agentShares` instance, not merely to the
+   * agent: `AgentShareModel.create()` mints a brand-new share UUID every
+   * disable -> re-enable cycle (`deleteByAgentId` hard-deletes the row,
+   * `create()` inserts a fresh one), so `agentId` alone would resurface a
+   * returning visitor's conversations from a share instance the owner already
+   * took down. See `topics.shareId`'s JSDoc (`../schemas/topic.ts`).
+   *
+   * Selects a trimmed DTO rather than the full row: this list renders inside
+   * the share surface, where the row's cost/usage and model/provider snapshot
+   * of the CREATOR's run have no place.
    */
-  queryBySender = async (
-    { agentId, senderId, shareId }: { agentId: string; senderId: string; shareId: string },
+  queryVisitorShareTopics = async (
+    { agentId, shareId }: { agentId: string; shareId: string },
     { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
   ): Promise<VisitorTopicItem[]> => {
     return this.db
@@ -1163,137 +1139,78 @@ export class TopicModel {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
-      .where(
-        and(
-          this.mine(),
-          eq(topics.agentId, agentId),
-          eq(topics.senderId, senderId),
-          eq(topics.shareId, shareId),
-        ),
-      )
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.shareId, shareId)))
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
   };
 
   /**
-   * Per-visitor topic count on the CURRENT share instance — drives
+   * This visitor's topic count on the CURRENT share instance — drives
    * `maxTopicsPerVisitor`. Scoped by `shareId` for the same reason as
-   * `queryBySender`: without it, topics from a share instance the owner
-   * already disabled would count against a brand-new instance's cap,
-   * potentially making it unusable immediately after re-enabling. See
-   * `topics.shareId`'s JSDoc.
+   * `queryVisitorShareTopics`: without it, topics from a share instance the
+   * owner already disabled would count against a brand-new instance's cap,
+   * potentially making it unusable immediately after re-enabling.
    */
-  countBySender = async ({
+  countVisitorShareTopics = async ({
     agentId,
-    senderId,
     shareId,
   }: {
     agentId: string;
-    senderId: string;
     shareId: string;
   }): Promise<number> => {
     const result = await this.db
       .select({ count: count(topics.id) })
       .from(topics)
-      .where(
-        and(
-          this.mine(),
-          eq(topics.agentId, agentId),
-          eq(topics.senderId, senderId),
-          eq(topics.shareId, shareId),
-        ),
-      );
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.shareId, shareId)));
 
     return result[0].count;
   };
 
   /**
-   * Scope-generic sibling of `findActiveVisitorRunTopics`, for bulk creator
-   * sweeps (`deleteAll` / `batchDelete*`) that are not scoped to one agent —
-   * `findActiveVisitorRunTopics` requires an `agentId` and cannot see a
-   * visitor run on a DIFFERENT agent that a user-wide `deleteAll()` (or an
-   * arbitrary-id `batchDelete()`) is about to delete out from under.
-   *
-   * `extraMatch` mirrors the exact predicate of the destructive sweep this
-   * snapshot guards (e.g. `inArray(topics.id, ids)`, `matchSession(...)`,
-   * `matchGroup(...)`, or omitted entirely for `deleteAll`) so the snapshot
-   * and the delete never drift apart. See `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc.
-   *
-   * The "has a running operation" predicate is written as a COALESCE
-   * comparison rather than `IS NOT NULL`: an `IS [NOT] NULL` test on an
-   * *extracted* jsonb value takes the query planner down at PLAN time on
-   * bm25-indexed tables, and `topics` carries such an index.
-   * `jsonbNullTest.test.ts` guards the shape.
-   */
-  private findActiveVisitorRunTopicsMatching = async (
-    extraMatch?: SQL,
-  ): Promise<ActiveShareRun[]> => {
-    const rows = await this.db
-      .select({ id: topics.id, metadata: topics.metadata })
-      .from(topics)
-      .where(
-        and(
-          this.mine(),
-          isNotNull(topics.senderId),
-          sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
-          extraMatch,
-        ),
-      );
-
-    return rows
-      .map((row) => ({
-        operationId: row.metadata?.runningOperation?.operationId,
-        topicId: row.id,
-      }))
-      .filter((row): row is ActiveShareRun => Boolean(row.operationId));
-  };
-
-  /**
-   * Public, id-scoped sibling of `findActiveVisitorRunTopicsMatching`, for
-   * SIBLING models whose own bulk/batch writes can silently empty out a
-   * share-visitor topic's rows without ever touching the `topics` row itself
-   * — chiefly `MessageModel`'s message-level deletes (`deleteMessage`,
-   * `deleteMessages`, `deleteMessagesBySession`, `deleteAllMessages`,
-   * `batchDeleteByAgentId`). Those never delete the topic row, so nothing in
-   * THIS class's own delete methods ever runs a snapshot for them — the
-   * caller must resolve the exact set of topic ids its own write is about to
-   * affect BEFORE deleting, then hand that id list here.
-   *
-   * `findActiveVisitorRunTopicsMatching` itself stays private: an arbitrary
-   * `SQL` predicate is only safe to pass from code that also owns the
-   * corresponding delete's WHERE clause (this class), whereas an id list is a
-   * safe, narrow contract for any caller. See `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc.
-   */
-  findActiveVisitorRunTopicsByIds = async (topicIds: string[]): Promise<ActiveShareRun[]> => {
-    if (topicIds.length === 0) return [];
-    return this.findActiveVisitorRunTopicsMatching(inArray(topics.id, topicIds));
-  };
-
-  /**
    * Every share-visitor topic on this agent with a still-open
-   * `runningOperation` marker — the set of in-flight visitor runs a share
-   * revocation (visibility flipped off `link`, or the share row deleted) must
-   * proactively interrupt.
+   * `runningOperation` marker — the set of in-flight visitor runs that a
+   * share revocation (visibility flipped off `link`, or the share row
+   * deleted) or an agent deletion must proactively interrupt.
    *
-   * Scoped by `senderId IS NOT NULL` (the share-visitor marker, see
-   * `notShareVisitorTopic`) rather than by a specific visitor: revocation
-   * must stop every visitor's run, not just one. Only the root
-   * `runningOperation.operationId` is returned per topic — `AiAgentService
-   * .interruptTask` re-derives any hetero child operation from the same
-   * topic metadata, so callers can pass these pairs straight through without
-   * re-reading child operations here.
+   * Deliberately NOT scoped to the calling user or workspace, on two counts:
+   *
+   * 1. Share conversations belong to their VISITORS, so a creator-scoped
+   *    query would never see a single one of the runs it is trying to stop.
+   * 2. `AiAgentService.interruptActiveShareRuns` runs this inside `after()`,
+   *    arbitrarily long after the write that produced `revocationGeneration`
+   *    committed. In between, the agent can have been transferred AGAIN (a
+   *    second `AgentModel.transferAgents` / `AgentGroupRepository
+   *    .transferToWorkspace`), moving its topics' `workspaceId` a second
+   *    time. That second transfer bumps no new generation and schedules no
+   *    new reset callback, because the share was already flipped to `private`
+   *    by the FIRST move (the `ne(visibility, 'private')` guard both transfer
+   *    paths use finds nothing left to reset) — see
+   *    `scheduleShareRunInterruptOnReset`'s JSDoc. The only callback that
+   *    will ever fire still carries the FIRST transfer's target workspace.
+   *
+   * `agentId` is the one identity that never changes across any number of
+   * transfers. This sweep's authority comes from holding that id plus a
+   * generation cutoff authenticated under the `agents.id FOR UPDATE` lock
+   * that produced it (see `bumpAgentShareGeneration`), not from the caller's
+   * own tenant scope.
+   *
+   * A topic qualifies on `shareId IS NOT NULL` — the provenance marker (see
+   * `topics.shareId`'s JSDoc). Only the root `runningOperation.operationId`
+   * is returned per topic: `AiAgentService.interruptTask` re-derives any
+   * hetero child operation from the same topic metadata, which is also why
+   * the raw `metadata` comes back with it — that lets `interruptTask` skip
+   * its own scoped `findById` re-fetch for remote-hetero cancellation
+   * dispatch, a re-fetch that would hit the same scope drift described above.
    *
    * `revocationGeneration`, when passed, ALSO filters to `shareGeneration <
    * revocationGeneration` (see `ChatTopicMetadata.runningOperation
    * .shareGeneration`'s JSDoc): a running operation confirmed AT OR AFTER
-   * `revocationGeneration` was authorized by a write that happened no
-   * earlier than the caller's own revocation (e.g. a republish racing a
-   * stale deferred callback) and must survive it. A marker with no
+   * `revocationGeneration` was authorized by a write that happened no earlier
+   * than the caller's own revocation (e.g. a republish racing a stale
+   * deferred callback) and must survive it. A marker with no
    * `shareGeneration` at all (`COALESCE(..., 0)`) is always treated as older
-   * than any cutoff — fail closed rather than let an unstamped legacy/edge-
-   * case marker silently escape every future revocation.
+   * than any cutoff — fail closed rather than let an unstamped legacy /
+   * edge-case marker silently escape every future revocation.
    *
    * Omitted (no filter, every active run returned) by the agent/session
    * DELETE snapshot paths (`AgentModel.delete`, `SessionModel`'s orphan
@@ -1301,6 +1218,12 @@ export class TopicModel {
    * per run, not to the generation-scoped `interruptActiveShareRuns` sweep,
    * and the agent row is cascading away in the SAME transaction regardless of
    * generation — there is no "legitimate newer run" to protect there.
+   *
+   * The "has a running operation" predicate is written as a COALESCE
+   * comparison rather than `IS NOT NULL`: an `IS [NOT] NULL` test on an
+   * *extracted* jsonb value takes the query planner down at PLAN time on
+   * bm25-indexed tables, and `topics` carries such an index.
+   * `jsonbNullTest.test.ts` guards the shape.
    */
   findActiveVisitorRunTopics = async (
     agentId: string,
@@ -1311,71 +1234,8 @@ export class TopicModel {
       .from(topics)
       .where(
         and(
-          this.mine(),
           eq(topics.agentId, agentId),
-          isNotNull(topics.senderId),
-          sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
-          revocationGeneration === undefined
-            ? undefined
-            : sql`COALESCE((${topics.metadata} -> 'runningOperation' ->> 'shareGeneration')::int, 0) < ${revocationGeneration}`,
-        ),
-      );
-
-    return rows
-      .map((row) => ({
-        operationId: row.metadata?.runningOperation?.operationId,
-        topicId: row.id,
-      }))
-      .filter((row): row is ActiveShareRun => Boolean(row.operationId));
-  };
-
-  /**
-   * Agent-scoped (NOT workspace/user-scoped) variant of
-   * `findActiveVisitorRunTopics`, for `AiAgentService.interruptActiveShareRuns`'s
-   * deferred post-commit sweep only — every other caller of the sibling
-   * method should keep using it, this one is deliberately narrower-purpose.
-   *
-   * WHY unscoped: that sweep runs inside `after()`, arbitrarily long after
-   * the write that produced `revocationGeneration` committed. Between
-   * schedule time and this query, the agent can have been transferred AGAIN
-   * (a second, unrelated `AgentModel.transferAgents` /
-   * `AgentGroupRepository.transferToWorkspace` call) — its topics'
-   * `workspaceId`/`userId` moved a second time. That second transfer bumps
-   * NO new generation and schedules NO new reset callback, because the share
-   * was already flipped to `private` by the FIRST move (the `ne(visibility,
-   * 'private')` guard both transfer paths use finds nothing left to reset) —
-   * see `scheduleShareRunInterruptOnReset`'s JSDoc. So the ONLY callback that
-   * will ever fire for this revocation is the one already scheduled, still
-   * carrying the FIRST transfer's `targetWorkspaceId`, and the topic is no
-   * longer there. `mine()` (`findActiveVisitorRunTopics`'s ownership filter)
-   * would silently return nothing for it.
-   *
-   * `agentId` is the one identity that never changes across any number of
-   * transfers. This sweep's authority comes from holding that id plus a
-   * generation cutoff authenticated under the `agents.id FOR UPDATE` lock
-   * that produced it (see `bumpAgentShareGeneration`) — not from the
-   * caller's own current tenant scope — so matching on `agentId` alone,
-   * with no `userId`/`workspaceId` filter at all, is both correct and
-   * sufficient regardless of how many times the agent has moved since,
-   * including the double-transfer window.
-   *
-   * Also returns each row's raw `metadata` (unlike the sibling method) so
-   * `interruptActiveShareRuns` can pass it straight into `interruptTask`,
-   * letting that method skip its OWN workspace-scoped `topicModel.findById`
-   * lookup for remote-hetero cancellation dispatch — the same scope-drift
-   * window applies there too.
-   */
-  findActiveVisitorRunTopicsByAgentId = async (
-    agentId: string,
-    revocationGeneration?: number,
-  ): Promise<ActiveShareRun[]> => {
-    const rows = await this.db
-      .select({ id: topics.id, metadata: topics.metadata })
-      .from(topics)
-      .where(
-        and(
-          eq(topics.agentId, agentId),
-          isNotNull(topics.senderId),
+          isNotNull(topics.shareId),
           sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
           revocationGeneration === undefined
             ? undefined
@@ -1390,6 +1250,87 @@ export class TopicModel {
         topicId: row.id,
       }))
       .filter((row) => Boolean(row.operationId));
+  };
+
+  /**
+   * Owner-scoped sibling of `findActiveVisitorRunTopics`, for the destructive
+   * sweeps in this class: every share conversation THIS user owns that a
+   * delete is about to remove while a run is still in flight on it. See
+   * `TopicModelOptions.onShareRunsInterrupted`'s JSDoc for why the visitor's
+   * own delete is the case that matters.
+   *
+   * `extraMatch` mirrors the exact predicate of the destructive sweep this
+   * snapshot guards (e.g. `eq(topics.id, id)`, `inArray(topics.id, ids)`,
+   * `matchSession(...)`, or omitted entirely for `deleteAll`) so the snapshot
+   * and the delete can never drift apart. Stays private for that reason: an
+   * arbitrary `SQL` predicate is only safe to pass from code that also owns
+   * the corresponding delete's WHERE clause.
+   *
+   * The "has a running operation" predicate is a COALESCE comparison rather
+   * than `IS NOT NULL` for the planner reason documented on
+   * `findActiveVisitorRunTopics`.
+   */
+  private findOwnedActiveShareRuns = async (extraMatch?: SQL): Promise<ActiveShareRun[]> => {
+    const rows = await this.db
+      .select({ id: topics.id, metadata: topics.metadata })
+      .from(topics)
+      .where(
+        and(
+          this.mine(),
+          isNotNull(topics.shareId),
+          sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
+          extraMatch,
+        ),
+      );
+
+    return rows
+      .map((row): ActiveShareRun => ({
+        metadata: row.metadata,
+        operationId: row.metadata?.runningOperation?.operationId as string,
+        topicId: row.id,
+      }))
+      .filter((row) => Boolean(row.operationId));
+  };
+
+  /**
+   * Public, id-scoped sibling of {@link findOwnedActiveShareRuns}, for SIBLING
+   * models whose own bulk/batch writes can silently empty out a share topic's
+   * rows without ever touching the `topics` row itself — chiefly
+   * `MessageModel`'s message-level deletes. Those never delete the topic row,
+   * so nothing in THIS class's delete methods runs a snapshot for them: the
+   * caller must resolve the exact set of topic ids its write is about to
+   * affect BEFORE deleting, then hand that id list here.
+   */
+  findActiveShareRunsByIds = async (topicIds: string[]): Promise<ActiveShareRun[]> => {
+    if (topicIds.length === 0) return [];
+    return this.findOwnedActiveShareRuns(inArray(topics.id, topicIds));
+  };
+
+  /**
+   * Run a destructive topic sweep with the share-run snapshot taken inside the
+   * SAME transaction, and hand the snapshot to `onShareRunsInterrupted` only
+   * after that transaction commits — never before, so a rolled-back delete
+   * cannot interrupt a run that is still perfectly alive.
+   */
+  private deleteWithShareRunSnapshot = async <T>(
+    match: SQL | undefined,
+    runDelete: (trx: LobeChatDatabase) => Promise<T>,
+  ): Promise<T> => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findOwnedActiveShareRuns(match);
+
+      return runDelete(trx as LobeChatDatabase);
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   // **************** Create *************** //
@@ -1622,29 +1563,15 @@ export class TopicModel {
   /**
    * Delete a session, also delete all messages and topics associated with it.
    *
-   * Snapshots any in-flight Agent Share visitor run on this exact topic
-   * BEFORE the delete, same as the bulk sweeps below — a single-topic delete
-   * has the identical bug shape (see `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc) even though the creator's own topic
-   * list never surfaces a visitor topic to click delete on (`notShareVisitor`
-   * filters every read path). Fail closed rather than rely on that UI gap.
+   * Snapshots any in-flight Agent Share run on this exact topic BEFORE the
+   * delete: this single-topic path is the `topic.removeTopic` router endpoint,
+   * which a VISITOR reaches for their own running share conversation. See
+   * `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   delete = async (id: string) => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (trx) => {
-      activeShareRuns = await new TopicModel(
-        trx as LobeChatDatabase,
-        this.userId,
-        this.workspaceId,
-      ).findActiveVisitorRunTopicsMatching(eq(topics.id, id));
-
-      return trx.delete(topics).where(and(eq(topics.id, id), this.ownership()));
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+    return this.deleteWithShareRunSnapshot(eq(topics.id, id), (trx) =>
+      trx.delete(topics).where(and(eq(topics.id, id), this.ownership())),
+    );
   };
 
   /**
@@ -1652,72 +1579,46 @@ export class TopicModel {
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
    *
-   * Snapshots in-flight Agent Share visitor runs matching this exact session
-   * scope BEFORE the delete — see `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc.
+   * Snapshots in-flight share runs matching this exact session scope BEFORE
+   * the delete — see `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteBySessionId = async (
     sessionId?: string | null,
     options?: { restrictToCreator?: boolean },
   ) => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (trx) => {
-      activeShareRuns = await new TopicModel(
-        trx as LobeChatDatabase,
-        this.userId,
-        this.workspaceId,
-      ).findActiveVisitorRunTopicsMatching(this.matchSession(sessionId));
-
-      return trx
+    return this.deleteWithShareRunSnapshot(this.matchSession(sessionId), (trx) =>
+      trx
         .delete(topics)
         .where(
           and(
             this.matchSession(sessionId),
             options?.restrictToCreator ? this.mine() : this.ownership(),
           ),
-        );
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+        ),
+    );
   };
 
   /**
    * Deletes multiple topics based on the groupId.
    * `restrictToCreator` limits the sweep to the caller's own rows in workspace mode.
    *
-   * Snapshots in-flight Agent Share visitor runs matching this exact group
-   * scope BEFORE the delete — see `TopicModelOptions
-   * .onShareRunsInterrupted`'s JSDoc.
+   * Snapshots in-flight share runs matching this exact group scope BEFORE the
+   * delete — see `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteByGroupId = async (
     groupId?: string | null,
     options?: { restrictToCreator?: boolean },
   ) => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (trx) => {
-      activeShareRuns = await new TopicModel(
-        trx as LobeChatDatabase,
-        this.userId,
-        this.workspaceId,
-      ).findActiveVisitorRunTopicsMatching(this.matchGroup(groupId));
-
-      return trx
+    return this.deleteWithShareRunSnapshot(this.matchGroup(groupId), (trx) =>
+      trx
         .delete(topics)
         .where(
           and(
             this.matchGroup(groupId),
             options?.restrictToCreator ? this.mine() : this.ownership(),
           ),
-        );
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+        ),
+    );
   };
 
   /**
@@ -1725,91 +1626,46 @@ export class TopicModel {
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
    *
-   * Snapshots in-flight Agent Share visitor runs on this agent BEFORE the
-   * delete via the same `findActiveVisitorRunTopics` every other agent-scoped
-   * deletion path uses — see `TopicModelOptions.onShareRunsInterrupted`'s
-   * JSDoc.
+   * Snapshots in-flight share runs on this agent BEFORE the delete — see
+   * `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (trx) => {
-      activeShareRuns = await new TopicModel(
-        trx as LobeChatDatabase,
-        this.userId,
-        this.workspaceId,
-      ).findActiveVisitorRunTopics(agentId);
-
-      return trx
+    return this.deleteWithShareRunSnapshot(eq(topics.agentId, agentId), (trx) =>
+      trx
         .delete(topics)
         .where(
           and(
             options?.restrictToCreator ? this.mine() : this.ownership(),
             eq(topics.agentId, agentId),
           ),
-        );
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+        ),
+    );
   };
 
   /**
    * Deletes multiple topics and all messages associated with them in a transaction.
    *
-   * Snapshots in-flight Agent Share visitor runs among this exact id set
-   * BEFORE the delete — see `TopicModelOptions.onShareRunsInterrupted`'s
-   * JSDoc.
+   * Snapshots in-flight share runs among these exact ids BEFORE the delete —
+   * see `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDelete = async (ids: string[]) => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (trx) => {
-      activeShareRuns = await new TopicModel(
-        trx as LobeChatDatabase,
-        this.userId,
-        this.workspaceId,
-      ).findActiveVisitorRunTopicsMatching(inArray(topics.id, ids));
-
-      return trx.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+    return this.deleteWithShareRunSnapshot(inArray(topics.id, ids), (trx) =>
+      trx.delete(topics).where(and(inArray(topics.id, ids), this.ownership())),
+    );
   };
 
   /**
    * Deletes every topic this user owns — the checked `topic.removeAllTopics`
    * router path.
    *
-   * Snapshots EVERY in-flight Agent Share visitor run across every agent
-   * BEFORE the delete, not just one agent's: unlike `batchDeleteByAgentId`,
-   * this sweep is not scoped to a single agent, so it uses the scope-generic
-   * `findActiveVisitorRunTopicsMatching` with no extra predicate — the exact
-   * bulk-topic-deletion bug this method previously had: a visitor's running
-   * topic was deleted with no interrupt, the
-   * operation row survived with `topicId` set to null, and the visitor's
-   * `shareChat.interruptTask` could no longer find the topic to authorize the
-   * stop. See `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
+   * Snapshots every in-flight share run this user owns BEFORE the delete: for
+   * a visitor, "every topic I own" includes their running share conversations.
+   * See `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   deleteAll = async () => {
-    let activeShareRuns: ActiveShareRun[] = [];
-
-    const result = await this.db.transaction(async (trx) => {
-      activeShareRuns = await new TopicModel(
-        trx as LobeChatDatabase,
-        this.userId,
-        this.workspaceId,
-      ).findActiveVisitorRunTopicsMatching();
-
-      return trx.delete(topics).where(this.mine());
-    });
-
-    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
-
-    return result;
+    return this.deleteWithShareRunSnapshot(undefined, (trx) =>
+      trx.delete(topics).where(this.mine()),
+    );
   };
 
   // **************** Update *************** //
@@ -2597,9 +2453,6 @@ export class TopicModel {
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where: and(
         this.ownership(),
-        // Share-visitor conversations are not the creator's own speech — never
-        // feed them into the creator's memory extraction.
-        this.notShareVisitor(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted
@@ -2626,7 +2479,6 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
-          this.notShareVisitor(),
           options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted

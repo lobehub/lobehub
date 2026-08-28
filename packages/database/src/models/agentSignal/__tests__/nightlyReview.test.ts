@@ -588,10 +588,12 @@ describe('AgentSignalNightlyReviewModel', () => {
     });
 
     it('excludes messages inside an agent-share visitor topic from the nightly digest', async () => {
-      // Agent-share visitor topics keep the creator's userId on both the topic
-      // and its messages, but a non-null topics.senderId marks the topic as
-      // visitor traffic that must not feed the creator's own nightly review.
-      await serverDB.insert(users).values({ id: enabledUserId });
+      // An agent-share visitor's topic and messages belong to the VISITOR
+      // (`userId` is the visitor, `topics.shareId` records the share it came
+      // through). `listActiveAgentTargets` scopes its query to the calling
+      // creator's own `userId`, so the visitor's rows are structurally
+      // unreachable and must not feed the creator's own nightly review.
+      await serverDB.insert(users).values([{ id: enabledUserId }, { id: otherUserId }]);
       await serverDB.insert(agents).values({
         chatConfig: { selfIteration: { enabled: true } },
         id: 'nightly-share-agent',
@@ -602,9 +604,9 @@ describe('AgentSignalNightlyReviewModel', () => {
         {
           agentId: 'nightly-share-agent',
           id: 'nightly-visitor-topic',
-          senderId: 'visitor-user-x',
+          shareId: '00000000-0000-4000-8000-000000000005',
           title: 'Visitor topic',
-          userId: enabledUserId,
+          userId: otherUserId,
         },
         {
           agentId: 'nightly-share-agent',
@@ -621,7 +623,7 @@ describe('AgentSignalNightlyReviewModel', () => {
           id: 'nightly-visitor-message',
           role: 'user',
           topicId: 'nightly-visitor-topic',
-          userId: enabledUserId,
+          userId: otherUserId,
         },
         {
           agentId: 'nightly-share-agent',

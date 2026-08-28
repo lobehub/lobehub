@@ -36,7 +36,6 @@ import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 import { AiAgentService } from '@/server/services/aiAgent';
-import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import {
   AgentEvalRunWorkflow,
@@ -147,24 +146,9 @@ export class AgentEvalRunService {
     this.experimentModel = new AgentEvalExperimentModel(db, userId, workspaceId);
     this.runTopicModel = new AgentEvalRunTopicModel(db, userId, workspaceId);
     this.testCaseModel = new AgentEvalTestCaseModel(db, userId, workspaceId);
-    // `onShareRunsInterrupted`: `resolveTrajectoryResumeTarget`'s dangling-
-    // message cleanup below calls `MessageModel.deleteMessages`, the same
-    // share-visitor gap `deleteRun`'s `TopicModel.batchDelete` closes below —
-    // wiring it here too keeps every bulk delete on this service on one
-    // contract instead of assuming eval-run topics can never carry a
-    // `senderId`. See `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
-    this.messageModel = new MessageModel(db, userId, workspaceId, {
-      onShareRunsInterrupted: interruptSnapshottedShareRuns(db, userId),
-    });
+    this.messageModel = new MessageModel(db, userId, workspaceId);
     this.threadModel = new ThreadModel(db, userId, workspaceId);
-    // `onShareRunsInterrupted`: `deleteRun`'s cleanup below reuses
-    // `TopicModel.batchDelete`, the same shared bulk-delete surface the
-    // `topic.removeAllTopics` router path uses — wiring it here too keeps
-    // both callers on one contract instead of assuming eval-run topics can
-    // never carry a `senderId`.
-    this.topicModel = new TopicModel(db, userId, workspaceId, {
-      onShareRunsInterrupted: interruptSnapshottedShareRuns(db, userId),
-    });
+    this.topicModel = new TopicModel(db, userId, workspaceId);
     this.agentService = new AgentService(db, userId, workspaceId);
   }
 

@@ -132,7 +132,6 @@ const topicMock = {
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findActiveVisitorRunTopics: vi.fn().mockResolvedValue([]),
-  findActiveVisitorRunTopicsByAgentId: vi.fn().mockResolvedValue([]),
   findById: vi.fn().mockResolvedValue(undefined),
   releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
   tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
@@ -1653,7 +1652,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   // for a visitor who may no longer be present (closed tab).
   describe('interruptActiveShareRuns', () => {
     it('interrupts every active visitor run found for the agent', async () => {
-      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
         { operationId: 'op-1', topicId: 'topic-1' },
         { operationId: 'op-2', topicId: 'topic-2' },
       ]);
@@ -1661,11 +1660,12 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
       await service.interruptActiveShareRuns('agent-1', 2);
 
-      // Agent-scoped, NOT workspace-scoped: `findActiveVisitorRunTopicsByAgentId`,
-      // not the sibling `findActiveVisitorRunTopics` — see that method's
-      // JSDoc for why the sweep must key on `agentId` alone, to cover the
-      // double-transfer window where an agent moves between workspaces.
-      expect(topicMock.findActiveVisitorRunTopicsByAgentId).toHaveBeenCalledWith('agent-1', 2);
+      // Agent-scoped and deliberately UNSCOPED by user/workspace — see
+      // `findActiveVisitorRunTopics`'s JSDoc: the runs it stops belong to
+      // visitors while the caller is the creator, and keying on `agentId`
+      // alone also covers the double-transfer window where an agent moves
+      // between workspaces.
+      expect(topicMock.findActiveVisitorRunTopics).toHaveBeenCalledWith('agent-1', 2);
       expect(interruptTaskSpy).toHaveBeenCalledWith({
         operationId: 'op-1',
         topicId: 'topic-1',
@@ -1680,7 +1680,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     it('passes each run’s already-fetched topic metadata straight through, skipping interruptTask’s own scoped re-fetch', async () => {
       const runningOperation = { operationId: 'op-1' };
-      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
         { metadata: { runningOperation }, operationId: 'op-1', topicId: 'topic-1' },
       ]);
       const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
@@ -1697,7 +1697,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('does nothing when the agent has no active visitor run', async () => {
-      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([]);
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([]);
       const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
 
       await service.interruptActiveShareRuns('agent-1', 2);
@@ -1706,7 +1706,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('keeps interrupting the remaining runs when one interrupt fails on both attempts', async () => {
-      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
         { operationId: 'op-1', topicId: 'topic-1' },
         { operationId: 'op-2', topicId: 'topic-2' },
       ]);
@@ -1736,7 +1736,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     // authorization recheck in `AgentRuntimeService` (covered separately in
     // `AgentRuntimeService.shareGeneration.test.ts`).
     it('retries once and succeeds when the first interrupt attempt rejects', async () => {
-      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
         { operationId: 'op-1', topicId: 'topic-1' },
       ]);
       const interruptTaskSpy = vi

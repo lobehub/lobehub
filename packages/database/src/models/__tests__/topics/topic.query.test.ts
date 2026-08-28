@@ -2345,19 +2345,22 @@ describe('TopicModel - Query', () => {
     });
   });
 
-  describe('queryBySender', () => {
+  describe('queryVisitorShareTopics', () => {
     const shareId = '11111111-1111-1111-1111-111111111111';
 
     it('returns only the visitor-facing DTO, never creator-only fields', async () => {
       const agentId = 'share-agent';
       const visitorId = 'share-visitor';
+      await serverDB.insert(users).values({ id: visitorId });
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent' });
+      // The conversation belongs to the VISITOR: `topics.userId` is the
+      // visitor's id and `shareId` is the only provenance marker back to the
+      // agent's share instance.
       await serverDB.insert(topics).values({
         id: 'share-topic-1',
         title: 'Shared Topic',
-        userId,
+        userId: visitorId,
         agentId,
-        senderId: visitorId,
         shareId,
         status: 'completed',
         model: 'gpt-4',
@@ -2367,7 +2370,10 @@ describe('TopicModel - Query', () => {
         metadata: { boundDeviceId: 'internal-detail' },
       });
 
-      const result = await topicModel.queryBySender({ agentId, senderId: visitorId, shareId });
+      const result = await new TopicModel(serverDB, visitorId).queryVisitorShareTopics({
+        agentId,
+        shareId,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
@@ -2386,15 +2392,21 @@ describe('TopicModel - Query', () => {
       expect(result[0]).not.toHaveProperty('metadata');
     });
 
-    it('scopes results to the given senderId on the same agent', async () => {
+    it('scopes results to the calling visitor, not a second visitor on the same share', async () => {
       const agentId = 'share-agent-2';
+      const visitorAId = 'visitor-a';
+      const visitorBId = 'visitor-b';
+      await serverDB.insert(users).values([{ id: visitorAId }, { id: visitorBId }]);
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 2' });
       await serverDB.insert(topics).values([
-        { id: 'visitor-a-topic', title: 'A', userId, agentId, senderId: 'visitor-a', shareId },
-        { id: 'visitor-b-topic', title: 'B', userId, agentId, senderId: 'visitor-b', shareId },
+        { id: 'visitor-a-topic', title: 'A', userId: visitorAId, agentId, shareId },
+        { id: 'visitor-b-topic', title: 'B', userId: visitorBId, agentId, shareId },
       ]);
 
-      const result = await topicModel.queryBySender({ agentId, senderId: 'visitor-a', shareId });
+      const result = await new TopicModel(serverDB, visitorAId).queryVisitorShareTopics({
+        agentId,
+        shareId,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('visitor-a-topic');
@@ -2402,37 +2414,35 @@ describe('TopicModel - Query', () => {
 
     // Regression test: `AgentShareModel.create()` mints a
     // brand-new `agentShares.id` every disable → re-enable cycle. A returning
-    // visitor opening the REPLACEMENT link must not see (or have counted)
-    // conversations from the share instance the owner already took down —
-    // see `topics.shareId`'s JSDoc (`../../schemas/topic.ts`).
+    // visitor opening the REPLACEMENT link must not see conversations from
+    // the share instance the owner already took down — see `topics.shareId`'s
+    // JSDoc (`../../schemas/topic.ts`).
     it('excludes topics created under a different (e.g. disabled-and-replaced) share instance', async () => {
       const agentId = 'share-agent-3';
       const visitorId = 'returning-visitor';
       const oldShareId = '22222222-2222-2222-2222-222222222222';
       const newShareId = '33333333-3333-3333-3333-333333333333';
+      await serverDB.insert(users).values({ id: visitorId });
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 3' });
       await serverDB.insert(topics).values([
         {
           id: 'old-share-topic',
           title: 'From the disabled share',
-          userId,
+          userId: visitorId,
           agentId,
-          senderId: visitorId,
           shareId: oldShareId,
         },
         {
           id: 'new-share-topic',
           title: 'From the new share',
-          userId,
+          userId: visitorId,
           agentId,
-          senderId: visitorId,
           shareId: newShareId,
         },
       ]);
 
-      const result = await topicModel.queryBySender({
+      const result = await new TopicModel(serverDB, visitorId).queryVisitorShareTopics({
         agentId,
-        senderId: visitorId,
         shareId: newShareId,
       });
 
@@ -2441,7 +2451,7 @@ describe('TopicModel - Query', () => {
     });
   });
 
-  describe('countBySender', () => {
+  describe('countVisitorShareTopics', () => {
     // Regression test: without `shareId` scoping, stale
     // topics from a share instance the owner already disabled would count
     // against a brand-new share's `maxTopicsPerVisitor`, potentially making
@@ -2451,64 +2461,100 @@ describe('TopicModel - Query', () => {
       const visitorId = 'returning-visitor-2';
       const oldShareId = '44444444-4444-4444-4444-444444444444';
       const newShareId = '55555555-5555-5555-5555-555555555555';
+      await serverDB.insert(users).values({ id: visitorId });
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 4' });
       await serverDB.insert(topics).values([
         {
           id: 'old-share-topic-2',
           title: 'From the disabled share',
-          userId,
+          userId: visitorId,
           agentId,
-          senderId: visitorId,
           shareId: oldShareId,
         },
       ]);
 
-      const staleCount = await topicModel.countBySender({
+      const visitorModel = new TopicModel(serverDB, visitorId);
+
+      const staleCount = await visitorModel.countVisitorShareTopics({
         agentId,
-        senderId: visitorId,
         shareId: newShareId,
       });
       expect(staleCount).toBe(0);
 
-      const oldShareCount = await topicModel.countBySender({
+      const oldShareCount = await visitorModel.countVisitorShareTopics({
         agentId,
-        senderId: visitorId,
         shareId: oldShareId,
       });
       expect(oldShareCount).toBe(1);
+    });
+
+    it('scopes the count to the calling visitor, not a second visitor on the same share', async () => {
+      const agentId = 'share-agent-5';
+      const shareId = '66666666-6666-6666-6666-666666666666';
+      const visitorAId = 'visitor-a-count';
+      const visitorBId = 'visitor-b-count';
+      await serverDB.insert(users).values([{ id: visitorAId }, { id: visitorBId }]);
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 5' });
+      await serverDB.insert(topics).values([
+        { id: 'visitor-a-count-topic', title: 'A', userId: visitorAId, agentId, shareId },
+        { id: 'visitor-b-count-topic-1', title: 'B1', userId: visitorBId, agentId, shareId },
+        { id: 'visitor-b-count-topic-2', title: 'B2', userId: visitorBId, agentId, shareId },
+      ]);
+
+      const result = await new TopicModel(serverDB, visitorAId).countVisitorShareTopics({
+        agentId,
+        shareId,
+      });
+
+      expect(result).toBe(1);
     });
   });
 
   // Regression test: revoking a share must be able to find every
   // in-flight visitor run so it can interrupt them — see
-  // `AiAgentService.interruptActiveShareRuns`.
+  // `AiAgentService.interruptActiveShareRuns`. The query is deliberately NOT
+  // scoped to any user: share conversations belong to their visitors, so the
+  // creator-scoped `topicModel` above would never see the rows it needs to
+  // interrupt.
   describe('findActiveVisitorRunTopics', () => {
     it('returns the running operationId for a share-visitor topic with a running operation', async () => {
       const agentId = 'active-share-agent';
+      const visitorId = 'visitor-active';
+      await serverDB.insert(users).values({ id: visitorId });
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Active Share Agent' });
       await serverDB.insert(topics).values({
         id: 'active-visitor-topic',
         title: 'Active',
-        userId,
+        userId: visitorId,
         agentId,
-        senderId: 'visitor-active',
+        shareId: '77777777-7777-7777-7777-777777777777',
         metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
       });
 
+      // Called from the creator's model to prove the lookup crosses ownership:
+      // the agent belongs to `userId`, the running topic belongs to `visitorId`.
       const result = await topicModel.findActiveVisitorRunTopics(agentId);
 
-      expect(result).toEqual([{ operationId: 'op-1', topicId: 'active-visitor-topic' }]);
+      expect(result).toEqual([
+        {
+          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+          operationId: 'op-1',
+          topicId: 'active-visitor-topic',
+        },
+      ]);
     });
 
     it('ignores share-visitor topics without a running operation', async () => {
       const agentId = 'idle-share-agent';
+      const visitorId = 'visitor-idle';
+      await serverDB.insert(users).values({ id: visitorId });
       await serverDB.insert(agents).values({ id: agentId, userId, title: 'Idle Share Agent' });
       await serverDB.insert(topics).values({
         id: 'idle-visitor-topic',
         title: 'Idle',
-        userId,
+        userId: visitorId,
         agentId,
-        senderId: 'visitor-idle',
+        shareId: '88888888-8888-8888-8888-888888888888',
         metadata: {},
       });
 
@@ -2525,7 +2571,9 @@ describe('TopicModel - Query', () => {
         title: 'Creator',
         userId,
         agentId,
-        senderId: null,
+        // `shareId` is null: this is a plain creator-owned topic, not a
+        // share-visitor conversation, so it must never qualify.
+        shareId: null,
         metadata: { runningOperation: { assistantMessageId: 'msg-2', operationId: 'op-2' } },
       });
 

@@ -327,7 +327,7 @@ describe('topicReferenceRuntime', () => {
       vi.clearAllMocks();
     });
 
-    it("limits topic references to the visitor's own topics: rejects a topic outside the share", async () => {
+    it("limits topic references to this share's own topics: rejects a topic that did not come from a share", async () => {
       const context: ToolExecutionContext = {
         principal: resolveRunPrincipal({
           agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
@@ -338,11 +338,12 @@ describe('topicReferenceRuntime', () => {
       };
       const runtime = topicReferenceRuntime.factory(context);
 
-      // Belongs to a different visitor/agent pairing than the active share.
+      // The lookup is actor-scoped, so this is one of the VISITOR's own rows —
+      // but it carries no `shareId`, meaning it never came from this share and
+      // must not be pulled into a run the creator is funding.
       mockTopicModelFindById.mockResolvedValue({
         agentId: 'agent-1',
         id: 'topic-out-of-scope',
-        senderId: 'someone-else',
         title: 'Not visible',
       });
 
@@ -356,7 +357,7 @@ describe('topicReferenceRuntime', () => {
       expect(mockMessageModelQuery).not.toHaveBeenCalled();
     });
 
-    it("limits topic references to the visitor's own topics: rejects a topic on a different agent", async () => {
+    it("limits topic references to this share's own topics: rejects a topic on a different agent", async () => {
       const context: ToolExecutionContext = {
         principal: resolveRunPrincipal({
           agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
@@ -370,7 +371,7 @@ describe('topicReferenceRuntime', () => {
       mockTopicModelFindById.mockResolvedValue({
         agentId: 'agent-2',
         id: 'topic-other-agent',
-        senderId: 'visitor-1',
+        shareId: 'share-1',
         title: 'Not visible',
       });
 
@@ -397,7 +398,6 @@ describe('topicReferenceRuntime', () => {
         agentId: 'agent-1',
         historySummary: 'Summary for the visitor own topic',
         id: 'topic-in-scope',
-        senderId: 'visitor-1',
         shareId: 'share-1',
         title: 'Visible Topic',
       });
@@ -417,7 +417,7 @@ describe('topicReferenceRuntime', () => {
       };
       const runtime = topicReferenceRuntime.factory(context);
 
-      // No senderId/agentId match required when there is no active share.
+      // No agentId/shareId match required when there is no active share.
       mockTopicModelFindById.mockResolvedValue({
         historySummary: 'Regular summary',
         id: 'topic-regular',

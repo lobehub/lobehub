@@ -2,7 +2,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, topics, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AgentShareModel } from '@/database/models/agentShare';
@@ -43,7 +43,7 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const agentShareModel = new AgentShareModel(serverDB, ownerId);
 
 const cleanup = async () => {
-  await serverDB.delete(users).where(eq(users.id, ownerId));
+  await serverDB.delete(users).where(inArray(users.id, [ownerId, visitorId]));
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,7 +51,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — row-lock ordering vs concurrent updateConfig (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
+    // The visitor is a real user row now: a share conversation is THEIR
+    // topic, so it cannot be inserted without one.
+    await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   });
 
   afterAll(cleanup);
@@ -70,7 +72,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
 
     // Guard call A: reads the (still 50) cap, then artificially holds the
     // Agent row lock open for DELAY_MS before actually inserting — the exact
-    // window Codex's ordering targets. `create` is the caller-supplied hook
+    // window this ordering bug targets. `create` is the caller-supplied hook
     // that runs INSIDE the guard's own locked transaction, so the delay here
     // genuinely happens with the row lock held, not after it is released.
     const reservationA = reserveShareVisitorTopicOrThrow({
@@ -80,7 +82,6 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
         await sleep(DELAY_MS);
         const created = await topicModel.create({
           agentId,
-          senderId: visitorId,
           shareId,
           title: 'topic-a',
         });
@@ -129,8 +130,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
       reserveShareVisitorTopicOrThrow({
         agentId,
         expectedGeneration: 1,
-        create: (topicModel, shareId) =>
-          topicModel.create({ agentId, senderId: visitorId, shareId, title: 'topic-b' }),
+        create: (topicModel, shareId) => topicModel.create({ agentId, shareId, title: 'topic-b' }),
         db: serverDB,
         ownerId,
         visitorUserId: visitorId,
@@ -149,7 +149,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
 
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId, senderId: visitorId, userId: ownerId })
+      .values({ agentId, shareId: '00000000-0000-4000-8000-000000000001', userId: visitorId })
       .returning();
 
     const DELAY_MS = 400;
@@ -172,6 +172,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
       db: serverDB,
       ownerId,
       topicId: topic.id,
+      visitorUserId: visitorId,
     });
 
     await sleep(50);
@@ -196,6 +197,7 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — r
         db: serverDB,
         ownerId,
         topicId: topic.id,
+        visitorUserId: visitorId,
       }),
     ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
   }, 15_000);

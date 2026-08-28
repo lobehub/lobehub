@@ -37,7 +37,8 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  await serverDB.insert(users).values([{ id: ownerId }]);
+  // The visitor is a real user row: a share conversation is THEIR topic.
+  await serverDB.insert(users).values([{ id: ownerId }, { id: visitorId }]);
   await serverDB.insert(workspaces).values([
     {
       id: targetWsId,
@@ -72,11 +73,13 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     // The supervisor is `owned` by the group but is still an ordinary
     // personal agent as far as Agent Share is concerned — it can carry its
     // own `link` share the same as any other personal agent.
-    await agentShareModel.create(supervisorId, 'link');
+    const share = await agentShareModel.create(supervisorId, 'link');
 
+    // The share conversation belongs to the VISITOR; `shareId` links it back
+    // to the share instance it came from (see `schemas/topic.ts`).
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId: supervisorId, senderId: visitorId, userId: ownerId })
+      .values({ agentId: supervisorId, shareId: share.id, userId: visitorId })
       .returning();
 
     const operationId = 'op-group-transfer-race';
@@ -152,11 +155,11 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     ]);
 
     const agentShareModel = new AgentShareModel(serverDB, ownerId);
-    await agentShareModel.create(supervisorId, 'link');
+    const share = await agentShareModel.create(supervisorId, 'link');
 
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId: supervisorId, groupId, senderId: visitorId, userId: ownerId })
+      .values({ agentId: supervisorId, groupId, shareId: share.id, userId: visitorId })
       .returning();
 
     const operationId = 'op-group-transfer-race-running';
@@ -195,13 +198,13 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     expect(revocationGeneration).toBe(2);
 
     // Agent-scoped, mirroring what `scheduleShareRunInterruptOnReset`
-    // actually does post-transfer: `findActiveVisitorRunTopicsByAgentId`
+    // actually does post-transfer: `findActiveVisitorRunTopics`
     // matches on `supervisorId` alone, independent of which workspace the
     // transfer moved the topic into. A personal-scoped (or, before this
     // fix, a stale-workspace-scoped) re-query would miss this topic now that
     // the transfer has moved it.
     const unscopedTopicModel = new TopicModel(serverDB, ownerId);
-    const active = await unscopedTopicModel.findActiveVisitorRunTopicsByAgentId(
+    const active = await unscopedTopicModel.findActiveVisitorRunTopics(
       supervisorId,
       revocationGeneration!,
     );
@@ -222,7 +225,7 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
   // ONE callback that will ever run for this revocation must still find the
   // topic wherever the SECOND transfer left it (workspace B, not the FIRST
   // transfer's workspace A). See `TopicModel
-  // .findActiveVisitorRunTopicsByAgentId`'s JSDoc and
+  // .findActiveVisitorRunTopics`'s JSDoc and
   // `shareResetInterrupt.ts`'s JSDoc for the full rationale.
   it('finds an already-running visitor operation after a SECOND transfer moves it again before the deferred sweep runs', async () => {
     const secondWsId = 'agent-share-group-transfer-race-ws-2';
@@ -250,11 +253,11 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     ]);
 
     const agentShareModel = new AgentShareModel(serverDB, ownerId);
-    await agentShareModel.create(supervisorId, 'link');
+    const share = await agentShareModel.create(supervisorId, 'link');
 
     const [topic] = await serverDB
       .insert(topics)
-      .values({ agentId: supervisorId, groupId, senderId: visitorId, userId: ownerId })
+      .values({ agentId: supervisorId, groupId, shareId: share.id, userId: visitorId })
       .returning();
 
     const operationId = 'op-group-double-transfer-race';
@@ -322,13 +325,16 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
     expect(revoked).toEqual([]); // already confirmed, nothing left to revoke
 
     const unscopedTopicModel = new TopicModel(serverDB, ownerId);
-    const active = await unscopedTopicModel.findActiveVisitorRunTopicsByAgentId(
+    const active = await unscopedTopicModel.findActiveVisitorRunTopics(
       supervisorId,
       revocationGeneration!,
     );
-    // Found by `agentId` alone, in its ACTUAL current workspace (B) — a
-    // workspace-A-scoped query (the pre-fix behavior) would have found
-    // nothing here.
+    // Found by `agentId` alone, in its ACTUAL current workspace (B).
+    // `findActiveVisitorRunTopics` is deliberately unscoped by workspace AND
+    // by user (see its JSDoc): a workspace-scoped variant would miss the topic
+    // after a second transfer, and a user-scoped one could not see it at all
+    // now that a share conversation belongs to the visitor rather than the
+    // creator running this sweep.
     expect(active).toEqual([
       {
         metadata: expect.objectContaining({ runningOperation: expect.anything() }),
@@ -336,14 +342,5 @@ describe('AgentGroupRepository.transferToWorkspace share reset x visitor run res
         topicId: topic.id,
       },
     ]);
-
-    // And the pre-fix, workspace-scoped query genuinely WOULD have missed
-    // it — demonstrating exactly what this fix closes.
-    const staleWorkspaceScopedTopicModel = new TopicModel(serverDB, ownerId, targetWsId);
-    const staleActive = await staleWorkspaceScopedTopicModel.findActiveVisitorRunTopics(
-      supervisorId,
-      revocationGeneration!,
-    );
-    expect(staleActive).toEqual([]);
   });
 });

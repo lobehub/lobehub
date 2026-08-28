@@ -12,7 +12,6 @@ import {
   userMemories,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 const parseAggregateTimestamp = (value: Date | string) =>
@@ -101,12 +100,11 @@ export interface AgentSignalDocumentActivityRow {
 /**
  * Database-backed context queries for Agent Signal self-review policies.
  *
- * Share-visitor topics carry the creator's `userId` (billing) alongside a
- * non-null `senderId` (the visitor), so plain ownership scoping alone surfaces
- * them here too. Every topic/message activity reader in this class ANDs in
- * `notShareVisitorMessage()` — otherwise a visitor's topic titles, tool
- * arguments, and failures would feed the creator's durable self-iteration /
- * expertise learning outside the share-budget gate.
+ * Every reader here is ownership-scoped, which is also what keeps a share
+ * visitor's conversation out of the creator's self-iteration and expertise
+ * learning: a share conversation belongs to the VISITOR, so the creator's own
+ * scope never reaches its titles, tool arguments or failures in the first
+ * place.
  */
 export class AgentSignalReviewContextModel {
   private readonly db: LobeChatDatabase;
@@ -208,9 +206,6 @@ export class AgentSignalReviewContextModel {
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
-          // Share-visitor tool calls bill to the creator but are not the
-          // creator's own activity — never feed them into self-iteration context.
-          notShareVisitorMessage(),
         ),
       )
       .groupBy(messagePlugins.identifier, messagePlugins.apiName)
@@ -307,10 +302,6 @@ export class AgentSignalReviewContextModel {
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
-          // Share-visitor topics bill to the creator but are not the creator's
-          // own speech — excluding them keeps visitor titles, summaries, and
-          // failures out of nightly self-iteration / expertise ingestion.
-          notShareVisitorMessage(),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)
@@ -373,9 +364,6 @@ export class AgentSignalReviewContextModel {
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
           eq(messages.topicId, options.topicId),
-          // A visitor could hand back a scopeId/topicId that resolves to their
-          // own share topic — fail closed so self-reflection never ingests it.
-          notShareVisitorMessage(),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)

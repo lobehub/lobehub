@@ -26,7 +26,7 @@ export const agentShareConfigSchema = z
       })
       .strict()
       .optional(),
-    // Bounded by the visitor topic list page size (`TopicModel.queryBySender`),
+    // Bounded by the visitor topic list page size (`TopicModel.queryVisitorShareTopics`),
     // which has no cursor: a higher cap would let a visitor create topics that
     // the list can never show again.
     maxTopicsPerVisitor: z.number().int().positive().max(VISITOR_TOPIC_PAGE_SIZE),

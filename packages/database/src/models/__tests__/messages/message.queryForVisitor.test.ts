@@ -9,9 +9,10 @@ import { MessageModel, sanitizeVisitorError, toVisitorMessage } from '../../mess
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
-// `queryForVisitor` is read under the CREATOR's account scope (agent-share
-// visitor reads run `new MessageModel(db, share.ownerId)`), matching the
-// production shareChat.ts caller.
+// `queryForVisitor` is read under the VISITOR's own account scope (a share
+// conversation belongs to the visitor — see `schemas/topic.ts`), matching the
+// production shareChat.ts caller. The creator user row below only exists so
+// the fixtures can prove nothing of theirs crosses the boundary.
 const creatorId = 'visitor-dto-creator';
 const visitorId = 'visitor-dto-visitor';
 const testUserIds = [creatorId, visitorId];
@@ -41,8 +42,8 @@ describe('MessageModel.queryForVisitor', () => {
     await serverDB.insert(topics).values({
       id: topicId,
       title: 'Share topic',
-      userId: creatorId,
-      senderId: visitorId,
+      shareId: '00000000-0000-4000-8000-000000000001',
+      userId: visitorId,
     });
     await serverDB.insert(messages).values([
       {
@@ -51,7 +52,7 @@ describe('MessageModel.queryForVisitor', () => {
         createdAt: new Date('2026-01-01'),
         role: 'user',
         topicId,
-        userId: creatorId,
+        userId: visitorId,
       },
       {
         id: 'visitor-dto-assistant-message',
@@ -69,17 +70,17 @@ describe('MessageModel.queryForVisitor', () => {
         role: 'assistant',
         topicId,
         usage: { totalTokens: 999 } as any,
-        userId: creatorId,
+        userId: visitorId,
       },
     ]);
 
-    // Mirrors shareChat.ts: the model is scoped to the CREATOR's account.
-    const creatorScopedModel = new MessageModel(serverDB, creatorId);
-    const result = await creatorScopedModel.queryForVisitor({ topicId });
+    // Mirrors shareChat.ts: the model is scoped to the VISITOR's account.
+    const visitorScopedModel = new MessageModel(serverDB, visitorId);
+    const result = await visitorScopedModel.queryForVisitor({ topicId });
 
     expect(result).toHaveLength(2);
     for (const message of result) {
-      // The creator's account identity must never cross the share boundary.
+      // No account identity is hydrated onto a visitor-facing row at all.
       expect(message.sender).toBeNull();
       expect(message.usage).toBeUndefined();
       expect(message.works).toBeUndefined();
@@ -106,35 +107,36 @@ describe('MessageModel.queryForVisitor', () => {
     expect((assistantMessage?.metadata as any)?.cost).toBeUndefined();
   });
 
-  it('still exposes the creator identity through the raw query() path (regression guard)', async () => {
-    // Guards the premise of the fix above: without `queryForVisitor`, `query()`
-    // hydrates the creator's account into `sender` — this is the vulnerable
-    // path shareChat.ts must never call directly for visitor reads.
+  it("still exposes the creator's execution snapshot through the raw query() path (regression guard)", async () => {
+    // Guards the premise of the redaction above: `query()` returns the
+    // model/provider/usage the CREATOR's agent ran with, and that stays true
+    // even now that the row itself belongs to the visitor. This is the path
+    // shareChat.ts must never call directly for visitor reads.
     const topicId = 'visitor-dto-raw-topic';
     await serverDB.insert(topics).values({
       id: topicId,
       title: 'Share topic',
-      userId: creatorId,
-      senderId: visitorId,
+      shareId: '00000000-0000-4000-8000-000000000001',
+      userId: visitorId,
     });
     await serverDB.insert(messages).values({
       id: 'visitor-dto-raw-message',
-      content: 'hello agent',
+      content: 'hello human',
       createdAt: new Date('2026-01-01'),
-      role: 'user',
+      model: 'gpt-4',
+      provider: 'openai',
+      role: 'assistant',
       topicId,
-      userId: creatorId,
+      usage: { totalTokens: 999 } as any,
+      userId: visitorId,
     });
 
-    const creatorScopedModel = new MessageModel(serverDB, creatorId);
-    const [rawMessage] = await creatorScopedModel.query({ topicId });
+    const visitorScopedModel = new MessageModel(serverDB, visitorId);
+    const [rawMessage] = await visitorScopedModel.query({ topicId });
 
-    expect(rawMessage.sender).toEqual({
-      avatar: 'https://example.com/creator-avatar.png',
-      fullName: 'Creator Full Name',
-      id: creatorId,
-      username: 'creator-handle',
-    });
+    expect(rawMessage.model).toBe('gpt-4');
+    expect(rawMessage.provider).toBe('openai');
+    expect((rawMessage as any).usage).toMatchObject({ totalTokens: 999 });
   });
 });
 
