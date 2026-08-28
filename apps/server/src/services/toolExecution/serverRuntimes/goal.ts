@@ -6,6 +6,7 @@ import {
 
 import { GoalService } from '@/server/services/goal';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -53,6 +54,17 @@ export const goalRuntime: ServerRuntimeRegistration = {
             title: args.name,
             work: [{ description: args.instruction, title: args.name }],
           });
+          // The TRPC `goal.create` route queues this; calling the service
+          // directly does not. Without it the "the server will pick it up"
+          // promise below is false — outside queue mode there is no local timer
+          // for the goal and no recurring sweep, so it would sit in `planning`
+          // while the agent has been told not to create it again.
+          await scheduleGoalAdvance({
+            goalId: graph.goal.id,
+            userId,
+            workspaceId: workspaceId ?? undefined,
+          });
+
           const created = `Goal "${graph.goal.title}" created with ${drafts.length} acceptance criteria.`;
           const tail =
             'Execution continues in its own task; do not perform or reproduce the work in this conversation.';
