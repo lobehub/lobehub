@@ -45,19 +45,21 @@ const createDependencies = () => {
     refresh: vi.fn().mockResolvedValue(undefined),
   };
   const repository: SearchReindexStateRepository = {
-    checkpointBatch: vi.fn(async (checkpoint) => {
-      const progress = state.progress.find(({ entity }) => entity === checkpoint.entity)!;
-      if (progress.cursor !== checkpoint.previousCursor) return false;
-      progress.cursor = checkpoint.cursor;
-      progress.processedCount += checkpoint.processedCount;
-      progress.indexedCount += checkpoint.indexedCount;
-      failures.set(
-        checkpoint.entity,
-        checkpoint.failures.map(({ documentId }) => ({ documentId })),
-      );
-      progress.failedCount = failures.get(checkpoint.entity)?.length ?? 0;
-      return true;
-    }),
+    checkpointBatch: vi.fn(
+      async (checkpoint: Parameters<SearchReindexStateRepository['checkpointBatch']>[0]) => {
+        const progress = state.progress.find(({ entity }) => entity === checkpoint.entity)!;
+        if (progress.cursor !== checkpoint.previousCursor) return false;
+        progress.cursor = checkpoint.cursor;
+        progress.processedCount += checkpoint.processedCount;
+        progress.indexedCount += checkpoint.indexedCount;
+        failures.set(
+          checkpoint.entity,
+          checkpoint.failures.map(({ documentId }) => ({ documentId })),
+        );
+        progress.failedCount = failures.get(checkpoint.entity)?.length ?? 0;
+        return true;
+      },
+    ),
     completeEntity: vi.fn(async (_runId, entity) => {
       state.progress.find((item) => item.entity === entity)!.status = 'completed';
     }),
@@ -93,7 +95,9 @@ describe('SearchReindexService', () => {
     const { builder, client, repository, state } = createDependencies();
     const events: unknown[] = [];
     const service = new SearchReindexService(builder, repository, client, {
-      onProgress: (event) => events.push(event),
+      onProgress: (event) => {
+        events.push(event);
+      },
     });
 
     await expect(service.run('test', 1)).resolves.toMatchObject({
@@ -225,7 +229,9 @@ describe('SearchReindexService', () => {
     );
     const service = new SearchReindexService(builder, repository, client, {
       maxRequestRetries: 1,
-      onProgress: (event) => events.push(event),
+      onProgress: (event) => {
+        events.push(event);
+      },
       retryBaseDelayMs: 0,
     });
 
@@ -278,7 +284,9 @@ describe('SearchReindexService', () => {
     vi.mocked(client.bulk).mockRejectedValueOnce(new Error('gateway unavailable'));
     const service = new SearchReindexService(builder, repository, client, {
       maxRequestRetries: 0,
-      onProgress: (event) => events.push(event),
+      onProgress: (event) => {
+        events.push(event);
+      },
     });
 
     await expect(service.run('test', 1)).rejects.toThrow('gateway unavailable');
@@ -382,7 +390,11 @@ describe('SearchReindexService', () => {
       { buildBatch: vi.fn().mockResolvedValue([]), buildByIds: vi.fn().mockResolvedValue([]) },
       repository,
       client,
-      { onProgress: (event) => events.push(event) },
+      {
+        onProgress: (event) => {
+          events.push(event);
+        },
+      },
     );
 
     await expect(service.run('test', 1)).rejects.toThrow('Reindex count mismatch for agents');

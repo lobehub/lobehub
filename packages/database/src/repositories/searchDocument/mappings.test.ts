@@ -110,9 +110,10 @@ describe('search index mappings', () => {
     for (const entity of MEMORY_SEARCH_DOCUMENT_ENTITIES) {
       const definition = SEARCH_INDEX_DEFINITIONS[entity];
       for (const field of definition.queryFields) {
-        expect(definition.mappings.properties[field]).toEqual(
+        expect(Object.entries(definition.mappings.properties)).toContainEqual([
+          field,
           expect.objectContaining({ analyzer: 'lobehub_cjk_bigram_english' }),
-        );
+        ]);
       }
     }
 
