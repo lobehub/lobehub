@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode, Ref } from 'react';
+import type { Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -185,30 +185,9 @@ vi.mock('@/store/chat', () => ({
 
 const messageSpy = vi.hoisted(() => ({ warning: vi.fn() }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   message: messageSpy,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button type={'button'} onClick={onClick} />
-  ),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  copyToClipboard: vi.fn(),
-  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  stopPropagation: vi.fn(),
 }));
 
 vi.mock('antd-style', async (importOriginal) => {

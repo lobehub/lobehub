@@ -9,10 +9,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import UsageTable from './UsageTable';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@lobehub/icons', () => ({
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
 }));

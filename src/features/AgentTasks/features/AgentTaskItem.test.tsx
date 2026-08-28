@@ -13,28 +13,6 @@ const mocks = vi.hoisted(() => ({
   useFetchTaskDetail: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Block: ({
-    children,
-    clickable,
-    onClick,
-  }: {
-    children: ReactNode;
-    clickable?: boolean;
-    onClick?: () => void;
-  }) =>
-    clickable ? (
-      <button data-testid="task-card" type="button" onClick={onClick}>
-        {children}
-      </button>
-    ) : (
-      <span>{children}</span>
-    ),
-  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US' },
@@ -132,7 +110,7 @@ describe('AgentTaskItem', () => {
   it('opens an assigned task inside its owning agent route', () => {
     render(<AgentTaskItem task={createTask('agt_owner')} />);
 
-    fireEvent.click(screen.getByTestId('task-card'));
+    fireEvent.click(screen.getByText('Hourly trend update'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22');
   });
@@ -140,7 +118,7 @@ describe('AgentTaskItem', () => {
   it('opens an assigned task on the global detail route in global scope', () => {
     render(<AgentTaskItem routeScope="global" task={createTask('agt_owner')} />);
 
-    fireEvent.click(screen.getByTestId('task-card'));
+    fireEvent.click(screen.getByText('Hourly trend update'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
   });
@@ -148,7 +126,7 @@ describe('AgentTaskItem', () => {
   it('falls back to the global task detail route when the task has no assignee', () => {
     render(<AgentTaskItem task={createTask(null)} />);
 
-    fireEvent.click(screen.getByTestId('task-card'));
+    fireEvent.click(screen.getByText('Hourly trend update'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
   });

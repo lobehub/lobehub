@@ -2,20 +2,17 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render } from '@testing-library/react';
-import { createElement, type ReactNode } from 'react';
+import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import TopicPanel from './TopicPanel';
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => createElement('div', null, children),
-  Icon: () => null,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
+// Real base-ui ActionIcon only surfaces its title via a hover Tooltip, so the
+// static DOM has no accessible name to query.
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) =>
     createElement('button', { onClick, title }, title),
-  Text: ({ children }: { children?: ReactNode }) => createElement('span', null, children),
 }));
 
 vi.mock('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer', () => ({
@@ -39,10 +36,6 @@ vi.mock('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer', () => ({
       },
       `${agentId}:${topicId}`,
     ),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 describe('TopicPanel', () => {

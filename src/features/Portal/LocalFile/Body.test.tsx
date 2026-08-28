@@ -21,6 +21,7 @@ vi.mock('antd-style', async (importOriginal) => ({
     row: 'row',
     value: 'value',
   }),
+  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
   cssVar: {
     colorBgContainer: 'var(--color-bg-container)',
     colorBorderSecondary: 'var(--color-border-secondary)',
@@ -36,6 +37,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
+  ActionIcon: () => null,
   Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -43,12 +45,13 @@ vi.mock('@lobehub/ui', () => ({
   Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
   Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: () => null,
+vi.mock('@lobehub/ui/base-ui', () => ({
   Tabs: () => null,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  ToggleGroup: () => null,
 }));
 
 vi.mock('@/components/CodeEditorPane', () => ({

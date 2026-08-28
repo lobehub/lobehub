@@ -28,41 +28,8 @@ vi.mock('@lobehub/editor/react', () => ({
   }),
 }));
 
-// Stub the base-ui Button (submit) to a native button — it needs a
-// MotionProvider the app sets up globally but the unit env doesn't.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  ActionIcon: ({
-    onClick,
-    style,
-    title,
-  }: {
-    onClick?: () => void;
-    style?: CSSProperties;
-    title?: string;
-  }) => (
-    <div
-      aria-label={title}
-      role="button"
-      style={{ height: 24, width: 24, ...style }}
-      onClick={onClick}
-    >
-      {title}
-    </div>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
@@ -135,10 +102,6 @@ vi.mock('../shared/useAgentVisibility', () => ({
   useAgentVisibility: (agentId?: string) => (agentId === 'agent-private' ? 'private' : undefined),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
@@ -182,7 +145,9 @@ describe('CreateTaskInlineEntry', () => {
     expect(assigneeControl?.style.getPropertyValue('--lobe-flex-height')).toBe('24px');
     expect(assigneeControl?.style.getPropertyValue('--lobe-flex-padding-block')).toBe('3px');
 
-    const attachmentAction = container.querySelector<HTMLElement>('[role="button"]');
+    const attachmentAction = container
+      .querySelector('svg.lucide-paperclip')
+      ?.closest<HTMLElement>('button');
     expect(attachmentAction).toHaveStyle({ height: '24px', width: '24px' });
     expect(attachmentAction?.parentElement?.style.getPropertyValue('--lobe-flex-align')).toBe(
       'center',

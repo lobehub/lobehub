@@ -77,47 +77,9 @@ vi.mock('@lobechat/const', () => ({
       : undefined,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Avatar: () => <div data-testid="avatar" />,
-  Markdown: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Skeleton: () => <div data-testid="skeleton" />,
-}));
-
-// Stub the base-ui Button to a native button — it needs a MotionProvider the
-// app sets up globally but the unit env doesn't.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: (
-    creator: (tokens: {
-      css: () => string;
-      cssVar: Record<string, string>;
-    }) => Record<string, string>,
-  ) =>
-    creator({
-      css: () => '',
-      cssVar: {
-        colorBorderSecondary: 'colorBorderSecondary',
-        colorText: 'colorText',
-        colorTextSecondary: 'colorTextSecondary',
-        colorTextTertiary: 'colorTextTertiary',
-      },
-    }),
 }));
 
 vi.mock('react-i18next', () => ({

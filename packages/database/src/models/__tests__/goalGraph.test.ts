@@ -1,9 +1,10 @@
 // @vitest-environment node
+import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { goalNodes, users } from '../../schemas';
+import { agents, goalNodes, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -45,6 +46,40 @@ describe('GoalGraphModel', () => {
     expect(graph?.nodes).toHaveLength(2);
     expect(graph?.edges).toHaveLength(1);
     expect(graph?.events.map((event) => event.eventType)).toEqual(['created', 'created', 'linked']);
+  });
+
+  it('records who made each transition', async () => {
+    // Every event used to be attributed to the goal's owner, because the model
+    // falls back to its `userId` — which made a move the coordinator decided on
+    // its own indistinguishable from one a person made.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Attributed' });
+    const coordinator = new GoalGraphModel(serverDB, userId, undefined, {
+      id: GOAL_COORDINATOR_ACTOR_ID,
+      type: 'system',
+    });
+
+    const byUser = await graphModel.createNode(goal.id, { kind: 'work', title: 'Asked for' });
+    const bySystem = await coordinator.createNode(goal.id, { kind: 'finding', title: 'Concluded' });
+    await serverDB.insert(agents).values({ id: 'agt_author', slug: 'agt-author', userId });
+    const byAgent = await coordinator.createNode(goal.id, {
+      createdByAgentId: 'agt_author',
+      kind: 'finding',
+      title: 'Written by an agent',
+    });
+
+    const { events } = (await graphModel.getGraph(goal.id))!;
+    const actorOf = (nodeId: string) => {
+      const event = events.find((item) => item.entityId === nodeId);
+      return { actorId: event?.actorId, actorType: event?.actorType };
+    };
+
+    expect(actorOf(byUser!.id)).toEqual({ actorId: userId, actorType: 'user' });
+    expect(actorOf(bySystem!.id)).toEqual({
+      actorId: GOAL_COORDINATOR_ACTOR_ID,
+      actorType: 'system',
+    });
+    // An explicit agent author still wins over the instance actor.
+    expect(actorOf(byAgent!.id)).toEqual({ actorId: 'agt_author', actorType: 'agent' });
   });
 
   it('creates a synthesized node only once when coordinators race', async () => {

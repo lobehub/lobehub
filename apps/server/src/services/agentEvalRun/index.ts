@@ -312,7 +312,7 @@ export class AgentEvalRunService {
         preparedCases.map(({ testCase, topicId }) => ({
           agentId: targetAgentId ?? null,
           id: topicId,
-          title: `[Eval Case #${(testCase.sortOrder ?? 0) + 1}] ${testCase.content.input.slice(0, 50) || 'Test Case'}...`,
+          title: `[${(testCase.sortOrder ?? 0) + 1}] ${testCase.content.input.slice(0, 50) || 'Topic'}...`,
           trigger: 'eval' as const,
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,

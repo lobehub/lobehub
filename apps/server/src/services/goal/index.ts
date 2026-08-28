@@ -1,9 +1,11 @@
+import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type {
+  GoalConfig,
   GoalEdgeKind,
   GoalGraphSnapshot,
+  GoalItem,
   GoalNodeKind,
   GoalNodeStatus,
-  GoalRecoveryPolicy,
   GoalTickResult,
   TaskItem,
   TaskTopicHandoff,
@@ -31,15 +33,27 @@ const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
 const GOAL_ACCEPTANCE_WORK_TITLE = 'Complete full Goal acceptance';
 
+export interface CreateGoalWorkInput {
+  description?: string;
+  title: string;
+}
+
 export interface CreateGoalGraphInput {
   agentId?: string;
-  config?: { recovery?: GoalRecoveryPolicy };
+  config?: GoalConfig;
+  /**
+   * The agent that made this call, when a tool did. Distinct from `agentId`,
+   * which is the agent the goal is assigned to — creating a goal from the modal
+   * on an agent's page sets that, but the author is still the person.
+   */
+  createdByAgentId?: string;
   maxRounds?: number;
   maxTotalCost?: number;
   projectId?: string;
   requirement?: string;
   title: string;
-  work?: string[];
+  /** Seed Work nodes, in dependency-free order. A plain string is title-only. */
+  work?: Array<CreateGoalWorkInput | string>;
 }
 
 export interface CreateGoalNodeInput {
@@ -54,7 +68,18 @@ export interface CreateGoalNodeInput {
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
   private readonly goalModel: GoalModel;
+  /**
+   * Graph writes attributed to the person who asked for them: seeding a goal,
+   * adding a node or edge by hand, resolving a decision gate.
+   */
   private readonly graphModel: GoalGraphModel;
+  /**
+   * Graph writes the coordinator makes on its own — claiming Work, binding its
+   * task, synthesizing a finding, opening a gate. Attributed to the coordinator
+   * even when a person pressed Advance: they asked it to run, they did not make
+   * these moves.
+   */
+  private readonly coordinatorGraph: GoalGraphModel;
   private readonly taskModel: TaskModel;
   private readonly taskService: TaskService;
   private readonly taskTopicModel: TaskTopicModel;
@@ -68,11 +93,24 @@ export class GoalService {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
+    this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
+      id: GOAL_COORDINATOR_ACTOR_ID,
+      type: 'system',
+    });
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskService = new TaskService(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.workModel = new WorkModel(db, userId, workspaceId);
   }
+
+  /**
+   * The graph model whose audit trail names `agentId` as the author, or the
+   * user-attributed one when a person is calling.
+   */
+  private graphAs = (agentId?: string) =>
+    agentId
+      ? new GoalGraphModel(this.db, this.userId, this.workspaceId, { id: agentId, type: 'agent' })
+      : this.graphModel;
 
   create = async (input: CreateGoalGraphInput): Promise<GoalGraphSnapshot> => {
     if (input.agentId) {
@@ -99,8 +137,14 @@ export class GoalService {
       subjectType: 'standalone',
       title: input.title,
     });
+    // `/goal` is an agent making the call. Seeding through the user-attributed
+    // model would file the whole opening graph under the goal's owner, which is
+    // the same loss of authorship the coordinator split just fixed.
+    const authorGraph = this.graphAs(input.createdByAgentId);
+
     try {
-      const problem = await this.graphModel.createNode(goal.id, {
+      const problem = await authorGraph.createNode(goal.id, {
+        createdByAgentId: input.createdByAgentId,
         description: input.requirement,
         kind: 'problem',
         status: 'active',
@@ -108,10 +152,16 @@ export class GoalService {
       });
       if (!problem) throw new Error('Failed to seed goal problem');
 
-      for (const title of input.work ?? []) {
-        const work = await this.graphModel.createNode(goal.id, { kind: 'work', title });
+      for (const seed of input.work ?? []) {
+        const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
+        const work = await authorGraph.createNode(goal.id, {
+          createdByAgentId: input.createdByAgentId,
+          description,
+          kind: 'work',
+          title,
+        });
         if (!work) throw new Error('Failed to seed goal work');
-        await this.graphModel.createEdge(goal.id, problem.id, work.id, 'decomposes');
+        await authorGraph.createEdge(goal.id, problem.id, work.id, 'decomposes');
       }
     } catch (error) {
       await this.goalModel.delete(goal.id).catch(() => {});
@@ -139,19 +189,93 @@ export class GoalService {
     return edge;
   };
 
+  /**
+   * Stop everything the goal has running, then delete it and its graph.
+   *
+   * Deleting only the goal row cascades the graph away but leaves each Work
+   * Task — and the agent operation behind it — running, spending the user's
+   * budget with nothing left on screen to stop it. The tasks themselves stay:
+   * they are ordinary tasks with their own history and acceptance.
+   */
+  delete = async (goalId: string) => {
+    const graph = await this.graphModel.getGraph(goalId);
+    const taskIds = graph?.nodes.flatMap((node) => (node.taskId ? [node.taskId] : [])) ?? [];
+
+    for (const taskId of taskIds) {
+      const topics = await this.taskTopicModel.findByTaskId(taskId);
+      for (const topic of topics) {
+        if (topic.status !== 'running' || !topic.topicId) continue;
+        // Deliberately not swallowed. Interrupting can fail — the runtime or a
+        // device gateway may be unreachable — and going ahead would delete the
+        // only surface that can stop an operation which keeps spending. Better
+        // to leave the goal intact and say so.
+        try {
+          await this.taskService.cancelTopic(topic.topicId);
+        } catch (error) {
+          throw new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Could not stop the work still running for this goal, so it was not deleted. Try again once the run is reachable.',
+          });
+        }
+      }
+      await this.taskModel
+        .updateStatusIfCurrent(taskId, 'running', 'paused')
+        .catch((error) => console.error('[GoalService.delete] failed to pause task:', error));
+    }
+
+    return this.goalModel.delete(goalId);
+  };
+
   pause = async (goalId: string) => {
     const goal = await this.goalModel.updateStatus(goalId, 'paused');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
   };
 
+  /**
+   * What the goal has spent against what it is allowed to spend.
+   *
+   * Rounds are counted across every Work Task in the graph, not per Work — the
+   * budget is the goal's, so `setBudget` has to read it exactly the way the
+   * coordinator does or raising a budget would not reliably unstick a goal.
+   */
+  private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
+    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
+    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
+    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
+    return {
+      costLimitReached: goal.maxTotalCost !== null && totalCost >= Number(goal.maxTotalCost),
+      roundLimitReached: goal.maxRounds !== null && runs.length >= goal.maxRounds,
+      runs,
+      totalCost,
+    };
+  };
+
   setBudget = async (
     goalId: string,
     budget: { maxRounds?: number | null; maxTotalCost?: number | null },
   ) => {
+    const before = await this.requireGraph(goalId);
+    const wasBinding = await this.evaluateBudget(before.goal, before);
+
     const goal = await this.goalModel.update(goalId, budget);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-    return goal;
+
+    // Raising a budget is how a user un-sticks a goal the coordinator parked on
+    // one, and `tick` refuses to move a paused goal — so without this the
+    // queued advance would return straight away and the user would have to find
+    // Resume as a second gesture. Only a goal the budget actually stopped is
+    // reopened: if the old budget was not binding, this pause was somebody's
+    // deliberate one and is left alone.
+    const stoppedByBudget = wasBinding.costLimitReached || wasBinding.roundLimitReached;
+    if (goal.status !== 'paused' || !stoppedByBudget) return goal;
+
+    const nowBinding = await this.evaluateBudget(goal, before);
+    if (nowBinding.costLimitReached || nowBinding.roundLimitReached) return goal;
+
+    return (await this.resume(goalId)) ?? goal;
   };
 
   resume = async (goalId: string) => {
@@ -251,7 +375,7 @@ export class GoalService {
           (node) => node.title === GOAL_ACCEPTANCE_WORK_TITLE,
         );
         if (graph.goal.requirement && !goalAcceptanceWork) {
-          const result = await this.graphModel.createNodeOnce(goalId, {
+          const result = await this.coordinatorGraph.createNodeOnce(goalId, {
             description: [
               `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
               'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
@@ -272,7 +396,12 @@ export class GoalService {
           if (result.created) {
             const problem = graph.nodes.find((node) => node.kind === 'problem');
             if (problem) {
-              await this.graphModel.createEdge(goalId, problem.id, result.node.id, 'decomposes');
+              await this.coordinatorGraph.createEdge(
+                goalId,
+                problem.id,
+                result.node.id,
+                'decomposes',
+              );
             }
           }
           return {
@@ -295,6 +424,14 @@ export class GoalService {
         await this.goalModel.updateStatus(goalId, 'achieved');
         return { goalId, message: 'Goal-level acceptance passed', outcome: 'achieved' };
       }
+      // Nothing here moves without a person: either there is no Work at all, or
+      // every remaining Work is blocked and nothing is running to unblock it.
+      // Say so on the row instead of leaving a goal that reads as `running`
+      // while it cannot run — and, just as importantly, take it out of the
+      // sweep's window. A `running` goal that always reports `no_progress` is
+      // picked by every scan forever, and enough of them starve every other
+      // stalled goal out of the newest-first limit.
+      await this.goalModel.updateStatus(goalId, 'paused');
       return {
         goalId,
         message:
@@ -306,7 +443,7 @@ export class GoalService {
     }
 
     if (!frontier.taskId) {
-      const claim = await this.graphModel.claimWorkNode(
+      const claim = await this.coordinatorGraph.claimWorkNode(
         goalId,
         frontier.id,
         new Date(Date.now() - WORK_NODE_CLAIM_TTL_MS),
@@ -347,7 +484,7 @@ export class GoalService {
           ),
         });
         acceptanceId = acceptance.id;
-        const bound = await this.graphModel.bindTask(goalId, frontier.id, task.id);
+        const bound = await this.coordinatorGraph.bindTask(goalId, frontier.id, task.id);
         if (!bound) {
           await this.acceptanceService.acceptanceModel.delete(acceptance.id);
           await this.taskModel.delete(task.id);
@@ -367,7 +504,7 @@ export class GoalService {
             console.error('[GoalService.tick] failed to delete unbound task:', cleanupError);
           });
         }
-        await this.graphModel.updateNodeStatus(goalId, frontier.id, 'proposed');
+        await this.coordinatorGraph.updateNodeStatus(goalId, frontier.id, 'proposed');
         throw error;
       }
       const work = await this.workModel.registerTask({
@@ -377,7 +514,7 @@ export class GoalService {
         toolName: 'createResponsibleTask',
       });
       if (work?.currentVersionId) {
-        await this.graphModel.attachWorkVersion(
+        await this.coordinatorGraph.attachWorkVersion(
           goalId,
           frontier.id,
           work.currentVersionId,
@@ -396,7 +533,7 @@ export class GoalService {
 
     const task = await this.taskModel.findById(frontier.taskId);
     if (!task) {
-      await this.graphModel.updateNodeStatus(
+      await this.coordinatorGraph.updateNodeStatus(
         goalId,
         frontier.id,
         'waiting',
@@ -428,9 +565,9 @@ export class GoalService {
           this.db,
           this.userId,
           this.workspaceId,
-        ).recover({ goal: graph.goal, spentCost: totalCost, task, taskCarried: false });
+        ).recover({ goal: graph.goal, spentCost: totalCost, task });
         if (recovery === 'continued') {
-          await this.graphModel.updateNodeStatus(
+          await this.coordinatorGraph.updateNodeStatus(
             goalId,
             frontier.id,
             'active',
@@ -483,12 +620,10 @@ export class GoalService {
       };
     }
 
-    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
-    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
-    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
-    const roundLimitReached = graph.goal.maxRounds !== null && runs.length >= graph.goal.maxRounds;
-    const costLimitReached =
-      graph.goal.maxTotalCost !== null && totalCost >= Number(graph.goal.maxTotalCost);
+    const { costLimitReached, roundLimitReached, runs, totalCost } = await this.evaluateBudget(
+      graph.goal,
+      graph,
+    );
     if (roundLimitReached || costLimitReached) {
       await this.goalModel.updateStatus(goalId, 'paused');
       return {
@@ -502,18 +637,49 @@ export class GoalService {
       };
     }
 
-    const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
-      maxSteps: resolveWorkMaxSteps(graph.goal),
-      taskId: task.id,
-      trigger: 'goal',
+    // Advances arrive from independent sources — an event hook, a manual nudge,
+    // the sweep — and can overlap. `runTask` decides whether a run is already
+    // in flight by reading the task's topics and only then creating one, so two
+    // overlapping advances would both dispatch this Work and pay for it twice.
+    // Claim the task first: the transition is a single conditional UPDATE, so
+    // exactly one advance can win it.
+    const claimed = await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'running', {
+      error: null,
+      startedAt: new Date(),
     });
-    return {
-      goalId,
-      message: `Started task ${task.identifier}`,
-      nodeId: frontier.id,
-      outcome: 'waiting_external',
-      taskId: run.taskId,
-    };
+    if (!claimed) {
+      return {
+        goalId,
+        message: `Task ${task.identifier} is already being started`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    try {
+      const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
+        maxSteps: resolveWorkMaxSteps(graph.goal),
+        taskId: task.id,
+        trigger: 'goal',
+      });
+      return {
+        goalId,
+        message: `Started task ${task.identifier}`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: run.taskId,
+      };
+    } catch (error) {
+      // We claimed the task, so nothing else will put it back. Release it or the
+      // Work stays 'running' with no run behind it and only the lease reclaims it.
+      await this.taskModel
+        .updateStatusIfCurrent(task.id, 'running', task.status)
+        .catch((releaseError) => {
+          console.error('[GoalService.tick] failed to release claimed task:', releaseError);
+        });
+      throw error;
+    }
   };
 
   private requireGraph = async (goalId: string) => {
@@ -523,7 +689,7 @@ export class GoalService {
   };
 
   private ensureTaskWorkVersion = async (goalId: string, nodeId: string, taskId: string) => {
-    const graph = await this.graphModel.getGraph(goalId);
+    const graph = await this.coordinatorGraph.getGraph(goalId);
     if (graph?.workVersions.some((link) => link.nodeId === nodeId)) return;
     const work = await this.workModel.registerTask({
       changeType: 'created',
@@ -532,7 +698,12 @@ export class GoalService {
       toolName: 'createResponsibleTask',
     });
     if (work?.currentVersionId) {
-      await this.graphModel.attachWorkVersion(goalId, nodeId, work.currentVersionId, 'produced');
+      await this.coordinatorGraph.attachWorkVersion(
+        goalId,
+        nodeId,
+        work.currentVersionId,
+        'produced',
+      );
     }
   };
 
@@ -544,9 +715,26 @@ export class GoalService {
     const [runningTopic] = await this.taskTopicModel.findRunningByTaskIds([task.id]);
     const operationId = runningTopic?.operationId;
     const topicId = runningTopic?.topicId;
-    if (!operationId || !topicId) return undefined;
-
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
+
+    if (!operationId || !topicId) {
+      // A task claimed for dispatch but with no run behind it. Normally this is
+      // the sliver between the claim and `runTask` creating the topic; if the
+      // worker died in there it is permanent, and every later advance would
+      // report `waiting_external` forever because there is no operation to
+      // reclaim. Once the claim is older than the lease, hand it back.
+      if (new Date(task.updatedAt) >= staleBefore) return undefined;
+      const released = await this.taskModel.updateStatusIfCurrent(task.id, 'running', 'backlog');
+      if (!released) return undefined;
+      return {
+        goalId: graph.goal.id,
+        message: `Released the abandoned dispatch claim on task ${task.identifier}`,
+        nodeId,
+        outcome: 'advanced',
+        taskId: task.id,
+      };
+    }
+
     const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
     const reclaimed = await this.db.transaction(async (tx) => {
       const settled = await new AgentOperationModel(
@@ -580,9 +768,9 @@ export class GoalService {
       this.db,
       this.userId,
       this.workspaceId,
-    ).recover({ goal: graph.goal, task, taskCarried: false });
+    ).recover({ goal: graph.goal, task });
     if (recovery === 'continued') {
-      await this.graphModel.updateNodeStatus(
+      await this.coordinatorGraph.updateNodeStatus(
         graph.goal.id,
         nodeId,
         'active',
@@ -675,7 +863,7 @@ export class GoalService {
       topicId: latest?.topicId,
     });
     if (completedWork?.currentVersionId) {
-      await this.graphModel.attachWorkVersion(
+      await this.coordinatorGraph.attachWorkVersion(
         graph.goal.id,
         nodeId,
         completedWork.currentVersionId,
@@ -684,7 +872,7 @@ export class GoalService {
     }
     if (!existingFinding) {
       const handoff = latest?.handoff as TaskTopicHandoff | null;
-      const finding = await this.graphModel.createNode(graph.goal.id, {
+      const finding = await this.coordinatorGraph.createNode(graph.goal.id, {
         confidence: 1,
         description: handoff?.content ?? handoff?.summary ?? undefined,
         kind: 'finding',
@@ -694,9 +882,10 @@ export class GoalService {
           handoff?.summary ??
           `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`,
       });
-      if (finding) await this.graphModel.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
+      if (finding)
+        await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
     }
-    await this.graphModel.updateNodeStatus(
+    await this.coordinatorGraph.updateNodeStatus(
       graph.goal.id,
       nodeId,
       'resolved',
@@ -722,18 +911,18 @@ export class GoalService {
       .map((edge) => graph.nodes.find((node) => node.id === edge.targetNodeId))
       .find((node) => node?.kind === 'decision' && node.status !== 'resolved');
     if (!existingDecisionNode) {
-      const node = await this.graphModel.createNode(graph.goal.id, {
+      const node = await this.coordinatorGraph.createNode(graph.goal.id, {
         description: reason,
         kind: 'decision',
         status: 'waiting',
         title: 'Choose how to recover failed work',
       });
       if (node) {
-        await this.graphModel.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
+        await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
         const terminalAcceptance =
           graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
           GOAL_ACCEPTANCE_WORK_TITLE;
-        await this.graphModel.createDecision(graph.goal.id, node.id, {
+        await this.coordinatorGraph.createDecision(graph.goal.id, node.id, {
           authority: 'user',
           options: terminalAcceptance
             ? [
@@ -752,7 +941,7 @@ export class GoalService {
         });
       }
     }
-    await this.graphModel.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
+    await this.coordinatorGraph.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
     await this.goalModel.updateStatus(graph.goal.id, 'review');
     return {
       goalId: graph.goal.id,

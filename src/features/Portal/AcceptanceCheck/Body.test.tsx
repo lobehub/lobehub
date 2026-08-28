@@ -9,9 +9,8 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Empty: () => <div />,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Flexbox: ({
     children,
     className,
@@ -29,21 +28,6 @@ vi.mock('@lobehub/ui', () => ({
     </div>
   ),
   Icon: () => <span data-testid={'check-state-icon'} />,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ...(await import('~base-ui-stubs')).baseUiStubs,
-}));
-
-vi.mock('antd', () => ({
-  App: { useApp: () => ({ message: { error: vi.fn() } }) },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@/store/chat', () => ({

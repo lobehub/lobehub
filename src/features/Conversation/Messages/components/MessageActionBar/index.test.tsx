@@ -14,7 +14,8 @@ const actionMocks = vi.hoisted(() => ({
   commentsAvailable: true,
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIconGroup: ({
     items,
     menu,

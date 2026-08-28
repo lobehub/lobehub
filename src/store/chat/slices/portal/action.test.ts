@@ -19,8 +19,6 @@ const localFileTabId = ({
   workingDirectory: string;
 }) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
 
-vi.mock('zustand/traditional');
-
 describe('chatDockSlice', () => {
   describe('pushPortalView', () => {
     it('should push a new view onto the stack and open portal', () => {

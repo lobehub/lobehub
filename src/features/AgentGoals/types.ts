@@ -1,7 +1,6 @@
 import type { GoalListItem } from '@/store/goal/initialState';
 
 export interface GoalItemProps {
-  hideAchieved?: boolean;
+  goal: GoalListItem;
   projectId?: string;
-  task: GoalListItem;
 }

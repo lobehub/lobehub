@@ -9,16 +9,6 @@ const mocks = vi.hoisted(() => ({
   useUserProfile: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button data-testid="back-button" onClick={onClick} />
-  ),
-}));
-
 vi.mock('@/features/NavHeader', () => ({
   default: ({ left, right }: { left?: React.ReactNode; right?: React.ReactNode }) => (
     <header>

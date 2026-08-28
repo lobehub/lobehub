@@ -30,9 +30,6 @@ import { useChatStore } from '../../../../store';
 import { createMockAgentConfig, createMockMessage, TEST_CONTENT, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
-
 const executeHeterogeneousAgentMock = vi.hoisted(() => vi.fn());
 const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
 const mockLocalFileService = vi.hoisted(() => ({

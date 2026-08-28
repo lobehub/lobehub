@@ -1706,7 +1706,7 @@ describe('GatewayActionImpl', () => {
         });
       };
 
-      it('forwards this desktop deviceId when local execution is selected', async () => {
+      it('forwards this desktop as both the route and local capability hint', async () => {
         mockEnv.isDesktop = true;
         mockRuntime.isLocal = true;
         mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
@@ -1714,7 +1714,10 @@ describe('GatewayActionImpl', () => {
         await send();
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ deviceId: 'device-local-1' }),
+          expect.objectContaining({
+            deviceId: 'device-local-1',
+            localDeviceId: 'device-local-1',
+          }),
           expect.anything(),
         );
       });

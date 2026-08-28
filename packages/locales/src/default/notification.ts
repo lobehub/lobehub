@@ -88,6 +88,13 @@ export default {
   'storage_overage_cap_reached':
     'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
   'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',
+  'document_comment_activity': '{{actorLabel}} commented on your document "{{documentTitle}}".',
+  'document_comment_activity_replied':
+    '{{actorLabel}} replied to your comment in "{{documentTitle}}".',
+  'document_comment_activity_replied_title': 'New reply to your comment',
+  'document_comment_activity_title': 'New comment on your document',
+  'document_comment_mentioned': '{{actorLabel}} mentioned you in a comment on "{{documentTitle}}".',
+  'document_comment_mentioned_title': 'You were mentioned in a document comment',
   'subscription_payment_failed':
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',

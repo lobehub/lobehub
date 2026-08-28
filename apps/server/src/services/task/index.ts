@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
-import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
-  CreateTaskGoalInput,
-  GoalItem,
   TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
@@ -20,7 +17,6 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
-import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
 import { RbacModel } from '@/database/models/rbac';
 import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
@@ -69,11 +65,6 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
-  /**
-   * Bind a goal entity (`goals` row) to the created task — the task becomes the
-   * goal's execution carrier and the outer verify-driven round loop applies.
-   */
-  goal?: CreateTaskGoalInput;
   identifierPrefix?: string;
   instruction: string;
   name?: string;
@@ -137,8 +128,8 @@ export class TaskService {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
     this.assertAutomationAssigneeCompat(input.automationMode, input.assigneeUserId);
 
-    const { goal, ...taskInput } = input;
-    const createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> } = {
+    const taskInput = input;
+    const createData: CreateTaskInput & { config?: Record<string, unknown> } = {
       ...taskInput,
     };
 
@@ -208,39 +199,6 @@ export class TaskService {
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
     const task = await this.createTaskWithAssigneeLock(createData);
-
-    if (goal) {
-      // Goal creation stays separate from the task write because the task's
-      // membership-locked transaction has already committed. Compensate on
-      // failure — a task committed without its promised goal is a ghost on
-      // goal surfaces (it never lists as a goal), and a retry would stack
-      // another one.
-      let created: GoalItem;
-      try {
-        created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
-          agentId: task.assigneeAgentId,
-          // `null` is the user's explicit "no cap"; `undefined` means they never
-          // chose, which falls back to the documented default. The floor keeps a
-          // degenerate 1-round loop from ever passing verify-then-stop.
-          maxRounds:
-            goal.maxRounds === undefined
-              ? DEFAULT_GOAL_MAX_ROUNDS
-              : goal.maxRounds === null
-                ? null
-                : Math.max(2, goal.maxRounds),
-          maxTotalCost: goal.maxTotalCost ?? null,
-          projectId: task.projectId,
-          requirement: goal.requirement ?? null,
-          subjectId: task.id,
-          subjectType: 'task',
-          title: goal.title?.trim() || task.name?.trim() || task.instruction,
-        });
-      } catch (error) {
-        await this.taskModel.delete(task.id).catch(() => {});
-        throw error;
-      }
-      return { ...task, goal: created };
-    }
 
     return task;
   }
@@ -492,20 +450,6 @@ export class TaskService {
     const task = await this.taskModel.updateStatus(resolved.id, status, extra);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
-    // Canceling the carrier task cancels its goal: the loop has no executor
-    // left, and a "running" goal over a canceled task would be a lie. The
-    // user's positive sign-off (`achieved`) is never downgraded. Best-effort —
-    // goal state must not block the task transition.
-    if (status === 'canceled') {
-      try {
-        const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
-        const goal = await goalModel.findBySubject('task', task.id);
-        if (goal && goal.status !== 'achieved') await goalModel.updateStatus(goal.id, 'canceled');
-      } catch (err) {
-        console.error('[TaskService.updateStatus] goal cancel mirror failed:', err);
-      }
-    }
-
     // Stamp the schedule run-count window each time the user (re)starts a
     // scheduled task. The cron dispatcher itself flips a task running →
     // scheduled on every tick, so we exclude that natural cycle by only
@@ -744,7 +688,7 @@ export class TaskService {
   }
 
   private async createTaskWithAssigneeLock(
-    createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> },
+    createData: CreateTaskInput & { config?: Record<string, unknown> },
   ): Promise<TaskItem> {
     if (!createData.assigneeUserId || !this.workspaceId) {
       await this.assertAssigneeUserAssignable(createData.assigneeUserId);
@@ -809,7 +753,7 @@ export class TaskService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace, goal, acceptance] =
+    const [allDescendants, dependencies, directTopics, comments, workspace, acceptance] =
       await Promise.all([
         this.taskModel.findAllDescendants(task.id),
         this.taskModel.getDependencies(task.id),
@@ -818,9 +762,6 @@ export class TaskService {
           .catch(() => []),
         this.taskModel.getComments(task.id).catch(() => []),
         this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-        new GoalModel(this.db, this.userId, this.workspaceId)
-          .findBySubject('task', task.id)
-          .catch(() => undefined),
         resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(
           () => undefined,
         ),
@@ -1069,7 +1010,7 @@ export class TaskService {
           time: toISO(t.createdAt),
           title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
           // What opened this round. Without it the feed cannot distinguish a run
-          // the user started from one the goal loop / scheduler opened on its
+          // the user started from one the goal coordinator / scheduler opened on its
           // own — they render identically apart from `#seq`.
           trigger: t.trigger ?? null,
           verify: verifyRun
@@ -1133,7 +1074,6 @@ export class TaskService {
       editorData: task.editorData ?? undefined,
       error: task.error,
       files: taskFiles.length > 0 ? taskFiles : undefined,
-      goal: goal ?? null,
       heartbeat:
         task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {

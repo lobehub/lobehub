@@ -80,6 +80,7 @@ const FULL_BODY_CANVAS_DIRECTION = `Use the entire portrait canvas for a clean c
 
 const AVATAR_COMPOSITION_DIRECTION = `Compose a close-up avatar: the head fills most of the frame, with at most a little of the upper body visible.`;
 const FULL_BODY_COMPOSITION_DIRECTION = `Compose a complete head-to-toe character image: show the entire body clearly, centered in a natural standing or action pose, with comfortable breathing room around the silhouette. Keep the face expressive and readable.`;
+const VISUAL_IDENTITY_VALUE_LIMIT = 200;
 
 /**
  * `character` is for avatars, where the references define the TARGET subject
@@ -135,6 +136,10 @@ const countStyleReferences = (urls?: string[] | null): number =>
   urls?.filter((url) => url.trim()).length ?? 0;
 
 export interface AgentArtworkPromptInput {
+  /** Non-image avatar value, such as an Emoji, that still carries identity meaning. */
+  avatarIdentity?: string | null;
+  /** Non-image profile background value, such as a CSS color or gradient. */
+  backgroundIdentity?: string | null;
   composition?: AgentArtworkComposition;
   description?: string | null;
   /**
@@ -168,6 +173,8 @@ export interface AgentArtworkPromptInput {
 }
 
 const formatAgentContext = ({
+  avatarIdentity,
+  backgroundIdentity,
   description,
   id,
   name,
@@ -180,6 +187,10 @@ const formatAgentContext = ({
   if (title?.trim()) attributes.push(`title="${escapeXmlAttr(title.trim())}"`);
 
   const details = [
+    avatarIdentity?.trim() &&
+      `<avatar_identity>${escapeXmlContent(avatarIdentity.trim().slice(0, VISUAL_IDENTITY_VALUE_LIMIT))}</avatar_identity>`,
+    backgroundIdentity?.trim() &&
+      `<profile_background>${escapeXmlContent(backgroundIdentity.trim().slice(0, VISUAL_IDENTITY_VALUE_LIMIT))}</profile_background>`,
     description?.trim() && `<description>${escapeXmlContent(description.trim())}</description>`,
     systemRole?.trim() && `<system_role>${escapeXmlContent(systemRole.trim())}</system_role>`,
   ].filter(Boolean);
@@ -187,8 +198,31 @@ const formatAgentContext = ({
   return `<agent ${attributes.join(' ')}>${details.join('')}</agent>`;
 };
 
+const buildVisualIdentityDirection = ({
+  avatarIdentity,
+  backgroundIdentity,
+  kind,
+}: Pick<AgentArtworkPromptInput, 'avatarIdentity' | 'backgroundIdentity' | 'kind'>): string => {
+  const directions = [
+    avatarIdentity?.trim() &&
+      (kind === 'background'
+        ? 'Interpret the avatar identity semantically as subtle environmental motifs, shapes, and atmosphere; do not reproduce the raw glyph or text, and do not place it as a foreground subject.'
+        : 'Interpret the avatar identity semantically as a character, object, expression, or visual motif; do not reproduce the raw glyph or text.'),
+    backgroundIdentity?.trim() &&
+      'Use the profile background as a color and palette cue without overriding the canvas or background constraints.',
+  ].filter(Boolean);
+
+  if (directions.length === 0) return '';
+
+  return `\n\n${directions.join(' ')} These are identity cues, not rendering-style instructions; keep the selected style authoritative.`;
+};
+
 export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string => {
+  const backgroundIdentity =
+    input.composition === 'fullBody' ? undefined : input.backgroundIdentity;
   const agentContext = formatAgentContext({
+    avatarIdentity: input.avatarIdentity,
+    backgroundIdentity,
     description: input.description,
     id: input.id,
     name: input.name,
@@ -216,6 +250,11 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
     input.styleReferenceSource === 'custom',
   );
   const counterpartReferenceUrl = styleReferenceCount > 0 ? undefined : input.referenceImageUrl;
+  const visualIdentityDirection = buildVisualIdentityDirection({
+    avatarIdentity: input.avatarIdentity,
+    backgroundIdentity,
+    kind: input.kind,
+  });
   const userDirection = buildUserDirection(input.direction);
 
   if (input.kind === 'avatar') {
@@ -239,7 +278,7 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
 
 ${agentContext}
 
-Translate the agent's identity, purpose, and personality into one coherent visual concept. Use a single centered subject with a simple silhouette. ${compositionDirection} ${styleDirection} ${MOTIF_DIRECTION} ${canvasDirection}${styleReferenceDirection}${referenceDirection}${userDirection}`;
+Translate the agent's identity, purpose, and personality into one coherent visual concept. Use a single centered subject with a simple silhouette. ${compositionDirection} ${styleDirection} ${MOTIF_DIRECTION} ${canvasDirection}${visualIdentityDirection}${styleReferenceDirection}${referenceDirection}${userDirection}`;
   }
 
   const referenceDirection = counterpartReferenceUrl?.trim()
@@ -250,7 +289,7 @@ Translate the agent's identity, purpose, and personality into one coherent visua
 
 ${agentContext}
 
-Translate the agent's identity, purpose, and personality into an abstract environment. ${styleDirection} ${MOTIF_DIRECTION} Use generous negative space and a balanced composition. Do not use a person portrait, words, letters, a logo, or a border.${styleReferenceDirection}${referenceDirection}${userDirection}`;
+Translate the agent's identity, purpose, and personality into an abstract environment. ${styleDirection} ${MOTIF_DIRECTION} Use generous negative space and a balanced composition. Do not use a person portrait, words, letters, a logo, or a border.${visualIdentityDirection}${styleReferenceDirection}${referenceDirection}${userDirection}`;
 };
 
 /**

@@ -18,8 +18,8 @@ import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import {
   AGENT_PLAN_FILE_TYPE,
   COMPOSIO_APP_TYPES,
+  getConnectorCatalog,
   isDesktop,
-  LOBEHUB_SKILL_PROVIDERS,
 } from '@lobechat/const';
 import type {
   AgentBuilderContext,
@@ -258,13 +258,29 @@ export const contextEngineering = async ({
         const toolState = getToolStoreState();
         const officialTools: GroupOfficialToolItem[] = [];
 
-        // Get builtin tools (excluding Composio tools)
+        const isComposioEnabled = Boolean(
+          typeof window !== 'undefined' &&
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio,
+        );
+        const isLobehubSkillEnabled = Boolean(
+          typeof window !== 'undefined' &&
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill,
+        );
+        const connectorCatalog = getConnectorCatalog({
+          composio: isComposioEnabled,
+          lobehub: isLobehubSkillEnabled,
+        });
+        const connectorIdentifiers = new Set(
+          connectorCatalog.map((item) =>
+            item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
+          ),
+        );
+
+        // Get builtin tools (excluding connectors rendered through their canonical owner)
         const builtinTools = builtinToolSelectors.metaList(toolState);
-        const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
         for (const tool of builtinTools) {
-          // Skip Composio tools in builtin list (they'll be shown separately)
-          if (composioIdentifiers.has(tool.identifier)) continue;
+          if (connectorIdentifiers.has(tool.identifier)) continue;
 
           officialTools.push({
             description: tool.meta?.description,
@@ -276,48 +292,35 @@ export const contextEngineering = async ({
           });
         }
 
-        // Get Composio tools (if enabled)
-        const isComposioEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
-
-        if (isComposioEnabled) {
-          const allComposioServers = composioStoreSelectors.getServers(toolState);
-
-          for (const composioType of COMPOSIO_APP_TYPES) {
-            const server = allComposioServers.find((s) => s.identifier === composioType.identifier);
-
+        const allComposioServers = composioStoreSelectors.getServers(toolState);
+        const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
+        for (const connector of connectorCatalog) {
+          if (connector.type === 'composio') {
+            const { serverType } = connector;
+            const server = allComposioServers.find(
+              (item) => item.identifier === serverType.identifier,
+            );
             officialTools.push({
-              description: `LobeHub Mcp Server: ${composioType.label}`,
-              enabled: enabledPlugins.includes(composioType.identifier),
-              identifier: composioType.identifier,
+              description: `LobeHub Mcp Server: ${serverType.label}`,
+              enabled: enabledPlugins.includes(serverType.identifier),
+              identifier: serverType.identifier,
               installed: !!server,
-              name: composioType.label,
+              name: serverType.label,
               type: 'composio',
             });
+            continue;
           }
-        }
 
-        // Get LobehubSkill providers (if enabled)
-        const isLobehubSkillEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
-
-        if (isLobehubSkillEnabled) {
-          const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
-
-          for (const provider of LOBEHUB_SKILL_PROVIDERS) {
-            const server = allLobehubSkillServers.find((s) => s.identifier === provider.id);
-
-            officialTools.push({
-              description: `LobeHub Skill Provider: ${provider.label}`,
-              enabled: enabledPlugins.includes(provider.id),
-              identifier: provider.id,
-              installed: !!server,
-              name: provider.label,
-              type: 'lobehub-skill',
-            });
-          }
+          const { provider } = connector;
+          const server = allLobehubSkillServers.find((item) => item.identifier === provider.id);
+          officialTools.push({
+            description: `LobeHub Skill Provider: ${provider.label}`,
+            enabled: enabledPlugins.includes(provider.id),
+            identifier: provider.id,
+            installed: !!server,
+            name: provider.label,
+            type: 'lobehub-skill',
+          });
         }
 
         groupAgentBuilderContext = {
@@ -570,7 +573,23 @@ export const contextEngineering = async ({
     // Builtin tools (use allMetaList to include hidden tools like web-browsing, cloud-sandbox, etc.)
     // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
     const allBuiltinTools = builtinToolSelectors.allMetaList(toolState);
-    const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
+    const isComposioEnabled = Boolean(
+      typeof window !== 'undefined' &&
+      window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio,
+    );
+    const isLobehubSkillEnabled = Boolean(
+      typeof window !== 'undefined' &&
+      window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill,
+    );
+    const connectorCatalog = getConnectorCatalog({
+      composio: isComposioEnabled,
+      lobehub: isLobehubSkillEnabled,
+    });
+    const connectorIdentifiers = new Set(
+      connectorCatalog.map((item) =>
+        item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
+      ),
+    );
     const INTERNAL_TOOLS = new Set([
       'lobe-agent-management', // Don't show agent-management in its own context
       'lobe-agent-builder', // Used for editing current agent, not for creating new agents
@@ -579,8 +598,7 @@ export const contextEngineering = async ({
     ]);
 
     for (const tool of allBuiltinTools) {
-      // Skip Composio tools in builtin list (they'll be shown separately)
-      if (composioIdentifiers.has(tool.identifier)) continue;
+      if (connectorIdentifiers.has(tool.identifier)) continue;
       // Skip internal tools
       if (INTERNAL_TOOLS.has(tool.identifier)) continue;
 
@@ -592,36 +610,25 @@ export const contextEngineering = async ({
       });
     }
 
-    // Composio tools (if enabled)
-    const isComposioEnabled =
-      typeof window !== 'undefined' &&
-      window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
-
-    if (isComposioEnabled) {
-      for (const composioType of COMPOSIO_APP_TYPES) {
+    for (const connector of connectorCatalog) {
+      if (connector.type === 'composio') {
+        const { serverType } = connector;
         availablePlugins.push({
-          description: composioType.description,
-          identifier: composioType.identifier,
-          name: composioType.label,
+          description: serverType.description,
+          identifier: serverType.identifier,
+          name: serverType.label,
           type: 'composio' as const,
         });
+        continue;
       }
-    }
 
-    // LobehubSkill providers (if enabled)
-    const isLobehubSkillEnabled =
-      typeof window !== 'undefined' &&
-      window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
-
-    if (isLobehubSkillEnabled) {
-      for (const provider of LOBEHUB_SKILL_PROVIDERS) {
-        availablePlugins.push({
-          description: provider.description,
-          identifier: provider.id,
-          name: provider.label,
-          type: 'lobehub-skill' as const,
-        });
-      }
+      const { provider } = connector;
+      availablePlugins.push({
+        description: provider.description,
+        identifier: provider.id,
+        name: provider.label,
+        type: 'lobehub-skill' as const,
+      });
     }
 
     agentManagementContext = {

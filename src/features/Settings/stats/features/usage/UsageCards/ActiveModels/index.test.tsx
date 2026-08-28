@@ -10,20 +10,9 @@ import type { UsageLog } from '@/types/usage/usageRecord';
 import { GroupBy } from '../../../../types';
 import ActiveModels from './index';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@lobehub/icons', () => ({
   ModelIcon: ({ model }: { model: string }) => <span>{model}</span>,
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Modal: () => null,
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
@@ -31,7 +20,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
 
   return {
     ...actual,
-    ActionIcon: () => <button type="button" />,
     Avatar: ({ avatar, title }: { avatar?: string | null; title?: string }) => (
       <span aria-label={title} data-testid="active-user-avatar">
         {avatar}

@@ -5,8 +5,6 @@ import { mutate } from '@/libs/swr';
 import { userKeys } from '@/libs/swr/keys';
 import { useUserStore } from '@/store/user';
 
-vi.mock('zustand/traditional');
-
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
   const actual = await vi.importActual('@/libs/swr');

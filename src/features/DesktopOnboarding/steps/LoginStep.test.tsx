@@ -1,7 +1,8 @@
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import LoginStep from './LoginStep';
 
 const mockElectronState = vi.hoisted(() => ({
   clearRemoteServerSyncError: vi.fn(),
@@ -18,56 +19,6 @@ const mockSignOut = vi.hoisted(() => vi.fn());
 vi.mock('@lobechat/electron-client-ipc', () => ({
   useWatchBroadcast: vi.fn(),
 }));
-
-vi.mock('@lobehub/ui', () => {
-  const Button = ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  );
-
-  return {
-    Alert: ({ description, title }: { description?: ReactNode; title?: ReactNode }) => (
-      <section>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </section>
-    ),
-    Button,
-    Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    Icon: () => <span />,
-    Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-    Text: ({ as, children }: { as?: 'p' | 'span'; children: ReactNode }) =>
-      as === 'p' ? <p>{children}</p> : <span>{children}</span>,
-  };
-});
-
-vi.mock('antd', () => ({
-  Divider: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('antd-style', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-
-  return {
-    ...actual,
-    createStaticStyles: () => ({}),
-    cssVar: {
-      colorFillSecondary: '#eee',
-      colorTextDescription: '#888',
-      colorTextSecondary: '#666',
-    },
-  };
-});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -159,7 +110,6 @@ vi.mock('../components/LobeMessage', () => ({
 }));
 
 const renderLoginStep = async (props: { mode?: 'onboarding' | 'status' } = {}) => {
-  const { default: LoginStep } = await import('./LoginStep');
   const onBack = vi.fn();
   const onNext = vi.fn();
 

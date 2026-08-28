@@ -1,9 +1,4 @@
-import type {
-  CheckpointConfig,
-  CreateTaskGoalInput,
-  TaskAutomationMode,
-  TaskStatus,
-} from '@lobechat/types';
+import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -17,7 +12,6 @@ class TaskService {
   list = async (params: {
     assigneeAgentId?: string;
     automated?: boolean;
-    hasGoal?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
@@ -40,7 +34,6 @@ class TaskService {
       offset?: number;
       statuses: string[];
     }>;
-    hasGoal?: boolean;
     parentTaskId?: string | null;
     projectId?: string;
     visibility?: 'private' | 'public';
@@ -73,7 +66,6 @@ class TaskService {
     description?: string;
     editorData?: unknown;
     /** Bind a goal entity (`goals` row) to the created task. */
-    goal?: CreateTaskGoalInput;
     identifierPrefix?: string;
     instruction: string;
     name?: string;
@@ -115,8 +107,6 @@ class TaskService {
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
-
-  deleteGoal = async (id: string) => lambdaClient.task.deleteGoal.mutate({ id });
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 

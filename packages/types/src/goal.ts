@@ -14,14 +14,14 @@ export type GoalStatus =
   'planning' | 'running' | 'verifying' | 'review' | 'paused' | 'achieved' | 'failed' | 'canceled';
 
 /**
- * The execution carrier a goal is optionally bound to:
- * - `task`       — the `/goal` flow: the goal runs inside a dedicated task.
- * - `topic`      — a goal declared directly in a conversation.
- * - `standalone` — a pure goal declaration with no carrier attached.
+ * The execution carrier a goal is optionally bound to. Goals are standalone
+ * today: the Goal Graph owns execution and dispatches its own Work Tasks, so
+ * nothing binds a goal to a single carrier row. The column stays because
+ * existing rows still carry the earlier `task` value.
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 
-/** Automatic recovery policy shared by task-carried goals and Goal Graph work. */
+/** Automatic recovery policy for Goal Graph Work. */
 export interface GoalRecoveryPolicy {
   /** Maximum execution attempts for one Work before escalating to a decision gate. */
   maxAttemptsPerWork?: number;
@@ -63,19 +63,6 @@ export interface GoalItem {
   workspaceId: string | null;
 }
 
-/**
- * Goal creation payload accepted by `TaskService.createTask` / the `task.create`
- * procedure: binds a new goals row to the created task in the same flow.
- * `maxRounds: null` is the user's explicit "no cap"; `undefined` means they
- * never chose, and the service falls back to the documented default.
- */
-export interface CreateTaskGoalInput {
-  maxRounds?: number | null;
-  maxTotalCost?: number | null;
-  requirement?: string | null;
-  title?: string;
-}
-
 // ============================================
 // Goal Graph — durable long-horizon reasoning structure
 // ============================================
@@ -113,6 +100,15 @@ export interface GoalDecisionOption {
 export type GoalEventActorType = 'agent' | 'user' | 'system';
 
 export type GoalEventEntityType = 'goal' | 'node' | 'edge' | 'decision' | 'task';
+
+/**
+ * Who a Goal Graph mutation is recorded as. Defaults to the acting user; the
+ * coordinator supplies its own so its moves are separable from a person's.
+ */
+export interface GoalEventActor {
+  id: string;
+  type: GoalEventActorType;
+}
 
 export type GoalEventType =
   'created' | 'updated' | 'activated' | 'resolved' | 'rejected' | 'retired' | 'linked' | 'unlinked';
