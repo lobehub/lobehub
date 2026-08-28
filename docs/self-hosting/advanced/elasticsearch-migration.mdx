@@ -10,7 +10,7 @@ tags:
 
 # Migrate Search Data to Elasticsearch
 
-The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It records a durable cursor and item-level failures in PostgreSQL, so running the same command again resumes the existing attempt.
+The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It atomically records the cursor, counters, and item-level failures in a local checkpoint file, so running the same command with the same state directory resumes the existing attempt.
 
 <Callout type="warning">
   The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes.
@@ -18,12 +18,13 @@ The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreS
 
 ## Environment variables
 
-| Variable             | Required | Purpose                                                                                                                                    |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`       | Yes      | PostgreSQL source database. It also stores reindex cursors, counters, failures, and the incremental-change outbox.                         |
-| `ES_URL`             | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
-| `ES_API_KEY`         | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
-| `ES_INDEX_NAMESPACE` | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
+| Variable               | Required | Purpose                                                                                                                                    |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`         | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
+| `ES_URL`               | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
+| `ES_API_KEY`           | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
+| `ES_INDEX_NAMESPACE`   | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
+| `ES_REINDEX_STATE_DIR` | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command. Environment variables from earlier feasibility experiments are not part of this migration.
 
@@ -44,19 +45,35 @@ Inspect the current state without writing to Elasticsearch:
 bun run search:reindex -- --status
 ```
 
-Start or resume the full backfill:
+Choose a durable local state directory and start a new backfill into an empty Elasticsearch target:
 
 ```bash
-bun run search:reindex -- --apply --yes
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run search:reindex -- --apply --fresh-run --yes
+```
+
+Only the first invocation uses `--fresh-run`. Resume the same run with the same state directory:
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
 `--apply` enables PostgreSQL Outbox capture before the first backfill batch. The required `--yes`
 acknowledges that persistent database-side effect; it is not an interactive prompt.
 
+The run ID is also stored in each physical index's mapping metadata. A different local checkpoint
+cannot silently continue writing the same physical indexes. Never run copies of one checkpoint
+concurrently from multiple machines.
+
+The checkpoint file contains only migration control state and sanitized failure metadata. It never
+stores database or Elasticsearch credentials. Keep the entire state directory until validation and
+incremental catch-up finish; moving to another machine requires copying that directory.
+
 Optional limits:
 
 ```bash
-bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=52428800
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=52428800
 ```
 
 `--batch-size` limits PostgreSQL rows per keyset page. `--bulk-max-bytes` limits each Elasticsearch `_bulk` request by encoded bytes; an individual document larger than this limit is stored as an explicit failure.
@@ -66,16 +83,27 @@ bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=524288
 The official image includes `/app/elasticsearch-reindex.cjs`:
 
 ```bash
-docker run --rm --env-file .env lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --status
-docker run --rm --env-file .env lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --apply --yes
+mkdir -m 700 -p .elasticsearch-reindex
+docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
+  -e ES_REINDEX_STATE_DIR=/data/elasticsearch-reindex \
+  -v "$PWD/.elasticsearch-reindex:/data/elasticsearch-reindex" \
+  lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --status
+docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
+  -e ES_REINDEX_STATE_DIR=/data/elasticsearch-reindex \
+  -v "$PWD/.elasticsearch-reindex:/data/elasticsearch-reindex" \
+  lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --apply --fresh-run --yes
 ```
 
-If Docker Compose already supplies the same environment variables and database network, run the image as a one-time service instead of starting a second application server.
+The bind mount is required for resume after a `--rm` container exits. Running with the host user's
+ID lets the process write the bind-mounted directory without changing its ownership. If Docker
+Compose already supplies the same environment variables and database network, mount the same
+persistent state directory and run the image as a one-time service instead of starting a second
+application server.
 
 ## Resume and verify
 
-- Re-run the exact `--apply` command after a process crash or temporary Elasticsearch failure. Completed entities are skipped and the next batch starts after the persisted cursor.
-- Request-level failures do not advance the cursor. Item-level failures are recorded and replayed before an entity can complete.
+- After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor.
+- Request-level failures do not advance the cursor. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
 - The tool refuses to create aliases while any entity or item-level failure is incomplete.
 - The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
 
@@ -94,8 +122,9 @@ operator deliberately accepts that one document with a non-retryable failure wil
 the initial Elasticsearch snapshot, resolve the blocker explicitly and then resume:
 
 ```bash
-bun run search:reindex -- --skip-failure=agents:document-id --yes
-bun run search:reindex -- --apply --yes
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run search:reindex -- --skip-failure=agents:document-id --yes
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
 Only non-retryable failures can be skipped, and skipping does not count the document as indexed. Use

@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type { SearchDocumentEntity } from '@lobechat/types';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
@@ -8,8 +10,8 @@ import {
   SearchDocumentBuilder,
 } from '../../packages/database/src/repositories/searchDocument';
 import {
+  SearchReindexFileRepository,
   SearchReindexHttpClient,
-  SearchReindexRepository,
   SearchReindexService,
 } from '../../packages/database/src/repositories/searchReindex';
 import { SearchSyncOutboxRepository } from '../../packages/database/src/repositories/searchSyncOutbox';
@@ -28,13 +30,20 @@ const readPositiveIntegerArgument = (name: string) => {
 const args = new Set(process.argv.slice(2));
 const apply = args.has('--apply');
 const disableCapture = args.has('--disable-capture');
+const freshRun = args.has('--fresh-run');
 const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-failure='));
 const status = args.has('--status');
 const yes = args.has('--yes');
 const batchSize = readPositiveIntegerArgument('--batch-size');
 const bulkMaxBytes = readPositiveIntegerArgument('--bulk-max-bytes');
 
-const knownArguments = new Set(['--apply', '--disable-capture', '--status', '--yes']);
+const knownArguments = new Set([
+  '--apply',
+  '--disable-capture',
+  '--fresh-run',
+  '--status',
+  '--yes',
+]);
 const unknownArgument = process.argv
   .slice(2)
   .find(
@@ -54,6 +63,7 @@ if (mutationModes > 1 || (status && mutationModes > 0)) {
 if (mutationModes > 0 && !yes) {
   throw new Error('Mutating commands require --yes after reviewing their documented effects');
 }
+if (freshRun && !apply) throw new Error('--fresh-run can only be used with --apply');
 
 const readFailureReference = ():
   { documentId: string; entity: SearchDocumentEntity } | undefined => {
@@ -75,19 +85,28 @@ const databaseUrl = process.env.DATABASE_URL;
 const elasticsearchApiKey = process.env.ES_API_KEY;
 const elasticsearchUrl = process.env.ES_URL;
 const namespace = process.env.ES_INDEX_NAMESPACE;
+const configuredStateDirectory = process.env.ES_REINDEX_STATE_DIR;
+const stateDirectory = path.resolve(configuredStateDirectory ?? '.elasticsearch-reindex');
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 if (!namespace) throw new Error('ES_INDEX_NAMESPACE is required');
 if (apply && !elasticsearchApiKey) throw new Error('ES_API_KEY is required with --apply');
 if (apply && !elasticsearchUrl) throw new Error('ES_URL is required with --apply');
+if ((apply || failureReference) && !configuredStateDirectory) {
+  throw new Error('ES_REINDEX_STATE_DIR is required for reindex mutations and resume attempts');
+}
 
 const pool = new Pool({ connectionString: databaseUrl });
 const db = drizzle(pool, { schema });
-const repository = new SearchReindexRepository(db);
 const outbox = new SearchSyncOutboxRepository(db);
+const repository = new SearchReindexFileRepository({
+  readHighWaterRevision: () => outbox.readHighWaterRevision(),
+  reserveRevision: () => outbox.reserveRevision(),
+  stateDirectory,
+});
 
 const printStatus = async () => {
-  const state = await repository.getLatestRun(namespace);
+  const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   const captureEnabled = await outbox.isCaptureEnabled();
   const unresolvedFailures = state ? await repository.listUnresolvedFailures(state.run.id) : [];
   const outboxStats = await outbox.stats();
@@ -95,6 +114,7 @@ const printStatus = async () => {
     JSON.stringify(
       {
         namespace,
+        stateDirectory,
         outbox: {
           captureEnabled,
           dead: outboxStats.dead,
@@ -144,7 +164,7 @@ const run = async () => {
   }
 
   if (failureReference) {
-    const state = await repository.getLatestRun(namespace);
+    const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
     if (!state) throw new Error(`No reindex run exists for namespace ${namespace}`);
     const skipped = await repository.skipFailure(
       state.run.id,
@@ -162,6 +182,25 @@ const run = async () => {
     await printStatus();
     return;
   }
+
+  const existing = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  if (!existing && !freshRun) {
+    throw new Error(
+      `No checkpoint exists in ${stateDirectory}; pass --fresh-run only for a new, empty Elasticsearch target`,
+    );
+  }
+  if (existing && freshRun) {
+    throw new Error(`Checkpoint ${existing.run.id} already exists; omit --fresh-run to resume it`);
+  }
+  const prepared = await repository.createOrResume(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  console.log(
+    JSON.stringify({
+      runId: prepared.run.id,
+      schemaVersion: prepared.run.schemaVersion,
+      stateDirectory,
+      type: existing ? 'reindex_resumed' : 'reindex_started',
+    }),
+  );
 
   await outbox.enableCapture();
   const client = new SearchReindexHttpClient({

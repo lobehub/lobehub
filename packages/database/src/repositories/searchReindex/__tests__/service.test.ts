@@ -7,32 +7,26 @@ import type { SearchReindexElasticsearchClient, SearchReindexStateRepository } f
 import { SearchReindexService } from '../service';
 
 const createState = (): SearchReindexRunState => ({
-  progress: SEARCH_DOCUMENT_ENTITIES.map((entity, index) => ({
+  progress: SEARCH_DOCUMENT_ENTITIES.map((entity) => ({
     completedAt: null,
-    createdAt: new Date(),
     cursor: null,
     entity,
     failedCount: 0,
-    id: `progress-${index}`,
     indexedCount: 0,
     physicalIndex: `test-${entity}-v1`,
     processedCount: 0,
-    runId: 'run-1',
     status: 'pending',
-    updatedAt: new Date(),
   })),
   run: {
     aliasesCreatedAt: null,
     baseRevision: 10,
     backfillHighWaterRevision: null,
-    completedAt: null,
-    createdAt: new Date(),
+    createdAt: '2026-08-28T00:00:00.000Z',
     id: 'run-1',
-    lastError: null,
     namespace: 'test',
     schemaVersion: 1,
     status: 'backfilling',
-    updatedAt: new Date(),
+    updatedAt: '2026-08-28T00:00:00.000Z',
   },
 });
 
@@ -92,6 +86,14 @@ describe('SearchReindexService', () => {
     });
 
     expect(client.ensureIndex).toHaveBeenCalledTimes(14);
+    expect(client.ensureIndex).toHaveBeenCalledWith(
+      'test-agents-v1',
+      expect.objectContaining({
+        mappings: expect.objectContaining({
+          _meta: { reindex_run_id: 'run-1', schema_version: 1 },
+        }),
+      }),
+    );
     expect(client.ensureAlias).toHaveBeenCalledTimes(14);
     expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
     expect(state.progress.every(({ status }) => status === 'completed')).toBe(true);

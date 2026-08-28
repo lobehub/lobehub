@@ -8,7 +8,11 @@ import {
   SEARCH_INDEX_ANALYSIS,
   SEARCH_INDEX_DEFINITIONS,
 } from '../searchDocument';
-import type { SearchReindexBatchFailure, SearchReindexRepository, SearchReindexRunState } from '.';
+import type {
+  SearchReindexBatchFailure,
+  SearchReindexFileRepository,
+  SearchReindexRunState,
+} from '.';
 
 export interface SearchReindexBulkItemResult {
   error?: unknown;
@@ -24,7 +28,9 @@ export interface SearchReindexElasticsearchClient {
 }
 
 export interface SearchReindexIndexBody {
-  mappings: (typeof SEARCH_INDEX_DEFINITIONS)[SearchDocumentEntity]['mappings'];
+  mappings: (typeof SEARCH_INDEX_DEFINITIONS)[SearchDocumentEntity]['mappings'] & {
+    _meta: { reindex_run_id: string; schema_version: number };
+  };
   settings: { analysis: typeof SEARCH_INDEX_ANALYSIS };
 }
 
@@ -35,7 +41,7 @@ export interface SearchReindexServiceOptions {
 }
 
 export type SearchReindexStateRepository = Pick<
-  SearchReindexRepository,
+  SearchReindexFileRepository,
   | 'checkpointBatch'
   | 'completeEntity'
   | 'createOrResume'
@@ -254,7 +260,13 @@ export class SearchReindexService {
     if (progress.status === 'completed') return;
 
     await this.client.ensureIndex(progress.physicalIndex, {
-      mappings: SEARCH_INDEX_DEFINITIONS[entity].mappings,
+      mappings: {
+        ...SEARCH_INDEX_DEFINITIONS[entity].mappings,
+        _meta: {
+          reindex_run_id: state.run.id,
+          schema_version: state.run.schemaVersion,
+        },
+      },
       settings: { analysis: SEARCH_INDEX_ANALYSIS },
     });
 

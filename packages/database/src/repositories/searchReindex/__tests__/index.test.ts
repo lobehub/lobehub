@@ -1,39 +1,82 @@
 // @vitest-environment node
-import { and, eq } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-import { getTestDB } from '../../../core/getTestDB';
-import {
-  searchReindexEntityProgress,
-  searchReindexFailures,
-  searchReindexRuns,
-} from '../../../schemas';
-import { SearchReindexRepository } from '..';
+import { SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = await getTestDB();
-const repository = new SearchReindexRepository(db);
+import { SearchReindexFileRepository } from '..';
 
-const clean = async () => {
-  await db.delete(searchReindexRuns);
-};
+let stateDirectory: string;
+let repository: SearchReindexFileRepository;
+let revision = 10;
 
-beforeEach(clean);
-afterAll(clean);
+beforeEach(async () => {
+  stateDirectory = await mkdtemp(path.join(tmpdir(), 'search-reindex-test-'));
+  revision = 10;
+  repository = new SearchReindexFileRepository({
+    readHighWaterRevision: vi.fn(async () => revision),
+    reserveRevision: vi.fn(async () => ++revision),
+    stateDirectory,
+  });
+});
 
-describe('SearchReindexRepository', () => {
-  it('creates one durable v1 run and resumes it', async () => {
+afterEach(async () => {
+  await rm(stateDirectory, { force: true, recursive: true });
+});
+
+describe('SearchReindexFileRepository', () => {
+  it('creates one local v1 checkpoint and resumes it after constructing a new repository', async () => {
     const first = await repository.createOrResume('test-search', 1);
-    const resumed = await repository.createOrResume('test-search', 1);
+    const resumed = await new SearchReindexFileRepository({
+      readHighWaterRevision: vi.fn(async () => revision),
+      reserveRevision: vi.fn(async () => ++revision),
+      stateDirectory,
+    }).createOrResume('test-search', 1);
 
-    expect(first.run.baseRevision).toBeGreaterThan(0);
+    expect(first.run.baseRevision).toBe(11);
     expect(first.progress).toHaveLength(14);
     expect(first.progress.map(({ physicalIndex }) => physicalIndex)).toContain(
       'test-search-messages-v1',
     );
     expect(resumed.run.id).toBe(first.run.id);
+
+    const checkpointFiles = await readdir(stateDirectory);
+    expect(checkpointFiles).toHaveLength(1);
+    expect(checkpointFiles[0]).toMatch(/^reindex-test-search-[a-f\d]{12}-v1\.json$/);
+    const checkpoint = JSON.parse(
+      await readFile(path.join(stateDirectory, checkpointFiles[0]), 'utf8'),
+    );
+    expect(checkpoint).toMatchObject({ formatVersion: 1, run: { namespace: 'test-search' } });
   });
 
-  it('checkpoints item failures and resolves them before completing an entity', async () => {
+  it('reports a corrupt checkpoint instead of silently starting over', async () => {
+    await repository.createOrResume('corrupt-search', 1);
+    const [checkpointFile] = await readdir(stateDirectory);
+    await writeFile(path.join(stateDirectory, checkpointFile), '{');
+
+    await expect(repository.createOrResume('corrupt-search', 1)).rejects.toThrow(
+      'Search reindex checkpoint is not valid JSON',
+    );
+    await expect(readdir(stateDirectory)).resolves.toEqual([checkpointFile]);
+  });
+
+  it('loads the exact target without parsing an unrelated corrupt checkpoint', async () => {
+    const state = await repository.createOrResume('healthy-search', 1);
+    await writeFile(path.join(stateDirectory, 'reindex-unrelated-deadbeef-v1.json'), '{');
+
+    const restarted = new SearchReindexFileRepository({
+      readHighWaterRevision: vi.fn(async () => revision),
+      reserveRevision: vi.fn(async () => ++revision),
+      stateDirectory,
+    });
+    await expect(restarted.getTargetRun('healthy-search', 1)).resolves.toMatchObject({
+      run: { id: state.run.id },
+    });
+  });
+
+  it('atomically checkpoints item failures and rejects a stale cursor', async () => {
     const state = await repository.createOrResume('checkpoint-search', 1);
 
     await expect(
@@ -61,16 +104,13 @@ describe('SearchReindexRepository', () => {
       }),
     ).resolves.toBe(false);
 
-    const [progress] = await db
-      .select()
-      .from(searchReindexEntityProgress)
-      .where(
-        and(
-          eq(searchReindexEntityProgress.runId, state.run.id),
-          eq(searchReindexEntityProgress.entity, 'agents'),
-        ),
-      );
-    expect(progress).toMatchObject({ cursor: 'agent-2', failedCount: 1 });
+    const checkpointed = await repository.getRun(state.run.id);
+    expect(checkpointed?.progress.find(({ entity }) => entity === 'agents')).toMatchObject({
+      cursor: 'agent-2',
+      failedCount: 1,
+      indexedCount: 1,
+      processedCount: 2,
+    });
     await expect(repository.completeEntity(state.run.id, 'agents')).rejects.toThrow(
       '1 reindex failures remain',
     );
@@ -78,24 +118,13 @@ describe('SearchReindexRepository', () => {
     await expect(repository.resolveFailures(state.run.id, 'agents', ['agent-2'])).resolves.toBe(1);
     await repository.completeEntity(state.run.id, 'agents');
 
-    const [completed] = await db
-      .select()
-      .from(searchReindexEntityProgress)
-      .where(
-        and(
-          eq(searchReindexEntityProgress.runId, state.run.id),
-          eq(searchReindexEntityProgress.entity, 'agents'),
-        ),
-      );
-    const [failure] = await db
-      .select()
-      .from(searchReindexFailures)
-      .where(eq(searchReindexFailures.runId, state.run.id));
-    expect(completed).toMatchObject({ failedCount: 0, indexedCount: 2, status: 'completed' });
-    expect(failure.resolvedAt).toBeInstanceOf(Date);
-    await expect(
-      db.select().from(searchReindexFailures).where(eq(searchReindexFailures.runId, state.run.id)),
-    ).resolves.toHaveLength(1);
+    const completed = await repository.getRun(state.run.id);
+    expect(completed?.progress.find(({ entity }) => entity === 'agents')).toMatchObject({
+      failedCount: 0,
+      indexedCount: 2,
+      status: 'completed',
+    });
+    await expect(repository.listUnresolvedFailures(state.run.id)).resolves.toEqual([]);
   });
 
   it('refuses to mark a run ready while entities are incomplete', async () => {
@@ -121,22 +150,13 @@ describe('SearchReindexRepository', () => {
     await expect(repository.skipFailure(state.run.id, 'agents', 'agent-1')).resolves.toBe(true);
     await expect(repository.skipFailure(state.run.id, 'agents', 'agent-1')).resolves.toBe(false);
 
-    const [progress] = await db
-      .select()
-      .from(searchReindexEntityProgress)
-      .where(
-        and(
-          eq(searchReindexEntityProgress.runId, state.run.id),
-          eq(searchReindexEntityProgress.entity, 'agents'),
-        ),
-      );
-    const [failure] = await db
-      .select()
-      .from(searchReindexFailures)
-      .where(eq(searchReindexFailures.runId, state.run.id));
-    expect(progress).toMatchObject({ failedCount: 0, indexedCount: 0, processedCount: 1 });
-    expect(failure.error).toMatch(/^Skipped by operator:/);
-    expect(failure.resolvedAt).toBeInstanceOf(Date);
+    const skipped = await repository.getRun(state.run.id);
+    expect(skipped?.progress.find(({ entity }) => entity === 'agents')).toMatchObject({
+      failedCount: 0,
+      indexedCount: 0,
+      processedCount: 1,
+    });
+    await expect(repository.listUnresolvedFailures(state.run.id)).resolves.toEqual([]);
   });
 
   it('does not let an operator skip an uncertain retryable failure', async () => {
@@ -159,16 +179,15 @@ describe('SearchReindexRepository', () => {
 
   it('records the Outbox high-water boundary when all entities are ready', async () => {
     const state = await repository.createOrResume('ready-search', 1);
-    await db
-      .update(searchReindexEntityProgress)
-      .set({ status: 'completed' })
-      .where(eq(searchReindexEntityProgress.runId, state.run.id));
+    for (const entity of SEARCH_DOCUMENT_ENTITIES) {
+      await repository.completeEntity(state.run.id, entity);
+    }
 
     await repository.markReadyForIncrementalSync(state.run.id);
 
     const ready = await repository.getRun(state.run.id);
     expect(ready?.run).toMatchObject({
-      backfillHighWaterRevision: expect.any(Number),
+      backfillHighWaterRevision: revision,
       status: 'ready_for_incremental_sync',
     });
     expect(ready!.run.backfillHighWaterRevision).toBeGreaterThanOrEqual(state.run.baseRevision);

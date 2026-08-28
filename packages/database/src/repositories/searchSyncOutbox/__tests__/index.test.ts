@@ -34,6 +34,13 @@ afterAll(async () => {
 });
 
 describe('SearchSyncOutboxRepository', () => {
+  it('reserves and observes revisions for a local full-reindex checkpoint', async () => {
+    const revision = await repository.reserveRevision();
+
+    expect(revision).toBeGreaterThan(0);
+    await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
+  });
+
   it('replays the migration safely', async () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),

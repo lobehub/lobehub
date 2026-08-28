@@ -8,6 +8,8 @@ const response = (body: unknown, status = 200) =>
     status,
   });
 
+const reindexMeta = { reindex_run_id: '00000000-0000-4000-8000-000000000001', schema_version: 1 };
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SearchReindexHttpClient', () => {
@@ -23,7 +25,7 @@ describe('SearchReindexHttpClient', () => {
     });
 
     await client.ensureIndex('lobehub-messages-v1', {
-      mappings: { dynamic: 'strict', properties: {} },
+      mappings: { _meta: reindexMeta, dynamic: 'strict', properties: {} },
       settings: { analysis: { analyzer: {}, filter: {}, tokenizer: {} } },
     });
 
@@ -41,7 +43,11 @@ describe('SearchReindexHttpClient', () => {
       .mockResolvedValueOnce(
         response({
           'lobehub-messages-v1': {
-            mappings: { dynamic: 'strict', properties: { id: { type: 'text' } } },
+            mappings: {
+              _meta: reindexMeta,
+              dynamic: 'strict',
+              properties: { id: { type: 'text' } },
+            },
           },
         }),
       );
@@ -53,10 +59,43 @@ describe('SearchReindexHttpClient', () => {
 
     await expect(
       client.ensureIndex('lobehub-messages-v1', {
-        mappings: { dynamic: 'strict', properties: { id: { type: 'keyword' } } },
+        mappings: {
+          _meta: reindexMeta,
+          dynamic: 'strict',
+          properties: { id: { type: 'keyword' } },
+        },
         settings: { analysis: { analyzer: {}, filter: {}, tokenizer: {} } },
       }),
     ).rejects.toThrow('mapping is incompatible for id');
+  });
+
+  it('refuses to resume an index created by a different local reindex run', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            mappings: {
+              _meta: { ...reindexMeta, reindex_run_id: '00000000-0000-4000-8000-000000000002' },
+              dynamic: 'strict',
+              properties: {},
+            },
+          },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new SearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.ensureIndex('lobehub-messages-v1', {
+        mappings: { _meta: reindexMeta, dynamic: 'strict', properties: {} },
+        settings: { analysis: { analyzer: {}, filter: {}, tokenizer: {} } },
+      }),
+    ).rejects.toThrow('reindex run identity is incompatible');
   });
 
   it('keeps an alias that already targets the expected writable index', async () => {

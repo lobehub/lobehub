@@ -46,6 +46,12 @@ const mappingResponseSchema = z.record(
   z.string(),
   z.object({
     mappings: z.object({
+      _meta: z
+        .object({
+          reindex_run_id: z.string().optional(),
+          schema_version: z.number().int().positive().optional(),
+        })
+        .optional(),
       dynamic: z.union([z.boolean(), z.string()]).optional(),
       properties: z.record(z.string(), mappingPropertyResponseSchema),
     }),
@@ -134,9 +140,14 @@ export class SearchReindexHttpClient implements SearchReindexElasticsearchClient
       );
     }
     const actual = parsed.data[index]?.mappings;
-    if (!actual || actual.dynamic !== expected.mappings.dynamic) {
+    if (
+      !actual ||
+      actual.dynamic !== expected.mappings.dynamic ||
+      actual._meta?.reindex_run_id !== expected.mappings._meta.reindex_run_id ||
+      actual._meta?.schema_version !== expected.mappings._meta.schema_version
+    ) {
       throw new SearchReindexRequestError(
-        `Elasticsearch index mapping is incompatible for ${index}`,
+        `Elasticsearch index mapping or reindex run identity is incompatible for ${index}; restore the matching checkpoint or use a clean target`,
       );
     }
     for (const [field, expectedProperty] of Object.entries(expected.mappings.properties)) {

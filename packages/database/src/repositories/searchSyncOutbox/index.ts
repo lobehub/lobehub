@@ -57,6 +57,14 @@ const toWork = (row: SearchSyncRow): SearchSyncWork => ({
 const errorMessage = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 2000);
 
+const revisionNumber = (value: number | string | undefined, operation: string, minimum = 0) => {
+  const revision = Number(value);
+  if (!Number.isSafeInteger(revision) || revision < minimum) {
+    throw new Error(`Failed to read a valid search sync revision while ${operation}`);
+  }
+  return revision;
+};
+
 /** Durable claim and settlement operations for the PostgreSQL-triggered search outbox. */
 export class SearchSyncOutboxRepository {
   constructor(private readonly db: SearchSyncDatabase) {}
@@ -93,6 +101,30 @@ export class SearchSyncOutboxRepository {
       ) AS enabled
     `);
     return Boolean(rowsOf<{ enabled: boolean }>(result)[0]?.enabled);
+  }
+
+  /** Observes the latest allocated revision without treating it as a committed snapshot boundary. */
+  async readHighWaterRevision(): Promise<number> {
+    const result = await this.db.execute(sql`
+      SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision
+      FROM search_sync_revision_seq
+    `);
+    return revisionNumber(
+      rowsOf<{ revision: number | string }>(result)[0]?.revision,
+      'reading the high-water mark',
+    );
+  }
+
+  /** Reserves a version for idempotent full-reindex writes before Outbox changes are drained. */
+  async reserveRevision(): Promise<number> {
+    const result = await this.db.execute(sql`
+      SELECT nextval('search_sync_revision_seq')::bigint AS revision
+    `);
+    return revisionNumber(
+      rowsOf<{ revision: number | string }>(result)[0]?.revision,
+      'reserving a reindex version',
+      1,
+    );
   }
 
   async acknowledgeMany(works: SearchSyncWork[]): Promise<SearchSyncWork[]> {
