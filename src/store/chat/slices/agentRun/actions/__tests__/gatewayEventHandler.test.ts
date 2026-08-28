@@ -1294,14 +1294,14 @@ describe('createGatewayEventHandler', () => {
       expect(store.replaceMessages).toHaveBeenCalledTimes(1);
     });
 
-    // Regression: the `message.update` mutation resolves rows in the
-    // CALLER's scope. A share visitor calling the owner-scoped
-    // `updateMessageError` would "succeed" with 0 rows updated and its
-    // response messages (queried as the visitor) come back empty — wiping
-    // the message bucket with []. The handler must skip the owner-scoped
-    // persistence entirely for share-visitor runs and fall through to the
-    // share-aware refetch + inline error overlay instead.
-    it('should NOT call updateMessageError for a share-visitor run and still surface the inline error', async () => {
+    // Regression: a share visitor's error must be PERSISTED, not just
+    // overlaid in memory, or it disappears on refresh. `message.update`
+    // resolves rows in the caller's scope, and a share run's conversation
+    // rows are the VISITOR's own — stamped with the CREATOR's `agentId`,
+    // which is what the share client sends — so the visitor's own call
+    // resolves the row. Covered server-side by
+    // `shareVisitorMessageError.integration.test.ts`.
+    it('should call updateMessageError for a share-visitor run and still surface the inline error', async () => {
       const store = createMockStore();
       const handler = createHandler(store, {
         contextOverrides: { agentShareId: 'share-1' },
@@ -1310,10 +1310,11 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('error', { message: 'Something went wrong' }));
       await flush();
 
-      expect(messageService.updateMessageError).not.toHaveBeenCalled();
-      // Falls through to the share-aware refetch instead of trusting an
-      // (absent) mutation response.
-      expect(messageService.getMessages).toHaveBeenCalled();
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-initial',
+        expect.objectContaining({ message: 'Something went wrong' }),
+        expect.objectContaining({ agentId: expect.anything() }),
+      );
       expect(store.replaceMessages).toHaveBeenCalled();
 
       // The inline error overlay still lands regardless of persistence.

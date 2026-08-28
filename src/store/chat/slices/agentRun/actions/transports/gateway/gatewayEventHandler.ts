@@ -1356,23 +1356,24 @@ export const createGatewayEventHandler = (
             get().completeOperation(operationId);
           }
 
-          // Share visitors must not persist through the owner-scoped
-          // `message.update`: it resolves rows in the CALLER's scope, so the
-          // visitor call "succeeds" with 0 rows updated and its response
-          // messages (queried as the visitor) come back empty — replacing the
-          // bucket with [] and leaving the inline error overlay nothing to
-          // attach to. Fall through to the share-aware refetch + overlay;
-          // server-side error persistence for share runs is a known v1 gap.
-          const updateResult = context.agentShareId
-            ? undefined
-            : await messageService
-                .updateMessageError(currentAssistantMessageId, messageError, {
-                  agentId: context.agentId,
-                  groupId: context.groupId,
-                  threadId: context.threadId,
-                  topicId: context.topicId,
-                })
-                .catch(console.error);
+          // Share visitors go through this same owner-scoped `message.update`.
+          // That is safe — and necessary — because a share run's conversation
+          // rows are VISITOR-owned (only the execution principal is the
+          // creator's), and the assistant row is stamped with the CREATOR's
+          // `agentId` (`AiAgentService.execAgent`'s `assistantAgentId`), which
+          // is exactly what `context.agentId` carries on the share client. So
+          // the visitor's own scope resolves the row, persists the error, and
+          // returns its refreshed messages. Without this call the error would
+          // live only in the in-memory overlay below and vanish on refresh.
+          // Covered by `shareVisitorMessageError.test.ts`.
+          const updateResult = await messageService
+            .updateMessageError(currentAssistantMessageId, messageError, {
+              agentId: context.agentId,
+              groupId: context.groupId,
+              threadId: context.threadId,
+              topicId: context.topicId,
+            })
+            .catch(console.error);
 
           if (updateResult?.success && updateResult.messages) {
             get().replaceMessages(updateResult.messages, { context });
