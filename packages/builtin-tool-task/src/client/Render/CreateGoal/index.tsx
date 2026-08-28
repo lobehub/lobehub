@@ -130,23 +130,23 @@ const CreateGoalRender = memo<BuiltinRenderProps<CreateGoalParams, CreateGoalSta
     const [now, setNow] = useState(() => Date.now());
 
     const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
-    const { mutate } = useFetchGoalGraph(goalId);
+    useFetchGoalGraph(goalId);
     const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
     const pendingDecisions =
       snapshot?.decisions.filter((decision) => decision.status === 'pending').length ?? 0;
     const phase = resolvePhase(snapshot?.goal.status, pendingDecisions);
     const meta = PHASE_META[phase];
 
-    // The elapsed clock and the poll share one timer: both exist only while the
-    // goal is still moving, and both stop the moment it settles.
+    // Ticks the elapsed clock only. Refreshing the graph is `useFetchGoalGraph`'s
+    // job and it already polls while the goal is one the server can move — doing
+    // it here too meant every mounted card pulled the whole snapshot once a
+    // second, and a card whose fetch had failed read as unsettled and never
+    // stopped asking.
     useEffect(() => {
       if (meta.settled) return;
-      const timer = window.setInterval(() => {
-        setNow(Date.now());
-        void mutate();
-      }, 1000);
+      const timer = window.setInterval(() => setNow(Date.now()), 1000);
       return () => window.clearInterval(timer);
-    }, [meta.settled, mutate]);
+    }, [meta.settled]);
 
     if (!pluginState?.success || !goalId) return null;
 
