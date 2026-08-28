@@ -56,6 +56,7 @@ const tick = (index: number, overrides: Partial<GoalTickSnapshot> = {}): GoalTic
   branch: 'dispatch_task',
   budget: { costLimitReached: false, roundLimitReached: false, runs: 0, totalCost: 0 },
   candidates: [],
+  effects: [],
   graphShape: {
     edgesTotal: 0,
     findings: 0,
@@ -79,7 +80,6 @@ describe('reconstructGraphAt', () => {
         {
           completedAt: 2,
           durationMs: 2,
-          effects: [],
           seq: 0,
           startedAt: 0,
           ticks: [
@@ -91,7 +91,6 @@ describe('reconstructGraphAt', () => {
         {
           completedAt: 4,
           durationMs: 1,
-          effects: [],
           seq: 1,
           startedAt: 3,
           ticks: [tick(0, { graphDelta: { nodesUpserted: [node('a', { status: 'resolved' })] } })],

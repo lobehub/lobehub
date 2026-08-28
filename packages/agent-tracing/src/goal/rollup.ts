@@ -50,7 +50,9 @@ const humanWaiting = (trajectory: GoalTrajectory): number => {
       total += advance.startedAt - openedAt;
       openedAt = undefined;
     }
-    const opened = advance.effects.some((effect) => effect.type === 'opened_decision');
+    const opened = advance.ticks.some((tick) =>
+      tick.effects.some((effect) => effect.type === 'opened_decision'),
+    );
     if (opened) openedAt = advance.completedAt;
   }
   return total;
@@ -74,11 +76,12 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
     if (last) increment(advancesByOutcome, last.outcome);
 
     ticksTotal += advance.ticks.length;
-    for (const tick of advance.ticks) increment(ticksByBranch, tick.branch);
-
-    for (const effect of advance.effects) {
-      if (effect.type === 'opened_decision') gatesOpened += 1;
-      if (effect.type === 'resolved_decision') gatesResolved += 1;
+    for (const tick of advance.ticks) {
+      increment(ticksByBranch, tick.branch);
+      for (const effect of tick.effects) {
+        if (effect.type === 'opened_decision') gatesOpened += 1;
+        if (effect.type === 'resolved_decision') gatesResolved += 1;
+      }
     }
     for (const operationId of advance.childOperationIds ?? []) operationIds.add(operationId);
   }

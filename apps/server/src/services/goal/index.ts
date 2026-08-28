@@ -747,7 +747,12 @@ export class GoalService {
         taskId: task.id,
         trigger: 'goal',
       });
-      effects.push({ nodeId, targetId: task.id, type: 'started_run' });
+      effects.push({
+        nodeId,
+        operationId: run.operationId,
+        targetId: task.id,
+        type: 'started_run',
+      });
       return {
         goalId,
         message: `Started task ${task.identifier}`,
@@ -949,6 +954,13 @@ export class GoalService {
       toolIdentifier: 'goal-coordinator',
       toolName: 'synthesizeTaskOutcome',
       topicId: latest?.topicId,
+    });
+    effects.push({
+      nodeId,
+      operationId: latest?.operationId ?? undefined,
+      targetId: taskId,
+      type: 'node_status',
+      detail: 'resolved',
     });
     if (completedWork?.currentVersionId) {
       await this.coordinatorGraph.attachWorkVersion(

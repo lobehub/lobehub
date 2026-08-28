@@ -36,7 +36,7 @@ export interface GoalDecision {
 
 export type GoalDecider = (input: GoalDecisionInput) => GoalDecision;
 
-export interface ReplayDivergence {
+export interface GoalReplayDivergence {
   advanceSeq: number;
   field: 'branch' | 'chosenNodeId' | 'candidates';
   recorded: string;
@@ -44,8 +44,8 @@ export interface ReplayDivergence {
   tickIndex: number;
 }
 
-export interface ReplayResult {
-  divergences: ReplayDivergence[];
+export interface GoalReplayResult {
+  divergences: GoalReplayDivergence[];
   goalId: string;
   matched: number;
   ticks: number;
@@ -64,8 +64,11 @@ const candidateOrder = (candidates: FrontierCandidate[]): string =>
  * exact input that produced it. No database and no environment — the trajectory
  * carries the whole decision surface.
  */
-export const replayTrajectory = (trajectory: GoalTrajectory, decide: GoalDecider): ReplayResult => {
-  const divergences: ReplayDivergence[] = [];
+export const replayGoalTrajectory = (
+  trajectory: GoalTrajectory,
+  decide: GoalDecider,
+): GoalReplayResult => {
+  const divergences: GoalReplayDivergence[] = [];
   let ticks = 0;
   let matched = 0;
 
@@ -82,7 +85,7 @@ export const replayTrajectory = (trajectory: GoalTrajectory, decide: GoalDecider
 
       const before = divergences.length;
       const record = (
-        field: ReplayDivergence['field'],
+        field: GoalReplayDivergence['field'],
         recordedValue: string,
         replayedValue: string,
       ) => {

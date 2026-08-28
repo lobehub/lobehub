@@ -16,9 +16,9 @@ export {
   type GoalDecider,
   type GoalDecision,
   type GoalDecisionInput,
-  type ReplayDivergence,
-  type ReplayResult,
-  replayTrajectory,
+  type GoalReplayDivergence,
+  type GoalReplayResult,
+  replayGoalTrajectory,
 } from './replay';
 export { buildGoalTraceRollup, type GoalTraceRollup } from './rollup';
 export { FileGoalTraceStore } from './store/file-store';

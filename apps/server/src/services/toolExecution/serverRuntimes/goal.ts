@@ -62,6 +62,7 @@ export const goalRuntime: ServerRuntimeRegistration = {
           // while the agent has been told not to create it again.
           await scheduleGoalAdvance({
             goalId: graph.goal.id,
+            trigger: 'create',
             userId,
             workspaceId: workspaceId ?? undefined,
           });
@@ -80,6 +81,7 @@ export const goalRuntime: ServerRuntimeRegistration = {
             // the goal keeps itself moving through the queued advances.
             const { result } = await advanceGoal({
               goalId: graph.goal.id,
+              trigger: 'create',
               userId,
               workspaceId: workspaceId ?? undefined,
             });

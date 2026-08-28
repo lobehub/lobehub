@@ -2,7 +2,6 @@ import { buildGraphShape, computeGraphDelta, reconstructFinalGraph } from './del
 import { partialToTrajectory } from './store/file-store';
 import type { IGoalTraceStore } from './store/types';
 import type {
-  GoalAdvanceEffect,
   GoalAdvanceSnapshot,
   GoalAdvanceTrigger,
   GoalGraphState,
@@ -25,7 +24,6 @@ export interface RecordTickInput extends Omit<
 export interface RecordAdvanceInput {
   childOperationIds?: string[];
   completedAt?: number;
-  effects?: GoalAdvanceEffect[];
   error?: { message: string; type: string };
   startedAt: number;
   ticks: RecordTickInput[];
@@ -74,7 +72,6 @@ export const appendAdvanceToPartial = async (
     childOperationIds: input.childOperationIds?.length ? input.childOperationIds : undefined,
     completedAt,
     durationMs: completedAt - input.startedAt,
-    effects: input.effects ?? [],
     error: input.error,
     seq: advances.length,
     startedAt: input.startedAt,

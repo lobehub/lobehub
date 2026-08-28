@@ -37,6 +37,7 @@ const tick = (graphState: GoalGraphState, at = 0): RecordTickInput => ({
   branch: 'dispatch_task',
   budget: { costLimitReached: false, roundLimitReached: false, runs: 0, totalCost: 0 },
   candidates: [],
+  effects: [],
   graphState,
   message: 'ok',
   outcome: 'advanced',

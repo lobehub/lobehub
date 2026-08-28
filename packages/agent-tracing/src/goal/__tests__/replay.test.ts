@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type GoalDecider, replayTrajectory } from '../replay';
+import { type GoalDecider, replayGoalTrajectory } from '../replay';
 import type { GoalTickSnapshot, GoalTrajectory } from '../types';
 import { graph, node } from './fixtures';
 
@@ -13,6 +13,7 @@ const tick = (overrides: Partial<GoalTickSnapshot> = {}): GoalTickSnapshot => ({
     { blockedBy: [], nodeId: 'b', priority: 0, status: 'proposed', title: 'b' },
   ],
   chosenNodeId: 'a',
+  effects: [],
   graphShape: {
     edgesTotal: 0,
     findings: 0,
@@ -34,7 +35,6 @@ const trajectory: GoalTrajectory = {
     {
       completedAt: 5,
       durationMs: 5,
-      effects: [],
       seq: 0,
       startedAt: 0,
       ticks: [tick()],
@@ -66,9 +66,9 @@ const faithful: GoalDecider = ({ graph: state }) => {
   return { branch: 'dispatch_task', candidates, chosenNodeId: candidates[0]?.nodeId };
 };
 
-describe('replayTrajectory', () => {
+describe('replayGoalTrajectory', () => {
   it('reports no divergence when the decider still decides the same way', () => {
-    expect(replayTrajectory(trajectory, faithful)).toMatchObject({
+    expect(replayGoalTrajectory(trajectory, faithful)).toMatchObject({
       divergences: [],
       matched: 1,
       ticks: 1,
@@ -81,7 +81,7 @@ describe('replayTrajectory', () => {
       return { ...decision, candidates: [...decision.candidates].reverse() };
     };
 
-    const result = replayTrajectory(trajectory, reversed);
+    const result = replayGoalTrajectory(trajectory, reversed);
 
     expect(result.matched).toBe(0);
     expect(result.divergences).toEqual([
@@ -90,7 +90,7 @@ describe('replayTrajectory', () => {
   });
 
   it('ignores the outcome, which the branch produces rather than decides', () => {
-    const result = replayTrajectory(
+    const result = replayGoalTrajectory(
       {
         ...trajectory,
         advances: [
@@ -113,15 +113,14 @@ describe('replayTrajectory', () => {
       chosenNodeId: 'b',
     });
 
-    expect(replayTrajectory(trajectory, different).divergences.map((item) => item.field)).toEqual([
-      'branch',
-      'chosenNodeId',
-    ]);
+    expect(
+      replayGoalTrajectory(trajectory, different).divergences.map((item) => item.field),
+    ).toEqual(['branch', 'chosenNodeId']);
   });
 
   it('feeds the decider the graph as it was entering the tick, not the final one', () => {
     const seen: string[] = [];
-    replayTrajectory(
+    replayGoalTrajectory(
       {
         ...trajectory,
         advances: [

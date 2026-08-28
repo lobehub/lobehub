@@ -1,3 +1,4 @@
+import type { GoalAdvanceTrigger } from '@lobechat/agent-tracing';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -7,6 +8,7 @@ const log = debug('lobe-server:workflows:goal:advance');
 
 export interface GoalAdvancePayload {
   goalId?: string;
+  trigger?: GoalAdvanceTrigger;
   userId?: string;
   workspaceId?: string;
 }
@@ -24,13 +26,13 @@ export interface GoalAdvancePayload {
 export async function advance(c: Context) {
   try {
     const body = (await c.req.json().catch(() => ({}))) as GoalAdvancePayload;
-    const { goalId, userId, workspaceId } = body ?? {};
+    const { goalId, trigger, userId, workspaceId } = body ?? {};
 
     if (!goalId || !userId) {
       return c.json({ error: 'goalId and userId are required', success: false }, 400);
     }
 
-    const outcome = await advanceGoal({ goalId, userId, workspaceId });
+    const outcome = await advanceGoal({ goalId, trigger, userId, workspaceId });
     log('goal %s advanced in %d tick(s) → %s', goalId, outcome.ticks, outcome.result.outcome);
 
     return c.json({

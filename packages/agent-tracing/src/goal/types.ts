@@ -171,6 +171,8 @@ export interface GoalTickSnapshot {
   budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
   chosenNodeId?: string;
+  /** What this tick changed. Attributed per tick so an advance's writes stay ordered. */
+  effects: GoalAdvanceEffect[];
   frontierTask?: GoalFrontierTaskState;
   /**
    * Graph change since the previously recorded tick, observed on entry to this
@@ -201,6 +203,8 @@ export type GoalEffectType =
 export interface GoalAdvanceEffect {
   detail?: string;
   nodeId?: string;
+  /** The agent operation this effect put in flight or consumed — the drill-down key. */
+  operationId?: string;
   targetId?: string;
   type: GoalEffectType;
 }
@@ -210,7 +214,6 @@ export interface GoalAdvanceSnapshot {
   childOperationIds?: string[];
   completedAt: number;
   durationMs: number;
-  effects: GoalAdvanceEffect[];
   error?: { message: string; type: string };
   seq: number;
   startedAt: number;

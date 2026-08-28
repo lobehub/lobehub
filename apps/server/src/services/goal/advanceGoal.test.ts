@@ -1,10 +1,17 @@
 import type { GoalTickOutcome, GoalTickResult } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ tick: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  createStore: vi.fn(() => null as unknown),
+  status: vi.fn(),
+  tick: vi.fn(),
+}));
 
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
-vi.mock('./index', () => ({ GoalService: vi.fn(() => ({ tick: mocks.tick })) }));
+vi.mock('./index', () => ({
+  GoalService: vi.fn(() => ({ status: mocks.status, tick: mocks.tick })),
+}));
+vi.mock('./traceStore', () => ({ createDefaultGoalTraceStore: mocks.createStore }));
 
 const { advanceGoal, MAX_TICKS_PER_ADVANCE } = await import('./advanceGoal');
 
@@ -73,5 +80,133 @@ describe('advanceGoal', () => {
     await advanceGoal({ goalId: 'goal-1', userId: 'owner-9', workspaceId: 'ws-3' });
 
     expect(GoalService).toHaveBeenCalledWith(expect.anything(), 'owner-9', 'ws-3');
+  });
+});
+
+describe('advanceGoal trajectory recording', () => {
+  const graphState = {
+    decisions: [],
+    edges: [],
+    goal: { id: 'goal-1', status: 'running', title: 'Reproduce nanoGPT' },
+    nodes: [],
+  };
+
+  const observation = (outcome: GoalTickOutcome) => ({
+    at: 1000,
+    branch: 'dispatch_task' as const,
+    candidates: [],
+    effects: [{ operationId: 'op_1', type: 'started_run' as const }],
+    graphState,
+    message: outcome,
+    outcome,
+  });
+
+  /** Minimal store that only has to remember what was written. */
+  const memoryStore = () => {
+    const state: { partial?: any; saved?: any } = {};
+    return {
+      state,
+      store: {
+        get: async () => state.saved ?? null,
+        list: async () => [],
+        listPartials: async () => [],
+        loadPartial: async () => state.partial ?? null,
+        removePartial: async () => {
+          state.partial = undefined;
+        },
+        save: async (trajectory: any) => {
+          state.saved = trajectory;
+        },
+        savePartial: async (_id: string, partial: any) => {
+          state.partial = partial;
+        },
+      },
+    };
+  };
+
+  beforeEach(() => {
+    mocks.tick.mockReset();
+    mocks.status.mockReset();
+    mocks.createStore.mockReset();
+  });
+
+  it('records the ticks it observed, tagged with what triggered the advance', async () => {
+    const { state, store } = memoryStore();
+    mocks.createStore.mockReturnValue(store);
+    mocks.status.mockResolvedValue('running');
+    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
+      options?.onDecision?.(observation('waiting_external'));
+      return tickResult('waiting_external');
+    });
+
+    await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
+
+    expect(state.partial.advances).toHaveLength(1);
+    expect(state.partial.advances[0]).toMatchObject({
+      childOperationIds: ['op_1'],
+      seq: 0,
+      trigger: 'sweep',
+    });
+    expect(state.partial.advances[0].ticks[0]).toMatchObject({ branch: 'dispatch_task', index: 0 });
+    expect(state.saved).toBeUndefined();
+  });
+
+  it('closes the trajectory once the goal itself is terminal', async () => {
+    const { state, store } = memoryStore();
+    mocks.createStore.mockReturnValue(store);
+    mocks.status.mockResolvedValue('achieved');
+    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
+      options?.onDecision?.(observation('achieved'));
+      return tickResult('achieved');
+    });
+
+    await advanceGoal({ goalId: 'goal-1', trigger: 'settle', userId: 'user-1' });
+
+    expect(state.saved).toMatchObject({ completionReason: 'achieved', totalAdvances: 1 });
+    expect(state.partial).toBeUndefined();
+  });
+
+  it('leaves the trajectory open for a goal that is merely parked', async () => {
+    const { state, store } = memoryStore();
+    mocks.createStore.mockReturnValue(store);
+    mocks.status.mockResolvedValue('paused');
+    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
+      options?.onDecision?.(observation('no_progress'));
+      return tickResult('no_progress');
+    });
+
+    await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
+
+    expect(state.saved).toBeUndefined();
+    expect(state.partial.advances).toHaveLength(1);
+  });
+
+  it('keeps what a failing advance managed to do, with the failure attached', async () => {
+    const { state, store } = memoryStore();
+    mocks.createStore.mockReturnValue(store);
+    mocks.tick
+      .mockImplementationOnce(async (_goalId: string, options: any) => {
+        options?.onDecision?.(observation('advanced'));
+        return tickResult('advanced');
+      })
+      .mockRejectedValueOnce(new Error('database is gone'));
+
+    await expect(advanceGoal({ goalId: 'goal-1', userId: 'user-1' })).rejects.toThrow(
+      'database is gone',
+    );
+
+    expect(state.partial.advances[0]).toMatchObject({
+      error: { message: 'database is gone', type: 'advance' },
+    });
+    expect(state.partial.advances[0].ticks).toHaveLength(1);
+  });
+
+  it('does not read the goal status when tracing is off', async () => {
+    mocks.createStore.mockReturnValue(null);
+    mocks.tick.mockResolvedValue(tickResult('no_progress'));
+
+    await advanceGoal({ goalId: 'goal-1', userId: 'user-1' });
+
+    expect(mocks.status).not.toHaveBeenCalled();
   });
 });

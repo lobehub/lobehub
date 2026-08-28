@@ -14,6 +14,7 @@ const tick = (overrides: Partial<GoalTickSnapshot> = {}): GoalTickSnapshot => ({
   branch: 'dispatch_task',
   budget: { costLimitReached: false, roundLimitReached: false, runs: 0, totalCost: 0 },
   candidates: [],
+  effects: [],
   graphShape: {
     edgesTotal: 0,
     findings: 0,
@@ -37,7 +38,6 @@ const advance = (
 ): GoalAdvanceSnapshot => ({
   completedAt: seq * 10 + 5,
   durationMs: 5,
-  effects: [],
   seq,
   startedAt: seq * 10,
   ticks: [tick()],
@@ -76,11 +76,11 @@ describe('buildGoalTraceRollup', () => {
       trajectory([
         advance(0, 'create', {
           childOperationIds: ['op_1', 'op_2'],
-          effects: [{ type: 'opened_decision' }],
+          ticks: [tick({ effects: [{ type: 'opened_decision' }] })],
         }),
         advance(1, 'decide', {
           childOperationIds: ['op_2'],
-          effects: [{ type: 'resolved_decision' }],
+          ticks: [tick({ effects: [{ type: 'resolved_decision' }] })],
         }),
       ]),
     );
@@ -91,7 +91,10 @@ describe('buildGoalTraceRollup', () => {
   it('measures the wall time a goal sat parked on a person', () => {
     const rollup = buildGoalTraceRollup(
       trajectory([
-        advance(0, 'sweep', { completedAt: 100, effects: [{ type: 'opened_decision' }] }),
+        advance(0, 'sweep', {
+          completedAt: 100,
+          ticks: [tick({ effects: [{ type: 'opened_decision' }] })],
+        }),
         advance(1, 'decide', { startedAt: 400 }),
       ]),
     );
