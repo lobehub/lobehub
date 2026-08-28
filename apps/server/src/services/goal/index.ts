@@ -1,3 +1,4 @@
+import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type {
   GoalConfig,
   GoalEdgeKind,
@@ -61,7 +62,18 @@ export interface CreateGoalNodeInput {
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
   private readonly goalModel: GoalModel;
+  /**
+   * Graph writes attributed to the person who asked for them: seeding a goal,
+   * adding a node or edge by hand, resolving a decision gate.
+   */
   private readonly graphModel: GoalGraphModel;
+  /**
+   * Graph writes the coordinator makes on its own — claiming Work, binding its
+   * task, synthesizing a finding, opening a gate. Attributed to the coordinator
+   * even when a person pressed Advance: they asked it to run, they did not make
+   * these moves.
+   */
+  private readonly coordinatorGraph: GoalGraphModel;
   private readonly taskModel: TaskModel;
   private readonly taskService: TaskService;
   private readonly taskTopicModel: TaskTopicModel;
@@ -75,6 +87,10 @@ export class GoalService {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
+    this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
+      id: GOAL_COORDINATOR_ACTOR_ID,
+      type: 'system',
+    });
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskService = new TaskService(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
@@ -337,7 +353,7 @@ export class GoalService {
           (node) => node.title === GOAL_ACCEPTANCE_WORK_TITLE,
         );
         if (graph.goal.requirement && !goalAcceptanceWork) {
-          const result = await this.graphModel.createNodeOnce(goalId, {
+          const result = await this.coordinatorGraph.createNodeOnce(goalId, {
             description: [
               `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
               'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
@@ -358,7 +374,12 @@ export class GoalService {
           if (result.created) {
             const problem = graph.nodes.find((node) => node.kind === 'problem');
             if (problem) {
-              await this.graphModel.createEdge(goalId, problem.id, result.node.id, 'decomposes');
+              await this.coordinatorGraph.createEdge(
+                goalId,
+                problem.id,
+                result.node.id,
+                'decomposes',
+              );
             }
           }
           return {
@@ -400,7 +421,7 @@ export class GoalService {
     }
 
     if (!frontier.taskId) {
-      const claim = await this.graphModel.claimWorkNode(
+      const claim = await this.coordinatorGraph.claimWorkNode(
         goalId,
         frontier.id,
         new Date(Date.now() - WORK_NODE_CLAIM_TTL_MS),
@@ -441,7 +462,7 @@ export class GoalService {
           ),
         });
         acceptanceId = acceptance.id;
-        const bound = await this.graphModel.bindTask(goalId, frontier.id, task.id);
+        const bound = await this.coordinatorGraph.bindTask(goalId, frontier.id, task.id);
         if (!bound) {
           await this.acceptanceService.acceptanceModel.delete(acceptance.id);
           await this.taskModel.delete(task.id);
@@ -461,7 +482,7 @@ export class GoalService {
             console.error('[GoalService.tick] failed to delete unbound task:', cleanupError);
           });
         }
-        await this.graphModel.updateNodeStatus(goalId, frontier.id, 'proposed');
+        await this.coordinatorGraph.updateNodeStatus(goalId, frontier.id, 'proposed');
         throw error;
       }
       const work = await this.workModel.registerTask({
@@ -471,7 +492,7 @@ export class GoalService {
         toolName: 'createResponsibleTask',
       });
       if (work?.currentVersionId) {
-        await this.graphModel.attachWorkVersion(
+        await this.coordinatorGraph.attachWorkVersion(
           goalId,
           frontier.id,
           work.currentVersionId,
@@ -490,7 +511,7 @@ export class GoalService {
 
     const task = await this.taskModel.findById(frontier.taskId);
     if (!task) {
-      await this.graphModel.updateNodeStatus(
+      await this.coordinatorGraph.updateNodeStatus(
         goalId,
         frontier.id,
         'waiting',
@@ -524,7 +545,7 @@ export class GoalService {
           this.workspaceId,
         ).recover({ goal: graph.goal, spentCost: totalCost, task });
         if (recovery === 'continued') {
-          await this.graphModel.updateNodeStatus(
+          await this.coordinatorGraph.updateNodeStatus(
             goalId,
             frontier.id,
             'active',
@@ -646,7 +667,7 @@ export class GoalService {
   };
 
   private ensureTaskWorkVersion = async (goalId: string, nodeId: string, taskId: string) => {
-    const graph = await this.graphModel.getGraph(goalId);
+    const graph = await this.coordinatorGraph.getGraph(goalId);
     if (graph?.workVersions.some((link) => link.nodeId === nodeId)) return;
     const work = await this.workModel.registerTask({
       changeType: 'created',
@@ -655,7 +676,12 @@ export class GoalService {
       toolName: 'createResponsibleTask',
     });
     if (work?.currentVersionId) {
-      await this.graphModel.attachWorkVersion(goalId, nodeId, work.currentVersionId, 'produced');
+      await this.coordinatorGraph.attachWorkVersion(
+        goalId,
+        nodeId,
+        work.currentVersionId,
+        'produced',
+      );
     }
   };
 
@@ -722,7 +748,7 @@ export class GoalService {
       this.workspaceId,
     ).recover({ goal: graph.goal, task });
     if (recovery === 'continued') {
-      await this.graphModel.updateNodeStatus(
+      await this.coordinatorGraph.updateNodeStatus(
         graph.goal.id,
         nodeId,
         'active',
@@ -815,7 +841,7 @@ export class GoalService {
       topicId: latest?.topicId,
     });
     if (completedWork?.currentVersionId) {
-      await this.graphModel.attachWorkVersion(
+      await this.coordinatorGraph.attachWorkVersion(
         graph.goal.id,
         nodeId,
         completedWork.currentVersionId,
@@ -824,7 +850,7 @@ export class GoalService {
     }
     if (!existingFinding) {
       const handoff = latest?.handoff as TaskTopicHandoff | null;
-      const finding = await this.graphModel.createNode(graph.goal.id, {
+      const finding = await this.coordinatorGraph.createNode(graph.goal.id, {
         confidence: 1,
         description: handoff?.content ?? handoff?.summary ?? undefined,
         kind: 'finding',
@@ -834,9 +860,10 @@ export class GoalService {
           handoff?.summary ??
           `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`,
       });
-      if (finding) await this.graphModel.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
+      if (finding)
+        await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
     }
-    await this.graphModel.updateNodeStatus(
+    await this.coordinatorGraph.updateNodeStatus(
       graph.goal.id,
       nodeId,
       'resolved',
@@ -862,18 +889,18 @@ export class GoalService {
       .map((edge) => graph.nodes.find((node) => node.id === edge.targetNodeId))
       .find((node) => node?.kind === 'decision' && node.status !== 'resolved');
     if (!existingDecisionNode) {
-      const node = await this.graphModel.createNode(graph.goal.id, {
+      const node = await this.coordinatorGraph.createNode(graph.goal.id, {
         description: reason,
         kind: 'decision',
         status: 'waiting',
         title: 'Choose how to recover failed work',
       });
       if (node) {
-        await this.graphModel.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
+        await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
         const terminalAcceptance =
           graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
           GOAL_ACCEPTANCE_WORK_TITLE;
-        await this.graphModel.createDecision(graph.goal.id, node.id, {
+        await this.coordinatorGraph.createDecision(graph.goal.id, node.id, {
           authority: 'user',
           options: terminalAcceptance
             ? [
@@ -892,7 +919,7 @@ export class GoalService {
         });
       }
     }
-    await this.graphModel.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
+    await this.coordinatorGraph.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
     await this.goalModel.updateStatus(graph.goal.id, 'review');
     return {
       goalId: graph.goal.id,

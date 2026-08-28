@@ -2,6 +2,7 @@ import type {
   GoalDecisionAuthority,
   GoalDecisionOption,
   GoalEdgeKind,
+  GoalEventActor,
   GoalEventActorType,
   GoalEventEntityType,
   GoalEventType,
@@ -57,10 +58,17 @@ interface CreateDecisionInput {
 
 /** Persistence boundary for an owned Goal Graph and its append-only audit trail. */
 export class GoalGraphModel {
+  /**
+   * `actor` is who the audit trail records for the transitions made through this
+   * instance. It defaults to the owning user, which is right for anything a
+   * person did; the coordinator passes its own so the trail can answer "did a
+   * human do this, or did the system decide it".
+   */
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    private readonly actor?: GoalEventActor,
   ) {}
 
   private ownership = () =>
@@ -76,12 +84,13 @@ export class GoalGraphModel {
   };
 
   private appendEvent = async (tx: Transaction, goalId: string, input: EventInput) => {
+    const actor = this.actor ?? { id: this.userId, type: 'user' as const };
     const [event] = await tx
       .insert(goalEvents)
       .values({
         ...input,
-        actorId: input.actorId ?? this.userId,
-        actorType: input.actorType ?? 'user',
+        actorId: input.actorId ?? actor.id,
+        actorType: input.actorType ?? actor.type,
         goalId,
       })
       .returning();
@@ -191,7 +200,7 @@ export class GoalGraphModel {
         .returning();
       await this.appendEvent(tx, goalId, {
         actorId: input.createdByAgentId,
-        actorType: input.createdByAgentId ? 'agent' : 'user',
+        actorType: input.createdByAgentId ? 'agent' : undefined,
         entityId: node.id,
         entityType: 'node',
         eventType: 'created',
@@ -230,7 +239,7 @@ export class GoalGraphModel {
         .returning();
       await this.appendEvent(tx, goalId, {
         actorId: input.createdByAgentId,
-        actorType: input.createdByAgentId ? 'agent' : 'user',
+        actorType: input.createdByAgentId ? 'agent' : undefined,
         entityId: node.id,
         entityType: 'node',
         eventType: 'created',

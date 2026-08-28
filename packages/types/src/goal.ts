@@ -101,6 +101,15 @@ export type GoalEventActorType = 'agent' | 'user' | 'system';
 
 export type GoalEventEntityType = 'goal' | 'node' | 'edge' | 'decision' | 'task';
 
+/**
+ * Who a Goal Graph mutation is recorded as. Defaults to the acting user; the
+ * coordinator supplies its own so its moves are separable from a person's.
+ */
+export interface GoalEventActor {
+  id: string;
+  type: GoalEventActorType;
+}
+
 export type GoalEventType =
   'created' | 'updated' | 'activated' | 'resolved' | 'rejected' | 'retired' | 'linked' | 'unlinked';
 
