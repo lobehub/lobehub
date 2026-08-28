@@ -286,18 +286,30 @@ describe('AgentHeader', () => {
     expect(view.container.textContent).toContain('settingAgent.identity.edit');
   });
 
-  it('retains the role for an owner-qualified shared heterogeneous agent', () => {
+  it('leaves an ordinary identical name and role in both slots', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': { name: 'Grok Build', title: 'Grok Build' },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent?.match(/Grok Build/g)).toHaveLength(2);
+  });
+
+  it('suppresses the role included in an owner-qualified shared heterogeneous name', () => {
     mocks.agentStoreState.agentMap = {
       'agent-a': {
         agencyConfig: { heterogeneousProvider: { type: 'grok-build' } },
         name: 'Max’s Grok Build',
+        slug: 'shared-builder',
         title: 'Grok Build',
       },
     };
     const view = render(<AgentHeader />);
 
     expect(view.container.textContent).toContain('Max’s Grok Build');
-    expect(view.container.textContent?.match(/Grok Build/g)).toHaveLength(2);
+    expect(view.container.textContent?.match(/Grok Build/g)).toHaveLength(1);
+    expect(view.container.textContent).toContain('@shared-builder');
+    expect(view.container.textContent).not.toContain('·');
   });
 
   it('retains the role for a custom-named heterogeneous agent', () => {
@@ -312,6 +324,21 @@ describe('AgentHeader', () => {
 
     expect(view.container.textContent).toContain('Release Builder');
     expect(view.container.textContent).toContain('Grok Build');
+  });
+
+  it('retains the unset role slot for a heterogeneous agent without a role', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': {
+        agencyConfig: { heterogeneousProvider: { type: 'grok-build' } },
+        name: 'Release Builder',
+        slug: 'release-builder',
+      },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.role.unset');
+    expect(view.container.textContent).toContain('·');
+    expect(view.container.textContent).toContain('@release-builder');
   });
 
   // With no name there is nothing to headline, so the slot carries the prompt

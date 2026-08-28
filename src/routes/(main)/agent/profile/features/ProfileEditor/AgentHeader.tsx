@@ -1,5 +1,6 @@
 'use client';
 
+import { agentSecondaryDisplayName } from '@lobechat/types';
 import { Flexbox, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
@@ -32,7 +33,10 @@ const AgentHeader = memo(() => {
   const personalName = meta.name?.trim();
   const role = meta.title?.trim();
   const suppressDuplicateRole =
-    !!personalName && personalName === role && !!config?.agencyConfig?.heterogeneousProvider;
+    !!config?.agencyConfig?.heterogeneousProvider &&
+    !!personalName &&
+    !!role &&
+    agentSecondaryDisplayName({ name: personalName, title: role }) === undefined;
   // Without edit rights there is nothing to prompt for, so a nameless agent
   // falls back to the plain label rather than showing an action nobody can take.
   const showNamePrompt = !personalName && canEdit;
@@ -115,8 +119,8 @@ const AgentHeader = memo(() => {
               maps to the TERTIARY step — too faint for the line that carries the
               agent's role. Set the secondary colour explicitly, and leave only
               the decorative `@` and the separator at tertiary. */}
-          {/* A heterogeneous product name identical to its role is shown once.
-              Owner-qualified and custom names retain the role underneath. */}
+          {/* A heterogeneous product name that already includes its role is
+              shown once. Genuinely custom names retain the role underneath. */}
           {!suppressDuplicateRole ? (
             <Text
               ellipsis
