@@ -90,6 +90,7 @@ export const userMemoriesContexts = pgTable(
     ),
     index('user_memories_contexts_type_index').on(table.type),
     index('user_memories_contexts_user_id_index').on(table.userId),
+    index('user_memories_contexts_user_memory_ids_gin_idx').using('gin', table.userMemoryIds),
   ],
 );
 

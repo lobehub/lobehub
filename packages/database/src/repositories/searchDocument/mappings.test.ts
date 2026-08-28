@@ -39,16 +39,22 @@ describe('search index mappings', () => {
   });
 
   it('provides deployment-neutral versioned alias and physical names', () => {
-    expect(SEARCH_INDEX_SCHEMA_VERSION).toBe(1);
+    expect(SEARCH_INDEX_SCHEMA_VERSION).toBe(2);
     expect(getSearchIndexAlias('lobehub-dev', 'knowledgeBases')).toBe(
       'lobehub-dev-knowledge-bases',
     );
     expect(getSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases')).toBe(
-      'lobehub-dev-knowledge-bases-v1',
+      'lobehub-dev-knowledge-bases-v2',
     );
     expect(getSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases', 3)).toBe(
       'lobehub-dev-knowledge-bases-v3',
     );
+  });
+
+  it.each(SEARCH_DOCUMENT_ENTITIES)('maps the soft-delete marker for %s', (entity) => {
+    expect(SEARCH_INDEX_DEFINITIONS[entity].mappings.properties.search_sync_deleted).toEqual({
+      type: 'boolean',
+    });
   });
 
   it('keeps analyzer names generic for OSS deployments', () => {

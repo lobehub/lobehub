@@ -451,6 +451,7 @@ export class ElasticsearchSearchBackend implements SearchBackend {
   ): Promise<CandidateSearchResult> {
     const { entity } = target;
     const { filter, mustNot } = this.buildScopeClauses(entity, request.scope);
+    mustNot.push({ term: { search_sync_deleted: true } });
     if (request.filters.agentId && (entity === 'topics' || entity === 'messages')) {
       filter.push({ term: { agent_id: request.filters.agentId } });
     }

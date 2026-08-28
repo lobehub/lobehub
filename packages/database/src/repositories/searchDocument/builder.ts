@@ -114,6 +114,10 @@ export class SearchDocumentBuilder {
     return this.build(entity, { ids, limit: ids.length });
   }
 
+  /**
+   * Keep these relation fanout rules aligned with the search-sync trigger functions in the
+   * database migration. This method remains the application-side source for backfills and repair.
+   */
   async resolveAffectedKeys(change: SearchDocumentRelationChange): Promise<SearchDocumentKey[]> {
     if (change.relation === 'knowledgeBaseFiles') {
       const fileIds = normalizeIds(change.fileIds);

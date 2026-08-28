@@ -18,4 +18,13 @@ describe('search document schemas', () => {
       }),
     ).toThrow();
   });
+
+  it('accepts the shared soft-delete projection marker', () => {
+    expect(
+      parseSearchDocumentSource('agents', {
+        ...SEARCH_DOCUMENT_FIXTURES.agents,
+        search_sync_deleted: true,
+      }),
+    ).toMatchObject({ search_sync_deleted: true });
+  });
 });

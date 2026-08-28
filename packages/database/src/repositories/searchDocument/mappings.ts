@@ -49,6 +49,10 @@ const timestampProperties = {
   updated_at: date,
 };
 
+const projectionMetadataProperties = {
+  search_sync_deleted: boolean,
+};
+
 export const SEARCH_INDEX_ANALYSIS = {
   analyzer: {
     lobehub_icu: {
@@ -85,6 +89,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
       dynamic: 'strict',
       properties: {
         ...ownershipProperties,
+        ...projectionMetadataProperties,
         ...timestampProperties,
         description: mixedText,
         id: keyword,
@@ -105,6 +110,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
       dynamic: 'strict',
       properties: {
         ...ownershipProperties,
+        ...projectionMetadataProperties,
         ...timestampProperties,
         content: mixedText,
         description: mixedText,
@@ -122,6 +128,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
       dynamic: 'strict',
       properties: {
         ...ownershipProperties,
+        ...projectionMetadataProperties,
         ...timestampProperties,
         content: mixedText,
         description: mixedText,
@@ -145,6 +152,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
       dynamic: 'strict',
       properties: {
         ...ownershipProperties,
+        ...projectionMetadataProperties,
         ...timestampProperties,
         file_type: keyword,
         id: keyword,
@@ -163,6 +171,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
       dynamic: 'strict',
       properties: {
         ...ownershipProperties,
+        ...projectionMetadataProperties,
         ...timestampProperties,
         description: mixedText,
         id: keyword,
@@ -179,6 +188,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
         ends_at: date,
@@ -214,6 +224,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
         current_status: mixedTextWithRaw,
@@ -237,6 +248,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         action: mixedText,
         captured_at: date,
@@ -273,6 +285,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
         description: mixedText,
@@ -299,6 +312,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
         conclusion_directives: mixedText,
@@ -330,6 +344,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         agent_id: keyword,
         content: mixedText,
@@ -352,6 +367,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
         id: keyword,
@@ -370,6 +386,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         agent_id: keyword,
         content: mixedText,
@@ -391,6 +408,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
     mappings: {
       dynamic: 'strict',
       properties: {
+        ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
         details: mixedText,
@@ -411,7 +429,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
   [Entity in SearchDocumentEntity]: SearchIndexDefinition<Entity>;
 };
 
-export const SEARCH_INDEX_SCHEMA_VERSION = 1;
+export const SEARCH_INDEX_SCHEMA_VERSION = 2;
 
 const toIndexSegment = (entity: SearchDocumentEntity) =>
   entity.replaceAll(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);

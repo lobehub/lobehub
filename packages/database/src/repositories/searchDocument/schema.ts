@@ -30,6 +30,10 @@ const timestampShape = {
   updated_at: dateTime,
 };
 
+const projectionMetadataShape = {
+  search_sync_deleted: z.boolean().optional(),
+};
+
 const ownershipShape = {
   user_id: z.string(),
   visibility,
@@ -40,6 +44,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
   agents: z
     .object({
       ...ownershipShape,
+      ...projectionMetadataShape,
       ...timestampShape,
       description: nullableString,
       id: z.string(),
@@ -53,6 +58,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
   chatGroups: z
     .object({
       ...ownershipShape,
+      ...projectionMetadataShape,
       ...timestampShape,
       content: nullableString,
       description: nullableString,
@@ -64,6 +70,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
   documents: z
     .object({
       ...ownershipShape,
+      ...projectionMetadataShape,
       ...timestampShape,
       content: nullableString,
       description: nullableString,
@@ -82,6 +89,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
   files: z
     .object({
       ...ownershipShape,
+      ...projectionMetadataShape,
       ...timestampShape,
       file_type: z.string(),
       id: z.string(),
@@ -94,6 +102,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
   knowledgeBases: z
     .object({
       ...ownershipShape,
+      ...projectionMetadataShape,
       ...timestampShape,
       description: nullableString,
       id: z.string(),
@@ -104,6 +113,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   memoryActivities: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       captured_at: dateTime,
       ends_at: nullableDateTime,
@@ -126,6 +136,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   memoryContexts: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       captured_at: dateTime,
       current_status: nullableString,
@@ -143,6 +154,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   memoryExperiences: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       action: nullableString,
       captured_at: dateTime,
@@ -164,6 +176,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   memoryIdentities: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       captured_at: dateTime,
       description: nullableString,
@@ -184,6 +197,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   memoryPreferences: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       captured_at: dateTime,
       conclusion_directives: nullableString,
@@ -202,6 +216,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   messages: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       agent_id: nullableString,
       content: nullableString,
@@ -218,6 +233,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   personaDocuments: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       captured_at: dateTime,
       id: z.string(),
@@ -230,6 +246,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   topics: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       agent_id: nullableString,
       content: nullableString,
@@ -245,6 +262,7 @@ export const SEARCH_DOCUMENT_SCHEMAS = {
     .strict(),
   userMemories: z
     .object({
+      ...projectionMetadataShape,
       ...timestampShape,
       captured_at: dateTime,
       details: nullableString,
