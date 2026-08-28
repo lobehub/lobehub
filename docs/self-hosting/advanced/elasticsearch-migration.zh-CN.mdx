@@ -1,0 +1,100 @@
+---
+title: 将搜索数据迁移到 Elasticsearch（3.x）
+description: 使用可断点续跑的工具，将 LobeHub 搜索数据安全回填到空的 Elasticsearch 项目。
+tags:
+  - Elasticsearch
+  - 搜索
+  - 迁移
+  - 私有部署
+---
+
+# 将搜索数据迁移到 Elasticsearch
+
+3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复制到新的 Elasticsearch 项目。工具会把游标、计数和逐条失败记录持久化到 PostgreSQL，因此中断后重复执行同一条命令即可续跑。
+
+<Callout type="warning">
+  全量回填命令不会把产品搜索请求切到 Elasticsearch。回填和验收期间，应用必须继续使用 PostgreSQL 搜索。
+</Callout>
+
+## 环境变量
+
+| 变量                   | 是否必需 | 用途                                                             |
+| -------------------- | ---- | -------------------------------------------------------------- |
+| `DATABASE_URL`       | 是    | PostgreSQL 源数据库；同时保存迁移游标、计数、失败记录和增量变更队列。                       |
+| `ES_URL`             | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                  |
+| `ES_API_KEY`         | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。         |
+| `ES_INDEX_NAMESPACE` | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
+
+只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。早期可行性验证阶段的环境变量不属于本迁移。
+
+## 开始前
+
+1. 在正式使用的区域创建一个新的空 Elasticsearch 项目。
+2. 先执行同一 LobeHub 版本自带的数据库迁移。
+3. 备份 PostgreSQL。
+4. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
+
+首次正式映射版本是 `v1`。工具会创建 `lobehub-messages-v1` 这类实体索引；14 类索引全部完成且数量与断点记录一致后，再创建 `lobehub-messages` 这类稳定别名。别名只是 Elasticsearch 内部长期不变的名字，创建别名不会改变用户请求当前使用的搜索后端。
+
+## 在源码中运行
+
+只查看状态，不写 Elasticsearch：
+
+```bash
+bun run search:reindex -- --status
+```
+
+开始或继续全量回填：
+
+```bash
+bun run search:reindex -- --apply --yes
+```
+
+`--apply` 会在首批回填前开启 PostgreSQL 增量队列采集。必须显式传入 `--yes`，用于确认这个持久化数据库变更；命令不会弹出交互确认。
+
+可以按需限制批次：
+
+```bash
+bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=52428800
+```
+
+`--batch-size` 限制每次按主键翻页读取的 PostgreSQL 行数；`--bulk-max-bytes` 按编码后的字节数限制单次 Elasticsearch `_bulk` 请求。单个文档超过限制时会被明确记为失败，不会静默跳过。
+
+## 使用 Docker 镜像运行
+
+官方镜像内置 `/app/elasticsearch-reindex.cjs`：
+
+```bash
+docker run --rm --env-file .env lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --status
+docker run --rm --env-file .env lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --apply --yes
+```
+
+如果 Docker Compose 已提供相同的环境变量和数据库网络，请把它作为一次性服务运行，不要再启动一个应用服务实例。
+
+## 续跑与验收
+
+- 进程崩溃或 Elasticsearch 临时失败后，重新执行完全相同的 `--apply` 命令。已完成的数据类型会被跳过，未完成的数据类型从持久化游标后继续。
+- 整个请求失败时不会推进游标；逐条写入失败会持久化，并在该数据类型完成前重试。
+- 任何数据类型或逐条失败尚未完成时，工具都会拒绝创建别名。
+- 最终状态为 `ready_for_incremental_sync`。此时全量快照、别名和增量队列的追平边界已经就绪，但用户查询仍必须留在 PostgreSQL。
+
+这个修订号只用于观察增量追平进度，不是数据库已经提交的快照边界。增量消费器必须处理队列里的每一条记录，不能仅因修订号小于或等于该值就丢弃记录。
+
+继续下一阶段前，运行 `--status`，确认 `captureEnabled` 符合预期、14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
+
+修正被拒绝的源数据或映射后，再执行 `--apply --yes` 即可重试。如果运维人员明确接受某一条不可重试的数据暂时不进入初始 Elasticsearch 快照，可以显式解除阻塞，然后继续回填：
+
+```bash
+bun run search:reindex -- --skip-failure=agents:document-id --yes
+bun run search:reindex -- --apply --yes
+```
+
+只有不可重试的失败可以跳过，且跳过不会把该文档计为写入成功。只有在检查源记录，并接受它需要等后续数据变更或增量修复后才能被搜索到时，才能使用这个命令。需要停止采集新变更、但保留增量队列中已有记录时，执行：
+
+```bash
+bun run search:reindex -- --disable-capture --yes
+```
+
+<Callout type="info">
+  PostgreSQL 到 Elasticsearch 的持续同步需要使用已经包含增量消费器的版本。全量回填命令本身不会宣称应用已经可以切换搜索后端。
+</Callout>

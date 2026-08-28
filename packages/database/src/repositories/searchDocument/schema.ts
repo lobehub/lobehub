@@ -1,23 +1,8 @@
+import type { SearchDocumentEntity } from '@lobechat/types';
 import { z } from 'zod';
 
-export const SEARCH_DOCUMENT_ENTITIES = [
-  'agents',
-  'topics',
-  'files',
-  'knowledgeBases',
-  'userMemories',
-  'chatGroups',
-  'memoryContexts',
-  'memoryPreferences',
-  'memoryActivities',
-  'memoryIdentities',
-  'memoryExperiences',
-  'personaDocuments',
-  'documents',
-  'messages',
-] as const;
-
-export type SearchDocumentEntity = (typeof SEARCH_DOCUMENT_ENTITIES)[number];
+export type { SearchDocumentEntity } from '@lobechat/types';
+export { SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 
 export const MEMORY_SEARCH_DOCUMENT_ENTITIES = [
   'memoryActivities',

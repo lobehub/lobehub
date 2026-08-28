@@ -92,6 +92,16 @@ describe('SearchSyncOutboxRepository', () => {
     ]);
   });
 
+  it('reports and disables capture without deleting queued work', async () => {
+    await db.insert(agents).values({ id: 'capture-agent', title: 'one', userId: USER_ID });
+    await expect(repository.isCaptureEnabled()).resolves.toBe(true);
+
+    await repository.disableCapture();
+
+    await expect(repository.isCaptureEnabled()).resolves.toBe(false);
+    await expect(db.select().from(searchSyncOutbox)).resolves.toHaveLength(1);
+  });
+
   it('coalesces mutations and increases the revision, prioritizing revocations', async () => {
     await db.insert(agents).values({ id: 'sync-agent', title: 'one', userId: USER_ID });
     const [inserted] = await db

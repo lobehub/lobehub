@@ -5,6 +5,7 @@ export type ElasticsearchFieldType = 'boolean' | 'date' | 'integer' | 'keyword' 
 export interface ElasticsearchMappingProperty {
   analyzer?: string;
   fields?: Record<string, ElasticsearchMappingProperty>;
+  ignore_above?: number;
   type: ElasticsearchFieldType;
 }
 
@@ -26,20 +27,20 @@ const mixedText = { analyzer: 'lobehub_icu_english', type: 'text' } as const;
 const memoryText = { analyzer: 'lobehub_cjk_bigram_english', type: 'text' } as const;
 const memoryTextWithRaw = {
   analyzer: 'lobehub_cjk_bigram_english',
-  fields: { raw: { type: 'keyword' } },
+  fields: { raw: { ignore_above: 256, type: 'keyword' } },
   type: 'text',
 } as const;
 const fileNameText = {
   analyzer: 'lobehub_filename',
   fields: {
-    raw: { type: 'keyword' },
+    raw: { ignore_above: 256, type: 'keyword' },
     words: { analyzer: 'lobehub_icu', type: 'text' },
   },
   type: 'text',
 } as const;
 const icuText = {
   analyzer: 'lobehub_icu',
-  fields: { raw: { type: 'keyword' } },
+  fields: { raw: { ignore_above: 256, type: 'keyword' } },
   type: 'text',
 } as const;
 const keyword = { type: 'keyword' } as const;
@@ -462,8 +463,8 @@ export const SEARCH_INDEX_DEFINITIONS = {
   [Entity in SearchDocumentEntity]: SearchIndexDefinition<Entity>;
 };
 
-/** Filename and memory analyzer changes require reindexing instead of an in-place mapping update. */
-export const SEARCH_INDEX_SCHEMA_VERSION = 3;
+/** First production Elasticsearch mapping version. Development-only iterations were never shipped. */
+export const SEARCH_INDEX_SCHEMA_VERSION = 1;
 
 const toIndexSegment = (entity: SearchDocumentEntity) =>
   entity.replaceAll(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);

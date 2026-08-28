@@ -43,12 +43,12 @@ describe('search index mappings', () => {
   });
 
   it('provides deployment-neutral versioned alias and physical names', () => {
-    expect(SEARCH_INDEX_SCHEMA_VERSION).toBe(3);
+    expect(SEARCH_INDEX_SCHEMA_VERSION).toBe(1);
     expect(getSearchIndexAlias('lobehub-dev', 'knowledgeBases')).toBe(
       'lobehub-dev-knowledge-bases',
     );
     expect(getSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases')).toBe(
-      'lobehub-dev-knowledge-bases-v3',
+      'lobehub-dev-knowledge-bases-v1',
     );
     expect(getSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases', 4)).toBe(
       'lobehub-dev-knowledge-bases-v4',
@@ -78,11 +78,24 @@ describe('search index mappings', () => {
     expect(SEARCH_INDEX_DEFINITIONS.files.mappings.properties.name).toEqual({
       analyzer: 'lobehub_filename',
       fields: {
-        raw: { type: 'keyword' },
+        raw: { ignore_above: 256, type: 'keyword' },
         words: { analyzer: 'lobehub_icu', type: 'text' },
       },
       type: 'text',
     });
+  });
+
+  it('bounds exact-match multi-fields so long text cannot fail keyword indexing', () => {
+    const rawFields = Object.values(SEARCH_INDEX_DEFINITIONS).flatMap(({ mappings }) =>
+      Object.values(mappings.properties)
+        .map(({ fields }) => fields?.raw)
+        .filter(Boolean),
+    );
+
+    expect(rawFields.length).toBeGreaterThan(0);
+    for (const rawField of rawFields) {
+      expect(rawField).toEqual(expect.objectContaining({ ignore_above: 256, type: 'keyword' }));
+    }
   });
 
   it('normalizes memory text before generating CJK bigrams', () => {

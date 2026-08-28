@@ -596,10 +596,11 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     }
     if (filters.memoryStatus?.length) {
       const field = entity === 'memoryContexts' ? 'current_status.raw' : 'status';
-      const exactClause = { terms: { [field]: filters.memoryStatus } };
-      clauses.push(
-        entity === 'memoryContexts' ? exactOrLegacyMissingFilter(field, exactClause) : exactClause,
-      );
+      /**
+       * Do not treat a missing exact-value subfield as a legacy document. Elasticsearch also omits
+       * keyword values above `ignore_above`, and accepting those would bypass the status filter.
+       */
+      clauses.push({ terms: { [field]: filters.memoryStatus } });
     }
     const tagClauses = (filters.memoryTags ?? []).map((tag) =>
       entity === 'userMemories'

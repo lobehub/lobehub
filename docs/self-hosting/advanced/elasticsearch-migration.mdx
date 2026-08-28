@@ -1,0 +1,112 @@
+---
+title: Migrate Search Data to Elasticsearch (3.x)
+description: Safely backfill LobeHub search data into an empty Elasticsearch project with durable resume support.
+tags:
+  - Elasticsearch
+  - Search
+  - Migration
+  - Self-hosting
+---
+
+# Migrate Search Data to Elasticsearch
+
+The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It records a durable cursor and item-level failures in PostgreSQL, so running the same command again resumes the existing attempt.
+
+<Callout type="warning">
+  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes.
+</Callout>
+
+## Environment variables
+
+| Variable             | Required | Purpose                                                                                                                                    |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`       | Yes      | PostgreSQL source database. It also stores reindex cursors, counters, failures, and the incremental-change outbox.                         |
+| `ES_URL`             | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
+| `ES_API_KEY`         | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
+| `ES_INDEX_NAMESPACE` | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
+
+`ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command. Environment variables from earlier feasibility experiments are not part of this migration.
+
+## Before you start
+
+1. Create a new empty Elasticsearch project in the intended production region.
+2. Apply the database migrations for the same LobeHub release.
+3. Back up PostgreSQL.
+4. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
+
+The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
+
+## Run from source
+
+Inspect the current state without writing to Elasticsearch:
+
+```bash
+bun run search:reindex -- --status
+```
+
+Start or resume the full backfill:
+
+```bash
+bun run search:reindex -- --apply --yes
+```
+
+`--apply` enables PostgreSQL Outbox capture before the first backfill batch. The required `--yes`
+acknowledges that persistent database-side effect; it is not an interactive prompt.
+
+Optional limits:
+
+```bash
+bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=52428800
+```
+
+`--batch-size` limits PostgreSQL rows per keyset page. `--bulk-max-bytes` limits each Elasticsearch `_bulk` request by encoded bytes; an individual document larger than this limit is stored as an explicit failure.
+
+## Run from the Docker image
+
+The official image includes `/app/elasticsearch-reindex.cjs`:
+
+```bash
+docker run --rm --env-file .env lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --status
+docker run --rm --env-file .env lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --apply --yes
+```
+
+If Docker Compose already supplies the same environment variables and database network, run the image as a one-time service instead of starting a second application server.
+
+## Resume and verify
+
+- Re-run the exact `--apply` command after a process crash or temporary Elasticsearch failure. Completed entities are skipped and the next batch starts after the persisted cursor.
+- Request-level failures do not advance the cursor. Item-level failures are recorded and replayed before an entity can complete.
+- The tool refuses to create aliases while any entity or item-level failure is incomplete.
+- The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
+
+The high-water revision is an observation point for catch-up monitoring, not a committed database
+snapshot. An incremental consumer must process every queued row and must never discard rows only
+because their revision is at or below that value.
+
+Run `--status` and confirm `captureEnabled` has the intended value, all 14 entities show
+`completed`, every `failedCount` is `0`, and the Outbox `dead` count is `0` before proceeding with
+the release-specific incremental-sync and query-cutover steps. The status output lists unresolved
+document IDs, retryability, and attempt counts without persisting or printing Elasticsearch error
+reasons that may contain source text.
+
+After correcting a rejected source document or mapping, run `--apply --yes` again to retry it. If an
+operator deliberately accepts that one document with a non-retryable failure will be absent from
+the initial Elasticsearch snapshot, resolve the blocker explicitly and then resume:
+
+```bash
+bun run search:reindex -- --skip-failure=agents:document-id --yes
+bun run search:reindex -- --apply --yes
+```
+
+Only non-retryable failures can be skipped, and skipping does not count the document as indexed. Use
+it only after reviewing the source record and accepting that it will not be searchable until a
+later source change or incremental repair writes it. To stop capturing new changes without deleting
+queued Outbox rows:
+
+```bash
+bun run search:reindex -- --disable-capture --yes
+```
+
+<Callout type="info">
+  Continuous PostgreSQL-to-Elasticsearch synchronization requires a release that includes the incremental consumer. The full-reindex command deliberately does not claim that the application is ready to switch search backends by itself.
+</Callout>

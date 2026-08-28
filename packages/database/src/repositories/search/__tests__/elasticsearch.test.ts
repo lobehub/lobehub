@@ -187,15 +187,7 @@ describe('ElasticsearchSearchBackend', () => {
                 },
               },
               { terms: { type: ['workflow'] } },
-              {
-                bool: {
-                  minimum_should_match: 1,
-                  should: [
-                    { terms: { 'current_status.raw': ['active'] } },
-                    { bool: { must_not: [{ exists: { field: 'current_status.raw' } }] } },
-                  ],
-                },
-              },
+              { terms: { 'current_status.raw': ['active'] } },
               {
                 bool: {
                   minimum_should_match: 1,

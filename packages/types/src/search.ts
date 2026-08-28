@@ -1,5 +1,29 @@
 import { z } from 'zod';
 
+export const SEARCH_DOCUMENT_ENTITIES = [
+  'agents',
+  'topics',
+  'files',
+  'knowledgeBases',
+  'userMemories',
+  'chatGroups',
+  'memoryContexts',
+  'memoryPreferences',
+  'memoryActivities',
+  'memoryIdentities',
+  'memoryExperiences',
+  'personaDocuments',
+  'documents',
+  'messages',
+] as const;
+
+export type SearchDocumentEntity = (typeof SEARCH_DOCUMENT_ENTITIES)[number];
+
+export type SearchReindexEntityStatus = 'pending' | 'backfilling' | 'completed';
+
+export type SearchReindexRunStatus =
+  'backfilling' | 'ready_for_incremental_sync' | 'completed' | 'failed';
+
 export type SearchMode = 'off' | 'auto' | 'on';
 
 export enum ModelSearchImplement {

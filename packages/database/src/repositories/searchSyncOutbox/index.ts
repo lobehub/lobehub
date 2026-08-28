@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 
-import { serverDB } from '../../core/db-adaptor';
 import type { LobeChatDatabase } from '../../type';
 import type { SearchDocumentEntity } from '../searchDocument';
 import { SEARCH_DOCUMENT_ENTITIES } from '../searchDocument';
@@ -60,7 +59,7 @@ const errorMessage = (error: unknown) =>
 
 /** Durable claim and settlement operations for the PostgreSQL-triggered search outbox. */
 export class SearchSyncOutboxRepository {
-  constructor(private readonly db: SearchSyncDatabase = serverDB) {}
+  constructor(private readonly db: SearchSyncDatabase) {}
 
   /** Enables trigger capture for deployments that operate an outbox consumer. */
   async enableCapture(): Promise<void> {
@@ -72,6 +71,28 @@ export class SearchSyncOutboxRepository {
         updated_at = now()
       WHERE search_sync_settings.enabled IS DISTINCT FROM EXCLUDED.enabled
     `);
+  }
+
+  /** Disables trigger capture without deleting already queued changes. */
+  async disableCapture(): Promise<void> {
+    await this.db.execute(sql`
+      INSERT INTO search_sync_settings (key, enabled)
+      VALUES ('default', false)
+      ON CONFLICT (key) DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        updated_at = now()
+      WHERE search_sync_settings.enabled IS DISTINCT FROM EXCLUDED.enabled
+    `);
+  }
+
+  async isCaptureEnabled(): Promise<boolean> {
+    const result = await this.db.execute(sql`
+      SELECT COALESCE(
+        (SELECT enabled FROM search_sync_settings WHERE key = 'default'),
+        false
+      ) AS enabled
+    `);
+    return Boolean(rowsOf<{ enabled: boolean }>(result)[0]?.enabled);
   }
 
   async acknowledgeMany(works: SearchSyncWork[]): Promise<SearchSyncWork[]> {
@@ -317,5 +338,3 @@ export class SearchSyncOutboxRepository {
     };
   }
 }
-
-export const searchSyncOutboxRepository = new SearchSyncOutboxRepository();
