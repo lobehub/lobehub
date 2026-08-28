@@ -2454,6 +2454,36 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    // Regression: same as completeSubAgentBridge's hetero case — a
+    // heterogeneous isolated member never populates the coordinator's
+    // runtime state at all, so `loadAgentState` genuinely resolves `null`.
+    // Recover the real answer from the member's own isolation thread instead
+    // of falling through to the "no textual answer" stub.
+    it('single isolated member: recovers the answer from the isolation thread when the coordinator has no state at all (hetero)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('hello from the CLI'),
+      );
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+        threadId: 'thread-1',
+      });
+
+      expect((service as any).messageModel.query).toHaveBeenCalledWith({ threadId: 'thread-1' });
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'hello from the CLI' }),
+      );
+    });
+
     it('multi-member: holds (no group-tool backfill, no resume) until the barrier is met', async () => {
       (service as any).serverDB.query = {
         messagePlugins: { findFirst: vi.fn() },
@@ -2602,6 +2632,30 @@ describe('AgentRuntimeService', () => {
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({ content: 'final answer' }),
+      );
+    });
+
+    // Regression: a heterogeneous (CLI-driven) child never populates the
+    // coordinator's Redis-backed runtime state at all — `loadAgentState`
+    // genuinely resolves `null` for it, unlike the standard-runtime case
+    // above where it resolves a real (if message-stripped) state object.
+    // Without a thread-scoped fallback this always fell through to "Sub-agent
+    // completed without a textual answer.", even though the CLI produced a
+    // real reply — because the webhook's `eventFields` deliberately excludes
+    // `lastAssistantContent` (see `createSubAgentBridgeHook`) and hetero never
+    // writes into the coordinator, so nothing else could ever supply it.
+    it('recovers the answer from the isolation thread when the coordinator has no state at all (hetero)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('hello from the CLI'),
+      );
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect((service as any).messageModel.query).toHaveBeenCalledWith({ threadId: 'thread-1' });
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'hello from the CLI' }),
       );
     });
 

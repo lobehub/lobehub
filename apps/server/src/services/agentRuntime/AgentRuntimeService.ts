@@ -2902,7 +2902,25 @@ export class AgentRuntimeService {
     }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
-    const lastAssistantContent = extractTextFromMessage(lastAssistant);
+    let lastAssistantContent = extractTextFromMessage(lastAssistant);
+
+    // Heterogeneous (CLI-driven) children never populate `finalState` — see
+    // `resolveLastAssistantContentFromThread`'s doc comment — so the
+    // resolution above always comes up empty for them. Recover the real
+    // answer directly from the child's own isolation thread before falling
+    // back to the "no textual answer" stub.
+    if (!failed && !lastAssistantContent && threadId) {
+      try {
+        lastAssistantContent = await this.resolveLastAssistantContentFromThread(threadId);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to resolve content from thread %s: %O',
+          operationId,
+          threadId,
+          error,
+        );
+      }
+    }
     const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const content = failed
       ? errorReason
@@ -3096,7 +3114,25 @@ export class AgentRuntimeService {
     }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
-    const lastAssistantContent = extractTextFromMessage(lastAssistant);
+    let lastAssistantContent = extractTextFromMessage(lastAssistant);
+
+    // See `resolveLastAssistantContentFromThread`'s doc comment: a
+    // heterogeneous isolated member never populates `finalState`, so the
+    // resolution above always comes up empty for it. Recover the real answer
+    // directly from the member's own isolation thread before falling back to
+    // the "no textual answer" stub.
+    if (!failed && mode !== 'in_group' && !lastAssistantContent && threadId) {
+      try {
+        lastAssistantContent = await this.resolveLastAssistantContentFromThread(threadId);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to resolve content from thread %s: %O',
+          operationId,
+          threadId,
+          error,
+        );
+      }
+    }
     const agentLabel = (finalState?.metadata?.agentId as string | undefined) ?? 'member';
     const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const anchorContent = failed
@@ -3305,6 +3341,31 @@ export class AgentRuntimeService {
         ? dbMessages.find((message) => message.id === lastAssistantId)
         : undefined) ?? lastAssistant
     );
+  }
+
+  /**
+   * Fallback content resolution for a heterogeneous (CLI-driven) sub-agent
+   * child in queue mode. `coordinator.loadAgentState`/`finalState` is always
+   * empty here: a hetero run never writes into the Redis-backed runtime state
+   * this class's step loop maintains (only `saveAgentState` calls under the
+   * homogeneous step loop populate it), and the completion webhook's
+   * `eventFields` deliberately excludes `lastAssistantContent` to keep the
+   * QStash payload lean (see `createSubAgentBridgeHook`'s doc comment) —
+   * `heteroFinish` already resolves the real answer server-side before
+   * dispatching, but that resolution never reaches this callback.
+   *
+   * The child's own conversation is queryable directly by its isolation
+   * `threadId` regardless — the same source `heteroFinish` itself reads via
+   * `heteroCurrentMsgId` before completion. Scoping by `threadId` alone is
+   * sufficient: thread ids are unique, so no `agentId`/`topicId` is needed to
+   * disambiguate.
+   */
+  private async resolveLastAssistantContentFromThread(
+    threadId: string,
+  ): Promise<string | undefined> {
+    const messages = await this.messageModel.query({ threadId });
+    const lastAssistant = findLastAssistantMessage(normalizeCompletionMessages(messages));
+    return extractTextFromMessage(lastAssistant) || undefined;
   }
 
   /**
