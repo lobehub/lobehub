@@ -180,10 +180,19 @@ export const useSelectExecutionTarget = (agentId: string) => {
       // A silent caller is defaulting the target on mount, not answering a
       // pick — telling the user "your change was not applied" would be
       // reporting a change they never made (automatic corrections must not trigger phantom save-error toasts).
-      if (options?.silent) {
-        await updateAgentConfigById(agentId, nextConfig, { showErrorMessage: false });
-      } else {
-        await updateAgentConfigById(agentId, nextConfig);
+      //
+      // `rethrow` so a failed shared save (network error, server validation)
+      // stops here: the store already rolled the optimistic config back and
+      // toasted, and clearing the caller's override below would additionally
+      // destroy their previously valid personal target over a save that never
+      // happened.
+      try {
+        await updateAgentConfigById(agentId, nextConfig, {
+          rethrow: true,
+          ...(options?.silent ? { showErrorMessage: false } : {}),
+        });
+      } catch {
+        return;
       }
 
       // A manager's earlier `local` pick lives in their own override and would

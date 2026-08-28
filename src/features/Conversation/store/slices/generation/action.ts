@@ -16,6 +16,7 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
 import { getEffectiveConversationModel } from '@/features/Conversation/store/utils/effectiveModel';
+import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
@@ -104,9 +105,16 @@ const getEffectiveAgencyConfig = (agentId: string) => {
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
   const currentUserId = userProfileSelectors.userId(getUserStoreState());
-  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
+  // server (`isResourceAuthorOrAdmin`) — an admin's own override must survive
+  // a `fixed` selection policy just like the author's does.
+  const canManage = getRuntimeCanManageAgent({
+    agentId,
+    agentUserId: agent?.userId,
+    currentUserId,
+  });
   const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+    !!agent?.workspaceId && agent.visibility !== 'private' && !canManage;
   // Every workspace caller's override matters — a manager's / private owner's
   // `local` pick also lives in `agentDeviceOverrides` (the shared row must
   // never reference a personal device); `resolveAgentAgencyConfig` decides how
@@ -117,7 +125,7 @@ const getEffectiveAgencyConfig = (agentId: string) => {
 
   return {
     agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
-      canManage: isAuthor,
+      canManage,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     }),

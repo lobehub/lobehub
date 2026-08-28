@@ -27,6 +27,7 @@ import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
+import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
@@ -407,9 +408,16 @@ export class ConversationLifecycleActionImpl {
     }
     const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
-    const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+    // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and
+    // the server (`isResourceAuthorOrAdmin`) — an admin's own override must
+    // survive a `fixed` selection policy just like the author's does.
+    const canManage = getRuntimeCanManageAgent({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
+    });
     const usesWorkspaceMemberSelection =
-      !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+      !!agent?.workspaceId && agent.visibility !== 'private' && !canManage;
     // Every workspace caller's override matters — a manager's / private owner's
     // `local` pick also lives in `agentDeviceOverrides` (the shared row must
     // never reference a personal device); `resolveAgentAgencyConfig` decides
@@ -422,7 +430,7 @@ export class ConversationLifecycleActionImpl {
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop.
     const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage: isAuthor,
+      canManage,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     });

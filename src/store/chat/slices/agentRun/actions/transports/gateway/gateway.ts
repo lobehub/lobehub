@@ -16,6 +16,7 @@ import type {
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
+import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import {
   aiAgentService,
@@ -83,9 +84,16 @@ const resolveDesktopDeviceHints = async (
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
   const userState = useUserStore.getState();
   const currentUserId = userProfileSelectors.userId(userState);
-  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
+  // server (`isResourceAuthorOrAdmin`) — an admin's own override must survive
+  // a `fixed` selection policy just like the author's does.
+  const canManage = getRuntimeCanManageAgent({
+    agentId,
+    agentUserId: agent?.userId,
+    currentUserId,
+  });
   const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+    !!agent?.workspaceId && agent.visibility !== 'private' && !canManage;
   // Every workspace caller's override matters — a manager's / private owner's
   // `local` pick also lives in `agentDeviceOverrides` (the shared row must
   // never reference a personal device); `resolveAgentAgencyConfig` decides how
@@ -97,7 +105,7 @@ const resolveDesktopDeviceHints = async (
     agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
     deviceOverride,
     {
-      canManage: isAuthor,
+      canManage,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     },

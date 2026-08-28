@@ -99,9 +99,13 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'device-1', executionTarget: 'sandbox' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'device-1', executionTarget: 'sandbox' },
+        },
+        { rethrow: true },
+      );
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
 
@@ -110,9 +114,13 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('device', 'device-2');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'device-2', executionTarget: 'device' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'device-2', executionTarget: 'device' },
+        },
+        { rethrow: true },
+      );
     });
 
     it("stores 'local' verbatim (not pre-resolved to 'device') to preserve the in-process IPC path", async () => {
@@ -123,9 +131,13 @@ describe('useSelectExecutionTarget', () => {
       await result.current('local');
 
       expect(testState.getDeviceInfo).not.toHaveBeenCalled();
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
+        },
+        { rethrow: true },
+      );
     });
 
     it('falls back to the gateway connection service when no gateway deviceId is cached yet', async () => {
@@ -136,9 +148,13 @@ describe('useSelectExecutionTarget', () => {
       await result.current('local');
 
       expect(testState.getDeviceInfo).toHaveBeenCalled();
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'resolved-device', executionTarget: 'local' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'resolved-device', executionTarget: 'local' },
+        },
+        { rethrow: true },
+      );
     });
 
     it('keeps the previous boundDeviceId when the local device cannot be resolved for a non-hetero agent', async () => {
@@ -148,9 +164,13 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('local');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'stale-device', executionTarget: 'local' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'stale-device', executionTarget: 'local' },
+        },
+        { rethrow: true },
+      );
     });
 
     // automatic corrections must not trigger phantom save-error toasts: the device switcher defaults an unset target to `local` on
@@ -167,7 +187,7 @@ describe('useSelectExecutionTarget', () => {
       expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
         'agent-id',
         { agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' } },
-        { showErrorMessage: false },
+        { rethrow: true, showErrorMessage: false },
       );
     });
 
@@ -178,9 +198,13 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('local');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
+        },
+        { rethrow: true },
+      );
     });
 
     it('records the sandbox choice alongside a local pick', async () => {
@@ -190,13 +214,17 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('local', undefined, { localSandbox: true });
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: {
-          boundDeviceId: 'this-machine',
-          executionTarget: 'local',
-          localSandbox: true,
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'local',
+            localSandbox: true,
+          },
         },
-      });
+        { rethrow: true },
+      );
     });
 
     it('clears the sandbox when the plain local row is picked', async () => {
@@ -209,13 +237,17 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('local', undefined, { localSandbox: false });
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: {
-          boundDeviceId: 'this-machine',
-          executionTarget: 'local',
-          localSandbox: false,
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'local',
+            localSandbox: false,
+          },
         },
-      });
+        { rethrow: true },
+      );
     });
 
     it('leaves the stored sandbox choice dormant when switching to another environment', async () => {
@@ -226,9 +258,13 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { executionTarget: 'sandbox', localSandbox: true },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { executionTarget: 'sandbox', localSandbox: true },
+        },
+        { rethrow: true },
+      );
     });
 
     it('does not switch a heterogeneous agent to local when no device can be resolved', async () => {
@@ -362,13 +398,17 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: {
-          boundDeviceId: 'fixed-device',
-          executionTarget: 'sandbox',
-          executionTargetSelectionPolicy: 'fixed',
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: {
+            boundDeviceId: 'fixed-device',
+            executionTarget: 'sandbox',
+            executionTargetSelectionPolicy: 'fixed',
+          },
         },
-      });
+        { rethrow: true },
+      );
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
   });
@@ -438,14 +478,41 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { executionTarget: 'sandbox' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { executionTarget: 'sandbox' },
+        },
+        { rethrow: true },
+      );
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
         agentDeviceOverrides: {
           'agent-id': { localSandbox: true },
         },
       });
+    });
+
+    it('keeps the routing override intact when the shared save fails', async () => {
+      // The store rolls the optimistic config back and toasts on failure; the
+      // caller's previously valid `local` pick must survive it — clearing the
+      // override for a save that never happened would silently reroute them to
+      // the old shared target.
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      testState.agent.updateAgentConfigById = vi.fn().mockRejectedValue(new Error('save failed'));
+      testState.user.workspaceUserPreference = {
+        agentDeviceOverrides: {
+          'agent-id': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+        },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledTimes(1);
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
 
     it('leaves the preference untouched when a manager picks a shared target with no override', async () => {
@@ -457,9 +524,13 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { executionTarget: 'sandbox' },
-      });
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: { executionTarget: 'sandbox' },
+        },
+        { rethrow: true },
+      );
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
   });
@@ -478,13 +549,17 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: {
-          boundDeviceId: 'owner-device',
-          executionTarget: 'sandbox',
-          executionTargetSelectionPolicy: 'fixed',
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        {
+          agencyConfig: {
+            boundDeviceId: 'owner-device',
+            executionTarget: 'sandbox',
+            executionTargetSelectionPolicy: 'fixed',
+          },
         },
-      });
+        { rethrow: true },
+      );
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
   });

@@ -3872,6 +3872,76 @@ describe('ConversationLifecycle actions', () => {
         expect(executeGatewayAgent).not.toHaveBeenCalled();
       });
 
+      // A workspace admin who is not the author can store a personal `local`
+      // override (the picker and server both recognize management access), and
+      // runtime resolution must honor it even under a `fixed` selection
+      // policy — otherwise the send silently routes to the gateway instead of
+      // the admin's own desktop.
+      it("applies a workspace admin's local override under a fixed selection policy", async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () =>
+            ({ userId: 'author-user', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
+        const { rememberAgentManagementAccess, clearAgentManagementAccessCache } =
+          await import('@/helpers/agentManagementAccess');
+        useUserStore.setState({
+          user: { id: 'admin-user' } as any,
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'admin-desktop',
+                executionTarget: 'local',
+              },
+            },
+          },
+        });
+        rememberAgentManagementAccess('admin-user', TEST_IDS.SESSION_ID, true);
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        try {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              message: TEST_CONTENT.USER_MESSAGE,
+              context: createTestContext(),
+            });
+          });
+
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+          expect(executeGatewayAgent).not.toHaveBeenCalled();
+        } finally {
+          clearAgentManagementAccessCache();
+          useUserStore.setState({ user: undefined as any });
+        }
+      });
+
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
