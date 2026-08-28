@@ -18,10 +18,6 @@ const mocks = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
 }));

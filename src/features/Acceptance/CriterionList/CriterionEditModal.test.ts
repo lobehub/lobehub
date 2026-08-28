@@ -16,10 +16,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   createModal: mocks.createModal,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 describe('openCriterionEditModal', () => {
   it('renders the title through react-i18next so a lazily loaded namespace can update it', () => {
     openCriterionEditModal({

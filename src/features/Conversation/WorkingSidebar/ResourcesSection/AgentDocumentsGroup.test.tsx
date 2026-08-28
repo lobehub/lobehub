@@ -4,7 +4,6 @@ import {
   AGENT_DOCUMENT_SKILL_CATEGORY,
   AGENT_SIGNAL_SOURCE_TYPE,
 } from '@lobechat/const';
-import type { ErrorBoundary as LobeErrorBoundary } from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type * as ReactRouterDom from 'react-router';
@@ -29,48 +28,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   confirmModal: modalConfirm,
   toast: { error: messageError, success: messageSuccess },
 }));
-
-vi.mock('@lobehub/ui', async (importOriginal) => {
-  const actual = await importOriginal<{ ErrorBoundary: typeof LobeErrorBoundary }>();
-  return {
-    Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
-      <div>
-        {title}
-        {children}
-      </div>
-    ),
-    ActionIcon: ({
-      onClick,
-      title,
-    }: {
-      onClick?: (e: React.MouseEvent) => void;
-      title?: string;
-    }) => (
-      <button aria-label={title} onClick={onClick}>
-        {title}
-      </button>
-    ),
-    Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-    ErrorBoundary: actual.ErrorBoundary,
-    Flexbox: ({
-      children,
-      onClick,
-      ...props
-    }: {
-      children?: ReactNode;
-      onClick?: () => void;
-      [key: string]: unknown;
-    }) => (
-      <div onClick={onClick} {...props}>
-        {children}
-      </div>
-    ),
-    Highlighter: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    Text: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  };
-});
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({
   default: () => <div data-testid="neural-network-loading" />,

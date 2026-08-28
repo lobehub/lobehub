@@ -59,7 +59,8 @@ const mocks = vi.hoisted(() => ({
 const serializeSize = (size: unknown) =>
   size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   copyToClipboard: vi.fn(),
   DropdownMenu: ({
     children,
@@ -79,16 +80,6 @@ vi.mock('@lobehub/ui', () => ({
       )}
     </>
   ),
-  Flexbox: ({
-    children,
-    flex,
-    style,
-  }: {
-    children?: ReactNode;
-    flex?: CSSProperties['flex'];
-    style?: CSSProperties;
-  }) => <div style={{ flex, ...style }}>{children}</div>,
-  Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
@@ -171,12 +162,6 @@ vi.mock('next/dynamic', () => ({
     function DynamicComponent({ children }: { children?: ReactNode }) {
       return <>{children}</>;
     },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/features/Conversation/ChatList', () => ({

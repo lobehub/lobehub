@@ -34,38 +34,12 @@ const mocks = vi.hoisted(() => ({
   } as any,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      action
-    </button>
-  ),
-  Block: ({
-    children,
-    clickable,
-    onClick,
-  }: {
-    children: ReactNode;
-    clickable?: boolean;
-    onClick?: () => void;
-  }) =>
-    clickable ? (
-      <button type="button" onClick={onClick}>
-        {children}
-      </button>
-    ) : (
-      <div>{children}</div>
-    ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span>icon</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock('@/libs/contextMenu', () => ({
   showContextMenu: mocks.showContextMenu,
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -101,31 +75,12 @@ vi.mock('antd', () => ({
   ),
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   cssVar: {
     colorTextDescription: '#999',
     colorTextSecondary: '#666',
   },
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      action
-    </button>
-  ),
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  confirmModal: vi.fn(),
-  toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('react-router', () => ({

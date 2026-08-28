@@ -52,10 +52,6 @@ vi.mock('antd', async (importOriginal) => {
   };
 });
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
@@ -114,84 +110,6 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://example.test',
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    disabled,
-    onClick,
-    title,
-  }: {
-    disabled?: boolean;
-    onClick?: () => void;
-    title?: string;
-  }) => (
-    <button aria-label={title} disabled={disabled} onClick={onClick}>
-      {title}
-    </button>
-  ),
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
-  Form: ({
-    children,
-    form,
-    onValuesChange,
-  }: {
-    children?: ReactNode;
-    form?: ReturnType<typeof Form.useForm>[0];
-    onValuesChange?: (changedValues: unknown, values: unknown) => void;
-  }) => (
-    <Form form={form} onValuesChange={onValuesChange}>
-      {children}
-    </Form>
-  ),
-  FormGroup: ({
-    active,
-    children,
-    extra,
-    onCollapse,
-    title,
-  }: {
-    active?: boolean;
-    children?: ReactNode;
-    extra?: ReactNode;
-    onCollapse?: (active: boolean) => void;
-    title?: ReactNode;
-  }) => (
-    <section>
-      <div
-        className="ant-collapse-header"
-        data-testid="settings-collapse-header"
-        onClick={() => onCollapse?.(!active)}
-      >
-        <span className="ant-collapse-title">{title}</span>
-        <div className="ant-collapse-extra">{extra}</div>
-      </div>
-      {active && children}
-    </section>
-  ),
-  FormItem: ({
-    children,
-    label,
-    name,
-    rules,
-    valuePropName,
-  }: {
-    children?: ReactNode;
-    label?: ReactNode;
-    name?: string | string[];
-    rules?: unknown[];
-    valuePropName?: string;
-  }) => (
-    <Form.Item label={label} name={name} rules={rules as never} valuePropName={valuePropName}>
-      {children}
-    </Form.Item>
-  ),
-  Icon: () => null,
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
@@ -368,14 +286,20 @@ describe('Agent channel permission gates', () => {
   it('toggles advanced settings from the full header row', () => {
     render(<BodyHarness />);
 
-    const header = screen.getByTestId('settings-collapse-header');
+    const header = document.querySelector('.ant-collapse-header') as HTMLElement;
+    expect(header).not.toBeNull();
     expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
 
-    fireEvent.click(header);
-    expect(screen.queryByRole('spinbutton', { name: 'channel.charLimit' })).not.toBeInTheDocument();
+    const panel = () =>
+      screen
+        .getByRole('spinbutton', { hidden: true, name: 'channel.charLimit' })
+        .closest('.ant-collapse-panel');
 
     fireEvent.click(header);
-    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
+    expect(panel()).toHaveClass('ant-collapse-panel-inactive');
+
+    fireEvent.click(header);
+    expect(panel()).not.toHaveClass('ant-collapse-panel-inactive');
   });
 
   it('disables mutating channel actions when editing is denied', () => {

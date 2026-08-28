@@ -16,12 +16,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   toast: { error: messageErrorMock, loading: messageLoadingMock },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = (await vi.importActual('react-router')) as typeof import('react-router');

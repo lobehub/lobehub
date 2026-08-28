@@ -8,8 +8,6 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 
 import { useAgentStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/services/generation', () => ({
   generationService: { deleteGeneration: vi.fn(), getGenerationStatus: vi.fn() },
 }));

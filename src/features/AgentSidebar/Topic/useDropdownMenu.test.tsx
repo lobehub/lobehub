@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
@@ -49,30 +48,18 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   toast: messageMock,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  App: {
+    useApp: () => ({
+      message: messageMock,
+      modal: {
+        confirm: vi.fn(),
+        error: vi.fn(),
+      },
+    }),
+  },
 }));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
-vi.mock('antd', () => {
-  return {
-    App: {
-      useApp: () => ({
-        message: messageMock,
-        modal: {
-          confirm: vi.fn(),
-          error: vi.fn(),
-        },
-      }),
-    },
-    Upload: ({ children }: { children: ReactNode }) => <>{children}</>,
-  };
-});
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: 'create_content' | 'edit_own_content') => ({

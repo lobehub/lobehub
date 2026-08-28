@@ -17,8 +17,6 @@ const swrMocks = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/libs/swr', async (importOriginal) => {
   const actual = await importOriginal<typeof SWRLib>();
 

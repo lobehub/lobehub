@@ -16,10 +16,6 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('react-router', () => ({
   useParams: () => ({}),
 }));
@@ -34,10 +30,6 @@ vi.mock('@/components/404', () => ({
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/libs/trpc/client', () => ({

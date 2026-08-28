@@ -15,8 +15,6 @@ import {
   useConversationScroll,
 } from './useConversationScroll';
 
-vi.mock('zustand/traditional');
-
 vi.mock('../../store', async (importOriginal) => {
   const actual = await importOriginal<typeof ConversationStoreModule>();
   return {

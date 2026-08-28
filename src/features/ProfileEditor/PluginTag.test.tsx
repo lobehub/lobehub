@@ -44,11 +44,9 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
 }));
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Tag: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
     <div data-testid="author-tooltip" data-title={title}>
       {children}

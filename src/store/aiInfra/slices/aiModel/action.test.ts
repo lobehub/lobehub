@@ -13,8 +13,6 @@ import { withSWR } from '~test-utils';
 import { useAiInfraStore as useStore } from '../../store';
 import { aiModelSelectors } from './selectors';
 
-vi.mock('zustand/traditional');
-
 vi.mock('i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof I18nextModule>();
   return {

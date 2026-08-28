@@ -10,8 +10,6 @@ import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { useFileStore as useStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 // Mock necessary modules
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),

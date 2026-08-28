@@ -9,8 +9,6 @@ import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-vi.mock('zustand/traditional');
-
 describe('Operation Management Integration Tests', () => {
   beforeEach(() => {
     act(() => {

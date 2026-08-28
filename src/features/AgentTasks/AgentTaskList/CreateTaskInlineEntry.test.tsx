@@ -30,24 +30,6 @@ vi.mock('@lobehub/editor/react', () => ({
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  ActionIcon: ({
-    onClick,
-    style,
-    title,
-  }: {
-    onClick?: () => void;
-    style?: CSSProperties;
-    title?: string;
-  }) => (
-    <div
-      aria-label={title}
-      role="button"
-      style={{ height: 24, width: 24, ...style }}
-      onClick={onClick}
-    >
-      {title}
-    </div>
-  ),
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
@@ -120,10 +102,6 @@ vi.mock('../shared/useAgentVisibility', () => ({
   useAgentVisibility: (agentId?: string) => (agentId === 'agent-private' ? 'private' : undefined),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
@@ -167,7 +145,9 @@ describe('CreateTaskInlineEntry', () => {
     expect(assigneeControl?.style.getPropertyValue('--lobe-flex-height')).toBe('24px');
     expect(assigneeControl?.style.getPropertyValue('--lobe-flex-padding-block')).toBe('3px');
 
-    const attachmentAction = container.querySelector<HTMLElement>('[role="button"]');
+    const attachmentAction = container
+      .querySelector('svg.lucide-paperclip')
+      ?.closest<HTMLElement>('button');
     expect(attachmentAction).toHaveStyle({ height: '24px', width: '24px' });
     expect(attachmentAction?.parentElement?.style.getPropertyValue('--lobe-flex-align')).toBe(
       'center',

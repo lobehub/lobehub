@@ -10,12 +10,6 @@ vi.mock('@/store/global', () => ({
     selector({ revealInFilesTab: mockRevealInFilesTab }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/components/AntdStaticMethods', () => ({
   message: { error: vi.fn(), success: vi.fn() },
 }));

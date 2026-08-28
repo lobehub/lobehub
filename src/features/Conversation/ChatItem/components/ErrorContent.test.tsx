@@ -14,10 +14,6 @@ let isRegenerating = false;
 
 // Drive the Alert's `afterClose` directly via a click, so we exercise
 // ErrorContent's dismiss branching without the real close animation.
-vi.mock('@lobehub/ui', () => ({
-  Skeleton: { Button: () => <div>loading</div> },
-}));
-
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Alert: ({ action, afterClose }: { action?: ReactNode; afterClose?: () => void }) => (
@@ -28,10 +24,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       {action}
     </div>
   ),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@/features/Conversation/store', () => ({

@@ -30,7 +30,6 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
-vi.mock('zustand/traditional');
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {

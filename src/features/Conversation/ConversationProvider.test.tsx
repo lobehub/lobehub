@@ -23,10 +23,6 @@ const chatListMocks = vi.hoisted(() => ({
   useFetchAgentConfig: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/features/Conversation/ChatList/components/AgentSignalReceiptList', () => ({
   default: () => null,
 }));

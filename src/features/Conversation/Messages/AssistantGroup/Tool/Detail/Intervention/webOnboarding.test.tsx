@@ -1,22 +1,17 @@
 /**
  * @vitest-environment happy-dom
  */
+import { WebOnboardingApiName } from '@lobechat/builtin-tool-web-onboarding';
+import { WebOnboardingInterventions } from '@lobechat/builtin-tool-web-onboarding/client';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ avatar }: { avatar: string }) => <div>{avatar}</div>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   EmojiPicker: ({ onChange, value }: { onChange?: (next: string) => void; value?: string }) => (
     <button data-testid="emoji-picker" type="button" onClick={() => onChange?.('🪶')}>
       {value || ''}
     </button>
-  ),
-  Flexbox: ({ children }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div>{children}</div>
-  ),
-  Text: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <span {...props}>{children}</span>
   ),
 }));
 
@@ -38,13 +33,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('web onboarding intervention registry', () => {
-  let Component: ReturnType<typeof Object> | undefined;
+  const Component = WebOnboardingInterventions[WebOnboardingApiName.saveUserQuestion];
 
-  beforeEach(async () => {
-    const { WebOnboardingInterventions } =
-      await import('@lobechat/builtin-tool-web-onboarding/client');
-    const { WebOnboardingApiName } = await import('@lobechat/builtin-tool-web-onboarding');
-    Component = WebOnboardingInterventions[WebOnboardingApiName.saveUserQuestion];
+  it('registers the saveUserQuestion intervention', () => {
     expect(Component).toBeDefined();
   });
 

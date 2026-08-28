@@ -11,7 +11,8 @@ import WorkflowCollapse from './WorkflowCollapse';
 
 let mockIsGenerating = true;
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Accordion: ({
     children,
     expandedKeys,
@@ -64,8 +65,6 @@ vi.mock('@lobehub/ui', () => ({
       {IconComponent ? <IconComponent /> : null}
     </button>
   ),
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
     IconComponent ? (
       <div
@@ -77,8 +76,6 @@ vi.mock('@lobehub/ui', () => ({
     ) : (
       <div />
     ),
-  ShikiLobeTheme: {},
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({

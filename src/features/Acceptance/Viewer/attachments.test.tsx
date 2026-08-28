@@ -4,16 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AttachmentThumbs } from './attachments';
 
-// The unit env has neither the MotionProvider nor the image-preview portal the real
-// components need; stub them down to the DOM the assertions actually read.
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, onClick }: any) => <div onClick={onClick}>{children}</div>,
-  Icon: () => null,
-  Image: ({ alt, src }: any) => <img alt={alt} src={src} />,
-}));
-
-vi.mock('antd', () => ({ Upload: ({ children }: any) => <div>{children}</div> }));
-
 vi.mock('@/store/file', () => ({ useFileStore: () => vi.fn() }));
 
 const attachments = [{ id: 'att-1', name: 'screenshot.png', url: 'https://example.com/a.png' }];

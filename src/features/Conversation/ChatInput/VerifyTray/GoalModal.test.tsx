@@ -5,13 +5,7 @@ import { GoalContent } from './GoalModal';
 
 const mocks = vi.hoisted(() => ({ close: vi.fn() }));
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('i18next', () => ({ t: (key: string) => key }));
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: any) => <div>{children}</div>,
-  Text: ({ children }: any) => <span>{children}</span>,
-  TextArea: (props: any) => <textarea {...props} />,
-}));
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useModalContext: () => ({ close: mocks.close }),

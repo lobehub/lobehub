@@ -7,19 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import Arguments from './index';
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Highlighter: ({ children, wrap }: { children?: ReactNode; wrap?: boolean }) => (
-    <pre data-testid="highlighter" data-wrap={String(Boolean(wrap))}>
-      {children}
-    </pre>
-  ),
-}));
-
-vi.mock('antd', () => ({
-  Divider: () => <hr />,
-}));
-
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({

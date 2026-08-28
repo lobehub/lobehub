@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorSourceType } from '@/database/schemas';
@@ -57,16 +56,6 @@ vi.mock('@/hooks/useResourceManageable', () => ({
   useResourceManageable: () => true,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => children,
-}));
-
-vi.mock('antd', () => ({
-  App: { useApp: () => ({ message: { error: vi.fn() } }) },
-}));
-
-// Stub the base-ui Button to a native button — it needs a MotionProvider the
-// app sets up globally but the unit env doesn't.
 vi.mock('@/store/tool', () => ({
   useToolStore<T>(selector: (state: typeof mocks.toolState) => T): T {
     return selector(mocks.toolState);

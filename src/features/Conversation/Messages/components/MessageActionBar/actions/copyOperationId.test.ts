@@ -32,7 +32,8 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   toast: { success: mocks.messageSuccess },
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: { useApp: () => ({ message: { success: mocks.messageSuccess } }) },
 }));
 
@@ -67,10 +68,6 @@ vi.mock('@/store/user/selectors', () => ({
   userGeneralSettingsSelectors: {
     config: () => ({ isDevMode: mocks.isDevMode }),
   },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 const build = (

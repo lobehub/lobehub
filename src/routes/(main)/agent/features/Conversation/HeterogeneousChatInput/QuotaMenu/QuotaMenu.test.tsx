@@ -127,31 +127,11 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('antd-style', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  const mockCssVar = new Proxy({}, { get: (_target, prop) => `var(--${String(prop)})` });
-  return {
-    ...actual,
-    createStaticStyles: (
-      create: (utils: {
-        css: (...args: unknown[]) => string;
-        cssVar: Record<string, string>;
-      }) => Record<string, string>,
-    ) =>
-      create({
-        css: () => 'cls',
-        cssVar: mockCssVar,
-        cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
-      } as never),
-    cssVar: mockCssVar,
-    cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
-  };
-});
-
-vi.mock('@lobehub/ui', async () => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const { useState } = await import('react');
 
   return {
+    ...(await importOriginal<object>()),
     ActionIcon: ({
       disabled,
       onClick,

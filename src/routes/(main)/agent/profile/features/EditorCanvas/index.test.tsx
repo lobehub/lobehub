@@ -180,10 +180,6 @@ vi.mock('./useSlashItems', () => ({
   useSlashItems: () => [],
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 describe('Agent profile EditorCanvas', () => {
   beforeEach(() => {
     vi.clearAllMocks();

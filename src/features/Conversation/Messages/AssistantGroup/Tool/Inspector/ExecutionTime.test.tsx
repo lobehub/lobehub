@@ -2,14 +2,9 @@
  * @vitest-environment happy-dom
  */
 import { act, cleanup, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ExecutionTime from './ExecutionTime';
-
-vi.mock('@lobehub/ui', () => ({
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
 
 describe('ExecutionTime', () => {
   afterEach(() => {

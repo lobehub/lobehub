@@ -16,7 +16,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { info: mocks.toastInfo },
 }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/components/AsyncBoundary', () => ({
   default: ({
     children,

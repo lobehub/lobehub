@@ -29,22 +29,6 @@ vi.mock('antd-style', async (importOriginal) => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
-  Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock('@/components/CodeEditorPane', () => ({
   default: () => <textarea data-testid="code-editor" />,
 }));
