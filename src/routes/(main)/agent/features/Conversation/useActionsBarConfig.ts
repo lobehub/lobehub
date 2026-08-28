@@ -7,11 +7,12 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 /**
- * Hetero-agent (Claude Code / Codex) sessions keep the menu minimal — copy +
- * delete — because the external runtime owns the assistant message lifecycle
- * (edit / regenerate / branching / translate / tts / share don't apply).
- * `select` remains available because forwarding / batch deletion is handled by
- * the local conversation UI and does not depend on the external runtime.
+ * Hetero-agent (Claude Code / Codex) sessions keep the menu minimal because the
+ * external runtime owns the assistant message lifecycle (edit / regenerate /
+ * branching / translate / tts / share don't apply). Delete is omitted too:
+ * removing LobeHub's message row does not remove that turn from the resumed
+ * native CLI session, so exposing it would promise a context change it cannot
+ * reliably deliver. `select` remains available for forwarding.
  *
  * The one user-message action that DOES belong here is `restoreToInput`: a long
  * CLI run that errors out or loses context is exactly when you want to pull the
@@ -20,12 +21,12 @@ import { agentSelectors } from '@/store/agent/selectors';
  */
 const HETERO_USER: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } = {
   bar: ['copy'],
-  menu: ['restoreToInput', 'copy', 'divider', 'select', 'divider', 'del'],
+  menu: ['restoreToInput', 'copy', 'divider', 'select'],
 };
 
 const HETERO_ASSISTANT: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } = {
   bar: ['copy'],
-  menu: ['copy', 'divider', 'select', 'divider', 'del'],
+  menu: ['copy', 'divider', 'select'],
 };
 
 export const useActionsBarConfig = (): ActionsBarConfig => {
