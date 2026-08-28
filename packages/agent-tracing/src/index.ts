@@ -12,7 +12,9 @@ export {
   type ContextSegment,
   type SegmentKind,
 } from './analysis/contextMap';
+export { InspectError, type InspectOptions, inspectSnapshot } from './inspect/inspectSnapshot';
 export { appendStepToPartial, finalizeSnapshot } from './recorder';
+export * from './replay';
 export { FileSnapshotStore } from './store/file-store';
 export {
   AmbiguousSnapshotIdError,

@@ -1,9 +1,11 @@
 import type { Command } from 'commander';
 
-import { registerReplayCommand } from './replay';
+import { registerOpCommand } from './op';
 
 export function registerTraceCommand(program: Command) {
-  const trace = program.command('trace').description('Work with agent execution snapshots');
+  const trace = program
+    .command('trace')
+    .description('Inspect and replay recorded agent execution traces');
 
-  registerReplayCommand(trace);
+  registerOpCommand(trace);
 }
