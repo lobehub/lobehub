@@ -186,8 +186,6 @@ export default {
     'The server could not be reached. This usually indicates a local network problem — please check your internet connection, proxy, or VPN settings and try again.',
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
-  'response.SubscriptionKeyMismatch':
-    'We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.',
   'response.SubscriptionPlanLimit':
     'Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
   'response.SubscriptionPlanLimitUltimate':

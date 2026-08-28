@@ -34,7 +34,6 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
       return 403;
     }
 
-    case ChatErrorType.SubscriptionKeyMismatch:
     case ChatErrorType.SystemTimeNotMatchError: {
       return 400;
     }
