@@ -23,6 +23,8 @@ class GoalService {
   create = async (params: {
     agentId?: string;
     config?: GoalConfig;
+    /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
+    createdByAgentId?: string;
     maxRounds?: number;
     maxTotalCost?: number;
     projectId?: string;

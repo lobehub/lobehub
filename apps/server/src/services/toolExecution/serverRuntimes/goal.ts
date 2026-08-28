@@ -43,6 +43,7 @@ export const goalRuntime: ServerRuntimeRegistration = {
           const goalService = new GoalService(serverDB, userId, workspaceId ?? undefined);
           const graph = await goalService.create({
             agentId,
+            createdByAgentId: agentId,
             config: {
               recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(args.maxIterations) },
             },

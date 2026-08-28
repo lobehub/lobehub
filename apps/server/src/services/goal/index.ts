@@ -41,6 +41,12 @@ export interface CreateGoalWorkInput {
 export interface CreateGoalGraphInput {
   agentId?: string;
   config?: GoalConfig;
+  /**
+   * The agent that made this call, when a tool did. Distinct from `agentId`,
+   * which is the agent the goal is assigned to — creating a goal from the modal
+   * on an agent's page sets that, but the author is still the person.
+   */
+  createdByAgentId?: string;
   maxRounds?: number;
   maxTotalCost?: number;
   projectId?: string;
@@ -97,6 +103,15 @@ export class GoalService {
     this.workModel = new WorkModel(db, userId, workspaceId);
   }
 
+  /**
+   * The graph model whose audit trail names `agentId` as the author, or the
+   * user-attributed one when a person is calling.
+   */
+  private graphAs = (agentId?: string) =>
+    agentId
+      ? new GoalGraphModel(this.db, this.userId, this.workspaceId, { id: agentId, type: 'agent' })
+      : this.graphModel;
+
   create = async (input: CreateGoalGraphInput): Promise<GoalGraphSnapshot> => {
     if (input.agentId) {
       await assertAgentUsableBy(this.db, input.agentId, {
@@ -122,8 +137,14 @@ export class GoalService {
       subjectType: 'standalone',
       title: input.title,
     });
+    // `/goal` is an agent making the call. Seeding through the user-attributed
+    // model would file the whole opening graph under the goal's owner, which is
+    // the same loss of authorship the coordinator split just fixed.
+    const authorGraph = this.graphAs(input.createdByAgentId);
+
     try {
-      const problem = await this.graphModel.createNode(goal.id, {
+      const problem = await authorGraph.createNode(goal.id, {
+        createdByAgentId: input.createdByAgentId,
         description: input.requirement,
         kind: 'problem',
         status: 'active',
@@ -133,13 +154,14 @@ export class GoalService {
 
       for (const seed of input.work ?? []) {
         const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
-        const work = await this.graphModel.createNode(goal.id, {
+        const work = await authorGraph.createNode(goal.id, {
+          createdByAgentId: input.createdByAgentId,
           description,
           kind: 'work',
           title,
         });
         if (!work) throw new Error('Failed to seed goal work');
-        await this.graphModel.createEdge(goal.id, problem.id, work.id, 'decomposes');
+        await authorGraph.createEdge(goal.id, problem.id, work.id, 'decomposes');
       }
     } catch (error) {
       await this.goalModel.delete(goal.id).catch(() => {});

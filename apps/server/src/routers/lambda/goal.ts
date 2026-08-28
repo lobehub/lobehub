@@ -99,6 +99,8 @@ export const goalRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
+        /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
+        createdByAgentId: z.string().optional(),
         config: z
           .object({
             recovery: z

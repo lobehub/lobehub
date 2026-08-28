@@ -229,6 +229,44 @@ describe('GoalService', () => {
     ).not.toContainEqual(expect.objectContaining({ id: graph.goal.id }));
   });
 
+  it('files a goal the agent created under that agent, not its owner', async () => {
+    // `/goal` is an agent making the call. `agentId` alone cannot say so — the
+    // creation modal sets it too, and there the author is the person.
+    await serverDB
+      .insert(agents)
+      .values({ id: 'agt_goal_author', slug: 'agt-goal-author', userId });
+    const service = new GoalService(serverDB, userId);
+
+    const graph = await service.create({
+      agentId: 'agt_goal_author',
+      createdByAgentId: 'agt_goal_author',
+      title: 'Agent-authored goal',
+      work: ['Do the thing'],
+    });
+
+    const seeded = graph.events.filter((event) => ['created', 'linked'].includes(event.eventType));
+    expect(seeded.length).toBeGreaterThan(0);
+    expect(seeded.every((event) => event.actorType === 'agent')).toBe(true);
+    expect(seeded.every((event) => event.actorId === 'agt_goal_author')).toBe(true);
+    expect(graph.nodes.every((node) => node.createdByAgentId === 'agt_goal_author')).toBe(true);
+  });
+
+  it('still files a goal the user created under the user, even on an agent page', async () => {
+    // The modal passes `agentId` for assignment; the author is the person.
+    await serverDB.insert(agents).values({ id: 'agt_assignee', slug: 'agt-assignee', userId });
+    const service = new GoalService(serverDB, userId);
+
+    const graph = await service.create({
+      agentId: 'agt_assignee',
+      title: 'User-authored goal',
+      work: ['Do the thing'],
+    });
+
+    const seeded = graph.events.filter((event) => ['created', 'linked'].includes(event.eventType));
+    expect(seeded.every((event) => event.actorType === 'user')).toBe(true);
+    expect(seeded.every((event) => event.actorId === userId)).toBe(true);
+  });
+
   it('separates what the coordinator decided from what the user asked for', async () => {
     // The audit trail recorded every transition as the goal's owner, so "what did
     // the system decide on its own" could not be answered from product data.

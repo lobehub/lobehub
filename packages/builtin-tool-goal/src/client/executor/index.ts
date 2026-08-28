@@ -53,6 +53,7 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
     try {
       const graph = await goalService.create({
         agentId: ctx.agentId,
+        createdByAgentId: ctx.agentId,
         config: {
           recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(params.maxIterations) },
         },
