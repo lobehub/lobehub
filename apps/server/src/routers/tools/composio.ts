@@ -110,6 +110,8 @@ export const composioToolsRouter = router({
   getActions: publicProcedure.input(z.object({ appSlug: z.string() })).query(async ({ input }) => {
     const client = getComposioClient();
     const response = await (client.tools as any).getRawComposioTools({
+      // The SDK defaults to 20 tools per toolkit, which truncates larger ones (#18675).
+      limit: 200,
       toolkits: [input.appSlug],
     });
 
@@ -137,6 +139,8 @@ export const composioToolsRouter = router({
       // whose name/params live under `.function`, so slug/name/inputSchema come
       // back empty and every tool collapses to the same `${identifier}____` name.
       const response = await (ctx.composioClient.tools as any).getRawComposioTools({
+        // The SDK defaults to 20 tools per toolkit, which truncates larger ones (#18675).
+        limit: 200,
         toolkits: [input.appSlug],
       });
 
