@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalEdges, goalNodeDecisions, goalNodes, users, workspaces } from '../../schemas';
+import { agents, goalEdges, goalNodeDecisions, goalNodes, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -179,41 +179,6 @@ describe('GoalModel', () => {
 
       const open = await goalModel.list({ statuses: ['running'] });
       expect(open.goals.map(({ goal }) => goal.title)).toEqual(['Running']);
-    });
-  });
-
-  describe('workspace visibility', () => {
-    it('keeps a private goal and its graph out of another member’s reach', async () => {
-      // `goals` has no visibility column, so workspace scoping alone would let
-      // any member read the requirement, graph, findings and event log of a
-      // goal its creator marked private.
-      const [ws] = await serverDB
-        .insert(workspaces)
-        .values({ name: 'goal-vis-ws', primaryOwnerId: userId, slug: 'goal-vis-ws' })
-        .returning();
-      const mine = new GoalModel(serverDB, userId, ws.id);
-      const theirs = new GoalModel(serverDB, otherUserId, ws.id);
-      const myGraph = new GoalGraphModel(serverDB, userId, ws.id);
-
-      const priv = await mine.create({
-        config: { visibility: 'private' },
-        subjectType: 'standalone',
-        title: 'Private goal',
-      });
-      const shared = await mine.create({ subjectType: 'standalone', title: 'Shared goal' });
-      await myGraph.createNode(priv.id, { kind: 'work', title: 'W1' });
-      await myGraph.createNode(shared.id, { kind: 'work', title: 'W1' });
-
-      const theirList = await theirs.list();
-      expect(theirList.goals.map(({ goal }) => goal.id)).toEqual([shared.id]);
-      expect(await theirs.findById(priv.id)).toBeUndefined();
-      expect(
-        await new GoalGraphModel(serverDB, otherUserId, ws.id).getGraph(priv.id),
-      ).toBeUndefined();
-
-      // The creator still sees both.
-      const myList = await mine.list();
-      expect(myList.goals.map(({ goal }) => goal.id).sort()).toEqual([priv.id, shared.id].sort());
     });
   });
 

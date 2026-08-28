@@ -11,7 +11,6 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -61,7 +60,6 @@ export interface CreateGoalNodeInput {
 /** Application service shared by CLI today and Graph UI/schedulers later. */
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
-  private readonly agentModel: AgentModel;
   private readonly goalModel: GoalModel;
   private readonly graphModel: GoalGraphModel;
   private readonly taskModel: TaskModel;
@@ -75,7 +73,6 @@ export class GoalService {
     private readonly workspaceId?: string,
   ) {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
-    this.agentModel = new AgentModel(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
@@ -99,15 +96,9 @@ export class GoalService {
       ).findManageableById(input.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
-    // A goal's visibility is the creator's choice, but only the modal asks for
-    // it; `/goal` runs as an agent and never does. Derive it the same way
-    // `createTask` derives a task's — a private agent's goal is private —
-    // otherwise the graph, findings and event log of a private agent's goal
-    // would be readable by the whole workspace.
-    const config = await this.resolveCreateConfig(input.config, input.agentId);
     const goal = await this.goalModel.create({
       agentId: input.agentId,
-      config,
+      config: input.config,
       maxRounds: input.maxRounds,
       maxTotalCost: input.maxTotalCost,
       projectId: input.projectId,
@@ -203,23 +194,6 @@ export class GoalService {
     const goal = await this.goalModel.updateStatus(goalId, 'paused');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
-  };
-
-  /**
-   * Fill in the goal's visibility from its responsible agent when the caller
-   * did not state one. Mirrors `TaskService.createTask`'s precedence: an
-   * explicit choice wins, otherwise a private agent makes the goal private.
-   */
-  private resolveCreateConfig = async (
-    config: GoalConfig | undefined,
-    agentId?: string,
-  ): Promise<GoalConfig | undefined> => {
-    if (config?.visibility || !agentId) return config;
-
-    const agent = await this.agentModel.getAgentSnapshotForTaskCreate(agentId);
-    if (agent?.visibility !== 'private') return config;
-
-    return { ...config, visibility: 'private' };
   };
 
   /**
@@ -457,13 +431,6 @@ export class GoalService {
           instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
           name: frontier.title,
           projectId: graph.goal.projectId ?? undefined,
-          // The creator's choice lives on the goal, not on the task: without
-          // this a goal marked private would publish its output to the
-          // workspace via the assignee agent's visibility. Only `private` is
-          // forwarded — `public` is already what createTask derives, and
-          // stating it explicitly would instead throw against a private agent
-          // and leave the Work undispatchable on every tick.
-          visibility: graph.goal.config?.visibility === 'private' ? 'private' : undefined,
         });
         const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
           config: { enabled: true },

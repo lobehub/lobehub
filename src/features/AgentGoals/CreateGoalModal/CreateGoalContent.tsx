@@ -21,7 +21,6 @@ import {
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
@@ -29,9 +28,6 @@ import {
   CriterionRow,
   openCriterionEditModal,
 } from '@/features/Acceptance';
-import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
-import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
-import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
@@ -297,7 +293,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   const [isCreating, setIsCreating] = useState(false);
-  const activeWorkspaceId = useActiveWorkspaceId();
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -307,16 +302,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     maxTotalCost: null,
     name: initialTitle ?? '',
   });
-  // Default to private in workspace mode so sharing is opt-in; personal mode
-  // ignores the field and hides the chip.
-  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
-
-  // A private agent can only run a private task, goals included.
-  const isPrivateAgent = useAgentVisibility(agentId) === 'private';
-  useEffect(() => {
-    if (isPrivateAgent && visibility === 'public') setVisibility('private');
-  }, [isPrivateAgent, visibility]);
 
   const editor = useEditor();
   const instructionRef = useRef(plan.instruction);
@@ -451,7 +437,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         agentId,
         config: {
           recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
-          visibility: activeWorkspaceId ? visibility : undefined,
         },
         // `maxIterations` is the per-Work attempt budget above; it is not the
         // graph-wide round cap, which counts runs across every Work and would
@@ -477,18 +462,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     } finally {
       setIsCreating(false);
     }
-  }, [
-    activeWorkspaceId,
-    agentId,
-    canCreate,
-    close,
-    onCreated,
-    plan,
-    projectId,
-    requirement,
-    t,
-    visibility,
-  ]);
+  }, [agentId, canCreate, close, onCreated, plan, projectId, requirement, t]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;
@@ -737,17 +711,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          {activeWorkspaceId && (
-            <TaskVisibilityTag
-              visibility={visibility}
-              lockedReason={
-                isPrivateAgent ? t('createTask.visibility.privateAgentLocked') : undefined
-              }
-              onChange={setVisibility}
-            >
-              <TaskVisibilityChipLabel visibility={visibility} />
-            </TaskVisibilityTag>
-          )}
           {step === 'review' && (
             <ActionIcon
               icon={Paperclip}

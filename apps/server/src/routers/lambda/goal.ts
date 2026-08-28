@@ -108,7 +108,6 @@ export const goalRouter = router({
                 operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
               })
               .optional(),
-            visibility: z.enum(['private', 'public']).optional(),
           })
           .optional(),
         maxRounds: z.number().int().positive().optional(),

@@ -86,48 +86,6 @@ describe('GoalService', () => {
     expect(results.filter((result) => result.message.startsWith('Started task'))).toHaveLength(1);
   });
 
-  it('gives a private goal private Work Tasks', async () => {
-    // Goals have no visibility column, so a Work Task would otherwise fall back
-    // to the assignee agent's visibility and publish what the creator marked
-    // private to the whole workspace.
-    const service = new GoalService(serverDB, userId);
-    const graph = await service.create({
-      config: { visibility: 'private' },
-      title: 'Private goal',
-      work: ['Keep this to myself'],
-    });
-
-    const created = await service.tick(graph.goal.id);
-    const task = await new TaskModel(serverDB, userId).findById(created.taskId!);
-
-    expect(task?.visibility).toBe('private');
-  });
-
-  it('still dispatches a public goal owned by a private agent', async () => {
-    // `public` is what createTask derives anyway; passing it explicitly throws
-    // against a private agent, which would leave the Work undispatchable on
-    // every tick instead of just running.
-    await serverDB.insert(agents).values({
-      id: 'goal-private-agent',
-      slug: 'goal-private-agent',
-      userId,
-      visibility: 'private',
-    });
-    const service = new GoalService(serverDB, userId);
-    const graph = await service.create({
-      agentId: 'goal-private-agent',
-      config: { visibility: 'public' },
-      title: 'Public goal on a private agent',
-      work: ['Run anyway'],
-    });
-
-    const created = await service.tick(graph.goal.id);
-    const task = await new TaskModel(serverDB, userId).findById(created.taskId!);
-
-    expect(created.outcome).toBe('advanced');
-    expect(task?.visibility).toBe('private');
-  });
-
   it('retries a failed verification once when advances race on recovery', async () => {
     // The dispatch claim only covers starting a backlog Work; the automatic
     // retry path spawns its own run, so without the same claim two overlapping
@@ -232,46 +190,6 @@ describe('GoalService', () => {
     const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 50 });
 
     expect(updated?.status).toBe('paused');
-  });
-
-  it('makes a private agent’s goal private without being told to', async () => {
-    // `/goal` runs as an agent and never states a visibility, so without this
-    // the graph, findings and events of a private agent's goal would be
-    // readable by the whole workspace while its task was private.
-    await serverDB.insert(agents).values({
-      id: 'goal-priv-agent',
-      slug: 'goal-priv-agent',
-      userId,
-      visibility: 'private',
-    });
-    const service = new GoalService(serverDB, userId);
-
-    const graph = await service.create({
-      agentId: 'goal-priv-agent',
-      title: 'Agent-derived visibility',
-      work: ['Keep it in'],
-    });
-
-    expect(graph.goal.config?.visibility).toBe('private');
-  });
-
-  it('keeps an explicit visibility over the agent’s', async () => {
-    await serverDB.insert(agents).values({
-      id: 'goal-pub-agent',
-      slug: 'goal-pub-agent',
-      userId,
-      visibility: 'public',
-    });
-    const service = new GoalService(serverDB, userId);
-
-    const graph = await service.create({
-      agentId: 'goal-pub-agent',
-      config: { visibility: 'private' },
-      title: 'Explicit wins',
-      work: ['Keep it in'],
-    });
-
-    expect(graph.goal.config?.visibility).toBe('private');
   });
 
   it('refuses to delete a goal whose running work cannot be stopped', async () => {

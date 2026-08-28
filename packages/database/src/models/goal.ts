@@ -8,8 +8,7 @@ import { goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
-import { buildGoalScopeWhere } from '../utils/goalVisibility';
-import { buildWorkspacePayload } from '../utils/workspace';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /** States after which a goal's loop no longer advances. */
 const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
@@ -46,7 +45,7 @@ export class GoalModel {
   )`;
 
   private ownership = () =>
-    buildGoalScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
 
   /** Visibility-aware task scope for recursive raw-SQL carrier aggregation. */
   private taskOwnershipSql = (alias?: string) => {
