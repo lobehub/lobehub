@@ -19,3 +19,24 @@ export {
   replayFrozenCall,
   type ReplayFrozenCallParams,
 } from './replayFrozenCall';
+export {
+  type DivergencePolicy,
+  replayTrajectory,
+  type ReplayTrajectoryParams,
+  type TrajectoryNode,
+  type TrajectoryResult,
+} from './replayTrajectory';
+export {
+  type AnchorMatch,
+  buildToolMessages,
+  type ChainTurn,
+  findChainAnchor,
+  listFrozenCalls,
+  recordedAssistantTurn,
+  type RecordedOutcome,
+  recordedOutcome,
+  type RecordedToolCall,
+  type RecordedToolResult,
+  recordedToolResults,
+  toolSignature,
+} from './trajectory';
