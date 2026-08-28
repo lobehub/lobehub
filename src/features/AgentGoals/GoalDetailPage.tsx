@@ -69,19 +69,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
         left={
           <Flexbox horizontal align={'center'} gap={4}>
             {agentId ? (
-              <>
-                <AgentBreadcrumb
-                  agentId={agentId}
-                  extraItems={[goal.title]}
-                  title={t('goalList.title')}
-                />
-                <GoalDetailActions agentId={agentId} goalId={goal.id} />
-              </>
+              <AgentBreadcrumb
+                agentId={agentId}
+                extraItems={[goal.title]}
+                title={t('goalList.title')}
+              />
             ) : (
               <Text fontSize={14} weight={500}>
                 {goal.title}
               </Text>
             )}
+            {/* Not nested under the breadcrumb: an agent-less goal still has to
+                be deletable, and this menu is the only place that can do it. */}
+            <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
           </Flexbox>
         }
       />

@@ -11,6 +11,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -60,6 +61,7 @@ export interface CreateGoalNodeInput {
 /** Application service shared by CLI today and Graph UI/schedulers later. */
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
+  private readonly agentModel: AgentModel;
   private readonly goalModel: GoalModel;
   private readonly graphModel: GoalGraphModel;
   private readonly taskModel: TaskModel;
@@ -73,6 +75,7 @@ export class GoalService {
     private readonly workspaceId?: string,
   ) {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
+    this.agentModel = new AgentModel(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
@@ -96,9 +99,15 @@ export class GoalService {
       ).findManageableById(input.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
+    // A goal's visibility is the creator's choice, but only the modal asks for
+    // it; `/goal` runs as an agent and never does. Derive it the same way
+    // `createTask` derives a task's — a private agent's goal is private —
+    // otherwise the graph, findings and event log of a private agent's goal
+    // would be readable by the whole workspace.
+    const config = await this.resolveCreateConfig(input.config, input.agentId);
     const goal = await this.goalModel.create({
       agentId: input.agentId,
-      config: input.config,
+      config,
       maxRounds: input.maxRounds,
       maxTotalCost: input.maxTotalCost,
       projectId: input.projectId,
@@ -167,9 +176,20 @@ export class GoalService {
       const topics = await this.taskTopicModel.findByTaskId(taskId);
       for (const topic of topics) {
         if (topic.status !== 'running' || !topic.topicId) continue;
-        await this.taskService.cancelTopic(topic.topicId).catch((error) => {
-          console.error('[GoalService.delete] failed to cancel running topic:', error);
-        });
+        // Deliberately not swallowed. Interrupting can fail — the runtime or a
+        // device gateway may be unreachable — and going ahead would delete the
+        // only surface that can stop an operation which keeps spending. Better
+        // to leave the goal intact and say so.
+        try {
+          await this.taskService.cancelTopic(topic.topicId);
+        } catch (error) {
+          throw new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Could not stop the work still running for this goal, so it was not deleted. Try again once the run is reachable.',
+          });
+        }
       }
       await this.taskModel
         .updateStatusIfCurrent(taskId, 'running', 'paused')
@@ -183,6 +203,23 @@ export class GoalService {
     const goal = await this.goalModel.updateStatus(goalId, 'paused');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
+  };
+
+  /**
+   * Fill in the goal's visibility from its responsible agent when the caller
+   * did not state one. Mirrors `TaskService.createTask`'s precedence: an
+   * explicit choice wins, otherwise a private agent makes the goal private.
+   */
+  private resolveCreateConfig = async (
+    config: GoalConfig | undefined,
+    agentId?: string,
+  ): Promise<GoalConfig | undefined> => {
+    if (config?.visibility || !agentId) return config;
+
+    const agent = await this.agentModel.getAgentSnapshotForTaskCreate(agentId);
+    if (agent?.visibility !== 'private') return config;
+
+    return { ...config, visibility: 'private' };
   };
 
   /**

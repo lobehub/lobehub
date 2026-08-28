@@ -55,20 +55,33 @@ export class GoalActionImpl {
     this.#set = set;
   }
 
-  deleteGoal = async (agentId: string, goalId: string): Promise<void> => {
+  /**
+   * `agentId` is absent for a goal with no responsible agent — one created from
+   * a project page. There is no per-agent list to prune in that case, so only
+   * the scoped refetch happens, against the list scope the caller was rendering
+   * (`project:<id>` on a project page, the agent id otherwise).
+   */
+  deleteGoal = async (
+    agentId: string | undefined,
+    goalId: string,
+    scopeId?: string,
+  ): Promise<void> => {
     await goalService.delete(goalId);
-    const current = this.#get().goalListByAgentId[agentId] ?? [];
-    this.#set(
-      ({ goalListByAgentId }) => ({
-        goalListByAgentId: {
-          ...goalListByAgentId,
-          [agentId]: current.filter(({ goal }) => goal.id !== goalId),
-        },
-      }),
-      false,
-      'deleteGoal/success',
-    );
-    await this.refreshGoals(agentId);
+    if (agentId) {
+      const current = this.#get().goalListByAgentId[agentId] ?? [];
+      this.#set(
+        ({ goalListByAgentId }) => ({
+          goalListByAgentId: {
+            ...goalListByAgentId,
+            [agentId]: current.filter(({ goal }) => goal.id !== goalId),
+          },
+        }),
+        false,
+        'deleteGoal/success',
+      );
+    }
+    const scope = scopeId ?? agentId;
+    if (scope) await this.refreshGoals(scope);
   };
 
   /**

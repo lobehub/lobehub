@@ -24,6 +24,7 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
+import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './index';
 
@@ -230,6 +231,66 @@ describe('GoalService', () => {
     const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 50 });
 
     expect(updated?.status).toBe('paused');
+  });
+
+  it('makes a private agent’s goal private without being told to', async () => {
+    // `/goal` runs as an agent and never states a visibility, so without this
+    // the graph, findings and events of a private agent's goal would be
+    // readable by the whole workspace while its task was private.
+    await serverDB.insert(agents).values({
+      id: 'goal-priv-agent',
+      slug: 'goal-priv-agent',
+      userId,
+      visibility: 'private',
+    });
+    const service = new GoalService(serverDB, userId);
+
+    const graph = await service.create({
+      agentId: 'goal-priv-agent',
+      title: 'Agent-derived visibility',
+      work: ['Keep it in'],
+    });
+
+    expect(graph.goal.config?.visibility).toBe('private');
+  });
+
+  it('keeps an explicit visibility over the agent’s', async () => {
+    await serverDB.insert(agents).values({
+      id: 'goal-pub-agent',
+      slug: 'goal-pub-agent',
+      userId,
+      visibility: 'public',
+    });
+    const service = new GoalService(serverDB, userId);
+
+    const graph = await service.create({
+      agentId: 'goal-pub-agent',
+      config: { visibility: 'private' },
+      title: 'Explicit wins',
+      work: ['Keep it in'],
+    });
+
+    expect(graph.goal.config?.visibility).toBe('private');
+  });
+
+  it('refuses to delete a goal whose running work cannot be stopped', async () => {
+    // Deleting anyway would remove the only surface that can stop an operation
+    // which keeps spending.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Unstoppable', work: ['Runs on'] });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(topics).values({ id: 'tpc_stuck', userId });
+    await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_stuck', { seq: 1 });
+    await new TaskTopicModel(serverDB, userId).updateStatus(
+      created.taskId!,
+      'tpc_stuck',
+      'running',
+    );
+    vi.spyOn(TaskService.prototype, 'cancelTopic').mockRejectedValue(new Error('gateway is down'));
+
+    await expect(service.delete(graph.goal.id)).rejects.toThrow(/not deleted/);
+    expect(await service.graph(graph.goal.id)).toBeDefined();
   });
 
   it('keeps the overall requirement as background while making the current work authoritative', async () => {

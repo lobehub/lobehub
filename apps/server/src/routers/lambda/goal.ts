@@ -11,6 +11,8 @@ import { GoalService } from '@/server/services/goal';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   opts.next({
     ctx: {
@@ -195,6 +197,13 @@ export const goalRouter = router({
    */
   delete: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
+      // `agent:update` says the member may change goals; it does not say whose.
+      // Without this any member could delete a colleague's goal and cascade its
+      // whole graph away, which is the same rule tasks already enforce.
+      const goal = await ctx.goalModel.findById(input.id);
+      if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
       await ctx.goalService.delete(input.id);
       return { message: 'Goal deleted', success: true };
     } catch (error) {
