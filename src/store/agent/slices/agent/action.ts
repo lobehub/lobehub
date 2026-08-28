@@ -161,9 +161,9 @@ export class AgentSliceActionImpl {
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
     //
-    // A heterogeneous agent never draws a personal name. In personal/private
-    // scope its product title is enough; a shared workspace agent adds the
-    // creator so members can distinguish otherwise identical tools.
+    // A heterogeneous agent never draws a random personal name. In personal or
+    // workspace-private scope its name is the product title; a shared workspace
+    // agent adds the creator so members can distinguish identical tools.
     const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {

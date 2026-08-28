@@ -268,11 +268,12 @@ describe('AgentHeader', () => {
     expect(view.container.textContent?.match(/Lobe AI/g)).toHaveLength(1);
   });
 
-  it('uses the product title once as the identity of a nameless heterogeneous agent', () => {
+  it('shows an identical heterogeneous product name and role only once', () => {
     mocks.permissionState.allowed = true;
     mocks.agentStoreState.agentMap = {
       'agent-a': {
         agencyConfig: { heterogeneousProvider: { type: 'grok-build' } },
+        name: 'Grok Build',
         slug: 'why-hard-industry',
         title: 'Grok Build',
       },
@@ -283,6 +284,34 @@ describe('AgentHeader', () => {
     expect(view.container.textContent).toContain('@why-hard-industry');
     expect(view.container.textContent).not.toContain('settingAgent.personalName.unnamed');
     expect(view.container.textContent).toContain('settingAgent.identity.edit');
+  });
+
+  it('retains the role for an owner-qualified shared heterogeneous agent', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': {
+        agencyConfig: { heterogeneousProvider: { type: 'grok-build' } },
+        name: 'Max’s Grok Build',
+        title: 'Grok Build',
+      },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('Max’s Grok Build');
+    expect(view.container.textContent?.match(/Grok Build/g)).toHaveLength(2);
+  });
+
+  it('retains the role for a custom-named heterogeneous agent', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': {
+        agencyConfig: { heterogeneousProvider: { type: 'grok-build' } },
+        name: 'Release Builder',
+        title: 'Grok Build',
+      },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('Release Builder');
+    expect(view.container.textContent).toContain('Grok Build');
   });
 
   // With no name there is nothing to headline, so the slot carries the prompt

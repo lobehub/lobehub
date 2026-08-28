@@ -212,7 +212,7 @@ describe('AgentSlice Actions', () => {
       }
     });
 
-    it('leaves a personal heterogeneous agent unnamed so its product title is primary', async () => {
+    it('uses the product title as a personal heterogeneous agent name', async () => {
       vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
       const userState = useUserStore.getState();
       useUserStore.setState({
@@ -231,7 +231,9 @@ describe('AgentSlice Actions', () => {
           });
         });
 
-        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBeUndefined();
+        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe(
+          'Claude Code',
+        );
       } finally {
         useUserStore.setState({ isSignedIn: userState.isSignedIn, user: userState.user });
       }
@@ -268,7 +270,7 @@ describe('AgentSlice Actions', () => {
       }
     });
 
-    it('leaves a workspace-private heterogeneous agent unnamed', async () => {
+    it('uses the product title as a workspace-private heterogeneous agent name', async () => {
       vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
       vi.spyOn(activeWorkspaceModule, 'getActiveWorkspaceId').mockReturnValue('workspace-1');
       const { result } = renderHook(() => useAgentStore());
@@ -283,10 +285,10 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBeUndefined();
+      expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe('Claude Code');
     });
 
-    it('leaves a heterogeneous agent unnamed for an anonymous owner', async () => {
+    it('uses the product title as a personal heterogeneous agent name for an anonymous owner', async () => {
       vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
       const userState = useUserStore.getState();
       useUserStore.setState({ isSignedIn: false, user: undefined });
@@ -302,7 +304,9 @@ describe('AgentSlice Actions', () => {
           });
         });
 
-        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBeUndefined();
+        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe(
+          'Claude Code',
+        );
       } finally {
         useUserStore.setState({ isSignedIn: userState.isSignedIn, user: userState.user });
       }

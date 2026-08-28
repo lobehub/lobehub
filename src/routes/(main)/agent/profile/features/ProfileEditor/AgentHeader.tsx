@@ -31,12 +31,11 @@ const AgentHeader = memo(() => {
   const { autoName, naming } = useAutoName(agentId);
   const personalName = meta.name?.trim();
   const role = meta.title?.trim();
-  const usesHeterogeneousRoleAsName =
-    !personalName && !!role && !!config?.agencyConfig?.heterogeneousProvider;
-  const displayName = personalName || (usesHeterogeneousRoleAsName ? role : undefined);
+  const suppressDuplicateRole =
+    !!personalName && personalName === role && !!config?.agencyConfig?.heterogeneousProvider;
   // Without edit rights there is nothing to prompt for, so a nameless agent
   // falls back to the plain label rather than showing an action nobody can take.
-  const showNamePrompt = !displayName && canEdit;
+  const showNamePrompt = !personalName && canEdit;
 
   return (
     <Flexbox
@@ -73,13 +72,10 @@ const AgentHeader = memo(() => {
           form modal; inline inputs crowded the header and left no room for a
           per-field label or error. */}
       <Flexbox flex={1} gap={8} paddingInline={24} style={{ minWidth: 0 }}>
-        {/* The headline is normally the NAME slot. A heterogeneous agent is the
-            exception: without a custom name its product title is its identity,
-            so show that title once instead of prompting for a personal name.
-
-            With no name there is nothing to headline, so the slot carries the
-            one thing that can fix it instead of a placeholder pretending to be a
-            name. The edit affordance stays hidden until then: naming it IS the
+        {/* The headline is the NAME slot. With no name there is nothing to
+            headline, so it carries the action that can fix this instead of a
+            placeholder pretending to be a name. The edit affordance stays hidden
+            until then: naming it IS the
             next step, and offering the full identity form alongside would split
             attention between two ways to do the same thing. */}
         {showNamePrompt ? (
@@ -102,7 +98,7 @@ const AgentHeader = memo(() => {
         ) : (
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
-              {displayName || t('settingAgent.identity.untitled', { ns: 'setting' })}
+              {personalName || t('settingAgent.identity.untitled', { ns: 'setting' })}
             </Text>
             {canEdit ? (
               <ActionIcon
@@ -119,10 +115,9 @@ const AgentHeader = memo(() => {
               maps to the TERTIARY step — too faint for the line that carries the
               agent's role. Set the secondary colour explicitly, and leave only
               the decorative `@` and the separator at tertiary. */}
-          {/* Ordinary agents keep a dedicated role slot. A heterogeneous
-              product title already promoted to the headline is omitted here to
-              avoid repeating "Grok Build" directly below "Grok Build". */}
-          {!usesHeterogeneousRoleAsName ? (
+          {/* A heterogeneous product name identical to its role is shown once.
+              Owner-qualified and custom names retain the role underneath. */}
+          {!suppressDuplicateRole ? (
             <Text
               ellipsis
               style={{
@@ -132,7 +127,7 @@ const AgentHeader = memo(() => {
               {role || t('settingAgent.role.unset', { ns: 'setting' })}
             </Text>
           ) : null}
-          {slug && !usesHeterogeneousRoleAsName ? (
+          {slug && !suppressDuplicateRole ? (
             <Text style={{ color: cssVar.colorTextTertiary }}>·</Text>
           ) : null}
           {/* The tooltip only renders when a slug exists, so it can always name
