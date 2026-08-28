@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, deque
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
@@ -30,7 +31,21 @@ SECRET_ASSIGNMENT = re.compile(
     r"(\s*[:=]\s*)([^\s,}]+)"
 )
 BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+URL_USERINFO = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)([^/@\s]+)@")
 SPAWN_ARGUMENTS = re.compile(r"(Spawning agent:)\s+.*?(\s+\(cwd:.*\))$")
+SESSION_ID_KEYS = {"session_id", "thread_id", "sessionId", "sessionID", "threadId"}
+STRUCTURAL_EVENT_KEYS = (
+    "type",
+    "subtype",
+    "method",
+    "status",
+    "sessionUpdate",
+    "stopReason",
+    "stop_reason",
+    "is_error",
+    "isError",
+)
+EVENT_TAIL_LIMIT = 100
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,6 +101,7 @@ def walk_json(value: Any) -> Iterator[dict[str, Any]]:
 def redact_log_line(line: str) -> str:
     line = SPAWN_ARGUMENTS.sub(r"\1 [command arguments omitted]\2", line)
     line = BEARER_TOKEN.sub("Bearer [REDACTED]", line)
+    line = URL_USERINFO.sub(r"\1[REDACTED]@", line)
     return SECRET_ASSIGNMENT.sub(lambda match: f"{match.group(1)}{match.group(2)}[REDACTED]", line)
 
 
@@ -93,19 +109,6 @@ def safe_error_text(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     return redact_log_line(value[:2_000])
-
-
-def safe_error_value(value: Any) -> str | None:
-    if isinstance(value, str):
-        return safe_error_text(value)
-    if isinstance(value, list):
-        messages = [message for item in value if (message := safe_error_value(item))]
-        return safe_error_text("\n".join(messages)) if messages else None
-    if isinstance(value, dict):
-        for key in ("message", "error", "detail", "details", "reason"):
-            if message := safe_error_value(value.get(key)):
-                return message
-    return None
 
 
 def summarize_error(value: Any) -> dict[str, Any] | str | None:
@@ -151,7 +154,7 @@ def sqlite_read_only(path: Path) -> sqlite3.Connection:
 
 def entity_freshness(value: dict[str, Any]) -> datetime:
     for key in ("updatedAt", "completedAt", "createdAt"):
-        if timestamp := parse_iso(value.get(key)):
+        if timestamp := parse_timestamp(value.get(key)):
             return timestamp
     return datetime.min
 
@@ -247,7 +250,7 @@ def collect_topic_cache(database: Path, topic_id: str) -> dict[str, Any]:
 
     result["messageCount"] = len(messages)
     result["messageRoles"] = dict(sorted(role_counts.items()))
-    result["errors"] = sorted(persisted_errors, key=lambda item: item.get("createdAt") or "")
+    result["errors"] = sorted(persisted_errors, key=entity_freshness)
     result["nativeSessionIds"] = sorted(native_ids)
     return result
 
@@ -280,66 +283,70 @@ def collect_inventory(hetero_root: Path, trace_root: Path) -> dict[str, Any]:
 
 
 def event_session_ids(event: dict[str, Any]) -> list[str]:
-    session_ids: list[str] = []
-    for key in ("session_id", "thread_id", "sessionId", "sessionID"):
-        value = event.get(key)
-        if isinstance(value, str) and value and value not in session_ids:
-            session_ids.append(value)
-    return session_ids
-
-
-def terminal_error(event: dict[str, Any]) -> str | None:
-    if event.get("type") == "result":
-        candidates = (event.get("error"), event.get("result"), event.get("errors"))
-    else:
-        candidates = (event.get("message"), event.get("error"), event.get("result"))
-    return next((message for value in candidates if (message := safe_error_value(value))), None)
-
-
-def protocol_summary(stdout_path: Path) -> dict[str, Any]:
-    results: list[dict[str, Any]] = []
     session_ids: set[str] = set()
-    current_session_id: str | None = None
+    for node in walk_json(event):
+        session_ids.update(
+            value
+            for key, value in node.items()
+            if key in SESSION_ID_KEYS and isinstance(value, str) and value
+        )
+    return sorted(session_ids)
+
+
+def safe_structural_value(value: Any) -> bool | float | int | str | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return value
+    if isinstance(value, str) and value:
+        return redact_log_line(value[:120])
+    return None
+
+
+def stdout_summary(stdout_path: Path) -> dict[str, Any]:
+    event_tail: deque[dict[str, Any]] = deque(maxlen=EVENT_TAIL_LIMIT)
+    event_types: Counter[str] = Counter()
+    session_ids: set[str] = set()
+    json_event_count = 0
+    line_count = 0
+    non_json_line_count = 0
     try:
         with stdout_path.open(encoding="utf-8", errors="replace") as stream:
             for line_number, line in enumerate(stream, 1):
+                line_count = line_number
                 try:
                     event = json.loads(line)
                 except json.JSONDecodeError:
+                    non_json_line_count += 1
                     continue
                 if not isinstance(event, dict):
+                    non_json_line_count += 1
                     continue
-                event_type = event.get("type")
+                json_event_count += 1
                 discovered_ids = event_session_ids(event)
                 session_ids.update(discovered_ids)
-                if event_type == "thread.started" and discovered_ids:
-                    current_session_id = discovered_ids[0]
-                elif current_session_id is None and discovered_ids:
-                    current_session_id = discovered_ids[0]
 
-                if event_type not in {"result", "error", "turn.failed", "turn.completed"}:
-                    continue
-                is_error = (
-                    bool(event.get("is_error"))
-                    if event_type == "result"
-                    else event_type in {"error", "turn.failed"}
-                )
-                event_session_id = discovered_ids[0] if discovered_ids else current_session_id
-                results.append(
-                    {
-                        "line": line_number,
-                        "eventType": event_type,
-                        "subtype": event.get("subtype") or event_type,
-                        "isError": is_error,
-                        "error": terminal_error(event) if is_error else None,
-                        "durationMs": event.get("duration_ms"),
-                        "numTurns": event.get("num_turns"),
-                        "sessionId": event_session_id,
-                    }
-                )
+                event_type = safe_structural_value(event.get("type"))
+                event_method = safe_structural_value(event.get("method"))
+                event_types[str(event_type or event_method or "<untyped>")] += 1
+                signal: dict[str, Any] = {"line": line_number}
+                for key in STRUCTURAL_EVENT_KEYS:
+                    if (value := safe_structural_value(event.get(key))) is not None:
+                        signal[key] = value
+                if discovered_ids:
+                    signal["sessionIds"] = discovered_ids
+                event_tail.append(signal)
     except OSError:
         pass
-    return {"streamSessionIds": sorted(session_ids), "terminalResults": results}
+    return {
+        "eventTail": list(event_tail),
+        "eventTailTruncated": json_event_count > EVENT_TAIL_LIMIT,
+        "eventTypeCounts": dict(sorted(event_types.items())),
+        "jsonEventCount": json_event_count,
+        "lineCount": line_count,
+        "nonJsonLineCount": non_json_line_count,
+        "streamSessionIds": sorted(session_ids),
+    }
 
 
 def is_under(path: Path, root: Path) -> bool:
@@ -379,10 +386,22 @@ def discover_trace_dirs(
             needle and any(needle in value for value in searchable) for needle in needles
         )
         stdout_path = meta_path.parent / str(meta.get("stdoutFile") or "stdout.jsonl")
-        stream_session_ids = set(protocol_summary(stdout_path)["streamSessionIds"])
+        stream_session_ids = set(stdout_summary(stdout_path)["streamSessionIds"])
         if metadata_matches or needles.intersection(stream_session_ids):
             matches.append(meta_path.parent)
     return sorted(set(matches), key=str)
+
+
+def process_error_summary(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    value = read_json(path)
+    result = {
+        "message": safe_error_text(value.get("message")),
+        "name": safe_structural_value(value.get("name")),
+        "transport": safe_structural_value(value.get("transport")),
+    }
+    return {key: item for key, item in result.items() if item is not None}
 
 
 def collect_trace(trace_dir: Path) -> dict[str, Any]:
@@ -394,7 +413,7 @@ def collect_trace(trace_dir: Path) -> dict[str, Any]:
         stderr_bytes = stderr_path.stat().st_size
     except OSError:
         stderr_bytes = None
-    protocol = protocol_summary(stdout_path)
+    stdout = stdout_summary(stdout_path)
     return {
         "directory": str(trace_dir),
         "agentType": meta.get("agentType"),
@@ -413,14 +432,24 @@ def collect_trace(trace_dir: Path) -> dict[str, Any]:
             "code": exit_data.get("code"),
             "signal": exit_data.get("signal"),
             "finishedAt": exit_data.get("finishedAt"),
+            "transport": exit_data.get("transport"),
         },
-        "streamSessionIds": protocol["streamSessionIds"],
-        "terminalResults": protocol["terminalResults"],
+        "processError": process_error_summary(trace_dir / "process-error.json"),
+        "stdout": stdout,
+        "streamSessionIds": stdout["streamSessionIds"],
         "stderrBytes": stderr_bytes,
     }
 
 
-def parse_iso(value: Any) -> datetime | None:
+def parse_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        seconds = value / 1000 if abs(value) >= 100_000_000_000 else value
+        try:
+            return datetime.fromtimestamp(seconds)
+        except (OSError, OverflowError, ValueError):
+            return None
     if not isinstance(value, str) or not value:
         return None
     try:
@@ -441,7 +470,10 @@ def collect_log_evidence(
     times = [
         parsed
         for trace in traces
-        for parsed in (parse_iso(trace.get("createdAt")), parse_iso(trace.get("exit", {}).get("finishedAt")))
+        for parsed in (
+            parse_timestamp(trace.get("createdAt")),
+            parse_timestamp(trace.get("exit", {}).get("finishedAt")),
+        )
         if parsed is not None
     ]
     window_start = min(times) - timedelta(minutes=5) if times else None
@@ -498,11 +530,12 @@ def main() -> int:
     for trace in traces:
         identifiers.update(
             value
-            for value in (
+            for value in [
                 trace.get("processSessionId"),
                 trace.get("agentSessionId"),
                 trace.get("resumeSessionId"),
-            )
+                *trace.get("streamSessionIds", []),
+            ]
             if isinstance(value, str) and value
         )
 

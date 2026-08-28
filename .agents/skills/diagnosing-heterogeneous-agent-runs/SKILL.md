@@ -1,6 +1,6 @@
 ---
 name: diagnosing-heterogeneous-agent-runs
-description: Diagnose a local LobeHub Desktop heterogeneous-agent run from a topic, session, or the latest trace.
+description: Diagnoses a local LobeHub Desktop heterogeneous-agent run from a topic, session, or the latest trace.
 disable-model-invocation: true
 argument-hint: '<topic-id | session-id | latest>'
 ---
@@ -88,8 +88,10 @@ The script is read-only. It reports:
 - top-level `heteroAgent/` inventory;
 - topic status, provider, working directory, binding key, and native session IDs from the local SWR cache;
 - persisted assistant errors without message content;
-- matching trace metadata, process exit, terminal `result`, and stderr size;
+- matching trace metadata, process/transport errors, process exit, a structural stdout event index, and stderr size;
 - focused `main.log` lines for matching sessions and nearby transport/proxy activity.
+
+The stdout index deliberately reports only event types, safe structural fields, line numbers, and session IDs. It does not duplicate the TypeScript adapters by trying to normalize every provider's terminal protocol. Interpret candidate terminal lines against the run's actual adapter or transport source in step 4.
 
 Use `--storage-root` and `--log-file` when the app uses a non-default profile or another OS path:
 
@@ -140,12 +142,15 @@ Do not merge process success with protocol success. A CLI may exit 0 after corre
 For every matching trace, read in this order:
 
 1. `meta.json` — agent type, command, cwd, process/native session IDs, resume ID, safe environment key names;
-2. `exit.json` — OS process code and signal;
-3. terminal records from `stdout.jsonl` — `result`, error subtype, turn count, duration;
-4. focused raw events immediately before the terminal record;
-5. `stderr.log` only when non-empty.
+2. `process-error.json` — authoritative spawn, SDK, app-server, or ACP failure when present;
+3. `exit.json` — OS process code, signal, and transport;
+4. the collector's stdout event-type counts and structural tail — use line numbers to narrow inspection;
+5. the adapter/driver selected by `agentType` and transport, then only the candidate terminal lines and immediately preceding raw events from `stdout.jsonl`;
+6. `stderr.log` only when non-empty.
 
 Avoid dumping entire JSONL files. Select event type, tool ID, stop reason, success flag, and terminal fields with `jq`, Python, or `rg`.
+
+Do not add provider event allowlists to the collector. Local exec adapters are registered in `packages/heterogeneous-agents/src/registry.ts`; SDK, app-server, and ACP transports may have additional session-specific adapters. Source-aware interpretation keeps protocol ownership in TypeScript and prevents this skill from drifting whenever a provider changes its event schema.
 
 ### 5. Inspect native-agent history when available
 
