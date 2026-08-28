@@ -1,7 +1,8 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
+import { resolveLocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import type * as LobeChatConst from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
+import { type LobeChatPluginApi, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -93,8 +94,6 @@ const createMockRuntimeState = (operationId: string, status: AgentState['status'
   },
 });
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
 vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
 }));
@@ -188,6 +187,7 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
+  desktopFlag.value = false;
   serverConfigMock.enableMultimodalUnderstanding = false;
 
   act(() => {
@@ -1225,6 +1225,53 @@ describe('StreamingExecutor actions', () => {
         selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
         selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       });
+    });
+
+    it('should resolve desktop client tool manifests for the local execution environment', () => {
+      desktopFlag.value = true;
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+      const createToolsEngineSpy = vi
+        .spyOn(toolEngineering, 'createAgentToolsEngine')
+        .mockImplementation((_workingModel, _pluginIds, manifestContext) => {
+          const localSystemManifest = resolveLocalSystemManifest(manifestContext ?? {});
+
+          return {
+            generateToolsDetailed: vi.fn().mockReturnValue({
+              enabledManifests: localSystemManifest ? [localSystemManifest] : [],
+              enabledToolIds: localSystemManifest ? [localSystemManifest.identifier] : [],
+              tools: [],
+            }),
+          } as any;
+        });
+
+      const { state } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+
+      expect(createToolsEngineSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        undefined,
+        expect.objectContaining({ executionEnv: 'local' }),
+      );
+      const readFile = state.toolManifestMap['lobe-local-system']?.api.find(
+        (api: LobeChatPluginApi) => api.name === 'readFile',
+      );
+
+      expect(readFile?.description).toContain('base64');
+      expect(state.toolManifestMap['lobe-local-system']?.systemRole).toContain(
+        'Image files are uploaded as visual tool results',
+      );
     });
 
     it('should not inject page editor context outside page scope', () => {

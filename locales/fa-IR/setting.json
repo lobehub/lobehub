@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "محیط آزمایشی ابری",
   "tools.builtins.lobe-creds.description": "مدیریت اعتبارنامه‌های کاربر برای احراز هویت، تزریق متغیرهای محیطی و تأیید API — مدیریت کلیدهای API، توکن‌های OAuth و اسرار برای یکپارچه‌سازی سرویس‌های ثالث.",
   "tools.builtins.lobe-creds.title": "اعتبارنامه‌ها",
-  "tools.builtins.lobe-cron.description": "مدیریت وظایف زمان‌بندی شده که به صورت خودکار در زمان‌های مشخص اجرا می‌شوند. ایجاد، به‌روزرسانی، فعال/غیرفعال‌سازی و پایش وظایف دوره‌ای برای عامل‌ها.",
-  "tools.builtins.lobe-cron.title": "وظایف زمان‌بندی‌شده",
   "tools.builtins.lobe-group-agent-builder.description": "پیکربندی فراداده گروه، اعضا و محتوای مشترک برای گروه‌های چندعاملی",
   "tools.builtins.lobe-group-agent-builder.title": "سازنده عامل گروهی",
   "tools.builtins.lobe-group-management.description": "هماهنگ‌سازی و مدیریت گفتگوهای گروه‌های چندعاملی",

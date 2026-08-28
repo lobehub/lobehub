@@ -1,7 +1,15 @@
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { agentBuilderKeys, recentKeys, resourceKeys, taskKeys, workKeys } from './keys';
+import {
+  agentBuilderKeys,
+  documentCommentKeys,
+  isDocumentCommentKeyForEvent,
+  recentKeys,
+  resourceKeys,
+  taskKeys,
+  workKeys,
+} from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
@@ -97,6 +105,44 @@ describe('resourceKeys', () => {
     expect(resourceKeys.search({ q: 'report' }, 'workspace-1')).not.toEqual(
       resourceKeys.search({ q: 'report' }, 'workspace-2'),
     );
+  });
+});
+
+describe('isDocumentCommentKeyForEvent', () => {
+  const event = {
+    documentId: 'document-1',
+    rootCommentId: 'root-1',
+    workspaceId: 'workspace-1',
+  };
+
+  it('matches the affected summary, thread pages, and reply thread', () => {
+    expect(isDocumentCommentKeyForEvent(documentCommentKeys.summary('document-1'), event)).toBe(
+      true,
+    );
+    expect(
+      isDocumentCommentKeyForEvent(
+        documentCommentKeys.threads('workspace-1', 'document-1', 'cursor'),
+        event,
+      ),
+    ).toBe(true);
+    expect(
+      isDocumentCommentKeyForEvent(
+        documentCommentKeys.replies('workspace-1', 'root-1', 'cursor'),
+        event,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not invalidate other documents, workspaces, or reply threads', () => {
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.threads('workspace-2', 'document-1'), event),
+    ).toBe(false);
+    expect(isDocumentCommentKeyForEvent(documentCommentKeys.summary('document-2'), event)).toBe(
+      false,
+    );
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.replies('workspace-1', 'root-2'), event),
+    ).toBe(false);
   });
 });
 

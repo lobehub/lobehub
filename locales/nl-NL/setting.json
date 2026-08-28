@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Cloud Sandbox",
   "tools.builtins.lobe-creds.description": "Beheer gebruikersreferenties voor authenticatie, omgevingsvariabel‑injectie en API‑verificatie — beheer API‑sleutels, OAuth‑tokens en geheimen voor integraties van derden.",
   "tools.builtins.lobe-creds.title": "Referenties",
-  "tools.builtins.lobe-cron.description": "Beheer geplande taken die automatisch op ingestelde tijden worden uitgevoerd. Maak, update, activeer/deactiveer en monitor terugkerende taken voor je agents.",
-  "tools.builtins.lobe-cron.title": "Geplande Taken",
   "tools.builtins.lobe-group-agent-builder.description": "Configureer groepsmetadata, leden en gedeelde inhoud voor multi‑agentgroepen",
   "tools.builtins.lobe-group-agent-builder.title": "Groepsagentbouwer",
   "tools.builtins.lobe-group-management.description": "Orkestreer en beheer conversaties in multi‑agentgroepen",

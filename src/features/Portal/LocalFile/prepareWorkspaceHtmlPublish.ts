@@ -140,14 +140,20 @@ const workspaceHtmlPublishErrorMessage = (error: unknown): string => {
 export const publishPreparedWorkspaceHtml = async ({
   agentId,
   onError,
+  onUploadPhase,
+  onUploadProgress,
   plan,
   publish,
+  signal,
   topicId,
 }: {
   agentId?: string | null;
   onError?: (error: unknown) => boolean;
+  onUploadPhase?: Parameters<WorkspaceHtmlArtifactPublisher['publish']>[0]['onUploadPhase'];
+  onUploadProgress?: Parameters<WorkspaceHtmlArtifactPublisher['publish']>[0]['onUploadProgress'];
   plan: ReadyWorkspaceHtmlPublishPlan;
   publish: WorkspaceHtmlArtifactPublisher['publish'];
+  signal?: AbortSignal;
   topicId: string;
 }): Promise<WorkspaceHtmlArtifactPublishResult | undefined> => {
   try {
@@ -156,7 +162,10 @@ export const publishPreparedWorkspaceHtml = async ({
       entryPath: plan.gathered.entryPath,
       files: plan.gathered.files,
       identifier: plan.gathered.identifier,
+      onUploadPhase,
+      onUploadProgress,
       packed: { html: plan.packed.html, sidecars: plan.packed.sidecars },
+      signal,
       title: plan.gathered.title,
       topicId,
     });

@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Hộp cát đám mây",
   "tools.builtins.lobe-creds.description": "Quản lý thông tin xác thực của người dùng để xác thực, chèn biến môi trường và xác minh API — xử lý khóa API, token OAuth và bí mật cho các tích hợp bên thứ ba.",
   "tools.builtins.lobe-creds.title": "Thông Tin Xác Thực",
-  "tools.builtins.lobe-cron.description": "Quản lý các tác vụ được lên lịch chạy tự động vào thời điểm xác định. Tạo, cập nhật, bật/tắt và theo dõi các tác vụ định kỳ cho tác nhân của bạn.",
-  "tools.builtins.lobe-cron.title": "Tác Vụ Định Kỳ",
   "tools.builtins.lobe-group-agent-builder.description": "Cấu hình siêu dữ liệu nhóm, thành viên và nội dung chia sẻ cho các nhóm đa tác nhân",
   "tools.builtins.lobe-group-agent-builder.title": "Trình Xây Dựng Nhóm Tác Nhân",
   "tools.builtins.lobe-group-management.description": "Điều phối và quản lý hội thoại nhóm đa tác nhân",

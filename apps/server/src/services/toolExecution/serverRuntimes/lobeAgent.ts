@@ -6,10 +6,10 @@ import type {
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
   buildAnalyzeMediaContent,
-  createMediaFileItems,
+  createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
-  hasUserMediaFiles,
+  hasAnalyzableMediaFiles,
   LobeAgentIdentifier,
   normalizeAnalyzeMediaInput,
   selectMediaFileItems,
@@ -22,6 +22,7 @@ import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
+import { parseDataUri } from '@lobechat/utils/uriParser';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
@@ -55,6 +56,49 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
   error: { code, message: content },
   success: false,
 });
+
+const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
+const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
+
+/**
+ * Decode inline images before the provider boundary. Protocol and header checks
+ * are insufficient because a PNG can retain a valid signature while its pixel
+ * chunks or CRCs are corrupted. Decode sequentially with an explicit pixel
+ * ceiling to cap peak memory for highly compressed and multi-image calls.
+ */
+const findInvalidInlineImageIndexes = async (urls: string[]) => {
+  const invalidIndexes: number[] = [];
+  const hasInlineImages = urls.some((url) => /^data:image\//i.test(url));
+  if (!hasInlineImages) return invalidIndexes;
+
+  // Keep the native image dependency out of server bundles that never validate
+  // inline images; the server runtime registry imports this module eagerly.
+  const { default: sharp } = await import('sharp');
+
+  for (const [index, url] of urls.entries()) {
+    if (!/^data:image\//i.test(url)) continue;
+
+    const { base64, type } = parseDataUri(url);
+    if (
+      type !== 'base64' ||
+      !base64 ||
+      !BASE64_CONTENT_PATTERN.test(base64) ||
+      base64.length % 4 === 1
+    ) {
+      invalidIndexes.push(index + 1);
+      continue;
+    }
+
+    try {
+      const buffer = Buffer.from(base64, 'base64');
+      await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INLINE_IMAGE_PIXELS }).stats();
+    } catch {
+      invalidIndexes.push(index + 1);
+    }
+  }
+
+  return invalidIndexes;
+};
 
 const getModelAbilities = async (model: string, provider: string) => {
   const { loadModels } = await import('@/business/client/model-bank/loadModels');
@@ -275,6 +319,14 @@ class LobeAgentExecutionRuntime {
       return buildError(urlValidationError, 'UNSUPPORTED_MEDIA_URLS');
     }
 
+    const invalidInlineImageIndexes = await findInvalidInlineImageIndexes(urlValidation.validUrls);
+    if (invalidInlineImageIndexes.length > 0) {
+      return buildError(
+        `Invalid inline image data at URL indexes: ${invalidInlineImageIndexes.join(', ')}.`,
+        'INVALID_IMAGE_DATA',
+      );
+    }
+
     const selectedUrlItems = createUrlMediaFileItems(urlValidation.validUrls);
     let selectedRefItems: MediaFileItem[] = [];
 
@@ -293,9 +345,9 @@ class LobeAgentExecutionRuntime {
         ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
         : [];
       const orderedMediaMessages = [
-        ...(sourceMessage && hasUserMediaFiles(sourceMessage) ? [sourceMessage] : []),
+        ...(sourceMessage && hasAnalyzableMediaFiles(sourceMessage) ? [sourceMessage] : []),
         ...mediaMessages.filter(
-          (message) => message.id !== sourceMessage?.id && hasUserMediaFiles(message),
+          (message) => message.id !== sourceMessage?.id && hasAnalyzableMediaFiles(message),
         ),
       ];
 
@@ -307,7 +359,7 @@ class LobeAgentExecutionRuntime {
       }
 
       const mediaItems = orderedMediaMessages.flatMap((message) =>
-        createMediaFileItems(message, message.imageList, message.videoList, message.audioList),
+        createMediaFileItemsFromMessage(message),
       );
 
       if (mediaItems.length === 0) {

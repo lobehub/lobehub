@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,77 +28,10 @@ const hoisted = vi.hoisted(() => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  toast: hoisted.toast,
 }));
-
-vi.mock('@lobehub/ui/base-ui', () => {
-  return {
-    Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...props}>{children}</button>
-    ),
-    Checkbox: ({
-      checked,
-      children,
-      disabled,
-      onChange,
-    }: {
-      checked?: boolean;
-      children?: ReactNode;
-      disabled?: boolean;
-      onChange?: (checked: boolean) => void;
-    }) => (
-      <label>
-        <input
-          checked={checked}
-          disabled={disabled}
-          type="checkbox"
-          onChange={(event) => onChange?.(event.currentTarget.checked)}
-        />
-        {children}
-      </label>
-    ),
-    Drawer: ({
-      children,
-      onClose,
-      open,
-      title,
-    }: {
-      children?: ReactNode;
-      onClose?: () => void;
-      open?: boolean;
-      title?: ReactNode;
-    }) =>
-      open ? (
-        <div role="dialog">
-          <div>{title}</div>
-          <button type="button" onClick={onClose}>
-            close-drawer
-          </button>
-          {children}
-        </div>
-      ) : null,
-    Switch: ({
-      checked,
-      disabled,
-      onChange,
-    }: {
-      checked?: boolean;
-      disabled?: boolean;
-      onChange?: (checked: boolean) => void;
-      children?: ReactNode;
-    }) => (
-      <input
-        checked={checked}
-        disabled={disabled}
-        role="switch"
-        type="checkbox"
-        onChange={(event) => onChange?.(event.currentTarget.checked)}
-      />
-    ),
-    toast: hoisted.toast,
-  };
-});
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => hoisted.state.activeWorkspaceId,
@@ -341,7 +273,11 @@ describe('ApiKey', () => {
     const dialog = await openDetail('My Key');
     fireEvent.click(within(dialog).getByRole('switch'));
 
-    await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('manageOnlyCreator'));
+    await waitFor(() =>
+      expect(hoisted.toast.error).toHaveBeenCalledWith(
+        'Only the creator or a workspace owner can do this',
+      ),
+    );
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
   });
 
@@ -353,7 +289,9 @@ describe('ApiKey', () => {
     const dialog = await openDetail('My Key');
     fireEvent.click(within(dialog).getByRole('switch'));
 
-    await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('operationFailed'));
+    await waitFor(() =>
+      expect(hoisted.toast.error).toHaveBeenCalledWith('Operation failed, please try again'),
+    );
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
   });
 
@@ -527,9 +465,14 @@ describe('ApiKey', () => {
 
     const dialog = await openDetail('My Key');
     fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.detail.permissions.edit' }));
-    const scopeCheckboxes = within(dialog).getAllByRole('checkbox');
-    fireEvent.click(scopeCheckboxes[0]);
-    fireEvent.click(scopeCheckboxes[2]);
+    const toggleScope = (groupKey: string) => {
+      const group = within(dialog).getByText(`apikey.scopes.groups.${groupKey}`).parentElement!;
+      const checkbox = within(group).getByRole('checkbox', { name: 'apikey.scopes.read' });
+      fireEvent.keyDown(checkbox, { key: ' ' });
+      fireEvent.keyUp(checkbox, { key: ' ' });
+    };
+    toggleScope('agent');
+    toggleScope('chat');
     fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.detail.permissions.save' }));
 
     await waitFor(() =>

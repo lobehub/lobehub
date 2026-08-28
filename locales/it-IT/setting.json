@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Sandbox Cloud",
   "tools.builtins.lobe-creds.description": "Gestisci le credenziali utente per autenticazione, inserimento di variabili d’ambiente e verifica delle API — gestisci API key, token OAuth e segreti per integrazioni di terze parti.",
   "tools.builtins.lobe-creds.title": "Credenziali",
-  "tools.builtins.lobe-cron.description": "Gestisci attività pianificate che vengono eseguite automaticamente in orari specifici. Crea, aggiorna, abilita/disabilita e monitora attività ricorrenti per i tuoi agenti.",
-  "tools.builtins.lobe-cron.title": "Attività Pianificate",
   "tools.builtins.lobe-group-agent-builder.description": "Configura i metadati dei gruppi, i membri e i contenuti condivisi per gruppi multi‑agente",
   "tools.builtins.lobe-group-agent-builder.title": "Costruttore Gruppo Agente",
   "tools.builtins.lobe-group-management.description": "Organizza e gestisci conversazioni di gruppi multi‑agente",

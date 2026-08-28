@@ -72,7 +72,10 @@ vi.mock('@lobechat/const', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: toastError } }));
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: { error: toastError },
+}));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
   useAgentId: () => 'agent-id',

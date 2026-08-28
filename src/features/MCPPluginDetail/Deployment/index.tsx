@@ -1,16 +1,7 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { Microsoft } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Block,
-  Collapse,
-  Empty,
-  Flexbox,
-  Icon,
-  Popover,
-  Snippet,
-  Tag,
-} from '@lobehub/ui';
+import { Block, Collapse, Empty, Flexbox, Icon, Popover, Snippet } from '@lobehub/ui';
+import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
 import { Divider, Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';

@@ -7,19 +7,8 @@ import type {
   ReviewAdjudication,
   ReviewProposalEdit,
 } from '@lobechat/types';
-import {
-  ActionIcon,
-  copyToClipboard,
-  Empty,
-  Flexbox,
-  Icon,
-  Image,
-  Tag,
-  Text,
-  TextArea,
-  Tooltip,
-} from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Empty, Flexbox, Icon, Image, TextArea, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {

@@ -266,23 +266,23 @@ vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableInAppBrowser: () => true },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button aria-label={title} type="button" onClick={onClick} />
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
   Skeleton: () => <div data-testid="params-loading" />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async () => {
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const { useState } = await import('react');
+  const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {
+    ...actual,
+    ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+      <button aria-label={title} type="button" onClick={onClick} />
+    ),
     ContextMenuTrigger: ({ children, items }: { children: ReactNode; items: any[] }) => {
       const [open, setOpen] = useState(false);
       const menuItems = items.filter((item) => item && item.type !== 'divider');
@@ -334,9 +334,13 @@ vi.mock('@lobehub/ui/base-ui', async () => {
   };
 });
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => () => ({}),
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    createStaticStyles: () => () => ({}),
+  };
+});
 
 beforeEach(() => {
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {

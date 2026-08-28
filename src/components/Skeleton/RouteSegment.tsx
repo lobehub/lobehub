@@ -41,7 +41,8 @@ const RouteSegmentSkeleton = () => {
   const segments = pathname.split('/').filter(Boolean);
 
   if (Skeleton) return <Skeleton />;
-  if (pathname.startsWith('/settings/')) return <SettingsPageSkeleton />;
+  // `settings` at any depth: workspace settings live at /:slug/settings/*
+  if (segments.includes('settings')) return <SettingsPageSkeleton />;
   if (segments[0] === 'apps') return <AppsSkeleton />;
   if (isConversationPath(pathname)) return <ConversationLayoutSkeleton />;
   if (segments[0] === 'memory' && segments.length === 1) return <MemorySkeleton />;

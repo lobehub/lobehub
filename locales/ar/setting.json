@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "بيئة سحابية تجريبية",
   "tools.builtins.lobe-creds.description": "إدارة بيانات اعتماد المستخدم للمصادقة، وحقن متغيرات البيئة، والتحقق من واجهات API — التعامل مع مفاتيح API، رموز OAuth، والأسرار للتكامل مع الخدمات الخارجية.",
   "tools.builtins.lobe-creds.title": "بيانات الاعتماد",
-  "tools.builtins.lobe-cron.description": "إدارة المهام المجدولة التي تعمل تلقائيًا في أوقات محددة. إنشاء، تحديث، تفعيل/تعطيل، ومراقبة المهام المتكررة لوكلائك.",
-  "tools.builtins.lobe-cron.title": "المهام المجدولة",
   "tools.builtins.lobe-group-agent-builder.description": "إعداد بيانات المجموعات، الأعضاء، والمحتوى المشترك لمجموعات الوكلاء متعددة",
   "tools.builtins.lobe-group-agent-builder.title": "منشئ وكيل المجموعة",
   "tools.builtins.lobe-group-management.description": "تنظيم وإدارة المحادثات الجماعية لوكلاء متعددين",

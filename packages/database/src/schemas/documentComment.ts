@@ -1,3 +1,4 @@
+import type { DocumentCommentJson } from '@lobechat/types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
@@ -31,7 +32,7 @@ export const documentComments = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' })
       .notNull(),
     content: text('content').notNull(),
-    editorData: jsonb('editor_data'),
+    editorData: jsonb('editor_data').$type<DocumentCommentJson>(),
     /** Client-generated idempotency key for retried creates. */
     clientId: text('client_id').notNull(),
     /** Tombstone retained only while a deleted root still has replies. */

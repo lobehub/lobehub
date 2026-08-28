@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Облачная песочница",
   "tools.builtins.lobe-creds.description": "Управление пользовательскими учётными данными для аутентификации, переменных окружения и проверки API — работа с API‑ключами, OAuth‑токенами и секретами для сторонних интеграций.",
   "tools.builtins.lobe-creds.title": "Учётные данные",
-  "tools.builtins.lobe-cron.description": "Управление запланированными задачами, которые выполняются автоматически. Создание, обновление, включение/отключение и мониторинг повторяющихся задач агентов.",
-  "tools.builtins.lobe-cron.title": "Планировщик задач",
   "tools.builtins.lobe-group-agent-builder.description": "Настройка метаданных группы, её участников и общего контента для мультиагентных групп",
   "tools.builtins.lobe-group-agent-builder.title": "Конструктор групп агентов",
   "tools.builtins.lobe-group-management.description": "Оркестрация и управление групповыми беседами нескольких агентов",

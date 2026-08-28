@@ -1,6 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { canGoNative } from '@/libs/contextMenu/canGoNative';
@@ -23,18 +22,17 @@ const mocks = vi.hoisted(() => ({
   updateTaskStatus: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   copyToClipboard: mocks.copyToClipboard,
-  Flexbox: ({ children }: { children?: ReactNode }) => React.createElement('div', {}, children),
-  Icon: ({ icon: Icon }: { icon?: React.ComponentType }) =>
-    Icon ? React.createElement(Icon) : React.createElement('span'),
 }));
 
 vi.mock('@/libs/contextMenu', () => ({
   closeContextMenu: mocks.closeContextMenu,
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { success: mocks.messageSuccess },
@@ -49,10 +47,6 @@ vi.mock('@/business/client/hooks/useTaskTransferMenuItem', () => ({
 
 vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://example.com',
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/store/agent', () => ({

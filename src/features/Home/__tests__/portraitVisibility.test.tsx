@@ -214,6 +214,15 @@ describe('Home portrait visibility', () => {
 describe('Home input banner queue', () => {
   it('reveals the next available segment after dismissing the current one', async () => {
     vi.resetModules();
+    vi.doMock('@lobehub/ui/base-ui', () => ({
+      ActionIcon: ({
+        onClick,
+        title,
+      }: {
+        onClick?: (e: React.MouseEvent) => void;
+        title?: string;
+      }) => <button aria-label={title} type={'button'} onClick={onClick} />,
+    }));
     const { useGlobalStore } = await import('@/store/global');
     const originalDismissedIds = useGlobalStore.getState().status.dismissedBannerIds;
     const originalStatusInit = useGlobalStore.getState().isStatusInit;
@@ -247,6 +256,7 @@ describe('Home input banner queue', () => {
       expect(container.querySelector('[data-home-input-banner]')).toHaveTextContent('Second');
       expect(screen.getByTestId('second')).toBeVisible();
     } finally {
+      vi.doUnmock('@lobehub/ui/base-ui');
       useGlobalStore.setState((state) => ({
         isStatusInit: originalStatusInit,
         status: { ...state.status, dismissedBannerIds: originalDismissedIds },

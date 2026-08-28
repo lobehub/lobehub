@@ -5255,11 +5255,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.newState.messages).toHaveLength(2);
       expect(result.newState.messages[0]).toEqual({
         content: 'Tool execution was aborted by user.',
+        id: 'msg-123',
         role: 'tool',
         tool_call_id: 'tool-call-1',
       });
       expect(result.newState.messages[1]).toEqual({
         content: 'Tool execution was aborted by user.',
+        id: 'msg-123',
         role: 'tool',
         tool_call_id: 'tool-call-2',
       });

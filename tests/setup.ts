@@ -86,6 +86,27 @@ vi.mock('@/auth', () => ({
   },
 }));
 
+// Route zustand store creation through __mocks__/zustand/traditional.ts so every
+// store resets to its initial state between tests without per-file opt-in
+vi.mock('zustand/traditional');
+
+// Key-passthrough translations so component tests assert locale keys, not copy;
+// defaultValue still wins to match real t() fallback semantics. Tests needing
+// custom t/Trans behavior override with their own vi.mock
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useTranslation: () => ({
+    i18n: { changeLanguage: vi.fn(), language: 'en-US' },
+    t: (key: string, defaultValueOrOptions?: unknown, maybeOptions?: unknown) => {
+      if (typeof defaultValueOrOptions === 'string') return defaultValueOrOptions;
+      const options =
+        (defaultValueOrOptions as { defaultValue?: unknown } | undefined) ??
+        (maybeOptions as { defaultValue?: unknown } | undefined);
+      return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
+    },
+  }),
+}));
+
 type NativeButtonType = 'button' | 'submit' | 'reset';
 type TestButtonIcon = ComponentType<{ size?: number }> | ReactNode;
 

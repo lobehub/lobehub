@@ -1,5 +1,4 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { GoalStatus } from '@lobechat/const/goal';
 import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -8,7 +7,6 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
-import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -29,17 +27,6 @@ import { TransferErrorCode } from '@/types/transferError';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
-/** Manual task status → bound goal lifecycle state. */
-const taskStatusToGoalStatus: Record<string, GoalStatus | undefined> = {
-  backlog: 'planning',
-  canceled: 'canceled',
-  completed: 'review',
-  failed: 'failed',
-  paused: 'paused',
-  running: 'running',
-  scheduled: 'planning',
-};
-
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -48,7 +35,6 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId, wsId),
       editLockService: new EditLockService(ctx.userId),
-      goalModel: new GoalModel(ctx.serverDB, ctx.userId, wsId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
@@ -88,16 +74,6 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
-  // Bind a goal entity (`goals` row) to the created task; the task becomes the
-  // goal's execution carrier and the outer verify-driven round loop applies.
-  goal: z
-    .object({
-      maxRounds: z.number().int().nullish(),
-      maxTotalCost: z.number().nullish(),
-      requirement: z.string().nullish(),
-      title: z.string().optional(),
-    })
-    .optional(),
   identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
@@ -110,6 +86,11 @@ const createSchema = z.object({
   // assignee agent's visibility (private agent → private task). UI surfaces
   // such as the top-level "Tasks" create form pass it explicitly.
   visibility: z.enum(['private', 'public']).optional(),
+  // Removed contract, kept so the server can recognise it. A task no longer
+  // carries a goal — the Goal Graph owns execution and dispatches its own Work
+  // Tasks — and silently dropping this field would let a released client report
+  // that a goal started when only an ordinary task exists.
+  goal: z.unknown().optional(),
 });
 
 const updateSchema = z.object({
@@ -145,7 +126,6 @@ const listSchema = z.object({
   // misconfigured one cannot), false → its exact complement. Omitted leaves the
   // set unnarrowed.
   automated: z.boolean().optional(),
-  hasGoal: z.boolean().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   // Which timestamp orders the page, newest first. Defaults to creation time.
@@ -179,7 +159,6 @@ const groupListSchema = z
       .min(1)
       .max(10)
       .optional(),
-    hasGoal: z.boolean().optional(),
     parentTaskId: z.string().nullish(),
     projectId: z.string().optional(),
     visibility: z.enum(['private', 'public']).optional(),
@@ -458,12 +437,20 @@ export const taskRouter = router({
     }),
 
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
+    const { goal: legacyGoal, ...createInput } = input;
+    if (legacyGoal !== undefined) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          'Creating a goal through task.create is no longer supported. Reload the app, then create the goal again.',
+      });
+    }
     try {
-      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(input.config?.verify);
-      const { verify: _legacyVerify, ...taskConfig } = input.config ?? {};
+      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
+      const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
       const task = await ctx.taskService.createTask({
-        ...input,
-        config: parsedVerify.success ? taskConfig : input.config,
+        ...createInput,
+        config: parsedVerify.success ? taskConfig : createInput.config,
       });
       try {
         if (parsedVerify.success) {
@@ -530,30 +517,6 @@ export const taskRouter = router({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to delete task',
-      });
-    }
-  }),
-
-  deleteGoal: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
-    try {
-      const model = ctx.taskModel;
-      const task = await resolveOrThrow(model, input.id);
-      const goal = await ctx.goalModel.findBySubject('task', task.id);
-      if (!goal) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a goal root' });
-      }
-      assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
-      // TaskModel owns the transaction and removes goal rows for the complete
-      // subtree before deleting its tasks.
-      const count = await model.deleteSubtree(task.id);
-      return { count, data: task, message: 'Goal deleted', success: true };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      console.error('[task:deleteGoal]', error);
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to delete goal',
       });
     }
   }),
@@ -848,9 +811,6 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const task = await resolveOrThrow(ctx.taskModel, input.id);
-        // A manually (re)started goal leaves its paused/review state and runs.
-        const goal = await ctx.goalModel.findBySubject('task', task.id);
-        if (goal) await ctx.goalModel.updateStatus(goal.id, 'running');
 
         const runner = new TaskRunnerService(
           ctx.serverDB,
@@ -1482,12 +1442,6 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await ctx.taskService.updateStatus(input);
-        // Manual task status changes drive the bound goal's own state machine.
-        const goal = await ctx.goalModel.findBySubject('task', result.task.id);
-        if (goal) {
-          const goalStatus = taskStatusToGoalStatus[input.status];
-          if (goalStatus) await ctx.goalModel.updateStatus(goal.id, goalStatus);
-        }
         const { task, unlocked, paused, checkpointTriggered, allSubtasksDone, parentTaskId } =
           result;
         return {

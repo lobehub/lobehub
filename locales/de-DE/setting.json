@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Cloud-Sandbox",
   "tools.builtins.lobe-creds.description": "Benutzeranmeldedaten für Authentifizierung, Umgebungsvariablen und API‑Verifikation verwalten – API‑Schlüssel, OAuth‑Tokens und Secrets für Integrationen Dritter handhaben.",
   "tools.builtins.lobe-creds.title": "Zugangsdaten",
-  "tools.builtins.lobe-cron.description": "Geplante Aufgaben verwalten, die automatisch zu bestimmten Zeiten ausgeführt werden. Wiederkehrende Aufgaben für Ihre Agenten erstellen, aktualisieren, aktivieren/deaktivieren und überwachen.",
-  "tools.builtins.lobe-cron.title": "Geplante Aufgaben",
   "tools.builtins.lobe-group-agent-builder.description": "Metadaten, Mitglieder und gemeinsame Inhalte für Multi‑Agenten‑Gruppen konfigurieren",
   "tools.builtins.lobe-group-agent-builder.title": "Gruppen‑Agent‑Builder",
   "tools.builtins.lobe-group-management.description": "Unterhaltungen von Multi‑Agenten‑Gruppen orchestrieren und verwalten",

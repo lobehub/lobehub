@@ -1,9 +1,8 @@
 'use client';
 
-import { type ComposioAppType } from '@lobechat/const';
-import { COMPOSIO_APP_TYPES } from '@lobechat/const';
+import type { TaskTemplateConnectorReference } from '@lobechat/const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Alert, Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Alert, Avatar, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -12,14 +11,27 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
+import {
+  ConnectorConnectionMarketAuthRequiredError,
+  ConnectorConnectionPopupBlockedError,
+  useConnectorConnection,
+} from '@/features/RecommendTaskTemplates/useConnectorConnection';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
-import { type ComposioServer } from '@/store/tool/slices/composioStore';
 import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slices/composioStore';
+import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import type {
+  PendingComposioTool,
+  PendingLobehubTool,
+  PendingMarketTool,
+} from './resolvePendingAuthTools';
+import { resolvePendingAuthTools } from './resolvePendingAuthTools';
 
 const styles = createStaticStyles(({ css }) => ({
   // Reveal the remove icon only when the row is hovered.
@@ -37,28 +49,15 @@ const styles = createStaticStyles(({ css }) => ({
 // Tools that require Market authentication
 const MARKET_AUTH_TOOLS = [
   {
+    authType: 'market',
     avatar: '💻',
     identifier: 'lobe-cloud-sandbox',
     label: 'Cloud Sandbox',
   },
-];
+] satisfies PendingMarketTool[];
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
-
-interface PendingComposioTool extends ComposioAppType {
-  authType: 'composio';
-  server?: ComposioServer;
-}
-
-interface PendingMarketTool {
-  authType: 'market';
-  avatar: string;
-  identifier: string;
-  label: string;
-}
-
-type PendingAuthTool = PendingComposioTool | PendingMarketTool;
 
 interface ComposioToolAuthItemProps {
   onAuthComplete: () => void;
@@ -156,7 +155,7 @@ const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComp
         }
       }, 500);
     },
-    [refreshComposioConnectionStatus, startFallbackPolling],
+    [startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
@@ -268,6 +267,92 @@ const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComp
 
 ComposioToolAuthItem.displayName = 'ComposioToolAuthItem';
 
+interface LobehubToolAuthItemProps {
+  tool: PendingLobehubTool;
+}
+
+const LobehubToolAuthItem = ({ tool }: LobehubToolAuthItemProps) => {
+  const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
+  const removePlugin = useAgentStore((state) => state.removePlugin);
+  const connectorSpecs = useMemo<TaskTemplateConnectorReference[]>(
+    () => [{ identifier: tool.id, source: 'lobehub' }],
+    [tool.id],
+  );
+  const { connect, isConnecting } = useConnectorConnection(connectorSpecs);
+
+  const handleAuthorize = async () => {
+    try {
+      await connect();
+    } catch (error) {
+      // MarketAuthProvider already surfaces this interruption; avoid a duplicate toast.
+      if (error instanceof ConnectorConnectionMarketAuthRequiredError) return;
+      toast.error(
+        tCommon(
+          error instanceof ConnectorConnectionPopupBlockedError
+            ? 'taskTemplate.action.connect.popupBlocked'
+            : 'taskTemplate.action.connect.error',
+        ),
+      );
+    }
+  };
+
+  const handleRemove = async () => {
+    try {
+      await removePlugin(tool.id);
+    } catch (error) {
+      console.error('[ToolAuthAlert] Failed to remove plugin:', error);
+    }
+  };
+
+  const icon =
+    typeof tool.icon === 'string' ? (
+      <Avatar alt={tool.label} avatar={tool.icon} size={20} style={{ flex: 'none' }} />
+    ) : (
+      <Icon fill={cssVar.colorText} icon={tool.icon} size={20} />
+    );
+
+  return (
+    <Flexbox
+      horizontal
+      align="center"
+      className={cx(styles.row)}
+      gap={12}
+      justify="space-between"
+      style={{ cursor: 'pointer' }}
+      onClick={handleAuthorize}
+    >
+      <Flexbox horizontal align="center" gap={8}>
+        {icon}
+        <Text>{tool.label}</Text>
+        <ActionIcon
+          className={cx('tool-auth-remove', styles.removeIcon)}
+          icon={XIcon}
+          size="small"
+          title={t('toolAuth.remove')}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleRemove();
+          }}
+        />
+      </Flexbox>
+      <Button
+        disabled={isConnecting}
+        icon={PlusIcon}
+        loading={isConnecting}
+        size="small"
+        type="text"
+        onClick={(event) => {
+          event.stopPropagation();
+          void handleAuthorize();
+        }}
+      >
+        {isConnecting ? t('toolAuth.authorizing') : t('toolAuth.authorize')}
+      </Button>
+    </Flexbox>
+  );
+};
+
 interface MarketToolAuthItemProps {
   tool: PendingMarketTool;
 }
@@ -340,47 +425,45 @@ const ToolAuthAlert = memo(() => {
 
   const agentId = useConversationStore(contextSelectors.agentId);
   const plugins = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
+  const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
+  const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const lobehubServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   // Connections load asynchronously via `useFetchUserComposioConnections` (fired by
   // ChatInput on the same page). Until they arrive, `composioServers` is the empty
   // fallback — don't treat a missing server as "needs auth" or the card flashes a
   // false unauthorized state on refresh before the real status loads.
   const isComposioServersInit = useToolStore((s) => s.isComposioServersInit);
+  const useFetchLobehubSkillConnections = useToolStore(
+    (state) => state.useFetchLobehubSkillConnections,
+  );
+  const lobehubConnections = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
+  const isLobehubServersInit = !isLobehubSkillEnabled || !lobehubConnections.isLoading;
   const { isAuthenticated: isMarketAuthenticated } = useMarketAuth();
 
-  // Filter out tools that need authorization
-  const pendingAuthTools = useMemo<PendingAuthTool[]>(() => {
-    const result: PendingAuthTool[] = [];
-
-    for (const pluginId of plugins) {
-      // Check if this is a Composio tool
-      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === pluginId);
-      if (composioType) {
-        const server = composioServers.find((s) => s.identifier === pluginId);
-        // A missing server only means "not installed" once connections have loaded;
-        // before that, skip it to avoid flashing a false unauthorized state.
-        if (!server) {
-          if (isComposioServersInit) {
-            result.push({ ...composioType, authType: 'composio', server });
-          }
-          continue;
-        }
-        // Pending auth
-        if (server.status === ComposioServerStatus.PENDING_AUTH) {
-          result.push({ ...composioType, authType: 'composio', server });
-        }
-        continue;
-      }
-
-      // Check if this is a Market auth tool
-      const marketTool = MARKET_AUTH_TOOLS.find((t) => t.identifier === pluginId);
-      if (marketTool && !isMarketAuthenticated) {
-        result.push({ ...marketTool, authType: 'market' });
-      }
-    }
-
-    return result;
-  }, [plugins, composioServers, isComposioServersInit, isMarketAuthenticated]);
+  const pendingAuthTools = useMemo(
+    () =>
+      resolvePendingAuthTools({
+        availability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
+        composioInitialized: isComposioServersInit,
+        composioServers,
+        lobehubInitialized: isLobehubServersInit,
+        lobehubServers,
+        marketAuthenticated: isMarketAuthenticated,
+        marketTools: MARKET_AUTH_TOOLS,
+        plugins,
+      }),
+    [
+      composioServers,
+      isComposioEnabled,
+      isComposioServersInit,
+      isLobehubServersInit,
+      isLobehubSkillEnabled,
+      isMarketAuthenticated,
+      lobehubServers,
+      plugins,
+    ],
+  );
 
   // Don't render if no pending auth tools
   if (pendingAuthTools.length === 0) {
@@ -397,19 +480,23 @@ const ToolAuthAlert = memo(() => {
           {t('toolAuth.hint')}
           <Divider dashed style={{ marginBlock: 12 }} />
           <Flexbox gap={12} style={{ marginTop: 8 }}>
-            {pendingAuthTools.map((tool) =>
-              tool.authType === 'composio' ? (
-                <ComposioToolAuthItem
-                  key={tool.identifier}
-                  tool={tool}
-                  onAuthComplete={() => {
-                    // Component will re-render and tool will be removed from list
-                  }}
-                />
-              ) : (
-                <MarketToolAuthItem key={tool.identifier} tool={tool} />
-              ),
-            )}
+            {pendingAuthTools.map((tool) => {
+              if (tool.authType === 'composio') {
+                return (
+                  <ComposioToolAuthItem
+                    key={tool.identifier}
+                    tool={tool}
+                    onAuthComplete={() => {
+                      // Component will re-render and tool will be removed from list
+                    }}
+                  />
+                );
+              }
+              if (tool.authType === 'lobehub') {
+                return <LobehubToolAuthItem key={tool.id} tool={tool} />;
+              }
+              return <MarketToolAuthItem key={tool.identifier} tool={tool} />;
+            })}
           </Flexbox>
         </>
       }

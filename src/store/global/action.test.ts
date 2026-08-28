@@ -9,8 +9,6 @@ import { useGlobalStore } from '@/store/global/index';
 import { createInitialSystemStatus, initialState } from '@/store/global/initialState';
 import { withSWR } from '~test-utils';
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/utils/client/switchLang', () => ({
   switchLang: vi.fn(),
 }));

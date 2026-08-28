@@ -41,12 +41,6 @@ vi.mock('@lobehub/ui', () => ({
   },
 }));
 
-vi.mock('antd-style', () => ({
-  cssVar: {
-    colorFillQuaternary: 'var(--color-fill-quaternary)',
-  },
-}));
-
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: mockUseClientDataSWR,
 }));

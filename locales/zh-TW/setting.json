@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "雲端沙盒",
   "tools.builtins.lobe-creds.description": "管理使用者憑證以進行驗證、環境變數注入與 API 驗證 — 處理 API 金鑰、OAuth Token 與第三方整合所需的密鑰。",
   "tools.builtins.lobe-creds.title": "憑證",
-  "tools.builtins.lobe-cron.description": "管理在特定時間自動執行的排程任務。可建立、更新、啟用/停用並監控代理的週期性任務。",
-  "tools.builtins.lobe-cron.title": "排程任務",
   "tools.builtins.lobe-group-agent-builder.description": "設定多代理群組的中繼資料、成員與共享內容",
   "tools.builtins.lobe-group-agent-builder.title": "群組代理建構器",
   "tools.builtins.lobe-group-management.description": "協作並管理多代理的群組對話",

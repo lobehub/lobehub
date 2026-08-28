@@ -14,6 +14,7 @@ const mockMessageModelQuery = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
+const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
     abilities: { audio: true, video: true, vision: true },
@@ -31,6 +32,18 @@ const mockBuiltinModels = vi.hoisted(() => [
     providerId: 'test-provider',
   },
 ]);
+
+const VALID_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const VALID_PNG_DATA_URL = `data:image/png;base64,${VALID_PNG_BASE64}`;
+
+const createCorruptedPngDataUrl = () => {
+  const bytes = Buffer.from(VALID_PNG_BASE64, 'base64');
+  const idatOffset = bytes.indexOf(Buffer.from('IDAT'));
+  bytes[idatOffset + 4] ^= 1;
+
+  return `data:image/png;base64,${bytes.toString('base64')}`;
+};
 
 vi.mock('@/envs/tools', () => ({
   toolsEnv: mockToolsEnv,
@@ -64,6 +77,18 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 vi.mock('model-bank', () => ({
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
 }));
+
+vi.mock('sharp', async (importOriginal) => {
+  const actual = (await importOriginal()) as { default: (...args: any[]) => any };
+
+  return {
+    ...actual,
+    default: (input: Buffer, options?: Record<string, unknown>) => {
+      mockSharpOptions(options);
+      return actual.default(input, options);
+    },
+  };
+});
 
 // Plan documents are the todo runtime's optional mirror; a topic that never ran
 // `createPlan` simply has none. Model that here so the todo tests exercise the
@@ -317,14 +342,13 @@ describe('lobeAgentRuntime', () => {
 
     const result = await runtime.analyzeMedia({
       question: 'what is this?',
-      urls: [
-        'http://example.com/generated.png',
-        'data:image/png;base64,abcd',
-        'data:audio/mpeg;base64,abcd',
-      ],
+      urls: ['http://example.com/generated.png', VALID_PNG_DATA_URL, 'data:audio/mpeg;base64,abcd'],
     });
 
     expect(result.success).toBe(true);
+    expect(mockSharpOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
+    );
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -337,7 +361,7 @@ describe('lobeAgentRuntime', () => {
                 type: 'image_url',
               }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: 'data:image/png;base64,abcd' },
+                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
                 type: 'image_url',
               }),
               expect.objectContaining({
@@ -345,6 +369,83 @@ describe('lobeAgentRuntime', () => {
                 type: 'audio_url',
               }),
             ],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('should reject a corrupted inline image and fail a multi-image batch closed', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'compare these images',
+      urls: [VALID_PNG_DATA_URL, createCorruptedPngDataUrl()],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'INVALID_IMAGE_DATA' },
+      success: false,
+    });
+    expect(result.content).toContain('2');
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('should resolve stable refs for durable tool-result images', async () => {
+    const toolImageRef = createMediaFileRef({
+      index: 0,
+      messageId: 'msg-read-file',
+      type: 'image',
+    });
+    mockMessageModelQueryByIds.mockResolvedValue([
+      { id: 'msg-1', role: 'tool', topicId: 'topic-1' },
+    ]);
+    mockMessageModelQuery.mockResolvedValue([
+      {
+        id: 'msg-read-file',
+        pluginState: {
+          filename: 'character.png',
+          images: [
+            {
+              fileId: 'file-tool-image',
+              mediaType: 'image/png',
+              url: 'https://example.com/tool-image.png',
+            },
+          ],
+        },
+        role: 'tool',
+        topicId: 'topic-1',
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is in the image?',
+      refs: [toolImageRef],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      files: [
+        {
+          id: 'file-tool-image',
+          name: 'character.png',
+          ref: toolImageRef,
+          type: 'image',
+        },
+      ],
+    });
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: expect.arrayContaining([
+              {
+                image_url: { detail: 'auto', url: 'https://example.com/tool-image.png' },
+                type: 'image_url',
+              },
+            ]),
           }),
         ],
       }),

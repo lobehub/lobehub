@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Piaskownica w chmurze",
   "tools.builtins.lobe-creds.description": "Zarządzaj danymi uwierzytelniającymi użytkownika do autoryzacji, wstrzykiwania zmiennych środowiskowych i weryfikacji API — obsługuj klucze API, tokeny OAuth i sekrety do integracji z usługami zewnętrznymi.",
   "tools.builtins.lobe-creds.title": "Dane Uwierzytelniające",
-  "tools.builtins.lobe-cron.description": "Zarządzaj zaplanowanymi zadaniami uruchamianymi automatycznie o określonych porach. Twórz, aktualizuj, włączaj/wyłączaj i monitoruj cykliczne zadania dla swoich agentów.",
-  "tools.builtins.lobe-cron.title": "Zadania Cykliczne",
   "tools.builtins.lobe-group-agent-builder.description": "Konfiguruj metadane grup, członków i treści współdzielone dla grup wieloagentowych",
   "tools.builtins.lobe-group-agent-builder.title": "Kreator Agenta Grupowego",
   "tools.builtins.lobe-group-management.description": "Orkiestruj i zarządzaj rozmowami grup wieloagentowych",

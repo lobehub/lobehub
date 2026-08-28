@@ -12,10 +12,10 @@ import {
   Button,
   createModal,
   Select,
+  Tag,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';

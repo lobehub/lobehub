@@ -11,16 +11,9 @@ vi.mock('@lobehub/ui', () => ({
   TextArea: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: () => null,
-  Select: () => null,
-  Switch: () => null,
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createModal: mocks.createModal,
-  useModalContext: () => ({ close: vi.fn() }),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 describe('openCriterionEditModal', () => {

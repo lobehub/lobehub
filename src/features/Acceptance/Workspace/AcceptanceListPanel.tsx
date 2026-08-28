@@ -3,7 +3,6 @@
 import {
   Accordion,
   AccordionItem,
-  ActionIcon,
   Center,
   DraggablePanel,
   DraggablePanelContainer,
@@ -11,10 +10,9 @@ import {
   Empty,
   Flexbox,
   Icon,
-  Text,
 } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {

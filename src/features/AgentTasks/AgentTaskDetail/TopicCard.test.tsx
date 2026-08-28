@@ -9,10 +9,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import TopicCard from './TopicCard';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: any) => unknown) =>
     selector({
@@ -22,10 +18,6 @@ vi.mock('@/store/task', () => ({
       openTopicDrawer: vi.fn(),
       taskDetailMap: {},
     }),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/hooks/useActivityTime', () => ({

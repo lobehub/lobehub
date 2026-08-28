@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Bulut Sandbox",
   "tools.builtins.lobe-creds.description": "Kimlik doğrulama, ortam değişkeni ekleme ve API doğrulaması için kullanıcı kimlik bilgilerini yönetin — üçüncü taraf entegrasyonları için API anahtarları, OAuth belirteçleri ve gizli bilgileri işleyin.",
   "tools.builtins.lobe-creds.title": "Kimlik Bilgileri",
-  "tools.builtins.lobe-cron.description": "Belirli zamanlarda otomatik olarak çalışan zamanlanmış görevleri yönetin. Aracılarınız için yinelenen görevler oluşturun, güncelleyin, etkinleştirin/devre dışı bırakın ve izleyin.",
-  "tools.builtins.lobe-cron.title": "Zamanlanmış Görevler",
   "tools.builtins.lobe-group-agent-builder.description": "Çoklu aracı grupları için grup meta verilerini, üyeleri ve paylaşılan içeriği yapılandırın",
   "tools.builtins.lobe-group-agent-builder.title": "Grup Aracı Oluşturucu",
   "tools.builtins.lobe-group-management.description": "Çoklu aracı grup konuşmalarını yönetin ve düzenleyin",

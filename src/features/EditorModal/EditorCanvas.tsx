@@ -5,8 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC, useMemo } from 'react';
 
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
-
-import TypoBar from './Typobar';
+import { TypoBar } from '@/features/EditorCanvas/TypoBar';
 
 interface EditorCanvasProps {
   defaultValue?: string;

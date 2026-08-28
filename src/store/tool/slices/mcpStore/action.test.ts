@@ -44,9 +44,6 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
-
 // Mock sleep to speed up tests
 vi.mock('@/utils/sleep', () => ({
   sleep: vi.fn().mockResolvedValue(undefined),

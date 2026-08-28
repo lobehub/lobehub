@@ -137,12 +137,17 @@ describe('EditorCanvas', () => {
       const onContentChange = vi.fn();
       const onInit = vi.fn();
       const editorData = { content: 'test', editorData: { blocks: [] } };
+      const mentionOption = { items: [] };
+      const getPopupContainer = vi.fn(() => null);
 
       render(
         <EditorCanvas
           contentRevision={3}
+          contentStyle={{ minHeight: 44, padding: 0 }}
           editor={mockEditor}
           editorData={editorData}
+          getPopupContainer={getPopupContainer}
+          mentionOption={mentionOption}
           placeholder="Custom placeholder"
           onContentChange={onContentChange}
           onInit={onInit}
@@ -154,8 +159,11 @@ describe('EditorCanvas', () => {
 
       expect(lastCall?.[0]).toMatchObject({
         contentRevision: 3,
+        contentStyle: { minHeight: 44, padding: 0 },
         editor: mockEditor,
         editorData,
+        getPopupContainer,
+        mentionOption,
         onContentChange,
         onInit,
         placeholder: 'Custom placeholder',
@@ -225,11 +233,13 @@ describe('EditorCanvas', () => {
     it('should forward props to InternalEditor in basic mode', async () => {
       const onContentChange = vi.fn();
       const onInit = vi.fn();
+      const mentionOption = { items: [] };
 
       render(
         <EditorCanvas
           editor={mockEditor}
           floatingToolbar={false}
+          mentionOption={mentionOption}
           placeholder="Custom placeholder"
           onContentChange={onContentChange}
           onInit={onInit}
@@ -242,6 +252,7 @@ describe('EditorCanvas', () => {
       expect(lastCall?.[0]).toMatchObject({
         editor: mockEditor,
         floatingToolbar: false,
+        mentionOption,
         onContentChange,
         onInit,
         placeholder: 'Custom placeholder',

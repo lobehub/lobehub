@@ -1,10 +1,8 @@
-import type * as businessConstModule from '@lobechat/business-const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type * as modelRuntimeModule from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import type * as lobehubUiModule from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,14 +30,6 @@ const businessErrorContentMock = vi.hoisted(() =>
   })),
 );
 
-vi.mock('@lobechat/business-const', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof businessConstModule;
-
-  return {
-    ...actual,
-  };
-});
-
 vi.mock('@lobechat/model-runtime', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof modelRuntimeModule;
 
@@ -60,20 +50,6 @@ vi.mock('@lobechat/types', async (importOriginal) => {
     ChatErrorType: {
       ...actual.ChatErrorType,
       SystemTimeNotMatchError: 'SystemTimeNotMatchError',
-    },
-  };
-});
-
-vi.mock('@lobehub/ui', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof lobehubUiModule;
-
-  return {
-    ...actual,
-    Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    Highlighter: ({ children }: { children?: ReactNode }) => <pre>{children}</pre>,
-    Skeleton: {
-      ...actual.Skeleton,
-      Button: () => <div>loading</div>,
     },
   };
 });

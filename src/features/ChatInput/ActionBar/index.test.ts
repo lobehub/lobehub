@@ -12,23 +12,9 @@ const tokenMocks = vi.hoisted(() => ({
   useTokenBreakdown: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => {
-  const Primitive = ({ children }: { children?: ReactNode }) => createElement('div', {}, children);
-
-  return { Center: Primitive, Flexbox: Primitive, Tooltip: Primitive };
-});
-
 vi.mock('@lobehub/ui/chat', () => ({
   TokenTag: ({ value }: { value: number }) =>
     createElement('div', { 'data-testid': 'token-tag' }, value),
-}));
-
-vi.mock('antd-style', () => ({
-  cssVar: new Proxy({}, { get: (_, key) => String(key) }),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@/store/user', () => ({

@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "クラウドサンドボックス",
   "tools.builtins.lobe-creds.description": "認証、環境変数の注入、API 検証のためにユーザー認証情報を管理します。API キー、OAuth トークン、サードパーティ連携用の秘密情報などを扱います。",
   "tools.builtins.lobe-creds.title": "認証情報",
-  "tools.builtins.lobe-cron.description": "指定時間に自動で実行されるスケジュールタスクを管理します。定期タスクの作成、更新、オン／オフ切替、監視を行います。",
-  "tools.builtins.lobe-cron.title": "スケジュールタスク",
   "tools.builtins.lobe-group-agent-builder.description": "マルチエージェントグループのメタデータ、メンバー、共有コンテンツを構成します",
   "tools.builtins.lobe-group-agent-builder.title": "グループエージェントビルダー",
   "tools.builtins.lobe-group-management.description": "マルチエージェントグループの会話をオーケストレーションおよび管理します",

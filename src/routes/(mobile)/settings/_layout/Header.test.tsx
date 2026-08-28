@@ -1,28 +1,9 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+// @vitest-environment happy-dom
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import Header from './Header';
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement(React.Fragment, undefined, children),
-}));
-
-vi.mock('@lobehub/ui/mobile', () => {
-  const ChatHeader = ({ center }: { center?: React.ReactNode }) =>
-    React.createElement('header', undefined, center);
-
-  ChatHeader.Title = ({ title }: { title?: React.ReactNode }) =>
-    React.createElement(React.Fragment, undefined, title);
-
-  return { ChatHeader };
-});
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
@@ -35,7 +16,7 @@ vi.mock('@/store/session', () => ({
 }));
 
 const renderHeader = (tab: string) =>
-  renderToStaticMarkup(
+  render(
     <MemoryRouter initialEntries={[`/acme/settings/${tab}`]}>
       <Header />
     </MemoryRouter>,
@@ -51,9 +32,8 @@ describe('mobile settings Header', () => {
     ['devices', 'setting:tab.devices'],
     ['service-model', 'setting:tab.serviceModel'],
   ])('resolves the workspace %s title', (tab, title) => {
-    const html = renderHeader(tab);
+    renderHeader(tab);
 
-    expect(html).toContain('<header>');
-    expect(html).toContain(`>${title}</span></header>`);
+    expect(within(screen.getByRole('banner')).getByText(title)).toBeInTheDocument();
   });
 });

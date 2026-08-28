@@ -31,12 +31,10 @@ const resolveGoalLoopContext = async (
   deps: BuildTaskPromptDeps,
 ): Promise<TaskRunPromptGoalLoop | undefined> => {
   const { db, userId, workspaceId } = deps;
-  const goalModel = new GoalModel(db, userId, workspaceId);
-  const taskCarriedGoal = await goalModel.findBySubject('task', task.id);
-  const goal = taskCarriedGoal ?? (await goalModel.findByWorkTask(task.id));
+  const goal = await new GoalModel(db, userId, workspaceId).findByWorkTask(task.id);
   if (!goal || !task.totalTopics) return undefined;
 
-  const budget = resolveWorkAttemptBudget(goal, Boolean(taskCarriedGoal));
+  const budget = resolveWorkAttemptBudget(goal);
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
     round: (task.totalTopics || 0) + 1,

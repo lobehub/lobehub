@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../types/error';
-import { isNonRetryableRequestError } from './isNonRetryableRequestError';
+import {
+  isImageDecodingRequestError,
+  isNonRetryableRequestError,
+} from './isNonRetryableRequestError';
 
 describe('isNonRetryableRequestError', () => {
   it('returns true for ExceededContextWindow errors', () => {
@@ -27,6 +30,35 @@ describe('isNonRetryableRequestError', () => {
         errorType: AgentRuntimeErrorType.ProviderNoImageGenerated,
       }),
     ).toBe(true);
+  });
+
+  it('returns true for provider image decoding request errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          message:
+            '400 INVALID_ARGUMENT: Failed to decode image data. Please make sure the image is valid.',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+
+    expect(
+      isNonRetryableRequestError({
+        error: { message: 'Unable to process input image' },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+
+    expect(
+      isImageDecodingRequestError({
+        error: { message: 'Unable to process input image' },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+      }),
+    ).toBe(true);
+    expect(isImageDecodingRequestError({ message: 'Invalid request payload' })).toBe(false);
   });
 
   it('returns true for invalid request payload errors', () => {
@@ -143,6 +175,14 @@ describe('isNonRetryableRequestError', () => {
   });
 
   it('returns false for retryable rate limit and quota errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: { message: 'Unable to process input image' },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 429,
+      }),
+    ).toBe(false);
+
     expect(
       isNonRetryableRequestError({
         error: { code: 'rate_limit_exceeded', message: 'Rate limit reached for requests' },

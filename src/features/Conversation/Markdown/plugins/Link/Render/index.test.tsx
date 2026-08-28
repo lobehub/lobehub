@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+    <button {...rest} aria-label={title} type="button" onClick={onClick} />
+  ),
+}));
+
 let mockIsDesktop = false;
 
 vi.mock('@lobechat/const', async (importOriginal) => ({

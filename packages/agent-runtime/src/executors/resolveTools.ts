@@ -76,6 +76,7 @@ export const resolveBlockedTools =
         type: 'tool_end',
       });
 
+      let toolMessageId: string;
       try {
         const toolMessage = await transports.messages.createToolMessage({
           agentId,
@@ -95,14 +96,17 @@ export const resolveBlockedTools =
           tool_call_id: toolPayload.id,
           topicId,
         });
-        toolMessageIds.push(toolMessage.id);
+        toolMessageId = toolMessage.id;
+        toolMessageIds.push(toolMessageId);
       } catch (error) {
         await publishPersistError(host, error);
         throw error;
       }
 
+      /** Keep the persisted id so the next gateway step can resolve media refs. */
       newState.messages.push({
         content: result.content,
+        id: toolMessageId,
         role: 'tool',
         tool_call_id: toolPayload.id,
       });

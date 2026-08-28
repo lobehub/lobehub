@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Bac à sable cloud",
   "tools.builtins.lobe-creds.description": "Gérer les identifiants utilisateur pour l’authentification, l’injection de variables d’environnement et la vérification d’API — gérer clés API, jetons OAuth et secrets pour intégrations tierces.",
   "tools.builtins.lobe-creds.title": "Identifiants",
-  "tools.builtins.lobe-cron.description": "Gérer les tâches programmées exécutées automatiquement à des moments définis. Créer, modifier, activer/désactiver et surveiller les tâches récurrentes des agents.",
-  "tools.builtins.lobe-cron.title": "Tâches Programmées",
   "tools.builtins.lobe-group-agent-builder.description": "Configurer les métadonnées du groupe, les membres et le contenu partagé pour les groupes multi-agents",
   "tools.builtins.lobe-group-agent-builder.title": "Générateur de Groupe d’Agents",
   "tools.builtins.lobe-group-management.description": "Orchestrer et gérer les conversations de groupes multi-agents",

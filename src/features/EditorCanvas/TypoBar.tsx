@@ -1,6 +1,6 @@
-import { type IEditor } from '@lobehub/editor';
+import type { IEditor } from '@lobehub/editor';
 import { getHotkeyById, HotkeyEnum } from '@lobehub/editor';
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
+import type { ChatInputActionsProps } from '@lobehub/editor/react';
 import { ChatInputActionBar, ChatInputActions, useEditorState } from '@lobehub/editor/react';
 import { cssVar } from 'antd-style';
 import {
@@ -19,7 +19,12 @@ import {
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
+interface TypoBarProps {
+  editor?: IEditor;
+}
+
+/** Shared fixed Markdown toolbar for ChatInput-based editors. */
+export const TypoBar = memo<TypoBarProps>(({ editor }) => {
   const { t } = useTranslation('editor');
   const editorState = useEditorState(editor);
 
@@ -58,10 +63,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           onClick: editorState.strikethrough,
           tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Strikethrough).keys },
         },
-        {
-          type: 'divider',
-        },
-
+        { type: 'divider' },
         {
           icon: ListIcon,
           key: 'bulletList',
@@ -82,9 +84,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           label: t('typobar.taskList'),
           onClick: editorState.checkList,
         },
-        {
-          type: 'divider',
-        },
+        { type: 'divider' },
         {
           active: editorState.isBlockquote,
           icon: MessageSquareQuote,
@@ -92,9 +92,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           label: t('typobar.blockquote'),
           onClick: editorState.blockquote,
         },
-        {
-          type: 'divider',
-        },
+        { type: 'divider' },
         {
           icon: SigmaIcon,
           key: 'math',
@@ -115,8 +113,8 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           label: t('typobar.codeblock'),
           onClick: editorState.codeblock,
         },
-      ].filter(Boolean) as ChatInputActionsProps['items'],
-    [editorState],
+      ] as ChatInputActionsProps['items'],
+    [editorState, t],
   );
 
   return (
@@ -132,5 +130,3 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
 });
 
 TypoBar.displayName = 'TypoBar';
-
-export default TypoBar;

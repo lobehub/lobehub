@@ -173,6 +173,7 @@ describe('execAgent', () => {
         .values({
           agentId: testAgentId,
           content: 'Initial question',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
           role: 'user',
           topicId: existingTopic.id,
           userId,
@@ -183,6 +184,7 @@ describe('execAgent', () => {
         .values({
           agentId: testAgentId,
           content: 'Initial answer',
+          createdAt: new Date('2024-01-01T00:00:01Z'),
           parentId: seedUserMessage.id,
           role: 'assistant',
           topicId: existingTopic.id,

@@ -13,10 +13,6 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('motion/react', async () => {
   const React = await import('react');
   return {

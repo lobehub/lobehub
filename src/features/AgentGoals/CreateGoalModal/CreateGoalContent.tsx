@@ -1,5 +1,6 @@
 'use client';
 
+import { buildGoalRequirement, resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
@@ -20,7 +21,6 @@ import {
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
@@ -28,17 +28,13 @@ import {
   CriterionRow,
   openCriterionEditModal,
 } from '@/features/Acceptance';
-import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
-import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
-import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
-import { verifyService } from '@/services/verify';
-import { useTaskStore } from '@/store/task';
+import { goalService } from '@/services/goal';
 import { shinyTextStyles } from '@/styles';
 
-import { buildGoalTaskConfig } from './goalConfig';
+import { buildGoalCreateInput } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
 
@@ -277,7 +273,7 @@ export interface CreateGoalContentProps {
   initialRequirement?: string;
   initialRoundBudget?: number;
   initialTitle?: string;
-  onCreated?: (goal: { agentId?: string; identifier: string }) => void;
+  onCreated?: (goal: { agentId?: string; goalId: string }) => void;
   projectId?: string;
 }
 
@@ -296,9 +292,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
 
-  const createTask = useTaskStore((s) => s.createTask);
-  const isCreating = useTaskStore((s) => s.isCreatingTask);
-  const activeWorkspaceId = useActiveWorkspaceId();
+  const [isCreating, setIsCreating] = useState(false);
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -308,16 +302,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     maxTotalCost: null,
     name: initialTitle ?? '',
   });
-  // Default to private in workspace mode so sharing is opt-in; personal mode
-  // ignores the field and hides the chip.
-  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
-
-  // A private agent can only run a private task, goals included.
-  const isPrivateAgent = useAgentVisibility(agentId) === 'private';
-  useEffect(() => {
-    if (isPrivateAgent && visibility === 'public') setVisibility('private');
-  }, [isPrivateAgent, visibility]);
 
   const editor = useEditor();
   const instructionRef = useRef(plan.instruction);
@@ -436,59 +421,48 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     if (!canCreate) return;
     const instruction =
       instructionRef.current.trim() || plan.instruction.trim() || plan.name.trim();
-    const editorData = instructionRef.current.trim()
-      ? (editor?.getDocument?.('json') as unknown)
-      : undefined;
     const reviewedCriteria = plan.criteria.filter((criterion) => criterion.title.trim());
     if (!instruction || reviewedCriteria.length === 0) return;
 
-    let verifyCriteriaIds: string[] = [];
-    try {
-      verifyCriteriaIds = await verifyService.createCriteria(reviewedCriteria);
-      const { config, goal } = buildGoalTaskConfig({
-        costBudget: plan.maxTotalCost,
-        instruction,
-        requirement,
-        roundBudget: plan.maxIterations,
-        verifyCriteriaIds,
-      });
-      const result = await createTask({
-        assigneeAgentId: agentId,
-        config,
-        editorData,
-        goal,
-        instruction,
-        name: plan.name.trim() || undefined,
-        projectId,
-        visibility: activeWorkspaceId ? visibility : undefined,
-      });
+    const title = plan.name.trim() || instruction;
+    const budget = buildGoalCreateInput({
+      costBudget: plan.maxTotalCost,
+      instruction,
+      requirement,
+    });
 
-      if (!result) throw new Error('The goal was not created.');
+    setIsCreating(true);
+    try {
+      const graph = await goalService.create({
+        agentId,
+        config: {
+          recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
+        },
+        // `maxIterations` is the per-Work attempt budget above; it is not the
+        // graph-wide round cap, which counts runs across every Work and would
+        // strand the fourth task of a goal whose limit is three attempts.
+        maxTotalCost: budget.maxTotalCost ?? undefined,
+        projectId,
+        requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
+        title,
+        work: [{ description: instruction, title }],
+      });
+      // `goal.create` already queued an advance; this runs the same driver so
+      // the goal is visibly moving by the time the modal closes even where the
+      // queue is unavailable. It must be `advance`, not a single tick: whichever
+      // driver claims the Work has to carry it past binding the task into
+      // actually starting it, and the loser stops at `waiting_external`.
+      await goalService.advance(graph.goal.id);
 
       close();
-      onCreated?.({
-        agentId: result.assigneeAgentId ?? undefined,
-        identifier: result.identifier,
-      });
+      onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
       console.error('[CreateGoalContent] create failed:', error);
-      await Promise.allSettled(verifyCriteriaIds.map((id) => verifyService.deleteCriterion(id)));
       toast.error(t('createGoal.createFailed'));
+    } finally {
+      setIsCreating(false);
     }
-  }, [
-    activeWorkspaceId,
-    agentId,
-    canCreate,
-    close,
-    createTask,
-    editor,
-    onCreated,
-    plan,
-    projectId,
-    requirement,
-    t,
-    visibility,
-  ]);
+  }, [agentId, canCreate, close, onCreated, plan, projectId, requirement, t]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;
@@ -737,17 +711,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          {activeWorkspaceId && (
-            <TaskVisibilityTag
-              visibility={visibility}
-              lockedReason={
-                isPrivateAgent ? t('createTask.visibility.privateAgentLocked') : undefined
-              }
-              onChange={setVisibility}
-            >
-              <TaskVisibilityChipLabel visibility={visibility} />
-            </TaskVisibilityTag>
-          )}
           {step === 'review' && (
             <ActionIcon
               icon={Paperclip}

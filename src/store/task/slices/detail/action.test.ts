@@ -38,8 +38,9 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   notification: { error: vi.fn() },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 beforeEach(() => {

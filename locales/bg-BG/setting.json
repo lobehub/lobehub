@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "Облачна пясъчник среда",
   "tools.builtins.lobe-creds.description": "Управление на потребителски идентификационни данни за автентикация, задаване на променливи на средата и API проверка — управление на API ключове, OAuth токени и тайни за интеграции на трети страни.",
   "tools.builtins.lobe-creds.title": "Идентификационни данни",
-  "tools.builtins.lobe-cron.description": "Управление на планирани задачи, които се изпълняват автоматично в определени моменти. Създаване, актуализиране, активиране/деактивиране и наблюдение на повтарящи се задачи.",
-  "tools.builtins.lobe-cron.title": "Планирани задачи",
   "tools.builtins.lobe-group-agent-builder.description": "Конфигурирайте метаданни на групи, членове и споделено съдържание за групи с множество агенти",
   "tools.builtins.lobe-group-agent-builder.title": "Създател на групови агенти",
   "tools.builtins.lobe-group-management.description": "Оркестрирайте и управлявайте разговори в групи от агенти",

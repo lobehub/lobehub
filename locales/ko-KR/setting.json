@@ -1468,8 +1468,6 @@
   "tools.builtins.lobe-cloud-sandbox.title": "클라우드 샌드박스",
   "tools.builtins.lobe-creds.description": "인증, 환경 변수 주입, API 검증을 위한 사용자 자격 증명을 관리합니다 — API 키, OAuth 토큰, 서드파티 연동 비밀키 등을 처리합니다.",
   "tools.builtins.lobe-creds.title": "자격 증명",
-  "tools.builtins.lobe-cron.description": "지정된 시간에 자동으로 실행되는 예약 작업을 관리합니다. 반복 작업 생성, 수정, 활성/비활성, 모니터링을 지원합니다.",
-  "tools.builtins.lobe-cron.title": "예약 작업",
   "tools.builtins.lobe-group-agent-builder.description": "멀티 에이전트 그룹을 위한 그룹 메타데이터, 구성원, 공유 콘텐츠를 설정합니다",
   "tools.builtins.lobe-group-agent-builder.title": "그룹 에이전트 빌더",
   "tools.builtins.lobe-group-management.description": "멀티 에이전트 그룹 대화를 오케스트레이션하고 관리합니다",
