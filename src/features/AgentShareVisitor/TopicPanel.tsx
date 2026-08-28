@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Center, Flexbox, SkeletonTitle, Text } from '@lobehub/ui';
+import { Center, Flexbox, SkeletonTitle } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
@@ -70,13 +71,19 @@ const TopicPanel = memo<{ onSelect?: () => void; shareId: string; showTitle?: bo
             const active = topic.id === activeTopicId;
             return (
               <Flexbox
+                aria-current={active ? 'true' : undefined}
+                as={'button'}
                 key={topic.id}
                 paddingBlock={6}
                 paddingInline={8}
                 style={{
-                  background: active ? cssVar.colorFillSecondary : undefined,
+                  background: active ? cssVar.colorFillSecondary : 'none',
+                  border: 'none',
                   borderRadius: 6,
+                  color: 'inherit',
                   cursor: 'pointer',
+                  font: 'inherit',
+                  textAlign: 'left',
                 }}
                 onClick={() => selectTopic(topic.id)}
               >
