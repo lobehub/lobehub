@@ -144,7 +144,7 @@ export function registerReplayCommand(program: Command) {
                   console.log(
                     `${node.divergence ? '≠' : '✓'} node ${node.nodeIndex + 1} (step ${node.stepIndex})` +
                       (node.divergence
-                        ? `  expected ${node.divergence.expected || '(final answer)'} / got ${node.divergence.got || '(final answer)'}`
+                        ? `  ${node.divergence.field}: recorded ${node.divergence.recorded || '(final answer)'} / replayed ${node.divergence.replayed || '(final answer)'}`
                         : ''),
                   ),
             reproductionJudge: judgeModel ? { judgeModel } : undefined,
