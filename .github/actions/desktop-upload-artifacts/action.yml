@@ -24,11 +24,15 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Export renderer OTA base hash
+    - name: Validate renderer OTA base hash
       shell: bash
-      env:
-        RENDERER_OTA_PUBLIC_KEY: ${{ inputs.renderer-ota-public-key }}
-      run: node apps/desktop/scripts/mainHash.mjs > apps/desktop/release/renderer-mainhash.txt
+      run: |
+        set -euo pipefail
+        MAIN_HASH=$(cat apps/desktop/release/renderer-mainhash.txt)
+        if [[ ! "$MAIN_HASH" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Invalid renderer OTA main bundle hash"
+          exit 1
+        fi
 
     - name: Sign renderer OTA r0 baseline
       if: runner.os == 'Linux' && inputs.renderer-ota-private-key != '' && inputs.update-channel != ''

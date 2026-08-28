@@ -106,6 +106,8 @@ jobs:
         env:
           BASE_MAIN_HASH: ${{ steps.base.outputs.main_hash }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
         run: |
           MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
           echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
