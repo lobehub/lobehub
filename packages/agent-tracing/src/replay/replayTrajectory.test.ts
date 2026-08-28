@@ -150,8 +150,9 @@ describe('replayTrajectory', () => {
     expect(result.divergedAtNode).toBe(0);
     expect(result.nodes).toHaveLength(1);
     expect(result.nodes[0].divergence).toEqual({
-      expected: 'fs____readFile',
-      got: 'fs____writeFile',
+      field: 'toolSignature',
+      recorded: 'fs____readFile',
+      replayed: 'fs____writeFile',
     });
     expect(result.nodes[0].unmatchedTools).toEqual(['fs____writeFile']);
   });

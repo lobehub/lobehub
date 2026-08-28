@@ -19,10 +19,24 @@ import {
 
 export type DivergencePolicy = 'continue' | 'stop';
 
+/**
+ * One field of a node that came out differently from the recording.
+ *
+ * `field` is what keeps the shape shared with the goal-coordinator layer, which
+ * reports its own divergences the same way: a reader decides per field whether
+ * it is scored or merely informational. Content, for instance, is expected to
+ * differ and is judged rather than failed.
+ */
+export interface TrajectoryDivergence {
+  field: 'toolSignature';
+  recorded: string;
+  replayed: string;
+}
+
 export interface TrajectoryNode {
   attempt: ReplayAttempt;
   /** Present only when the node's tool calls differ from the recorded run. */
-  divergence?: { expected: string; got: string };
+  divergence?: TrajectoryDivergence;
   nodeIndex: number;
   recorded: { content: string; toolSignature: string };
   stepIndex: number;
@@ -134,7 +148,11 @@ export const replayTrajectory = async ({
     };
 
     if (!attempt.error && actualSignature !== recordedSignature) {
-      node.divergence = { expected: recordedSignature, got: actualSignature };
+      node.divergence = {
+        field: 'toolSignature',
+        recorded: recordedSignature,
+        replayed: actualSignature,
+      };
       divergedAtNode ??= nodeIndex;
     }
 

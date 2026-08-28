@@ -19,8 +19,9 @@ export const printTrajectoryNode = (node: TrajectoryNode, totalNodes: number) =>
   console.log(`${mark} ${label}  ${pc.dim(`${node.attempt.durationMs}ms`)}`);
 
   if (node.divergence) {
-    console.log(pc.yellow(`    expected  ${node.divergence.expected || '(final answer)'}`));
-    console.log(pc.yellow(`    got       ${node.divergence.got || '(final answer)'}`));
+    console.log(pc.yellow(`    ${node.divergence.field}`));
+    console.log(pc.yellow(`      recorded  ${node.divergence.recorded || '(final answer)'}`));
+    console.log(pc.yellow(`      replayed  ${node.divergence.replayed || '(final answer)'}`));
   } else if (node.recorded.toolSignature) {
     console.log(pc.dim(`    ${node.recorded.toolSignature}`));
   }

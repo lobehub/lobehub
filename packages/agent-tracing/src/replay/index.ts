@@ -23,6 +23,7 @@ export {
   type DivergencePolicy,
   replayTrajectory,
   type ReplayTrajectoryParams,
+  type TrajectoryDivergence,
   type TrajectoryNode,
   type TrajectoryResult,
 } from './replayTrajectory';
