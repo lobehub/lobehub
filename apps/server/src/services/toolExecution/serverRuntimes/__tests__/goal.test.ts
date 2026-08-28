@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
+
 const mocks = vi.hoisted(() => ({
   advanceGoal: vi.fn(),
   create: vi.fn(),
@@ -19,9 +21,9 @@ const { goalRuntime } = await import('../goal');
 const runtime = () =>
   goalRuntime.factory({
     agentId: 'agt_1',
+    principal: createOwnerPrincipal('user-1'),
     serverDB: {} as never,
     toolManifestMap: {},
-    userId: 'user-1',
     workspaceId: 'ws-1',
   } as never);
 

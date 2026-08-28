@@ -19,10 +19,14 @@ import type { ServerRuntimeRegistration } from './types';
  */
 export const goalRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    // Goals are an owner-scoped resource: creation, scheduling and the paid
+    // work they dispatch all run under the resource owner, matching the other
+    // owner-side runtimes (see the `principal` doc on ToolExecutionContext).
+    const userId = context.principal.resourceOwnerUserId;
+    if (!userId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Goal tool execution');
     }
-    const { agentId, serverDB, userId, workspaceId } = context;
+    const { agentId, serverDB, workspaceId } = context;
 
     return {
       createGoal: async (args: {
