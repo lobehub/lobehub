@@ -13,6 +13,7 @@ import {
   COMPACT_MODEL_PICKER_STYLE,
   compactModelTriggerText,
   modelPickerStyles,
+  resolveServerDefaultAgentModels,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
@@ -56,7 +57,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const serverDefaultModelOptions = useMemo(() => {
     const models =
       serverCapability.data?.enabled === true && serverDefaultAgentType
-        ? serverCapability.data.models[serverDefaultAgentType]
+        ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
         : [];
     return buildServerDefaultModelOptions(models, builtinAiModelList);
   }, [builtinAiModelList, serverCapability.data, serverDefaultAgentType]);

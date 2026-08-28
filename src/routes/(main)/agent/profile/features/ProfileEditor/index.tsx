@@ -16,6 +16,7 @@ import { Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -154,7 +155,7 @@ const ProfileEditor = memo(() => {
   const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
   const serverDefaultModels =
     serverCapability.data?.enabled === true && serverDefaultAgentType
-      ? serverCapability.data.models[serverDefaultAgentType]
+      ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
       : [];
   const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
   const serverDefaultUnavailableReason = !apiModeLabEnabled
