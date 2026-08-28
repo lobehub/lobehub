@@ -2,7 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
 import { resolveLocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import type * as LobeChatConst from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
+import { type LobeChatPluginApi, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1267,7 +1267,7 @@ describe('StreamingExecutor actions', () => {
         expect.objectContaining({ executionEnv: 'local' }),
       );
       const readFile = state.toolManifestMap['lobe-local-system']?.api.find(
-        (api) => api.name === 'readFile',
+        (api: LobeChatPluginApi) => api.name === 'readFile',
       );
 
       expect(readFile?.description).toContain('base64');
