@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import {
@@ -17,11 +18,14 @@ import {
   goalNodes,
   goals,
   tasks,
+  taskTopics,
+  topics,
   users,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
+import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './index';
 
@@ -43,6 +47,8 @@ afterEach(async () => {
   await serverDB.delete(goals);
   await serverDB.delete(acceptances);
   await serverDB.delete(agentOperations);
+  await serverDB.delete(taskTopics);
+  await serverDB.delete(topics);
   await serverDB.delete(tasks);
   await serverDB.delete(agents);
   await serverDB.delete(users);
@@ -61,6 +67,165 @@ describe('GoalService', () => {
     expect(taskRows).toHaveLength(1);
     expect(current.nodes.find((node) => node.kind === 'work')?.taskId).toBe(taskRows[0].id);
     expect(current.workVersions).toHaveLength(1);
+  });
+
+  it('starts the bound Work once when advances race on dispatch', async () => {
+    // Overlapping advances (an event hook, a manual nudge, the sweep) both read
+    // the task as backlog; without an atomic claim both would call runTask and
+    // the user would pay for the same Work twice.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockImplementation(async ({ taskId }) => ({ taskId }) as never);
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Raced dispatch', work: ['Only run once'] });
+    await service.tick(graph.goal.id);
+
+    const results = await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(results.filter((result) => result.message.startsWith('Started task'))).toHaveLength(1);
+  });
+
+  it('retries a failed verification once when advances race on recovery', async () => {
+    // The dispatch claim only covers starting a backlog Work; the automatic
+    // retry path spawns its own run, so without the same claim two overlapping
+    // advances would each pay for an attempt.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockImplementation(async ({ taskId }) => ({ taskId }) as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { maxAttemptsPerWork: 3 } },
+      title: 'Raced recovery',
+      work: ['Retry me once'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    runSpy.mockClear();
+
+    await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands back a dispatch claim whose worker died before the run existed', async () => {
+    // The claim is taken just before `runTask` creates the topic. If the worker
+    // dies in that sliver the task is `running` with no operation to reclaim,
+    // and every later advance would report `waiting_external` forever.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockRejectedValue(new Error('worker died'));
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ title: 'Orphaned claim', work: ['Start me'] });
+    const created = await service.tick(graph.goal.id);
+
+    // The claim survives the crash: put the row back where a dead worker left it.
+    await expect(service.tick(graph.goal.id)).rejects.toThrow('worker died');
+    await taskModel.updateStatus(created.taskId!, 'running');
+    await serverDB
+      .update(tasks)
+      .set({ updatedAt: new Date(Date.now() - 60 * 60 * 1000) })
+      .where(eq(tasks.id, created.taskId!));
+
+    const released = await service.tick(graph.goal.id);
+
+    expect(released.outcome).toBe('advanced');
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('backlog');
+    runSpy.mockRestore();
+  });
+
+  it('leaves a fresh dispatch claim alone', async () => {
+    // The same shape a moment after the claim is just a run about to start.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockRejectedValue(new Error('worker died'));
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ title: 'Fresh claim', work: ['Start me'] });
+    const created = await service.tick(graph.goal.id);
+    await expect(service.tick(graph.goal.id)).rejects.toThrow('worker died');
+    await taskModel.updateStatus(created.taskId!, 'running');
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('waiting_external');
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('running');
+  });
+
+  it('reopens a goal its round budget stopped when the budget is raised', async () => {
+    // `tick` refuses to move a paused goal, so without this the queued advance
+    // returns straight away and the user has to find Resume as a second gesture.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      maxRounds: 1,
+      title: 'Budget stopped',
+      work: ['Costs a round'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(topics).values({ id: 'tpc_budget', userId });
+    await serverDB
+      .insert(taskTopics)
+      .values({ seq: 1, taskId: created.taskId!, topicId: 'tpc_budget', userId });
+
+    const stopped = await service.tick(graph.goal.id);
+    expect(stopped.outcome).toBe('no_progress');
+    expect(stopped.message).toContain('Round budget reached');
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+
+    const raised = await service.setBudget(graph.goal.id, { maxRounds: 5 });
+
+    expect(raised?.status).not.toBe('paused');
+  });
+
+  it('leaves a deliberately paused goal paused when its budget changes', async () => {
+    // Nothing distinguishes a user pause from a budget pause on the row, so the
+    // reopen is limited to goals whose budget was actually binding.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'User paused', work: ['Wait'] });
+    await service.pause(graph.goal.id);
+
+    const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 50 });
+
+    expect(updated?.status).toBe('paused');
+  });
+
+  it('refuses to delete a goal whose running work cannot be stopped', async () => {
+    // Deleting anyway would remove the only surface that can stop an operation
+    // which keeps spending.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Unstoppable', work: ['Runs on'] });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(topics).values({ id: 'tpc_stuck', userId });
+    await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_stuck', { seq: 1 });
+    await new TaskTopicModel(serverDB, userId).updateStatus(
+      created.taskId!,
+      'tpc_stuck',
+      'running',
+    );
+    vi.spyOn(TaskService.prototype, 'cancelTopic').mockRejectedValue(new Error('gateway is down'));
+
+    await expect(service.delete(graph.goal.id)).rejects.toThrow(/not deleted/);
+    expect(await service.graph(graph.goal.id)).toBeDefined();
+  });
+
+  it('parks a goal nothing can move so the sweep stops re-picking it', async () => {
+    // A goal with no Work can only report `no_progress`. Left `running` it is
+    // selected by every newest-first scan forever, and enough of them starve
+    // every other stalled goal out of the sweep's window.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Nothing to do' });
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('no_progress');
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+    expect(
+      await GoalModel.listStalled(serverDB, { staleBefore: new Date(Date.now() - 60_000) }),
+    ).not.toContainEqual(expect.objectContaining({ id: graph.goal.id }));
   });
 
   it('keeps the overall requirement as background while making the current work authoritative', async () => {

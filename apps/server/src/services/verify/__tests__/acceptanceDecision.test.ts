@@ -10,8 +10,6 @@ const mocks = vi.hoisted(() => ({
   findReportByRun: vi.fn(),
   findRunById: vi.fn(),
   ensureForSubject: vi.fn(),
-  goalFindBySubject: vi.fn(),
-  goalUpdateStatus: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskResolve: vi.fn(),
@@ -41,21 +39,11 @@ vi.mock('@/database/models/verifyEvidence', () => ({ VerifyEvidenceModel: vi.fn(
 vi.mock('@/database/models/verifyReport', () => ({
   VerifyReportModel: vi.fn(() => ({ findByRun: mocks.findReportByRun })),
 }));
-vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({
-    findBySubject: mocks.goalFindBySubject,
-    updateStatus: mocks.goalUpdateStatus,
-  })),
-}));
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(() => ({ resolve: mocks.taskResolve })),
 }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
-vi.mock('../goalLoop', () => ({
-  maybeContinueGoalLoop: vi.fn().mockResolvedValue('spawn-failed'),
-  syncGoalToolState: vi.fn(),
-}));
 vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));
 
 const service = () => new AcceptanceService({} as any, 'user-1');
@@ -177,55 +165,5 @@ describe('AcceptanceService decision gating', () => {
       expect.objectContaining({ comment: 'dark mode needs a screenshot' }),
     );
     expect(mocks.updateStatus).toHaveBeenCalledWith('acc-1', 'rejected');
-  });
-});
-
-describe('AcceptanceService goal-status mirroring', () => {
-  const taskAcceptance = (status: string) => ({
-    id: 'acc-1',
-    status,
-    subjectId: 'task-1',
-    subjectType: 'task',
-  });
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.findReportByRun.mockResolvedValue(null);
-    mocks.goalFindBySubject.mockResolvedValue({ id: 'goal-1', status: 'running' });
-  });
-
-  it('does NOT flip a running goal to verifying when the round is merely planned', async () => {
-    // Regression (caught by the E2E acceptance run): the verify plan is
-    // instantiated and confirmed at RUN START, so the acceptance recompute goes
-    // pending → planned while the round is still executing. Mirroring `planned`
-    // to `verifying` showed 验证中 for the whole execution phase.
-    mocks.findById.mockResolvedValue(taskAcceptance('pending'));
-    mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1, status: 'planned' }]);
-
-    await expect(service().recomputeStatus('acc-1')).resolves.toBe('planned');
-    expect(mocks.goalUpdateStatus).not.toHaveBeenCalled();
-  });
-
-  it('mirrors a genuinely verifying round onto the goal', async () => {
-    mocks.findById.mockResolvedValue(taskAcceptance('planned'));
-    mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1, status: 'verifying' }]);
-
-    await expect(service().recomputeStatus('acc-1')).resolves.toBe('verifying');
-    expect(mocks.goalUpdateStatus).toHaveBeenCalledWith('goal-1', 'verifying');
-  });
-
-  it('mirrors a delivered round as review, but never re-opens a terminal goal', async () => {
-    mocks.findById.mockResolvedValue(taskAcceptance('verifying'));
-    mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1, status: 'passed' }]);
-
-    await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
-    expect(mocks.goalUpdateStatus).toHaveBeenCalledWith('goal-1', 'review');
-
-    mocks.goalUpdateStatus.mockClear();
-    mocks.goalFindBySubject.mockResolvedValue({ id: 'goal-1', status: 'achieved' });
-    mocks.findById.mockResolvedValue(taskAcceptance('verifying'));
-
-    await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
-    expect(mocks.goalUpdateStatus).not.toHaveBeenCalled();
   });
 });

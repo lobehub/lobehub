@@ -55,17 +55,22 @@ interface TaskPageHeaderVisibilityParams {
   agentId?: string;
   isEmptyHero: boolean;
   isMobile: boolean;
+  projectId?: string;
 }
 
 export const getTaskPageHeaderVisibility = ({
   agentId,
   isEmptyHero,
   isMobile,
+  projectId,
 }: TaskPageHeaderVisibilityParams) => {
-  const isGlobalEmpty = !agentId && isEmptyHero;
+  // The global page's own crumb is the `tasks` tab, so the breadcrumb only
+  // earns its place once the list is scoped to an agent or a project.
+  const isScoped = !!(agentId || projectId);
+  const isGlobalEmpty = !isScoped && isEmptyHero;
 
   return {
-    showBreadcrumb: !isGlobalEmpty,
+    showBreadcrumb: isScoped,
     showTaskAgentPanelToggle: !isGlobalEmpty && shouldRenderTaskAgentPanelToggle(isMobile),
     showViewOptions: !isGlobalEmpty,
   };
@@ -108,16 +113,17 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
   const [searchParams, setSearchParams] = useSearchParams();
   const [scheduledPage, setScheduledPage] = useState(1);
-  const canSwitchCollection = !agentId && !projectId;
-  const collection = canSwitchCollection ? resolveTaskCollection(searchParams) : 'tasks';
-  const isScheduledCollection = canSwitchCollection && collection === 'scheduled';
+  const collection = resolveTaskCollection(searchParams);
+  const isScheduledCollection = collection === 'scheduled';
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
+  // Every scope splits automated work out of the ordinary tab — it is the
+  // scheduled tab's content, and listing it twice makes the split meaningless.
   const { error, isLoading, mutate } = useFetchTaskList(
     projectId
-      ? { projectId, visibility: 'all' }
+      ? { automated: false, projectId, visibility: 'all' }
       : agentId
-        ? { agentId }
+        ? { agentId, automated: false }
         : { allAgents: true, automated: false },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
@@ -133,9 +139,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
   const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
   const scheduledSWR = useFetchScheduledTaskList({
+    agentId,
     enabled: isScheduledCollection,
     limit: SCHEDULED_TASK_PAGE_SIZE,
     offset: (scheduledPage - 1) * SCHEDULED_TASK_PAGE_SIZE,
+    projectId,
   });
   const scheduledTasks = scheduledSWR.data?.data ?? [];
   const scheduledTasksTotal = scheduledSWR.data?.total ?? 0;
@@ -219,24 +227,26 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
     agentId,
     isEmptyHero: isScheduledCollection ? false : isEmptyHero,
     isMobile,
+    projectId,
   });
 
-  const collectionTabs = canSwitchCollection ? (
-    <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
-      <TabsList>
-        <TabsIndicator />
-        <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
-        <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
-      </TabsList>
-    </TabsRoot>
-  ) : (
-    <Breadcrumb />
+  const headerLeft = (
+    <Flexbox horizontal align={'center'} gap={8}>
+      {headerVisibility.showBreadcrumb && <Breadcrumb />}
+      <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
+        <TabsList>
+          <TabsIndicator />
+          <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
+          <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
+        </TabsList>
+      </TabsRoot>
+    </Flexbox>
   );
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={headerVisibility.showBreadcrumb || canSwitchCollection ? collectionTabs : undefined}
+        left={headerLeft}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {!isScheduledCollection && !agentId && !projectId && <TaskListVisibilityFilter />}

@@ -1,9 +1,10 @@
 import type {
+  GoalConfig,
   GoalEdgeKind,
   GoalGraphSnapshot,
+  GoalItem,
   GoalNodeKind,
   GoalNodeStatus,
-  GoalRecoveryPolicy,
   GoalTickResult,
   TaskItem,
   TaskTopicHandoff,
@@ -31,15 +32,21 @@ const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
 const GOAL_ACCEPTANCE_WORK_TITLE = 'Complete full Goal acceptance';
 
+export interface CreateGoalWorkInput {
+  description?: string;
+  title: string;
+}
+
 export interface CreateGoalGraphInput {
   agentId?: string;
-  config?: { recovery?: GoalRecoveryPolicy };
+  config?: GoalConfig;
   maxRounds?: number;
   maxTotalCost?: number;
   projectId?: string;
   requirement?: string;
   title: string;
-  work?: string[];
+  /** Seed Work nodes, in dependency-free order. A plain string is title-only. */
+  work?: Array<CreateGoalWorkInput | string>;
 }
 
 export interface CreateGoalNodeInput {
@@ -108,8 +115,13 @@ export class GoalService {
       });
       if (!problem) throw new Error('Failed to seed goal problem');
 
-      for (const title of input.work ?? []) {
-        const work = await this.graphModel.createNode(goal.id, { kind: 'work', title });
+      for (const seed of input.work ?? []) {
+        const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
+        const work = await this.graphModel.createNode(goal.id, {
+          description,
+          kind: 'work',
+          title,
+        });
         if (!work) throw new Error('Failed to seed goal work');
         await this.graphModel.createEdge(goal.id, problem.id, work.id, 'decomposes');
       }
@@ -139,19 +151,93 @@ export class GoalService {
     return edge;
   };
 
+  /**
+   * Stop everything the goal has running, then delete it and its graph.
+   *
+   * Deleting only the goal row cascades the graph away but leaves each Work
+   * Task — and the agent operation behind it — running, spending the user's
+   * budget with nothing left on screen to stop it. The tasks themselves stay:
+   * they are ordinary tasks with their own history and acceptance.
+   */
+  delete = async (goalId: string) => {
+    const graph = await this.graphModel.getGraph(goalId);
+    const taskIds = graph?.nodes.flatMap((node) => (node.taskId ? [node.taskId] : [])) ?? [];
+
+    for (const taskId of taskIds) {
+      const topics = await this.taskTopicModel.findByTaskId(taskId);
+      for (const topic of topics) {
+        if (topic.status !== 'running' || !topic.topicId) continue;
+        // Deliberately not swallowed. Interrupting can fail — the runtime or a
+        // device gateway may be unreachable — and going ahead would delete the
+        // only surface that can stop an operation which keeps spending. Better
+        // to leave the goal intact and say so.
+        try {
+          await this.taskService.cancelTopic(topic.topicId);
+        } catch (error) {
+          throw new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Could not stop the work still running for this goal, so it was not deleted. Try again once the run is reachable.',
+          });
+        }
+      }
+      await this.taskModel
+        .updateStatusIfCurrent(taskId, 'running', 'paused')
+        .catch((error) => console.error('[GoalService.delete] failed to pause task:', error));
+    }
+
+    return this.goalModel.delete(goalId);
+  };
+
   pause = async (goalId: string) => {
     const goal = await this.goalModel.updateStatus(goalId, 'paused');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
   };
 
+  /**
+   * What the goal has spent against what it is allowed to spend.
+   *
+   * Rounds are counted across every Work Task in the graph, not per Work — the
+   * budget is the goal's, so `setBudget` has to read it exactly the way the
+   * coordinator does or raising a budget would not reliably unstick a goal.
+   */
+  private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
+    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
+    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
+    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
+    return {
+      costLimitReached: goal.maxTotalCost !== null && totalCost >= Number(goal.maxTotalCost),
+      roundLimitReached: goal.maxRounds !== null && runs.length >= goal.maxRounds,
+      runs,
+      totalCost,
+    };
+  };
+
   setBudget = async (
     goalId: string,
     budget: { maxRounds?: number | null; maxTotalCost?: number | null },
   ) => {
+    const before = await this.requireGraph(goalId);
+    const wasBinding = await this.evaluateBudget(before.goal, before);
+
     const goal = await this.goalModel.update(goalId, budget);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-    return goal;
+
+    // Raising a budget is how a user un-sticks a goal the coordinator parked on
+    // one, and `tick` refuses to move a paused goal — so without this the
+    // queued advance would return straight away and the user would have to find
+    // Resume as a second gesture. Only a goal the budget actually stopped is
+    // reopened: if the old budget was not binding, this pause was somebody's
+    // deliberate one and is left alone.
+    const stoppedByBudget = wasBinding.costLimitReached || wasBinding.roundLimitReached;
+    if (goal.status !== 'paused' || !stoppedByBudget) return goal;
+
+    const nowBinding = await this.evaluateBudget(goal, before);
+    if (nowBinding.costLimitReached || nowBinding.roundLimitReached) return goal;
+
+    return (await this.resume(goalId)) ?? goal;
   };
 
   resume = async (goalId: string) => {
@@ -295,6 +381,14 @@ export class GoalService {
         await this.goalModel.updateStatus(goalId, 'achieved');
         return { goalId, message: 'Goal-level acceptance passed', outcome: 'achieved' };
       }
+      // Nothing here moves without a person: either there is no Work at all, or
+      // every remaining Work is blocked and nothing is running to unblock it.
+      // Say so on the row instead of leaving a goal that reads as `running`
+      // while it cannot run — and, just as importantly, take it out of the
+      // sweep's window. A `running` goal that always reports `no_progress` is
+      // picked by every scan forever, and enough of them starve every other
+      // stalled goal out of the newest-first limit.
+      await this.goalModel.updateStatus(goalId, 'paused');
       return {
         goalId,
         message:
@@ -428,7 +522,7 @@ export class GoalService {
           this.db,
           this.userId,
           this.workspaceId,
-        ).recover({ goal: graph.goal, spentCost: totalCost, task, taskCarried: false });
+        ).recover({ goal: graph.goal, spentCost: totalCost, task });
         if (recovery === 'continued') {
           await this.graphModel.updateNodeStatus(
             goalId,
@@ -483,12 +577,10 @@ export class GoalService {
       };
     }
 
-    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
-    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
-    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
-    const roundLimitReached = graph.goal.maxRounds !== null && runs.length >= graph.goal.maxRounds;
-    const costLimitReached =
-      graph.goal.maxTotalCost !== null && totalCost >= Number(graph.goal.maxTotalCost);
+    const { costLimitReached, roundLimitReached, runs, totalCost } = await this.evaluateBudget(
+      graph.goal,
+      graph,
+    );
     if (roundLimitReached || costLimitReached) {
       await this.goalModel.updateStatus(goalId, 'paused');
       return {
@@ -502,18 +594,49 @@ export class GoalService {
       };
     }
 
-    const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
-      maxSteps: resolveWorkMaxSteps(graph.goal),
-      taskId: task.id,
-      trigger: 'goal',
+    // Advances arrive from independent sources — an event hook, a manual nudge,
+    // the sweep — and can overlap. `runTask` decides whether a run is already
+    // in flight by reading the task's topics and only then creating one, so two
+    // overlapping advances would both dispatch this Work and pay for it twice.
+    // Claim the task first: the transition is a single conditional UPDATE, so
+    // exactly one advance can win it.
+    const claimed = await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'running', {
+      error: null,
+      startedAt: new Date(),
     });
-    return {
-      goalId,
-      message: `Started task ${task.identifier}`,
-      nodeId: frontier.id,
-      outcome: 'waiting_external',
-      taskId: run.taskId,
-    };
+    if (!claimed) {
+      return {
+        goalId,
+        message: `Task ${task.identifier} is already being started`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    try {
+      const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
+        maxSteps: resolveWorkMaxSteps(graph.goal),
+        taskId: task.id,
+        trigger: 'goal',
+      });
+      return {
+        goalId,
+        message: `Started task ${task.identifier}`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: run.taskId,
+      };
+    } catch (error) {
+      // We claimed the task, so nothing else will put it back. Release it or the
+      // Work stays 'running' with no run behind it and only the lease reclaims it.
+      await this.taskModel
+        .updateStatusIfCurrent(task.id, 'running', task.status)
+        .catch((releaseError) => {
+          console.error('[GoalService.tick] failed to release claimed task:', releaseError);
+        });
+      throw error;
+    }
   };
 
   private requireGraph = async (goalId: string) => {
@@ -544,9 +667,26 @@ export class GoalService {
     const [runningTopic] = await this.taskTopicModel.findRunningByTaskIds([task.id]);
     const operationId = runningTopic?.operationId;
     const topicId = runningTopic?.topicId;
-    if (!operationId || !topicId) return undefined;
-
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
+
+    if (!operationId || !topicId) {
+      // A task claimed for dispatch but with no run behind it. Normally this is
+      // the sliver between the claim and `runTask` creating the topic; if the
+      // worker died in there it is permanent, and every later advance would
+      // report `waiting_external` forever because there is no operation to
+      // reclaim. Once the claim is older than the lease, hand it back.
+      if (new Date(task.updatedAt) >= staleBefore) return undefined;
+      const released = await this.taskModel.updateStatusIfCurrent(task.id, 'running', 'backlog');
+      if (!released) return undefined;
+      return {
+        goalId: graph.goal.id,
+        message: `Released the abandoned dispatch claim on task ${task.identifier}`,
+        nodeId,
+        outcome: 'advanced',
+        taskId: task.id,
+      };
+    }
+
     const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
     const reclaimed = await this.db.transaction(async (tx) => {
       const settled = await new AgentOperationModel(
@@ -580,7 +720,7 @@ export class GoalService {
       this.db,
       this.userId,
       this.workspaceId,
-    ).recover({ goal: graph.goal, task, taskCarried: false });
+    ).recover({ goal: graph.goal, task });
     if (recovery === 'continued') {
       await this.graphModel.updateNodeStatus(
         graph.goal.id,

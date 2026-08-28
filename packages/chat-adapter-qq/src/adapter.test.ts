@@ -423,7 +423,7 @@ describe('QQAdapter', () => {
       const data = await message.attachments[0].fetchData!();
 
       expect(data).toBeInstanceOf(Buffer);
-      expect(data.length).toBe(4);
+      expect(data.byteLength).toBe(4);
 
       vi.unstubAllGlobals();
     });

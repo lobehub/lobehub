@@ -72,9 +72,9 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, isQueryScopeCurrent, mutate } = useFetchTaskGroupList(
     projectId
-      ? { excludeStatuses, groupBy, projectId }
+      ? { automated: false, excludeStatuses, groupBy, projectId }
       : agentId
-        ? { agentId, excludeStatuses, groupBy }
+        ? { agentId, automated: false, excludeStatuses, groupBy }
         : { allAgents: true, automated: false, excludeStatuses, groupBy },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's

@@ -985,6 +985,20 @@ export const sharedMainAreaChildren: RouteObject[] = [
         errorElement: <ErrorBoundary resetPath="../tasks" />,
         path: 'task',
       },
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/goal/[goalId]'),
+              'Desktop > Goal Detail',
+            ),
+            handle: { meta: goalDetailRouteMeta },
+            path: ':goalId',
+          },
+        ],
+        errorElement: <ErrorBoundary resetPath="../tasks" />,
+        path: 'goal',
+      },
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/(task-workspace)/_layout'),

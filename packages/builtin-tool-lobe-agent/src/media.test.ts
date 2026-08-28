@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAnalyzeMediaContent,
   createMediaFileItems,
+  createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   filterAllowedMediaUrls,
   formatMediaUrlValidationError,
+  hasAnalyzableMediaFiles,
   hasUserMediaFiles,
   MAX_MEDIA_URL_LENGTH,
   MAX_MEDIA_URLS,
@@ -106,6 +108,53 @@ describe('media', () => {
         uri: 'https://example.com/audio.mp3',
       },
     ]);
+  });
+
+  it('should create stable refs for durable tool-result images', () => {
+    const items = createMediaFileItemsFromMessage({
+      id: 'tool-message-1',
+      pluginState: {
+        filename: 'character.png',
+        images: [
+          {
+            mediaType: 'image/png',
+            url: 'data:image/png;base64,opaque-data-must-not-be-exposed',
+          },
+          {
+            fileId: 'tool-image-1',
+            mediaType: 'image/png',
+            url: 'https://example.com/tool-image.png',
+          },
+        ],
+      },
+      role: 'tool',
+    });
+
+    expect(items).toEqual([
+      {
+        description: 'character.png',
+        id: 'tool-image-1',
+        localRef: 'image_2',
+        messageId: 'tool-message-1',
+        name: 'character.png',
+        ref: createMediaFileRef({ index: 1, messageId: 'tool-message-1', type: 'image' }),
+        type: 'image',
+        uri: 'https://example.com/tool-image.png',
+      },
+    ]);
+  });
+
+  it('should limit analyzable message media to user attachments and durable tool images', () => {
+    const imageList = [{ url: 'https://example.com/image.png' }];
+
+    expect(hasAnalyzableMediaFiles({ imageList, role: 'user' })).toBe(true);
+    expect(hasAnalyzableMediaFiles({ imageList, role: 'assistant' })).toBe(false);
+    expect(
+      hasAnalyzableMediaFiles({
+        pluginState: { images: [{ url: 'https://example.com/tool-image.png' }] },
+        role: 'tool',
+      }),
+    ).toBe(true);
   });
 
   it('should infer URL item type and name from direct media urls', () => {

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
           backgroundColor?: string;
           name?: string;
           slug?: string;
+          storedAvatar?: string | null;
           title?: string;
         }
       >,
@@ -111,6 +112,8 @@ vi.mock('@/store/agent/selectors', () => ({
       state.agentMap[agentId] || {},
     getAgentSlugById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
       state.agentMap[agentId]?.slug,
+    getAgentStoredAvatarById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
+      state.agentMap[agentId]?.storedAvatar || undefined,
   },
 }));
 
@@ -180,6 +183,19 @@ describe('AgentHeader', () => {
     render(<AgentHeader />);
 
     expect(mocks.artworkProps.last?.canEdit).toBe(false);
+  });
+
+  it('keeps the display fallback out of the artwork character reference', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': { avatar: '/avatars/agent-default.png', storedAvatar: null },
+    };
+
+    render(<AgentHeader />);
+
+    expect(mocks.artworkProps.last).toMatchObject({
+      avatar: '/avatars/agent-default.png',
+      storedAvatar: undefined,
+    });
   });
 
   it('opens the identity form instead of editing inline', () => {

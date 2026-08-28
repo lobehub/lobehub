@@ -1095,6 +1095,11 @@ export class AgentRuntimeService {
     // standard branch (`groupId IS NULL`) and returns ZERO group messages, so
     // the step_start uiMessages snapshot would be empty and clobber the client.
     const groupId: string | undefined = agentState?.metadata?.groupId;
+    // threadId scopes a subtopic run. Without it the snapshot is the topic's
+    // MAIN conversation, and the client writes that into the thread's bucket at
+    // step_start / agent_runtime_end — wiping the turn the run just produced, so
+    // the subtopic panel falls back to showing the main conversation.
+    const threadId: string | undefined = agentState?.metadata?.threadId ?? undefined;
     if (!agentId || !topicId) return undefined;
 
     try {
@@ -1102,6 +1107,7 @@ export class AgentRuntimeService {
         agentId,
         groupId,
         skipWorks: options?.skipWorks,
+        threadId,
         topicId,
       });
     } catch (error) {
@@ -2902,7 +2908,31 @@ export class AgentRuntimeService {
     }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
-    const lastAssistantContent = extractTextFromMessage(lastAssistant);
+    let lastAssistantContent = extractTextFromMessage(lastAssistant);
+
+    // Gated on `!finalState`, not merely an empty `lastAssistantContent`: a
+    // real (authoritative) final state whose last turn is legitimately
+    // textless (image-only, or the "preserve an empty leaf" case in
+    // `normalizeCompletionMessages`) must keep the stub below, not go dig
+    // through the thread's own message history — a lagging read could
+    // surface an EARLIER real reply from the same thread and silently show
+    // stale text instead of the correct empty-answer signal. `!finalState`
+    // is exactly the case this fallback exists for: heterogeneous (CLI-driven)
+    // children never populate it at all (see
+    // `resolveLastAssistantContentFromThread`'s doc comment), so there is no
+    // authoritative signal here to override.
+    if (!failed && !finalState && threadId) {
+      try {
+        lastAssistantContent = await this.resolveLastAssistantContentFromThread(threadId);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to resolve content from thread %s: %O',
+          operationId,
+          threadId,
+          error,
+        );
+      }
+    }
     const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const content = failed
       ? errorReason
@@ -3096,7 +3126,27 @@ export class AgentRuntimeService {
     }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
-    const lastAssistantContent = extractTextFromMessage(lastAssistant);
+    let lastAssistantContent = extractTextFromMessage(lastAssistant);
+
+    // Gated on `!finalState`, not merely an empty `lastAssistantContent` —
+    // see the identical guard (and its full rationale) in
+    // `completeSubAgentBridge`. A real final state whose last turn is
+    // legitimately textless must keep the stub below, not risk surfacing a
+    // stale earlier reply from the thread's own history. `!finalState` is
+    // exactly the heterogeneous-isolated-member case this fallback exists
+    // for: it never populates `finalState` at all.
+    if (!failed && mode !== 'in_group' && !finalState && threadId) {
+      try {
+        lastAssistantContent = await this.resolveLastAssistantContentFromThread(threadId);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to resolve content from thread %s: %O',
+          operationId,
+          threadId,
+          error,
+        );
+      }
+    }
     const agentLabel = (finalState?.metadata?.agentId as string | undefined) ?? 'member';
     const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const anchorContent = failed
@@ -3305,6 +3355,31 @@ export class AgentRuntimeService {
         ? dbMessages.find((message) => message.id === lastAssistantId)
         : undefined) ?? lastAssistant
     );
+  }
+
+  /**
+   * Fallback content resolution for a heterogeneous (CLI-driven) sub-agent
+   * child in queue mode. `coordinator.loadAgentState`/`finalState` is always
+   * empty here: a hetero run never writes into the Redis-backed runtime state
+   * this class's step loop maintains (only `saveAgentState` calls under the
+   * homogeneous step loop populate it), and the completion webhook's
+   * `eventFields` deliberately excludes `lastAssistantContent` to keep the
+   * QStash payload lean (see `createSubAgentBridgeHook`'s doc comment) —
+   * `heteroFinish` already resolves the real answer server-side before
+   * dispatching, but that resolution never reaches this callback.
+   *
+   * The child's own conversation is queryable directly by its isolation
+   * `threadId` regardless — the same source `heteroFinish` itself reads via
+   * `heteroCurrentMsgId` before completion. Scoping by `threadId` alone is
+   * sufficient: thread ids are unique, so no `agentId`/`topicId` is needed to
+   * disambiguate.
+   */
+  private async resolveLastAssistantContentFromThread(
+    threadId: string,
+  ): Promise<string | undefined> {
+    const messages = await this.messageModel.query({ threadId });
+    const lastAssistant = findLastAssistantMessage(normalizeCompletionMessages(messages));
+    return extractTextFromMessage(lastAssistant) || undefined;
   }
 
   /**

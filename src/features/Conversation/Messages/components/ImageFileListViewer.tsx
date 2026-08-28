@@ -4,6 +4,8 @@ import { memo } from 'react';
 import GalleyGrid from '@/components/GalleyGrid';
 import ImageItem from '@/components/ImageItem';
 
+import { downloadPreviewImage } from './downloadPreviewImage';
+
 interface ImageFileItem {
   alt?: string;
   id: string;
@@ -18,7 +20,7 @@ interface FileListProps {
 
 const ImageFileListViewer = memo<FileListProps>(({ items }) => {
   return (
-    <PreviewGroup>
+    <PreviewGroup preview={{ onDownload: downloadPreviewImage }}>
       <GalleyGrid items={items} renderItem={ImageItem} />
     </PreviewGroup>
   );

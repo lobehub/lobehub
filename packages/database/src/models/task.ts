@@ -28,13 +28,12 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
-import { goals } from '../schemas/goal';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
-import type { LobeChatDatabase, Transaction } from '../type';
+import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
@@ -103,20 +102,9 @@ const RUNNABLE_AUTOMATION = and(
   ),
 )!;
 
-/**
- * A goal task is one carrying a `goals` row as its execution subject. Ownership
- * is not re-checked inside the EXISTS — the outer query already scopes `tasks`,
- * and a goal always belongs to its carrier's owner.
- */
-const HAS_GOAL = sql`EXISTS (
-  SELECT 1 FROM ${goals}
-  WHERE ${goals.subjectType} = 'task' AND ${goals.subjectId} = ${tasks.id}
-)`;
-
 interface TaskListFilterOptions {
   assigneeAgentId?: string;
   automated?: boolean;
-  hasGoal?: boolean;
   parentTaskId?: string | null;
   projectId?: string;
   visibility?: 'private' | 'public';
@@ -206,7 +194,6 @@ export class TaskModel {
   private buildListConditions = ({
     assigneeAgentId,
     automated,
-    hasGoal,
     parentTaskId,
     projectId,
     visibility,
@@ -218,8 +205,6 @@ export class TaskModel {
     // `IS NOT TRUE`, not `NOT (…)`: nullable automation fields make the
     // runnable expression NULL for manual tasks, and WHERE would drop them.
     if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
-    if (hasGoal === true) conditions.push(HAS_GOAL);
-    if (hasGoal === false) conditions.push(sql`NOT ${HAS_GOAL}`);
     if (projectId) conditions.push(eq(tasks.projectId, projectId));
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
@@ -360,39 +345,12 @@ export class TaskModel {
    * to render as "resource deleted" from its version snapshot. See.
    */
   async delete(id: string): Promise<boolean> {
-    // The goal carried by this task has no FK on the polymorphic subject link,
-    // so its row must be swept explicitly — in the same transaction, or a
-    // failure between the two statements would orphan it.
-    return this.db.transaction(async (tx) => {
-      const deleted = await tx
-        .delete(tasks)
-        .where(and(eq(tasks.id, id), this.ownership()))
-        .returning({ id: tasks.id });
+    const deleted = await this.db
+      .delete(tasks)
+      .where(and(eq(tasks.id, id), this.ownership()))
+      .returning({ id: tasks.id });
 
-      if (deleted.length > 0) await this.deleteGoalsOfTasks([id], tx);
-
-      return deleted.length > 0;
-    });
-  }
-
-  /** Sweep the goals bound to the given (already deleted) tasks. */
-  private async deleteGoalsOfTasks(
-    taskIds: string[],
-    tx: LobeChatDatabase | Transaction = this.db,
-  ) {
-    if (taskIds.length === 0) return;
-    await tx
-      .delete(goals)
-      .where(
-        and(
-          eq(goals.subjectType, 'task'),
-          inArray(goals.subjectId, taskIds),
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: goals.userId, workspaceId: goals.workspaceId },
-          ),
-        ),
-      );
+    return deleted.length > 0;
   }
 
   /**
@@ -560,16 +518,8 @@ export class TaskModel {
       ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
       : this.ownership();
 
-    // One transaction so the FK-less goals rows can never outlive their
-    // swept carriers (see deleteGoalsOfTasks).
-    return this.db.transaction(async (tx) => {
-      const result = await tx.delete(tasks).where(where).returning({ id: tasks.id });
-      await this.deleteGoalsOfTasks(
-        result.map(({ id }) => id),
-        tx,
-      );
-      return result.length;
-    });
+    const result = await this.db.delete(tasks).where(where).returning({ id: tasks.id });
+    return result.length;
   }
 
   /** Delete a task and every descendant in one transaction. */
@@ -590,7 +540,6 @@ export class TaskModel {
             ),
           ),
         );
-      await this.deleteGoalsOfTasks(taskIds, tx);
       const result = await tx
         .delete(tasks)
         .where(and(inArray(tasks.id, taskIds), this.ownership()))
@@ -860,10 +809,7 @@ export class TaskModel {
     const taskIds = Array.from(
       new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
     );
-    const [runStats, goalByTaskId] = await Promise.all([
-      this.runStatsByTaskIds(taskIds),
-      this.goalsByTaskIds(taskIds),
-    ]);
+    const runStats = await this.runStatsByTaskIds(taskIds);
     const runStatsByTaskId = new Map(
       runStats.map((stats) => [
         stats.root_id,
@@ -878,23 +824,10 @@ export class TaskModel {
       ...group,
       tasks: group.tasks.map((task) => ({
         ...task,
-        goal: goalByTaskId.get(task.id) ?? null,
         totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
         totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
       })),
     }));
-  }
-
-  /** The goal entities carried by the given tasks, keyed by task id. */
-  private async goalsByTaskIds(taskIds: string[]) {
-    if (taskIds.length === 0) return new Map<string, typeof goals.$inferSelect>();
-
-    const rows = await this.db
-      .select()
-      .from(goals)
-      .where(and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, taskIds)));
-
-    return new Map(rows.map((row) => [row.subjectId!, row]));
   }
 
   private async runStatsByTaskIds(taskIds: string[]): Promise<TaskRunStats[]> {

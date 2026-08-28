@@ -311,16 +311,15 @@ describe('Task Router Integration', () => {
       expect(completed.data.status).toBe('completed');
     });
 
-    it('updates the bound goal when addressed by task identifier', async () => {
-      const task = await caller.create({
-        goal: { title: 'Identifier lifecycle goal' },
-        instruction: 'Test goal lifecycle',
+    it('resolves a task identifier to its row when changing status', async () => {
+      const task = await caller.create({ instruction: 'Test identifier resolution' });
+
+      const running = await caller.updateStatus({
+        id: task.data.identifier,
+        status: 'running',
       });
 
-      await caller.updateStatus({ id: task.data.identifier, status: 'running' });
-
-      const goal = await serverDB.query.goals.findFirst();
-      expect(goal).toMatchObject({ status: 'running', subjectId: task.data.id });
+      expect(running.data).toMatchObject({ id: task.data.id, status: 'running' });
     });
   });
 
@@ -562,17 +561,16 @@ describe('Task Router Integration', () => {
   });
 
   describe('run idempotency', () => {
-    it('starts the bound goal when addressed by task identifier', async () => {
+    it('resolves a task identifier to its row when starting a run', async () => {
       const task = await caller.create({
         assigneeAgentId: testAgentId,
-        goal: { title: 'Identifier run goal' },
         instruction: 'Test',
       });
 
       await caller.run({ id: task.data.identifier });
 
-      const goal = await serverDB.query.goals.findFirst();
-      expect(goal).toMatchObject({ status: 'running', subjectId: task.data.id });
+      const updated = await caller.detail({ id: task.data.id });
+      expect(updated.data?.status).toBe('running');
     });
 
     it('should reject run when a topic is already running', async () => {
