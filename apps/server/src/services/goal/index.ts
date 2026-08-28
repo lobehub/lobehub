@@ -1,9 +1,9 @@
 import type {
+  GoalConfig,
   GoalEdgeKind,
   GoalGraphSnapshot,
   GoalNodeKind,
   GoalNodeStatus,
-  GoalRecoveryPolicy,
   GoalTickResult,
   TaskItem,
   TaskTopicHandoff,
@@ -38,7 +38,7 @@ export interface CreateGoalWorkInput {
 
 export interface CreateGoalGraphInput {
   agentId?: string;
-  config?: { recovery?: GoalRecoveryPolicy };
+  config?: GoalConfig;
   maxRounds?: number;
   maxTotalCost?: number;
   projectId?: string;
@@ -377,9 +377,12 @@ export class GoalService {
           name: frontier.title,
           projectId: graph.goal.projectId ?? undefined,
           // The creator's choice lives on the goal, not on the task: without
-          // this every Work would fall back to the assignee agent's visibility
-          // and a goal marked private would publish its output to the workspace.
-          visibility: graph.goal.config?.visibility,
+          // this a goal marked private would publish its output to the
+          // workspace via the assignee agent's visibility. Only `private` is
+          // forwarded — `public` is already what createTask derives, and
+          // stating it explicitly would instead throw against a private agent
+          // and leave the Work undispatchable on every tick.
+          visibility: graph.goal.config?.visibility === 'private' ? 'private' : undefined,
         });
         const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
           config: { enabled: true },

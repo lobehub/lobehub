@@ -97,6 +97,31 @@ describe('GoalService', () => {
     expect(task?.visibility).toBe('private');
   });
 
+  it('still dispatches a public goal owned by a private agent', async () => {
+    // `public` is what createTask derives anyway; passing it explicitly throws
+    // against a private agent, which would leave the Work undispatchable on
+    // every tick instead of just running.
+    await serverDB.insert(agents).values({
+      id: 'goal-private-agent',
+      slug: 'goal-private-agent',
+      userId,
+      visibility: 'private',
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'goal-private-agent',
+      config: { visibility: 'public' },
+      title: 'Public goal on a private agent',
+      work: ['Run anyway'],
+    });
+
+    const created = await service.tick(graph.goal.id);
+    const task = await new TaskModel(serverDB, userId).findById(created.taskId!);
+
+    expect(created.outcome).toBe('advanced');
+    expect(task?.visibility).toBe('private');
+  });
+
   it('keeps the overall requirement as background while making the current work authoritative', async () => {
     const service = new GoalService(serverDB, userId);
     const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;
