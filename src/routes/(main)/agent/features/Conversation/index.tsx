@@ -7,6 +7,11 @@ import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segm
 import { insertLocalPathTags } from '@/features/ChatInput/InputEditor/insertLocalFileTags';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import {
+  canExecutionTargetReadLocalPaths,
+  resolveExecutionTarget,
+} from '@/helpers/executionTarget';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import {
@@ -15,6 +20,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useElectronStore } from '@/store/electron';
 
 import ConversationArea from './ConversationArea';
 
@@ -48,8 +54,24 @@ const ChatConversation = memo(() => {
   const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
   const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
 
+  // A dropped `<localFile>` path only makes sense when THIS run executes
+  // somewhere that can read this machine's filesystem. Resolve the effective
+  // execution target (member override + workspace coercion included) instead of
+  // trusting "hetero / local-system" alone — a Claude Code agent whose run
+  // lands in the cloud sandbox must fall back to attachment upload, or the
+  // agent receives a `/Users/...` path that does not exist in its container.
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const executionTarget = resolveExecutionTarget(agencyConfig, {
+    clientExecutionAvailable: isDesktop,
+    isHetero: isHeterogeneous,
+    workspaceScoped,
+  });
   const enableLocalPathReference =
-    isDesktop && !!workingDirectory && (isHeterogeneous || isLocalSystemEnabled);
+    isDesktop &&
+    !!workingDirectory &&
+    (isHeterogeneous || isLocalSystemEnabled) &&
+    canExecutionTargetReadLocalPaths(executionTarget, agencyConfig, currentDeviceId);
 
   const handleLocalPaths = useCallback((paths: DroppedLocalPath[]) => {
     const editor = useChatStore.getState().mainInputEditor?.instance;

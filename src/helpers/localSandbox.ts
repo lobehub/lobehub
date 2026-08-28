@@ -38,12 +38,12 @@ const isFenced = (agencyConfig: LobeAgentAgencyConfig | undefined): boolean =>
  * it reads the two stores `useEffectiveAgencyConfig` composes: the shared
  * `agents.agencyConfig` plus this member's `agentDeviceOverrides` entry, merged
  * through the same `resolveAgentAgencyConfig` the picker and server dispatch
- * use — a plain `resolveAgencyConfig` would apply a member override on a
- * private Agent, where every other layer ignores it.
+ * use — a plain `resolveAgencyConfig` would apply an override on a personal
+ * Agent, where every other layer ignores it.
  *
  * One input is genuinely unavailable here: `canManage` comes from a permission
- * hook with no store to read synchronously. It only changes the answer for an
- * author/admin of a *public workspace* Agent carrying a stale member override,
+ * hook with no store to read synchronously. It only changes whether a public
+ * workspace Agent's shared `fixed` policy suppresses the caller's override,
  * so rather than guess, both readings are computed and a disagreement resolves
  * toward fencing. Over-fencing fails loudly and recoverably — a write outside
  * the working directory is refused with a clear error — while under-fencing

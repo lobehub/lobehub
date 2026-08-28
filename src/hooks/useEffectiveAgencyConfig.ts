@@ -41,9 +41,11 @@ export interface UseEffectiveAgencyConfigResult {
  * Reading the shared row alone shows whichever device landed there (usually
  * the creator's machine) instead of this member's choice.
  *
- * Personal and Private Workspace Agents have a single owner whose choice IS
- * the shared config, so the override and member policy are applied only for
- * public Workspace Agents — mirroring the write side (`useSelectExecutionTarget`).
+ * The member policy applies only to public Workspace Agents, but the caller's
+ * override merges for every workspace agent: managers and private-agent
+ * owners also keep their `local` / this-machine pick in the override (the
+ * shared row must never reference a personal device) — mirroring the write
+ * side (`useSelectExecutionTarget`).
  *
  * Self-populates the workspace preference cache (SWR dedupes across callers;
  * personal mode short-circuits without a network call).
@@ -78,7 +80,10 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,
   });
-  const isPreferenceLoading = isAccessLoading || (usesWorkspaceMemberSelection && isLoading);
+  // Managers and private-agent owners also keep their `local` pick in the
+  // per-user override, so any workspace agent must wait for the preference
+  // fetch — not just the member-selection case.
+  const isPreferenceLoading = isAccessLoading || (!!agent?.workspaceId && isLoading);
 
   return {
     agencyConfig,

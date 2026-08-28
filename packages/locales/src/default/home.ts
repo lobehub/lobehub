@@ -79,6 +79,7 @@ export default {
   'dashboard.customize.widget.suggestions': 'Suggestions',
   'dashboard.customize.widget.tasks': 'Recent tasks',
   'dashboard.customize.widget.unread': 'Unread',
+  'dashboard.customize.widget.usage': 'Usage',
   'dashboard.empty.plan.description': 'Break an outcome into clear next steps',
   'dashboard.empty.plan.prompt': 'Help me create a practical plan for:',
   'dashboard.empty.plan.title': 'Make a plan',
@@ -138,6 +139,7 @@ export default {
   'inbox.unread.followUpPlaceholder': 'Reply to continue this run…',
   'inbox.unread.title': 'Unread',
   'inbox.unread.viewChat': 'View chat',
+  'inbox.usage.title': 'Usage',
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",

@@ -3816,13 +3816,17 @@ describe('ConversationLifecycle actions', () => {
         expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
       });
 
-      it('uses the owner target and ignores a retained member override for a private Workspace Agent', async () => {
+      // The owner's own `local` pick lives in the per-user override even on a
+      // private Workspace Agent (the shared row must never reference a
+      // personal device — the server rejects it), so a `local` override must
+      // keep routing the owner's run to the in-process desktop runtime.
+      it("applies the owner's own local override for a private Workspace Agent", async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
           agentConfig: {
             agencyConfig: {
-              boundDeviceId: 'owner-device',
-              executionTarget: 'local',
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
               executionTargetSelectionPolicy: 'fixed',
               heterogeneousProvider: { command: 'codex', type: 'codex' },
             },
@@ -3833,8 +3837,8 @@ describe('ConversationLifecycle actions', () => {
           workspaceUserPreference: {
             agentDeviceOverrides: {
               [TEST_IDS.SESSION_ID]: {
-                boundDeviceId: 'stale-workspace-device',
-                executionTarget: 'device',
+                boundDeviceId: 'owner-desktop',
+                executionTarget: 'local',
               },
             },
           },

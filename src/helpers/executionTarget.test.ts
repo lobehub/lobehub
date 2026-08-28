@@ -3,6 +3,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  canExecutionTargetReadLocalPaths,
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
   executionTargetToRuntimeMode,
@@ -1235,5 +1236,38 @@ describe('isLocalSandboxEnabled', () => {
 
   it('treats a missing config as unfenced', () => {
     expect(isLocalSandboxEnabled(undefined, 'local')).toBe(false);
+  });
+});
+
+describe('canExecutionTargetReadLocalPaths', () => {
+  it('local runs read this machine directly', () => {
+    expect(canExecutionTargetReadLocalPaths('local', cfg(), 'device-1')).toBe(true);
+    expect(canExecutionTargetReadLocalPaths('local', undefined, undefined)).toBe(true);
+  });
+
+  it('a device run bound to THIS machine reads local paths', () => {
+    expect(
+      canExecutionTargetReadLocalPaths('device', cfg({ boundDeviceId: 'device-1' }), 'device-1'),
+    ).toBe(true);
+  });
+
+  it('a device run bound to ANOTHER machine cannot read paths dragged from here', () => {
+    expect(
+      canExecutionTargetReadLocalPaths('device', cfg({ boundDeviceId: 'device-2' }), 'device-1'),
+    ).toBe(false);
+  });
+
+  it('an unbound device run or unknown current device stays off', () => {
+    expect(canExecutionTargetReadLocalPaths('device', cfg(), 'device-1')).toBe(false);
+    expect(
+      canExecutionTargetReadLocalPaths('device', cfg({ boundDeviceId: 'device-1' }), undefined),
+    ).toBe(false);
+  });
+
+  it('sandbox / auto / none never read the user filesystem', () => {
+    const config = cfg({ boundDeviceId: 'device-1' });
+    expect(canExecutionTargetReadLocalPaths('sandbox', config, 'device-1')).toBe(false);
+    expect(canExecutionTargetReadLocalPaths('auto', config, 'device-1')).toBe(false);
+    expect(canExecutionTargetReadLocalPaths('none', config, 'device-1')).toBe(false);
   });
 });

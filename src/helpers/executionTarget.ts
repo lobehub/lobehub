@@ -249,6 +249,24 @@ export const isLocalSandboxEnabled = (
 ): boolean => effectiveTarget === 'local' && agencyConfig?.localSandbox === true;
 
 /**
+ * Whether a run resolved to `target` executes somewhere that can read absolute
+ * paths on THIS machine — the gate for inserting `<localFile>` path references
+ * (drag-drop) instead of uploading the file. Only `local` (in-process on this
+ * desktop) or a `device` target whose bound device IS this machine qualifies.
+ * `sandbox` runs in a cloud container where the user's filesystem does not
+ * exist, and `auto` / a foreign `device` may land on another machine — a path
+ * reference dragged from here would be unreadable there, so those runs must
+ * fall back to attachment upload.
+ */
+export const canExecutionTargetReadLocalPaths = (
+  target: DeviceExecutionTarget,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  currentDeviceId: string | undefined,
+): boolean =>
+  target === 'local' ||
+  (target === 'device' && !!currentDeviceId && agencyConfig?.boundDeviceId === currentDeviceId);
+
+/**
  * Derive the `runtimeMode` tool gate from the unified execution target:
  * `local` → local-system tools, `sandbox` → cloud sandbox, `device`/`auto` →
  * gateway routing, `none` → no run tools (plain chat). `device`/`auto`/`none`

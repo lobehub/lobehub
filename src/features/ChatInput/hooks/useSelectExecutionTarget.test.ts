@@ -373,6 +373,97 @@ describe('useSelectExecutionTarget', () => {
     });
   });
 
+  describe("workspace agent — a manager's or owner's `local` pick stays per-user", () => {
+    // The regression behind "用户在 Workspace 中无法切换个人的本地设备": a `local`
+    // pick binds this member's PERSONAL desktop device, which the shared row
+    // must never reference — the server rejects it with
+    // `WorkspaceAgentRequiresWorkspaceDevice` and the picker surfaces
+    // "Failed to save agent settings". So even callers who manage the shared
+    // config route `local` into their per-user override.
+    it("routes a manager's 'local' pick into the per-user override, never the shared config", async () => {
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local');
+
+      expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+        agentDeviceOverrides: {
+          'agent-id': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+        },
+      });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it("routes a private Workspace agent owner's 'local' pick into the per-user override", async () => {
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'private', workspaceId: 'ws-1' },
+      };
+      testState.isDesktop = true;
+      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('local');
+
+      expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+        agentDeviceOverrides: {
+          'agent-id': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+        },
+      });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it("clears the manager's own routing override when they pick a shared target", async () => {
+      // Without this, the earlier `local` override would keep shadowing the
+      // shared target the manager just wrote. The sandbox fence stays dormant —
+      // it qualifies their machine, not this pick.
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      testState.user.workspaceUserPreference = {
+        agentDeviceOverrides: {
+          'agent-id': {
+            boundDeviceId: 'this-machine',
+            executionTarget: 'local',
+            localSandbox: true,
+          },
+        },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: { executionTarget: 'sandbox' },
+      });
+      expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+        agentDeviceOverrides: {
+          'agent-id': { localSandbox: true },
+        },
+      });
+    });
+
+    it('leaves the preference untouched when a manager picks a shared target with no override', async () => {
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('sandbox');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+        agencyConfig: { executionTarget: 'sandbox' },
+      });
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+    });
+  });
+
   describe('private Workspace agent — writes to the owner-controlled shared config', () => {
     it('switches target directly even when the future public policy is fixed', async () => {
       testState.agent.agentMap = {

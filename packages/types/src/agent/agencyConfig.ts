@@ -1013,6 +1013,41 @@ export const canPublishAgentTopicLink = (
 };
 
 /**
+ * The raw override merge behind {@link resolveAgencyConfig}, without the
+ * `fixed`-policy short-circuit. The owner path of
+ * {@link resolveAgentAgencyConfig} needs it directly: the stored selection
+ * policy constrains members, not the owner, so the owner's own override
+ * applies even while the shared policy is `fixed`.
+ */
+const applyAgencyConfigOverride = (
+  base: LobeAgentAgencyConfig | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  if (!override) return base;
+  const hasTarget = override.executionTarget !== undefined;
+  const hasDevice = override.boundDeviceId !== undefined;
+  // `false` is a real value here — a member turning the sandbox (or its network
+  // allowance) back off must override a shared `true`, so test for presence,
+  // not truthiness.
+  const hasLocalSandbox = override.localSandbox !== undefined;
+  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
+  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
+  return {
+    ...base,
+    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
+    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
+    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
+  };
+};
+
+/**
  * The workspace-shared `agencyConfig` on the agent row is one row per agent —
  * inherently a *single* execution decision for the whole workspace. Real users
  * want each member to pick their own machine independently (see
@@ -1047,22 +1082,7 @@ export const resolveAgencyConfig = (
 ): LobeAgentAgencyConfig | undefined => {
   const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   if (base?.executionTargetSelectionPolicy === 'fixed') return base;
-  if (!override) return base;
-  const hasTarget = override.executionTarget !== undefined;
-  const hasDevice = override.boundDeviceId !== undefined;
-  // `false` is a real value here — a member turning the sandbox (or its network
-  // allowance) back off must override a shared `true`, so test for presence,
-  // not truthiness.
-  const hasLocalSandbox = override.localSandbox !== undefined;
-  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
-  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
-  return {
-    ...base,
-    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
-    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
-    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
-    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
-  };
+  return applyAgencyConfigOverride(base, override);
 };
 
 export interface AgentAgencyConfigContext {
@@ -1075,10 +1095,15 @@ export interface AgentAgencyConfigContext {
 /**
  * Resolve an Agent's effective agency config in its ownership context.
  *
- * Member execution-target policies and overrides apply only after a Workspace
- * Agent is public. A Private Agent remains owner-configurable: its shared
- * execution target is used directly, while the stored selection policy is
- * retained only as the policy that will take effect if the Agent is published.
+ * Member execution-target policies apply only after a Workspace Agent is
+ * public. The caller's per-user override, however, merges for EVERY workspace
+ * agent — member, manager, or private owner alike: a `local` / this-machine
+ * pick is inherently per-user (the shared row must never carry a personal
+ * device — the server rejects it), so managers and private-agent owners store
+ * that pick in the same `agentDeviceOverrides` slot members use. The owner
+ * path bypasses the `fixed` short-circuit (the policy constrains members, not
+ * the owner) and keeps stripping the stored selection policy, which is
+ * retained only as the policy that takes effect once the Agent is published.
  */
 export const resolveAgentAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
@@ -1097,10 +1122,12 @@ export const resolveAgentAgencyConfig = (
 
   if (isPublicWorkspaceAgent) return resolveAgencyConfig(base, override);
 
-  if (!base?.executionTargetSelectionPolicy) return base;
+  const merged = context.workspaceId ? applyAgencyConfigOverride(base, override) : base;
 
-  const { executionTargetSelectionPolicy, ...ownerConfig } = base;
-  return executionTargetSelectionPolicy ? ownerConfig : base;
+  if (!merged?.executionTargetSelectionPolicy) return merged;
+
+  const { executionTargetSelectionPolicy, ...ownerConfig } = merged;
+  return executionTargetSelectionPolicy ? ownerConfig : merged;
 };
 
 /**

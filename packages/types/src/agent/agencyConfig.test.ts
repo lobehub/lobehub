@@ -944,21 +944,11 @@ describe('resolveAgentAgencyConfig', () => {
     ).toEqual(shared);
   });
 
-  it('ignores member policy and overrides while a Workspace Agent is private', () => {
-    expect(
-      resolveAgentAgencyConfig(
-        {
-          boundDeviceId: 'owner-device',
-          executionTarget: 'device',
-          executionTargetSelectionPolicy: 'fixed',
-        },
-        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
-        { visibility: 'private', workspaceId: 'workspace-1' },
-      ),
-    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
-  });
-
-  it('ignores member policy and overrides for an author or Workspace admin', () => {
+  // A `local` / this-machine pick is per-user even for the owner: the shared
+  // row must never reference a personal device (the server rejects it), so the
+  // owner's pick lives in the same override slot members use and must merge
+  // back at read time — bypassing `fixed`, which constrains members only.
+  it("applies the owner's own override on a private Workspace Agent, stripping the member policy", () => {
     expect(
       resolveAgentAgencyConfig(
         {
@@ -966,10 +956,48 @@ describe('resolveAgentAgencyConfig', () => {
           executionTarget: 'device',
           executionTargetSelectionPolicy: 'fixed',
         },
-        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-desktop', executionTarget: 'local' });
+  });
+
+  it("applies an author's or Workspace admin's own override on a public Workspace Agent", () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'manager-desktop', executionTarget: 'local' });
+  });
+
+  it('keeps the shared config (policy stripped) for an owner without an override', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        undefined,
         { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
       ),
     ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
+  });
+
+  it('never applies an override on a personal agent', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        { executionTarget: 'sandbox' },
+        { boundDeviceId: 'stale-device', executionTarget: 'local' },
+        { workspaceId: null },
+      ),
+    ).toEqual({ executionTarget: 'sandbox' });
   });
 });
 

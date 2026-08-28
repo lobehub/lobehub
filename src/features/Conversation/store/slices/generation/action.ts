@@ -107,7 +107,11 @@ const getEffectiveAgencyConfig = (agentId: string) => {
   const isAuthor = !!currentUserId && agent?.userId === currentUserId;
   const usesWorkspaceMemberSelection =
     !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
-  const deviceOverride = usesWorkspaceMemberSelection
+  // Every workspace caller's override matters — a manager's / private owner's
+  // `local` pick also lives in `agentDeviceOverrides` (the shared row must
+  // never reference a personal device); `resolveAgentAgencyConfig` decides how
+  // it applies per role.
+  const deviceOverride = agent?.workspaceId
     ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
 

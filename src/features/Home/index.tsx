@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
+import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
@@ -300,7 +301,11 @@ const Home = memo(() => {
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const promo = useHomePromoLine();
-  const minimal = isHomeMinimalLayout({ hiddenWidgets, showPortrait: showHomePortrait });
+  const usageActive = useHomeUsageWidgetActive();
+  const minimal = isHomeMinimalLayout(
+    { hiddenWidgets, showPortrait: showHomePortrait },
+    usageActive,
+  );
   const [mode, setMode] = useState<HomeMode>(() =>
     resolveInitialHomeMode(typeof window === 'undefined' ? '' : window.location.search),
   );
@@ -315,7 +320,7 @@ const Home = memo(() => {
   if (drawerTopicId && !drawerMounted) setDrawerMounted(true);
   const [acceptanceDrawerMounted, setAcceptanceDrawerMounted] = useState(false);
   if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
-  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
+  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail, usageActive });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
