@@ -341,6 +341,42 @@ describe('TaskListSliceAction', () => {
       );
     });
 
+    it('scopes the scheduled roll-up to one agent, key included', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ agentId: 'agent-1', limit: 50 });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:scheduledList', 'agent-1', 'all', { limit: 50, offset: undefined }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
+      await fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agent-1', automated: true }),
+      );
+    });
+
+    it('scopes the scheduled roll-up to one project, key included', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, projectId: 'project-1' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:scheduledList', '__project__:project-1', 'all', { limit: 50, offset: undefined }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
+      await fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ automated: true, projectId: 'project-1' }),
+      );
+    });
+
     it('keeps concurrent consumers isolated by their SWR keys', async () => {
       const { useClientDataSWR } = await import('@/libs/swr');
 

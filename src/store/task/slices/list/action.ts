@@ -278,18 +278,31 @@ export class TaskListSliceActionImpl {
   };
 
   /**
-   * The automated-task roll-up behind Home's "Scheduled" section. Each caller
-   * consumes its own SWR result because Home and the paginated Tasks page can
-   * coexist in Electron with different limits and offsets.
+   * The automated-task roll-up behind Home's "Scheduled" section and the Tasks
+   * page's scheduled tab. Each caller consumes its own SWR result because Home
+   * and the paginated Tasks page can coexist in Electron with different limits
+   * and offsets. `agentId`/`projectId` narrow the roll-up to the scoped Tasks
+   * page; they are part of the key so an agent's schedules never render under
+   * another scope.
    */
   useFetchScheduledTaskList = (
-    options: { enabled?: boolean; limit?: number; offset?: number } = {},
+    options: {
+      agentId?: string;
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+      projectId?: string;
+    } = {},
   ) => {
-    const { enabled = true, limit, offset } = options;
+    const { agentId, enabled = true, limit, offset, projectId } = options;
+    const scopeKey = projectId
+      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
+      : (agentId ?? ALL_AGENTS_LIST_KEY);
     return useClientDataSWR(
-      enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY, 'all', limit, offset) : null,
+      enabled ? taskKeys.scheduledList(scopeKey, 'all', limit, offset) : null,
       async () =>
         this.fetchTaskList({
+          ...(projectId ? { projectId } : agentId ? { assigneeAgentId: agentId } : {}),
           automated: true,
           hasGoal: false,
           limit,
