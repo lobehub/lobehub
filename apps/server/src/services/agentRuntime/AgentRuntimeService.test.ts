@@ -2484,6 +2484,43 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    // Mirrors completeSubAgentBridge's identical Codex-flagged regression:
+    // the thread fallback must be gated on `!finalState`, not merely an
+    // empty `lastAssistantContent` — a real finalState whose last turn is
+    // legitimately textless must keep the stub, not risk a stale earlier
+    // reply from the thread's own history.
+    it('single isolated member: does not query the thread when a real finalState already says the final turn is textless', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...memberState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+      const threadFallbackSpy = vi.spyOn(service as any, 'resolveLastAssistantContentFromThread');
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+        threadId: 'thread-1',
+      });
+
+      expect(threadFallbackSpy).not.toHaveBeenCalled();
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'Agent member completed without a textual answer.' }),
+      );
+    });
+
     it('multi-member: holds (no group-tool backfill, no resume) until the barrier is met', async () => {
       (service as any).serverDB.query = {
         messagePlugins: { findFirst: vi.fn() },
@@ -2713,6 +2750,36 @@ describe('AgentRuntimeService', () => {
 
       await service.completeSubAgentBridge(bridgeParams);
 
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),
+      );
+    });
+
+    // Regression for a Codex review finding on the thread-fallback above: it
+    // must be gated on `!finalState` (no authoritative state at all — the
+    // heterogeneous case), not merely an empty `lastAssistantContent`.
+    // Otherwise a REAL, authoritative finalState whose last turn is
+    // legitimately textless would still trigger the thread re-query, and a
+    // lagging read that surfaces an EARLIER real reply from the same thread
+    // would silently show stale text instead of the correct empty-answer
+    // stub.
+    it('does not query the thread when a real finalState already says the final turn is textless', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...childState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+      const threadFallbackSpy = vi.spyOn(service as any, 'resolveLastAssistantContentFromThread');
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(threadFallbackSpy).not.toHaveBeenCalled();
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),

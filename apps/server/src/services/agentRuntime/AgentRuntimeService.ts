@@ -2904,12 +2904,18 @@ export class AgentRuntimeService {
     lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
     let lastAssistantContent = extractTextFromMessage(lastAssistant);
 
-    // Heterogeneous (CLI-driven) children never populate `finalState` — see
-    // `resolveLastAssistantContentFromThread`'s doc comment — so the
-    // resolution above always comes up empty for them. Recover the real
-    // answer directly from the child's own isolation thread before falling
-    // back to the "no textual answer" stub.
-    if (!failed && !lastAssistantContent && threadId) {
+    // Gated on `!finalState`, not merely an empty `lastAssistantContent`: a
+    // real (authoritative) final state whose last turn is legitimately
+    // textless (image-only, or the "preserve an empty leaf" case in
+    // `normalizeCompletionMessages`) must keep the stub below, not go dig
+    // through the thread's own message history — a lagging read could
+    // surface an EARLIER real reply from the same thread and silently show
+    // stale text instead of the correct empty-answer signal. `!finalState`
+    // is exactly the case this fallback exists for: heterogeneous (CLI-driven)
+    // children never populate it at all (see
+    // `resolveLastAssistantContentFromThread`'s doc comment), so there is no
+    // authoritative signal here to override.
+    if (!failed && !finalState && threadId) {
       try {
         lastAssistantContent = await this.resolveLastAssistantContentFromThread(threadId);
       } catch (error) {
@@ -3116,12 +3122,14 @@ export class AgentRuntimeService {
     lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
     let lastAssistantContent = extractTextFromMessage(lastAssistant);
 
-    // See `resolveLastAssistantContentFromThread`'s doc comment: a
-    // heterogeneous isolated member never populates `finalState`, so the
-    // resolution above always comes up empty for it. Recover the real answer
-    // directly from the member's own isolation thread before falling back to
-    // the "no textual answer" stub.
-    if (!failed && mode !== 'in_group' && !lastAssistantContent && threadId) {
+    // Gated on `!finalState`, not merely an empty `lastAssistantContent` —
+    // see the identical guard (and its full rationale) in
+    // `completeSubAgentBridge`. A real final state whose last turn is
+    // legitimately textless must keep the stub below, not risk surfacing a
+    // stale earlier reply from the thread's own history. `!finalState` is
+    // exactly the heterogeneous-isolated-member case this fallback exists
+    // for: it never populates `finalState` at all.
+    if (!failed && mode !== 'in_group' && !finalState && threadId) {
       try {
         lastAssistantContent = await this.resolveLastAssistantContentFromThread(threadId);
       } catch (error) {
