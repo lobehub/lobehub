@@ -44,3 +44,4 @@ export type {
   GoalTraceSummary,
   GoalTrajectory,
 } from './types';
+export { renderGoalAdvanceDetail, renderGoalTrajectory } from './viewer';

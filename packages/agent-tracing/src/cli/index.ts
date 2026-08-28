@@ -4,6 +4,7 @@ import { Command } from 'commander';
 
 import { registerCtxLintCommand } from './ctx-lint';
 import { registerCtxMapCommand } from './ctx-map';
+import { registerGoalCommand } from './goal';
 import { registerInspectCommand } from './inspect';
 import { registerListCommand } from './list';
 import { registerPartialCommand } from './partial';
@@ -21,5 +22,6 @@ registerReplayCommand(program);
 registerToolQualityCommand(program);
 registerCtxLintCommand(program);
 registerCtxMapCommand(program);
+registerGoalCommand(program);
 
 program.parse();
