@@ -42,6 +42,23 @@ export async function register() {
     });
   }
 
+  // Start BullMQ memory workers for self-hosted deployments.
+  // When MEMORY_WORKFLOW_MODE=local-queue, the memory extraction pipeline
+  // uses BullMQ + Redis instead of QStash Cloud.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.MEMORY_WORKFLOW_MODE === 'local-queue'
+  ) {
+    void import(
+      '@/server/services/memory/userMemory/workflow/workers/bootstrap'
+    ).then(({ startMemoryWorkers }) => {
+      startMemoryWorkers();
+      console.info('[Instrumentation] BullMQ memory workers started');
+    }).catch((err) => {
+      console.error('[Instrumentation] Failed to start BullMQ memory workers:', err);
+    });
+  }
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is

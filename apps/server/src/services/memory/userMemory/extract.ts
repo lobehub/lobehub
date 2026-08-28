@@ -48,8 +48,6 @@ import type {
   UserServiceModelConfig,
 } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
-import { type FlowControl } from '@upstash/qstash';
-import type { Client } from '@upstash/workflow';
 import debug from 'debug';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { join } from 'pathe';
@@ -71,13 +69,13 @@ import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { asyncTasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
-import { OtelWorkflowClient } from '@/libs/qstash';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
 import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
+import { getMemoryWorkflowTrigger } from '@/server/services/memory/userMemory/workflow/impls';
 import {
   AsyncTaskError,
   type AsyncTaskErrorBody,
@@ -2730,98 +2728,31 @@ export class MemoryExtractionExecutor {
   }
 }
 
-const WORKFLOW_PATHS = {
-  hourly: '/api/workflows/memory-user-memory/call-cron-hourly-analysis',
-  personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
-  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
-  topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
-  userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
-  users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
-} as const;
-
-const PROCESS_USERS_FLOW_CONTROL = {
-  key: 'memory-user-memory.pipelines.chat-topic.process-users',
-  parallelism: 1,
-  ratePerSecond: 1,
-} satisfies FlowControl;
-
-const getProcessUserTopicsFlowControl = (): FlowControl => {
-  const { workflow } = parseMemoryExtractionConfig();
-
-  return {
-    key: 'memory-user-memory.pipelines.chat-topic.process-user-topics',
-    // NOTICE: Trigger-side flow control is required for initial workflow delivery.
-    // A serve() flowControl setting alone is applied after the run starts, so it cannot prevent
-    // many process-user-topics runs from entering execution at the same time.
-    parallelism: workflow?.processUserTopicsParallelism ?? 25,
-  };
-};
-
 const buildHourlyChildWorkflowRunId = (entryWorkflowRunId: string) =>
   `memory-user-memory-hourly-${entryWorkflowRunId.replaceAll(/[^\w-]/g, '_')}`;
 
-const getWorkflowUrl = (path: string, baseUrl: string) => {
-  const url = new URL(path, baseUrl);
-
-  return url.toString();
-};
-
-const getWorkflowClient = () => {
-  const token = process.env.QSTASH_TOKEN;
-  if (!token) throw new Error('QSTASH_TOKEN is required to trigger workflows');
-
-  const config: ConstructorParameters<typeof Client>[0] = { token };
-
-  if (process.env.QSTASH_URL) {
-    (config as Record<string, unknown>).url = process.env.QSTASH_URL;
-  }
-
-  return new OtelWorkflowClient(config);
-};
-
+/**
+ * Facade for memory extraction workflow triggers.
+ *
+ * Delegates to the transport-specific implementation selected by
+ * MEMORY_WORKFLOW_MODE / AGENT_RUNTIME_MODE environment variables.
+ *
+ * `triggerHourlyTracked` retains its DB logic here (async task creation,
+ * idempotency checks) and delegates only the actual trigger call.
+ */
 export class MemoryExtractionWorkflowService {
-  private static client: Client;
-
-  private static getClient() {
-    if (!this.client) {
-      this.client = getWorkflowClient();
-    }
-
-    return this.client;
-  }
-
   static triggerProcessUsers(
     payload: MemoryExtractionPayloadInput,
     options?: { extraHeaders?: Record<string, string> },
   ) {
-    if (!payload.baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.users, payload.baseUrl);
-    return this.getClient().trigger({
-      body: payload,
-      flowControl: PROCESS_USERS_FLOW_CONTROL,
-      headers: options?.extraHeaders,
-      url,
-    });
+    return getMemoryWorkflowTrigger().triggerProcessUsers(payload, options);
   }
 
   static triggerHourly(
     payload: MemoryExtractionHourlyWorkflowPayload,
     options?: { extraHeaders?: Record<string, string>; workflowRunId?: string },
   ) {
-    if (!payload.baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.hourly, payload.baseUrl);
-    return this.getClient().trigger({
-      body: payload,
-      headers: options?.extraHeaders,
-      url,
-      workflowRunId: options?.workflowRunId,
-    });
+    return getMemoryWorkflowTrigger().triggerHourly(payload, options);
   }
 
   /**
@@ -2836,7 +2767,7 @@ export class MemoryExtractionWorkflowService {
    * - `MEMORY_EXTRACTION_HOURLY_TASK_USER_ID` identifies the service-account task owner
    *
    * Returns:
-   * - The created async task id and root Upstash workflow run id
+   * - The created async task id and root workflow run id
    */
   static async triggerHourlyTracked(
     payload: MemoryExtractionHourlyWorkflowPayload,
@@ -2928,17 +2859,7 @@ export class MemoryExtractionWorkflowService {
     payload: UserTopicWorkflowPayload,
     options?: { extraHeaders?: Record<string, string> },
   ) {
-    if (!payload.baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.userTopics, payload.baseUrl);
-    return this.getClient().trigger({
-      body: payload,
-      flowControl: getProcessUserTopicsFlowControl(),
-      headers: options?.extraHeaders,
-      url,
-    });
+    return getMemoryWorkflowTrigger().triggerProcessUserTopics(payload, options);
   }
 
   static triggerProcessTopics(
@@ -2946,24 +2867,7 @@ export class MemoryExtractionWorkflowService {
     payload: MemoryExtractionPayloadInput,
     options?: { extraHeaders?: Record<string, string> },
   ) {
-    if (!payload.baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.topicBatch, payload.baseUrl);
-    return this.getClient().trigger({
-      body: payload,
-      flowControl: {
-        key: `memory-user-memory.pipelines.chat-topic.process-topics.user.${userId}`,
-        // NOTICE: Each process-topics workflow currently invokes topic workflows sequentially.
-        // Parallelism 20 therefore bounds each user's active topic extraction workflows to 20.
-        // If process-topics changes back to parallel per-topic invoke, divide this number by
-        // the per-batch topic concurrency to preserve the same per-user topic budget.
-        parallelism: 20,
-      },
-      headers: options?.extraHeaders,
-      url,
-    });
+    return getMemoryWorkflowTrigger().triggerProcessTopics(userId, payload, options);
   }
 
   static triggerProcessTopic(
@@ -2971,24 +2875,7 @@ export class MemoryExtractionWorkflowService {
     payload: MemoryExtractionPayloadInput,
     options?: { extraHeaders?: Record<string, string> },
   ) {
-    if (!payload.baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.topic, payload.baseUrl);
-    return this.getClient().trigger({
-      body: payload,
-      // NOTICE: fire-and-forget fan-out (replaces the old context.invoke). The per-user key bounds
-      // how many process-topic runs a single user can start concurrently, so one heavy user can't
-      // monopolize extraction. Serve-side flow control (processTopicWorkflowOptions) additionally
-      // keeps this workflow's own step-continuation messages out of the shared "$" (unbound) bucket.
-      flowControl: {
-        key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}`,
-        parallelism: 5,
-      } satisfies FlowControl,
-      headers: options?.extraHeaders,
-      url,
-    });
+    return getMemoryWorkflowTrigger().triggerProcessTopic(userId, payload, options);
   }
 
   static triggerPersonaUpdate(
@@ -2996,19 +2883,6 @@ export class MemoryExtractionWorkflowService {
     baseUrl: string,
     options?: { extraHeaders?: Record<string, string>; hourlyTaskId?: string },
   ) {
-    if (!baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
-    return this.getClient().trigger({
-      body: { hourlyTaskId: options?.hourlyTaskId, userIds: [userId] },
-      flowControl: {
-        key: `memory-user-memory.pipelines.persona.update-write.${userId}`,
-        parallelism: 1,
-      } satisfies FlowControl,
-      headers: options?.extraHeaders,
-      url,
-    });
+    return getMemoryWorkflowTrigger().triggerPersonaUpdate(userId, baseUrl, options);
   }
 }

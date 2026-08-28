@@ -67,6 +67,7 @@ COPY packages ./packages
 COPY patches ./patches
 # workspace manifests must exist before pnpm i so --filter can resolve them
 COPY apps/desktop/src/main/package.json ./apps/desktop/src/main/package.json
+COPY apps/server/package.json ./apps/server/package.json
 COPY apps/share/package.json ./apps/share/package.json
 COPY apps/workbench/package.json ./apps/workbench/package.json
 
