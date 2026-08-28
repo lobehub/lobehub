@@ -10,7 +10,7 @@ import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed, StarIcon } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -181,9 +181,10 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
-    const [activeAgentId, isSharedAgent] = useAgentStore((s) => [
+    const [activeAgentId, isSharedAgent, isHeterogeneousAgent] = useAgentStore((s) => [
       s.activeAgentId,
       agentSelectors.currentAgentVisibility(s) === 'public',
+      agentSelectors.isCurrentAgentHeterogeneous(s),
     ]);
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
     // Creator of the topic — resolves only inside an active workspace; drives
@@ -407,9 +408,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return null;
     })();
 
-    // Identity-flavored icons the row owns (bot platform, PR marker) — these
-    // keep the leading slot even in workspace mode, with the creator shrunk to
-    // a corner badge.
+    // Identity-flavored icons the row owns (PR, favorite, bot platform) keep
+    // the leading slot even in workspace mode, with the creator shrunk to a
+    // corner badge.
     const identityIconNode = (() => {
       // GitHub PR state marker (open=green, merged=purple, closed=red),
       // like Codex. It is secondary metadata, so only an idle topic uses it
@@ -422,20 +423,33 @@ const TopicItemRow = memo<TopicItemRowProps>(
           </Tooltip>
         );
       }
-      if (metadata?.bot?.platform) {
+      if (!fav && metadata?.bot?.platform) {
         const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
         if (ProviderIcon) {
           return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
         }
       }
-      return null;
+      return (
+        <Icon
+          fill={fav ? cssVar.colorWarning : 'transparent'}
+          icon={StarIcon}
+          size={'small'}
+          style={{
+            color: fav ? cssVar.colorWarning : cssVar.colorTextDescription,
+            // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
+            // topic semantics, so suppress the idle marker while keeping its
+            // box so the title stays aligned with sibling rows.
+            visibility: isHeterogeneousAgent && !fav ? 'hidden' : undefined,
+          }}
+        />
+      );
     })();
 
     const idleIconPlaceholder = <span aria-hidden style={{ flex: 'none', width: 16 }} />;
 
     // Workspace mode (creator resolvable): the creator's round avatar is the
     // primary visual and always leads the row; the row's own icon — execution
-    // status first, then identity icons (Discord / WeChat / PR marker) —
+    // status first, then identity icons (favorite / Discord / WeChat / PR) —
     // shrinks into a bottom-right corner badge. Personal mode keeps the
     // original layout untouched.
     const ownIconNode = statusIconNode ?? identityIconNode;

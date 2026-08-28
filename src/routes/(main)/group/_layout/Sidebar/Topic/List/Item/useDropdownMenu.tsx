@@ -12,6 +12,7 @@ import {
   LucideCopy,
   PanelTop,
   PencilLine,
+  Star,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -31,12 +32,14 @@ import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
 interface TopicItemDropdownMenuProps {
+  fav?: boolean;
   id?: string;
   status?: ChatTopicStatus | null;
   toggleEditing: (visible?: boolean) => void;
 }
 
 export const useTopicItemDropdownMenu = ({
+  fav,
   id,
   status,
   toggleEditing,
@@ -57,12 +60,14 @@ export const useTopicItemDropdownMenu = ({
     autoRenameTopicTitle,
     duplicateTopic,
     removeTopic,
+    favoriteTopic,
     markTopicCompleted,
     unmarkTopicCompleted,
   ] = useChatStore((s) => [
     s.autoRenameTopicTitle,
     s.duplicateTopic,
     s.removeTopic,
+    s.favoriteTopic,
     s.markTopicCompleted,
     s.unmarkTopicCompleted,
   ]);
@@ -86,6 +91,18 @@ export const useTopicItemDropdownMenu = ({
           }
         },
         sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
+      },
+      {
+        type: 'divider' as const,
+      },
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={Star} />,
+        key: 'favorite',
+        label: fav ? t('actions.unfavorite') : t('actions.favorite'),
+        onClick: () => {
+          favoriteTopic(id, !fav);
+        },
       },
       {
         type: 'divider' as const,
@@ -193,6 +210,7 @@ export const useTopicItemDropdownMenu = ({
     ].filter(Boolean) as MenuProps['items'];
   }, [
     id,
+    fav,
     isCompleted,
     canCreateTopic,
     canEditTopic,
@@ -201,6 +219,7 @@ export const useTopicItemDropdownMenu = ({
     appOrigin,
     autoRenameTopicTitle,
     duplicateTopic,
+    favoriteTopic,
     markTopicCompleted,
     unmarkTopicCompleted,
     removeTopic,

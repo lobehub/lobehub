@@ -3,7 +3,7 @@ import type { ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
 import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed, StarIcon } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -178,6 +178,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   ]);
 
   const dropdownMenu = useTopicItemDropdownMenu({
+    fav,
     id,
     status,
     toggleEditing,
@@ -315,6 +316,15 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     return null;
   })();
 
+  const topicIconNode = (
+    <Icon
+      fill={fav ? cssVar.colorWarning : 'transparent'}
+      icon={StarIcon}
+      size={'small'}
+      style={{ color: fav ? cssVar.colorWarning : cssVar.colorTextDescription }}
+    />
+  );
+
   return (
     <Flexbox style={{ position: 'relative' }}>
       <NavItem
@@ -331,14 +341,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         titleColor={cssVar.colorText}
         icon={
           // Workspace mode: the creator's round avatar is the primary visual;
-          // the row's own status icon shrinks into a bottom-right corner
+          // the row's own status or favorite icon shrinks into a bottom-right corner
           // badge. Personal mode keeps the original status-first layout.
           author ? (
-            <TopicCreatorAvatar corner={statusIconNode} userId={userId} />
+            <TopicCreatorAvatar corner={statusIconNode ?? topicIconNode} userId={userId} />
           ) : (
-            (statusIconNode ?? (
-              <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
-            ))
+            (statusIconNode ?? topicIconNode)
           )
         }
         slots={{

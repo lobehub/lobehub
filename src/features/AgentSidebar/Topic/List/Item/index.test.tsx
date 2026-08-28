@@ -13,6 +13,8 @@ const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undef
 const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
+const heterogeneousAgentMock = vi.hoisted(() => ({ value: false }));
+const platformIconMock = vi.hoisted(() => ({ enabled: false }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as { pullRequest?: { state: string } } | undefined,
 }));
@@ -21,8 +23,21 @@ vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
-  Icon: ({ icon }: { icon?: { displayName?: string } }) => (
-    <div data-icon={icon?.displayName} data-testid="topic-item-icon" />
+  Icon: ({
+    fill,
+    icon,
+    style,
+  }: {
+    fill?: string;
+    icon?: { displayName?: string };
+    style?: CSSProperties;
+  }) => (
+    <div
+      data-fill={fill}
+      data-icon={icon?.displayName}
+      data-testid="topic-item-icon"
+      style={style}
+    />
   ),
   Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Skeleton: {
@@ -51,6 +66,7 @@ vi.mock('antd-style', () => ({
   cssVar: {
     colorInfo: '#00f',
     colorTextDescription: '#999',
+    colorWarning: '#f90',
   },
   keyframes: () => 'keyframes',
   useTheme: () => ({ isDarkMode: false }),
@@ -109,13 +125,22 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => 'team',
 }));
 vi.mock('@/routes/(main)/agent/channel/const', () => ({
-  getPlatformIcon: () => null,
+  getPlatformIcon: () =>
+    platformIconMock.enabled
+      ? ({ color }: { color?: string }) => <span data-testid="platform-icon" style={{ color }} />
+      : null,
 }));
 vi.mock('@/store/agent', () => ({
   // `agentMap` is read by `agentSelectors.currentAgentVisibility`.
   useAgentStore: (
     selector: (state: { activeAgentId: string; agentMap: Record<string, unknown> }) => unknown,
   ) => selector({ activeAgentId: 'agt_test', agentMap: {} }),
+}));
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: {
+    currentAgentVisibility: () => 'private',
+    isCurrentAgentHeterogeneous: () => heterogeneousAgentMock.value,
+  },
 }));
 vi.mock('@/store/chat', () => {
   const useChatStore = (
@@ -175,6 +200,8 @@ describe('TopicItem active state', () => {
     agentRuntimeRunningMock.value = false;
     runningStartTimeMock.value = undefined;
     topicUnreadCompletedMock.value = false;
+    heterogeneousAgentMock.value = false;
+    platformIconMock.enabled = false;
     topicMetaCardMock.value = undefined;
     vi.useRealTimers();
   });
@@ -256,20 +283,7 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
     expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
-  });
-
-  it('keeps idle topics iconless', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
-    render(<TopicItem id="tpc_test" title="Topic" />);
-
-    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', 'Star');
   });
 
   it('prefetches messages when a topic is an unread completion', async () => {
@@ -392,5 +406,73 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" status={status} title="Topic" />);
 
     expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', icon);
+  });
+
+  it('uses an outline star for regular topics and fills it for favorites', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    const { rerender } = render(<TopicItem fav={false} id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', 'Star');
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-fill', 'transparent');
+
+    rerender(<TopicItem fav id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-fill', '#f90');
+    expect(screen.getByTestId('topic-item-icon')).toHaveStyle({ color: '#f90' });
+  });
+
+  it('lets a favorite star override the platform provider icon', () => {
+    platformIconMock.enabled = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+    const metadata = {
+      bot: {
+        applicationId: 'app',
+        isOwner: true,
+        platform: 'slack',
+        platformThreadId: 'thread',
+        senderExternalUserId: 'user',
+      },
+    };
+
+    const { rerender } = render(
+      <TopicItem fav={false} id="tpc_test" metadata={metadata} title="Topic" />,
+    );
+
+    expect(screen.getByTestId('platform-icon')).toBeInTheDocument();
+    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
+
+    rerender(<TopicItem fav id="tpc_test" metadata={metadata} title="Topic" />);
+
+    expect(screen.queryByTestId('platform-icon')).not.toBeInTheDocument();
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', 'Star');
+  });
+
+  it('keeps an idle heterogeneous marker hidden unless the topic is favorited', () => {
+    heterogeneousAgentMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    const { rerender } = render(<TopicItem fav={false} id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-item-icon')).toHaveStyle({ visibility: 'hidden' });
+
+    rerender(<TopicItem fav id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-item-icon')).not.toHaveStyle({ visibility: 'hidden' });
   });
 });
