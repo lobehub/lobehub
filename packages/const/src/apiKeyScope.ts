@@ -181,6 +181,11 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentQuota: rw('agent:read', null),
   agentSignal: rw('agent:read', 'agent:write'),
   agentSkills: rw('agent:read', 'agent:write'),
+  // a trace snapshot is the whole inside of a run — system role, injected user
+  // memory, tool results — and `getSnapshotUrl` hands back a presigned URL that
+  // needs no further auth, so a restricted key holding one would read past its
+  // own scope. Same call as `llmGenerationTracing`.
+  agentTrace: 'blocked',
   aiAgent: rw('agent:read', 'agent:write'),
   aiChat: { any: 'model:invoke' },
   aiModel: rw('model:read', 'model:write'),
