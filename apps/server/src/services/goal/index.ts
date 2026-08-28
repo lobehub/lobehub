@@ -407,6 +407,14 @@ export class GoalService {
         await this.goalModel.updateStatus(goalId, 'achieved');
         return { goalId, message: 'Goal-level acceptance passed', outcome: 'achieved' };
       }
+      // Nothing here moves without a person: either there is no Work at all, or
+      // every remaining Work is blocked and nothing is running to unblock it.
+      // Say so on the row instead of leaving a goal that reads as `running`
+      // while it cannot run — and, just as importantly, take it out of the
+      // sweep's window. A `running` goal that always reports `no_progress` is
+      // picked by every scan forever, and enough of them starve every other
+      // stalled goal out of the newest-first limit.
+      await this.goalModel.updateStatus(goalId, 'paused');
       return {
         goalId,
         message:

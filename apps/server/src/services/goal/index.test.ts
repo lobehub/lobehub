@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import {
@@ -291,6 +292,22 @@ describe('GoalService', () => {
 
     await expect(service.delete(graph.goal.id)).rejects.toThrow(/not deleted/);
     expect(await service.graph(graph.goal.id)).toBeDefined();
+  });
+
+  it('parks a goal nothing can move so the sweep stops re-picking it', async () => {
+    // A goal with no Work can only report `no_progress`. Left `running` it is
+    // selected by every newest-first scan forever, and enough of them starve
+    // every other stalled goal out of the sweep's window.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Nothing to do' });
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('no_progress');
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+    expect(
+      await GoalModel.listStalled(serverDB, { staleBefore: new Date(Date.now() - 60_000) }),
+    ).not.toContainEqual(expect.objectContaining({ id: graph.goal.id }));
   });
 
   it('keeps the overall requirement as background while making the current work authoritative', async () => {

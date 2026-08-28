@@ -53,26 +53,49 @@ export const goalRuntime: ServerRuntimeRegistration = {
             title: args.name,
             work: [{ description: args.instruction, title: args.name }],
           });
-          // Advance until the coordinator is waiting on something other than a
-          // tick — normally that is the first Work Task executing. From there
-          // the goal keeps itself moving through the queued advances.
-          const { result } = await advanceGoal({
-            goalId: graph.goal.id,
-            userId,
-            workspaceId: workspaceId ?? undefined,
-          });
+          const created = `Goal "${graph.goal.title}" created with ${drafts.length} acceptance criteria.`;
+          const tail =
+            'Execution continues in its own task; do not perform or reproduce the work in this conversation.';
 
-          return {
-            content: `Goal "${graph.goal.title}" created with ${drafts.length} acceptance criteria. ${result.message}. Execution continues in its own task; do not perform or reproduce the work in this conversation.`,
-            state: {
+          // The goal is committed. Kickoff failure must not be reported as
+          // creation failure — an agent told the goal was not created makes
+          // another one, and both then do the same paid work. `goal.create`
+          // already queued an advance, so this is only about immediate feedback.
+          try {
+            // Advance until the coordinator is waiting on something other than a
+            // tick — normally that is the first Work Task executing. From there
+            // the goal keeps itself moving through the queued advances.
+            const { result } = await advanceGoal({
               goalId: graph.goal.id,
-              name: args.name,
-              startedAt: new Date().toISOString(),
+              userId,
+              workspaceId: workspaceId ?? undefined,
+            });
+
+            return {
+              content: `${created} ${result.message}. ${tail}`,
+              state: {
+                goalId: graph.goal.id,
+                name: args.name,
+                startedAt: new Date().toISOString(),
+                success: true,
+                taskId: result.taskId,
+              },
               success: true,
-              taskId: result.taskId,
-            },
-            success: true,
-          };
+            };
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : 'Could not start it right away';
+            return {
+              content: `${created} It has not started yet (${message}); the server will pick it up. Do not create it again. ${tail}`,
+              state: {
+                goalId: graph.goal.id,
+                name: args.name,
+                startedAt: new Date().toISOString(),
+                success: true,
+              },
+              success: true,
+            };
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to create the goal';
           return {

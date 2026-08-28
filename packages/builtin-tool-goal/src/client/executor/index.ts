@@ -1,5 +1,10 @@
 import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
-import type { BuiltinToolContext, BuiltinToolResult, ToolAfterCallContext } from '@lobechat/types';
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  GoalGraphSnapshot,
+  ToolAfterCallContext,
+} from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import { goalService } from '@/services/goal';
@@ -60,24 +65,7 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
         work: [{ description: params.instruction, title: params.name }],
       });
 
-      // `goal.create` already queued an advance; running the same driver here
-      // makes the goal visibly moving before this call returns, even where the
-      // queue is unavailable. It must be `advance` rather than one tick: the
-      // driver that claims the Work has to carry it past binding the task into
-      // starting it, or nothing runs until the sweep notices.
-      const tick = await goalService.advance(graph.goal.id);
-
-      return {
-        content: `Goal "${graph.goal.title}" created with ${criteria.length} acceptance criteria. ${tick.message}. Execution continues in its own task; do not perform or reproduce the work in this conversation.`,
-        state: {
-          goalId: graph.goal.id,
-          name: params.name,
-          startedAt: new Date().toISOString(),
-          success: true,
-          taskId: tick.taskId,
-        },
-        success: true,
-      };
+      return await this.reportCreatedGoal(graph, criteria.length, params.name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create the goal';
       return {
@@ -85,6 +73,50 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
         error: { message, type: 'GoalCreateFailed' },
         state: { name: params.name, success: false },
         success: false,
+      };
+    }
+  };
+
+  /**
+   * The goal is committed by the time this runs, so kickoff failure must never
+   * be reported as creation failure: an agent told the goal was not created
+   * makes another one, and both then do the same paid work. `goal.create`
+   * already queued an advance server-side, so a failure here costs nothing more
+   * than the immediate feedback.
+   */
+  private reportCreatedGoal = async (
+    graph: GoalGraphSnapshot,
+    criteriaCount: number,
+    name: string,
+  ): Promise<BuiltinToolResult> => {
+    const created = `Goal "${graph.goal.title}" created with ${criteriaCount} acceptance criteria.`;
+    const tail =
+      'Execution continues in its own task; do not perform or reproduce the work in this conversation.';
+
+    try {
+      const advance = await goalService.advance(graph.goal.id);
+      return {
+        content: `${created} ${advance.message}. ${tail}`,
+        state: {
+          goalId: graph.goal.id,
+          name,
+          startedAt: new Date().toISOString(),
+          success: true,
+          taskId: advance.taskId,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start it right away';
+      return {
+        content: `${created} It has not started yet (${message}); the server will pick it up. Do not create it again. ${tail}`,
+        state: {
+          goalId: graph.goal.id,
+          name,
+          startedAt: new Date().toISOString(),
+          success: true,
+        },
+        success: true,
       };
     }
   };
