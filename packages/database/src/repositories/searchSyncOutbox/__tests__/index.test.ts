@@ -54,6 +54,23 @@ describe('SearchSyncOutboxRepository', () => {
     for (const statement of migration.sql) await db.execute(sql.raw(statement));
   });
 
+  it('does not replace triggers that were installed before the deployment migration', () => {
+    const migration = readMigrationFiles({
+      migrationsFolder: path.join(__dirname, '../../../../migrations'),
+    }).find((item) =>
+      item.sql.some((statement) =>
+        statement.includes('CREATE TABLE IF NOT EXISTS "search_sync_outbox"'),
+      ),
+    );
+
+    if (!migration) throw new Error('Search sync migration was not generated');
+    const triggerSql = migration.sql.filter((statement) => statement.includes('CREATE TRIGGER'));
+
+    expect(triggerSql).toHaveLength(1);
+    expect(triggerSql[0]).toContain('IF NOT EXISTS');
+    expect(triggerSql[0]).not.toContain('CREATE OR REPLACE TRIGGER');
+  });
+
   it('installs every direct and relation-fanout trigger', async () => {
     const result = await db.execute(sql`
       SELECT tgname
