@@ -175,6 +175,8 @@
   "management.empty.noTopics.action": "开始新对话",
   "management.empty.noTopics.desc": "和这个助手聊聊，创建第一个话题。",
   "management.empty.noTopics.title": "还没有话题",
+  "management.filters.botChannel.empty": "暂无频道",
+  "management.filters.botChannel.label": "发送来源",
   "management.filters.project.empty": "暂无项目",
   "management.filters.project.label": "项目",
   "management.filters.status.active": "活跃",

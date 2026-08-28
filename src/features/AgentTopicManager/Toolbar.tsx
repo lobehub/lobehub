@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ChevronDown,
   FolderClosed,
+  Hash,
   LayoutGrid,
   List as ListIcon,
   ListFilter,
@@ -23,11 +24,20 @@ import {
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { useTopicsViewStore } from './store';
-import type { GroupBy, SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
+import type {
+  BotChannelFilter,
+  BotChannelGroup,
+  GroupBy,
+  SortBy,
+  StatusFilter,
+  TimeRangeFilter,
+  TriggerFilter,
+} from './types';
 
 const CONTROL_HEIGHT = 32;
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
@@ -160,6 +170,7 @@ const SORT_OPTIONS: SortBy[] = ['updatedAt', 'createdAt', 'title'];
 const GROUP_OPTIONS: GroupBy[] = ['byTime', 'byProject', 'none'];
 
 interface ToolbarProps {
+  botChannelGroups: BotChannelGroup[];
   projects: { label: string; value: string }[];
   statusCounts: Record<StatusFilter, number>;
 }
@@ -202,7 +213,7 @@ const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }
   );
 });
 
-const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
+const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelGroups }) => {
   const { t } = useTranslation('topic');
 
   const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
@@ -214,6 +225,8 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const setGroupIds = useTopicsViewStore((s) => s.setGroupIds);
   const triggers = useTopicsViewStore((s) => s.triggers);
   const setTriggers = useTopicsViewStore((s) => s.setTriggers);
+  const botChannels = useTopicsViewStore((s) => s.botChannels);
+  const setBotChannels = useTopicsViewStore((s) => s.setBotChannels);
   const timeRange = useTopicsViewStore((s) => s.timeRange);
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
@@ -253,6 +266,40 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     }));
   }, [projects, groupIds, t, setGroupIds]);
 
+  // Two-level "send source" filter: bot (platform + application) → channels.
+  const botChannelItems: DropdownItem[] = useMemo(() => {
+    if (botChannelGroups.length === 0) {
+      return [{ disabled: true, key: 'empty', label: t('management.filters.botChannel.empty') }];
+    }
+    return botChannelGroups.map((group) => {
+      const ProviderIcon = getPlatformIcon(group.platform);
+      return {
+        children: group.channels.map((channel) => {
+          const toggle = (key: BotChannelFilter) =>
+            setBotChannels(
+              botChannels.includes(key)
+                ? botChannels.filter((x) => x !== key)
+                : [...botChannels, key],
+            );
+          return {
+            extra: <CheckMark visible={botChannels.includes(channel.key)} />,
+            key: channel.key,
+            label: channel.label,
+            onClick: () => toggle(channel.key),
+          };
+        }),
+        icon: ProviderIcon ? (
+          <Icon icon={ProviderIcon} size={14} />
+        ) : (
+          <Icon icon={Hash} size={14} />
+        ),
+        key: group.key,
+        label: group.label,
+        type: 'submenu',
+      };
+    });
+  }, [botChannelGroups, botChannels, setBotChannels, t]);
+
   const timeItems: DropdownItem[] = useMemo(
     () =>
       TIME_OPTIONS.map((r) => ({
@@ -288,8 +335,9 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
 
   const triggerApplied = triggers.length > 0;
   const projectApplied = groupIds.length > 0;
+  const botChannelApplied = botChannels.length > 0;
   const timeApplied = timeRange !== 'all';
-  const anyFilterApplied = triggerApplied || projectApplied || timeApplied;
+  const anyFilterApplied = triggerApplied || projectApplied || botChannelApplied || timeApplied;
 
   const addFilterItems: DropdownItem[] = useMemo(() => {
     const items: DropdownItem[] = [];
@@ -311,6 +359,15 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
         type: 'submenu',
       });
     }
+    if (!botChannelApplied) {
+      items.push({
+        children: botChannelItems,
+        icon: <Icon icon={Hash} size={14} />,
+        key: 'botChannel',
+        label: t('management.filters.botChannel.label'),
+        type: 'submenu',
+      });
+    }
     if (!timeApplied) {
       items.push({
         children: timeItems,
@@ -321,7 +378,17 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
       });
     }
     return items;
-  }, [triggerApplied, projectApplied, timeApplied, triggerItems, projectItems, timeItems, t]);
+  }, [
+    triggerApplied,
+    projectApplied,
+    botChannelApplied,
+    timeApplied,
+    triggerItems,
+    projectItems,
+    botChannelItems,
+    timeItems,
+    t,
+  ]);
 
   const projectChipValue = useMemo(() => {
     if (groupIds.length === 1) {
@@ -334,6 +401,17 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     triggers.length === 1
       ? (t(`management.filters.trigger.${triggers[0]}` as any) as string)
       : `${triggers.length} selected`;
+
+  // Single selection shows "Bot · channel"; multi shows a count.
+  const botChannelChipValue = useMemo(() => {
+    if (botChannels.length !== 1) return `${botChannels.length} selected`;
+    const selected = botChannels[0];
+    for (const group of botChannelGroups) {
+      const channel = group.channels.find((c) => c.key === selected);
+      if (channel) return `${group.label} · ${channel.label}`;
+    }
+    return selected;
+  }, [botChannels, botChannelGroups]);
 
   const handleArchiveStale = useCallback(() => {
     const cutoff = Date.now() - THREE_MONTHS_MS;
@@ -381,6 +459,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
           onClick: () => {
             setTriggers([]);
             setGroupIds([]);
+            setBotChannels([]);
             setTimeRange('all');
           },
         },
@@ -403,6 +482,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     t,
     setTriggers,
     setGroupIds,
+    setBotChannels,
     setTimeRange,
     handleArchiveStale,
   ]);
@@ -455,6 +535,15 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
           label={t('management.filters.project.label')}
           value={projectChipValue}
           onClear={() => setGroupIds([])}
+        />
+      )}
+      {botChannelApplied && (
+        <FilterChip
+          icon={Hash}
+          items={botChannelItems}
+          label={t('management.filters.botChannel.label')}
+          value={botChannelChipValue}
+          onClear={() => setBotChannels([])}
         />
       )}
       {timeApplied && (

@@ -6,7 +6,14 @@ import dayjs from 'dayjs';
 
 import type { ChatTopic } from '@/types/topic';
 
-import type { SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
+import type {
+  BotChannelFilter,
+  BotChannelGroup,
+  SortBy,
+  StatusFilter,
+  TimeRangeFilter,
+  TriggerFilter,
+} from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -46,6 +53,12 @@ export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boo
   if (triggers.length === 0) return true;
   const effective: TriggerFilter = (topic.trigger as TriggerFilter | null | undefined) ?? 'chat';
   return triggers.includes(effective);
+};
+
+export const matchesBotChannel = (topic: ChatTopic, botChannels: BotChannelFilter[]): boolean => {
+  if (botChannels.length === 0) return true;
+  const thread = topic.metadata?.bot?.platformThreadId;
+  return !!thread && botChannels.includes(thread);
 };
 
 export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): boolean => {
@@ -112,6 +125,63 @@ export const getProjectLabel = (topic: ChatTopic): string | undefined => {
   const branch = topic.metadata?.workingDirectoryConfig?.git?.branch;
 
   return branch ? `${pathLabel} · ${branch}` : pathLabel;
+};
+
+/** Client-side platform display names (server `PlatformDefinition.name`). */
+const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  discord: 'Discord',
+  feishu: 'Feishu',
+  googlechat: 'Google Chat',
+  imessage: 'iMessage',
+  lark: 'Lark',
+  line: 'Line',
+  msteams: 'Microsoft Teams',
+  qq: 'QQ',
+  slack: 'Slack',
+  telegram: 'Telegram',
+  wechat: 'WeChat',
+  whatsapp: 'WhatsApp',
+};
+
+/** Human-readable bot (platform) name, e.g. `discord` → `Discord`. */
+export const getBotPlatformName = (platform: string): string =>
+  PLATFORM_DISPLAY_NAMES[platform.toLowerCase()] ?? platform;
+
+/**
+ * Last segment of a `platformThreadId` (`discord:guild:channel:thread` →
+ * `thread`). Compact fallback label when a channel carries no readable title.
+ */
+export const getBotChannelShortLabel = (platformThreadId: string): string =>
+  platformThreadId.split(':').findLast(Boolean) ?? platformThreadId;
+
+/**
+ * Derive the bot → channel option tree from a topic set. Only channels that
+ * actually own topics appear; each bot groups its channels under
+ * `${platform}:${applicationId}`.
+ */
+export const buildBotChannelGroups = (topics: ChatTopic[]): BotChannelGroup[] => {
+  const groups = new Map<string, BotChannelGroup>();
+  for (const topic of topics) {
+    const bot = topic.metadata?.bot;
+    if (!bot?.platformThreadId) continue;
+    const platform = bot.platform;
+    const applicationId = bot.applicationId ?? '';
+    const groupKey = `${platform}:${applicationId}`;
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = { channels: [], key: groupKey, label: getBotPlatformName(platform), platform };
+      groups.set(groupKey, group);
+    }
+    if (!group.channels.some((c) => c.key === bot.platformThreadId)) {
+      group.channels.push({
+        applicationId,
+        key: bot.platformThreadId,
+        label: getBotChannelShortLabel(bot.platformThreadId),
+        platform,
+      });
+    }
+  }
+  return Array.from(groups.values());
 };
 
 /**
