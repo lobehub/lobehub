@@ -55,6 +55,8 @@ import {
   buildCodexAppServerThreadParams,
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
+  buildDroidAcpArgs,
+  buildDroidAcpPrompt,
   buildGrokAcpArgs,
   buildGrokAcpPrompt,
   buildTraeAcpArgs,
@@ -64,6 +66,7 @@ import {
   CodexThreadSession,
   createFileStoreImageUploader,
   CursorAcpSession,
+  DroidAcpSession,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
@@ -357,6 +360,7 @@ interface AgentSession {
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
+  droidAcpSession?: DroidAcpSession;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
@@ -1069,15 +1073,16 @@ export default class HeterogeneousAgentCtr {
   private setupAcpInterventionForOp(
     operationId: string,
     sessionId: string,
+    provider: 'cursor' | 'droid',
   ): {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    // Cursor reuses the Claude Code AskUserQuestion renderer, but provider is
-    // explicit so consumers never mistake renderer compatibility for origin.
+    // Cursor keeps its legacy Claude Code renderer identifier. Droid has a
+    // first-class identifier, while provider remains explicit for both.
     const bridge = new AskUserBridge(operationId, {
-      identifier: 'claude-code',
-      provider: 'cursor',
+      identifier: provider === 'cursor' ? 'claude-code' : provider,
+      provider,
     });
     const pumpDone = (async () => {
       for await (const event of bridge.events()) {
@@ -1496,6 +1501,10 @@ export default class HeterogeneousAgentCtr {
 
     if (session.agentType === 'cursor') {
       return this.sendPromptWithCursorAcp(params, session);
+    }
+
+    if (session.agentType === 'droid') {
+      return this.sendPromptWithDroidAcp(params, session);
     }
 
     if (session.agentType === 'trae') {
@@ -2101,7 +2110,11 @@ export default class HeterogeneousAgentCtr {
     }
 
     const stderrChunks: string[] = [];
-    const intervention = this.setupAcpInterventionForOp(params.operationId, session.sessionId);
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'cursor',
+    );
     const cursorAcpSession = new CursorAcpSession({
       args: session.args,
       askUserBridge: intervention.bridge,
@@ -2167,6 +2180,111 @@ export default class HeterogeneousAgentCtr {
     } finally {
       await intervention.cleanup();
       if (session.cursorAcpSession === cursorAcpSession) session.cursorAcpSession = undefined;
+    }
+  }
+
+  private async sendPromptWithDroidAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildDroidAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildDroidAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'droid',
+    );
+    const droidAcpSession = new DroidAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'droid-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.droidAcpSession = droidAcpSession;
+
+    try {
+      await droidAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'droid-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'droid-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = stderr
+        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+            cause: error,
+          })
+        : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await intervention.cleanup();
+      if (session.droidAcpSession === droidAcpSession) session.droidAcpSession = undefined;
     }
   }
 
@@ -2762,6 +2880,10 @@ export default class HeterogeneousAgentCtr {
       session.cursorAcpSession.interrupt();
       return;
     }
+    if (session.droidAcpSession) {
+      session.droidAcpSession.interrupt();
+      return;
+    }
     if (session.appServerSession) {
       const appServerSession = session.appServerSession;
       try {
@@ -2816,6 +2938,11 @@ export default class HeterogeneousAgentCtr {
     if (session.cursorAcpSession) {
       session.cancelledByUs = true;
       session.cursorAcpSession.close();
+    }
+
+    if (session.droidAcpSession) {
+      session.cancelledByUs = true;
+      session.droidAcpSession.close();
     }
 
     if (session.appServerSession) {
@@ -2915,6 +3042,10 @@ export default class HeterogeneousAgentCtr {
         if (session.cursorAcpSession) {
           session.cancelledByUs = true;
           session.cursorAcpSession.close();
+        }
+        if (session.droidAcpSession) {
+          session.cancelledByUs = true;
+          session.droidAcpSession.close();
         }
         if (session.appServerSession) {
           session.cancelledByUs = true;

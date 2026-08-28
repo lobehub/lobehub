@@ -601,6 +601,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
   },
+  'droid': {
+    validateHelpArgs: ['exec', '--help'],
+    validateHelpKeywords: ['--output-format', 'ACP modes'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'grok-build': {
     validateHelpArgs: ['agent', '--help'],
     validateHelpKeywords: ['agent', 'stdio'],
@@ -720,6 +725,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         // Cursor's installer creates both names. Keep the unambiguous legacy
         // alias as a fallback when another CLI shadows the generic `agent`.
         path.join(homedir(), '.local', 'bin', 'cursor-agent'),
+      ];
+    }
+    case 'droid': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'droid.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'droid'),
+        path.join(homedir(), '.bun', 'bin', 'droid'),
+        path.join(homedir(), '.npm-global', 'bin', 'droid'),
+        path.join(homedir(), 'Library', 'pnpm', 'droid'),
       ];
     }
     case 'grok-build': {

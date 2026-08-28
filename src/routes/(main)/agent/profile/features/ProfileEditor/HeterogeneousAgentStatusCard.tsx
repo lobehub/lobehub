@@ -355,6 +355,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         provider.type === 'codebuddy' ||
         provider.type === 'codex' ||
         provider.type === 'cursor' ||
+        provider.type === 'droid' ||
         provider.type === 'kimi-code' ||
         provider.type === 'opencode' ||
         provider.type === 'pi' ||

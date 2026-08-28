@@ -925,6 +925,16 @@ export default {
   'cursorInstallGuide.menuNotification.title': 'Cursor CLI not found',
   'cursorInstallGuide.reason': 'LobeHub could not start Cursor: {{message}}',
   'cursorInstallGuide.title': 'Install Cursor CLI',
+  'droidInstallGuide.actions.openDocs': 'Open Install Guide',
+  'droidInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'droidInstallGuide.afterInstall':
+    'After installing, run `droid` to sign in, then retry your message or click Re-detect in System Tools.',
+  'droidInstallGuide.desc':
+    'Factory Droid needs the Droid CLI to run locally. Install it and make sure the `droid` command is available in your PATH.',
+  'droidInstallGuide.installWithNpm': 'Recommended install',
+  'droidInstallGuide.menuNotification.title': 'Factory Droid CLI not found',
+  'droidInstallGuide.reason': 'LobeHub could not start Factory Droid: {{message}}',
+  'droidInstallGuide.title': 'Install Factory Droid CLI',
   'grokBuildInstallGuide.actions.openDocs': 'Open Install Guide',
   'grokBuildInstallGuide.actions.openSystemTools': 'Open System Tools',
   'grokBuildInstallGuide.afterInstall':
@@ -1003,6 +1013,7 @@ export default {
   'newCodeBuddyAgent': 'Add CodeBuddy',
   'newCodexAgent': 'Add Codex',
   'newCursorAgent': 'Add Cursor',
+  'newDroidAgent': 'Add Factory Droid',
   'newGrokBuildAgent': 'Add Grok Build',
   'newKimiCodeAgent': 'Add Kimi Code',
   'newOpenCodeAgent': 'Add OpenCode',
@@ -1093,6 +1104,7 @@ export default {
   'connectAgent.providerDesc.codebuddy': 'Tencent coding agent CLI',
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
+  'connectAgent.providerDesc.droid': 'Factory coding agent CLI',
   'connectAgent.providerDesc.grok-build': 'xAI coding agent CLI',
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.kimi-code': 'Moonshot AI coding agent CLI',

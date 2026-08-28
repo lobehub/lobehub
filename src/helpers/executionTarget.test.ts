@@ -29,6 +29,10 @@ const cursorCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyCo
   heterogeneousProvider: { command: 'agent', type: 'cursor' },
   ...over,
 });
+const droidCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'droid', type: 'droid' },
+  ...over,
+});
 const kimiCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
   heterogeneousProvider: { command: 'kimi', type: 'kimi-code' },
   ...over,
@@ -57,6 +61,7 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
   });
 
   it('keeps local-only CLIs on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('droid')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
   });
@@ -204,6 +209,7 @@ describe('resolveExecutionTarget', () => {
       ['Amp', ampCfg],
       ['CodeBuddy', codeBuddyCfg],
       ['Cursor', cursorCfg],
+      ['Droid', droidCfg],
       ['Kimi Code', kimiCodeCfg],
       ['OpenCode', openCodeCfg],
       ['Pi', piCfg],

@@ -282,6 +282,36 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('runs Factory Droid with ACP model selection and safe native provider arguments', async () => {
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'droid' });
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'droid',
+      '--prompt',
+      'do thing',
+      '--model',
+      'gpt-5.4',
+      '--agent-arg=--tag',
+      '--agent-arg=lobe',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('droid', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'droid',
+        askUserBridge: undefined,
+        command: 'droid',
+        extraArgs: ['--tag', 'lobe'],
+        initialModel: 'gpt-5.4',
+        prompt: 'do thing',
+      }),
+    );
+  });
+
   it('uses the provided --operation-id verbatim', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

@@ -84,6 +84,19 @@ export {
   normalizeCursorQuestion,
 } from './cursorAcpSession';
 export {
+  buildDroidAcpArgs,
+  buildDroidAcpPrompt,
+  type DroidAcpImagePromptBlock,
+  type DroidAcpModelCatalog,
+  type DroidAcpPromptBlock,
+  DroidAcpSession,
+  type DroidAcpSessionOptions,
+  type DroidAcpTextPromptBlock,
+  listDroidAcpModels,
+  type ListDroidAcpModelsOptions,
+  parseDroidAcpModelCatalog,
+} from './droidAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,

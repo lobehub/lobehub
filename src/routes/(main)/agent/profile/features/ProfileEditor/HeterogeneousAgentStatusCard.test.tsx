@@ -23,29 +23,35 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
           icon: () => <span>Claude Code Icon</span>,
           title: 'Claude Code',
         }
-      : type === 'kimi-code'
+      : type === 'droid'
         ? {
-            defaultCommand: 'kimi',
-            icon: () => <span>Kimi Code Icon</span>,
-            title: 'Kimi Code',
+            defaultCommand: 'droid',
+            icon: () => <span>Factory Droid Icon</span>,
+            title: 'Factory Droid',
           }
-        : type === 'opencode'
+        : type === 'kimi-code'
           ? {
-              defaultCommand: 'opencode',
-              icon: () => <span>OpenCode Icon</span>,
-              title: 'OpenCode',
+              defaultCommand: 'kimi',
+              icon: () => <span>Kimi Code Icon</span>,
+              title: 'Kimi Code',
             }
-          : type === 'pi'
+          : type === 'opencode'
             ? {
-                defaultCommand: 'pi',
-                icon: () => <span>Pi Icon</span>,
-                title: 'Pi',
+                defaultCommand: 'opencode',
+                icon: () => <span>OpenCode Icon</span>,
+                title: 'OpenCode',
               }
-            : {
-                defaultCommand: 'codex',
-                icon: () => <span>Codex Icon</span>,
-                title: 'Codex',
-              },
+            : type === 'pi'
+              ? {
+                  defaultCommand: 'pi',
+                  icon: () => <span>Pi Icon</span>,
+                  title: 'Pi',
+                }
+              : {
+                  defaultCommand: 'codex',
+                  icon: () => <span>Codex Icon</span>,
+                  title: 'Codex',
+                },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
 }));
 
@@ -272,6 +278,32 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('codex Install Guide')).toBeInTheDocument();
     expect(screen.getByText('codex')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('codex')).not.toBeInTheDocument();
+  });
+
+  it('detects Factory Droid and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'droid',
+      type: 'droid',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'droid',
+        command: 'droid',
+      });
+    });
+
+    expect(screen.getByText('Factory Droid CLI')).toBeInTheDocument();
+    expect(screen.getByText('Factory Droid CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('droid Install Guide')).toBeInTheDocument();
   });
 
   it('detects OpenCode and shows its install guide when unavailable', async () => {

@@ -284,6 +284,7 @@ const INTERVENTION_KINDS = new Set<AgentInterventionInteractionKind>([
 const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
   'claude-code',
   'cursor',
+  'droid',
   'qoder',
 ]);
 

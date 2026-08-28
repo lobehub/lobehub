@@ -340,6 +340,22 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
+  it('keeps Droid model selection in ACP instead of native process arguments', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--tag', 'lobe'],
+      model: 'gpt-5.4',
+      type: 'droid',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--tag', 'lobe']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--tag',
+      '--agent-arg=lobe',
+      '--model',
+      'gpt-5.4',
+    ]);
+  });
+
   it('forwards Qoder native args, model, and reasoning effort', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--verbose'],

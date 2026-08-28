@@ -137,7 +137,7 @@ const buildExtraArgs = (
   const selectorArgs =
     options.type === 'amp'
       ? [...(options.mode ? ['--mode', options.mode] : [])]
-      : options.type === 'trae'
+      : options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [
@@ -500,13 +500,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const askPollAbort = new AbortController();
   if (
     serverIngest &&
-    (agentType === 'claude-code' || agentType === 'cursor' || agentType === 'qoder') &&
+    (agentType === 'claude-code' ||
+      agentType === 'cursor' ||
+      agentType === 'droid' ||
+      agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor') {
+    if (agentType === 'cursor' || agentType === 'droid') {
       askBridge = new AskUserBridge(operationId, {
-        identifier: 'claude-code',
-        provider: 'cursor',
+        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
+        provider: agentType,
       });
     } else {
       askServer = new LobeBuiltinMcpServer();
@@ -880,7 +883,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
-      initialModel: options.type === 'trae' ? options.model : undefined,
+      initialModel: options.type === 'droid' || options.type === 'trae' ? options.model : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -915,7 +918,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
-        initialModel: options.type === 'trae' ? options.model : undefined,
+        initialModel:
+          options.type === 'droid' || options.type === 'trae' ? options.model : undefined,
         operationId,
         prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
         uploadImage,

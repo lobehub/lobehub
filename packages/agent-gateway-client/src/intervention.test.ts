@@ -46,6 +46,14 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     });
   });
 
+  it('accepts Droid as an explicit permission provider', () => {
+    expect(
+      sanitizeAgentInterventionRequestForReview(
+        request({ identifier: 'droid', provider: 'droid' }),
+      ),
+    ).toMatchObject({ interactionKind: 'permission', provider: 'droid' });
+  });
+
   it('fails closed when a permission option lacks an id or ids are duplicated', () => {
     const missingId = request({
       arguments: JSON.stringify({

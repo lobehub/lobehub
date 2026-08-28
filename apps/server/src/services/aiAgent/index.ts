@@ -2584,7 +2584,7 @@ export class AiAgentService {
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
     // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codebuddy /
-    // codex / cursor / kimi-code / opencode / pi / qoder) or
+    // codex / cursor / droid / grok-build / kimi-code / opencode / pi / qoder / trae) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),

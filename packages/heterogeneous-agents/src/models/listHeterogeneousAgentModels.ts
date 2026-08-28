@@ -11,6 +11,7 @@ import type {
 
 import { getHeterogeneousTypeLabel } from '../labels';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
+import { listDroidAcpModels } from '../spawn/droidAcpSession';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
 
@@ -238,6 +239,17 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
+    if (params.type === 'droid') {
+      const models = await listDroidAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: params.cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
     if (params.type === 'trae') {
       const models = await listTraeAcpModels({
         args: params.args,

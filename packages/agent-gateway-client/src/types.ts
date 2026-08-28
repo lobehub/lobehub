@@ -197,7 +197,7 @@ export interface OperationHeartbeatData extends StepCompleteData {
 export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
 
 /** Producer that owns the blocked interaction. */
-export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'qoder';
+export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'droid' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

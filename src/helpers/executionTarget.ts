@@ -81,7 +81,7 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp, CodeBuddy, OpenCode, Pi, and Qoder
+   * sandbox. Defaults to `false` for Amp, CodeBuddy, Droid, OpenCode, Pi, and Qoder
    * (which currently
    * require a local or connected device) and `true` otherwise. Callers that only
    * know the provider through a legacy model discriminator can override the
@@ -117,6 +117,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'amp' &&
   type !== 'codebuddy' &&
   type !== 'cursor' &&
+  type !== 'droid' &&
   type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&

@@ -142,6 +142,10 @@ const {
   cursorAcpSessionConstructMock,
   cursorAcpSessionInterruptMock,
   cursorAcpSessionRunMock,
+  droidAcpSessionCloseMock,
+  droidAcpSessionConstructMock,
+  droidAcpSessionInterruptMock,
+  droidAcpSessionRunMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -168,6 +172,10 @@ const {
   cursorAcpSessionConstructMock: vi.fn(),
   cursorAcpSessionInterruptMock: vi.fn(),
   cursorAcpSessionRunMock: vi.fn(),
+  droidAcpSessionCloseMock: vi.fn(),
+  droidAcpSessionConstructMock: vi.fn(),
+  droidAcpSessionInterruptMock: vi.fn(),
+  droidAcpSessionRunMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -426,12 +434,52 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockDroidAcpSession {
+    constructor(private readonly options: any) {
+      droidAcpSessionConstructMock(options);
+    }
+
+    close() {
+      droidAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      droidAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (droidAcpSessionRunMock.getMockImplementation()) {
+        return droidAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'droid-acp',
+      });
+      this.options.onSessionId('droid_session_1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+    }
+  }
+
   return {
     ...actual,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerClient: MockCodexAppServerClient,
     CodexThreadSession: MockCodexThreadSession,
     CursorAcpSession: MockCursorAcpSession,
+    DroidAcpSession: MockDroidAcpSession,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
@@ -606,6 +654,10 @@ describe('HeterogeneousAgentCtr', () => {
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
     traeAcpSessionRunMock.mockReset();
+    droidAcpSessionCloseMock.mockReset();
+    droidAcpSessionConstructMock.mockReset();
+    droidAcpSessionInterruptMock.mockReset();
+    droidAcpSessionRunMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
@@ -3434,6 +3486,58 @@ describe('HeterogeneousAgentCtr', () => {
         message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
         stderr: 'No API key found for provider anthropic',
       });
+    });
+  });
+
+  describe('sendPrompt (droid)', () => {
+    it('routes Factory Droid through ACP and persists the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'droid',
+        args: ['--tag', 'lobe'],
+        command: 'droid',
+        initialModel: 'gpt-5.4',
+        resumeSessionId: 'droid_session_old',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-droid', prompt: 'inspect this repo', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(droidAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--tag', 'lobe'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'droid',
+          cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'gpt-5.4',
+          operationId: 'op-droid',
+          prompt: [{ text: 'inspect this repo', type: 'text' }],
+          resumeSessionId: 'droid_session_old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'droid_session_1',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentRuntimeStatus', {
+        activeTasks: [],
+        lastEventAt: expect.any(Number),
+        operationId: 'op-droid',
+        sessionId,
+        state: 'running',
+        transport: 'droid-acp',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
   });
 

@@ -50,6 +50,8 @@ const existingFiles = (files: Record<string, string | true>) => {
 };
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options] [prompt]
+  --output-format <format>  Output format. ACP modes use bidirectional JSON-RPC.`;
 const TRAE_ACP_HELP = `Start the ACP server
 
 Usage:
@@ -307,6 +309,34 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         version: '0.120.52',
       });
       expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
+    });
+
+    it('accepts Factory Droid only when droid exec exposes ACP output', async () => {
+      callExecFile('/usr/local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('droid', 'droid');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/droid',
+        version: '0.206.0',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['exec', '--help']);
+    });
+
+    it('rejects a droid binary without ACP output support', async () => {
+      callExecFile('/usr/local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile('Usage: droid exec [options]\n--output-format text|jsonl');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('droid', 'droid')).resolves.toMatchObject({
+        available: false,
+      });
     });
 
     it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
