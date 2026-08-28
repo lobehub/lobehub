@@ -7,6 +7,9 @@ import { Forward, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+
 import { messageStateSelectors, useConversationStore, useConversationStoreApi } from '../store';
 import { openForwardModal } from './ForwardModal';
 
@@ -35,13 +38,16 @@ const styles = createStaticStyles(({ css }) => ({
 
 /**
  * Bottom action bar shown while multi-selecting: selection count on the leading
- * edge, Cancel / Delete / Forward on the trailing edge. Replaces the chat
- * composer (hidden by MessageForwardFooter).
+ * edge, Cancel / optional Delete / Forward on the trailing edge. Delete is
+ * omitted for heterogeneous agents because removing LobeHub rows cannot
+ * reliably remove those turns from the resumed native CLI session. Replaces
+ * the chat composer (hidden by MessageForwardFooter).
  */
 const SelectionFooterBar = memo(() => {
   const { t } = useTranslation('chat');
 
   const [forwardOpen, setForwardOpen] = useState(false);
+  const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const storeApi = useConversationStoreApi();
   const selectedCount = useConversationStore(messageStateSelectors.selectedMessageCount);
   const selectedMessageIds = useConversationStore((s) => s.selectedMessageIds);
@@ -93,15 +99,17 @@ const SelectionFooterBar = memo(() => {
         <Button icon={<Icon icon={X} />} type={'text'} onClick={exitSelectionMode}>
           {t('messageForward.bar.cancel')}
         </Button>
-        <Button
-          danger
-          disabled={disabled}
-          icon={<Icon icon={Trash2} />}
-          type={'text'}
-          onClick={handleDelete}
-        >
-          {t('messageForward.bar.delete')}
-        </Button>
+        {!isHeterogeneousAgent && (
+          <Button
+            danger
+            disabled={disabled}
+            icon={<Icon icon={Trash2} />}
+            type={'text'}
+            onClick={handleDelete}
+          >
+            {t('messageForward.bar.delete')}
+          </Button>
+        )}
         <Button
           disabled={disabled}
           icon={<Icon icon={Forward} />}
