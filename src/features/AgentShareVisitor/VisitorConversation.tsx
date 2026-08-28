@@ -3,6 +3,7 @@
 import type { SharedAgentData } from '@lobechat/types';
 import { memo } from 'react';
 
+import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useChatStore } from '@/store/chat';
 
 import ReadOnlyConversationArea from './ReadOnlyConversationArea';
@@ -19,7 +20,16 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
   const { agentId, shareId } = data;
   const seeded = useVisitorConversationSeed(data);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const { mutate: refreshVisitorTopics } = useVisitorTopics(shareId);
+  const { data: visitorTopics, mutate: refreshVisitorTopics } = useVisitorTopics(shareId);
+
+  // A reload/reopen mid-run must resume the stream: the server keeps a
+  // sanitized `runningOperation` marker on the visitor's topic row, and the
+  // share-authorized token refresh (`agentShareId`) lets the visitor reconnect
+  // to the creator-funded operation instead of silently losing it.
+  const runningOperation = activeTopicId
+    ? visitorTopics?.find((topic) => topic.id === activeTopicId)?.runningOperation
+    : undefined;
+  useGatewayReconnect(activeTopicId, runningOperation ?? undefined, agentId, shareId);
 
   // The message surface reads the active ids on first render — mounting it before
   // the seed lands would fetch against a stale topic left by the main app.

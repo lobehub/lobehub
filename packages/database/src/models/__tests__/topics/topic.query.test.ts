@@ -2379,6 +2379,7 @@ describe('TopicModel - Query', () => {
       expect(result[0]).toEqual({
         createdAt: expect.any(Date),
         id: 'share-topic-1',
+        runningOperation: null,
         title: 'Shared Topic',
         updatedAt: expect.any(Date),
       });
@@ -2390,6 +2391,47 @@ describe('TopicModel - Query', () => {
       expect(result[0]).not.toHaveProperty('usage');
       expect(result[0]).not.toHaveProperty('status');
       expect(result[0]).not.toHaveProperty('metadata');
+    });
+
+    it('exposes only the reconnect essentials of a running operation, never device/hook internals', async () => {
+      const agentId = 'share-agent-run';
+      const visitorId = 'share-visitor-run';
+      await serverDB.insert(users).values({ id: visitorId });
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Running Share Agent' });
+      await serverDB.insert(topics).values({
+        id: 'share-topic-running',
+        title: 'Mid-run Topic',
+        userId: visitorId,
+        agentId,
+        shareId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'msg-assistant-1',
+            childOperations: [{ assistantMessageId: 'msg-child', operationId: 'op-child' }],
+            deviceId: 'device-internal',
+            deviceUserId: 'creator-device-user',
+            heteroType: 'claude-code',
+            hooks: [{ kind: 'onComplete' }],
+            operationId: 'op-root-1',
+            scope: 'main',
+            threadId: null,
+          },
+        },
+      });
+
+      const result = await new TopicModel(serverDB, visitorId).queryVisitorShareTopics({
+        agentId,
+        shareId,
+      });
+
+      // A visitor reloading mid-run needs exactly these four fields to
+      // reconnect; everything else on the marker is creator infrastructure.
+      expect(result[0].runningOperation).toEqual({
+        assistantMessageId: 'msg-assistant-1',
+        operationId: 'op-root-1',
+        scope: 'main',
+        threadId: null,
+      });
     });
 
     it('scopes results to the calling visitor, not a second visitor on the same share', async () => {

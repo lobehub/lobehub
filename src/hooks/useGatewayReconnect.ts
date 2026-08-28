@@ -36,6 +36,12 @@ export const useGatewayReconnect = (
    * unset — see `reconnectToGatewayOperation`.
    */
   agentId?: string,
+  /**
+   * Present on the agent-share visitor surface: reconnect must refresh its
+   * gateway token through the share-authorized endpoint (the visitor cannot
+   * call the owner-scoped one) — see `reconnectToGatewayOperation`.
+   */
+  agentShareId?: string,
 ) => {
   const agentGatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
 
@@ -48,6 +54,7 @@ export const useGatewayReconnect = (
 
       await useChatStore.getState().reconnectToGatewayOperation({
         agentId,
+        agentShareId,
         assistantMessageId: runningOperation.assistantMessageId,
         heteroType: runningOperation.heteroType,
         operationId: runningOperation.operationId,
