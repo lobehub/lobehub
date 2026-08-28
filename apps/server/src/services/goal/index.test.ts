@@ -63,6 +63,40 @@ describe('GoalService', () => {
     expect(current.workVersions).toHaveLength(1);
   });
 
+  it('starts the bound Work once when advances race on dispatch', async () => {
+    // Overlapping advances (an event hook, a manual nudge, the sweep) both read
+    // the task as backlog; without an atomic claim both would call runTask and
+    // the user would pay for the same Work twice.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockImplementation(async ({ taskId }) => ({ taskId }) as never);
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Raced dispatch', work: ['Only run once'] });
+    await service.tick(graph.goal.id);
+
+    const results = await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(results.filter((result) => result.message.startsWith('Started task'))).toHaveLength(1);
+  });
+
+  it('gives a private goal private Work Tasks', async () => {
+    // Goals have no visibility column, so a Work Task would otherwise fall back
+    // to the assignee agent's visibility and publish what the creator marked
+    // private to the whole workspace.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      config: { visibility: 'private' },
+      title: 'Private goal',
+      work: ['Keep this to myself'],
+    });
+
+    const created = await service.tick(graph.goal.id);
+    const task = await new TaskModel(serverDB, userId).findById(created.taskId!);
+
+    expect(task?.visibility).toBe('private');
+  });
+
   it('keeps the overall requirement as background while making the current work authoritative', async () => {
     const service = new GoalService(serverDB, userId);
     const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;

@@ -452,6 +452,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         agentId,
         config: {
           recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
+          visibility: activeWorkspaceId ? visibility : undefined,
         },
         maxRounds: budget.maxRounds ?? undefined,
         maxTotalCost: budget.maxTotalCost ?? undefined,
@@ -472,7 +473,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     } finally {
       setIsCreating(false);
     }
-  }, [agentId, canCreate, close, onCreated, plan, projectId, requirement, t]);
+  }, [
+    activeWorkspaceId,
+    agentId,
+    canCreate,
+    close,
+    onCreated,
+    plan,
+    projectId,
+    requirement,
+    t,
+    visibility,
+  ]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;

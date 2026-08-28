@@ -150,6 +150,34 @@ export class GoalService {
     return edge;
   };
 
+  /**
+   * Stop everything the goal has running, then delete it and its graph.
+   *
+   * Deleting only the goal row cascades the graph away but leaves each Work
+   * Task — and the agent operation behind it — running, spending the user's
+   * budget with nothing left on screen to stop it. The tasks themselves stay:
+   * they are ordinary tasks with their own history and acceptance.
+   */
+  delete = async (goalId: string) => {
+    const graph = await this.graphModel.getGraph(goalId);
+    const taskIds = graph?.nodes.flatMap((node) => (node.taskId ? [node.taskId] : [])) ?? [];
+
+    for (const taskId of taskIds) {
+      const topics = await this.taskTopicModel.findByTaskId(taskId);
+      for (const topic of topics) {
+        if (topic.status !== 'running' || !topic.topicId) continue;
+        await this.taskService.cancelTopic(topic.topicId).catch((error) => {
+          console.error('[GoalService.delete] failed to cancel running topic:', error);
+        });
+      }
+      await this.taskModel
+        .updateStatusIfCurrent(taskId, 'running', 'paused')
+        .catch((error) => console.error('[GoalService.delete] failed to pause task:', error));
+    }
+
+    return this.goalModel.delete(goalId);
+  };
+
   pause = async (goalId: string) => {
     const goal = await this.goalModel.updateStatus(goalId, 'paused');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
@@ -348,6 +376,10 @@ export class GoalService {
           instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
           name: frontier.title,
           projectId: graph.goal.projectId ?? undefined,
+          // The creator's choice lives on the goal, not on the task: without
+          // this every Work would fall back to the assignee agent's visibility
+          // and a goal marked private would publish its output to the workspace.
+          visibility: graph.goal.config?.visibility,
         });
         const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
           config: { enabled: true },
@@ -513,18 +545,49 @@ export class GoalService {
       };
     }
 
-    const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
-      maxSteps: resolveWorkMaxSteps(graph.goal),
-      taskId: task.id,
-      trigger: 'goal',
+    // Advances arrive from independent sources — an event hook, a manual nudge,
+    // the sweep — and can overlap. `runTask` decides whether a run is already
+    // in flight by reading the task's topics and only then creating one, so two
+    // overlapping advances would both dispatch this Work and pay for it twice.
+    // Claim the task first: the transition is a single conditional UPDATE, so
+    // exactly one advance can win it.
+    const claimed = await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'running', {
+      error: null,
+      startedAt: new Date(),
     });
-    return {
-      goalId,
-      message: `Started task ${task.identifier}`,
-      nodeId: frontier.id,
-      outcome: 'waiting_external',
-      taskId: run.taskId,
-    };
+    if (!claimed) {
+      return {
+        goalId,
+        message: `Task ${task.identifier} is already being started`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    try {
+      const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
+        maxSteps: resolveWorkMaxSteps(graph.goal),
+        taskId: task.id,
+        trigger: 'goal',
+      });
+      return {
+        goalId,
+        message: `Started task ${task.identifier}`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: run.taskId,
+      };
+    } catch (error) {
+      // We claimed the task, so nothing else will put it back. Release it or the
+      // Work stays 'running' with no run behind it and only the lease reclaims it.
+      await this.taskModel
+        .updateStatusIfCurrent(task.id, 'running', task.status)
+        .catch((releaseError) => {
+          console.error('[GoalService.tick] failed to release claimed task:', releaseError);
+        });
+      throw error;
+    }
   };
 
   private requireGraph = async (goalId: string) => {

@@ -35,6 +35,15 @@ export class GoalModel {
     this.workspaceId = workspaceId;
   }
 
+  /**
+   * The goal owns a Goal Graph. `goal.create` always seeds a problem node and
+   * the opening Work, so this is exactly "not a leftover from the old
+   * task-carried flow".
+   */
+  private static hasGraphSql = sql`EXISTS (
+    SELECT 1 FROM ${goalNodes} WHERE ${goalNodes.goalId} = ${goals.id}
+  )`;
+
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
 
@@ -124,6 +133,9 @@ export class GoalModel {
       .where(
         and(
           inArray(goals.status, ['planning', 'running', 'verifying']),
+          // A graph-less legacy goal has no frontier, so every sweep would
+          // tick it only to report `no_progress`. Leave it alone.
+          GoalModel.hasGraphSql,
           sql`NOT EXISTS (
             SELECT 1 FROM ${goalNodes}
             WHERE ${goalNodes.goalId} = ${goals.id}
@@ -164,7 +176,11 @@ export class GoalModel {
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
     const { agentId, limit = 50, offset = 0, projectId, statuses } = options;
 
-    const conditions = [this.ownership()];
+    // Only goals that actually have a graph. Rows created by the earlier
+    // task-carried flow have no `goal_nodes`, so they would render as a
+    // zero-work goal page that can never advance; they stay out of the list
+    // until something backfills them into graphs.
+    const conditions = [this.ownership(), GoalModel.hasGraphSql];
     if (agentId) conditions.push(eq(goals.agentId, agentId));
     if (projectId) conditions.push(eq(goals.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));

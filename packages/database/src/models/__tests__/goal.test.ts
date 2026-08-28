@@ -137,17 +137,43 @@ describe('GoalModel', () => {
         { id: mine, slug: mine, userId },
         { id: theirs, slug: theirs, userId },
       ]);
-      await goalModel.create({ agentId: mine, subjectType: 'standalone', title: 'Mine' });
-      await goalModel.create({ agentId: theirs, subjectType: 'standalone', title: 'Theirs' });
+      const ours = await goalModel.create({
+        agentId: mine,
+        subjectType: 'standalone',
+        title: 'Mine',
+      });
+      const others = await goalModel.create({
+        agentId: theirs,
+        subjectType: 'standalone',
+        title: 'Theirs',
+      });
+      await graphModel.createNode(ours.id, { kind: 'work', title: 'W1' });
+      await graphModel.createNode(others.id, { kind: 'work', title: 'W1' });
 
       const scoped = await goalModel.list({ agentId: mine });
       expect(scoped.total).toBe(1);
       expect(scoped.goals[0].goal.title).toBe('Mine');
     });
 
+    it('leaves out a goal that never got a graph', async () => {
+      // Rows from the earlier task-carried flow have no `goal_nodes`. Listing
+      // them renders a goal page with no work, no frontier and no way forward.
+      const legacy = await goalModel.create({ subjectType: 'task', title: 'Carrier-bound' });
+      const graphed = await goalModel.create({ subjectType: 'standalone', title: 'Has a graph' });
+      await graphModel.createNode(graphed.id, { kind: 'work', title: 'W1' });
+
+      const { goals, total } = await goalModel.list();
+
+      expect(total).toBe(1);
+      expect(goals.map(({ goal }) => goal.id)).toEqual([graphed.id]);
+      expect(goals.map(({ goal }) => goal.id)).not.toContain(legacy.id);
+    });
+
     it('filters by lifecycle status', async () => {
       const running = await goalModel.create({ subjectType: 'standalone', title: 'Running' });
       const achieved = await goalModel.create({ subjectType: 'standalone', title: 'Achieved' });
+      await graphModel.createNode(running.id, { kind: 'work', title: 'W1' });
+      await graphModel.createNode(achieved.id, { kind: 'work', title: 'W1' });
       await goalModel.updateStatus(running.id, 'running');
       await goalModel.updateStatus(achieved.id, 'achieved');
 
@@ -166,6 +192,16 @@ describe('GoalModel', () => {
 
       const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
       expect(stalled.map(({ id }) => id)).toContain(goal.id);
+    });
+
+    it('leaves out a goal that never got a graph', async () => {
+      // No graph means no frontier, so every sweep would tick it only to hear
+      // `no_progress` back.
+      const goal = await goalModel.create({ subjectType: 'task', title: 'Carrier-bound' });
+      await goalModel.updateStatus(goal.id, 'running');
+
+      const stalled = await GoalModel.listStalled(serverDB, { staleBefore: staleBefore() });
+      expect(stalled.map(({ id }) => id)).not.toContain(goal.id);
     });
 
     it('leaves a goal alone while one of its Work Tasks is freshly active', async () => {

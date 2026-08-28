@@ -33,6 +33,12 @@ export interface GoalRecoveryPolicy {
 
 export interface GoalConfig {
   recovery?: GoalRecoveryPolicy;
+  /**
+   * Visibility the goal's Work Tasks inherit. Goals have no visibility column;
+   * the choice the creator made is kept here so the coordinator can stamp every
+   * task it dispatches, instead of each one falling back to the agent's.
+   */
+  visibility?: 'private' | 'public';
 }
 
 /**

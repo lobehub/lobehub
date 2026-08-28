@@ -106,6 +106,7 @@ export const goalRouter = router({
                 operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
               })
               .optional(),
+            visibility: z.enum(['private', 'public']).optional(),
           })
           .optional(),
         maxRounds: z.number().int().positive().optional(),
@@ -188,13 +189,17 @@ export const goalRouter = router({
   }),
 
   /**
-   * Delete a goal and, by FK cascade, its whole graph. The Work Tasks the
-   * coordinator dispatched are deliberately left in place — they are ordinary
-   * tasks with their own history and acceptance.
+   * Delete a goal and, by FK cascade, its whole graph. Anything still running
+   * is stopped first; the Work Tasks themselves are deliberately left in place
+   * — they are ordinary tasks with their own history and acceptance.
    */
   delete: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
-    await ctx.goalModel.delete(input.id);
-    return { message: 'Goal deleted', success: true };
+    try {
+      await ctx.goalService.delete(input.id);
+      return { message: 'Goal deleted', success: true };
+    } catch (error) {
+      mapGoalError(error, 'delete');
+    }
   }),
 
   graph: goalProcedure.input(idInput).query(async ({ ctx, input }) => {

@@ -1,10 +1,5 @@
 import type { GoalStatus } from '@lobechat/const/goal';
-import type {
-  GoalGraphSnapshot,
-  GoalNodeKind,
-  GoalRecoveryPolicy,
-  GoalTickResult,
-} from '@lobechat/types';
+import type { GoalConfig, GoalGraphSnapshot, GoalNodeKind, GoalTickResult } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -27,7 +22,7 @@ class GoalService {
   /** Create a goal and seed its graph with a problem node and the given Work. */
   create = async (params: {
     agentId?: string;
-    config?: { recovery?: GoalRecoveryPolicy };
+    config?: GoalConfig;
     maxRounds?: number;
     maxTotalCost?: number;
     projectId?: string;

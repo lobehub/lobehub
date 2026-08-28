@@ -86,6 +86,11 @@ const createSchema = z.object({
   // assignee agent's visibility (private agent → private task). UI surfaces
   // such as the top-level "Tasks" create form pass it explicitly.
   visibility: z.enum(['private', 'public']).optional(),
+  // Removed contract, kept so the server can recognise it. A task no longer
+  // carries a goal — the Goal Graph owns execution and dispatches its own Work
+  // Tasks — and silently dropping this field would let a released client report
+  // that a goal started when only an ordinary task exists.
+  goal: z.unknown().optional(),
 });
 
 const updateSchema = z.object({
@@ -432,12 +437,20 @@ export const taskRouter = router({
     }),
 
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
+    const { goal: legacyGoal, ...createInput } = input;
+    if (legacyGoal !== undefined) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          'Creating a goal through task.create is no longer supported. Reload the app, then create the goal again.',
+      });
+    }
     try {
-      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(input.config?.verify);
-      const { verify: _legacyVerify, ...taskConfig } = input.config ?? {};
+      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
+      const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
       const task = await ctx.taskService.createTask({
-        ...input,
-        config: parsedVerify.success ? taskConfig : input.config,
+        ...createInput,
+        config: parsedVerify.success ? taskConfig : createInput.config,
       });
       try {
         if (parsedVerify.success) {
