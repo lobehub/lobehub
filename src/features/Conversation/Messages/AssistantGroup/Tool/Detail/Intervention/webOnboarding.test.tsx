@@ -81,8 +81,8 @@ describe('web onboarding intervention registry', () => {
     if (!Component) throw new TypeError('Expected web onboarding intervention to be registered');
 
     const onArgsChange = vi.fn();
-    let beforeApproveCallback: (() => Promise<void>) | undefined;
-    const registerBeforeApprove = (_id: string, callback: () => Promise<void>) => {
+    let beforeApproveCallback: (() => void | Promise<void>) | undefined;
+    const registerBeforeApprove = (_id: string, callback: () => void | Promise<void>) => {
       beforeApproveCallback = callback;
       return () => {
         beforeApproveCallback = undefined;
