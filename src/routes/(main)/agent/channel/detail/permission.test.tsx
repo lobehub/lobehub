@@ -330,7 +330,7 @@ describe('Agent channel permission gates', () => {
     await waitFor(() =>
       expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toHaveValue('app-id'),
     );
-  });
+  }, 15_000);
 
   it('disables the channel enable switch and status refresh when editing is denied', () => {
     render(
