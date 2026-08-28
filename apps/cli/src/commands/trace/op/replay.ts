@@ -3,6 +3,7 @@ import {
   type ExecutionSnapshot,
   type FrozenCall,
   judgeReplay,
+  listFrozenCalls,
   listReplayableSteps,
   type ModelTarget,
   parseModelTargets,
@@ -224,6 +225,17 @@ const originalTarget = (snapshot: ExecutionSnapshot): ModelTarget[] => {
   ];
 };
 
+/**
+ * Traces do not record sampling parameters, so a replay runs at the server's
+ * current defaults for them. Say so where the comparison is set up, rather than
+ * letting a run that used non-default temperature or reasoning settings read as
+ * a clean model-to-model comparison. Disappears once a trace carries them.
+ */
+const printParamsCaveat = (call?: FrozenCall) => {
+  if (call?.params && Object.keys(call.params).length > 0) return;
+  console.log(pc.dim('  note       sampling params are not recorded; replay uses server defaults'));
+};
+
 const printTrajectoryHeader = (
   snapshot: ExecutionSnapshot,
   target: ModelTarget,
@@ -233,6 +245,7 @@ const printTrajectoryHeader = (
   console.log(`  operation  ${snapshot.operationId}`);
   console.log(`  recorded   ${snapshot.provider ?? '?'}/${snapshot.model ?? '?'}`);
   console.log(`  target     ${target.label}`);
+  printParamsCaveat(listFrozenCalls(snapshot)[0]);
   console.log('');
 };
 
@@ -244,6 +257,7 @@ const printHeader = (snapshot: ExecutionSnapshot, call: FrozenCall, targets: Mod
     `  step       ${call.stepIndex} — ${call.messages.length} messages, ${call.tools?.length ?? 0} tools`,
   );
   console.log(`  targets    ${targets.map((t) => t.label).join(', ')}`);
+  printParamsCaveat(call);
   console.log('');
 };
 

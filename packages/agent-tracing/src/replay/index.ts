@@ -8,6 +8,7 @@ export {
   listReplayableSteps,
   type ModelTarget,
   parseModelTargets,
+  resolveStepParams,
   resolveStepTools,
   selectFrozenCall,
 } from './payload';
@@ -33,6 +34,7 @@ export {
   type ChainTurn,
   findChainAnchor,
   listFrozenCalls,
+  normalizeToolArguments,
   recordedAssistantTurn,
   type RecordedOutcome,
   recordedOutcome,

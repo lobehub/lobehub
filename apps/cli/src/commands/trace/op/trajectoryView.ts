@@ -42,11 +42,18 @@ export const printTrajectorySummary = (result: TrajectoryResult) => {
   console.log(`  nodes replayed  ${replayed}/${result.totalNodes}`);
 
   if (result.mode === 'chain') {
-    console.log(
-      result.divergedAtNode === undefined
-        ? `  ${pc.green('stayed on the recorded trajectory end to end')}`
-        : `  ${pc.yellow(`diverged at node ${result.divergedAtNode + 1}`)}`,
-    );
+    if (result.incomplete) {
+      console.log(
+        `  ${pc.yellow(`stopped at node ${result.incomplete.nodeIndex + 1}: no anchor left to chain onto`)}`,
+      );
+      console.log(
+        pc.dim('    context compression dropped every earlier assistant turn from that payload'),
+      );
+    } else if (result.divergedAtNode === undefined) {
+      console.log(`  ${pc.green('stayed on the recorded trajectory end to end')}`);
+    } else {
+      console.log(`  ${pc.yellow(`diverged at node ${result.divergedAtNode + 1}`)}`);
+    }
   } else {
     console.log(
       diverged === 0

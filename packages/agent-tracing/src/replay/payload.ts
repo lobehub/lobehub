@@ -4,10 +4,39 @@ import type { ExecutionSnapshot } from '../types';
 /** One `call_llm` step frozen out of a snapshot, ready to be re-issued. */
 export interface FrozenCall {
   messages: unknown[];
+  /**
+   * Sampling / reasoning parameters the recorded call ran with.
+   *
+   * Undefined for every trace written so far: the recorder stores the runtime
+   * step context under `context.payload`, not the provider request body, so
+   * temperature, top_p, max_tokens, penalties and reasoning config are simply
+   * not in the file. Replays therefore run at the server's current defaults for
+   * those, and a difference in output is attributable to the model ONLY to the
+   * extent the original also ran at defaults. Populated automatically once the
+   * recorder starts writing them.
+   */
+  params?: Record<string, unknown>;
   stepIndex: number;
   /** LLM function definitions visible to the model at this step, if recorded. */
   tools?: unknown[];
 }
+
+/**
+ * Generation parameters a replay must reproduce for the model to be the only
+ * variable. Kept as an explicit allow-list so unrelated runtime-context keys
+ * under `context.payload` can never leak into a provider request.
+ */
+const GENERATION_PARAM_KEYS = [
+  'frequency_penalty',
+  'max_tokens',
+  'presence_penalty',
+  'reasoning',
+  'reasoning_effort',
+  'stop',
+  'temperature',
+  'top_k',
+  'top_p',
+] as const;
 
 export interface ModelTarget {
   /** `provider/model` as the user typed it, used for display. */
@@ -38,9 +67,31 @@ export const selectFrozenCall = (
 
   return {
     messages: picked.messages,
+    params: resolveStepParams(snapshot, picked.stepIndex),
     stepIndex: picked.stepIndex,
     tools: resolveStepTools(snapshot, picked.stepIndex),
   };
+};
+
+/**
+ * Recover the recorded generation parameters for a step, if the trace carries
+ * any. Returns undefined when none were recorded, which is what every trace
+ * written before the recorder learned to store them looks like.
+ */
+export const resolveStepParams = (
+  snapshot: ExecutionSnapshot,
+  stepIndex: number,
+): Record<string, unknown> | undefined => {
+  const step = snapshot.steps.find((s) => s.stepIndex === stepIndex);
+  const payload = step?.context?.payload as Record<string, unknown> | undefined;
+  if (!payload) return undefined;
+
+  const params: Record<string, unknown> = {};
+  for (const key of GENERATION_PARAM_KEYS) {
+    if (payload[key] !== undefined) params[key] = payload[key];
+  }
+
+  return Object.keys(params).length > 0 ? params : undefined;
 };
 
 /**
@@ -106,9 +157,15 @@ export interface BuildReplayRequestParams {
 }
 
 /**
- * Rebuild the chat request from a frozen call. Everything except the model is
- * carried over verbatim — that is the whole point: the only variable between
- * replays is the model, so a difference in output is attributable to it.
+ * Rebuild the chat request from a frozen call: messages, tools and whatever
+ * generation parameters the trace recorded are carried over, then explicit
+ * overrides are applied on top, so the model is the only variable.
+ *
+ * The caveat is `call.params` — see {@link FrozenCall.params}. Traces do not
+ * record sampling parameters yet, so for an operation that ran with non-default
+ * temperature or reasoning settings, a replay silently uses today's defaults
+ * instead. Comparisons across models stay valid (every target gets the same
+ * request); comparisons against the recorded output do not.
  */
 export const buildReplayRequest = ({
   call,
@@ -118,6 +175,7 @@ export const buildReplayRequest = ({
   withTools = true,
 }: BuildReplayRequestParams): Record<string, unknown> => {
   const request: Record<string, unknown> = {
+    ...call.params,
     messages: call.messages,
     model: target.model,
     responseMode: 'json',

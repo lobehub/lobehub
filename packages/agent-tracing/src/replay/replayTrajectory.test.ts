@@ -68,8 +68,10 @@ const twoNodeSnapshot = (): ExecutionSnapshot =>
     traceId: 't',
   }) as unknown as ExecutionSnapshot;
 
+type StubToolCall = string | { arguments?: string; name: string };
+
 /** Stub the chat route, returning one scripted completion per call. */
-const stubModel = (completions: Array<{ content?: string; toolCalls?: string[] }>) => {
+const stubModel = (completions: Array<{ content?: string; toolCalls?: StubToolCall[] }>) => {
   const sent: any[] = [];
   let call = 0;
 
@@ -82,10 +84,13 @@ const stubModel = (completions: Array<{ content?: string; toolCalls?: string[] }
           {
             message: {
               content: next.content ?? '',
-              tool_calls: next.toolCalls?.map((name, index) => ({
-                function: { arguments: '{}', name },
-                id: `orig_${index}`,
-              })),
+              tool_calls: next.toolCalls?.map((toolCall, index) => {
+                const shaped = typeof toolCall === 'string' ? { name: toolCall } : toolCall;
+                return {
+                  function: { arguments: shaped.arguments ?? '{}', name: shaped.name },
+                  id: `orig_${index}`,
+                };
+              }),
             },
           },
         ],
@@ -196,6 +201,58 @@ describe('replayTrajectory', () => {
       'looking it up',
       'FILE BODY',
     ]);
+  });
+
+  // The recorded run read "a"; the replay reads "b". Tool names match, so
+  // toolSignature sees nothing — but the recording holds no output for "b", and
+  // feeding it the body of "a" would produce a falsely successful chain.
+  it('treats the same tool called with different arguments as a divergence', async () => {
+    const snap = twoNodeSnapshot();
+    snap.steps[0].toolsCalling = [
+      { apiName: 'readFile', arguments: '{"path":"a"}', identifier: 'fs' },
+    ];
+    stubModel([
+      {
+        content: 'looking it up',
+        toolCalls: [{ arguments: '{"path":"b"}', name: 'fs____readFile' }],
+      },
+    ]);
+
+    const result = await replayTrajectory({ connection, mode: 'chain', snapshot: snap, target });
+
+    expect(result.nodes[0].unmatchedTools).toEqual(['fs____readFile']);
+    expect(result.nodes[0].divergence).toEqual({
+      field: 'toolArguments',
+      recorded: 'fs____readFile({"path":"a"})',
+      replayed: 'fs____readFile({"path":"b"})',
+    });
+    expect(result.divergedAtNode).toBe(0);
+    // Stopped rather than continuing on a tool result it never earned.
+    expect(result.nodes).toHaveLength(1);
+  });
+
+  it('reports a lost anchor as incomplete instead of a finished trajectory', async () => {
+    const snap = twoNodeSnapshot();
+    // Compression rewrote node 1's payload so no earlier assistant turn is left
+    // to splice the replayed tail onto.
+    (snap.steps[2] as any).contextEngine = {
+      output: [{ content: 'compressed summary', role: 'user' }],
+    };
+    stubModel([{ content: 'looking it up', toolCalls: ['fs____readFile'] }, { content: '42' }]);
+
+    const result = await replayTrajectory({
+      connection,
+      mode: 'chain',
+      reproductionJudge: { judgeModel: target },
+      snapshot: snap,
+      target,
+    });
+
+    expect(result.incomplete).toEqual({ nodeIndex: 1, reason: 'anchor_lost' });
+    expect(result.nodes).toHaveLength(1);
+    expect(result.totalNodes).toBe(2);
+    // A truncated run has no whole-run output to score.
+    expect(result.reproduction).toBeUndefined();
   });
 
   it('stops when a node errors', async () => {

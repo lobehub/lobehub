@@ -148,6 +148,79 @@ describe('buildToolMessages', () => {
     expect(messages).toHaveLength(2);
     expect(unmatched).toEqual(['fs____readFile']);
   });
+
+  const recordedWithArgs = [
+    { arguments: '{"path":"a"}', name: 'fs____readFile', output: 'BODY OF A' },
+  ];
+
+  it('refuses to answer a call whose arguments the recording never ran', () => {
+    // Same tool, different file: feeding back the output recorded for "a" would
+    // let the chain continue on a premise the recorded run never established.
+    const { messages, unmatched } = buildToolMessages(
+      [{ arguments: '{"path":"b"}', id: 'c1', name: 'fs____readFile' }],
+      recordedWithArgs,
+    );
+
+    expect(messages).toEqual([]);
+    expect(unmatched).toEqual(['fs____readFile']);
+  });
+
+  it('matches arguments regardless of key order and whitespace', () => {
+    const { messages, unmatched } = buildToolMessages(
+      [{ arguments: '{ "path" : "a" }', id: 'c1', name: 'fs____readFile' }],
+      [{ arguments: '{"path":"a"}', name: 'fs____readFile', output: 'BODY OF A' }],
+    );
+
+    expect(unmatched).toEqual([]);
+    expect(messages[0].content).toBe('BODY OF A');
+  });
+
+  it('picks the recorded result whose arguments match, not merely the first by name', () => {
+    const { messages } = buildToolMessages(
+      [{ arguments: '{"path":"b"}', id: 'c1', name: 'fs____readFile' }],
+      [
+        { arguments: '{"path":"a"}', name: 'fs____readFile', output: 'BODY OF A' },
+        { arguments: '{"path":"b"}', name: 'fs____readFile', output: 'BODY OF B' },
+      ],
+    );
+
+    expect(messages[0].content).toBe('BODY OF B');
+  });
+
+  it('still matches by name for traces recorded before arguments were paired on', () => {
+    const { messages, unmatched } = buildToolMessages(
+      [{ arguments: '{"path":"anything"}', id: 'c1', name: 'fs____readFile' }],
+      results,
+    );
+
+    expect(unmatched).toEqual([]);
+    expect(messages[0].content).toBe('first');
+  });
+});
+
+describe('recordedToolResults', () => {
+  it('carries the arguments of the call each result answers', () => {
+    const snap = snapshot([
+      {
+        toolsCalling: [
+          { apiName: 'readFile', arguments: '{"path":"a"}', identifier: 'fs' },
+          { apiName: 'readFile', arguments: '{"path":"b"}', identifier: 'fs' },
+        ],
+      },
+      {
+        stepType: 'call_tool',
+        toolsResult: [
+          { apiName: 'readFile', identifier: 'fs', output: 'BODY OF A' },
+          { apiName: 'readFile', identifier: 'fs', output: 'BODY OF B' },
+        ],
+      },
+    ]);
+
+    expect(recordedToolResults(snap, 0)).toEqual([
+      { arguments: '{"path":"a"}', name: 'fs____readFile', output: 'BODY OF A' },
+      { arguments: '{"path":"b"}', name: 'fs____readFile', output: 'BODY OF B' },
+    ]);
+  });
 });
 
 describe('findChainAnchor', () => {

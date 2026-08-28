@@ -1,6 +1,6 @@
 import { resolvePayloads } from '../analysis/contextLint';
 import type { ExecutionSnapshot } from '../types';
-import { type FrozenCall, resolveStepTools } from './payload';
+import { type FrozenCall, resolveStepParams, resolveStepTools } from './payload';
 
 /** Tool identifiers are exposed to the model as `identifier____apiName`. */
 const TOOL_NAME_SEPARATOR = '____';
@@ -17,14 +17,50 @@ export interface RecordedOutcome {
 }
 
 export interface RecordedToolResult {
+  /**
+   * Arguments of the recorded call this output answers, when the trace kept
+   * them. Traces record calls and results as separate step fields with no id
+   * linking them, so this is recovered by pairing them per tool name in order.
+   */
+  arguments?: string;
   name: string;
   output: string;
 }
+
+/**
+ * Canonical form of a tool-call argument blob, for comparing a replayed call
+ * against the recorded one. Arguments arrive as provider-serialized JSON, so
+ * key order and whitespace carry no meaning; anything unparseable falls back to
+ * a trimmed string compare rather than being treated as a mismatch.
+ */
+export const normalizeToolArguments = (raw?: string): string => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return '';
+
+  const sortDeep = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map((item) => sortDeep(item));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, item]) => [key, sortDeep(item)]),
+      );
+    }
+    return value;
+  };
+
+  try {
+    return JSON.stringify(sortDeep(JSON.parse(trimmed)));
+  } catch {
+    return trimmed;
+  }
+};
 
 /** Every `call_llm` step of a snapshot, in order, with the payload it saw. */
 export const listFrozenCalls = (snapshot: ExecutionSnapshot): FrozenCall[] =>
   resolvePayloads(snapshot).payloads.map(({ messages, stepIndex }) => ({
     messages,
+    params: resolveStepParams(snapshot, stepIndex),
     stepIndex,
     tools: resolveStepTools(snapshot, stepIndex),
   }));
@@ -53,6 +89,18 @@ export const recordedToolResults = (
   snapshot: ExecutionSnapshot,
   callStepIndex: number,
 ): RecordedToolResult[] => {
+  // Arguments live on the call_llm step's `toolsCalling`, outputs on the
+  // call_tool steps that follow; nothing links a specific call to a specific
+  // result, so pair them per tool name in the order both were recorded.
+  const callStep = snapshot.steps.find((s) => s.stepIndex === callStepIndex);
+  const pendingArguments = new Map<string, (string | undefined)[]>();
+  for (const call of callStep?.toolsCalling ?? []) {
+    const name = `${call.identifier}${TOOL_NAME_SEPARATOR}${call.apiName}`;
+    const queue = pendingArguments.get(name) ?? [];
+    queue.push(call.arguments);
+    pendingArguments.set(name, queue);
+  }
+
   const results: RecordedToolResult[] = [];
 
   for (const step of snapshot.steps) {
@@ -60,8 +108,10 @@ export const recordedToolResults = (
     if (step.stepType === 'call_llm') break;
 
     for (const result of step.toolsResult ?? []) {
+      const name = `${result.identifier}${TOOL_NAME_SEPARATOR}${result.apiName}`;
       results.push({
-        name: `${result.identifier}${TOOL_NAME_SEPARATOR}${result.apiName}`,
+        arguments: pendingArguments.get(name)?.shift(),
+        name,
         output: result.output ?? '',
       });
     }
@@ -85,18 +135,24 @@ export interface ChainTurn {
 
 /**
  * Build the tool messages that feed the next node, pairing each of the model's
- * tool calls with a recorded result for the same tool. Matching is by name in
- * call order — the recorded run is the only source of tool output, so a call
- * with no counterpart is reported rather than invented.
+ * tool calls with a recorded result for the same call. The recorded run is the
+ * only source of tool output, so a call with no counterpart is reported rather
+ * than invented.
+ *
+ * Matching is by name AND arguments: `readFile("b")` must not be answered with
+ * the output recorded for `readFile("a")`, or the chain continues on a premise
+ * the recording never established and still reports success. Traces from before
+ * arguments were paired onto results carry none, and those fall back to
+ * name-and-order matching so old snapshots stay replayable.
  */
 export const buildToolMessages = (
-  toolCalls: Array<{ id?: string; name: string }>,
+  toolCalls: Array<{ arguments?: string; id?: string; name: string }>,
   results: RecordedToolResult[],
 ): { messages: ChainTurn[]; unmatched: string[] } => {
-  const pool = new Map<string, string[]>();
+  const pool = new Map<string, RecordedToolResult[]>();
   for (const result of results) {
     const queue = pool.get(result.name) ?? [];
-    queue.push(result.output);
+    queue.push(result);
     pool.set(result.name, queue);
   }
 
@@ -104,8 +160,20 @@ export const buildToolMessages = (
   const unmatched: string[] = [];
 
   for (const [index, call] of toolCalls.entries()) {
-    const queue = pool.get(call.name);
-    const output = queue?.shift();
+    const queue = pool.get(call.name) ?? [];
+    const wanted = normalizeToolArguments(call.arguments);
+    // Prefer an exact argument match; only then fall back to a recorded result
+    // that carries no arguments at all, so a mixed queue cannot let an
+    // argument-less entry shadow the call it actually belongs to.
+    const exactIndex = queue.findIndex(
+      (candidate) =>
+        candidate.arguments !== undefined && normalizeToolArguments(candidate.arguments) === wanted,
+    );
+    const matchIndex =
+      exactIndex >= 0
+        ? exactIndex
+        : queue.findIndex((candidate) => candidate.arguments === undefined);
+    const output = matchIndex >= 0 ? queue.splice(matchIndex, 1)[0].output : undefined;
 
     if (output === undefined) {
       unmatched.push(call.name);
