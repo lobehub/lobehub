@@ -26,6 +26,12 @@ export type FileType = z.infer<typeof fileSchema>;
 const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
 
+const encodeContentDispositionFilename = (fileName: string) =>
+  encodeURIComponent(fileName || 'download').replaceAll(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
 export interface PreSignedUpload {
   headers?: Record<string, string>;
   url: string;
@@ -162,6 +168,22 @@ export class S3 {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
+    });
+
+    return getSignedUrl(this.client, command, {
+      expiresIn: expiresIn ?? fileEnv.S3_PREVIEW_URL_EXPIRE_IN,
+    });
+  }
+
+  public async createPreSignedUrlForDownload(
+    key: string,
+    fileName: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeContentDispositionFilename(fileName)}`,
     });
 
     return getSignedUrl(this.client, command, {

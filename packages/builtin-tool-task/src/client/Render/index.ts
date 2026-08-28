@@ -1,6 +1,7 @@
 import type { BuiltinRender } from '@lobechat/types';
 
 import { TaskApiName } from '../../types';
+import CreateGoalRender from './CreateGoal';
 import CreateTaskRender from './CreateTask';
 import CreateTasksRender from './CreateTasks';
 import EditTaskRender from './EditTask';
@@ -17,6 +18,7 @@ import SetTaskVerifyRender from './SetTaskVerify';
  */
 export const TaskRenders: Record<string, BuiltinRender> = {
   [TaskApiName.createTask]: CreateTaskRender as BuiltinRender,
+  [TaskApiName.createGoal]: CreateGoalRender as BuiltinRender,
   [TaskApiName.createTasks]: CreateTasksRender as BuiltinRender,
   [TaskApiName.editTask]: EditTaskRender as BuiltinRender,
   [TaskApiName.runTask]: RunTaskRender as BuiltinRender,
@@ -24,6 +26,7 @@ export const TaskRenders: Record<string, BuiltinRender> = {
   [TaskApiName.setTaskVerify]: SetTaskVerifyRender as BuiltinRender,
 };
 
+export { default as CreateGoalRender } from './CreateGoal';
 export { default as CreateTaskRender } from './CreateTask';
 export { default as CreateTasksRender } from './CreateTasks';
 export { default as EditTaskRender } from './EditTask';

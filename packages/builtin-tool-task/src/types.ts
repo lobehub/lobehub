@@ -7,6 +7,9 @@ export const TaskApiName = {
   /** Create a new task, optionally as a subtask of another task */
   createTask: 'createTask',
 
+  /** Confirm and start a goal-driven task with automatic delivery acceptance */
+  createGoal: 'createGoal',
+
   /** Create multiple tasks in a single call (batched) */
   createTasks: 'createTasks',
 
@@ -70,6 +73,36 @@ export interface CreateTaskState {
   /** Lifecycle status the task was created in (usually `backlog`). */
   status?: TaskStatus;
   success: boolean;
+}
+
+// ==================== createGoal ====================
+
+export interface GoalCriterionDraft {
+  description?: string;
+  instruction?: string;
+  onFail?: 'auto_repair' | 'manual';
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: 'agent' | 'llm' | 'program';
+}
+
+export interface CreateGoalParams {
+  criteria: GoalCriterionDraft[];
+  instruction: string;
+  maxIterations?: number | null;
+  maxTotalCost?: number | null;
+  name: string;
+}
+
+export interface CreateGoalState {
+  identifier?: string;
+  name?: string;
+  operationId?: string;
+  startedAt?: string;
+  success: boolean;
+  taskId?: string;
+  topicId?: string;
 }
 
 // ==================== createTasks (batch) ====================

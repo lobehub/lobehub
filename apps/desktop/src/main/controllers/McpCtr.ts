@@ -3,12 +3,16 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import superjson from 'superjson';
+import {
+  deserializeMcpIpcPayload,
+  type McpIpcPayload,
+  serializeMcpIpcPayload,
+} from '@lobechat/utils/mcpIpcPayload';
 
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
 
-import { MCPClient, MCPConnectionError } from '../libs/mcp/client';
+import type { MCPClient } from '../libs/mcp/client';
 import type {
   AudioContent,
   ImageContent,
@@ -21,6 +25,7 @@ import { ControllerModule, IpcMethod } from './index';
 
 const execPromise = promisify(exec);
 const logger = createLogger('controllers:McpCtr');
+const loadMcpClient = () => import('../libs/mcp/client');
 
 /**
  * Desktop-only copy of `@lobechat/types`'s `CheckMcpInstallResult`.
@@ -105,24 +110,11 @@ export interface CallToolInput {
   toolName: string;
 }
 
-interface SuperJSONSerialized<T = unknown> {
-  json: T;
-  meta?: any;
-}
+type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
 
-const isSuperJSONSerialized = (value: unknown): value is SuperJSONSerialized => {
-  if (!value || typeof value !== 'object') return false;
-  return 'json' in value;
-};
+const deserializePayload = deserializeMcpIpcPayload;
 
-const deserializePayload = <T>(payload: unknown): T => {
-  // Keep backward compatibility for older renderer builds that might not serialize yet
-  if (isSuperJSONSerialized(payload)) return superjson.deserialize(payload as any) as T;
-  return payload as T;
-};
-
-const serializePayload = <T>(payload: T): SuperJSONSerialized =>
-  superjson.serialize(payload) as any;
+const serializePayload = serializeMcpIpcPayload;
 
 const safeParseToRecord = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value))
@@ -232,6 +224,7 @@ export default class McpCtr extends ControllerModule {
   }
 
   private async createClient(params: MCPClientParams) {
+    const { MCPClient } = await loadMcpClient();
     const client = new MCPClient(params);
     await client.initialize();
     return client;
@@ -334,6 +327,7 @@ export default class McpCtr extends ControllerModule {
       });
     } catch (error) {
       // If it's an MCPConnectionError with stderr logs, enhance the error message
+      const { MCPConnectionError } = await loadMcpClient();
       if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
         const stderrOutput = error.stderrLogs.join('\n');
         const enhancedError = new Error(
@@ -410,20 +404,58 @@ export default class McpCtr extends ControllerModule {
   async runStdioMcpTool(
     input: CallToolInput,
   ): Promise<{ content: string; state: unknown; success: boolean }> {
-    const params: MCPClientParams = {
-      args: input.params.args || [],
-      command: input.params.command,
-      env: input.env,
-      name: input.params.name,
-      type: 'stdio',
-    };
+    return this.runMcpTool(
+      {
+        args: input.params.args || [],
+        command: input.params.command,
+        env: input.env,
+        name: input.params.name,
+        type: 'stdio',
+      },
+      input.toolName,
+      input.args,
+    );
+  }
 
+  /**
+   * HTTP counterpart of {@link runStdioMcpTool} for the device-gateway tunnel:
+   * the cloud server forwards calls to localhost / LAN MCP endpoints that only
+   * this machine's network can reach, with the (server-decrypted) auth attached.
+   */
+  async runHttpMcpTool(
+    input: {
+      auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+      headers?: Record<string, string>;
+      name: string;
+      url: string;
+    },
+    toolName: string,
+    rawArgs: unknown,
+  ): Promise<{ content: string; state: unknown; success: boolean }> {
+    return this.runMcpTool(
+      {
+        auth: input.auth,
+        headers: input.headers,
+        name: input.name,
+        type: 'http',
+        url: input.url,
+      },
+      toolName,
+      rawArgs,
+    );
+  }
+
+  private async runMcpTool(
+    params: MCPClientParams,
+    toolName: string,
+    rawArgs: unknown,
+  ): Promise<{ content: string; state: unknown; success: boolean }> {
     let client: MCPClient | undefined;
     try {
       client = await this.createClient(params);
-      const args = safeParseToRecord(input.args);
+      const args = safeParseToRecord(rawArgs);
 
-      const raw = (await client.callTool(input.toolName, args)) as ToolCallResult;
+      const raw = (await client.callTool(toolName, args)) as ToolCallResult;
       const processed = raw.isError ? raw.content : await this.processContentBlocks(raw.content);
 
       const content = await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
@@ -435,6 +467,7 @@ export default class McpCtr extends ControllerModule {
       };
     } catch (error) {
       // If it's an MCPConnectionError with stderr logs, enhance the error message
+      const { MCPConnectionError } = await loadMcpClient();
       if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
         const stderrOutput = error.stderrLogs.join('\n');
         const enhancedError = new Error(

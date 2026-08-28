@@ -50,6 +50,12 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 describe('FloatingChatPanel InputRow', () => {
+  it('does not render the expand affordance when disabled', () => {
+    render(<InputRow isCollapsed={false} showExpandBar={false} onExpand={() => {}} />);
+
+    expect(screen.queryByTestId('floating-chat-panel-hover-bar')).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     mockConversationState.current.chatInputOverlayHeight = 0;
   });

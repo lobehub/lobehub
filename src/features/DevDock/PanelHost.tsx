@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Maximize2, Minimize2, XIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -120,7 +121,7 @@ const PanelHost = memo(() => {
       {!maximized && <div className={styles.resizeHandle} onPointerDown={handleDragStart} />}
       <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
         <Icon size={12} />
-        <span>{item.title}</span>
+        <span>{item.label}</span>
         <span style={{ flex: 1 }} />
         <ActionIcon
           icon={maximized ? Minimize2 : Maximize2}

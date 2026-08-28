@@ -26,6 +26,12 @@ export interface GatewayDevice {
 
 export interface DeviceSystemInfo {
   arch: string;
+  /**
+   * Human-readable name of the shell that runCommand uses on this device
+   * (e.g. "PowerShell 7+ (pwsh)"). Optional for protocol compatibility with
+   * older devices that do not report it.
+   */
+  defaultShell?: string;
   desktopPath: string;
   documentsPath: string;
   downloadsPath: string;
@@ -104,6 +110,23 @@ export interface GatewayMcpStdioParams {
 }
 
 /**
+ * HTTP MCP connection params forwarded to the device for a tunneled MCP tool
+ * call. Used for endpoints only the device's network can reach (localhost /
+ * LAN MCP servers) — the cloud server's fetch would fail. Credentials are
+ * decrypted server-side and forwarded verbatim; the device stores nothing.
+ */
+export interface GatewayMcpHttpParams {
+  auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  headers?: Record<string, string>;
+  name: string;
+  type: 'http';
+  url: string;
+}
+
+/** MCP connection params for a tunneled call — discriminated on `type`. */
+export type GatewayMcpParams = GatewayMcpStdioParams | GatewayMcpHttpParams;
+
+/**
  * How the device should execute a tunneled tool call. Explicit so routing never
  * depends on structural sniffing (e.g. "does `params` exist?") — the gateway
  * relays every call over one `tool-call` channel, so the discriminator must be
@@ -124,8 +147,8 @@ export interface ToolCallRequestMessage {
     apiName: string;
     arguments: string;
     identifier: string;
-    /** Stdio MCP connection params — present only when `type === 'mcp'`. */
-    params?: GatewayMcpStdioParams;
+    /** MCP connection params (stdio or http) — present only when `type === 'mcp'`. */
+    params?: GatewayMcpParams;
     /**
      * Routing discriminator. `'mcp'` → the device's local MCP client (spawns
      * the stdio server); `'tool'` (or omitted, for back-compat with older
@@ -201,6 +224,8 @@ export interface AgentRunRequestMessage {
    * compatibility with older servers.
    */
   args?: string[];
+  /** Seed assistant message that receives terminal state from the CLI run. */
+  assistantMessageId?: string;
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch
@@ -209,19 +234,40 @@ export interface AgentRunRequestMessage {
    * `sendPrompt(imageList)` path. Optional — omitted for older servers.
    */
   imageList?: Array<{ id?: string; url: string }>;
+  /**
+   * Same meaning as {@link workspaceId}. The HTTP dispatch payload uses this
+   * name so it is not confused with the device-pool routing `workspaceId`.
+   * Naive gateways forward the POST body as-is; devices accept either field.
+   */
+  ingestWorkspaceId?: string;
   jwt: string;
   operationId: string;
   prompt: string;
+  /**
+   * Full system context used only when native resume fails and the device CLI
+   * retries with a fresh session. Optional for compatibility with older
+   * servers and devices. The gateway relay must preserve this optional field;
+   * older deployments safely degrade to a fresh retry without recovery history.
+   */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**
    * Static context injected before the user prompt (workspace conventions,
-   * conversation history on resume). The desktop sends it to `lh hetero exec`
-   * as the first text block of a content-block array. Optional — omitted for
-   * older servers that don't build a device-specific context.
+   * selected context). The desktop sends it to `lh hetero exec` as the first
+   * text block of a content-block array. Optional — omitted for older servers
+   * that don't build a device-specific context.
    */
   systemContext?: string;
   topicId: string;
   type: 'agent_run_request';
+  /**
+   * Workspace that owns the topic. `lh hetero exec` must send this as
+   * `X-Workspace-Id` on heteroIngest/heteroFinish; without it the write lands
+   * in personal scope and the workspace topic stays `running` with an empty
+   * assistant. Optional for older gateways — a workspace-enrolled connection
+   * falls back to its own enrollment id.
+   */
+  workspaceId?: string;
 }
 
 /** Client → Server: acknowledgement for an agent_run_request. */
@@ -254,11 +300,7 @@ export type ServerMessage =
 // ─── Client Types ───
 
 export type ConnectionStatus =
-  | 'authenticating'
-  | 'connected'
-  | 'connecting'
-  | 'disconnected'
-  | 'reconnecting';
+  'authenticating' | 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
 
 export interface GatewayClientEvents {
   agent_run_request: (request: AgentRunRequestMessage) => void;

@@ -7,11 +7,24 @@ import { resolveMappedModelId } from '../../utils/modelIdMapping';
 const log = createDebug('lobe-video:minimax');
 
 interface MiniMaxVideoCreateResponse {
-  base_resp: {
+  base_resp?: {
     status_code: number;
     status_msg: string;
   };
   task_id: string;
+}
+
+interface MiniMaxH3VideoStatusResponse {
+  task?: {
+    content?: {
+      url?: string;
+    };
+    error?: { message?: string } | string;
+    id: string;
+    message?: string;
+    model: string;
+    status: 'queued' | 'running' | 'succeeded' | 'failed' | 'expired';
+  };
 }
 
 interface MiniMaxVideoStatusResponse {
@@ -42,6 +55,33 @@ interface MiniMaxFileRetrieveResponse {
   };
 }
 
+const INFERENCE_ID_SEPARATOR = '::';
+const MINIMAX_H3_MODEL = 'MiniMax-H3';
+
+const isMiniMaxH3 = (model?: string) => model?.toLowerCase() === MINIMAX_H3_MODEL.toLowerCase();
+
+const buildInferenceId = (model: string, taskId: string) =>
+  `${model}${INFERENCE_ID_SEPARATOR}${taskId}`;
+
+const parseInferenceId = (inferenceId: string) => {
+  const separatorIndex = inferenceId.indexOf(INFERENCE_ID_SEPARATOR);
+  if (separatorIndex === -1) return { id: inferenceId, model: undefined };
+
+  return {
+    id: inferenceId.slice(separatorIndex + INFERENCE_ID_SEPARATOR.length),
+    model: inferenceId.slice(0, separatorIndex),
+  };
+};
+
+const resolveMiniMaxV2BaseURL = (baseURL?: string) => {
+  const normalizedBaseURL = (baseURL || 'https://api.minimaxi.com/v1').replace(/\/$/, '');
+
+  if (normalizedBaseURL.endsWith('/v2')) return normalizedBaseURL;
+  if (normalizedBaseURL.endsWith('/v1')) return `${normalizedBaseURL.slice(0, -3)}/v2`;
+
+  return `${normalizedBaseURL}/v2`;
+};
+
 export async function queryMiniMaxVideoStatus(
   taskId: string,
   options: { apiKey: string; baseURL: string },
@@ -63,6 +103,27 @@ export async function queryMiniMaxVideoStatus(
   }
 
   return (await response.json()) as MiniMaxVideoStatusResponse;
+}
+
+export async function queryMiniMaxH3VideoStatus(
+  taskId: string,
+  options: { apiKey: string; baseURL: string },
+): Promise<MiniMaxH3VideoStatusResponse> {
+  const statusUrl = `${resolveMiniMaxV2BaseURL(options.baseURL)}/query/video_generation/${encodeURIComponent(taskId)}`;
+
+  const response = await fetch(statusUrl, {
+    headers: {
+      Authorization: `Bearer ${options.apiKey}`,
+    },
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MiniMax H3 status API error: ${response.status} ${errorText}`);
+  }
+
+  return (await response.json()) as MiniMaxH3VideoStatusResponse;
 }
 
 export async function retrieveMiniMaxVideoFile(
@@ -99,13 +160,41 @@ export async function retrieveMiniMaxVideoFile(
 }
 
 export async function pollMiniMaxVideoStatus(
-  taskId: string,
+  inferenceId: string,
   options: { apiKey: string; baseURL: string },
 ): Promise<
   | { status: 'success'; videoUrl: string }
   | { status: 'failed'; error: string }
   | { status: 'pending' }
 > {
+  const { id: taskId, model } = parseInferenceId(inferenceId);
+
+  if (isMiniMaxH3(model)) {
+    const response = await queryMiniMaxH3VideoStatus(taskId, options);
+    const task = response.task;
+
+    if (!task) return { error: 'Missing task in MiniMax H3 status response', status: 'failed' };
+
+    if (task.status === 'succeeded') {
+      if (!task.content?.url) {
+        return { error: 'Task succeeded but no video URL found', status: 'failed' };
+      }
+
+      return { status: 'success', videoUrl: task.content.url };
+    }
+
+    if (task.status === 'failed' || task.status === 'expired') {
+      const taskError =
+        typeof task.error === 'string' ? task.error : task.error?.message || task.message;
+      return {
+        error: taskError || `Video generation ${task.status}`,
+        status: 'failed',
+      };
+    }
+
+    return { status: 'pending' };
+  }
+
   const response = await queryMiniMaxVideoStatus(taskId, options);
 
   if (response.status === 'Success') {
@@ -138,9 +227,82 @@ export async function createMiniMaxVideo(
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
   const requestModel = resolveMappedModelId(model, options);
-  const { prompt, imageUrl, endImageUrl, duration, resolution } = params;
+  const { prompt, imageUrl, imageUrls, endImageUrl, aspectRatio, duration, resolution } = params;
 
   const baseURL = options.baseURL || 'https://api.minimaxi.com/v1';
+
+  if (isMiniMaxH3(model) || isMiniMaxH3(requestModel)) {
+    const content: Record<string, unknown>[] = [{ text: prompt, type: 'text' }];
+    const hasReferenceImages = Boolean(imageUrls?.length);
+    const referenceImageUrls = hasReferenceImages
+      ? [imageUrl, ...(imageUrls ?? []), endImageUrl].filter(
+          (url): url is string => typeof url === 'string' && url.length > 0,
+        )
+      : [];
+
+    if (referenceImageUrls.length > 9) {
+      throw new Error('MiniMax-H3 supports up to 9 reference images');
+    }
+
+    if (hasReferenceImages) {
+      referenceImageUrls.forEach((url) =>
+        content.push({
+          image_url: { url },
+          role: 'reference_image',
+          type: 'image_url',
+        }),
+      );
+    } else if (imageUrl) {
+      content.push({
+        image_url: { url: imageUrl },
+        role: 'first_frame',
+        type: 'image_url',
+      });
+    }
+
+    if (!hasReferenceImages && endImageUrl) {
+      content.push({
+        image_url: { url: endImageUrl },
+        role: 'last_frame',
+        type: 'image_url',
+      });
+    }
+
+    const body: Record<string, unknown> = {
+      aigc_watermark: params.watermark ?? false,
+      content,
+      model: requestModel,
+      ratio: !hasReferenceImages && (imageUrl || endImageUrl) ? 'adaptive' : aspectRatio || '16:9',
+      ...(typeof duration === 'number' ? { duration } : {}),
+      ...(typeof resolution === 'string' ? { resolution } : {}),
+    };
+
+    log('Creating video with MiniMax H3 API - model: %s, params: %O', model, params);
+
+    const response = await fetch(`${resolveMiniMaxV2BaseURL(baseURL)}/video_generation`, {
+      body: JSON.stringify(body),
+      headers: {
+        'Authorization': `Bearer ${options.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`MiniMax H3 video API error: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as MiniMaxVideoCreateResponse;
+
+    if (data.base_resp && data.base_resp.status_code !== 0) {
+      throw new Error(`MiniMax H3 video API error: ${data.base_resp.status_msg}`);
+    }
+
+    if (!data.task_id) throw new Error('Invalid response: missing task_id');
+
+    return { inferenceId: buildInferenceId(MINIMAX_H3_MODEL, data.task_id) };
+  }
 
   const body: Record<string, unknown> = {
     model: requestModel,
@@ -187,7 +349,7 @@ export async function createMiniMaxVideo(
 
   const data = (await response.json()) as MiniMaxVideoCreateResponse;
 
-  if (data.base_resp.status_code !== 0) {
+  if (data.base_resp && data.base_resp.status_code !== 0) {
     throw new Error(`MiniMax video API error: ${data.base_resp.status_msg}`);
   }
 

@@ -1,4 +1,5 @@
-import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -21,6 +22,7 @@ import IdentityRightPanel from './features/IdentityRightPanel';
 import { type IdentityType } from './features/List';
 import List from './features/List';
 import SegmentedBar from './features/SegmentedBar';
+import { showIdentityControls } from './showIdentityControls';
 
 const IdentitiesArea = memo(() => {
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
@@ -69,6 +71,15 @@ const IdentitiesArea = memo(() => {
   // Show loading: during search/reset or initial load
   const showLoading = identitiesSearchLoading || !identitiesInit;
 
+  // Action bar, type tabs and search are controls over nothing on an empty
+  // collection, so they only render once there is something to act on.
+  const showControls = showIdentityControls({
+    hasFilters: Boolean(searchValue) || typeFilter !== 'all',
+    init: identitiesInit,
+    searchLoading: identitiesSearchLoading,
+    total: identitiesTotal,
+  });
+
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
@@ -78,10 +89,12 @@ const IdentitiesArea = memo(() => {
           )
         }
         right={
-          <ActionBar showAnalysis showPurge>
-            <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
-            <WideScreenButton />
-          </ActionBar>
+          showControls && (
+            <ActionBar showAnalysis showPurge>
+              <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
+              <WideScreenButton />
+            </ActionBar>
+          )
         }
       />
       <Flexbox
@@ -91,10 +104,12 @@ const IdentitiesArea = memo(() => {
         width={'100%'}
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
-          <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-            <SegmentedBar typeValue={typeFilter} onTypeChange={handleTypeChange} />
-            <CommonFilterBar searchValue={searchValue} onSearch={handleSearch} />
-          </Flexbox>
+          {showControls && (
+            <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+              <SegmentedBar typeValue={typeFilter} onTypeChange={handleTypeChange} />
+              <CommonFilterBar searchValue={searchValue} onSearch={handleSearch} />
+            </Flexbox>
+          )}
           {showLoading ? (
             <Loading viewMode={viewMode} />
           ) : (

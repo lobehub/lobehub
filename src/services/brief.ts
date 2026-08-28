@@ -5,6 +5,10 @@ class BriefService {
     return lambdaClient.brief.delete.mutate({ id });
   };
 
+  listNewsByDay = async (params: { endAt: Date; startAt: Date }) => {
+    return lambdaClient.brief.listNewsByDay.query(params);
+  };
+
   listUnresolved = async () => {
     return lambdaClient.brief.listUnresolved.query();
   };

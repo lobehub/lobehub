@@ -10,11 +10,13 @@ import type {
   InstallPluginParams,
   SearchMarketToolsParams,
 } from '@lobechat/builtin-tool-agent-builder';
-import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult, ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+import { getChatGroupStoreState } from '@/store/agentGroup';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
 import { GroupAgentBuilderExecutionRuntime } from './ExecutionRuntime';
 import type {
@@ -37,6 +39,34 @@ const agentManagerRuntime = new AgentManagerRuntime({
   discoverService,
 });
 const groupAgentBuilderRuntime = new GroupAgentBuilderExecutionRuntime();
+
+// APIs that mutate group / member state. Under gateway mode these commit inside
+// the server runtime, so the client stores only learn about them through
+// `onAfterCall` (fired on `tool_end` regardless of where the tool ran).
+const GROUP_WRITE_APIS = new Set<string>([
+  GroupAgentBuilderApiName.batchCreateAgents,
+  GroupAgentBuilderApiName.createAgent,
+  GroupAgentBuilderApiName.inviteAgent,
+  GroupAgentBuilderApiName.removeAgent,
+  GroupAgentBuilderApiName.updateAgentPrompt,
+  GroupAgentBuilderApiName.updateGroup,
+  GroupAgentBuilderApiName.updateGroupPrompt,
+]);
+
+/**
+ * The Group Agent Builder conversation is keyed by the builtin builder agent, so
+ * its ConversationContext deliberately carries no groupId. The edited group is
+ * whatever the profile page has active — the same source `resolveGroupTarget`
+ * already uses for the group-level APIs.
+ */
+const resolveActiveGroupId = (ctx: BuiltinToolContext): string | undefined =>
+  ctx.groupId ?? getChatGroupStoreState().activeGroupId ?? undefined;
+
+const NO_GROUP_CONTEXT: BuiltinToolResult = {
+  content: 'No active group found',
+  error: { message: 'No active group found', type: 'NoGroupContext' },
+  success: false,
+};
 
 class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApiName> {
   readonly identifier = GroupAgentBuilderIdentifier;
@@ -65,15 +95,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: CreateAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = ctx.groupId;
+    const groupId = resolveActiveGroupId(ctx);
 
-    if (!groupId) {
-      return {
-        content: 'No active group found',
-        error: { message: 'No active group found', type: 'NoGroupContext' },
-        success: false,
-      };
-    }
+    if (!groupId) return NO_GROUP_CONTEXT;
 
     return groupAgentBuilderRuntime.createAgent(groupId, params);
   };
@@ -82,15 +106,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: BatchCreateAgentsParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = ctx.groupId;
+    const groupId = resolveActiveGroupId(ctx);
 
-    if (!groupId) {
-      return {
-        content: 'No active group found',
-        error: { message: 'No active group found', type: 'NoGroupContext' },
-        success: false,
-      };
-    }
+    if (!groupId) return NO_GROUP_CONTEXT;
 
     return groupAgentBuilderRuntime.batchCreateAgents(groupId, params);
   };
@@ -99,15 +117,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: InviteAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = ctx.groupId;
+    const groupId = resolveActiveGroupId(ctx);
 
-    if (!groupId) {
-      return {
-        content: 'No active group found',
-        error: { message: 'No active group found', type: 'NoGroupContext' },
-        success: false,
-      };
-    }
+    if (!groupId) return NO_GROUP_CONTEXT;
 
     return groupAgentBuilderRuntime.inviteAgent(groupId, params);
   };
@@ -116,15 +128,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: RemoveAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = ctx.groupId;
+    const groupId = resolveActiveGroupId(ctx);
 
-    if (!groupId) {
-      return {
-        content: 'No active group found',
-        error: { message: 'No active group found', type: 'NoGroupContext' },
-        success: false,
-      };
-    }
+    if (!groupId) return NO_GROUP_CONTEXT;
 
     return groupAgentBuilderRuntime.removeAgent(groupId, params);
   };
@@ -135,15 +141,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: UpdateAgentPromptParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = ctx.groupId;
+    const groupId = resolveActiveGroupId(ctx);
 
-    if (!groupId) {
-      return {
-        content: 'No active group found',
-        error: { message: 'No active group found', type: 'NoGroupContext' },
-        success: false,
-      };
-    }
+    if (!groupId) return NO_GROUP_CONTEXT;
 
     return groupAgentBuilderRuntime.updateAgentPrompt(groupId, params);
   };
@@ -204,6 +204,43 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     }
 
     return agentManagerRuntime.installPlugin(agentId, params);
+  };
+
+  // ==================== Hooks ====================
+
+  /**
+   * Under gateway mode these tools run in the server runtime, so the client-side
+   * `refreshGroupDetail` inside `GroupAgentBuilderExecutionRuntime` never fires
+   * and the group Profile sidebar keeps showing the pre-change roster. This hook
+   * runs on `tool_end` for both transports, so it is the one place that reliably
+   * re-syncs the stores after a write.
+   */
+  onAfterCall = async ({ apiName, params, result }: ToolAfterCallContext): Promise<void> => {
+    const groupStore = getChatGroupStoreState();
+
+    // A brand-new group isn't in the list yet — refresh the list, not a detail.
+    if (apiName === GroupAgentBuilderApiName.createGroup) {
+      if (result.success) await groupStore.refreshGroups();
+      return;
+    }
+
+    if (!result.success || !GROUP_WRITE_APIS.has(apiName)) return;
+
+    const args = (params ?? {}) as { agentId?: string; groupId?: string; prompt?: string };
+    const groupId = args.groupId ?? groupStore.activeGroupId;
+    if (!groupId) return;
+
+    await groupStore.refreshGroupDetail(groupId);
+
+    // Prompt writes must also land in the open editor: it treats its own JSON
+    // doc as authoritative and would otherwise autosave the stale text back over
+    // the change the agent just made.
+    if (apiName === GroupAgentBuilderApiName.updateAgentPrompt && args.agentId) {
+      useGroupProfileStore.getState().setAgentBuilderContent(args.agentId, args.prompt ?? '');
+    }
+    if (apiName === GroupAgentBuilderApiName.updateGroupPrompt) {
+      useGroupProfileStore.getState().setAgentBuilderContent(groupId, args.prompt ?? '');
+    }
   };
 }
 

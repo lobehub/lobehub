@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "I metadati non sono stati salvati. Riprova o continua a modificare.",
   "skillFrontmatter.title": "Metadati dell'abilità",
   "slash.compact": "Compatta il contesto",
+  "slash.goal": "Imposta obiettivo",
+  "slash.goal.desc": "Pianifica e avvia un obiettivo con criteri di accettazione modificabili",
   "slash.h1": "Titolo 1",
   "slash.h2": "Titolo 2",
   "slash.h3": "Titolo 3",

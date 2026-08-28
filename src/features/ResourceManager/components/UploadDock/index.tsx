@@ -1,5 +1,6 @@
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
-import { ActionIcon, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { UploadIcon, XIcon } from 'lucide-react';
@@ -104,7 +105,7 @@ const UploadDock = memo(() => {
   const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isUploading || overviewUploadingStatus === 'pending') {
+    if (overviewUploadingStatus !== 'success') {
       if (autoDismissTimerRef.current) {
         clearTimeout(autoDismissTimerRef.current);
       }
@@ -121,7 +122,7 @@ const UploadDock = memo(() => {
         clearTimeout(autoDismissTimerRef.current);
       }
     };
-  }, [isUploading, overviewUploadingStatus, fileList, dispatchDockFileList]);
+  }, [overviewUploadingStatus, fileList, dispatchDockFileList]);
 
   if (count === 0 || !show) return;
 

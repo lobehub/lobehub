@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheHydration } from '@/libs/swr/cacheHydration';
+import { getAppPainted, setAppPainted, setAppReady } from '@/spa/atoms/app';
 
 // Import after mocks are registered.
 import CacheHydrationGate from './CacheHydrationGate';
@@ -32,16 +33,15 @@ const renderGate = () =>
 beforeEach(() => {
   mockScope = 'anon:personal';
   resetHydration();
-  // A loading-screen node so the gate's removal side-effect has a target.
-  const el = document.createElement('div');
-  el.id = 'loading-screen';
-  document.body.appendChild(el);
+  setAppPainted(false);
+  setAppReady(true);
 });
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
   resetHydration();
-  document.getElementById('loading-screen')?.remove();
+  setAppPainted(false);
+  setAppReady(false);
   vi.useRealTimers();
 });
 
@@ -50,15 +50,15 @@ describe('CacheHydrationGate', () => {
     renderGate();
     // not ready yet → blocked
     expect(screen.queryByTestId('app')).toBeNull();
-    expect(document.getElementById('loading-screen')).not.toBeNull();
+    expect(getAppPainted()).toBe(false);
 
     act(() => {
       cacheHydration.markReady('anon:personal');
     });
 
     expect(screen.queryByTestId('app')).not.toBeNull();
-    // loading-screen removed once released
-    expect(document.getElementById('loading-screen')).toBeNull();
+    // signals the boot shell to tear down once the real app has committed
+    expect(getAppPainted()).toBe(true);
   });
 
   it('CORE: after first release, a scope change does NOT unmount the app (no white-screen)', () => {
@@ -113,6 +113,49 @@ describe('CacheHydrationGate', () => {
       cacheHydration.markReady('anon:personal');
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
+  });
+
+  it('tears down the static loading screen for entries that mount no boot shell', () => {
+    // The Electron popup entry renders no `BootShell`, and `popup.html` ships an
+    // opaque z-index 99999 `#loading-screen`. `useBootShell` is what normally
+    // removes it, so the gate has to be the backstop or the popup stays covered
+    // forever after hydration.
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+
+    renderGate();
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).toBeNull();
+  });
+
+  it('holds the static loading screen until the app can actually paint', () => {
+    // Hydration can finish before initialization. In that window `AppLayer`
+    // renders null and the boot shell's phase is still `hidden` (it needs BOTH
+    // signals, and the 200ms timer has not fired), so tearing the splash down on
+    // release alone leaves the window blank.
+    setAppReady(false);
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+
+    renderGate();
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      setAppReady(true);
+    });
+
+    expect(document.getElementById('loading-screen')).toBeNull();
   });
 
   it('hung-hydration backstop still releases if ready never fires', () => {

@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import type { FileListItem } from '@/types/files';
 
 import { useExplorerSelectionActions } from '../hooks/useExplorerSelection';

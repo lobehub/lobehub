@@ -16,7 +16,7 @@ import {
 import type { ChatToolPayload } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
-import { isDeviceCapablePlan } from '@/helpers/executionTarget';
+import { isDeviceCapablePlan, isLocalSandboxEnabled } from '@/helpers/executionTarget';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
 import {
   isDeviceToolIdentifier,
@@ -142,7 +142,7 @@ export class ServerToolTransport implements ToolTransport {
         execution = {
           attempts: 0,
           mocked: true,
-          result: { content: hookResult.content, executionTime: 0, success: true },
+          result: hookResult.result,
         };
       } else if (
         chatToolPayload.executor === 'client' &&
@@ -154,6 +154,12 @@ export class ServerToolTransport implements ToolTransport {
           args: context.parsedArgs,
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
+        // The preflight above (`dispatchBeforeToolCall`, policy checks) is async,
+        // so Stop can land between entering `run` and reaching this line. The
+        // executor's race has already settled the call by then — launching now
+        // would start side-effecting work for a cancelled operation.
+        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.metadata?.agentId,
           assistantMessageId: context.parentMessageId,
@@ -182,6 +188,10 @@ export class ServerToolTransport implements ToolTransport {
         });
         const agentVisibility = await this.resolveAgentVisibility(context);
 
+        // Re-checked after the visibility await for the same reason as above:
+        // every await between entry and launch reopens the cancellation window.
+        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
         execution = await executeToolWithRetry(
           () =>
@@ -200,15 +210,29 @@ export class ServerToolTransport implements ToolTransport {
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
               clientIp: context.state.metadata?.clientIp,
+              currentTodos: context.currentTodos,
               deviceCapable: context.state.metadata?.executionPlan
                 ? isDeviceCapablePlan(context.state.metadata.executionPlan)
                 : undefined,
               documentId: context.state.metadata?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
+              editingGroupId: context.state.metadata?.editingGroupId,
               execSubAgent: this.ctx.execSubAgent,
               executionTimeoutMs: timeoutMs,
               groupId: context.state.metadata?.groupId,
               isSubAgent: context.state.metadata?.isSubAgent === true,
+              // Sandboxing qualifies a `local` run, so it is gated on the plan's
+              // resolved target rather than the stored flag: a config that says
+              // `localSandbox` but landed on `sandbox`/`device` was never fenced,
+              // and telling the device otherwise would fence the wrong run.
+              localSandbox: context.state.metadata?.executionPlan
+                ? isLocalSandboxEnabled(
+                    context.state.metadata?.agentConfig?.agencyConfig,
+                    context.state.metadata.executionPlan.target,
+                  )
+                : undefined,
+              localSandboxNetwork:
+                context.state.metadata?.agentConfig?.agencyConfig?.localSandboxNetwork === true,
               memoryToolPermission:
                 context.state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
               messageId: context.state.metadata?.sourceMessageId,
@@ -300,6 +324,21 @@ export class ServerToolTransport implements ToolTransport {
     }
   }
 
+  /**
+   * Result for a call the abort caught before anything was launched.
+   *
+   * Returned rather than thrown: by this point the executor's race has already
+   * rejected and moved on, so this promise is detached — throwing would only
+   * surface as an unhandled rejection.
+   */
+  private abortedBeforeLaunch(): ToolRunExecution {
+    return {
+      attempts: 0,
+      interrupted: true,
+      result: { content: '', success: false },
+    };
+  }
+
   private async dispatchBeforeToolCall(chatToolPayload: ChatToolPayload, context: ToolRunContext) {
     const { hookDispatcher, operationId, stepIndex, userId } = this.ctx;
     if (!hookDispatcher) return null;
@@ -338,6 +377,14 @@ export class ServerToolTransport implements ToolTransport {
   ) {
     const { hookDispatcher, operationId, stepIndex, userId } = this.ctx;
     if (!hookDispatcher) return;
+
+    // A tool that outlives an abort still finishes in the background — we cannot
+    // recall work already handed to a process. Its hook must not be dispatched
+    // though: by now `executeStep` has emitted the terminal hooks and
+    // `CompletionLifecycle` has unregistered this operation, so a local consumer
+    // would silently drop it and a webhook consumer would receive `afterToolCall`
+    // AFTER `onComplete`.
+    if (context.abortSignal?.aborted) return;
 
     hookDispatcher
       .dispatch(

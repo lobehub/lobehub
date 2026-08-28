@@ -17,17 +17,13 @@ import {
   ExecutionTargetIcon,
   executionTargetValue,
   groupExecutionTargetDevices,
-  isSharedExecutionTarget,
   parseExecutionTargetValue,
+  resolveExecutionTargetSelection,
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 
-import {
-  WorkspaceAgentPolicyCard,
-  WorkspaceAgentSelectionPolicyMenu,
-} from './WorkspaceAgentPolicyCard';
-import { getWorkspaceAgentSelectionPolicyLabelKeys } from './workspaceAgentSelectionPolicyLabels';
+import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
 const styles = createStaticStyles(({ css }) => ({
   option: css`
@@ -181,10 +177,6 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);
-    const boundDevice = publicWorkspaceDevices.find(
-      (device) => device.deviceId === agencyConfig?.boundDeviceId,
-    );
-    const isFixed = agencyConfig?.executionTargetSelectionPolicy === 'fixed';
 
     const targetLabels = useMemo(
       () => ({
@@ -309,21 +301,15 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       targetLabels,
     ]);
 
-    const configuredTarget = agencyConfig?.executionTarget;
-    const selectedTarget =
-      configuredTarget === 'device' && boundDevice
-        ? { deviceId: boundDevice.deviceId, target: 'device' as const }
-        : isSharedExecutionTarget(configuredTarget) && configuredTarget !== 'device'
-          ? { target: configuredTarget }
-          : configuredTarget === undefined && !isHeterogeneous
-            ? { target: 'none' as const }
-            : undefined;
+    const selectedTarget = resolveExecutionTargetSelection({
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      configuredTarget: agencyConfig?.executionTarget,
+      devices: publicWorkspaceDevices,
+      isHeterogeneous,
+    });
     const selectedValue = selectedTarget
       ? executionTargetValue(selectedTarget.target, selectedTarget.deviceId)
       : undefined;
-    const canLockCurrentTarget =
-      !!selectedTarget && (selectedTarget.target !== 'sandbox' || supportsSandbox);
-    const labelKeys = getWorkspaceAgentSelectionPolicyLabelKeys(config?.visibility === 'private');
 
     const saveAgencyConfig = useCallback(
       (patch: Partial<LobeAgentAgencyConfig>) =>
@@ -333,31 +319,12 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
 
     if (!config?.workspaceId) return null;
 
+    // Whether members may switch this environment is configured on the Agent's
+    // Permission page — this card only picks the environment itself.
     return (
       <WorkspaceAgentPolicyCard
         icon={MonitorSmartphone}
         title={t('settingAgent.devicePolicy.title')}
-        action={
-          <WorkspaceAgentSelectionPolicyMenu
-            locked={isFixed}
-            lockedDisabled={!isFixed && !canLockCurrentTarget}
-            lockedLabel={t(labelKeys.locked)}
-            unlockedLabel={t(labelKeys.unlocked)}
-            onChange={(locked) => {
-              if (!locked) {
-                void saveAgencyConfig({ executionTargetSelectionPolicy: 'member' });
-                return;
-              }
-              if (!selectedTarget) return;
-
-              void saveAgencyConfig({
-                ...(selectedTarget.deviceId ? { boundDeviceId: selectedTarget.deviceId } : {}),
-                executionTarget: selectedTarget.target,
-                executionTargetSelectionPolicy: 'fixed',
-              });
-            }}
-          />
-        }
       >
         {showDevicePicker ? (
           <Select

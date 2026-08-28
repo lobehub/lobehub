@@ -98,6 +98,12 @@ describe('translation', () => {
     expect(t('nested.key')).toBe('Nested value');
   });
 
+  it('should fallback to the default locale when a locale file is missing a key', async () => {
+    const { t } = await translation('common', 'fr-FR');
+
+    expect(t('key2', { param: 'fallback' })).toBe('Value 2 with fallback');
+  });
+
   it('should handle multiple parameters in translation string', async () => {
     const { t } = await translation('common', 'en-US');
     expect(t('multiParam', { name: 'John', count: '5' })).toBe('Hello John, you have 5 messages');

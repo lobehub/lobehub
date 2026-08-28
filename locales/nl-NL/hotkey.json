@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Toon of verberg het linker paneel",
   "toggleLeftPanel.title": "Linker Paneel Wisselen",
   "toggleRightPanel.desc": "Toon of verberg het rechter paneel",
-  "toggleRightPanel.title": "Rechter Paneel Wisselen"
+  "toggleRightPanel.title": "Rechter Paneel Wisselen",
+  "toggleTerminalPanel.desc": "Toon of verberg het onderste terminalpaneel",
+  "toggleTerminalPanel.title": "Terminalpaneel schakelen"
 }

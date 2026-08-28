@@ -1,4 +1,5 @@
-import { Tag } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Tag } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { type MouseEventHandler } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -6,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
@@ -21,6 +24,7 @@ import {
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
+import { resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
@@ -37,15 +41,21 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const selfAvatar = useUserAvatar();
   const selfTitle = useUserStore(userProfileSelectors.displayUserName);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
   // In workspaces every user bubble shows its sender avatar so ownership is
   // visible even during single-user testing; personal mode keeps the legacy
-  // hidden-avatar behavior. Optimistic/streaming rows without a `sender`
-  // fall back to the current user, which is who authored them.
+  // hidden-avatar behavior. Self identity applies only to the viewer's own
+  // rows — see resolveSenderIdentity.
   const showSender = Boolean(activeWorkspaceId);
-  const senderName = sender?.fullName || sender?.username || '';
-  const avatar = sender?.avatar || senderName || selfAvatar;
-  const title = senderName || selfTitle;
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const { avatar, title } = resolveSenderIdentity({
+    currentUserId,
+    selfAvatar,
+    selfTitle,
+    sender,
+    unknownLabel: t('sender.unknownMember'),
+  });
 
   // Get editing and loading state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
@@ -60,7 +70,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     const targetName =
       targetId === 'user'
         ? userName
-        : agents?.find((agent) => agent.id === targetId)?.title || targetId;
+        : agentDisplayName(
+            agents?.find((agent) => agent.id === targetId),
+            targetId,
+          );
 
     return <Tag>{t('dm.visibleTo', { target: targetName })}</Tag>;
   }, [targetId, userName, agents, t]);
@@ -99,6 +112,11 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       showTitle={showSender}
       time={createdAt}
       titleAddon={dmIndicator}
+      actionAddon={
+        commentCount > 0 && commentTopicId ? (
+          <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+        ) : undefined
+      }
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
     >

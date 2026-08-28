@@ -7,7 +7,8 @@ exports[`chainSummaryTitle > should use the default model if the token count is 
       "content": "You are a professional conversation summarizer. Generate a concise title that captures the essence of the conversation.
 
 Rules:
-- Output ONLY the title text, no explanations or additional context
+- Return one JSON object with a single "title" string matching the supplied schema
+- No explanations or additional fields
 - Maximum 15 words
 - Maximum 80 characters
 - No punctuation marks

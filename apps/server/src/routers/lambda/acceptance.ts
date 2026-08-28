@@ -1,7 +1,10 @@
 import {
   acceptanceCheckReviewActions,
+  acceptanceRejectIntents,
   acceptanceSubjectTypes,
   acceptanceVisibilities,
+  reviewAdjudications,
+  reviewProposalEdits,
 } from '@lobechat/const/verify';
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -12,6 +15,9 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { ProjectModel } from '@/database/models/project';
+import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
@@ -24,7 +30,14 @@ import {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
+  isCurrentReviewPrediction,
+  mapWithConcurrency,
+  REVIEW_PREDICT_CONCURRENCY,
+  REVIEW_PREDICT_MODEL_CONFIG,
+  shouldSurfaceProposal,
+  VerifyReviewPredictorService,
 } from '@/server/services/verify';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -121,12 +134,14 @@ export const acceptanceRouter = router({
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
+        title: z.string().trim().min(1).max(500).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
           requirement: input.requirement,
+          title: input.title,
         });
       } catch (error) {
         throw new TRPCError({
@@ -144,7 +159,19 @@ export const acceptanceRouter = router({
         input.subjectType,
         input.subjectId,
       );
-      return acceptance ?? null;
+      if (!acceptance) return null;
+
+      // `delivered` alone is ambiguous for the subject's status surface: a
+      // converged delivery waiting for sign-off and a failed one waiting for a
+      // decision both land there. The latest round's verdict is what tells
+      // them apart, so ship it with the aggregate instead of forcing callers
+      // to load the whole bundle for one field.
+      const latest = await ctx.acceptanceService.latestRound(acceptance.id);
+      return {
+        ...acceptance,
+        latestRunStatus: latest?.status ?? null,
+        latestRunUserDecision: latest?.userDecision ?? null,
+      };
     }),
 
   /**
@@ -329,6 +356,18 @@ export const acceptanceRouter = router({
       };
 
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
+      // What each round actually spent. Owner-only: cost is the author's
+      // operating detail, not something a shared link should expose.
+      // `isOwner` already implies a signed-in viewer; the explicit id check is
+      // what narrows it for the model, which is owner-scoped by construction.
+      const usageByOperation =
+        isOwner && ctx.userId
+          ? await new AgentOperationModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findUsageByOperations(
+                runs.flatMap((run) => (run.operationId ? [run.operationId] : [])),
+              )
+              .catch(() => new Map<string, { cost: number; tokens: number }>())
+          : new Map<string, { cost: number; tokens: number }>();
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
         // to a visitor holding nothing but the shared link.
@@ -351,7 +390,11 @@ export const acceptanceRouter = router({
             },
           };
         }
-        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+        return {
+          report: reportsByRun.get(run.id) ?? null,
+          run: publicRun,
+          usage: (run.operationId ? usageByOperation.get(run.operationId) : undefined) ?? null,
+        };
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
@@ -361,6 +404,35 @@ export const acceptanceRouter = router({
 
       const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
       const resultsById = new Map(results.map((result) => [result.id, result]));
+
+      // Automated proposals are the reviewer's working state, not published
+      // content — a shared acceptance URL (the whole point of `public`
+      // visibility) must not show visitors "an AI thinks this is broken".
+      // Owner-only, same rule as `origin`.
+      const predictions = isOwner
+        ? await new VerifyReviewPredictionModel(
+            ctx.serverDB,
+            acceptance.userId,
+            acceptance.workspaceId ?? undefined,
+          ).listByRuns(runs.map((run) => run.id))
+        : [];
+      // Keyed by the concrete check RESULT, never by the union row's id. The
+      // union exposes `sourceCriterionId ?? checkItemId` as `check.id` so a
+      // renamed check folds across rounds — but a prediction is stored against
+      // the result it judged. Keying on the logical id silently misses every
+      // plan that uses a distinct snapshot id: generation reports success and
+      // no card ever renders.
+      const predictionByResult = new Map<string, (typeof predictions)[number]>();
+      // Newest-first from the model, so the first write per check item wins and
+      // later (older) rows are ignored.
+      for (const prediction of predictions) {
+        // Rows from an earlier pin (another model / prompt version) stay in
+        // the table for the comparison set but are not this page's reviewer.
+        if (!isCurrentReviewPrediction(prediction, REVIEW_PREDICT_MODEL_CONFIG)) continue;
+        if (!predictionByResult.has(prediction.checkResultId)) {
+          predictionByResult.set(prediction.checkResultId, prediction);
+        }
+      }
 
       return {
         acceptance,
@@ -380,9 +452,23 @@ export const acceptanceRouter = router({
             return attachments ? { ...review, attachments } : review;
           });
           const latestAttachments = toAttachments(reviews.at(-1)?.fileIds);
+          const prediction = check.result ? predictionByResult.get(check.result.id) : undefined;
+          // A STALE review is last round's rejection carried forward as history;
+          // THIS round's result is undecided. Treating it as a current verdict
+          // hid the proposal on exactly the repair round where the reviewer has
+          // to judge again.
+          const settled = Boolean(userReview && !userReview.stale);
           return {
             ...check,
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
+            prediction:
+              prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
+            // The card above is gated to actionable rejects, but the FACT that
+            // the predictor finished with this check must stay visible: an
+            // `accept`, a skip and an error all render no card, and without
+            // this the predict button's poll cannot tell "still running" from
+            // "reviewed, nothing to say" — it spins to timeout on a clean bill.
+            predictionStatus: prediction?.status ?? null,
             reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
@@ -401,8 +487,65 @@ export const acceptanceRouter = router({
       };
     }),
 
-  /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
-  list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+  /**
+   * Recent acceptances (with subject headers), newest first — list panel + CLI.
+   *
+   * `limit` is capped rather than open: the read resolves each row's subject
+   * title one by one, so an unbounded window would fan out. The merge picker
+   * asks for the wide end because a target it cannot list is a target the user
+   * cannot merge into.
+   */
+  list: acceptanceProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200) }).optional())
+    .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input?.limit)),
+
+  /**
+   * Fold one acceptance into another: the source's verification rounds (and
+   * with them its checks, verdicts and evidence) re-chain onto the target, and
+   * the source entry is deleted.
+   *
+   * Both sides are creator-scoped like every other verify write — a merge
+   * rewrites BOTH aggregates, so a workspace member must not be able to fold
+   * another member's acceptance into (or out of) their own.
+   */
+  merge: acceptanceWriteProcedure
+    .input(z.object({ sourceId: z.string(), targetId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const source = await resolveAcceptance(ctx, input.sourceId);
+      assertWorkspaceRowManageable(ctx, source.userId, 'acceptance');
+      const target = await resolveAcceptance(ctx, input.targetId);
+      assertWorkspaceRowManageable(ctx, target.userId, 'acceptance');
+
+      try {
+        return await ctx.acceptanceService.merge(source.id, target.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to merge acceptance',
+        });
+      }
+    }),
+
+  /**
+   * Acceptance status for a known set of subjects, in one read.
+   *
+   * `list` is recency-capped and spans every subject type, so a list surface
+   * that derived per-row state from it would silently mis-read any subject
+   * pushed past the cap. This answers about exactly the subjects asked for.
+   */
+  listStatusesBySubjects: acceptanceProcedure
+    .input(
+      z.object({
+        subjectIds: z.array(z.string()).max(200),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      ctx.acceptanceService.acceptanceModel.listStatusesBySubjects(
+        input.subjectType,
+        input.subjectIds,
+      ),
+    ),
 
   /**
    * Feedback addressed to a check GROUP (business category) rather than any
@@ -482,6 +625,21 @@ export const acceptanceRouter = router({
           comment: z.string().max(2000).optional(),
           fileIds: z.array(z.string()).max(10).optional(),
           id: z.string(),
+          /**
+           * Which of the three jobs a reject is doing. Optional so older
+           * clients keep working — and left genuinely absent rather than
+           * defaulted, because guessing `unmet` here would recreate exactly the
+           * conflated label the split exists to remove.
+           */
+          rejectIntent: z.enum(acceptanceRejectIntents).optional(),
+          /** Set when the reviewer was responding to a model proposal. */
+          proposal: z
+            .object({
+              adjudication: z.enum(reviewAdjudications),
+              edit: z.enum(reviewProposalEdits).optional(),
+              predictionId: z.string(),
+            })
+            .optional(),
         })
         // A reject IS its feedback — without a note (global, on an annotated
         // region, or a screenshot attachment) the next round has nothing to act on.
@@ -499,19 +657,141 @@ export const acceptanceRouter = router({
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
       try {
-        return await ctx.acceptanceService.reviewChecks(acceptance.id, {
+        const result = await ctx.acceptanceService.reviewChecks(acceptance.id, {
           action: input.action,
           annotations: input.annotations,
           checkItemIds: input.checkItemIds,
           comment: input.comment?.trim() || undefined,
           fileIds: input.fileIds,
+          proposal: input.proposal,
+          rejectIntent: input.rejectIntent,
         });
+
+        return result;
       } catch (error) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: error instanceof Error ? error.message : 'Failed to review checks',
         });
       }
+    }),
+
+  /**
+   * Answer a model proposal without ruling on the check itself.
+   *
+   * `not-an-issue` and `misidentified` are answers to the MODEL, not to the
+   * delivery — the check stays pending and the reviewer still has to judge it.
+   * That is why this writes to the prediction row rather than going through
+   * `reviewChecks`: routing a dismissal through the review path would stamp a
+   * `user_decision` the reviewer never made.
+   *
+   * The `confirmed` case does not come here — it rides along with the reject in
+   * `reviewChecks`, where the edit diff is available.
+   */
+  adjudicateProposal: acceptanceWriteProcedure
+    .input(
+      z.object({
+        adjudication: z.enum(['not-an-issue', 'misidentified'] as const),
+        id: z.string(),
+        predictionId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      const model = new VerifyReviewPredictionModel(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      );
+      const prediction = await model.findById(input.predictionId);
+      if (!prediction) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Proposal not found' });
+      }
+
+      await model.adjudicate(prediction.id, { adjudication: input.adjudication });
+      return { success: true };
+    }),
+
+  /**
+   * Generate automated review proposals for the checks still awaiting a
+   * verdict in this acceptance.
+   *
+   * An explicit mutation rather than a side effect of `getBundle`: reading a
+   * report must not spend model budget, and the reviewer needs to be able to
+   * ask for proposals again after a new round lands.
+   */
+  predictReviews: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      const { results, runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const resultsByRun = new Map<string, typeof results>();
+      for (const result of results) {
+        const bucket = resultsByRun.get(result.verifyRunId!) ?? [];
+        bucket.push(result);
+        resultsByRun.set(result.verifyRunId!, bucket);
+      }
+      const checks = buildAcceptanceCheckUnion(
+        runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+      );
+
+      // Pinned, never the verifier's own model: the predictor reads screenshots,
+      // and a text-only verifier model silently judges frames it cannot see.
+      const modelConfig = REVIEW_PREDICT_MODEL_CONFIG;
+
+      const predictor = new VerifyReviewPredictorService(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      );
+
+      // Only checks the reviewer has not already ruled on. Re-judging a settled
+      // check spends budget to argue with a decision that is already made.
+      const pending = checks.filter((check) => check.result && !check.result.userDecision);
+
+      // Forget the previous batch's unanswered rows BEFORE responding: the
+      // client waits for every queued check to carry a recorded attempt, and
+      // with the old rows still in place that condition holds on the first
+      // poll — before a single new judgement has landed.
+      await predictor.resetPending(
+        pending.map((check) => check.result!.id),
+        modelConfig,
+      );
+
+      // Dispatched AFTER the response, with a ceiling on how many model calls
+      // are open at once.
+      //
+      // Awaiting the fan-out inline could not survive real data: each check is
+      // a 10-25s multimodal generation, so a thirty-check acceptance ran well
+      // past any gateway timeout and the reviewer lost every proposal the run
+      // had already paid for. The ceiling is the other half — an unbounded
+      // `Promise.all` opened one generation per check simultaneously, which is
+      // how a single click turns into a provider rate-limit burst.
+      //
+      // The client polls the bundle for the cards to appear; a failed
+      // individual prediction is recorded as an `errored` row inside `predict`
+      // rather than thrown, so one bad check cannot abort its neighbours.
+      after(async () => {
+        try {
+          await mapWithConcurrency(pending, REVIEW_PREDICT_CONCURRENCY, (check) =>
+            predictor.predict({
+              checkResultId: check.result!.id,
+              instructionDocumentId: check.planItem?.documentId,
+              modelConfig,
+              requirement: acceptance.requirement,
+              surface: check.surface,
+            }),
+          );
+        } catch (error) {
+          console.error('[acceptance] review prediction batch failed', error);
+        }
+      });
+
+      return { queued: pending.length };
     }),
 
   /**
@@ -593,8 +873,38 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * File the acceptance under a project (or take it out of one) from the list.
+   * Only the grouping pointer moves: the delivery, its rounds and its subject
+   * are untouched, so this is reversible and never rewrites history.
+   *
+   * The bar is READABLE, not manageable: a delivery may be filed under any
+   * project the caller can see — the same set the list already groups by — so
+   * a workspace member is not blocked from filing under a teammate's project.
+   */
+  setProject: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      if (input.projectId) {
+        const project = await new ProjectModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.projectId);
+        if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      }
+
+      await ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+        projectId: input.projectId,
+      });
+      return { success: true };
+    }),
+
+  /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
-   * an owner override (mark accepted / rejected, or reopen for another look).
+   * an owner override (mark accepted / closed / rejected, or reopen for another look).
    *
    * accept / reject go through the SERVICE, never a bare status write: the
    * service applies `requireDecidableAcceptance` (a premature `accepted` is
@@ -604,7 +914,12 @@ export const acceptanceRouter = router({
    * not be forced back to a decision-pending state by hand.
    */
   updateStatus: acceptanceWriteProcedure
-    .input(z.object({ id: z.string(), status: z.enum(['delivered', 'accepted', 'rejected']) }))
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(['delivered', 'accepted', 'closed', 'rejected']),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
@@ -612,6 +927,8 @@ export const acceptanceRouter = router({
       try {
         if (input.status === 'accepted') {
           await ctx.acceptanceService.accept(acceptance.id);
+        } else if (input.status === 'closed') {
+          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
         } else if (input.status === 'rejected') {
           await ctx.acceptanceService.reject(
             acceptance.id,
@@ -620,7 +937,11 @@ export const acceptanceRouter = router({
         } else {
           // Reopen (→ delivered): only a decided aggregate can be re-opened; a
           // live round recomputes its own status and must not be clobbered.
-          if (acceptance.status !== 'accepted' && acceptance.status !== 'rejected') {
+          if (
+            acceptance.status !== 'accepted' &&
+            acceptance.status !== 'closed' &&
+            acceptance.status !== 'rejected'
+          ) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,

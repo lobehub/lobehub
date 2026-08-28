@@ -30,6 +30,7 @@ import type {
   SearchMessagesParams,
   SendDirectMessageParams,
   SendMessageParams,
+  SendMessengerPushParams,
   SetMessengerActiveAgentParams,
   ToggleBotParams,
   UninstallMessengerParams,
@@ -299,6 +300,13 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.unlinkMessenger(params);
+  };
+
+  sendMessengerPush = async (
+    params: SendMessengerPushParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.sendMessengerPush(params);
   };
 }
 

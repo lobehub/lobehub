@@ -2,8 +2,8 @@
 
 import { DOWNLOAD_URL } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { CopyButton, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, Tabs } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

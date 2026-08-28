@@ -1,9 +1,10 @@
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, Circle, CircleAlert, LoaderCircle, XCircle } from 'lucide-react';
 
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
-import { useVerifyResults, useVerifyState } from '@/features/Verify/hooks';
+import { useVerifyResults, useVerifyState } from '@/features/Acceptance/hooks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { oneLineEllipsis } from '@/styles';

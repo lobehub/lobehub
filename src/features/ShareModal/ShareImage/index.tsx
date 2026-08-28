@@ -28,7 +28,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 };
 
 const ShareImage = memo<{ mobile?: boolean }>(() => {
-  const currentAgentTitle = useAgentStore(agentSelectors.currentAgentTitle);
+  const currentAgentTitle = useAgentStore(agentSelectors.currentAgentDisplayName);
   const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
   const { context, dbMessages } = useShareData();

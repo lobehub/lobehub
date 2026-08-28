@@ -18,7 +18,7 @@ const oauthAppProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   });
 });
 
-const oauthAppWriteProcedure = oauthAppProcedure.use(requireWorkspaceRoleWhenScoped('owner'));
+const oauthAppWriteProcedure = oauthAppProcedure.use(requireWorkspaceRoleWhenScoped('admin'));
 
 const stripSecret = <T extends { clientSecret?: string | null }>(client: T) => {
   const { clientSecret: _clientSecret, ...rest } = client;

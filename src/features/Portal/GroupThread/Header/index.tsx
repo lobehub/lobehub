@@ -1,4 +1,6 @@
-import { ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { XIcon } from 'lucide-react';
@@ -36,7 +38,7 @@ const Header = memo(() => {
             size={20}
           />
           <div style={{ fontWeight: 600 }}>
-            {currentAgent?.title || t('defaultSession', { ns: 'common' })}
+            {agentDisplayName(currentAgent, t('defaultSession', { ns: 'common' }))}
           </div>
         </Flexbox>
       }

@@ -1,6 +1,6 @@
 'use client';
 
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,6 @@ const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam
 
 export const GenerationItem = memo<GenerationItemProps>(
   ({ generationBatch, generation, prompt }) => {
-    const { message } = App.useApp();
     const { t } = useTranslation('image');
     const useCheckGenerationStatus = useImageStore((s) => s.useCheckGenerationStatus);
     const deleteGeneration = useImageStore((s) => s.removeGeneration);
@@ -70,22 +69,22 @@ export const GenerationItem = memo<GenerationItemProps>(
       if (isSupportSeed) {
         try {
           reuseSeed(generation.seed);
-          message.success(t('generation.actions.seedApplied'));
+          toast.success(t('generation.actions.seedApplied'));
         } catch (error) {
           console.error('Failed to apply seed:', error);
-          message.error(t('generation.actions.seedApplyFailed'));
+          toast.error(t('generation.actions.seedApplyFailed'));
         }
       } else {
         // If current model doesn't support seed parameter, copy to clipboard
         try {
           await navigator.clipboard.writeText(generation.seed.toString());
-          message.success(t('generation.actions.seedCopied'));
+          toast.success(t('generation.actions.seedCopied'));
         } catch (error) {
           console.error('Failed to copy seed:', error);
-          message.error(t('generation.actions.seedCopyFailed'));
+          toast.error(t('generation.actions.seedCopyFailed'));
         }
       }
-    }, [generation.seed, isSupportSeed, message, t, reuseSeed]);
+    }, [generation.seed, isSupportSeed, t, reuseSeed]);
 
     const handleCopyError = useCallback(async () => {
       if (!generation.task.error) return;
@@ -97,12 +96,12 @@ export const GenerationItem = memo<GenerationItemProps>(
 
       try {
         await navigator.clipboard.writeText(errorMessage);
-        message.success(t('generation.actions.errorCopied'));
+        toast.success(t('generation.actions.errorCopied'));
       } catch (error) {
         console.error('Failed to copy error message:', error);
-        message.error(t('generation.actions.errorCopyFailed'));
+        toast.error(t('generation.actions.errorCopyFailed'));
       }
-    }, [generation.task.error, message, t]);
+    }, [generation.task.error, t]);
 
     // Render corresponding component based on status
     if (generation.task.status === AsyncTaskStatus.Success && generation.asset?.url) {

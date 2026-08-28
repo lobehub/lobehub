@@ -13,7 +13,7 @@ import { useControls } from './useControls';
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { marketItems, editPluginDrawer, pinnedCount, autoCount, isPolicyMenuOpen } = useControls();
+  const { marketItems, pinnedCount, autoCount, isPolicyMenuOpen } = useControls();
 
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
@@ -54,7 +54,6 @@ const Tools = memo(() => {
           },
         }}
       />
-      {editPluginDrawer}
     </Suspense>
   );
 });

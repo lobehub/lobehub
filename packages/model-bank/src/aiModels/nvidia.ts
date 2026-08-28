@@ -4,19 +4,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 204_800,
-    displayName: 'MiniMax-M2.7',
-    family: 'minimax',
-    generation: 'minimax-m2.7',
-    id: 'minimaxai/minimax-m2.7',
-    maxOutput: 131_072,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 128_000,
     description: 'An advanced LLM strong at reasoning, math, common sense, and function calling.',
@@ -101,15 +88,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     family: 'llama',
     generation: 'llama-3.1',
     id: 'nvidia/llama-3.1-nemotron-70b-instruct',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description: 'An advanced small language model designed for edge applications.',
-    displayName: 'Gemma 2 2B Instruct',
-    family: 'gemma',
-    generation: 'gemma-2',
-    id: 'google/gemma-2-2b-it',
     type: 'chat',
   },
 ];

@@ -9,7 +9,6 @@ export default defineConfig({
     // production dependency inside the bundle so the embedded CLI is truly
     // self-contained instead of failing at startup with ERR_MODULE_NOT_FOUND.
     alwaysBundle: ['ws'],
-    neverBundle: ['@napi-rs/canvas'],
   },
   entry: ['src/index.ts'],
   fixedExtension: false,

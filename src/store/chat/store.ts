@@ -33,6 +33,8 @@ import { type ChatTranslateAction } from './slices/translate/action';
 import { ChatTranslateActionImpl } from './slices/translate/action';
 import { type ChatTTSAction } from './slices/tts/action';
 import { ChatTTSActionImpl } from './slices/tts/action';
+import { type VoiceMessageAction } from './slices/voiceMessage/action';
+import { VoiceMessageActionImpl } from './slices/voiceMessage/action';
 
 export type ChatStoreAction = ChatMessageAction &
   ChatForwardAction &
@@ -46,6 +48,7 @@ export type ChatStoreAction = ChatMessageAction &
   ChatPortalAction &
   OperationActions &
   ChatAIAgentAction &
+  VoiceMessageAction &
   ResetableStore;
 
 export type ChatStore = ChatStoreAction & ChatStoreState;
@@ -54,12 +57,24 @@ export type ChatStore = ChatStoreAction & ChatStoreState;
 
 class ChatStoreResetAction extends ResetableStoreAction<ChatStore> {
   protected readonly resetActionName = 'resetChatStore';
+
+  constructor(
+    ...[set, get, api, disposeVoiceMessages]: [
+      ...Parameters<StateCreator<ChatStore, [['zustand/devtools', never]]>>,
+      () => void,
+    ]
+  ) {
+    super(set, get, api);
+    this.beforeReset = disposeVoiceMessages;
+  }
 }
 
 const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
   ...params: Parameters<StateCreator<ChatStore, [['zustand/devtools', never]]>>
-) =>
-  ({
+) => {
+  const voiceMessageAction = new VoiceMessageActionImpl(...params);
+
+  return {
     ...initialState,
     ...(flattenActions<ChatStoreAction>([
       chatMessage(...params),
@@ -74,10 +89,12 @@ const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
       new ChatPortalActionImpl(...params),
       new OperationActionsImpl(...params),
       chatAiAgent(...params),
-      new ChatStoreResetAction(...params),
+      voiceMessageAction,
+      new ChatStoreResetAction(...params, voiceMessageAction.disposeVoiceMessages),
     ]) as ChatStoreAction),
     // cloud
-  }) as ChatStore;
+  } as ChatStore;
+};
 
 //  ===============  Implement useStore ============ //
 const devtools = createDevtools('chat');

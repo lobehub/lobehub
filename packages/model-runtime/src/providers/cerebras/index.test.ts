@@ -204,6 +204,123 @@ describe('LobeCerebrasAI - custom features', () => {
       expect(transformedPayload.frequency_penalty).toBeUndefined();
       expect(transformedPayload.presence_penalty).toBeUndefined();
     });
+
+    describe('reasoning configuration', () => {
+      it('should handle Z.ai GLM 4.7 default reasoning settings (reasoning_format: parsed)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBeUndefined();
+      });
+
+      it('should handle Z.ai GLM 4.7 with thinking enabled (reasoning_format: parsed)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBeUndefined();
+      });
+
+      it('should handle Z.ai GLM 4.7 with effort value (e.g. high) via backward compatibility', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+          reasoning_effort: 'high',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBeUndefined(); // GLM 4.7 no longer maps effort when using enableReasoning, but resolves isThinkingEnabled/Disabled correctly
+      });
+
+      it('should handle Z.ai GLM 4.7 with thinking disabled (reasoning_effort: none)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+          thinking: { type: 'disabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_effort).toBe('none');
+        expect(calledPayload.reasoning_format).toBeUndefined();
+      });
+
+      it('should handle Gemma 4 31B reasoning settings when thinking is enabled (reasoning_format: parsed, reasoning_effort: medium)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gemma-4-31b',
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBe('medium');
+      });
+
+      it('should handle Gemma 4 31B with thinking disabled (reasoning_effort: none)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gemma-4-31b',
+          thinking: { type: 'disabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_effort).toBe('none');
+        expect(calledPayload.reasoning_format).toBeUndefined();
+      });
+
+      it('should handle GPT-OSS with high effort (reasoning_format: parsed, reasoning_effort: high)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gpt-oss-120b',
+          reasoning_effort: 'high',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBe('high');
+      });
+
+      it('should handle GPT-OSS with thinking disabled (reasoning_format: hidden)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gpt-oss-120b',
+          thinking: { type: 'disabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('hidden');
+        expect(calledPayload.reasoning_effort).toBeUndefined();
+      });
+
+      it('should map reasoning field to reasoning_content for non-streaming response transformation', () => {
+        const mockCompletion = {
+          choices: [
+            {
+              index: 0,
+              message: {
+                content: 'Test content',
+                role: 'assistant',
+                reasoning: 'Test reasoning',
+              },
+            },
+          ],
+        };
+
+        const stream = params.chatCompletion!.handleTransformResponseToStream!(
+          mockCompletion as any,
+        );
+        expect(stream).toBeDefined();
+      });
+    });
   });
 
   describe('models function', () => {

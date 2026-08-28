@@ -2,6 +2,7 @@
  * This file contains the root router of Lobe Chat tRPC-backend
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
+import { artifactShareRouter } from '@/business/server/lambda-routers/artifactShare';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
@@ -9,6 +10,7 @@ import { storageOverageRouter } from '@/business/server/lambda-routers/storageOv
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
 import { taskTemplateRouter } from '@/business/server/lambda-routers/taskTemplate';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
+import { waitlistRouter } from '@/business/server/lambda-routers/waitlist';
 import { workspaceRouter } from '@/business/server/lambda-routers/workspace';
 import { workspaceAuditLogRouter } from '@/business/server/lambda-routers/workspaceAuditLog';
 import { workspaceCreditsRouter } from '@/business/server/lambda-routers/workspaceCredits';
@@ -25,6 +27,7 @@ import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
+import { agentLabelRouter } from './agentLabel';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
 import { agentSignalRouter } from './agentSignal';
@@ -45,12 +48,15 @@ import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
 import { documentRouter } from './document';
+import { documentCommentRouter } from './documentComment';
+import { expertiseRouter } from './expertise';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
 import { followUpActionRouter } from './followUpAction';
 import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
+import { goalRouter } from './goal';
 import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
@@ -66,10 +72,12 @@ import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
+import { projectRouter } from './project';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
 import { resourcePermissionRouter } from './resourcePermission';
+import { resourceTransferRequestRouter } from './resourceTransferRequest';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
@@ -77,6 +85,7 @@ import { shareRouter } from './share';
 import { taskRouter } from './task';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
+import { topicCommentRouter } from './topicComment';
 import { uploadRouter } from './upload';
 import { usageRouter } from './usage';
 import { userRouter } from './user';
@@ -97,9 +106,10 @@ export const lambdaRouter = router({
   agentDocument: agentDocumentRouter,
   agentEval: agentEvalRouter,
   agentEvalExternal: agentEvalExternalRouter,
+  agentLabel: agentLabelRouter,
   agentSkills: agentSkillsRouter,
+  expertise: expertiseRouter,
   agentSignal: agentSignalRouter,
-  task: taskRouter,
   changelog: changelogRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
@@ -115,12 +125,14 @@ export const lambdaRouter = router({
   connector: connectorRouter,
   device: deviceRouter,
   document: documentRouter,
+  documentComment: documentCommentRouter,
   exporter: exporterRouter,
   file: fileRouter,
   followUpAction: followUpActionRouter,
   generation: generationRouter,
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,
+  goal: goalRouter,
   group: agentGroupRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
@@ -140,16 +152,20 @@ export const lambdaRouter = router({
   oauthApp: oauthAppRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
+  project: projectRouter,
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,
   recent: recentRouter,
   resourcePermission: resourcePermissionRouter,
+  resourceTransferRequest: resourceTransferRequestRouter,
   search: searchRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
   share: shareRouter,
+  task: taskRouter,
   thread: threadRouter,
   topic: topicRouter,
+  topicComment: topicCommentRouter,
   upload: uploadRouter,
   usage: usageRouter,
   user: userRouter,
@@ -168,6 +184,7 @@ export const lambdaRouter = router({
   workspaceUsage: workspaceUsageRouter,
   workspaceUserSettings: workspaceUserSettingsRouter,
   accountDeletion: accountDeletionRouter,
+  artifactShare: artifactShareRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,
   spend: spendRouter,
@@ -175,6 +192,7 @@ export const lambdaRouter = router({
   subscription: subscriptionRouter,
   taskTemplate: taskTemplateRouter,
   topUp: topUpRouter,
+  waitlist: waitlistRouter,
 });
 
 export type LambdaRouter = typeof lambdaRouter;

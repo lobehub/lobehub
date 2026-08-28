@@ -9,7 +9,7 @@ user-invocable: false
 - Default language: English (en-US)
 - Framework: react-i18next
 - **Only edit files in `packages/locales/src/default/`** - Never edit JSON files in `locales/` (except hand-written en-US/zh-CN previews)
-- Run `bun run i18n` to generate translations (or manually translate zh-CN/en-US for dev preview)
+- Leave generated locales to the daily `auto-i18n.yml` workflow by default; run `bun run i18n` manually only when they are needed immediately
 
 ## Key Naming Convention
 
@@ -54,7 +54,8 @@ export default {
 1. Add keys to `packages/locales/src/default/{namespace}.ts`
 2. Export new namespace in `packages/locales/src/default/index.ts`
 3. For dev preview: manually translate `locales/zh-CN/{namespace}.json` and `locales/en-US/{namespace}.json`
-4. Remind the user to run `bun run i18n` before creating PR — do NOT run it yourself (very slow)
+4. Leave all other locales to `.github/workflows/auto-i18n.yml`, which runs daily and opens an automated translation PR
+5. Run `bun run i18n` manually only when the branch needs those translations immediately; it is slow and requires `OPENAI_API_KEY`
 
 ## Usage
 

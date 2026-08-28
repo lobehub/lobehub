@@ -1,9 +1,9 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { agentDocumentService } from '@/services/agentDocument';
 
 import type { AgentDocumentItem } from '../types';
@@ -61,13 +61,13 @@ export const useDocumentTreeOps = ({
   topicId,
 }: UseDocumentTreeOpsArgs): DocumentTreeOps => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+
   const dataRef = useRef(data);
   dataRef.current = data;
 
   // Tracks in-flight creates so a rename committed before the server response
   // lands can be deferred to the real row id once the create resolves.
-  const pendingCreatesRef = useRef(new Map<string, Promise<string | null>>());
+  const pendingCreates = useSingleton(() => new Map<string, Promise<string | null>>());
 
   const byRowId = useMemo(() => {
     const map = new Map<string, AgentDocumentItem>();
@@ -134,7 +134,7 @@ export const useDocumentTreeOps = ({
     async (parentId: string | null, opts?: CreateOptions) => {
       const parentPath = buildParentPathFromRowId(parentId);
       if (parentPath === null) {
-        message.error(t('workingPanel.resources.tree.parentMissing'));
+        toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
 
@@ -161,28 +161,28 @@ export const useDocumentTreeOps = ({
           mutate((prev) => (prev ?? []).filter((doc) => doc.id !== pending.id), {
             revalidate: false,
           });
-          message.error(
+          toast.error(
             error instanceof Error
               ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
               : t('workingPanel.resources.tree.createError'),
           );
           return null;
         } finally {
-          pendingCreatesRef.current.delete(pending.id);
+          pendingCreates.delete(pending.id);
         }
       })();
 
-      pendingCreatesRef.current.set(pending.id, createPromise);
+      pendingCreates.set(pending.id, createPromise);
       await createPromise;
     },
-    [agentId, buildParentPathFromRowId, byRowId, message, mutate, pickUniqueFilename, t],
+    [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
   );
 
   const createDocument = useCallback(
     async (parentId: string | null, opts?: CreateOptions) => {
       const parentPath = buildParentPathFromRowId(parentId);
       if (parentPath === null) {
-        message.error(t('workingPanel.resources.tree.parentMissing'));
+        toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
 
@@ -220,21 +220,21 @@ export const useDocumentTreeOps = ({
           mutate((prev) => (prev ?? []).filter((doc) => doc.id !== pending.id), {
             revalidate: false,
           });
-          message.error(
+          toast.error(
             error instanceof Error
               ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
               : t('workingPanel.resources.tree.createError'),
           );
           return null;
         } finally {
-          pendingCreatesRef.current.delete(pending.id);
+          pendingCreates.delete(pending.id);
         }
       })();
 
-      pendingCreatesRef.current.set(pending.id, createPromise);
+      pendingCreates.set(pending.id, createPromise);
       await createPromise;
     },
-    [agentId, buildParentPathFromRowId, byRowId, message, mutate, pickUniqueFilename, t],
+    [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
   );
 
   const renameDocument = useCallback(
@@ -245,7 +245,7 @@ export const useDocumentTreeOps = ({
 
       const trimmed = newName.trim();
       if (!trimmed) {
-        message.warning(t('workingPanel.resources.renameEmpty'));
+        toast.warning(t('workingPanel.resources.renameEmpty'));
         return;
       }
       if (trimmed === target.title) return;
@@ -256,7 +256,7 @@ export const useDocumentTreeOps = ({
       // path-based rename state survives the hydration, so the user's input
       // stays intact.
       if (isPendingId(id)) {
-        const pendingPromise = pendingCreatesRef.current.get(id);
+        const pendingPromise = pendingCreates.get(id);
         if (!pendingPromise) return;
         const realId = await pendingPromise;
         if (!realId) return;
@@ -277,7 +277,7 @@ export const useDocumentTreeOps = ({
 
       try {
         await agentDocumentService.renameDocument({ agentId, id, newTitle: trimmed });
-        message.success(t('workingPanel.resources.renameSuccess'));
+        toast.success(t('workingPanel.resources.renameSuccess'));
       } catch (error) {
         // rollback
         mutate(
@@ -287,12 +287,12 @@ export const useDocumentTreeOps = ({
             ),
           { revalidate: false },
         );
-        message.error(
+        toast.error(
           error instanceof Error ? error.message : t('workingPanel.resources.renameError'),
         );
       }
     },
-    [agentId, message, mutate, t],
+    [agentId, mutate, pendingCreates, t],
   );
 
   const moveDocument: DocumentTreeOps['moveDocument'] = useCallback(
@@ -301,7 +301,7 @@ export const useDocumentTreeOps = ({
 
       const targetParentPath = buildParentPathFromRowId(targetId);
       if (targetParentPath === null) {
-        message.error(t('workingPanel.resources.tree.parentMissing'));
+        toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
 
@@ -351,10 +351,10 @@ export const useDocumentTreeOps = ({
 
       if (errors.length > 0) {
         const detail = errors.map((e) => e.message).join('; ');
-        message.error(`${t('workingPanel.resources.tree.moveError')}: ${detail}`);
+        toast.error(`${t('workingPanel.resources.tree.moveError')}: ${detail}`);
       }
     },
-    [agentId, buildItemPath, buildParentPathFromRowId, byRowId, message, mutate, t],
+    [agentId, buildItemPath, buildParentPathFromRowId, byRowId, mutate, t],
   );
 
   const deleteDocuments = useCallback(
@@ -404,7 +404,7 @@ export const useDocumentTreeOps = ({
             if (isFolder) {
               const folderPath = buildItemPath(target);
               if (!folderPath) {
-                message.error(t('workingPanel.resources.tree.parentMissing'));
+                toast.error(t('workingPanel.resources.tree.parentMissing'));
                 return;
               }
               plans.push({ kind: 'folder', path: folderPath, target });
@@ -459,14 +459,14 @@ export const useDocumentTreeOps = ({
             if (errors.length === plans.length) {
               mutate(snapshot, { revalidate: false });
               const detail = errors.map((e) => e.message).join('; ');
-              message.error(`${t('workingPanel.resources.deleteError')}: ${detail}`);
+              toast.error(`${t('workingPanel.resources.deleteError')}: ${detail}`);
               return;
             }
 
             await mutate();
             if (errors.length > 0) {
               const detail = errors.map((e) => e.message).join('; ');
-              message.error(`${t('workingPanel.resources.deleteError')}: ${detail}`);
+              toast.error(`${t('workingPanel.resources.deleteError')}: ${detail}`);
             }
           })();
         },
@@ -476,7 +476,7 @@ export const useDocumentTreeOps = ({
             : t('workingPanel.resources.deleteTitle'),
       });
     },
-    [agentId, buildItemPath, message, mutate, t, topicId],
+    [agentId, buildItemPath, mutate, t, topicId],
   );
 
   return useMemo(

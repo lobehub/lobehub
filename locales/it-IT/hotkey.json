@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Mostra o nascondi il pannello sinistro",
   "toggleLeftPanel.title": "Attiva/Disattiva Pannello Sinistro",
   "toggleRightPanel.desc": "Mostra o nascondi il pannello destro",
-  "toggleRightPanel.title": "Attiva/Disattiva Pannello Destro"
+  "toggleRightPanel.title": "Attiva/Disattiva Pannello Destro",
+  "toggleTerminalPanel.desc": "Mostra o nascondi il pannello terminale inferiore",
+  "toggleTerminalPanel.title": "Attiva/Disattiva Pannello Terminale"
 }

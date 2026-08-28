@@ -1,4 +1,7 @@
-import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
+import {
+  MessageToolIdentifier,
+  MESSENGER_PUSH_CONTENT_MAX_LENGTH,
+} from '@lobechat/builtin-tool-message';
 import type { BotProviderQuery } from '@lobechat/builtin-tool-message/executionRuntime';
 import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executionRuntime';
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
@@ -49,6 +52,9 @@ import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 import { wechatInstallationKey } from '@/server/services/messenger/installations/wechat';
+import type { TelegramInstallationView } from '@/server/services/messenger/installationViews';
+import { maybeSynthesizeTelegramInstall } from '@/server/services/messenger/installationViews';
+import { sendMessengerPush } from '@/server/services/messenger/push';
 
 import type { ServerRuntimeRegistration } from '../types';
 import { MessageDispatcherService } from './MessageDispatcherService';
@@ -72,47 +78,17 @@ type MessengerInstallationView = {
 };
 
 /**
- * Telegram bots are env-backed singletons — they never get a row in
- * `messenger_installations` (see `installations/telegram.ts`). Without this
- * synthesis the agent's two-step outbound discovery (`listBots` → fallback
- * `listMessengers`) sees Telegram nowhere and falsely concludes the platform
- * is unconfigured, even while it is actively replying inside a Telegram chat.
- *
- * Returns a virtual install entry when both gates pass:
- *   1. Env has Telegram config (otherwise the singleton genuinely isn't set up)
- *   2. The current user has an account link for `platform='telegram'`
- *      (otherwise the install exists globally but isn't routed to this user —
- *      surfacing it would let any user send through a bot they haven't linked)
+ * Adapt the shared Telegram singleton view (which keeps `installedAt` as a
+ * `Date` for the TRPC contract) to this runtime's ISO-string shape.
  */
-const maybeSynthesizeTelegramInstall = async (
-  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
-  userId: string,
-): Promise<MessengerInstallationView | undefined> => {
-  const telegramConfig = await getMessengerTelegramConfig();
-  if (!telegramConfig) return undefined;
+const toTelegramInstallationView = (
+  view: TelegramInstallationView | undefined,
+): MessengerInstallationView | undefined =>
+  view && { ...view, installedAt: view.installedAt.toISOString() };
 
-  const link = await new MessengerAccountLinkModel(serverDB, userId).findByPlatform('telegram');
-  if (!link) return undefined;
-
-  return {
-    applicationId: TELEGRAM_INSTALLATION_KEY,
-    enterpriseId: null,
-    id: TELEGRAM_INSTALLATION_KEY,
-    installedAt:
-      link.createdAt instanceof Date ? link.createdAt.toISOString() : String(link.createdAt),
-    isEnterpriseInstall: false,
-    platform: 'telegram',
-    scope: '',
-    tenantId: '',
-    tenantName: 'Telegram',
-  };
-};
-
-const synthesizeWechatInstalls = async (
-  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
-  userId: string,
-): Promise<MessengerInstallationView[]> => {
-  const links = await new MessengerAccountLinkModel(serverDB, userId).list();
+const synthesizeWechatInstalls = (
+  links: SafeMessengerAccountLink[],
+): MessengerInstallationView[] => {
   return links
     .filter(
       (link): link is SafeMessengerAccountLink & { applicationId: string } =>
@@ -130,6 +106,20 @@ const synthesizeWechatInstalls = async (
       tenantId: link.tenantId,
       tenantName: 'WeChat',
     }));
+};
+
+/**
+ * Resolve the caller's account links once, then derive every synthetic install
+ * from them: the Telegram singleton (no DB row) + user-owned WeChat accounts.
+ */
+const synthesizeInstallsFromLinks = async (
+  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
+  userId: string,
+): Promise<MessengerInstallationView[]> => {
+  const links = await new MessengerAccountLinkModel(serverDB, userId).list();
+  const telegramView = toTelegramInstallationView(await maybeSynthesizeTelegramInstall(links));
+
+  return [...(telegramView ? [telegramView] : []), ...synthesizeWechatInstalls(links)];
 };
 
 const disconnectWechatAccountLink = async (
@@ -498,9 +488,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
               ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
           }));
 
-        const telegramView = await maybeSynthesizeTelegramInstall(context.serverDB, context.userId);
-        if (telegramView) installations.push(telegramView);
-        installations.push(...(await synthesizeWechatInstalls(context.serverDB, context.userId)));
+        installations.push(
+          ...(await synthesizeInstallsFromLinks(context.serverDB, context.userId)),
+        );
 
         return installations;
       },
@@ -513,9 +503,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
         // env config + the caller's account link. Without this branch the
         // synthetic install id returned by `listMessengers` would 404 here.
         if (installationId === TELEGRAM_INSTALLATION_KEY) {
-          const telegramView = await maybeSynthesizeTelegramInstall(
+          const links = await new MessengerAccountLinkModel(
             context.serverDB,
             context.userId,
+          ).list();
+          const telegramView = toTelegramInstallationView(
+            await maybeSynthesizeTelegramInstall(links),
           );
           if (!telegramView) return null;
           return { ...telegramView, revokedAt: null };
@@ -717,6 +710,35 @@ export const messageRuntime: ServerRuntimeRegistration = {
           return;
         }
         await linkModel.deleteByPlatform(params.platform, params.tenantId);
+      },
+
+      // Proactive push into the caller's own DM. The runtime already resolved
+      // Slack workspace ambiguity, so this is a straight pass-through to the
+      // platform-agnostic push entry (same one the settings UI test-push uses).
+      sendMessengerPush: async (params) => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required to push messenger messages');
+        }
+        // The TRPC route caps this with Zod, but this runtime calls the push
+        // service directly and `BaseExecutor` dispatches params unvalidated —
+        // so without this guard the advertised limit would hold on the client
+        // path and silently vanish on the server path (the Cloud default).
+        // Rejecting beats truncating: a half-delivered notification reads as
+        // complete to the recipient, while an error lets the agent summarize
+        // or split and retry.
+        if (params.content.length > MESSENGER_PUSH_CONTENT_MAX_LENGTH) {
+          throw new Error(
+            `Message content is ${params.content.length} characters, exceeding the ${MESSENGER_PUSH_CONTENT_MAX_LENGTH}-character limit. Summarize or split it before pushing.`,
+          );
+        }
+        const result = await sendMessengerPush({
+          content: params.content,
+          platform: params.platform,
+          serverDB: context.serverDB,
+          tenantId: params.tenantId,
+          userId: context.userId,
+        });
+        return { remaining: result.remaining, status: result.status };
       },
     };
 

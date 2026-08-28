@@ -8,6 +8,8 @@ import { memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -24,6 +26,7 @@ import {
 import MessageWorks from '../MessageWorks';
 import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
+import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
 
 const actionBarHolder = (
@@ -105,6 +108,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
     const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
 
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+    const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
     const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
       (e) => {
@@ -123,12 +127,12 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={null}
-        avatar={avatar}
-        belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
+        aboveMessage={<ThreadExecutionSummary messageId={id} />}
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
+        avatar={avatar}
+        belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
         editing={editing}
         error={errorContent && error ? errorContent : undefined}
@@ -138,12 +142,19 @@ const AssistantMessage = memo<AssistantMessageProps>(
         placement={'left'}
         time={createdAt}
         actionAddon={
-          reactions.length > 0 ? (
-            <ReactionDisplay
-              isActive={isReactionActive}
-              reactions={reactions}
-              onReactionClick={handleReactionClick}
-            />
+          reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
+            <>
+              {reactions.length > 0 && (
+                <ReactionDisplay
+                  isActive={isReactionActive}
+                  reactions={reactions}
+                  onReactionClick={handleReactionClick}
+                />
+              )}
+              {commentCount > 0 && commentTopicId && (
+                <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+              )}
+            </>
           ) : undefined
         }
         actions={

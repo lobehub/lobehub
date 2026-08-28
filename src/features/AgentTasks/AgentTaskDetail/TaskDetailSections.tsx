@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import TaskAcceptance from './TaskAcceptance';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
@@ -11,7 +12,6 @@ import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
 import TaskProperties from './TaskProperties';
 import TaskSubtasks from './TaskSubtasks';
-import TaskVerifyConfig from './TaskVerifyConfig';
 
 /**
  * The scrollable body sections of a task detail, shared by the full-page
@@ -24,10 +24,18 @@ const TaskDetailSections = memo(() => {
     <>
       <Flexbox gap={4} style={{ paddingBlock: '24px 36px' }}>
         <TaskDetailTitleInput />
-        <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
-          <Flexbox align={'flex-start'} flex={1} gap={16}>
+        {/* Everything here wraps rather than compresses: this block also renders
+            inside the chat-side Portal and beside the task-agent panel, where the
+            column can get far narrower than the viewport. Without wrapping, the
+            assignee chip is the item that gives — it shrinks until its label
+            breaks one character per line. */}
+        <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'} wrap={'wrap'}>
+          {/* `minWidth` is what makes the row actually wrap: a `flex: 1` column
+              with `min-width: 0` shrinks to a sliver instead, and the properties
+              panel keeps its place while the assignee chip overflows. */}
+          <Flexbox align={'flex-start'} flex={1} gap={16} style={{ minWidth: 240 }}>
             <TaskParentBar />
-            <Flexbox horizontal align={'center'} gap={8}>
+            <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>
               <TaskDetailAssignee />
               <TaskModelConfig />
             </Flexbox>
@@ -38,7 +46,7 @@ const TaskDetailSections = memo(() => {
       </Flexbox>
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
         <TaskInstruction />
-        <TaskVerifyConfig />
+        <TaskAcceptance />
         <TaskSubtasks />
         <TaskArtifacts />
         <TaskActivities />

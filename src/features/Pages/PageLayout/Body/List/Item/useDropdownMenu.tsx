@@ -1,7 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { CopyPlus, EyeOffIcon, PanelTop, Pencil, Trash2, UsersIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +30,7 @@ export const useDropdownMenu = ({
   toggleEditing,
 }: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'file']);
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -71,10 +70,10 @@ export const useDropdownMenu = ({
       onOk: async () => {
         try {
           await removePage(pageId);
-          message.success(t('pageEditor.deleteSuccess', { ns: 'file' }));
+          toast.success(t('pageEditor.deleteSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to delete page:', error);
-          message.error(
+          toast.error(
             isForbiddenError(error)
               ? t('manageOnlyCreator')
               : t('pageEditor.deleteError', { ns: 'file' }),
@@ -83,7 +82,7 @@ export const useDropdownMenu = ({
       },
       title: t('pageEditor.deleteConfirm.title', { ns: 'file' }),
     });
-  }, [canEditPage, canManage, pageId, removePage, message, t]);
+  }, [canEditPage, canManage, pageId, removePage, t]);
 
   const handleDuplicate = useCallback(async () => {
     if (!canCreatePage) return;
@@ -102,29 +101,22 @@ export const useDropdownMenu = ({
     // flat list, so users can't see (and don't reliably know about) a
     // subtree — surfacing a "N sub-pages" count only creates confusion.
     // Visibility is changed only for this page; descendants stay independent.
-    const accessLevelRef: { current: 'edit' | 'view' } = { current: 'view' };
     confirmModal({
       cancelText: t('cancel'),
-      content: (
-        <VisibilityConfirmContent
-          accessLevelRef={accessLevelRef}
-          resourceType="document"
-          variant="publish"
-        />
-      ),
+      content: <VisibilityConfirmContent variant="publish" />,
       okText: t('continue'),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(pageId, accessLevelRef.current);
-          message.success(t('pageList.publishSuccess', { ns: 'file' }));
+          await publishPageToWorkspace(pageId);
+          toast.success(t('pageList.publishSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to publish page:', error);
-          message.error(t('pageList.publishError', { ns: 'file' }));
+          toast.error(t('pageList.publishError', { ns: 'file' }));
         }
       },
       title: t('pageList.publishConfirm.title', { ns: 'file' }),
     });
-  }, [canPublish, pageId, publishPageToWorkspace, message, t]);
+  }, [canPublish, pageId, publishPageToWorkspace, t]);
 
   const handleMakePrivate = useCallback(() => {
     if (!canMakePrivate) return;
@@ -136,15 +128,15 @@ export const useDropdownMenu = ({
       onOk: async () => {
         try {
           await setPageVisibility(pageId, 'private');
-          message.success(t('makePrivate.success'));
+          toast.success(t('makePrivate.success'));
         } catch (error) {
           console.error('Failed to make page private:', error);
-          message.error(t('makePrivate.error'));
+          toast.error(t('makePrivate.error'));
         }
       },
       title: t('makePrivate.confirm.title'),
     });
-  }, [canMakePrivate, pageId, setPageVisibility, message, t]);
+  }, [canMakePrivate, pageId, setPageVisibility, t]);
 
   return useCallback(
     () =>

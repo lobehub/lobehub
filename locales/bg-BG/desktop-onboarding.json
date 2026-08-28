@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Моля, опитайте отново или изберете друг метод за вход",
   "authResult.failed.title": "Неуспешно удостоверяване",
-  "authResult.success.desc": "Моля, натиснете бутона Старт по-долу, за да продължите с използването на LobeHub Desktop",
-  "authResult.success.title": "Успешно удостоверяване",
   "back": "Назад",
   "navigation.next": "Продължи",
   "next": "Напред",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "Отказ",
   "screen5.actions.connectToServer": "Свържи се със сървър",
   "screen5.actions.connecting": "Свързване...",
+  "screen5.actions.done": "Готово",
   "screen5.actions.signInCloud": "Влез в LobeHub Cloud",
   "screen5.actions.signOut": "Изход",
   "screen5.actions.signingIn": "Влизане...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Самостоятелно хоствана инстанция",
   "screen5.navigation.next": "Да започваме",
   "screen5.selfhost.endpointPlaceholder": "Въведи URL на сървъра си (напр. https://your-server.com)",
+  "screen5.status.cloud.title": "Свързано с LobeHub Cloud",
+  "screen5.status.description": "Агентите, групите, настройките и контекстът се синхронизират на всички ваши устройства.",
+  "screen5.status.selfhost.description": "Синхронизиране на агентите, групите, настройките и контекста с {{url}}.",
+  "screen5.status.selfhost.title": "Свързано с вашия собствен сървър",
   "screen5.title": "Влез, за да синхронизираш между устройства",
   "screen5.title2": "Дръж данните си синхронизирани навсякъде",
   "screen5.title3": "Данните ти остават под твой контрол"

@@ -24,7 +24,7 @@ export const useHeteroDetections = (): HeteroDetectionMap => {
           try {
             const status = await binaryService.detectHeterogeneousAgentCommand({
               agentType: config.type,
-              command: config.command,
+              command: config.defaultCommand,
             });
             return [config.type, status] as const;
           } catch (error) {

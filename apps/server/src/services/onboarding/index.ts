@@ -13,6 +13,7 @@ import type {
   SaveUserQuestionInput,
   UserAgentOnboarding,
   UserAgentOnboardingContext,
+  UserOnboarding,
 } from '@lobechat/types';
 import {
   MAX_ONBOARDING_STEPS,
@@ -50,9 +51,10 @@ const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
 
 const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
 const GROUP_AGENT_BUILDER_IDENTIFIER = 'lobe-group-agent-builder';
+const AGENT_ONBOARDING_VERSION = 1;
 
 const defaultAgentOnboardingState = (): UserAgentOnboarding => ({
-  version: CURRENT_ONBOARDING_VERSION,
+  version: AGENT_ONBOARDING_VERSION,
 });
 
 const formatNaturalList = (items: string[]) => {
@@ -216,7 +218,7 @@ export class OnboardingService {
   };
 
   private ensureState = (state?: UserAgentOnboarding): UserAgentOnboarding => {
-    if (!state || (state.version ?? 0) < CURRENT_ONBOARDING_VERSION) {
+    if (!state || (state.version ?? 0) < AGENT_ONBOARDING_VERSION) {
       return defaultAgentOnboardingState();
     }
 
@@ -246,7 +248,7 @@ export class OnboardingService {
 
     return {
       ...nextState,
-      version: nextState.version ?? CURRENT_ONBOARDING_VERSION,
+      version: nextState.version ?? AGENT_ONBOARDING_VERSION,
     };
   };
 
@@ -343,7 +345,7 @@ export class OnboardingService {
       phase,
       startedAt: existing?.startedAt ?? now,
       userIdentityCompletedAt: existing?.userIdentityCompletedAt,
-      version: CURRENT_ONBOARDING_VERSION,
+      version: AGENT_ONBOARDING_VERSION,
     };
 
     if (existing?.agentMarketplacePick) {
@@ -886,7 +888,7 @@ export class OnboardingService {
       agentOnboarding: {
         ...state,
         finishedAt,
-        version: CURRENT_ONBOARDING_VERSION,
+        version: AGENT_ONBOARDING_VERSION,
       },
       onboarding: {
         currentStep: MAX_ONBOARDING_STEPS,
@@ -924,12 +926,42 @@ export class OnboardingService {
     }
   };
 
-  reset = async () => {
-    const previousState = this.ensureState((await this.getUserState()).agentOnboarding);
-    const understandingCleanup = previousState.activeTopicId
-      ? await this.understandingRepository.removeForReset(previousState.activeTopicId)
-      : undefined;
+  private resetUnderstandingData = async (state?: UserAgentOnboarding): Promise<void> => {
+    const activeTopicId = this.ensureState(state).activeTopicId;
+    if (!activeTopicId) return;
+
+    const understandingCleanup = await this.understandingRepository.removeForReset(activeTopicId);
     if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup.id);
+  };
+
+  /**
+   * Updates the classic onboarding cursor and invalidates generated data on a fresh run.
+   *
+   * Use when:
+   * - Persisting normal onboarding step navigation
+   * - Restarting at the welcome step or moving to a new onboarding version
+   *
+   * Expects:
+   * - The complete classic onboarding state accepted by the user router
+   *
+   * Returns:
+   * - The underlying user update result
+   */
+  updateOnboarding = async (input: UserOnboarding) => {
+    const previousState = await this.getUserState();
+    const isRestart = input.currentStep === 1;
+    const isVersionChange = previousState.onboarding?.version !== input.version;
+
+    if (isRestart || isVersionChange) {
+      await this.resetUnderstandingData(previousState.agentOnboarding);
+    }
+
+    return this.userModel.updateUser({ onboarding: input });
+  };
+
+  reset = async () => {
+    const previousState = await this.getUserState();
+    await this.resetUnderstandingData(previousState.agentOnboarding);
     const state = defaultAgentOnboardingState();
 
     // Preserve users.full_name and users.username on reset.

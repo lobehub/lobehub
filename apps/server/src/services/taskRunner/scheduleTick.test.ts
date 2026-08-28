@@ -126,7 +126,7 @@ describe('runScheduleTick', () => {
     const outcome = await runScheduleTick(taskId, userId);
 
     expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
-    // Quota counts only scheduled ticks, not ad-hoc manual runs (LOBE-11391).
+    // Quota counts only scheduled ticks, not ad-hoc manual runs.
     expect(mockTaskTopicModel.countByTask).toHaveBeenCalledWith(taskId, {
       since: new Date('2026-05-01T00:00:00Z'),
       triggers: ['schedule'],

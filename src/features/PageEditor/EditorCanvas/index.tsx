@@ -6,6 +6,7 @@ import { type CSSProperties, useMemo } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { ComposerTarget } from '@/features/Conversation/types';
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 
 import { usePageEditorStore } from '../store';
@@ -14,11 +15,12 @@ import { useAskCopilotItem } from './useAskCopilotItem';
 import { useSlashItems } from './useSlashItems';
 
 interface EditorCanvasProps {
+  askCopilotTarget?: ComposerTarget;
   placeholder?: string;
   style?: CSSProperties;
 }
 
-const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
+const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, style }) => {
   const { t } = useTranslation(['file', 'ui']);
   const editable = usePageEditable();
 
@@ -26,7 +28,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
   const documentId = usePageEditorStore((s) => s.documentId);
 
   const slashItems = useSlashItems();
-  const askCopilotItem = useAskCopilotItem(editor);
+  const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
 
   const extraPlugins = useMemo(
     () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],

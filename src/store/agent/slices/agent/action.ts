@@ -1,20 +1,21 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
@@ -24,6 +25,9 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { aiAgentService } from '@/services/aiAgent';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -36,13 +40,23 @@ import type {
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -140,7 +154,29 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    const result = await agentService.createAgent(params);
+    // Seed a default name so a new agent has an identity before the Agent
+    // Builder conversation produces one; the builder may replace it later. This
+    // lives here rather than in the create endpoint because the language only
+    // resolves on the client (`auto` follows the browser). A caller that already
+    // carries a name — e.g. a market agent — keeps it.
+    //
+    // A heterogeneous agent never draws a personal name: it is the user's
+    // external tool, not one of our own agents, so its default reads as whose
+    // tool it is — "{owner}'s {product}" (e.g. "Max 的 Claude Code").
+    const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
+    const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
+    const config = {
+      ...params.config,
+      name:
+        params.config?.name ||
+        (heteroProvider
+          ? heteroAgentDefaultName(
+              params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+            )
+          : randomAgentName(locale)),
+    };
+
+    const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
@@ -223,7 +259,7 @@ export class AgentSliceActionImpl {
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ agentId: string; slug: string | null }> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     return agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
   };
 
@@ -250,29 +286,36 @@ export class AgentSliceActionImpl {
     await updateAgentConfig({ plugins: newPlugins });
   };
 
-  updateAgentChatConfig = async (config: Partial<LobeAgentChatConfig>): Promise<void> => {
+  updateAgentChatConfig = async (
+    config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfig({ chatConfig: config });
+    await this.#get().updateAgentConfig({ chatConfig: config }, options);
   };
 
   updateAgentChatConfigById = async (
     agentId: string,
     config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentConfigById(agentId, { chatConfig: config });
+    await this.#get().updateAgentConfigById(agentId, { chatConfig: config }, options);
   };
 
-  updateAgentConfig = async (config: PartialDeep<LobeAgentConfig>): Promise<void> => {
+  updateAgentConfig = async (
+    config: PartialDeep<LobeAgentConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfigById(activeAgentId, config);
+    await this.#get().updateAgentConfigById(activeAgentId, config, options);
   };
 
   updateAgentConfigById = async (
@@ -389,7 +432,17 @@ export class AgentSliceActionImpl {
             return;
           }
           this.#clearAgentNotFound(agentId);
-          this.#get().internal_dispatchAgentMap(agentId, data);
+          // This endpoint returns a complete, authoritative profile snapshot.
+          // Replace the cached entry instead of applying patch semantics: fields
+          // cleared on the server (for example editorData: null) may be omitted
+          // from the response and must not survive from an older local profile.
+          if (!isEqual(this.#get().agentMap[agentId], data)) {
+            this.#set(
+              (state) => ({ agentMap: { ...state.agentMap, [agentId]: data } }),
+              false,
+              'fetchAgentConfig',
+            );
+          }
           // Only adopt the fetched agent as the active one when nothing is
           // active yet. The active agent is owned by the route-level sync
           // (AgentIdSync on desktop/mobile, the popup pages' own setState).
@@ -418,6 +471,11 @@ export class AgentSliceActionImpl {
       },
     );
   };
+
+  useFetchServerDefaultHeterogeneousCapability = (enabled: boolean) =>
+    useClientDataSWR(enabled ? agentConfigKeys.serverDefaultHeterogeneousCapability() : null, () =>
+      aiAgentService.getServerDefaultHeterogeneousCapability(),
+    );
 
   /**
    * Re-trigger the agent config fetch after a failure. Clears the recorded
@@ -575,6 +633,10 @@ export class AgentSliceActionImpl {
         draft[id] = config;
       } else {
         draft[id] = merge(draft[id], config);
+        // The character sheet is authored as one document — `AgentModel`
+        // replaces it rather than merging — so mirror that here, or a trait the
+        // user just cleared reappears until the next full fetch.
+        if (Object.hasOwn(config, 'profile')) draft[id].profile = config.profile;
         // merge() can't drop keys; honor `undefined` as a per-device delete so
         // clearing a working directory takes effect optimistically.
         pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);
@@ -641,7 +703,7 @@ export class AgentSliceActionImpl {
         // data loss (the next refetch reverts the optimistic value) — tell the
         // user right away.
         if (options?.showErrorMessage !== false) {
-          message.error(t('saveAgentConfigFail', { ns: 'common' }));
+          toast.error(t('saveAgentConfigFail', { ns: 'common' }));
         }
         // Roll back only agencyConfig patches: those are discrete picks the
         // server actively validates (e.g. a workspace agent binding a

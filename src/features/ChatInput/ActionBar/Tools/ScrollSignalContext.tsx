@@ -10,6 +10,8 @@ import {
   useRef,
 } from 'react';
 
+import { useSingleton } from '@/hooks/useSingleton';
+
 type ScrollSubscriber = () => void;
 type Subscribe = (cb: ScrollSubscriber) => () => void;
 
@@ -33,18 +35,21 @@ export const ScrollSignalProvider = ({
   className,
   style,
 }: ScrollSignalProviderProps & { ref?: React.RefObject<HTMLDivElement | null> }) => {
-  const listenersRef = useRef<Set<ScrollSubscriber>>(new Set());
+  const listeners = useSingleton(() => new Set<ScrollSubscriber>());
 
-  const subscribe = useCallback<Subscribe>((cb) => {
-    listenersRef.current.add(cb);
-    return () => {
-      listenersRef.current.delete(cb);
-    };
-  }, []);
+  const subscribe = useCallback<Subscribe>(
+    (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    [listeners],
+  );
 
   const handleScroll = useCallback(() => {
-    listenersRef.current.forEach((cb) => cb());
-  }, []);
+    listeners.forEach((cb) => cb());
+  }, [listeners]);
 
   return (
     <ScrollSignalContext value={subscribe}>

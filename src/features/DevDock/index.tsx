@@ -1,7 +1,6 @@
 'use client';
 
-import { memo } from 'react';
-
+import { registerBusinessDevDockItems } from '@/business/client/registerDevDockItems';
 import FlagOverrideHydrator from '@/features/DevFeatureFlagPanel/Hydrator';
 
 import Bar from './Bar';
@@ -10,9 +9,9 @@ import ReactScanController from './ReactScanController';
 import { registerBuiltinDevDockItems } from './registerBuiltinItems';
 
 registerBuiltinDevDockItems();
+registerBusinessDevDockItems();
 
-const DevDock = memo(() => {
-  if (!__DEV__) return null;
+const DevDock = () => {
   return (
     <>
       <FlagOverrideHydrator />
@@ -21,8 +20,6 @@ const DevDock = memo(() => {
       <Bar />
     </>
   );
-});
-
-DevDock.displayName = 'DevDock';
+};
 
 export default DevDock;

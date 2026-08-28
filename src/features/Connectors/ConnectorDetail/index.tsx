@@ -1,7 +1,6 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
@@ -21,7 +20,7 @@ interface ConnectorDetailProps {
   /**
    * Title of the owning agent when this is an agent-dimension connector. Drives
    * the delete/uninstall confirmation copy — deleting an agent connector also
-   * removes its tool from that agent (LOBE-11682).
+   * removes its tool from that agent.
    */
   agentTitle?: string | null;
   connectorId: string;
@@ -29,7 +28,7 @@ interface ConnectorDetailProps {
   /**
    * Extra content rendered between the description and the tool-permission list.
    * Used by the unified settings' agent connectors to show the owning agent +
-   * a jump-to-use action (LOBE-11682).
+   * a jump-to-use action.
    */
   middleSlot?: ReactNode;
   onDelete?: () => void;
@@ -53,7 +52,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
   ({ agentTitle, connectorId, lifecycleActions, middleSlot, onDelete }) => {
     const { t } = useTranslation('tool');
     const { t: ts } = useTranslation('setting');
-    const { message } = App.useApp();
+
     const [customModalOpen, setCustomModalOpen] = useState(false);
 
     const connector = useToolStore(connectorSelectors.connectorById(connectorId));
@@ -104,7 +103,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const notifyActionError = useCallback(
       (error: unknown) => {
         const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
-        message.error(
+        toast.error(
           httpStatus === 403
             ? t(
                 'connector.manageOnlyCreator',
@@ -113,7 +112,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             : t('connector.actionFailed', 'Operation failed, please try again'),
         );
       },
-      [message, t],
+      [t],
     );
 
     // Custom connector sync hits the remote MCP server with stored credentials

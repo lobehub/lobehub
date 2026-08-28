@@ -6,21 +6,22 @@ import { encodeAsync } from '@/utils/tokenizer';
 export const useTokenCount = (input: string = '') => {
   const [value, setNum] = useState(0);
 
+  // The transition must wrap the setState itself — wrapping the debounce call
+  // only demotes the timer scheduling while the eventual update still lands at
+  // default priority.
   const debouncedEncode = useCallback(
     debounce((text: string) => {
       encodeAsync(text)
-        .then(setNum)
+        .then((count) => startTransition(() => setNum(count)))
         .catch(() => {
-          setNum(text.length);
+          startTransition(() => setNum(text.length));
         });
     }, 300),
     [],
   );
 
   useEffect(() => {
-    startTransition(() => {
-      debouncedEncode(input || '');
-    });
+    debouncedEncode(input || '');
 
     // Cleanup function
     return () => {

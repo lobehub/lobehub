@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "لطفاً دوباره تلاش کنید یا روش ورود دیگری را انتخاب کنید",
   "authResult.failed.title": "احراز هویت ناموفق بود",
-  "authResult.success.desc": "برای ادامه استفاده از LobeHub Desktop روی دکمه شروع در پایین کلیک کنید",
-  "authResult.success.title": "احراز هویت موفقیت‌آمیز بود",
   "back": "بازگشت",
   "navigation.next": "ادامه",
   "next": "بعدی",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "لغو",
   "screen5.actions.connectToServer": "اتصال به سرور",
   "screen5.actions.connecting": "در حال اتصال...",
+  "screen5.actions.done": "انجام شد",
   "screen5.actions.signInCloud": "ورود به LobeHub Cloud",
   "screen5.actions.signOut": "خروج",
   "screen5.actions.signingIn": "در حال ورود...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "نمونه میزبانی‌شده شخصی",
   "screen5.navigation.next": "شروع کنید",
   "screen5.selfhost.endpointPlaceholder": "آدرس سرور خود را وارد کنید (مثلاً https://your-server.com)",
+  "screen5.status.cloud.title": "متصل به LobeHub Cloud",
+  "screen5.status.description": "نمایندگان، گروه‌ها، تنظیمات و زمینه در حال همگام‌سازی در تمام دستگاه‌های شما هستند.",
+  "screen5.status.selfhost.description": "در حال همگام‌سازی نمایندگان، گروه‌ها، تنظیمات و زمینه با {{url}}.",
+  "screen5.status.selfhost.title": "متصل به سرور شخصی شما",
   "screen5.title": "برای همگام‌سازی در دستگاه‌ها وارد شوید",
   "screen5.title2": "داده‌های خود را در همه جا همگام نگه دارید",
   "screen5.title3": "داده‌های شما تحت کنترل شما باقی می‌ماند"

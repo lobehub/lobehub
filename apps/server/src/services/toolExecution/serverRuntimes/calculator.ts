@@ -1,4 +1,5 @@
-import { CalculatorExecutionRuntime, CalculatorManifest } from '@lobechat/builtin-tool-calculator';
+import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
+import { CalculatorExecutionRuntime } from '@lobechat/builtin-tool-calculator/executionRuntime';
 
 import { type ServerRuntimeRegistration } from './types';
 

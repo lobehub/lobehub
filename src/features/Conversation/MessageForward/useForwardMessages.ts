@@ -1,5 +1,5 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ export type { ForwardTarget } from '@/store/chat/slices/forward/action';
  */
 export const useForwardMessages = () => {
   const { t } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const forwardMessages = useChatStore((s) => s.forwardMessages);
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
@@ -35,7 +35,7 @@ export const useForwardMessages = () => {
   return useCallback(
     async (targets: ForwardTarget[], note?: string) => {
       if (selectedMessages.length === 0) {
-        message.warning(t('messageForward.empty'));
+        toast.warning(t('messageForward.empty'));
         return;
       }
       if (targets.length === 0) return;
@@ -57,15 +57,15 @@ export const useForwardMessages = () => {
         targets,
       }).then((result) => {
         if (result.succeeded.length > 0) {
-          message.success(
+          toast.success(
             targets.length === 1
               ? t('messageForward.success', { title: primaryTarget.title || '' })
               : t('messageForward.successMulti', { count: result.succeeded.length }),
           );
         }
-        if (result.failed.length > 0) message.error(t('messageForward.failed'));
+        if (result.failed.length > 0) toast.error(t('messageForward.failed'));
       });
     },
-    [t, message, navigate, clearPortalStack, forwardMessages, exitSelectionMode, selectedMessages],
+    [t, navigate, clearPortalStack, forwardMessages, exitSelectionMode, selectedMessages],
   );
 };

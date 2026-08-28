@@ -1,12 +1,13 @@
 'use client';
 
 import { useLayoutEffect } from 'react';
-import { useLocation } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
 import { useSilentSwitchWorkspace } from '@/business/client/hooks/useSwitchWorkspace';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+
+import { useWorkspaceSyncPathname } from './useWorkspaceSyncPathname';
 
 /**
  * Top-level route segments that share the namespace with `:workspaceSlug`.
@@ -23,6 +24,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'community',
   'memory',
   'page',
+  'projects',
   'resource',
   'image',
   'video',
@@ -30,6 +32,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'tasks',
   'task',
   // Personal-only:
+  'apps',
   'settings',
   'onboarding',
   'me',
@@ -69,7 +72,7 @@ export const isWorkspaceSlugCandidatePath = (pathname: string): boolean => {
  *   `WorkspaceSlugBoundary` can render its 404
  */
 export const useWorkspaceUrlSync = (): void => {
-  const { pathname } = useLocation();
+  const pathname = useWorkspaceSyncPathname();
   const workspaces = useWorkspaces();
   const activeId = useActiveWorkspaceId();
   const isLoading = useIsWorkspaceLoading();

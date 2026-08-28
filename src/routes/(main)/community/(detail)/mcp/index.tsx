@@ -44,8 +44,8 @@ const McpDetailPage = memo<McpDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileMcpPage = memo<{ mobile?: boolean }>(() => {
+export const MobileMcpPage = (_props: { mobile?: boolean }) => {
   return <McpDetailPage mobile={true} />;
-});
+};
 
 export default McpDetailPage;

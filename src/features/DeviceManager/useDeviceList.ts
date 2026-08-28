@@ -15,7 +15,7 @@ import { DEVICE_LIST_SWR_KEY } from './const';
  * resolves devices: `useClientDataSWR` augments the cache key with the active
  * workspace id, so switching workspaces re-fetches into a fresh cache entry.
  * The raw TRPC React Query key has no workspace dimension — a list primed in
- * one workspace kept serving a stale pool after switching (LOBE-11904), and a
+ * one workspace kept serving a stale pool after switching, and a
  * fetch primed while the workspace was still resolving stuck for the whole
  * session (the DeviceManager fix this generalizes).
  *

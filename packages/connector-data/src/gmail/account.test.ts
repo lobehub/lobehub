@@ -175,6 +175,8 @@ describe('loadGmailAccount', () => {
       operation: 'getAccount',
       provider: 'gmail',
     });
+    /** @example expect(error.cause).toBe(account); */
+    expect(error.cause).toBe(account);
     expect(error.message).not.toMatch(/account-1|EXPIRED|github/);
   });
 });

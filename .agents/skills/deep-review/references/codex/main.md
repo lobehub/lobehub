@@ -1,77 +1,158 @@
 # Deep Review · Codex Manual
 
-Deep mode in Codex, end to end. "Subagent" below means a `spawn_agent` agent: subagents share no context with the main agent, so every prompt must be self-contained.
+Deep mode in Codex, end to end. Every spawned agent receives a self-contained prompt.
 
-Codex constraints this manual is built around:
+## Runtime contract
 
-- **Tool discovery first**: multi-agent tool names vary by Codex version and may stay hidden until discovered — e.g. surfaced via `tool_search` as `multi_agent_v1.spawn_agent` / `wait_agent` / `close_agent`, or exposed directly as `spawn_agent` / `wait` / `close_agent`. Before step 2, search/list the session's tools and bind the spawn/wait/close verbs used below to the names actually exposed; do not assume this manual's names exist verbatim. If no multi-agent tools can be surfaced, stop and offer light mode.
-- **Concurrency budget**: multi\_agent\_v2 caps concurrent threads per session (default 4 including the root — 3 usable subagent slots); the legacy `agents.max_threads` default is 6. The flow therefore runs dimensions as **3 composite groups** in a single wave instead of one agent per dimension.
-- **Slots are held until closed**: a finished agent still occupies its slot until `close_agent`. Close every agent as soon as you've consumed its result.
-- **Delegation policy**: Codex spawns subagents only when the user explicitly allows agent delegation. Deep mode is explicitly invoked, which is that permission; if your session policy still forbids spawning, stop and offer light mode — never degrade to a single-agent "deep review".
-- Model per agent: balanced tier is enough (rules carry the quality); use a faster/mini tier for the `process` group, which is scan-heavy.
+Inspect the collaboration tools already exposed in the session before spawning. Use deferred-tool
+discovery only when the session explicitly says collaboration tools are deferred.
+
+Bind these capabilities from the real schemas:
+
+- spawn
+- wait for any completion
+- optional explicit close/release
+- context inheritance control
+- active concurrency limit
+
+Set context inheritance explicitly to none. If inheritance cannot be disabled, disclose weakened
+independence in the report. If spawning is unavailable, stop and offer light mode.
+
+Define one `release(agent)` operation from the documented lifecycle:
+
+- completion automatically releases an active slot → no-op;
+- a finished agent holds its slot until explicit close → close it;
+- slot reuse cannot be determined or achieved → stop and offer light mode.
+
+Do not select the algorithm merely from whether a close verb exists. Slot reuse is the capability
+that matters.
 
 ## Group table
 
-Dimension rules stay one-per-file; Codex only changes how they are **packed**:
+Codex packs related dimensions to fit the normal three usable subagent slots:
 
-| Group         | Dimensions (in prompt order)                       |
-| ------------- | -------------------------------------------------- |
-| `quality`     | code-style, reuse-architecture, business-logic, ux |
-| `correctness` | logic, performance, security, compatibility        |
-| `process`     | workflow, skill-freshness, observability           |
+| Group         | Dimensions                                                               |
+| ------------- | ------------------------------------------------------------------------ |
+| `quality`     | ai-coding-bad-habits, code-style, reuse-architecture, business-logic, ux |
+| `correctness` | logic, performance, security, compatibility                              |
+| `release`     | release-risk                                                             |
+| `process`     | workflow, skill-freshness, observability                                 |
 
-Pruning removes dimensions from a group; a fully pruned group is not spawned. The table is a starting point — recalibrate the packing in this file if group runtimes drift far apart.
+Pruning removes dimensions; empty groups disappear. Start `release`, `correctness`, and `quality`
+first so the largest evidence passes begin immediately; queue `process`. Use a fast tier for
+`process` and a balanced tier elsewhere.
 
-Extension packs can also **add** dimensions (a `deep-review-*/dimensions/` file whose name matches no built-in). Added dimensions have no row in the table: collect them into a dynamic fourth group, `extras`. `extras` never joins the initial wave — it queues until the first `close_agent` frees a slot (a slot is only free in the initial wave when a built-in group was fully pruned). Their verify routing follows each dimension file's own `verify` frontmatter flag (default: verified).
+Extension-only dimensions form an `extras` group and join the same queue. Never drop it.
 
-## Step 0 — Scope & background
+## Step 0 — Scope and background
 
-Follow [`../scoping.md`](../scoping.md). Outputs: `{changes}` (diff text or fetch commands), the ≤ 200-word scope summary, PR metadata in PR mode.
+Follow [`../scoping.md`](../scoping.md). Produce `{changes}`, a ≤ 200-word scope summary, and PR
+metadata in PR mode.
 
-## Step 1 — Select dimensions
+## Step 1 — Select dimensions and references
 
-Same as the pruning + extension-pack procedure in `SKILL.md`: apply the pruning table, detect sibling `deep-review-*` extension packs, collect each surviving dimension's rule-file paths (built-in + extension counterpart). Map surviving dimensions onto the group table; extension-added dimensions go to the `extras` group (see above) so downstream rules never get silently dropped.
+Apply `SKILL.md` pruning, detect sibling extension packs, and collect built-in plus extension paths.
+Dimension files may route to surface-specific references; agents read only the routes matching the
+diff.
 
-## Step 2 — Spawn all groups in one wave
+## Step 2 — Build prompts
 
-Launch the three built-in groups' `spawn_agent` concurrently in a single turn (≤ 3 agents — fits the default slot budget). A non-empty `extras` group is NOT part of this wave: queue it — step 3's dispatch priority gives it the first freed slot (step 3 closes each review agent as soon as its result is consumed, so the wait is short).
+For every non-empty group, instantiate [`../review-prompt.md`](../review-prompt.md) with
+`{dimensions}`, `{dimension_files}`, `{scope_summary}`, and `{changes}`. Set the discovered
+inheritance control to none.
 
-Per group:
+## Step 3 — Run the work queue
 
-1. Read [`../review-prompt.md`](../review-prompt.md); instantiate:
-   - `{dimensions}` → the group's surviving dimension ids (comma-separated)
-   - `{dimension_files}` → all their rule-file paths
-   - `{scope_summary}` / `{changes}` → step 0 outputs
-2. Substituted text → `spawn_agent.message`. Prompts are self-contained; `fork_context` stays `false` unless the session holds hard-to-summarize requirement background.
+Maintain:
 
-## Step 3 — Collect, close, verify (pipelined)
+- `pendingWork`: not-yet-spawned review, review-retry, verify, and verify-retry items
+- `active`: spawned work keyed by agent id
+- `reportPool`
+- `releaseChecks`
+- `missingSources`
+- `workflowFeedback`
+- `needsContext`
+- verification statistics
 
-Loop `wait` until all review agents have returned — the initial wave plus a late-spawned `extras` (wait is wait-any — call it repeatedly). For **each** returned review agent, immediately:
+Seed `pendingWork` in this order: `release`, `correctness`, `quality`, `process`, `extras`. Fill every
+usable slot.
 
-1. `close_agent` it — frees a slot. **Dispatch priority for the freed slot**: a still-queued `extras` group spawns first and joins the review wait set; only then does the slot go to a verifier.
-2. Extract the ` ```json ` fence and parse. Parse failure / wrong schema → reject, re-spawn that group with the same prompt.
-3. Partition its findings by dimension `verify` flag: `verify: false` dimensions (workflow, skill-freshness) go straight to the report pool; zero verifiable findings → done with this group.
-4. Otherwise spawn that group's verify agent in the next slot the dispatch priority allows (do not wait for other groups): [`../verify-prompt.md`](../verify-prompt.md) with `{issues}` = this group's verifiable findings, plus `{scope_summary}` / `{changes}`.
+Whenever an agent completes:
 
-On each verify return: `close_agent` first, then validate — `verifications.length` equals input count, ids one-to-one (Set difference). Mismatch → spawn a fresh verify agent with the missing ids' findings and the full prompt; do not loosen. Verdicts: `confirmed` → report pool (apply overrides / `same_root_as`); `false_positive` → drop; `need_more_context` → "Needs your input" appendix. The main agent never re-verifies findings itself.
+1. Call `release(agent)`.
+2. Remove it from `active`.
+3. Validate its fenced payload with
+   `bun run .agents/skills/deep-review/scripts/validate-output.ts <review|verify>`, passing the
+   response on stdin or through a task-scoped temp file.
+4. On invalid review output, prepend the identical review retry to `pendingWork`. On invalid verify
+   output, prepend a retry for the unresolved original ids.
+5. Handle valid output as described below.
+6. Refill every free slot from `pendingWork`.
 
-Slot arithmetic: up to 3 review agents spawn together; every later spawn (queued `extras`, verifiers) fills a slot freed by `close_agent`, so the flow never exceeds 3 concurrent agents and never deadlocks on the default budget. When `extras` claims the first freed slot it delays that one verifier by a single turn — acceptable, review coverage is the contract.
+The loop ends only when `active` and `pendingWork` are both empty.
 
-## Step 4 — Render the report
+### Valid review output
 
-Render strictly per [`../report-template.md`](../report-template.md) — structure, P2 cap, unverified-dimension sections, statistics, PR-mode merge verdict (main agent fills the decision table; never delegated). Run the template's pre-send self-check. Do not fall back to Codex's default findings format.
+Append `missing_sources`, `release_checks`, and `workflow_feedback` before partitioning findings.
 
-## Step 5 — Ask about the "safe to fix now" batch
+- `verify: false` findings → `reportPool`
+- verifiable findings → append one verify item using [`../verify-prompt.md`](../verify-prompt.md),
+  including only the required verification addenda
+- zero verifiable findings → no verify item
 
-Non-empty batch → one `request_user_input` (allowed regardless of delegation policy): `"Safe to fix now" has N low-risk findings — apply them all in one pass?` with options `Fix all` (recommended) / `Not now`; free-text covers partial picks. `Fix all` → apply each fix option, add regression tests where `need_test: true`, one line per fix. Empty → skip silently.
+### Valid verify output
 
-## Step 6 — Walk the remaining decisions
+Compare input and output ids one-to-one. Missing, duplicate, or invented ids invalidate those
+entries; prepend a fresh verify item for unresolved original ids.
 
-`can_auto_fix: false` confirmed findings + the `need_more_context` appendix, when non-empty, go through `request_user_input` one finding at a time — P0 → P1 → P2, `blocks_release: true` first; offer the finding's `fix_options` as the choices. Apply what the user picks; park the rest. Both lists empty → the report ends the flow.
+- Apply `severity_override` and the nature/exposure overrides before cross-checking invariants:
+  effective P0 must block release, effective P2 must not, and effective `release-risk` or
+  `exposed_legacy` findings must not be auto-fixes. Only a mismatch in the effective values returns
+  that id to the verify queue.
+- append verifier `workflow_feedback`
+- `confirmed` → apply overrides and append to `reportPool`
+- `false_positive` → statistics only
+- `need_more_context` → `needsContext`
+
+The main agent never re-verifies a candidate.
+
+## Step 4 — Consolidate duplicate roots
+
+After the queue drains, if at least two confirmed findings remain, spawn one fresh agent using
+[`../consolidate-prompt.md`](../consolidate-prompt.md). Pass confirmed findings after overrides and
+in report order.
+
+Validate with `validate-output.ts consolidate`. Reject invented ids, self-maps, cycles, or roots
+that occur after their duplicates; retry consolidation until valid. Apply the map only after those
+checks. Zero or one confirmed finding skips consolidation.
+
+## Step 5 — Render
+
+Render strictly per [`../report-template.md`](../report-template.md), including aggregated missing
+sources and workflow feedback, optional consolidation, statistics, and PR-mode merge verdict. Run
+the pre-send self-check.
+
+## Step 6 — Offer the safe batch
+
+When non-empty, use `request_user_input` once:
+`"Safe to fix now" has N low-risk findings — apply them all in one pass?`
+with `Fix all` / `Not now`; free text covers partial picks. Apply tests where `need_test: true`.
+
+## Step 7 — Walk remaining decisions
+
+Ask one finding at a time for confirmed `can_auto_fix: false` items and `needsContext`, ordered P0 →
+P1 → P2 and blocking first. Exclude legacy hand-offs. Skip low-likelihood, non-blocking items on
+repeat review unless requested.
+
+## Step 8 — Offer legacy hand-off issues
+
+When legacy hand-offs exist, ask once whether to create all, some, or no Linear issues. Create
+nothing before approval. On approval, use the `linear` skill and include location, culprit,
+scenario, likelihood, and verification evidence.
 
 ## Notes
 
-- **Self-containment**: everything a subagent needs lives in its prompt — especially scope summary and changes payload.
-- **Small vs large diff**: ≤ 200 lines AND ≤ 5 files → inline the diff; larger → pass fetch commands (very-large check first — see scoping.md).
-- **PR mode trigger**: GitHub PR URL in the user's message only.
-- Raising `agents.max_threads` shortens nothing here (the wave already fits 3 slots) — keep the group table as the execution grain for predictability.
+- Small diff: ≤ 200 lines and ≤ 5 files; inline it. Otherwise pass fetch commands.
+- PR mode: GitHub URL or unambiguous `PR #123` / `pr 123` / `pull request 123`; a bare `#123` is not.
+- Increasing concurrency may start all four built-in groups together; the same queue algorithm
+  remains valid.

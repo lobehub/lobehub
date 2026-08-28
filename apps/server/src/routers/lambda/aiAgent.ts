@@ -1,7 +1,13 @@
+import { randomUUID } from 'node:crypto';
+
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
-import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
+import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  entityIdPattern,
+  LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
@@ -10,33 +16,710 @@ import {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import {
+  deriveAgentInterventionContinuationMessageId,
+  deriveAgentInterventionContinuationOperationId,
+  deriveAgentInterventionQueueDeduplicationId,
+} from '@/business/server/agent-run/agentInterventionIdentity';
+import {
+  type AgentInterventionReviewStatus,
+  type AgentInterventionRuntimeAction,
+  type AgentInterventionSourceAction,
+  getAgentInterventionReview,
+  getAgentInterventionReviewBySource,
+  onAgentInterventionResolutionPublished,
+  resolveAgentIntervention,
+  resolveAgentInterventionBySource,
+  type ResolveAgentInterventionResult,
+  rollbackAgentInterventionResolution,
+} from '@/business/server/agent-run/agentInterventionReview';
+import { executeAgentMarketplaceIntervention } from '@/business/server/agent-run/executeCustomIntervention';
+import {
+  getHeteroInterventionReview,
+  onHeteroInterventionResolutionPublished,
+  resolveHeteroIntervention,
+  rollbackHeteroInterventionResolution,
+} from '@/business/server/agent-run/heteroInterventionReview';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { MessageModel } from '@/database/models/message';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { HumanApprovalAlreadyResolvedError, MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { agentOperations, topics } from '@/database/schemas';
+import { UserModel } from '@/database/models/user';
+import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
+import {
+  getServerDefaultHeterogeneousModels,
+  initModelRuntimeFromServerConfig,
+  resolveServerDefaultHeterogeneousModel,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
+} from '@/server/modules/ModelRuntime';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
+  assertCanViewMessageTargets,
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
+import {
+  GetAgentInterventionReviewBySourceSchema,
+  GetAgentInterventionReviewSchema,
+  ResolveAgentInterventionBySourceSchema,
+  ResolveAgentInterventionSchema,
+} from '@/server/routers/lambda/_schema/agentIntervention';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+import {
+  HeteroOperationPrincipalError,
+  resolveActiveHeteroOperationPrincipal,
+} from '@/server/services/heterogeneousAgent/operationPrincipal';
 
 const log = debug('lobe-server:ai-agent-router');
+
+type ClaimedAgentInterventionResolution = Extract<
+  ResolveAgentInterventionResult,
+  { state: 'claimed' }
+>;
+
+interface AgentInterventionDispatchContext {
+  aiAgentService: AiAgentService;
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}
+
+const publishedStatusForRuntimeAction = (
+  runtimeAction: AgentInterventionRuntimeAction,
+): AgentInterventionReviewStatus => {
+  switch (runtimeAction.type) {
+    case 'execute_custom_interaction': {
+      return runtimeAction.input.action.type === 'cancelled'
+        ? 'cancelled'
+        : runtimeAction.input.action.type === 'skipped'
+          ? 'skipped'
+          : 'resolved';
+    }
+    case 'heterogeneous_response': {
+      return 'resolving';
+    }
+    case 'resume_approval': {
+      return runtimeAction.decisions.every(({ decision }) => decision === 'approved')
+        ? 'approved'
+        : runtimeAction.decisions.every(({ decision }) => decision === 'rejected_continue')
+          ? 'rejected'
+          : 'mixed';
+    }
+    case 'resume_tool_result': {
+      return runtimeAction.outcome === 'skipped' ? 'skipped' : 'resolved';
+    }
+    case 'stop': {
+      return runtimeAction.terminalStatus;
+    }
+  }
+};
+
+type RuntimeActionDispatchProbe =
+  | { state: 'conflict' }
+  | { state: 'dispatched' }
+  | { retry: 'rebuild' | 'schedule' | 'stop'; state: 'prepared' }
+  | { state: 'unclaimed' };
+
+const sameNullable = (left: unknown, right: unknown): boolean => (left ?? null) === (right ?? null);
+
+const sameStringSet = (left: string[], right: string[]): boolean => {
+  const a = [...left].sort();
+  const b = [...right].sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+};
+
+const continuationRuntimeAction = (
+  runtimeAction: AgentInterventionRuntimeAction,
+): Extract<
+  AgentInterventionRuntimeAction,
+  { type: 'execute_custom_interaction' | 'resume_approval' | 'resume_tool_result' }
+> | null => {
+  if (runtimeAction.type === 'resume_approval' || runtimeAction.type === 'resume_tool_result') {
+    return runtimeAction;
+  }
+  if (
+    runtimeAction.type === 'execute_custom_interaction' &&
+    runtimeAction.input.action.type !== 'cancelled'
+  ) {
+    return runtimeAction;
+  }
+  return null;
+};
+
+/**
+ * Probe a retry against both the source-message claim and the deterministic
+ * continuation operation. A message marker alone only proves the request was
+ * prepared; a matching owner-scoped operation plus runtime state proves it was
+ * dispatched. This closes the crash window between message CAS and scheduling.
+ */
+const probeRuntimeActionDispatch = async (
+  resolution: ClaimedAgentInterventionResolution,
+  ctx: AgentInterventionDispatchContext,
+): Promise<RuntimeActionDispatchProbe> => {
+  const { runtimeAction } = resolution;
+  const expected: Array<{ messageId: string; skipped?: true; status: string }> = [];
+
+  switch (runtimeAction.type) {
+    case 'execute_custom_interaction': {
+      if (runtimeAction.input.action.type === 'cancelled') {
+        expected.push(
+          ...runtimeAction.toolMessageIds.map((messageId) => ({ messageId, status: 'aborted' })),
+        );
+      } else {
+        expected.push({
+          messageId: runtimeAction.parentMessageId,
+          ...(runtimeAction.input.action.type === 'skipped' && { skipped: true as const }),
+          status: runtimeAction.input.action.type === 'skipped' ? 'rejected' : 'approved',
+        });
+      }
+      break;
+    }
+    case 'heterogeneous_response': {
+      // The producer de-duplicates the stable resolutionRequestId. There is no
+      // runtime message claim that can prove whether XADD happened before a
+      // crash, so a resolving retry republishes the same idempotency key.
+      return { state: 'unclaimed' };
+    }
+    case 'resume_approval': {
+      expected.push(
+        ...runtimeAction.decisions.map((decision) => ({
+          messageId: decision.parentMessageId,
+          status: decision.decision === 'approved' ? 'approved' : 'rejected',
+        })),
+      );
+      break;
+    }
+    case 'resume_tool_result': {
+      expected.push({
+        messageId: runtimeAction.parentMessageId,
+        ...(runtimeAction.outcome === 'skipped' && { skipped: true as const }),
+        status: runtimeAction.outcome === 'skipped' ? 'rejected' : 'approved',
+      });
+      break;
+    }
+    case 'stop': {
+      expected.push(
+        ...runtimeAction.toolMessageIds.map((messageId) => ({ messageId, status: 'aborted' })),
+      );
+      break;
+    }
+  }
+
+  if (expected.length === 0) return { state: 'unclaimed' };
+  const messageModel = new MessageModel(
+    ctx.serverDB,
+    resolution.ownerUserId,
+    resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+  );
+  const plugins = await Promise.all(
+    expected.map(({ messageId }) => messageModel.findMessagePlugin(messageId)),
+  );
+
+  if (plugins.every((plugin) => plugin?.intervention?.status === 'pending')) {
+    return { state: 'unclaimed' };
+  }
+
+  const sourceClaimMatches = plugins.every((plugin, index) => {
+    const expectedIntervention = expected[index];
+    return (
+      plugin?.intervention?.resolutionRequestId === resolution.resolutionRequestId &&
+      plugin.intervention.status === expectedIntervention.status &&
+      (!expectedIntervention.skipped || plugin.intervention.skipped === true)
+    );
+  });
+  if (!sourceClaimMatches) return { state: 'conflict' };
+
+  // Stop and current custom-cancel semantics settle the parked operation
+  // itself. The message claim is only complete when that exact operation is
+  // durably interrupted; a crash between the two is retryable preparation.
+  if (
+    runtimeAction.type === 'stop' ||
+    (runtimeAction.type === 'execute_custom_interaction' &&
+      runtimeAction.input.action.type === 'cancelled')
+  ) {
+    const operationModel = new AgentOperationModel(
+      ctx.serverDB,
+      resolution.ownerUserId,
+      resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+    );
+    const operation = await operationModel.findById(runtimeAction.operationId);
+    const topicId =
+      runtimeAction.type === 'stop' ? runtimeAction.topicId : runtimeAction.appContext.topicId;
+    if (!operation || operation.topicId !== topicId) return { state: 'conflict' };
+    if (operation.status === 'interrupted') return { state: 'dispatched' };
+    return operation.status === 'waiting_for_human'
+      ? { retry: 'stop', state: 'prepared' }
+      : { state: 'conflict' };
+  }
+
+  const continuation = continuationRuntimeAction(runtimeAction);
+  if (!continuation) return { state: 'conflict' };
+  const continuationOperationId = deriveAgentInterventionContinuationOperationId({
+    resolutionRequestId: resolution.resolutionRequestId,
+    userId: resolution.ownerUserId,
+    workspaceId: resolution.workspaceId ?? ctx.workspaceId,
+  });
+  const operationModel = new AgentOperationModel(
+    ctx.serverDB,
+    resolution.ownerUserId,
+    resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+  );
+  const operation = await operationModel.findById(continuationOperationId);
+  if (!operation) return { retry: 'rebuild', state: 'prepared' };
+
+  const sourceToolMessageIds =
+    continuation.type === 'resume_approval'
+      ? continuation.decisions.map(({ parentMessageId }) => parentMessageId)
+      : [continuation.parentMessageId];
+  const provenance = operation.metadata?.agentInterventionContinuation as
+    | {
+        resolutionRequestId?: unknown;
+        sourceOperationId?: unknown;
+        sourceToolMessageIds?: unknown;
+      }
+    | undefined;
+  const rowContextMatches =
+    operation.agentId === continuation.agentId &&
+    operation.topicId === continuation.appContext.topicId &&
+    sameNullable(operation.threadId, continuation.appContext.threadId) &&
+    sameNullable(operation.taskId, continuation.appContext.taskId) &&
+    sameNullable(operation.chatGroupId, continuation.appContext.groupId) &&
+    sameNullable(operation.appContext?.documentId, continuation.appContext.documentId) &&
+    sameNullable(operation.appContext?.groupId, continuation.appContext.groupId) &&
+    sameNullable(operation.appContext?.scope, continuation.appContext.scope) &&
+    sameNullable(operation.appContext?.sessionId, continuation.appContext.sessionId) &&
+    operation.appContext?.sourceMessageId === continuation.parentMessageId &&
+    provenance?.resolutionRequestId === resolution.resolutionRequestId &&
+    provenance.sourceOperationId === continuation.operationId &&
+    Array.isArray(provenance.sourceToolMessageIds) &&
+    provenance.sourceToolMessageIds.every((id) => typeof id === 'string') &&
+    sameStringSet(provenance.sourceToolMessageIds as string[], sourceToolMessageIds);
+  if (!rowContextMatches) return { state: 'conflict' };
+
+  const expectedDeduplicationId = deriveAgentInterventionQueueDeduplicationId(
+    continuationOperationId,
+    0,
+  );
+  const dispatchMarker = operation.metadata?.agentInterventionDispatch as
+    | {
+        deduplicationId?: unknown;
+        resolutionRequestId?: unknown;
+        state?: unknown;
+      }
+    | undefined;
+  if (dispatchMarker) {
+    return dispatchMarker.state === 'scheduled' &&
+      dispatchMarker.resolutionRequestId === resolution.resolutionRequestId &&
+      dispatchMarker.deduplicationId === expectedDeduplicationId
+      ? { state: 'dispatched' }
+      : { state: 'conflict' };
+  }
+
+  const durablePreparation = operation.metadata?.agentInterventionPreparation as
+    | {
+        deduplicationId?: unknown;
+        resolutionRequestId?: unknown;
+        state?: unknown;
+        stepIndex?: unknown;
+      }
+    | undefined;
+  const durablePreparationMatches =
+    durablePreparation?.state === 'ready' &&
+    durablePreparation.resolutionRequestId === resolution.resolutionRequestId &&
+    durablePreparation.stepIndex === 0 &&
+    durablePreparation.deduplicationId === expectedDeduplicationId;
+  if (durablePreparation && !durablePreparationMatches) return { state: 'conflict' };
+
+  const state = await ctx.aiAgentService.loadInterventionContinuationState(continuationOperationId);
+  if (!state) {
+    // A row alone is never dispatch proof: recordStart precedes state + queue,
+    // and even `abandoned` can be watchdog settlement of that bare row. Only a
+    // provider ACK marker or an owner/context-matching live state can advance
+    // lifecycle completion. Unknown terminal/no-state combinations fail closed.
+    return !durablePreparation && operation.status === 'running'
+      ? { retry: 'rebuild', state: 'prepared' }
+      : { state: 'conflict' };
+  }
+
+  const stateProvenance = state.metadata?.agentInterventionContinuation as
+    typeof provenance | undefined;
+  const statePreparation = state.metadata?.agentInterventionPreparation as
+    | {
+        deduplicationId?: unknown;
+        resolutionRequestId?: unknown;
+        state?: unknown;
+        stepIndex?: unknown;
+      }
+    | undefined;
+  const stateContextMatches =
+    state.operationId === continuationOperationId &&
+    state.metadata?.userId === resolution.ownerUserId &&
+    sameNullable(
+      state.metadata?.workspaceId,
+      resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+    ) &&
+    state.metadata?.agentId === continuation.agentId &&
+    state.metadata?.topicId === continuation.appContext.topicId &&
+    sameNullable(state.metadata?.threadId, continuation.appContext.threadId) &&
+    sameNullable(state.metadata?.taskId, continuation.appContext.taskId) &&
+    sameNullable(state.metadata?.groupId, continuation.appContext.groupId) &&
+    sameNullable(state.metadata?.documentId, continuation.appContext.documentId) &&
+    sameNullable(state.metadata?.scope, continuation.appContext.scope) &&
+    sameNullable(state.metadata?.sessionId, continuation.appContext.sessionId) &&
+    state.metadata?.sourceMessageId === continuation.parentMessageId &&
+    stateProvenance?.resolutionRequestId === resolution.resolutionRequestId &&
+    stateProvenance.sourceOperationId === continuation.operationId &&
+    Array.isArray(stateProvenance.sourceToolMessageIds) &&
+    stateProvenance.sourceToolMessageIds.every((id) => typeof id === 'string') &&
+    sameStringSet(stateProvenance.sourceToolMessageIds as string[], sourceToolMessageIds);
+  if (!stateContextMatches) return { state: 'conflict' };
+
+  if (
+    statePreparation?.state !== 'ready' ||
+    statePreparation.resolutionRequestId !== resolution.resolutionRequestId ||
+    statePreparation.stepIndex !== 0 ||
+    statePreparation.deduplicationId !== expectedDeduplicationId
+  ) {
+    return !durablePreparation && state.status === 'idle'
+      ? { retry: 'rebuild', state: 'prepared' }
+      : { state: 'conflict' };
+  }
+
+  // Ready state without the durable provider-ACK marker is still preparation,
+  // even if a fast worker already advanced it to running/terminal. Re-enqueue
+  // with the same dedupe key to recover the ACK before topic repair/publish.
+  return { retry: 'schedule', state: 'prepared' };
+};
+
+const retireRuntimeActionSourceOperation = async (
+  runtimeAction: AgentInterventionRuntimeAction,
+  ctx: AgentInterventionDispatchContext,
+): Promise<void> => {
+  switch (runtimeAction.type) {
+    case 'execute_custom_interaction': {
+      if (runtimeAction.input.action.type !== 'cancelled') {
+        await ctx.aiAgentService.retirePendingApprovalOperation(runtimeAction.operationId);
+      }
+      return;
+    }
+    case 'resume_approval':
+    case 'resume_tool_result': {
+      await ctx.aiAgentService.retirePendingApprovalOperation(runtimeAction.operationId);
+      return;
+    }
+    case 'heterogeneous_response':
+    case 'stop': {
+      return;
+    }
+  }
+};
+
+const repairRuntimeActionContinuationAnchor = async (
+  resolution: ClaimedAgentInterventionResolution,
+  ctx: AgentInterventionDispatchContext,
+): Promise<void> => {
+  const continuation = continuationRuntimeAction(resolution.runtimeAction);
+  if (!continuation) return;
+  const identity = {
+    resolutionRequestId: resolution.resolutionRequestId,
+    userId: resolution.ownerUserId,
+    workspaceId: resolution.workspaceId ?? ctx.workspaceId,
+  };
+  await ctx.aiAgentService.repairInterventionContinuationTopicAnchor({
+    assistantMessageId: deriveAgentInterventionContinuationMessageId(identity),
+    continuationOperationId: deriveAgentInterventionContinuationOperationId(identity),
+    resolutionRequestId: resolution.resolutionRequestId,
+    scope: continuation.appContext.scope,
+    sourceOperationId: continuation.operationId,
+    sourceToolMessageIds:
+      continuation.type === 'resume_approval'
+        ? continuation.decisions.map(({ parentMessageId }) => parentMessageId)
+        : [continuation.parentMessageId],
+    threadId: continuation.appContext.threadId,
+    topicId: continuation.appContext.topicId,
+  });
+};
+
+/**
+ * One dispatch boundary shared by token Review and the active Web source
+ * bridge. Both paths arrive here only after Cloud has won the same durable
+ * first-winner claim.
+ */
+const dispatchClaimedAgentIntervention = async (
+  resolution: ClaimedAgentInterventionResolution,
+  ctx: AgentInterventionDispatchContext,
+): Promise<{ execution?: ExecAgentResult; status: AgentInterventionReviewStatus }> => {
+  const { runtimeAction } = resolution;
+  let execution: ExecAgentResult | undefined;
+  let durableCustomSideEffect = false;
+  const publishedStatus = publishedStatusForRuntimeAction(runtimeAction);
+  const dispatchProbe = await probeRuntimeActionDispatch(resolution, ctx);
+  const deterministicContinuationOperationId = continuationRuntimeAction(runtimeAction)
+    ? deriveAgentInterventionContinuationOperationId({
+        resolutionRequestId: resolution.resolutionRequestId,
+        userId: resolution.ownerUserId,
+        workspaceId: resolution.workspaceId ?? ctx.workspaceId,
+      })
+    : undefined;
+
+  try {
+    if (dispatchProbe.state === 'conflict') {
+      throw new Error('Agent intervention continuation provenance conflict');
+    }
+
+    let shouldDispatchRuntimeAction =
+      dispatchProbe.state === 'unclaimed' ||
+      (dispatchProbe.state === 'prepared' && dispatchProbe.retry !== 'schedule');
+
+    if (dispatchProbe.state === 'prepared' && dispatchProbe.retry === 'schedule') {
+      const continuationOperationId = deriveAgentInterventionContinuationOperationId({
+        resolutionRequestId: resolution.resolutionRequestId,
+        userId: resolution.ownerUserId,
+        workspaceId: resolution.workspaceId ?? ctx.workspaceId,
+      });
+      const start =
+        await ctx.aiAgentService.ensureInterventionContinuationStarted(continuationOperationId);
+      if (start === 'missing') {
+        // The first probe observed a complete ready state. If it disappears
+        // before the enqueue repair, rebuilding cannot distinguish a TTL from
+        // a worker that already ran after a lost provider ACK. Keep the durable
+        // claim and fail closed; a later retry must recover from authoritative
+        // operation evidence rather than replaying the continuation.
+        throw new Error(
+          `Intervention continuation state disappeared during dispatch recovery: ${continuationOperationId}`,
+        );
+      }
+      shouldDispatchRuntimeAction = false;
+    }
+
+    if (dispatchProbe.state !== 'dispatched' && shouldDispatchRuntimeAction) {
+      switch (runtimeAction.type) {
+        case 'execute_custom_interaction': {
+          const customAction = runtimeAction.input.action;
+          const customResult = await executeAgentMarketplaceIntervention({
+            action: customAction,
+            actorUserId: ctx.userId,
+            categoryHints: runtimeAction.input.categoryHints,
+            requestId: runtimeAction.input.requestId,
+            resolutionRequestId: resolution.resolutionRequestId,
+            topicId: runtimeAction.appContext.topicId,
+            userId: resolution.ownerUserId,
+            workspaceId: resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+          });
+          durableCustomSideEffect = true;
+          if (customAction.type === 'cancelled') {
+            await ctx.aiAgentService.stopPendingApproval({
+              approvalResolutionRequestId: resolution.resolutionRequestId,
+              batchId: runtimeAction.batchId,
+              operationId: runtimeAction.operationId,
+              toolMessageIds: runtimeAction.toolMessageIds,
+              topicId: runtimeAction.appContext.topicId,
+            });
+          } else {
+            const skipped = customAction.type === 'skipped';
+            execution = await ctx.aiAgentService.execAgent({
+              agentId: runtimeAction.agentId,
+              approvalResolutionRequestId: resolution.resolutionRequestId,
+              approvalSourceOperationId: runtimeAction.operationId,
+              appContext: runtimeAction.appContext,
+              parentMessageId: runtimeAction.parentMessageId,
+              prompt: '',
+              replacesOperationId: runtimeAction.operationId,
+              resume: true,
+              taskId: runtimeAction.appContext.taskId ?? undefined,
+              resumeToolResult: {
+                content: customResult.content,
+                outcome: skipped ? 'skipped' : 'submitted',
+                parentMessageId: runtimeAction.parentMessageId,
+                pluginState: customResult.pluginState,
+                toolCallId: runtimeAction.toolCallId,
+              },
+              topicStartReservationId: deterministicContinuationOperationId,
+            });
+          }
+          break;
+        }
+        case 'heterogeneous_response': {
+          await createStreamEventManager().publishStreamEvent(runtimeAction.operationId, {
+            data: runtimeAction.response,
+            stepIndex: runtimeAction.stepIndex ?? 0,
+            type: 'agent_intervention_response',
+          });
+          break;
+        }
+        case 'resume_approval': {
+          const [singleDecision] = runtimeAction.decisions;
+          execution = await ctx.aiAgentService.execAgent({
+            agentId: runtimeAction.agentId,
+            approvalResolutionRequestId: resolution.resolutionRequestId,
+            approvalSourceOperationId: runtimeAction.operationId,
+            appContext: runtimeAction.appContext,
+            parentMessageId: runtimeAction.parentMessageId,
+            prompt: '',
+            replacesOperationId: runtimeAction.operationId,
+            resume: true,
+            taskId: runtimeAction.appContext.taskId ?? undefined,
+            ...(runtimeAction.decisions.length === 1
+              ? { resumeApproval: singleDecision }
+              : { resumeApprovals: runtimeAction.decisions }),
+            topicStartReservationId: deterministicContinuationOperationId,
+          });
+          break;
+        }
+        case 'resume_tool_result': {
+          execution = await ctx.aiAgentService.execAgent({
+            agentId: runtimeAction.agentId,
+            approvalResolutionRequestId: resolution.resolutionRequestId,
+            approvalSourceOperationId: runtimeAction.operationId,
+            appContext: runtimeAction.appContext,
+            parentMessageId: runtimeAction.parentMessageId,
+            prompt: '',
+            replacesOperationId: runtimeAction.operationId,
+            resume: true,
+            taskId: runtimeAction.appContext.taskId ?? undefined,
+            resumeToolResult: {
+              content: runtimeAction.content,
+              outcome: runtimeAction.outcome,
+              parentMessageId: runtimeAction.parentMessageId,
+              pluginState: runtimeAction.pluginState,
+              rejectionReason: runtimeAction.rejectionReason,
+              toolCallId: runtimeAction.toolCallId,
+            },
+            topicStartReservationId: deterministicContinuationOperationId,
+          });
+          break;
+        }
+        case 'stop': {
+          await ctx.aiAgentService.stopPendingApproval({
+            approvalResolutionRequestId: resolution.resolutionRequestId,
+            batchId: runtimeAction.batchId,
+            operationId: runtimeAction.operationId,
+            toolMessageIds: runtimeAction.toolMessageIds,
+            topicId: runtimeAction.topicId,
+          });
+          break;
+        }
+      }
+    }
+
+    if (execution?.success === false || execution?.autoStarted === false) {
+      throw new Error('Agent intervention continuation was not scheduled');
+    }
+    await repairRuntimeActionContinuationAnchor(resolution, ctx);
+    await retireRuntimeActionSourceOperation(runtimeAction, ctx);
+  } catch (error) {
+    const retryProbe = await probeRuntimeActionDispatch(resolution, ctx);
+    if (retryProbe.state === 'dispatched') {
+      log(
+        'v2 intervention retry observed prior dispatch operation claim=%s request=%s',
+        resolution.claimId,
+        resolution.resolutionRequestId,
+      );
+      // The prior call may have scheduled the replacement operation and failed
+      // while retiring its parked predecessor. Retry that lifecycle transition
+      // under the same source identity; never roll back a generic claim after
+      // the tool/result side effect is authoritatively visible.
+      await repairRuntimeActionContinuationAnchor(resolution, ctx);
+      await retireRuntimeActionSourceOperation(runtimeAction, ctx);
+    } else if (retryProbe.state === 'unclaimed' && !durableCustomSideEffect) {
+      await rollbackAgentInterventionResolution({
+        actorUserId: ctx.userId,
+        claimId: resolution.claimId,
+        ownerUserId: resolution.ownerUserId,
+        resolutionRequestId: resolution.resolutionRequestId,
+        workspaceId: resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+      }).catch((rollbackError) => {
+        log(
+          'conditional v2 intervention rollback failed claim=%s: %O',
+          resolution.claimId,
+          rollbackError,
+        );
+      });
+      throw error;
+    } else {
+      // `prepared` means this exact request owns the source rows but has not
+      // reached a provably started continuation yet. Keep the generic claim so
+      // the same id can rebuild/requeue it; rolling back here would let a second
+      // actor win against already-settled source messages. `conflict` is also
+      // fail-closed and must never reopen the claim.
+      throw error;
+    }
+  }
+
+  // Runtime dispatch is authoritative. The durable published/completion
+  // transition is part of the mutation's success boundary: swallowing a hook
+  // failure would leave the row permanently resolving while telling clients
+  // the action completed. Cloud makes this idempotent by request id.
+  await onAgentInterventionResolutionPublished({
+    actorUserId: ctx.userId,
+    claimId: resolution.claimId,
+    ownerUserId: resolution.ownerUserId,
+    resolutionRequestId: resolution.resolutionRequestId,
+    status: publishedStatus,
+    workspaceId: resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+  });
+
+  return { execution, status: publishedStatus };
+};
+
+const resolveHeteroTopicWorkspace = async (params: {
+  db: LobeChatDatabase;
+  requestedWorkspaceId?: string | null;
+  topicId: string;
+  userId: string;
+}) => {
+  const { db, requestedWorkspaceId, topicId, userId } = params;
+  const [topic] = await db
+    .select({ userId: topics.userId, workspaceId: topics.workspaceId })
+    .from(topics)
+    .where(eq(topics.id, topicId))
+    .limit(1);
+
+  if (!topic || (requestedWorkspaceId != null && requestedWorkspaceId !== topic.workspaceId)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+  }
+
+  if (!topic.workspaceId) {
+    if (topic.userId !== userId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+    }
+    return undefined;
+  }
+
+  const [membership] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, topic.workspaceId),
+        eq(workspaceMembers.userId, userId),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+  }
+
+  return topic.workspaceId;
+};
 
 /**
  * Workspace `use` guard for operation-keyed endpoints: resolve the operation
@@ -197,10 +880,13 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        conversationAgentId: z.string().optional(),
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
         editingAgentId: z.string().optional(),
+        /** The group being edited when scope is 'group_agent_builder' (not a group chat turn). */
+        editingGroupId: z.string().optional(),
         groupId: z.string().nullish(),
         initialTopicMetadata: z
           .object({
@@ -224,14 +910,32 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Client-minted ids for the rows this run creates, honoured verbatim —
+     * the gateway counterpart of `sendMessageInServer`'s `newTopic.id` /
+     * `newUserMessage.id` / `newAssistantMessage.id`. Validated per namespace:
+     * an unvalidated client primary key would let a caller submit look-alike
+     * ids, wrong namespaces, or strings that leak into logs and URLs.
+     */
+    clientIds: z
+      .object({
+        assistantMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+        topicId: z.string().regex(entityIdPattern('topics')).optional(),
+        userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+      })
+      .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Current desktop device hint, honored only for an effective local target */
+    localDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds: z.array(z.string()).optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
+    /** Existing gateway operation this fresh turn atomically supersedes. */
+    replacesOperationId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -253,6 +957,31 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
+     * Batch form of `resumeApproval` — one entry per pending tool the user
+     * resolved in a single action ("approve all" on a parallel tool batch).
+     * The op applies every decision, then runs all approved tools in ONE
+     * `call_tools_batch` and continues the LLM once with the full result set.
+     *
+     * Prefer this over firing N `resumeApproval` ops for a parallel batch: each
+     * of those continues the LLM while the not-yet-approved tools are still
+     * empty rows, which forks the parent chain and shows the model blank
+     * results. Mutually exclusive with `resumeApproval`.
+     */
+    resumeApprovals: z
+      .array(
+        z.object({
+          decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+          /** ID of the pending `role='tool'` message this decision targets. */
+          parentMessageId: z.string(),
+          /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+          rejectionReason: z.string().optional(),
+          /** tool_call_id of the pending tool call being approved/rejected. */
+          toolCallId: z.string(),
+        }),
+      )
+      .min(1)
+      .optional(),
+    /**
      * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
      * lobe-agent `askUserQuestion`). When set, the new op writes the
      * human-provided answer as the target tool message's result and resumes from
@@ -268,6 +997,10 @@ const ExecAgentSchema = z
         parentMessageId: z.string(),
         /** Optional plugin state to persist on the tool message. */
         pluginState: z.record(z.string(), z.unknown()).optional(),
+        /** Whether the form was submitted or explicitly skipped. */
+        outcome: z.enum(['submitted', 'skipped']).optional().default('submitted'),
+        /** Optional skip reason, persisted only when outcome is skipped. */
+        rejectionReason: z.string().optional(),
         /** tool_call_id of the pending tool call being answered. */
         toolCallId: z.string(),
       })
@@ -306,6 +1039,73 @@ const ExecAgentSchema = z
   })
   .refine((data) => data.agentId || data.slug, {
     message: 'Either agentId or slug must be provided',
+  })
+  .superRefine((data, ctx) => {
+    const resumePayloadCount = [
+      data.resumeApproval,
+      data.resumeApprovals,
+      data.resumeToolResult,
+    ].filter(Boolean).length;
+    if (resumePayloadCount > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Only one of resumeApproval, resumeApprovals, or resumeToolResult is allowed',
+        path: ['resumeApproval'],
+      });
+    }
+
+    if (resumePayloadCount > 0 && !data.parentMessageId) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'parentMessageId is required for an intervention resume',
+        path: ['parentMessageId'],
+      });
+    }
+
+    if (
+      data.resumeApproval &&
+      data.parentMessageId &&
+      data.resumeApproval.parentMessageId !== data.parentMessageId
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'resumeApproval must target parentMessageId',
+        path: ['resumeApproval', 'parentMessageId'],
+      });
+    }
+    if (
+      data.resumeToolResult &&
+      data.parentMessageId &&
+      data.resumeToolResult.parentMessageId !== data.parentMessageId
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'resumeToolResult must target parentMessageId',
+        path: ['resumeToolResult', 'parentMessageId'],
+      });
+    }
+
+    if (data.resumeApprovals) {
+      const messageIds = data.resumeApprovals.map(({ parentMessageId }) => parentMessageId);
+      const toolCallIds = data.resumeApprovals.map(({ toolCallId }) => toolCallId);
+      if (
+        new Set(messageIds).size !== messageIds.length ||
+        new Set(toolCallIds).size !== toolCallIds.length
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'resumeApprovals cannot contain duplicate targets',
+          path: ['resumeApprovals'],
+        });
+      }
+      if (data.parentMessageId && !messageIds.includes(data.parentMessageId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'parentMessageId must be one of the resumeApprovals targets',
+          path: ['parentMessageId'],
+        });
+      }
+    }
   });
 
 /**
@@ -400,6 +1200,8 @@ const ExecSubAgentTaskSchema = z.object({
 const CreateClientTaskThreadSchema = z.object({
   /** The Agent ID to execute the task */
   agentId: z.string(),
+  /** Optional assistant placeholder for transports that stream into an existing row. */
+  assistantMessage: z.object({ provider: z.string() }).optional(),
   /** The Group ID (optional, only for Group mode) */
   groupId: z.string().optional(),
   /** Initial user message content (task instruction) */
@@ -465,9 +1267,9 @@ const InterruptTaskSchema = z
     /** Thread ID */
     threadId: z.string().optional(),
     /**
-     * Topic ID — required to cancel remote hetero tasks (openclaw / hermes).
+     * Topic ID — used to cancel device-backed heterogeneous agent tasks.
      * When provided and the topic's runningOperation has a deviceId, the server
-     * will dispatch a cancelHeteroTask tool call to kill the remote process.
+     * will dispatch a cancelHeteroTask tool call to kill the device process.
      */
     topicId: z.string().optional(),
   })
@@ -514,7 +1316,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: LocalHeterogeneousAgentTypeSchema,
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -531,7 +1333,12 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: LocalHeterogeneousAgentTypeSchema,
+  /** Initial assistant placeholder forwarded by the producer. Unlike the live
+   * ingest path, finish may arrive after gateway session completion has already
+   * cleared topic.metadata.runningOperation, so this is the durable fallback
+   * anchor for projecting a terminal error onto the assistant turn. */
+  assistantMessageId: z.string().min(1).optional(),
   error: z
     .object({
       /**
@@ -577,22 +1384,124 @@ const SubmitHeteroInterventionSchema = z.object({
   cancelReason: z.enum(['timeout', 'user_cancelled', 'session_ended']).optional(),
   cancelled: z.boolean().optional(),
   operationId: z.string().min(1),
+  /** Optional only for backward compatibility with pre-contract Web clients. */
+  resolutionRequestId: z.string().uuid().optional(),
   result: z.unknown().optional(),
   /** Producer step index; harmless placeholder — correlation is by toolCallId. */
   stepIndex: z.number().int().nonnegative().default(0),
   toolCallId: z.string().min(1),
 });
 
-const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+const HeteroInterventionReviewTokenSchema = z.object({
+  /** 32 random bytes encoded as base64url without padding. */
+  reviewToken: z.string().regex(/^[\w-]{43}$/),
+});
+
+const ResolveHeteroInterventionReviewSchema = z.object({
+  action: z.enum(['submit', 'skip']),
+  resolutionRequestId: z.string().uuid(),
+  result: z.unknown().optional(),
+  reviewToken: z.string().regex(/^[\w-]{43}$/),
+});
+
+const publishClaimedHeteroIntervention = async (params: {
+  claim: Extract<
+    Awaited<ReturnType<typeof resolveHeteroIntervention>>,
+    { handled: true; state: 'claimed' }
+  >;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { claim, userId, workspaceId } = params;
+  const resolvedWorkspaceId = claim.workspaceId ?? workspaceId ?? undefined;
+  const streamEventManager = createStreamEventManager();
+
+  try {
+    await streamEventManager.publishStreamEvent(claim.operationId, {
+      data: {
+        ...claim.response,
+        producerAck: false,
+        resolutionRequestId: claim.resolutionRequestId,
+      },
+      stepIndex: claim.stepIndex ?? 0,
+      type: 'agent_intervention_response',
+    });
+  } catch (error) {
+    await rollbackHeteroInterventionResolution({
+      claimId: claim.claimId,
+      operationId: claim.operationId,
+      resolutionRequestId: claim.resolutionRequestId,
+      toolCallId: claim.response.toolCallId,
+      userId,
+      workspaceId: resolvedWorkspaceId,
+    }).catch((rollbackError) => {
+      log(
+        'conditional intervention rollback failed claim=%s op=%s: %O',
+        claim.claimId,
+        claim.operationId,
+        rollbackError,
+      );
+    });
+    throw error;
+  }
+
+  // Notification surfaces may switch to `resolving` only after XADD has
+  // succeeded. This best-effort side effect must not roll back a response the
+  // producer can already consume from the stream.
+  await onHeteroInterventionResolutionPublished({
+    claimId: claim.claimId,
+    operationId: claim.operationId,
+    resolutionRequestId: claim.resolutionRequestId,
+    status: 'resolving',
+    toolCallId: claim.response.toolCallId,
+    userId,
+    workspaceId: resolvedWorkspaceId,
+  }).catch((notificationError) => {
+    log(
+      'intervention published hook failed claim=%s op=%s: %O',
+      claim.claimId,
+      claim.operationId,
+      notificationError,
+    );
+  });
+
+  return {
+    // XADD only acknowledges transport acceptance. The producer's echoed
+    // response is the authoritative terminal transition persisted by the
+    // intervention reducer; until then the durable row remains resolving.
+    status: 'resolving' as const,
+    success: true as const,
+  };
+};
+
+const aiAgentBaseProcedure = wsCompatProcedure.use(serverDatabase);
+
+const aiAgentProcedure = aiAgentBaseProcedure.use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
+
+  // Read market accessToken from user_settings.market so server-side agent runtime
+  // can authenticate with the Market API for creds operations.
+  let marketAccessToken: string | undefined;
+  try {
+    const userModel = new UserModel(ctx.serverDB!, ctx.userId);
+    const settings = await userModel.getUserSettings();
+    marketAccessToken = (settings?.market as any)?.accessToken;
+  } catch {
+    // non-fatal — MarketService will fall back to trustedClientToken
+  }
 
   return opts.next({
     ctx: {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        marketAccessToken,
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
@@ -604,17 +1513,289 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   });
 });
 
-// Dedicated procedure for hetero-agent ingest/finish endpoints.
-// Requires a `hetero-operation` JWT (4h expiry) — normal user tokens are rejected,
-// so only the sandbox/device that received the JWT from execAgent can call these.
-//
-// Note: workspaceId is not on `ctx` for this procedure (the JWT is server-to-server
-// and carries no workspace claim). Handlers must resolve wsId from the row keyed
-// by `topicId` and construct `HeterogeneousAgentService` per request.
+// Dedicated procedure for hetero-agent callbacks. Narrow operation tokens are
+// re-authorized against durable operation state; pre-deploy operation tokens and
+// normal user OIDC tokens go through the legacy ownership guards.
 const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase);
 const aiAgentWriteProcedure = aiAgentProcedure.use(withScopedPermission('message:create'));
 
+const authorizeOperationCallback = async (
+  ctx: {
+    heteroAuthKind: string;
+    heteroOperation?: NonNullable<
+      Parameters<typeof resolveActiveHeteroOperationPrincipal>[0]['claims']
+    > | null;
+    serverDB: LobeChatDatabase;
+  },
+  operationId: string,
+  capability: 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read',
+) => {
+  if (ctx.heteroAuthKind !== 'operation') return;
+  if (!ctx.heteroOperation) throw new TRPCError({ code: 'UNAUTHORIZED' });
+  try {
+    await resolveActiveHeteroOperationPrincipal({
+      capability,
+      claims: ctx.heteroOperation,
+      db: ctx.serverDB,
+      operationId,
+    });
+  } catch (error) {
+    if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+    throw new TRPCError({
+      cause: error,
+      code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+      message: error.message,
+    });
+  }
+};
+
+const assertServerDefaultControlAuth = (oidcAuth: Record<string, unknown> | null | undefined) => {
+  if (!oidcAuth || oidcAuth.purpose) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'Server-default operations require Desktop OIDC authentication',
+    });
+  }
+};
+
+export const resolveServerDefaultHeterogeneousCapability = async () => {
+  const base = {
+    model: 'lobehub-default' as const,
+  };
+  if (process.env.ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT === '0') {
+    return { ...base, agents: [], enabled: false as const, reason: 'disabled' as const };
+  }
+
+  try {
+    const models = await getServerDefaultHeterogeneousModels();
+    const agents = SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES.filter(
+      (agentType) => models[agentType].length > 0,
+    );
+    if (agents.length === 0) {
+      return {
+        ...base,
+        agents,
+        enabled: false as const,
+        models,
+        reason: 'invalidConfiguration' as const,
+      };
+    }
+    return { ...base, agents, enabled: true as const, models };
+  } catch (error) {
+    log('Server-default heterogeneous capability is unavailable: %O', error);
+    return {
+      ...base,
+      agents: [],
+      enabled: false as const,
+      reason: 'invalidConfiguration' as const,
+    };
+  }
+};
+
+const resolveServerDefaultControlOperation = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  userId: string;
+}) => {
+  const [operation] = await params.db
+    .select({
+      metadata: agentOperations.metadata,
+      model: agentOperations.model,
+      provider: agentOperations.provider,
+      status: agentOperations.status,
+      workspaceId: agentOperations.workspaceId,
+    })
+    .from(agentOperations)
+    .where(
+      and(eq(agentOperations.id, params.operationId), eq(agentOperations.userId, params.userId)),
+    )
+    .limit(1);
+
+  if (!operation || operation.metadata?.serverDefaultHeterogeneous !== true) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Operation is outside the caller scope' });
+  }
+
+  if (operation.workspaceId) {
+    const [membership] = await params.db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, operation.workspaceId),
+          eq(workspaceMembers.userId, params.userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Operation is outside the caller scope' });
+    }
+  }
+
+  return {
+    model: new AgentOperationModel(params.db, params.userId, operation.workspaceId ?? undefined),
+    operation,
+  };
+};
+
+const settleServerDefaultControlOperation = async (params: {
+  currentStatus: string;
+  model: AgentOperationModel;
+  operationId: string;
+  targetStatus: 'done' | 'error' | 'interrupted';
+}) => {
+  if (params.currentStatus === params.targetStatus) return;
+  if (params.currentStatus !== 'running') {
+    throw new TRPCError({ code: 'CONFLICT', message: 'Operation has already ended' });
+  }
+
+  if (await params.model.settleRunning(params.operationId, params.targetStatus)) return;
+
+  // Another terminal request won the CAS after the scope read. Treat an
+  // identical terminal result as idempotent and reject a conflicting result.
+  const current = await params.model.findById(params.operationId);
+  if (current?.status !== params.targetStatus) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'Operation has already ended' });
+  }
+};
+
 export const aiAgentRouter = router({
+  getServerDefaultHeterogeneousCapability: aiAgentBaseProcedure.query(() =>
+    resolveServerDefaultHeterogeneousCapability(),
+  ),
+
+  beginServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
+    .input(
+      z.object({
+        agentType: z.enum(SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES),
+        agentId: z.string().optional(),
+        model: z.string().min(1),
+        operationId: z.string().min(1),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      const workspaceId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId: input.topicId,
+        userId: ctx.userId,
+      });
+      if (workspaceId && input.agentId) {
+        await assertCanUseWorkspaceAgent({
+          agentId: input.agentId,
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId,
+        });
+      }
+      const capability = await resolveServerDefaultHeterogeneousCapability();
+      if (!capability.enabled) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            capability.reason === 'disabled'
+              ? 'Server-default agents are disabled'
+              : 'No server model is available',
+        });
+      }
+      const selection = await resolveServerDefaultHeterogeneousModel(
+        input.agentType,
+        input.model,
+      ).catch((error) => {
+        throw new TRPCError({
+          cause: error,
+          code: 'BAD_REQUEST',
+          message: 'The selected server model is not available for this heterogeneous agent',
+        });
+      });
+      await initModelRuntimeFromServerConfig({
+        actorUserId: ctx.userId,
+        workspaceId,
+      }).catch((error) => {
+        log('Selected server model runtime is unavailable: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'PRECONDITION_FAILED',
+          message: 'The selected server model runtime is unavailable',
+        });
+      });
+
+      const model = new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId);
+      await model.recordStart({
+        agentId: input.agentId,
+        metadata: { agentType: input.agentType, serverDefaultHeterogeneous: true },
+        model: selection.model,
+        operationId: input.operationId,
+        provider: selection.provider,
+        topicId: input.topicId,
+        trigger: RequestTrigger.Chat,
+      });
+      const operation = await model.findById(input.operationId);
+      if (
+        !operation ||
+        operation.userId !== ctx.userId ||
+        operation.workspaceId !== (workspaceId ?? null) ||
+        operation.status !== 'running' ||
+        operation.topicId !== input.topicId ||
+        operation.agentId !== (input.agentId ?? null) ||
+        operation.model !== selection.model ||
+        operation.provider !== selection.provider ||
+        operation.metadata?.agentType !== input.agentType
+      ) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Operation id is already in use' });
+      }
+
+      return {
+        model: 'lobehub-default' as const,
+        token: await signHeteroOperationJWT({
+          capabilities: ['model:invoke'],
+          model: selection.model,
+          operationId: input.operationId,
+          providerId: selection.provider,
+          userId: ctx.userId,
+          workspaceId,
+        }),
+      };
+    }),
+
+  finishServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
+    .input(z.object({ operationId: z.string().min(1), result: z.enum(['done', 'error']) }))
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      const { model, operation } = await resolveServerDefaultControlOperation({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+      });
+      await settleServerDefaultControlOperation({
+        currentStatus: operation.status,
+        model,
+        operationId: input.operationId,
+        targetStatus: input.result,
+      });
+      return { success: true as const };
+    }),
+
+  cancelServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
+    .input(z.object({ operationId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      const { model, operation } = await resolveServerDefaultControlOperation({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+      });
+      await settleServerDefaultControlOperation({
+        currentStatus: operation.status,
+        model,
+        operationId: input.operationId,
+        targetStatus: 'interrupted',
+      });
+      return { success: true as const };
+    }),
+
   /**
    * Create Thread for client-side task execution in Group mode
    *
@@ -736,7 +1917,8 @@ export const aiAgentRouter = router({
   createClientTaskThread: aiAgentWriteProcedure
     .input(CreateClientTaskThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId } = input;
+      const { agentId, assistantMessage, groupId, instruction, parentMessageId, title, topicId } =
+        input;
 
       log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -791,6 +1973,19 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
+        const assistantMessageRecord = assistantMessage
+          ? await ctx.messageModel.create({
+              agentId,
+              content: LOADING_FLAT,
+              groupId,
+              parentId: userMessage.id,
+              provider: assistantMessage.provider,
+              role: 'assistant',
+              threadId: thread.id,
+              topicId,
+            })
+          : undefined;
+
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
           postProcessUrl: createUiMessageFileUrlResolver(),
@@ -811,6 +2006,7 @@ export const aiAgentRouter = router({
 
         // 4. Return Thread, userMessageId, threadMessages and messages
         return {
+          assistantMessageId: assistantMessageRecord?.id,
           messages,
           startedAt,
           success: true,
@@ -841,11 +2037,13 @@ export const aiAgentRouter = router({
       appContext,
       autoStart = true,
       deviceId,
+      localDeviceId,
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       trigger,
@@ -869,22 +2067,165 @@ export const aiAgentRouter = router({
           ...existingMessageIds,
           parentMessageId,
           resumeApproval?.parentMessageId,
+          // Every batch target is authorized too — a caller must not be able to
+          // slip a message it doesn't own into the list behind an owned anchor.
+          ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
           resumeToolResult?.parentMessageId,
         ],
         topicId: appContext?.topicId,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
+
+      // Cross-version bridge: older Web clients call execAgent directly with
+      // resume payloads and know nothing about the v2 source endpoint. Recover
+      // the authoritative operation/batch from the tool rows and claim the
+      // same generic intervention before the legacy message CAS can run.
+      const legacyResumeTargets = [
+        ...(resumeApprovals ?? []),
+        ...(resumeApproval ? [resumeApproval] : []),
+        ...(resumeToolResult
+          ? [
+              {
+                decision: 'approved' as const,
+                parentMessageId: resumeToolResult.parentMessageId,
+                toolCallId: resumeToolResult.toolCallId,
+              },
+            ]
+          : []),
+      ];
+      if (legacyResumeTargets.length > 0) {
+        const plugins = await Promise.all(
+          legacyResumeTargets.map(({ parentMessageId }) =>
+            ctx.messageModel.findMessagePlugin(parentMessageId),
+          ),
+        );
+        const firstIntervention = plugins[0]?.intervention;
+        const hasGenericSource = Boolean(
+          firstIntervention?.operationId &&
+          firstIntervention.batchId &&
+          plugins.every(
+            (plugin) =>
+              plugin?.intervention?.operationId === firstIntervention.operationId &&
+              plugin?.intervention?.batchId === firstIntervention.batchId,
+          ),
+        );
+
+        if (hasGenericSource) {
+          let sourceAction: AgentInterventionSourceAction | undefined;
+          if (resumeToolResult) {
+            if (resumeToolResult.outcome === 'skipped') {
+              sourceAction = { type: 'skip_interaction' };
+            } else {
+              const pluginState = resumeToolResult.pluginState as
+                | {
+                    askUserAnswers?: Record<string, unknown>;
+                    selectedAgentIds?: unknown;
+                  }
+                | undefined;
+              const answers = pluginState?.askUserAnswers;
+              if (
+                answers &&
+                Object.keys(answers).length > 0 &&
+                Object.values(answers).every(
+                  (answer) =>
+                    typeof answer === 'string' ||
+                    (Array.isArray(answer) && answer.every((item) => typeof item === 'string')),
+                )
+              ) {
+                sourceAction = {
+                  result: answers as Record<string, string | string[]>,
+                  type: 'submit_answers',
+                };
+              } else if (
+                plugins[0]?.identifier === 'lobe-web-onboarding' &&
+                plugins[0]?.apiName === 'showAgentMarketplace' &&
+                Array.isArray(pluginState?.selectedAgentIds) &&
+                pluginState.selectedAgentIds.every((id) => typeof id === 'string')
+              ) {
+                sourceAction = {
+                  result: {
+                    kind: 'agent_marketplace',
+                    selectedTemplateIds: pluginState.selectedAgentIds as string[],
+                  },
+                  type: 'submit_custom',
+                };
+              }
+            }
+          } else if (legacyResumeTargets.every(({ decision }) => decision === 'approved')) {
+            // The legacy resume envelope has neither staged edits nor remember
+            // intent. Cloud therefore compares the durable revision with the
+            // authoritative message arguments and rejects a pre-mutated old
+            // edit as stale with a refresh-required conflict; it must never
+            // reinterpret already-written client state as an atomic edit.
+            // Old clients may also have changed their personal allow-list
+            // before this call, which remains a rollout-only non-atomic edge.
+            // Current Web sends both edits and remember through the source
+            // endpoint before any side effect.
+            sourceAction = { scope: 'once', type: 'approve_tool' };
+          } else if (
+            legacyResumeTargets.every(
+              ({ decision }) => decision === 'rejected' || decision === 'rejected_continue',
+            )
+          ) {
+            const reasons = [
+              ...new Set(
+                legacyResumeTargets
+                  .map(({ rejectionReason }) => rejectionReason)
+                  .filter((reason): reason is string => Boolean(reason)),
+              ),
+            ];
+            sourceAction = {
+              ...(reasons.length === 1 && { reason: reasons[0] }),
+              type: 'reject_continue',
+            };
+          }
+
+          if (!sourceAction) {
+            throw new Error('Unsupported legacy intervention payload for a durable generic row');
+          }
+
+          const sourceResolution = await resolveAgentInterventionBySource({
+            action: sourceAction,
+            actorUserId: ctx.userId,
+            batchId: firstIntervention!.batchId!,
+            operationId: firstIntervention!.operationId!,
+            resolutionRequestId: randomUUID(),
+            targets: legacyResumeTargets.map(({ parentMessageId, toolCallId }) => ({
+              toolCallId,
+              toolMessageId: parentMessageId,
+            })),
+            workspaceId: ctx.workspaceId ?? undefined,
+          });
+          if (sourceResolution.handled) {
+            if (sourceResolution.state === 'already_resolved') {
+              throw new HumanApprovalAlreadyResolvedError(parentMessageId ?? 'intervention');
+            }
+            const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx);
+            if (!dispatch.execution) {
+              throw new Error('Durable intervention resume did not create an operation');
+            }
+            return dispatch.execution;
+          }
+        }
+      }
+
       return await ctx.aiAgentService.execAgent({
         agentId,
         appContext,
         autoStart,
+        clientIds: input.clientIds,
+        // This procedure serves the composer (`aiAgentService.execAgentTask`).
+        // The client already queues follow-ups behind a live run and shows the
+        // user a tray; refusing here would only make the message disappear.
+        interactiveStart: true,
         // Propagate the originating request's client IP / user agent into the run
         // so downstream LLM-call metadata can carry them for auditing and spend
         // attribution. These are server-derived from the tRPC context and are
         // intentionally not part of the client-passable input schema.
         clientIp: ctx.clientIp ?? undefined,
         deviceId,
+        localDeviceId,
         existingMessageIds,
         fileIds,
         mentionedAgents,
@@ -894,6 +2235,7 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeApprovals,
         resumeToolResult,
         selectedToolIds,
         slug,
@@ -906,6 +2248,25 @@ export const aiAgentRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      if (error instanceof HumanApprovalAlreadyResolvedError) {
+        throw new TRPCError({
+          cause: error,
+          code: 'CONFLICT',
+          message: 'This approval has already been resolved.',
+        });
+      }
+
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
       }
 
       throw new TRPCError({
@@ -1491,6 +2852,83 @@ export const aiAgentRouter = router({
    * This endpoint interrupts a SubAgent task by threadId or operationId.
    * It updates both operation status and Thread status to cancelled state.
    */
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without executing anything or continuing the model.
+   *
+   * Distinct from `interruptTask`, which only flips runtime state and assumes
+   * a live loop will persist the outcome — a parked run has no loop, so its
+   * tool rows and DB row would both be left behind.
+   */
+  stopPendingApproval: aiAgentWriteProcedure
+    .input(
+      z.object({
+        /** Stable sealed batch id stamped on every pending tool row. */
+        batchId: z.string().min(1),
+        /** Exact parked operation to stop; never inferred from topic recency. */
+        operationId: z.string().min(1),
+        /** Pending `role='tool'` message ids to settle — the active batch. */
+        toolMessageIds: z.array(z.string()).min(1),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Same ownership gate the approval resume uses: every target must belong
+      // to the caller before anything is written.
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: input.toolMessageIds,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      const stopPlugins = await Promise.all(
+        input.toolMessageIds.map((id) => ctx.messageModel.findMessagePlugin(id)),
+      );
+      const hasGenericSource = stopPlugins.every(
+        (plugin) =>
+          Boolean(plugin?.toolCallId) &&
+          plugin?.intervention?.operationId === input.operationId &&
+          plugin.intervention.batchId === input.batchId,
+      );
+      if (hasGenericSource) {
+        const sourceResolution = await resolveAgentInterventionBySource({
+          action: { scope: 'operation', type: 'stop' },
+          actorUserId: ctx.userId,
+          batchId: input.batchId,
+          operationId: input.operationId,
+          resolutionRequestId: randomUUID(),
+          targets: stopPlugins.map((plugin, index) => ({
+            toolCallId: plugin!.toolCallId!,
+            toolMessageId: input.toolMessageIds[index],
+          })),
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        if (sourceResolution.handled) {
+          if (sourceResolution.state === 'already_resolved') {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'This approval has already been resolved.',
+            });
+          }
+          await dispatchClaimedAgentIntervention(sourceResolution, ctx);
+          return {
+            operationId: input.operationId,
+            settledToolMessageIds: input.toolMessageIds,
+            success: true,
+          };
+        }
+      }
+
+      return ctx.aiAgentService.stopPendingApproval({
+        batchId: input.batchId,
+        operationId: input.operationId,
+        toolMessageIds: input.toolMessageIds,
+        topicId: input.topicId,
+      });
+    }),
+
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }) => {
@@ -1520,6 +2958,8 @@ export const aiAgentRouter = router({
   heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, events, operationId, topicId } = input;
 
+    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
+
     log(
       'heteroIngest: topic=%s op=%s type=%s count=%d',
       topicId,
@@ -1529,30 +2969,12 @@ export const aiAgentRouter = router({
     );
 
     try {
-      // Resolve workspaceId from the topic row so persistence writes land in
-      // the correct workspace scope. heteroAuthedProcedure carries no
-      // workspace claim, so we must look it up here per request. We bypass
-      // `TopicModel.findById` because it filters by workspace; here we need a
-      // workspace-agnostic lookup keyed only by topicId + userId.
-      const [topicRow] = await ctx.serverDB
-        .select({ workspaceId: topics.workspaceId })
-        .from(topics)
-        .where(and(eq(topics.id, topicId), eq(topics.userId, ctx.userId)))
-        .limit(1);
-
-      // Owner-token callers (a logged-in desktop reusing its own session) must
-      // prove they own the target topic — `topicRow` is already filtered by
-      // `userId`, so a missing row means the topic isn't theirs. The
-      // operation-token path is exempt: its `sub` may be a workspaceId that
-      // never matches `topics.userId`, and it's trusted as server-minted.
-      if (ctx.heteroAuthKind === 'user' && !topicRow) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Topic not found or not owned by the caller',
-        });
-      }
-
-      const wsId = topicRow?.workspaceId ?? undefined;
+      const wsId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId,
+        userId: ctx.userId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       });
@@ -1588,28 +3010,19 @@ export const aiAgentRouter = router({
    * CLI's own end-event was lost mid-flight.
    */
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
-    const { agentType, error, operationId, result, sessionId, topicId } = input;
+    const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
+
+    await authorizeOperationCallback(ctx, operationId, 'hetero:finish');
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
     try {
-      // Resolve workspaceId from the topic row (heteroAuthedProcedure has no
-      // workspace claim) so persistence writes land in the correct scope.
-      const [topicRow] = await ctx.serverDB
-        .select({ workspaceId: topics.workspaceId })
-        .from(topics)
-        .where(and(eq(topics.id, topicId), eq(topics.userId, ctx.userId)))
-        .limit(1);
-
-      // See heteroIngest: owner tokens must own the topic; operation tokens are exempt.
-      if (ctx.heteroAuthKind === 'user' && !topicRow) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Topic not found or not owned by the caller',
-        });
-      }
-
-      const wsId = topicRow?.workspaceId ?? undefined;
+      const wsId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId,
+        userId: ctx.userId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       });
@@ -1621,6 +3034,7 @@ export const aiAgentRouter = router({
       // here anymore; this is just the server-to-server ack endpoint.
       await heteroService.heteroFinish({
         agentType,
+        assistantMessageId,
         error,
         operationId,
         result,
@@ -1656,16 +3070,18 @@ export const aiAgentRouter = router({
     .query(async ({ input, ctx }) => {
       const { operationId, lastEventId, blockMs } = input;
 
+      await authorizeOperationCallback(ctx, operationId, 'hetero:intervention:read');
+
       // Ownership guard, mirroring heteroIngest / heteroFinish. The op stream is
       // read by `operationId` alone, so an owner-token caller (a logged-in
       // desktop reusing its own OIDC session) must prove it owns THIS operation
       // — otherwise any signed-in user could long-poll another run's
       // `agent_intervention_response` payloads by id. Bind the guard to the
       // operation row directly (tighter than the topic-level guard the write
-      // paths use, since the read has no topicId to key on). The operation-token
-      // path is exempt: it's server-minted and handed only to the sandbox /
-      // device running this op.
-      if (ctx.heteroAuthKind === 'user') {
+      // paths use, since the read has no topicId to key on). Strict operation-token
+      // callers already passed the durable principal check above; user tokens and
+      // pre-deploy operation tokens use the legacy ownership lookup.
+      if (ctx.heteroAuthKind !== 'operation') {
         const [operationRow] = await ctx.serverDB
           .select({ userId: agentOperations.userId })
           .from(agentOperations)
@@ -1696,6 +3112,191 @@ export const aiAgentRouter = router({
     }),
 
   /**
+   * Authenticated v2 review lookup. The opaque token is only a locator: the
+   * business implementation must resolve the row, then evaluate view and
+   * resolve access against the intervention's current conversation resource.
+   * Keep the token in a POST body rather than a query URL retained by access
+   * logs and browser history.
+   */
+  getAgentInterventionReview: aiAgentBaseProcedure
+    .input(GetAgentInterventionReviewSchema)
+    .mutation(({ input, ctx }) =>
+      getAgentInterventionReview({
+        reviewToken: input.reviewToken,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
+    ),
+
+  /**
+   * Read-only counterpart to the active Web source resolver. Chat surfaces
+   * fetch authoritative authorization before rendering controls, so a
+   * view-only collaborator sees the request with actions disabled instead of
+   * discovering the denial only after a mutation. Source ids remain locators;
+   * Cloud applies the final resource ACL after resolving the durable row.
+   */
+  getAgentInterventionReviewBySource: aiAgentBaseProcedure
+    .input(GetAgentInterventionReviewBySourceSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        input.targets.map(({ toolMessageId }) => toolMessageId),
+      );
+
+      return getAgentInterventionReviewBySource({
+        actorUserId: ctx.userId,
+        batchId: input.batchId,
+        operationId: input.operationId,
+        targets: input.targets,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+    }),
+
+  /**
+   * Active Web approval bridge. Source ids only locate the durable runtime
+   * rows; Cloud re-resolves their operation, sealed batch, membership,
+   * revisions and conversation ACL before using the same atomic claim as
+   * Review. OSS returns unavailable so its existing message-row path remains
+   * the compatibility fallback.
+   */
+  resolveAgentInterventionBySource: aiAgentWriteProcedure
+    .input(ResolveAgentInterventionBySourceSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: input.targets.map(({ toolMessageId }) => toolMessageId),
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      const resolution = await resolveAgentInterventionBySource({
+        action: input.action,
+        actorUserId: ctx.userId,
+        batchId: input.batchId,
+        operationId: input.operationId,
+        resolutionRequestId: input.resolutionRequestId,
+        targets: input.targets,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      if (!resolution.handled) {
+        return {
+          contractVersion: 2 as const,
+          status: 'unavailable' as const,
+          success: false as const,
+        };
+      }
+      if (resolution.state === 'already_resolved') {
+        return {
+          contractVersion: 2 as const,
+          ...(resolution.conversationUrl && { conversationUrl: resolution.conversationUrl }),
+          state: resolution.state,
+          status: resolution.status,
+          success: true as const,
+        };
+      }
+
+      const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx);
+      return {
+        contractVersion: 2 as const,
+        ...(resolution.conversationUrl && { conversationUrl: resolution.conversationUrl }),
+        ...(dispatch.execution && { execution: dispatch.execution }),
+        state: resolution.state,
+        status: dispatch.status,
+        success: true as const,
+      };
+    }),
+
+  /**
+   * Resolve one v2 review through the durable first-winner claim. The client
+   * supplies only review/item ids plus revisions; the business slot derives
+   * every runtime authority (operation, tool call, message, canonical tool
+   * key) after ACL + batch membership checks.
+   */
+  resolveAgentIntervention: aiAgentWriteProcedure
+    .input(ResolveAgentInterventionSchema)
+    .mutation(async ({ input, ctx }) => {
+      const resolution = await resolveAgentIntervention({
+        action: input.action,
+        expectedBatchVersion: input.expectedBatchVersion,
+        expectedRequestRevisions: input.expectedRequestRevisions,
+        resolutionRequestId: input.resolutionRequestId,
+        reviewToken: input.reviewToken,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      if (!resolution.handled) {
+        return {
+          contractVersion: 2 as const,
+          status: 'unavailable' as const,
+          success: false as const,
+        };
+      }
+      if (resolution.state === 'already_resolved') {
+        return {
+          contractVersion: 2 as const,
+          conversationUrl: resolution.conversationUrl,
+          status: resolution.status,
+          success: true as const,
+        };
+      }
+
+      const { status: publishedStatus } = await dispatchClaimedAgentIntervention(resolution, ctx);
+
+      return {
+        contractVersion: 2 as const,
+        conversationUrl: resolution.conversationUrl,
+        status: publishedStatus,
+        success: true as const,
+      };
+    }),
+
+  /**
+   * Authenticated cold-start review lookup. The opaque token is the only
+   * client-supplied locator; Cloud resolves operation/tool ownership inside
+   * the business slot. Keep this read-only operation on the mutation transport
+   * so the review token is carried in the POST body instead of a query URL that
+   * infrastructure access logs commonly retain. OSS reports `unavailable`
+   * without exposing internals.
+   */
+  getHeteroInterventionReview: aiAgentBaseProcedure
+    .input(HeteroInterventionReviewTokenSchema)
+    .mutation(({ input, ctx }) =>
+      getHeteroInterventionReview({
+        reviewToken: input.reviewToken,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
+    ),
+
+  /** Token-only atomic resolution path used by Mobile review/deep links. */
+  resolveHeteroIntervention: aiAgentWriteProcedure
+    .input(ResolveHeteroInterventionReviewSchema)
+    .mutation(async ({ input, ctx }) => {
+      const resolution = await resolveHeteroIntervention({
+        action: input.action,
+        cancelReason: input.action === 'skip' ? 'user_cancelled' : undefined,
+        result: input.action === 'submit' ? input.result : undefined,
+        resolutionRequestId: input.resolutionRequestId,
+        target: { reviewToken: input.reviewToken },
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      if (!resolution.handled) return { status: 'unavailable' as const, success: false as const };
+      if (resolution.state === 'already_resolved') {
+        return { status: resolution.status, success: true as const };
+      }
+
+      return publishClaimedHeteroIntervention({
+        claim: resolution,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  /**
    * Browser leg of remote Human-in-the-loop (user auth). Publishes the user's
    * answer to an `agent_intervention_request` back onto the op's Redis stream
    * as an `agent_intervention_response`. Two consumers converge on it by
@@ -1706,7 +3307,14 @@ export const aiAgentRouter = router({
   submitHeteroIntervention: aiAgentWriteProcedure
     .input(SubmitHeteroInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, toolCallId, stepIndex, result, cancelled, cancelReason } = input;
+      const {
+        operationId,
+        toolCallId,
+        stepIndex,
+        result,
+        cancelled,
+        resolutionRequestId = randomUUID(),
+      } = input;
 
       log(
         'submitHeteroIntervention: op=%s toolCallId=%s cancelled=%s',
@@ -1722,19 +3330,47 @@ export const aiAgentRouter = router({
         workspaceId: ctx.workspaceId,
       });
 
+      // Cloud overrides this as an atomic first-winner claim shared by Web and
+      // Mobile. OSS returns `handled:false` and preserves the legacy stream
+      // publish below. A claimed response is authoritative: client-supplied
+      // operation/tool fields cannot override what Cloud resolved durably.
+      const businessResolution = await resolveHeteroIntervention({
+        action: cancelled ? 'skip' : 'submit',
+        cancelReason: cancelled ? 'user_cancelled' : undefined,
+        result: cancelled ? undefined : result,
+        resolutionRequestId,
+        target: { operationId, toolCallId },
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (businessResolution.handled) {
+        if (businessResolution.state === 'already_resolved') {
+          return { status: businessResolution.status, success: true as const };
+        }
+        return publishClaimedHeteroIntervention({
+          claim: businessResolution,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
       const streamEventManager = createStreamEventManager();
       await streamEventManager.publishStreamEvent(operationId, {
         data: {
-          cancelReason: cancelled ? (cancelReason ?? 'user_cancelled') : undefined,
+          // Client-driven cancellation cannot impersonate producer timeout or
+          // session teardown; those terminal reasons originate from bridge ACKs.
+          cancelReason: cancelled ? 'user_cancelled' : undefined,
           cancelled,
+          producerAck: false,
           result: cancelled ? undefined : result,
+          resolutionRequestId,
           toolCallId,
         },
         stepIndex,
         type: 'agent_intervention_response',
       });
 
-      return { success: true as const };
+      return { status: 'resolving' as const, success: true as const };
     }),
 
   processHumanIntervention: aiAgentWriteProcedure

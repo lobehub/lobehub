@@ -102,6 +102,11 @@ export class AsyncTaskModel {
             true
           )
         `,
+        // Verified on pg_search 0.15.26: `UPDATE … SET`, SELECT lists and ORDER
+        // BY all survive a null test over an extracted jsonb value; only quals
+        // (WHERE / JOIN ON / HAVING) crash the planner. `async_tasks` carries no
+        // bm25 index either. See the block comment above `TopicModel`.
+        // jsonb-null-test-safe: SET target list, not a qual
         status: sql`
           CASE
             WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Error} OR ${asyncTasks.error} IS NOT NULL

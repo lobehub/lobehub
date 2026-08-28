@@ -114,14 +114,14 @@ export const getServerGlobalConfig = async () => {
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
-    enableVisualUnderstanding: !!(
-      toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && toolsEnv.VISUAL_UNDERSTANDING_MODEL
+    enableMultimodalUnderstanding: !!(
+      toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
     ),
-    ...(toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && toolsEnv.VISUAL_UNDERSTANDING_MODEL
+    ...(toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
       ? {
-          visualUnderstanding: {
-            model: toolsEnv.VISUAL_UNDERSTANDING_MODEL,
-            provider: toolsEnv.VISUAL_UNDERSTANDING_PROVIDER,
+          multimodalUnderstanding: {
+            model: toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL,
+            provider: toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER,
           },
         }
       : undefined),

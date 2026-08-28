@@ -45,6 +45,17 @@ describe('parseOpenAIModelId', () => {
     });
   });
 
+  it('should parse Codex-prefixed OpenAI ids', () => {
+    expect(parseOpenAIModelId('codex/gpt-5.6-luna')).toEqual({
+      family: 'gpt',
+      majorVersion: 5,
+      minorVersion: 6,
+      modifiers: ['luna'],
+      normalizedModelId: 'gpt-5.6-luna',
+      source: 'codex',
+    });
+  });
+
   it('should not treat release dates as minor versions', () => {
     expect(parseOpenAIModelId('gpt-5-pro-2025-10-06')).toEqual({
       family: 'gpt',
@@ -86,6 +97,11 @@ describe('isGPT5ResponsesModel', () => {
     expect(isGPT5ResponsesModel('gpt-5.6-sol')).toBe(true);
     expect(isGPT5ResponsesModel('gpt-5.6-terra')).toBe(true);
     expect(isGPT5ResponsesModel('gpt-5.6-luna')).toBe(true);
+  });
+
+  it('should match Codex-prefixed GPT-5.6 models', () => {
+    expect(isGPT5ResponsesModel('codex/gpt-5.6-luna')).toBe(true);
+    expect(isResponsesAPIModel('codex/gpt-5.6-luna')).toBe(true);
   });
 
   it('should not force OpenRouter GPT slugs into the built-in Responses API rules', () => {
@@ -139,6 +155,7 @@ describe('isOpenAIReasoningPayloadModel', () => {
     expect(isOpenAIReasoningPayloadModel('codex-mini-latest')).toBe(true);
     expect(isOpenAIReasoningPayloadModel('computer-use-preview')).toBe(true);
     expect(isOpenAIReasoningPayloadModel('gpt-5.6-luna')).toBe(true);
+    expect(isOpenAIReasoningPayloadModel('codex/gpt-5.6-luna')).toBe(true);
     expect(isOpenAIReasoningPayloadModel('openai/gpt-5.6-sol')).toBe(true);
   });
 

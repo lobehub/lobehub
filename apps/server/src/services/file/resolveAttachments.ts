@@ -1,10 +1,11 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import { readAudioDurationMs } from '@lobechat/utils/audio';
 import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
 import { DocumentService } from '@/server/services/document';
-import { FileService } from '@/server/services/file';
+import { FileService, getFileProxyUrl } from '@/server/services/file';
 
 const log = debug('lobe-server:resolveAttachments');
 
@@ -30,6 +31,24 @@ interface ResolveArgs {
 }
 
 const dedupe = (ids: string[]) => Array.from(new Set(ids));
+
+const getAudioMetadata = (
+  metadata: unknown,
+  fileType: string,
+): Pick<ChatAudioItem, 'codec' | 'durationMs' | 'mimeType'> => {
+  const value =
+    metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : {};
+
+  const durationMs = readAudioDurationMs(metadata);
+
+  return {
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : undefined),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    mimeType: typeof value.mimeType === 'string' ? value.mimeType : fileType,
+  };
+};
 
 /**
  * Resolve fileIds into image/video/file lists for the LLM prompt layer.
@@ -113,7 +132,12 @@ export const resolveAttachmentsByFileIds = async ({
       continue;
     }
     if (fileType.startsWith('audio')) {
-      result.audioList.push({ alt: file.name || 'audio', id: file.id, url: resolvedUrl });
+      result.audioList.push({
+        ...getAudioMetadata(file.metadata, fileType),
+        alt: file.name || 'audio',
+        id: file.id,
+        url: resolvedUrl,
+      });
       continue;
     }
     if (entry.parseError) {
@@ -173,11 +197,12 @@ export const resolveAttachmentMetadata = async ({
   const fileService = signUrls ? new FileService(db, userId, workspaceId) : null;
   const recordById = new Map(fileRecords.map((f) => [f.id, f]));
   const items = await Promise.all(
-    dedupedFileIds.map(async (id) => {
+    dedupedFileIds.map(async (id): Promise<ChatFileItem | undefined> => {
       const file = recordById.get(id);
       if (!file) return undefined;
       const url = fileService ? (await fileService.getFullFileUrl(file.url)) || file.url : file.url;
       return {
+        downloadUrl: getFileProxyUrl(file.id),
         fileType: file.fileType || 'application/octet-stream',
         id: file.id,
         name: file.name || 'file',

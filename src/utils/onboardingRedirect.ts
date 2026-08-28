@@ -1,5 +1,6 @@
 const ONBOARDING_PATH = '/onboarding';
 const CALLBACK_STORAGE_KEY = 'onboarding-callback-url';
+export const POST_ONBOARDING_HOME_TASK_URL = '/?onboarding=task';
 
 /**
  * Only same-site relative paths are allowed as post-onboarding redirect
@@ -68,9 +69,9 @@ export const stashOnboardingCallbackUrl = (search: string): void => {
 /**
  * Drop a stale stashed callback left by a previously abandoned onboarding
  * attempt in this tab. Only a fresh top-level entry (`/onboarding` without a
- * valid `callbackUrl`) may clear: internal navigations either stay on branch
- * paths (`/onboarding/agent`, `/onboarding/classic`) or re-enter the shared
- * prefix with an explicit `?step` param, and must keep the stash intact.
+ * valid `callbackUrl`) may clear: internal step changes stay on `/onboarding`
+ * itself or re-enter it with an explicit `?step` param, and must keep the
+ * stash intact.
  */
 export const clearStaleOnboardingCallbackUrl = (pathname: string, search: string): void => {
   if (pathname !== ONBOARDING_PATH) return;
@@ -104,3 +105,6 @@ export const consumeOnboardingCallbackUrl = (): string | undefined => {
   }
   return url;
 };
+
+export const resolvePostOnboardingTargetUrl = (): string =>
+  consumeOnboardingCallbackUrl() || POST_ONBOARDING_HOME_TASK_URL;

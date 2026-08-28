@@ -1,6 +1,8 @@
+import { isLocalOrPrivateUrl } from '@lobechat/utils';
 import debug from 'debug';
 
 import { ConnectorMcpConnectionType } from '@/database/schemas';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { type ConnectorToolSyncContext, syncConnectorToolsById } from './sync';
@@ -102,6 +104,12 @@ export const scheduleStaleConnectorToolsRefresh = (
       // machine); skip anything without an HTTP endpoint.
       if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) continue;
       if (!connector.mcpServerUrl) continue;
+      // Localhost / private-network endpoints are unreachable from the CLOUD
+      // server — their tool list is synced by the desktop client instead
+      // (`syncToolsFromClientById`). Gate on the device gateway being
+      // configured: a self-hosted server may share a LAN with the endpoint
+      // and can legitimately refresh it.
+      if (deviceGateway.isConfigured && isLocalOrPrivateUrl(connector.mcpServerUrl)) continue;
 
       const { id } = connector;
       // Throttle on whichever is more recent: the DB tool marker or the last

@@ -182,6 +182,31 @@ describe('ensureFreshOAuthToken', () => {
     expect(result.oauthRefreshToken).toBe('old-refresh');
   });
 
+  it('preserves the provider account id when refresh does not return a new one', async () => {
+    mockFetch.mockResolvedValueOnce(
+      tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }),
+    );
+
+    const result = await ensureFreshOAuthToken(
+      makeParams({
+        oauthAccessToken: 'old-access',
+        oauthAccountId: 'account-id',
+        oauthRefreshToken: 'old-refresh',
+        oauthTokenExpiresAt: String(Date.now() - 1000),
+      }),
+    );
+
+    expect(result.oauthAccountId).toBe('account-id');
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      'supergrok',
+      expect.objectContaining({
+        keyVaults: expect.objectContaining({ oauthAccountId: 'account-id' }),
+      }),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it('collapses concurrent refreshes onto a single HTTP call', async () => {
     mockFetch.mockResolvedValue(
       tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }),

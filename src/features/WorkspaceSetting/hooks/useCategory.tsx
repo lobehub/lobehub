@@ -1,6 +1,7 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
+  BellIcon,
   Blocks,
   Brain,
   Building2,
@@ -8,18 +9,20 @@ import {
   Coins,
   CreditCard,
   Database,
+  HandCoins,
   KeyIcon,
   KeyRound,
   Map,
   MonitorSmartphoneIcon,
   ScrollText,
   Sparkles,
+  TagIcon,
   Users,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -48,7 +51,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
-  const isOwner = useIsWorkspaceOwner();
+  const { allowed: canManageWorkspace } = usePermission('manage_settings');
+  const { allowed: canViewBilling } = usePermission('view_billing');
+  // API keys act as the member who issued them, so the tab follows the same
+  // member-level gate the server enforces: `API_KEY_*` is granted from Member
+  // up, never to Viewer. Without this the tab leads to a list request that
+  // immediately 403s.
+  const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(
@@ -72,6 +81,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('tab.devices'),
             },
             {
+              icon: BellIcon,
+              key: WorkspaceSettingsTabs.Notification,
+              label: t('tab.notification'),
+            },
+            {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Stats,
               label: tAuth('tab.stats'),
@@ -92,30 +106,42 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
-            {
+            // Credits / Billing are readable by Admin-or-higher; the pages
+            // themselves keep the money-moving controls (top-up, payment
+            // methods, plan changes) behind the narrower subscription gate.
+            canViewBilling && {
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
-            {
+            // Spend governance (budget pools + member caps) — admin task,
+            // same visibility gate as the other money pages.
+            canViewBilling && {
+              icon: HandCoins,
+              key: WorkspaceSettingsTabs.Budget,
+              label: tSubscription('tab.budget'),
+            },
+            canViewBilling && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
               label: tSubscription('tab.billing'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Subscription,
           title: t('group.subscription'),
         },
         {
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
-            // owner-only, hidden from members entirely (LOBE-11834).
-            isOwner && {
+            // Admin-or-higher, hidden from members entirely.
+            canManageWorkspace && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
             },
-            {
+            // Service-model preferences steer the shared workspace model
+            // policy — Admin-or-higher, hidden from members like Provider.
+            canManageWorkspace && {
               icon: Sparkles,
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
@@ -124,6 +150,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: SkillsIcon,
               key: WorkspaceSettingsTabs.Skill,
               label: t('workspaceSetting.tab.skill'),
+            },
+            // Label registry is readable by everyone; the page itself keeps
+            // management actions behind the admin gate (disabled, not hidden).
+            {
+              icon: TagIcon,
+              key: WorkspaceSettingsTabs.Labels,
+              label: t('workspaceSetting.tab.labels'),
             },
             {
               icon: Blocks,
@@ -144,30 +177,29 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        enableOAuthApps && {
+        (canCreateContent || enableOAuthApps) && {
           items: [
-            {
+            canCreateContent && {
+              icon: KeyIcon,
+              key: WorkspaceSettingsTabs.APIKey,
+              label: tAuth('tab.apikey'),
+            },
+            enableOAuthApps && {
               icon: AppWindowIcon,
               key: WorkspaceSettingsTabs.OAuthApps,
               label: tAuth('tab.oauthApps'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Developer,
           title: t('group.developer'),
         },
-        // The Admin group is owner-only — managing shared infra and audit
-        // surfaces is an owner action.
-        isOwner && {
+        // The Admin group is available to Admin and Owner.
+        canManageWorkspace && {
           items: [
             {
               icon: Database,
               key: WorkspaceSettingsTabs.Storage,
               label: t('tab.storage'),
-            },
-            {
-              icon: KeyIcon,
-              key: WorkspaceSettingsTabs.APIKey,
-              label: tAuth('tab.apikey'),
             },
             {
               icon: ScrollText,
@@ -179,6 +211,14 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, enableOAuthApps, isOwner],
+    [
+      t,
+      tAuth,
+      tSubscription,
+      enableOAuthApps,
+      canManageWorkspace,
+      canViewBilling,
+      canCreateContent,
+    ],
   );
 };

@@ -34,7 +34,8 @@ vi.mock('@lobehub/ui', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({ clock: 'clock' }),
 }));
 

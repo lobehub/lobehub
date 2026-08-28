@@ -1,5 +1,6 @@
 'use client';
 
+import { isCollaborativeBuiltinAgentRow } from '@lobechat/builtin-agents';
 import type { AgentModelSelectionPolicy } from '@lobechat/types';
 import { resolveAgentModelConfig, resolveAgentModelSelectionPolicy } from '@lobechat/types';
 import { useCallback } from 'react';
@@ -18,10 +19,22 @@ interface ModelSelection {
   provider: string;
 }
 
+/**
+ * Why the model trigger is shown but not switchable, so the trigger can say so
+ * instead of silently going inert.
+ *
+ * - `fixedByAgent` — a public Workspace Agent whose author pinned the model
+ *   (`modelSelectionPolicy: 'fixed'`); it changes in the Agent Profile only.
+ * - `useOnly` — the caller may chat with the resource but not edit its config.
+ */
+export type AgentModelSelectionLockReason = 'fixedByAgent' | 'useOnly';
+
 export interface UseAgentModelSelectionResult extends ModelSelection {
   canDisplayModel: boolean;
   canSelectModel: boolean;
   isPreferenceLoading: boolean;
+  /** Set only while the model is displayed but locked (see the type doc). */
+  selectionLockReason?: AgentModelSelectionLockReason;
   selectionPolicy: AgentModelSelectionPolicy;
   selectModel: (selection: ModelSelection) => Promise<void>;
   usesWorkspaceMemberSelection: boolean;
@@ -49,8 +62,15 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   const sharedProvider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
+  // Collaborative builtins (the builders, Lobe AI, the Page Copilot) are one
+  // shared row per Workspace with no config page of their own, so managing the
+  // row must not mean picking the model for everyone else — see
+  // `AgentModelConfig.personalModelSelection`.
+  const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
   const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
+    !!agent?.workspaceId &&
+    agent.visibility !== 'private' &&
+    (personalModelSelection || !canManageAgent);
 
   const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
@@ -64,6 +84,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   const sharedModelConfig = {
     agencyConfig: sharedAgencyConfig,
     model: sharedModel,
+    personalModelSelection,
     provider: sharedProvider,
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,
@@ -84,6 +105,14 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     canUseResource &&
     !isResourceAccessLoading &&
     !isPreferenceLoading;
+  // Only meaningful once the trigger actually renders: a hidden trigger has no
+  // tooltip to explain, and a still-loading one isn't locked, just not settled.
+  const selectionLockReason: AgentModelSelectionLockReason | undefined =
+    canDisplayModel && !canSelectModel
+      ? usesWorkspaceMemberSelection && selectionPolicy === 'fixed'
+        ? 'fixedByAgent'
+        : 'useOnly'
+      : undefined;
 
   const selectModel = useCallback(
     async (selection: ModelSelection) => {
@@ -122,6 +151,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     isPreferenceLoading,
     model: effectiveModel.model,
     provider: effectiveModel.provider ?? sharedProvider,
+    selectionLockReason,
     selectionPolicy,
     selectModel,
     usesWorkspaceMemberSelection,

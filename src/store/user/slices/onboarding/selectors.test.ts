@@ -171,33 +171,15 @@ describe('onboardingSelectors', () => {
       expect(onboardingSelectors.needsOnboarding(store)).toBe(true);
     });
 
-    it('should return true when version is older than current', () => {
-      // If CURRENT_ONBOARDING_VERSION > 1, test with version 1
-      // Otherwise, this test is not applicable since there's no valid older version
-      if (CURRENT_ONBOARDING_VERSION > 1) {
-        const store = {
-          onboarding: {
-            finishedAt: '2024-01-01T00:00:00Z',
-            version: 1,
-          },
-        } as Pick<UserStore, 'onboarding'>;
+    it('should return false when a v1 user has finishedAt set, regardless of version', () => {
+      const store = {
+        onboarding: {
+          finishedAt: '2024-01-01T00:00:00Z',
+          version: 1,
+        },
+      } as Pick<UserStore, 'onboarding'>;
 
-        expect(onboardingSelectors.needsOnboarding(store)).toBe(true);
-      } else {
-        // When CURRENT_ONBOARDING_VERSION is 1, there's no valid older version (0 is falsy)
-        // Test that version 0 is treated as NOT needing onboarding due to falsy check
-        const store = {
-          onboarding: {
-            finishedAt: '2024-01-01T00:00:00Z',
-            version: 0,
-          },
-        } as Pick<UserStore, 'onboarding'>;
-
-        // version 0 is falsy, so the condition (version && version < CURRENT) short-circuits to 0 (falsy)
-        // finishedAt is set, so the first condition is false
-        // The result is falsy (0), not strictly false
-        expect(onboardingSelectors.needsOnboarding(store)).toBeFalsy();
-      }
+      expect(onboardingSelectors.needsOnboarding(store)).toBe(false);
     });
 
     it('should return false when finishedAt is set and version is current', () => {
@@ -217,52 +199,6 @@ describe('onboardingSelectors', () => {
       } as Pick<UserStore, 'onboarding'>;
 
       expect(onboardingSelectors.needsOnboarding(store)).toBe(true);
-    });
-  });
-
-  describe('commonStepsCompleted', () => {
-    it('returns true when responseLanguage is explicitly stored', () => {
-      const store = {
-        settings: { general: { responseLanguage: 'en-US' } },
-      } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
-    });
-
-    it('returns true when responseLanguage is empty string (explicit auto-detect choice)', () => {
-      const store = {
-        settings: { general: { responseLanguage: '' } },
-      } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
-    });
-
-    it('returns true even when telemetry is missing (telemetry is not part of derivation)', () => {
-      const store = {
-        settings: { general: { responseLanguage: 'en-US' } },
-      } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
-    });
-
-    it('returns false when responseLanguage is missing', () => {
-      const store = {
-        settings: { general: { telemetry: true } },
-      } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
-    });
-
-    it('returns false when general is missing entirely', () => {
-      const store = { settings: {} } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
-    });
-
-    it('returns false for a fresh user with empty settings', () => {
-      const store = { settings: undefined } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
     });
   });
 });

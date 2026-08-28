@@ -5,7 +5,7 @@ import {
   getTransparentDragImage,
   useDragActive,
   useSetCurrentDrag,
-} from '@/routes/(main)/resource/features/DndContextWrapper';
+} from '@/features/ResourceManager/DndContextWrapper';
 import { useFileStore } from '@/store/file';
 
 interface UseFileListItemDragOptions {

@@ -1,3 +1,4 @@
+import { createGmailConnectorClient, hasGmailReadPermission } from '@lobechat/connector-data/gmail';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type ToolManifest } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -395,11 +396,32 @@ export const composioRouter = router({
         const account = await (ctx.composioClient.connectedAccounts as any).get(
           input.connectedAccountId,
         );
+        const appSlug = account?.toolkit?.slug || '';
+        const status = (account?.status || 'PENDING') as string;
+        let gmailReadPermission: boolean | undefined;
+
+        if (appSlug.toLowerCase() === 'gmail' && status === 'ACTIVE') {
+          try {
+            const gmailClient = createGmailConnectorClient({
+              composio: ctx.composioClient,
+              connectedAccountId: input.connectedAccountId,
+              userId: ctx.userId,
+            });
+            const gmailAccount = await gmailClient.getAccount();
+            gmailReadPermission = hasGmailReadPermission(gmailAccount.scopes);
+          } catch (error) {
+            // Permission introspection is advisory: a transient Composio lookup failure must not
+            // downgrade an otherwise active connection or trap the OAuth polling loop.
+            console.warn('[Composio] Failed to inspect Gmail permissions:', error);
+          }
+        }
+
         return {
-          appSlug: account?.toolkit?.slug || '',
+          appSlug,
           connectedAccountId: input.connectedAccountId,
           error: undefined as 'AUTH_ERROR' | undefined,
-          status: (account?.status || 'PENDING') as string,
+          gmailReadPermission,
+          status,
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

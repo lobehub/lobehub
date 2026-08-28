@@ -5,7 +5,9 @@ import type { LambdaRouter } from '@/server/routers/lambda';
 import type { ToolsRouter } from '@/server/routers/tools';
 
 import { getValidToken } from '../auth/refresh';
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
+import { cliPackageName } from '../pkg';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { resolveWorkspaceId, withWorkspaceHeader } from './workspace';
@@ -15,7 +17,7 @@ export type ToolsTrpcClient = ReturnType<typeof createTRPCClient<ToolsRouter>>;
 
 const PERSONAL_KEY = '__personal__';
 const _clients = new Map<string, TrpcClient>();
-let _toolsClient: ToolsTrpcClient | undefined;
+const _toolsClients = new Map<string, ToolsTrpcClient>();
 
 async function getAuthAndServer(): Promise<{ headers: Record<string, string>; serverUrl: string }> {
   // LOBEHUB_JWT + LOBEHUB_SERVER env vars (used by server-side sandbox execution)
@@ -29,7 +31,7 @@ async function getAuthAndServer(): Promise<{ headers: Record<string, string>; se
     };
   }
 
-  const envApiKey = process.env[CLI_API_KEY_ENV];
+  const envApiKey = readCliApiKeyEnv();
   if (envApiKey) {
     const serverUrl = resolveServerUrl();
 
@@ -42,7 +44,7 @@ async function getAuthAndServer(): Promise<{ headers: Record<string, string>; se
   const result = await getValidToken();
   if (!result) {
     log.error(
-      `No authentication found. Run 'lh login' (or 'npx -y @lobehub/cli login') first, or set ${CLI_API_KEY_ENV}.`,
+      `No authentication found. Run '${CLI_PRIMARY_BIN} login' (or 'npx -y ${cliPackageName} login') first, or set ${CLI_API_KEY_ENV}.`,
     );
     process.exit(1);
   }
@@ -107,19 +109,29 @@ export function createLambdaClient(
   });
 }
 
-export async function getToolsTrpcClient(): Promise<ToolsTrpcClient> {
-  if (_toolsClient) return _toolsClient;
+/**
+ * Same workspace scoping as `getTrpcClient` — the tools router is workspace
+ * aware too, and dropping the header here silently ran every tools call
+ * (web/local search, market) against personal scope, which also mis-attributes
+ * the spend.
+ */
+export async function getToolsTrpcClient(workspaceId?: string): Promise<ToolsTrpcClient> {
+  const wsId = resolveWorkspaceId(workspaceId);
+  const cacheKey = wsId ?? PERSONAL_KEY;
+  const cached = _toolsClients.get(cacheKey);
+  if (cached) return cached;
 
   const { headers, serverUrl } = await getAuthAndServer();
-  _toolsClient = createTRPCClient<ToolsRouter>({
+  const client = createTRPCClient<ToolsRouter>({
     links: [
       httpLink({
-        headers,
+        headers: withWorkspaceHeader(headers, wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/tools`,
       }),
     ],
   });
+  _toolsClients.set(cacheKey, client);
 
-  return _toolsClient;
+  return client;
 }

@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+    <button {...rest} aria-label={title} type="button" onClick={onClick} />
+  ),
+}));
+
 let mockIsDesktop = false;
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -28,6 +34,19 @@ const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
 const mockOpenTaskDetail = vi.fn();
 const mockOpenVerifyReport = vi.fn();
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: (props: { onClick?: (e: unknown) => void; title?: string }) => (
+    <button
+      aria-label={props.title}
+      data-side-browser={(props as Record<string, unknown>)['data-side-browser']}
+      type="button"
+      onClick={props.onClick}
+    />
+  ),
+  Avatar: ({ alt }: { alt?: string }) => <span>{alt}</span>,
+  Text: ({ children }: { children?: unknown }) => <span>{children as never}</span>,
+}));
 
 vi.mock('@/business/client/hooks/useWorkspaces', () => ({
   useWorkspaces: () => [{ id: 'ws-1', slug: 'lobe-team' }],
@@ -93,6 +112,7 @@ afterEach(() => {
   mockShowIcon = true;
   mockIsDesktop = false;
   mockEnableInAppBrowser = false;
+  vi.restoreAllMocks();
 });
 
 beforeEach(() => {
@@ -171,7 +191,9 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
-  it('opens acceptance links in the conversation portal, never a full-page navigation', () => {
+  it('opens acceptance links in the conversation portal', () => {
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
+
     const { getByRole } = renderLink({
       linkHref: '/acceptance/acceptance-1',
       linkKind: 'generic',
@@ -181,6 +203,7 @@ describe('Link Render — internal entities', () => {
     fireEvent.click(getByRole('link', { name: 'Acceptance' }));
 
     expect(mockOpenAcceptance).toHaveBeenCalledWith('acceptance-1');
+    expect(assign).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
@@ -218,6 +241,22 @@ describe('Link Render — internal entities', () => {
     });
     fireEvent.click(agent.getByRole('link', { name: 'Research agent' }));
     expect(mockOpenAgentDetail).toHaveBeenCalledWith('agt_1');
+  });
+
+  it('hard-navigates personal verify pages into the Workbench runtime', () => {
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
+
+    const { getByRole } = renderLink({
+      linkHref: '/verify/run-1',
+      linkKind: 'generic',
+      linkLabel: 'Verify report',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Verify report' }));
+
+    expect(assign).toHaveBeenCalledWith('/verify/run-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockOpenVerifyReport).not.toHaveBeenCalled();
   });
 
   it('opens a verify link for the active workspace in the report portal', () => {

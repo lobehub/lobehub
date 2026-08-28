@@ -45,22 +45,73 @@ export interface ResumeApprovalParam {
 export interface ResumeToolResultParam {
   /** The human-provided tool result (the answer text). */
   content: string;
+  /** Distinguishes a submitted form from an explicit skip. */
+  outcome?: 'skipped' | 'submitted';
   /** ID of the pending `role='tool'` message this result targets. */
   parentMessageId: string;
   /** Optional plugin state to persist on the tool message. */
   pluginState?: Record<string, unknown>;
+  /** Optional user-supplied reason for a skipped interaction. */
+  rejectionReason?: string;
   /** tool_call_id of the pending tool call being answered. */
   toolCallId: string;
+}
+
+export type AgentInterventionSourceAction =
+  | { optionId: string; type: 'select_provider_option' }
+  | {
+      edits?: Record<string, Record<string, unknown>>;
+      scope: 'once' | 'remember';
+      type: 'approve_tool';
+    }
+  | { reason?: string; type: 'reject_continue' }
+  | { scope: 'operation'; type: 'stop' }
+  | { result: Record<string, string | string[]>; type: 'submit_answers' }
+  | {
+      result: { kind: 'agent_marketplace'; selectedTemplateIds: string[] };
+      type: 'submit_custom';
+    }
+  | { type: 'skip_interaction' }
+  | { type: 'cancel_interaction' };
+
+export interface ResolveAgentInterventionBySourceParams {
+  action: AgentInterventionSourceAction;
+  batchId: string;
+  operationId: string;
+  resolutionRequestId: string;
+  targets: Array<{ toolCallId: string; toolMessageId: string }>;
+}
+
+export type ResolveAgentInterventionBySourceResult =
+  | { execution?: never; handled: false; state?: never }
+  | {
+      execution?: ExecAgentResult;
+      handled: true;
+      state: 'already_resolved' | 'claimed';
+    };
+
+export interface GetAgentInterventionReviewBySourceParams {
+  batchId: string;
+  operationId: string;
+  targets: Array<{ toolCallId: string; toolMessageId: string }>;
 }
 
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
   autoStart?: boolean;
+  /**
+   * Client-minted ids for the rows this run creates, honoured verbatim by the
+   * server — the gateway counterpart of `sendMessageInServer`'s
+   * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Fresh
+   * sends only; resume / regeneration must not replay them.
+   */
+  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds?: string[];
+  localDeviceId?: string;
   /**
    * Agents the user @-mentioned in this message (multi-mention). The server
    * enables the callAgent tool and injects the mentioned-agents delegation
@@ -70,8 +121,16 @@ export interface ExecAgentTaskParams {
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
+  /** Existing gateway operation this fresh turn atomically supersedes. */
+  replacesOperationId?: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
+  /**
+   * Batch form of `resumeApproval` — one entry per pending tool resolved in a
+   * single "approve all" action. The server applies every decision, runs all
+   * approved tools as ONE `call_tools_batch`, and continues the LLM once.
+   */
+  resumeApprovals?: ResumeApprovalParam[];
   /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
   resumeToolResult?: ResumeToolResultParam;
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
@@ -120,6 +179,11 @@ export interface InterruptTaskParams {
  */
 export interface CreateClientTaskThreadParams {
   agentId: string;
+  /**
+   * Seed an assistant placeholder for transports that stream into an existing
+   * message (for example a local heterogeneous CLI).
+   */
+  assistantMessage?: { provider: string };
   groupId?: string;
   /** Initial user message content (task instruction) */
   instruction: string;
@@ -163,6 +227,10 @@ export interface UpdateClientTaskThreadStatusParams {
 }
 
 class AiAgentService {
+  async getServerDefaultHeterogeneousCapability() {
+    return await lambdaClient.aiAgent.getServerDefaultHeterogeneousCapability.query();
+  }
+
   /**
    * Execute a single Agent task.
    * Returns the operationId needed to connect to the Agent Gateway.
@@ -212,6 +280,46 @@ class AiAgentService {
    */
   async interruptTask(params: InterruptTaskParams) {
     return await lambdaClient.aiAgent.interruptTask.mutate(params);
+  }
+
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without running anything or continuing the model.
+   *
+   * Not `interruptTask` — that one assumes a live loop will persist the
+   * outcome, which a parked run does not have.
+   */
+  async stopPendingApproval(params: {
+    batchId: string;
+    operationId: string;
+    toolMessageIds: string[];
+    topicId: string;
+  }) {
+    return await lambdaClient.aiAgent.stopPendingApproval.mutate(params);
+  }
+
+  /**
+   * Try the Cloud durable first-winner path for an active Web card. A false
+   * result means this deployment has no generic intervention store and the
+   * caller should use the legacy OSS Gateway resume path.
+   */
+  async resolveAgentInterventionBySource(
+    params: ResolveAgentInterventionBySourceParams,
+  ): Promise<ResolveAgentInterventionBySourceResult> {
+    const result = await lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate(params);
+
+    if (!result.success) return { handled: false };
+
+    return {
+      execution: 'execution' in result ? result.execution : undefined,
+      handled: true,
+      state: result.state,
+    };
+  }
+
+  /** Fetch the authoritative v2 snapshot and view/resolve authorization for an active card. */
+  async getAgentInterventionReviewBySource(params: GetAgentInterventionReviewBySourceParams) {
+    return await lambdaClient.aiAgent.getAgentInterventionReviewBySource.mutate(params);
   }
 
   /**

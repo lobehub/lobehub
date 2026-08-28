@@ -4,9 +4,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
+import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 import { FilesTabs } from '@/types/files';

@@ -1,8 +1,16 @@
 'use client';
 
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, Switch } from '@lobehub/ui/base-ui';
-import { Radio } from 'antd';
+import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
+import { DropdownMenu, Flexbox, Icon, Input } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createModal,
+  type ModalInstance,
+  RadioGroup,
+  Switch,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import {
@@ -13,7 +21,7 @@ import {
   XIcon,
   ZapIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentQuotaService } from '@/services/agentQuota';
@@ -28,8 +36,22 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
+  interactive: css`
+    display: contents;
+  `,
+  radioGroup: css`
+    width: 100%;
+
+    > label {
+      width: 100%;
+    }
+
+    > label > span:last-child {
+      flex: 1;
+      min-width: 0;
+    }
+  `,
   routing: css`
-    margin-inline-start: 26px;
     padding-block: 6px;
     padding-inline: 10px;
     border-radius: ${cssVar.borderRadius};
@@ -56,17 +78,20 @@ const styles = createStaticStyles(({ css }) => ({
 
 type Account = Awaited<ReturnType<typeof agentQuotaService.listAccounts>>[number];
 type Binding = Awaited<ReturnType<typeof agentQuotaService.listBindings>>[number];
-type QuotaWindow = Awaited<ReturnType<typeof agentQuotaService.getWindows>>[number];
+type QuotaReading = Awaited<ReturnType<typeof agentQuotaService.getLatestReadings>>[number];
 
 const AUTO = 'auto';
 
 const clampPercent = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
 
-const weeklyLeftOf = (windows: QuotaWindow[]): number | undefined => {
-  const wk = windows.find((w) => w.limitType === 'weekly_all');
-  if (!wk) return undefined;
-  const used = wk.lastUtilization ?? wk.peakUtilization;
-  return used == null ? undefined : clampPercent(100 - used);
+/**
+ * Weekly headroom for the account row. A reading whose window already rolled
+ * over describes spend that has since refilled, so it counts as free rather
+ * than as the last utilization it happened to record.
+ */
+const weeklyLeftOf = (readings: QuotaReading[], now = Date.now()): number | undefined => {
+  const weekly = readings.find((r) => isWeeklyAllLimit(r));
+  return weekly ? clampPercent(100 - currentUtilization(weekly, now)) : undefined;
 };
 
 const accountName = (a: Account) => a.label || a.email || a.externalAccountId;
@@ -93,8 +118,10 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
 
     const entries = await Promise.all(
       accs.map(async (a) => {
-        const w = await agentQuotaService.getWindows(a.id).catch(() => [] as QuotaWindow[]);
-        return [a.id, weeklyLeftOf(w)] as const;
+        const readings = await agentQuotaService
+          .getLatestReadings(a.id)
+          .catch(() => [] as QuotaReading[]);
+        return [a.id, weeklyLeftOf(readings)] as const;
       }),
     );
     setWeeklyById(Object.fromEntries(entries));
@@ -193,123 +220,143 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
     [editLabel, run],
   );
 
+  const preventRadioSelection = useCallback((event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
   return (
     <Flexbox gap={2}>
-      <Radio.Group
-        style={{ width: '100%' }}
+      <RadioGroup
+        className={styles.radioGroup}
+        gap={2}
+        horizontal={false}
         value={selected}
-        onChange={(e) => setPending(e.target.value as string)}
-      >
-        {/* Auto balance is the first option in the pool, not a separate toggle */}
-        <Flexbox className={styles.row} gap={4}>
-          <Radio disabled={busy} value={AUTO}>
-            <Text style={{ fontSize: 13 }}>{t('heteroAgent.claudeQuota.manage.modeAuto')}</Text>
-          </Radio>
-          {selected === AUTO && (
-            <Flexbox horizontal align={'center'} className={styles.routing} gap={6}>
-              <Icon icon={ZapIcon} size={14} />
-              {routeAccount
-                ? t('heteroAgent.claudeQuota.manage.autoRoutingTo', {
-                    account: accountName(routeAccount),
-                  })
-                : t('heteroAgent.claudeQuota.manage.autoNoAccount')}
-            </Flexbox>
-          )}
-        </Flexbox>
-
-        {accounts.map((a) => {
-          const rotate = inRotation(a.id);
-          const weekly = weeklyById[a.id];
-          const isEditing = editingId === a.id;
-          const menuItems = [
-            {
-              icon: <Icon icon={PencilIcon} />,
-              key: 'edit',
-              label: t('heteroAgent.claudeQuota.manage.edit'),
-              onClick: () => startEdit(a),
-            },
-            { type: 'divider' as const },
-            {
-              danger: true,
-              disabled: !bindingOf(a.id),
-              icon: <Icon icon={Trash2Icon} />,
-              key: 'remove',
-              label: t('heteroAgent.claudeQuota.manage.remove'),
-              onClick: () => void remove(a.id),
-            },
-          ];
-
-          return (
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={styles.row}
-              data-off={!rotate}
-              gap={8}
-              key={a.id}
-            >
-              <Radio disabled={busy || !rotate || isEditing} value={a.id} />
-              {isEditing ? (
-                <>
-                  <Input
-                    autoFocus
-                    placeholder={a.email || t('heteroAgent.claudeQuota.manage.labelPlaceholder')}
-                    size={'small'}
-                    style={{ flex: 1 }}
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    onPressEnter={() => void saveEdit(a.id)}
-                  />
-                  <ActionIcon
-                    disabled={busy}
-                    icon={CheckIcon}
-                    size={'small'}
-                    onClick={() => void saveEdit(a.id)}
-                  />
-                  <ActionIcon icon={XIcon} size={'small'} onClick={() => setEditingId(null)} />
-                </>
-              ) : (
-                <>
-                  <Flexbox flex={1} gap={0} style={{ minWidth: 0 }}>
-                    <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-                      <Text ellipsis style={{ fontSize: 13 }}>
-                        {accountName(a)}
-                      </Text>
-                      {a.planTier && (
-                        <Text style={{ flex: 'none', fontSize: 12 }} type={'secondary'}>
-                          {a.planTier}
-                        </Text>
-                      )}
-                    </Flexbox>
-                    {/* Only a real quota reading gets a subline; a disabled row is
-                        conveyed by the dimmed state, and no-data shows nothing. */}
-                    {rotate && weekly != null && (
-                      <Text style={{ fontSize: 12 }} type={'secondary'}>
-                        {weekly === 0
-                          ? t('heteroAgent.claudeQuota.manage.exhausted')
-                          : t('heteroAgent.claudeQuota.manage.weeklyLeft', { percent: weekly })}
-                      </Text>
-                    )}
+        options={[
+          {
+            disabled: busy,
+            label: (
+              <Flexbox className={styles.row} gap={4}>
+                <Text style={{ fontSize: 13 }}>{t('heteroAgent.claudeQuota.manage.modeAuto')}</Text>
+                {selected === AUTO && (
+                  <Flexbox horizontal align={'center'} className={styles.routing} gap={6}>
+                    <Icon icon={ZapIcon} size={14} />
+                    {routeAccount
+                      ? t('heteroAgent.claudeQuota.manage.autoRoutingTo', {
+                          account: accountName(routeAccount),
+                        })
+                      : t('heteroAgent.claudeQuota.manage.autoNoAccount')}
                   </Flexbox>
-                  <Switch
-                    checked={rotate}
-                    disabled={busy}
-                    size={'small'}
-                    onChange={(v) => void setRotation(a.id, v)}
-                  />
-                  <DropdownMenu items={menuItems} placement={'bottomRight'}>
-                    <ActionIcon
-                      icon={MoreHorizontalIcon}
-                      size={'small'}
-                      title={t('heteroAgent.claudeQuota.manage.more')}
-                    />
-                  </DropdownMenu>
-                </>
-              )}
-            </Flexbox>
-          );
-        })}
-      </Radio.Group>
+                )}
+              </Flexbox>
+            ),
+            value: AUTO,
+          },
+          ...accounts.map((a) => {
+            const rotate = inRotation(a.id);
+            const weekly = weeklyById[a.id];
+            const isEditing = editingId === a.id;
+            const menuItems = [
+              {
+                icon: <Icon icon={PencilIcon} />,
+                key: 'edit',
+                label: t('heteroAgent.claudeQuota.manage.edit'),
+                onClick: () => startEdit(a),
+              },
+              { type: 'divider' as const },
+              {
+                danger: true,
+                disabled: !bindingOf(a.id),
+                icon: <Icon icon={Trash2Icon} />,
+                key: 'remove',
+                label: t('heteroAgent.claudeQuota.manage.remove'),
+                onClick: () => void remove(a.id),
+              },
+            ];
+
+            return {
+              disabled: busy || !rotate || isEditing,
+              label: (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={styles.row}
+                  data-off={!rotate}
+                  gap={8}
+                >
+                  {isEditing ? (
+                    <>
+                      <Input
+                        autoFocus
+                        size={'small'}
+                        style={{ flex: 1 }}
+                        value={editLabel}
+                        placeholder={
+                          a.email || t('heteroAgent.claudeQuota.manage.labelPlaceholder')
+                        }
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        onPressEnter={() => void saveEdit(a.id)}
+                      />
+                      <ActionIcon
+                        disabled={busy}
+                        icon={CheckIcon}
+                        size={'small'}
+                        onClick={() => void saveEdit(a.id)}
+                      />
+                      <ActionIcon icon={XIcon} size={'small'} onClick={() => setEditingId(null)} />
+                    </>
+                  ) : (
+                    <>
+                      <Flexbox flex={1} gap={0} style={{ minWidth: 0 }}>
+                        <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+                          <Text ellipsis style={{ fontSize: 13 }}>
+                            {accountName(a)}
+                          </Text>
+                          {a.planTier && (
+                            <Text style={{ flex: 'none', fontSize: 12 }} type={'secondary'}>
+                              {a.planTier}
+                            </Text>
+                          )}
+                        </Flexbox>
+                        {/* Only a real quota reading gets a subline; a disabled row is
+                            conveyed by the dimmed state, and no-data shows nothing. */}
+                        {rotate && weekly != null && (
+                          <Text style={{ fontSize: 12 }} type={'secondary'}>
+                            {weekly === 0
+                              ? t('heteroAgent.claudeQuota.manage.exhausted')
+                              : t('heteroAgent.claudeQuota.manage.weeklyLeft', {
+                                  percent: weekly,
+                                })}
+                          </Text>
+                        )}
+                      </Flexbox>
+                      <span className={styles.interactive} onClick={preventRadioSelection}>
+                        <Switch
+                          checked={rotate}
+                          disabled={busy}
+                          size={'small'}
+                          onChange={(v) => void setRotation(a.id, v)}
+                        />
+                      </span>
+                      <span className={styles.interactive} onClick={preventRadioSelection}>
+                        <DropdownMenu items={menuItems} placement={'bottomRight'}>
+                          <ActionIcon
+                            icon={MoreHorizontalIcon}
+                            size={'small'}
+                            title={t('heteroAgent.claudeQuota.manage.more')}
+                          />
+                        </DropdownMenu>
+                      </span>
+                    </>
+                  )}
+                </Flexbox>
+              ),
+              value: a.id,
+            };
+          }),
+        ]}
+        onChange={setPending}
+      />
 
       {accounts.length === 0 && (
         <Text className={styles.hint}>{t('heteroAgent.claudeQuota.manage.empty')}</Text>

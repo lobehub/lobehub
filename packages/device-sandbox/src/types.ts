@@ -23,6 +23,21 @@ export interface SandboxCapability {
   warnings?: string[];
 }
 
+/**
+ * Outcome of provisioning the sandbox backend on this machine.
+ *
+ * `cancelled` is deliberately not an error: the Windows setup raises a UAC
+ * prompt, and dismissing it is the user declining, so the caller should leave
+ * the UI untouched rather than report a failure.
+ */
+export type SandboxSetupStatus = 'cancelled' | 'installed' | 'not-installable';
+
+export interface SandboxSetupResult {
+  /** What to do by hand when `status` is `not-installable`. */
+  instructions?: string;
+  status: SandboxSetupStatus;
+}
+
 export interface SandboxCommand {
   args: string[];
   cmd: string;

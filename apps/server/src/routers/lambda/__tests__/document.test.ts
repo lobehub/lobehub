@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
   businessFileTransferStorageCheck: vi.fn(),
   countFileUsageInSubtree: vi.fn(),
   findById: vi.fn(),
+  getAccessLevel: vi.fn(),
   getResourceMeta: vi.fn(),
+  publishToWorkspace: vi.fn(),
+  setAccessLevel: vi.fn(),
   subtreeHasForeignRows: vi.fn(),
   transferTo: vi.fn(),
   updateDocument: vi.fn(),
@@ -31,10 +34,17 @@ vi.mock('@/database/models/document', () => ({
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn(() => ({})) }));
 vi.mock('@/database/models/message', () => ({ MessageModel: vi.fn(() => ({})) }));
 vi.mock('@/database/models/resourcePermission', () => ({
-  ResourcePermissionModel: vi.fn(() => ({ removeAll: vi.fn(), setAccessLevel: vi.fn() })),
+  ResourcePermissionModel: vi.fn(() => ({
+    getAccessLevel: mocks.getAccessLevel,
+    removeAll: vi.fn(),
+    setAccessLevel: mocks.setAccessLevel,
+  })),
 }));
 vi.mock('@/server/services/document', () => ({
-  DocumentService: vi.fn(() => ({ updateDocument: mocks.updateDocument })),
+  DocumentService: vi.fn(() => ({
+    publishToWorkspace: mocks.publishToWorkspace,
+    updateDocument: mocks.updateDocument,
+  })),
 }));
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanEditResource: mocks.assertCanEditResource,
@@ -163,5 +173,51 @@ describe('documentRouter transferDocument', () => {
       parentId: 'old-parent',
       title: 'Renamed',
     });
+  });
+});
+
+describe('documentRouter publishDocumentToWorkspace', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCanPerformResourceAction.mockResolvedValue(undefined);
+    mocks.findById.mockResolvedValue({
+      id: 'doc-1',
+      userId: 'creator-1',
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+    mocks.publishToWorkspace.mockResolvedValue({ documentIds: ['doc-1'] });
+  });
+
+  const caller = () =>
+    documentRouter.createCaller({
+      serverDB: {},
+      userId: 'creator-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+  it('preserves an access level staged while the document was private', async () => {
+    mocks.getAccessLevel.mockResolvedValue('edit');
+
+    await caller().publishDocumentToWorkspace({ id: 'doc-1' });
+
+    expect(mocks.setAccessLevel).toHaveBeenCalledWith('document', 'doc-1', 'edit', 'creator-1');
+  });
+
+  it('falls back to the default level when nothing was staged', async () => {
+    mocks.getAccessLevel.mockResolvedValue(null);
+
+    await caller().publishDocumentToWorkspace({ id: 'doc-1' });
+
+    expect(mocks.setAccessLevel).toHaveBeenCalledWith('document', 'doc-1', 'view', 'creator-1');
+  });
+
+  it('lets an explicit input override a staged level', async () => {
+    mocks.getAccessLevel.mockResolvedValue('view');
+
+    await caller().publishDocumentToWorkspace({ accessLevel: 'edit', id: 'doc-1' });
+
+    expect(mocks.setAccessLevel).toHaveBeenCalledWith('document', 'doc-1', 'edit', 'creator-1');
   });
 });

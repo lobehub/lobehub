@@ -409,4 +409,37 @@ describe('UsageRecordService', () => {
       });
     });
   });
+
+  describe('copied transcripts', () => {
+    // Duplicated history (agent copy / workspace import) consumed its tokens in
+    // the SOURCE scope. Counting it again here would inflate the target's
+    // spend, request counts and per-model rows, so every report filters it out.
+    it('excludes copied rows from the usage record query', async () => {
+      const { whereArgs } = setupCapturingMock([]);
+
+      await service.findByDateRange('2024-01-01', '2024-01-31');
+
+      expect(deepIncludes(whereArgs[0], `'copied'`)).toBe(true);
+      // COALESCE form only. Null-testing a jsonb arrow expression in a WHERE
+      // clause crashes the production engine before it reads a row, and no
+      // test against real Postgres can catch it — so the shape is asserted
+      // here, both ways round.
+      expect(deepIncludes(whereArgs[0], `coalesce`)).toBe(true);
+      expect(deepIncludes(whereArgs[0], `is distinct from`)).toBe(false);
+    });
+
+    it('excludes copied rows from the agent usage stats query', async () => {
+      const { whereArgs } = setupCapturingMock([]);
+
+      await service.getAgentUsageStats('agt_123', '2024-01-01', '2024-01-31', 'day');
+
+      expect(deepIncludes(whereArgs[0], `'copied'`)).toBe(true);
+      // COALESCE form only. Null-testing a jsonb arrow expression in a WHERE
+      // clause crashes the production engine before it reads a row, and no
+      // test against real Postgres can catch it — so the shape is asserted
+      // here, both ways round.
+      expect(deepIncludes(whereArgs[0], `coalesce`)).toBe(true);
+      expect(deepIncludes(whereArgs[0], `is distinct from`)).toBe(false);
+    });
+  });
 });

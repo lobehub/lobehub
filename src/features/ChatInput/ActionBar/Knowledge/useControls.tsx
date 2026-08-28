@@ -127,20 +127,24 @@ export const useControls = ({
     ...fileItems,
   ];
 
-  const footer =
-    relatedGroups.length > 0 ? (
-      <button
-        className={cx(styles.viewMore)}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          openAttachKnowledgeModal();
-        }}
-      >
-        <Icon color={cssVar.colorTextSecondary} icon={LibraryBig} size={14} />
-        <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
-      </button>
-    ) : null;
+  // The footer is the only entry into the full library / file picker, so it stays
+  // rendered when nothing is attached yet — otherwise the submenu shows "no related
+  // files or libraries" with no way to attach the first one.
+  const footer = (
+    <button
+      className={cx(styles.viewMore)}
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        openAttachKnowledgeModal();
+      }}
+    >
+      <Icon color={cssVar.colorTextSecondary} icon={LibraryBig} size={14} />
+      <span className={cx(styles.viewMoreLabel)}>
+        {relatedGroups.length > 0 ? t('knowledgeBase.viewMore') : t('knowledgeBase.related.browse')}
+      </span>
+    </button>
+  );
 
   return { enabledCount, footer, items: relatedGroups } satisfies KnowledgeControls;
 };

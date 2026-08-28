@@ -1,7 +1,7 @@
 'use client';
 
-import { Button } from '@lobehub/ui/base-ui';
-import { App, Form as AntdForm } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { Form as AntdForm } from 'antd';
 import { Download } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import type { PlatformCredentialExtrasProps } from '../types';
 const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
-  const { message } = App.useApp();
+
   const form = AntdForm.useFormInstance();
   const channelAccessToken = AntdForm.useWatch(['credentials', 'channelAccessToken'], form) as
     string | undefined;
@@ -26,7 +26,7 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
 
     const token = channelAccessToken?.trim();
     if (!token) {
-      message.warning(t('channel.line.fetchBotInfoMissingToken'));
+      toast.warning(t('channel.line.fetchBotInfoMissingToken'));
       return;
     }
     setLoading(true);
@@ -36,14 +36,14 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
       // Trigger validation/dirty state on the field so the form save button
       // recognises the auto-filled value as a real change.
       form.validateFields(['applicationId']).catch(() => undefined);
-      message.success(
+      toast.success(
         info.displayName
           ? `${t('channel.line.fetchBotInfoSuccess')} (${info.displayName})`
           : t('channel.line.fetchBotInfoSuccess'),
       );
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      message.error(`${t('channel.line.fetchBotInfoFailed')}: ${text}`);
+      toast.error(`${t('channel.line.fetchBotInfoFailed')}: ${text}`);
     } finally {
       setLoading(false);
     }

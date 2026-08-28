@@ -149,6 +149,38 @@ describe('TaskConfigSliceAction', () => {
       });
     });
 
+    it('should clear a member assignee in the same request when enabling automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            heartbeat: { interval: 1800 },
+            userId: 'user_member_1',
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
+
+      // Server rejects automation + human assignee; the clear must ride the
+      // same update or the optimistic toggle silently bounces back.
+      expect(taskService.update).toHaveBeenCalledWith('T-1', {
+        assigneeUserId: null,
+        automationMode: 'heartbeat',
+      });
+      expect(useTaskStore.getState().taskDetailMap['T-1'].userId).toBeNull();
+    });
+
+    it('should not touch the assignee when disabling automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', null);
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: null });
+    });
+
     it('should preserve existing heartbeat interval when re-entering heartbeat mode', async () => {
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 

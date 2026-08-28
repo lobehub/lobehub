@@ -1,4 +1,4 @@
-import type { execSync as ExecSyncType } from 'node:child_process';
+import type * as ChildProcessModule from 'node:child_process';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -165,7 +165,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-vi.mock('electron-is', () => ({
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
   linux: vi.fn(() => false),
@@ -183,14 +183,22 @@ vi.mock('node:crypto', () => ({
   randomUUID: vi.fn(() => 'mock-device-uuid'),
 }));
 
-const execSyncMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const executeRemotePlatformMock = vi.hoisted(() => vi.fn());
+const prepareRemotePlatformSpawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<{ execSync: typeof ExecSyncType }>();
-  return { ...actual, execFileSync: execFileSyncMock, execSync: execSyncMock, spawn: spawnMock };
+  const actual = await importOriginal<typeof ChildProcessModule>();
+  return { ...actual, execFileSync: execFileSyncMock, spawn: spawnMock };
 });
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
+}));
 
 vi.mock('node:os', () => ({
   default: { hostname: vi.fn(() => 'mock-hostname'), tmpdir: vi.fn(() => '/tmp') },
@@ -202,10 +210,6 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 
 vi.mock('@/services/imessageBridgeSrv', () => ({
   default: class ImessageBridgeService {},
-}));
-
-vi.mock('execa', () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }));
@@ -296,6 +300,21 @@ describe('GatewayConnectionCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    resolveRemotePlatformRuntimeMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv = process.env) => ({
+        available: true,
+        execute: executeRemotePlatformMock,
+        prepareSpawn: (args: string[]) => prepareRemotePlatformSpawnMock(type, args, baseEnv),
+      }),
+    );
+    prepareRemotePlatformSpawnMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+        args,
+        command: `/resolved/bin/${type}`,
+        env: { ...baseEnv, PATH: '/resolved/bin:/usr/bin' },
+      }),
+    );
+    executeRemotePlatformMock.mockResolvedValue({ stderr: '', stdout: '' });
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
     mockStoreGet.mockImplementation((key: string) => {
@@ -309,6 +328,7 @@ describe('GatewayConnectionCtr', () => {
 
   afterEach(() => {
     ctr.disconnect();
+    vi.unstubAllEnvs();
     vi.useRealTimers();
   });
 
@@ -324,7 +344,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       const options = MockGatewayClient.lastOptions;
@@ -344,7 +364,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
@@ -353,7 +373,7 @@ describe('GatewayConnectionCtr', () => {
     it('should return success:false when no access token', async () => {
       // Prevent auto-connect, then set up providers manually
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
@@ -365,7 +385,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('should persist gatewayEnabled=true on connect', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       mockStoreSet.mockClear();
 
@@ -374,7 +394,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should no-op when already connected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const firstClient = MockGatewayClient.lastInstance;
       firstClient!.simulateConnected();
@@ -386,7 +406,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should broadcast status changes: disconnected → connecting → connected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'connecting',
@@ -403,7 +423,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('disconnect', () => {
     it('should disconnect client and set status to disconnected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -418,7 +438,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should persist gatewayEnabled=false on disconnect', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       MockGatewayClient.lastInstance!.simulateConnected();
       mockStoreSet.mockClear();
@@ -428,7 +448,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should not trigger reconnect after intentional disconnect', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -446,9 +466,9 @@ describe('GatewayConnectionCtr', () => {
 
   // ─── Auto-Connect ───
 
-  describe('afterAppReady (auto-connect)', () => {
+  describe('afterFirstFrame (auto-connect)', () => {
     it('should auto-connect when server is configured and token exists', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).not.toBeNull();
@@ -462,7 +482,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -471,7 +491,7 @@ describe('GatewayConnectionCtr', () => {
     it('should skip auto-connect when remote server not configured', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -480,7 +500,7 @@ describe('GatewayConnectionCtr', () => {
     it('should skip auto-connect when no access token', async () => {
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -488,7 +508,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('should create device ID on first launch and persist it', () => {
       mockStoreGet.mockReturnValue(undefined);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       expect(mockStoreSet).toHaveBeenCalledWith('gatewayDeviceId', 'mock-device-uuid');
     });
@@ -500,7 +520,7 @@ describe('GatewayConnectionCtr', () => {
         return undefined;
       });
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       expect(mockStoreSet).not.toHaveBeenCalledWith('gatewayDeviceId', expect.anything());
     });
@@ -510,7 +530,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('reconnection', () => {
     it('should broadcast reconnecting status when client emits reconnecting', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -528,7 +548,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('tool call routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -722,7 +742,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('message API routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -784,7 +804,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('auth_expired handling', () => {
     it('should refresh token and reconnect on auth_expired', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client1 = MockGatewayClient.lastInstance!;
       client1.simulateConnected();
@@ -804,7 +824,7 @@ describe('GatewayConnectionCtr', () => {
         success: false,
       });
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -823,7 +843,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('agent run routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -834,23 +854,30 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code', 'opencode'] as const)(
-      'forwards agentType "%s" to spawnLhHeteroExec',
-      async (agentType) => {
-        const client = await connectAndOpen();
-        client.simulateAgentRunRequest(agentType);
-        await vi.advanceTimersByTimeAsync(0);
+    it.each([
+      'openclaw',
+      'hermes',
+      'codex',
+      'claude-code',
+      'codebuddy',
+      'cursor',
+      'kimi-code',
+      'opencode',
+    ] as const)('forwards agentType "%s" to spawnLhHeteroExec', async (agentType) => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest(agentType);
+      await vi.advanceTimersByTimeAsync(0);
 
-        expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-          expect.objectContaining({ agentType }),
-        );
-      },
-    );
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ agentType }),
+      );
+    });
 
-    it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
+    it('forwards cwd and primary/fallback context from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('claude-code', 'op-ctx', 'hi', 'mock-jwt', {
         cwd: '/Users/alice/repo',
+        resumeFallbackSystemContext: 'RECOVERY CONTEXT',
         systemContext: 'WORKSPACE CONTEXT',
       });
       await vi.advanceTimersByTimeAsync(0);
@@ -858,8 +885,21 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/Users/alice/repo',
+          resumeFallbackSystemContext: 'RECOVERY CONTEXT',
           systemContext: 'WORKSPACE CONTEXT',
         }),
+      );
+    });
+
+    it('forwards the seeded assistant message id to the hetero launcher', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-assistant', 'hi', 'mock-jwt', {
+        assistantMessageId: 'asst-1',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ assistantMessageId: 'asst-1' }),
       );
     });
 
@@ -874,6 +914,18 @@ describe('GatewayConnectionCtr', () => {
         expect.objectContaining({
           args: ['--model', 'opus', '--effort', 'high'],
         }),
+      );
+    });
+
+    it('forwards ingestWorkspaceId to spawnLhHeteroExec as workspaceId', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('grok-build', 'op-ws', 'hi', 'mock-jwt', {
+        ingestWorkspaceId: 'ws-lobehub',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-lobehub' }),
       );
     });
 
@@ -980,6 +1032,15 @@ describe('GatewayConnectionCtr', () => {
   // ─── runHeteroTask ───
 
   describe('runHeteroTask', () => {
+    function makeMockStream() {
+      const listeners: Array<(chunk: Buffer) => void> = [];
+
+      return {
+        on: vi.fn((_event: string, cb: (chunk: Buffer) => void) => listeners.push(cb)),
+        _emit: (content: string) => listeners.forEach((cb) => cb(Buffer.from(content))),
+      };
+    }
+
     /** Creates a minimal mock child process returned by spawn(). */
     function makeMockChild(pid = 9999) {
       const listeners: Record<string, Array<(...a: any[]) => void>> = {};
@@ -989,13 +1050,15 @@ describe('GatewayConnectionCtr', () => {
           listeners[event].push(cb);
         }),
         pid,
+        stderr: makeMockStream(),
+        stdout: makeMockStream(),
         unref: vi.fn(),
         _emit: (event: string, ...args: any[]) => listeners[event]?.forEach((cb) => cb(...args)),
       };
     }
 
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -1026,14 +1089,114 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(spawnMock).toHaveBeenCalledTimes(1);
-      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      const [spawnCommand, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] as [
+        string,
+        string[],
+        { env: NodeJS.ProcessEnv },
+      ];
+      expect(spawnCommand).toBe('/resolved/bin/openclaw');
+      expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
+      expect(spawnOptions.env.LOBEHUB_OPERATION_ID).toBe('op-1');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
     });
 
+    it('reports a failed child process as a terminal error', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-failed-child',
+        prompt: 'hello',
+        taskId: 'task-failed-child',
+        topicId: 'topic-failed-child',
+      });
+      child._emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          done: true,
+          error: { message: 'Task failed (exit code: 1)', type: 'HeteroProcessError' },
+          operationId: 'op-failed-child',
+        }),
+      );
+    });
+
+    it('reports a signal exit as a cancelled terminal signal', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-cancelled-child',
+        prompt: 'hello',
+        taskId: 'task-cancelled-child',
+        topicId: 'topic-cancelled-child',
+      });
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancelled: true,
+          done: true,
+          error: undefined,
+          operationId: 'op-cancelled-child',
+        }),
+      );
+    });
+
+    it.each([
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'researcher',
+        platformAgentId: ' researcher ',
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: undefined,
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: '   ',
+      },
+      { environmentAgentId: '', expectedAgentId: 'main', platformAgentId: undefined },
+    ])(
+      'selects OpenClaw agent $expectedAgentId from platform config before environment fallback',
+      async ({ environmentAgentId, expectedAgentId, platformAgentId }) => {
+        vi.stubEnv('OPENCLAW_AGENT_ID', environmentAgentId);
+        spawnMock.mockReturnValue(makeMockChild());
+
+        const client = await connectAndOpen();
+        client.simulateToolCallRequest(
+          'runHeteroTask',
+          {
+            agentType: 'openclaw',
+            operationId: 'op-agent-selection',
+            platformAgentId,
+            prompt: 'hello',
+            taskId: 'task-agent-selection',
+            topicId: 'topic-agent-selection',
+          },
+          'req-agent-selection',
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+        expect(spawnArgs[spawnArgs.indexOf('--agent') + 1]).toBe(expectedAgentId);
+      },
+    );
+
     it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify');
 
       // First task
       const child1 = makeMockChild(1111);
@@ -1068,10 +1231,181 @@ describe('GatewayConnectionCtr', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(killSpy).toHaveBeenCalledWith(-1111, 'SIGTERM');
       expect(spawnMock).toHaveBeenCalledTimes(2);
 
+      // The replaced child may close after the new operation has started. It must
+      // neither send a terminal notify for the new operation nor remove its task.
+      child1._emit('close', null, 'SIGTERM');
+      expect(notifySpy).not.toHaveBeenCalled();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-2' },
+        'req-cancel-2',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(killSpy).toHaveBeenCalledWith(-2222, 'SIGINT');
+
       killSpy.mockRestore();
+    });
+
+    it('isolates concurrent group members that share a topic', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-1',
+        parentOperationId: 'op-parent',
+        prompt: 'member one',
+        taskId: 'task-child-1',
+        topicId: 'topic-shared',
+      });
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-2',
+        parentOperationId: 'op-parent',
+        prompt: 'member two',
+        taskId: 'task-child-2',
+        topicId: 'topic-shared',
+      });
+
+      expect(killSpy).not.toHaveBeenCalled();
+      const firstArgs = spawnMock.mock.calls[0][1] as string[];
+      const secondArgs = spawnMock.mock.calls[1][1] as string[];
+      expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+      expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+      expect((ctr as any).platformTasks.get('task-child-2')).toMatchObject({
+        parentOperationId: 'op-parent',
+      });
+
+      killSpy.mockRestore();
+    });
+
+    it('kills the complete detached process group when cancelling a task', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5555);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel',
+          prompt: 'work',
+          taskId: 'task-cancel',
+          topicId: 'topic-cancel',
+        },
+        'req-run-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel' },
+        'req-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGINT');
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('does not escalate cancellation after the process group is gone', async () => {
+      const alive = new Set([5556]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal?) => {
+        const target = typeof pid === 'number' ? Math.abs(pid) : Number(pid);
+        if (signal === 0) {
+          if (!alive.has(target)) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
+          return true;
+        }
+        if (signal === 'SIGINT' || signal === 'SIGTERM') {
+          // Leader exits, but leave group membership to the close handler's cleanup
+          // simulation below so the escalation probe can see "gone".
+        }
+        if (signal === 'SIGKILL') {
+          alive.delete(target);
+        }
+        return true;
+      });
+      const child = makeMockChild(5556);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-exit',
+          prompt: 'work',
+          taskId: 'task-cancel-exit',
+          topicId: 'topic-cancel-exit',
+        },
+        'req-run-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-exit' },
+        'req-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      // Whole tree is gone with the leader — escalation must not fire SIGKILL.
+      alive.delete(5556);
+      child._emit('close', 0, null);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5556, 'SIGINT');
+      expect(killSpy).not.toHaveBeenCalledWith(-5556, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('still escalates when the group leader exits but detached children remain', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5557);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-orphan',
+          prompt: 'work',
+          taskId: 'task-cancel-orphan',
+          topicId: 'topic-cancel-orphan',
+        },
+        'req-run-cancel-orphan',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-orphan' },
+        'req-cancel-orphan',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      // Leader closed, but process.kill(-pid, 0) still succeeds → orphans remain.
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5557, 'SIGINT');
+      expect(killSpy).toHaveBeenCalledWith(-5557, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('uses taskkill to terminate the full Windows wrapper process tree', () => {
+      const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+      (ctr as any).killPlatformProcessTree(6666, 'SIGINT');
+
+      expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '6666', '/T', '/F'], {
+        stdio: 'ignore',
+      });
+      platformSpy.mockRestore();
     });
 
     it('does not kill processes for a different topicId', async () => {
@@ -1112,13 +1446,126 @@ describe('GatewayConnectionCtr', () => {
 
       killSpy.mockRestore();
     });
+
+    describe('hermes', () => {
+      it('relays stdout intact and saves the final session id from stderr', async () => {
+        const child = makeMockChild();
+        const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+        spawnMock.mockReturnValue(child);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-hermes-1',
+          prompt: 'hello',
+          taskId: 'task-hermes-1',
+          topicId: 'topic-hermes',
+        });
+
+        const [command, , spawnOptions] = spawnMock.mock.calls[0] as [
+          string,
+          string[],
+          { stdio: string[] },
+        ];
+        expect(command).toBe('/resolved/bin/hermes');
+        expect(spawnOptions.stdio).toEqual(['ignore', 'pipe', 'pipe']);
+
+        child.stdout._emit('session_id: part of the final answer\nHello from Hermes\n');
+        child.stderr._emit(
+          'Restored working directory: /repo\r\nsession_id: session-before-compaction\r\n' +
+            'Context compacted\r\nsession_id: session-continuation\r\n',
+        );
+        child._emit('close', 0, null);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(notifySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: 'session_id: part of the final answer\nHello from Hermes',
+            operationId: 'op-hermes-1',
+            topicId: 'topic-hermes',
+          }),
+        );
+        expect((ctr as any).hermesSessionMap.get('topic-hermes')).toBe('session-continuation');
+      });
+
+      it('resumes the saved session and replaces it with a continuation id', async () => {
+        const firstChild = makeMockChild(1001);
+        const secondChild = makeMockChild(1002);
+        const thirdChild = makeMockChild(1003);
+        spawnMock
+          .mockReturnValueOnce(firstChild)
+          .mockReturnValueOnce(secondChild)
+          .mockReturnValueOnce(thirdChild);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-1',
+          prompt: 'remember this',
+          taskId: 'task-1',
+          topicId: 'topic-multi-turn',
+        });
+        firstChild.stderr._emit('session_id: session-a\n');
+        firstChild._emit('close', 0, null);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-2',
+          prompt: 'what did I say?',
+          taskId: 'task-2',
+          topicId: 'topic-multi-turn',
+        });
+        expect(spawnMock.mock.calls[1][1]).toEqual([
+          'chat',
+          '--query',
+          'what did I say?',
+          '--quiet',
+          '--accept-hooks',
+          '--resume',
+          'session-a',
+        ]);
+
+        secondChild.stderr._emit('session_id: session-continuation\n');
+        secondChild._emit('close', 0, null);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-3',
+          prompt: 'continue',
+          taskId: 'task-3',
+          topicId: 'topic-multi-turn',
+        });
+        expect(spawnMock.mock.calls[2][1]).toContain('session-continuation');
+      });
+
+      it('still relays a successful response when stderr has no session id', async () => {
+        const child = makeMockChild();
+        const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+        spawnMock.mockReturnValue(child);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-no-session',
+          prompt: 'hello',
+          taskId: 'task-no-session',
+          topicId: 'topic-no-session',
+        });
+        child.stdout._emit('Successful response\n');
+        child.stderr._emit('Provider diagnostic only\n');
+        child._emit('close', 0, null);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(notifySpy).toHaveBeenCalledWith(
+          expect.objectContaining({ content: 'Successful response' }),
+        );
+        expect((ctr as any).hermesSessionMap.has('topic-no-session')).toBe(false);
+      });
+    });
   });
 
   // ─── Platform Capability Probing ───
 
   describe('platform capability probing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -1126,15 +1573,15 @@ describe('GatewayConnectionCtr', () => {
     }
 
     beforeEach(() => {
-      execSyncMock.mockReset();
+      resolveRemotePlatformCommandMock.mockReset();
     });
 
-    it('returns available:true with version when binary is installed', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd.startsWith('which ') || cmd.startsWith('where '))
-          return '/usr/local/bin/openclaw\n';
-        if (cmd.includes('--version')) return 'openclaw 1.2.3\n';
-        return '';
+    it('uses the shared login-shell resolver for capability checks', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/login-shell/bin/openclaw',
+        resolvedPathEnv: '/login-shell/bin:/usr/bin',
+        version: '1.2.3',
       });
 
       const client = await connectAndOpen();
@@ -1148,18 +1595,18 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-cap',
         result: {
-          content: JSON.stringify({ available: true, version: 'openclaw 1.2.3' }),
-          state: { available: true, version: 'openclaw 1.2.3' },
+          content: JSON.stringify({ available: true, version: '1.2.3' }),
+          state: { available: true, version: '1.2.3' },
           success: true,
         },
       });
+      expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('openclaw');
     });
 
-    it('returns available:true without version when --version command fails', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd.startsWith('which ') || cmd.startsWith('where '))
-          return '/usr/local/bin/openclaw\n';
-        throw new Error('version command failed');
+    it('returns available:true when the shared resolver has no version', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/login-shell/bin/openclaw',
       });
 
       const client = await connectAndOpen();
@@ -1181,8 +1628,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false when binary is not installed', async () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('command not found');
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
       });
 
       const client = await connectAndOpen();
@@ -1210,6 +1657,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false for unknown platform', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
+        error: 'Unknown platform: unknownBot',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest(
         'checkPlatformCapability',
@@ -1229,6 +1681,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('getAgentProfile returns empty object', async () => {
+      resolveRemotePlatformRuntimeMock.mockResolvedValue({
+        available: false,
+        error: 'openclaw was not found or failed validation',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-profile');
       await vi.advanceTimersByTimeAsync(0);
@@ -1241,6 +1698,66 @@ describe('GatewayConnectionCtr', () => {
           success: true,
         },
       });
+      expect(executeRemotePlatformMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the shared OpenClaw runtime to load its profile', async () => {
+      executeRemotePlatformMock.mockResolvedValueOnce({
+        stderr: '',
+        stdout: JSON.stringify([
+          {
+            id: 'main',
+            identityEmoji: '🦞',
+            identityName: 'Clawd',
+            isDefault: true,
+          },
+        ]),
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-openclaw');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('openclaw');
+      expect(executeRemotePlatformMock).toHaveBeenCalledWith(['agents', 'list', '--json'], {
+        timeout: 5000,
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-openclaw',
+        result: {
+          content: JSON.stringify({ avatar: '🦞', title: 'Clawd' }),
+          state: { avatar: '🦞', description: undefined, title: 'Clawd' },
+          success: true,
+        },
+      });
+    });
+
+    it('uses one shared Hermes runtime to load its profile', async () => {
+      executeRemotePlatformMock
+        .mockResolvedValueOnce({ stderr: '', stdout: '◆research\n' })
+        .mockResolvedValueOnce({ stderr: '', stdout: 'Path: /profiles/research\n' });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'hermes' }, 'req-hermes');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('hermes');
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(1, ['profile', 'list'], {
+        timeout: 5000,
+      });
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(
+        2,
+        ['profile', 'show', 'research'],
+        { timeout: 5000 },
+      );
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-hermes',
+        result: {
+          content: JSON.stringify({ avatar: '⚡', title: 'research' }),
+          state: { avatar: '⚡', description: undefined, title: 'research' },
+          success: true,
+        },
+      });
     });
   });
 
@@ -1250,7 +1767,7 @@ describe('GatewayConnectionCtr', () => {
     it('should return current status', async () => {
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'disconnected' });
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'connecting' });
 
@@ -1267,14 +1784,12 @@ describe('GatewayConnectionCtr', () => {
         return undefined;
       });
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       const info = await ctr.getDeviceInfo();
       expect(info).toEqual({
-        description: '',
         deviceId: 'my-device',
         hostname: 'mock-hostname',
-        name: 'mock-hostname',
         platform: process.platform,
       });
     });

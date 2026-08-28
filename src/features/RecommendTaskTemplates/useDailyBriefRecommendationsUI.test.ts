@@ -53,9 +53,16 @@ vi.mock('swr', () => ({
   default: mockUseSWR,
 }));
 
+// The brief feed is read through the active cache scope — a list fetched for
+// another user/workspace is treated as not-loaded (see `briefListSelectors`).
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  useCacheScope: () => 'user-1:personal',
+}));
+
 vi.mock('@/store/brief', () => ({
   useBriefStore: (selector: (state: any) => unknown) =>
     selector({
+      briefsScope: 'user-1:personal',
       isBriefsInit: true,
       useFetchBriefs: mockUseFetchBriefs,
     }),
@@ -258,7 +265,11 @@ describe('useDailyBriefRecommendationsUI', () => {
 
     const { result } = renderHook(() => useDailyBriefRecommendationsUI({ count: 2 }));
 
-    expect(result.current).toMatchObject({ mode: 'cards', templates: [template] });
+    expect(result.current).toMatchObject({
+      isValidating: false,
+      mode: 'cards',
+      templates: [template],
+    });
     expect(mockUseSWR.mock.calls[0][0]).toEqual(
       taskTemplateKeys.listDailyRecommend('', 2, 'en-US'),
     );
@@ -271,6 +282,19 @@ describe('useDailyBriefRecommendationsUI', () => {
       locale: 'en-US',
       refreshSeed: undefined,
     });
+  });
+
+  it('keeps validating state visible while cached cards remain mounted', () => {
+    mockUseSWR.mockReturnValue({
+      data: { data: [template], success: true },
+      isLoading: false,
+      isValidating: true,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toMatchObject({ isValidating: true, mode: 'cards' });
   });
 
   it('drops recommendations that are missing connectors', () => {

@@ -1,7 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
-import { memo, Suspense, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -9,15 +10,10 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from '@/features/Conversation/store';
+import { openEditorModal } from '@/features/EditorModal';
 import { usePermission } from '@/hooks/usePermission';
-import dynamic from '@/libs/next/dynamic';
 
 import { type ChatItemProps } from '../../type';
-
-const EditorModal = dynamic(
-  () => import('@/features/EditorModal').then((mode) => mode.EditorModal),
-  { ssr: false },
-);
 
 export const MSG_CONTENT_CLASSNAME = 'msg_content_flag';
 
@@ -101,48 +97,53 @@ const MessageContent = memo<MessageContentProps>(
       [canEdit, id, toggleMessageEditing],
     );
 
+    // Held in a ref rather than in the effect's deps: the editor snapshots the
+    // message when it opens, so a re-render (a streaming token, a permission
+    // refresh) must not tear down and reopen a modal the user is typing in.
+    const openEditorRef = useRef<() => ModalInstance>(undefined);
+    openEditorRef.current = () =>
+      openEditorModal({
+        editorData,
+        okText: shouldSendOnConfirm ? t('send') : t('save'),
+        value: message ? String(message) : '',
+        onClose: () => onEditingChange(false),
+        onConfirm: async (value, newEditorData) => {
+          if (!canEdit) return;
+          onEditingChange(false);
+          // updateMessageContent does an optimistic state update synchronously before
+          // awaiting the DB round trip. Kick off regenerate in parallel so the old
+          // assistant reply is replaced by switchMessageBranch without waiting for persistence.
+          const save = updateMessageContent(id, value, {
+            editorData: newEditorData as Record<string, any> | undefined,
+          });
+          if (canCreate && shouldSendOnConfirm) {
+            await regenerateUserMessage(id);
+          }
+          await save;
+        },
+      });
+
+    useEffect(() => {
+      if (!editing) return;
+      const instance = openEditorRef.current!();
+      return () => instance.close();
+    }, [editing]);
+
     return (
-      <>
-        <Flexbox
-          gap={16}
-          className={cx(
-            MSG_CONTENT_CLASSNAME,
-            styles.message,
-            variant === 'bubble' && styles.bubble,
-            disabled && styles.disabled,
-            className,
-          )}
-          onDoubleClick={onDoubleClick}
-        >
-          {children || message}
-          {messageExtra}
-        </Flexbox>
-        <Suspense fallback={null}>
-          {editing && (
-            <EditorModal
-              editorData={editorData}
-              okText={shouldSendOnConfirm ? t('send') : t('save')}
-              open={editing}
-              value={message ? String(message) : ''}
-              onCancel={() => onEditingChange(false)}
-              onConfirm={async (value, newEditorData) => {
-                if (!canEdit) return;
-                onEditingChange(false);
-                // updateMessageContent does an optimistic state update synchronously before
-                // awaiting the DB round trip. Kick off regenerate in parallel so the old
-                // assistant reply is replaced by switchMessageBranch without waiting for persistence.
-                const save = updateMessageContent(id, value, {
-                  editorData: newEditorData as Record<string, any> | undefined,
-                });
-                if (canCreate && shouldSendOnConfirm) {
-                  await regenerateUserMessage(id);
-                }
-                await save;
-              }}
-            />
-          )}
-        </Suspense>
-      </>
+      <Flexbox
+        gap={16}
+        className={cx(
+          MSG_CONTENT_CLASSNAME,
+          styles.message,
+          variant === 'bubble' && styles.bubble,
+          disabled && styles.disabled,
+          className,
+        )}
+        onDoubleClick={onDoubleClick}
+      >
+        {children || message}
+        {messageExtra}
+      </Flexbox>
     );
   },
 );

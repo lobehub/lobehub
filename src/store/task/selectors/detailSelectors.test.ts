@@ -49,6 +49,7 @@ describe('taskDetailSelectors', () => {
     const state = createState({
       activeTaskId: 'T-1',
       taskDetailMap: { 'T-1': mockDetail },
+      taskInstructionRevisionMap: { 'T-1': 3 },
     });
 
     it('should return activeTaskName', () => {
@@ -69,6 +70,11 @@ describe('taskDetailSelectors', () => {
 
     it('should return activeTaskInstruction', () => {
       expect(taskDetailSelectors.activeTaskInstruction(state)).toBe('Do something');
+    });
+
+    it('should return the active task instruction revision', () => {
+      expect(taskDetailSelectors.activeTaskInstructionRevision(state)).toBe(3);
+      expect(taskDetailSelectors.activeTaskInstructionRevision(createState())).toBe(0);
     });
 
     it('should return activeTaskAgentId', () => {

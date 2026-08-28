@@ -266,11 +266,11 @@ describe('ToolsEngine', () => {
 
       const result = engine.generateToolsDetailed({
         toolIds: ['lobe-web-browsing', 'dalle'],
-        model: 'gpt-5-chat-latest',
+        model: 'gpt-5.6-sol',
         provider: 'openai',
       });
 
-      expect(mockFunctionCallChecker).toHaveBeenCalledWith('gpt-5-chat-latest', 'openai');
+      expect(mockFunctionCallChecker).toHaveBeenCalledWith('gpt-5.6-sol', 'openai');
       expect(result.tools).toBeUndefined();
       expect(result.enabledToolIds).toEqual([]);
       expect(result.filteredTools).toEqual([
@@ -287,7 +287,7 @@ describe('ToolsEngine', () => {
 
       const result = engine.generateToolsDetailed({
         toolIds: ['lobe-web-browsing', 'non-existent', 'dalle'],
-        model: 'gpt-5-chat-latest',
+        model: 'gpt-5.6-sol',
         provider: 'openai',
       });
 
@@ -333,7 +333,7 @@ describe('ToolsEngine', () => {
 
       const result = engine.generateToolsDetailed({
         toolIds: ['lobe-web-browsing', 'dalle'],
-        model: 'gpt-5-chat-latest',
+        model: 'gpt-5.6-sol',
         provider: 'openai',
       });
 

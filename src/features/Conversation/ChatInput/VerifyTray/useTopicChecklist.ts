@@ -92,7 +92,7 @@ const persistGoal = (topicId: string, goal: string, checks: TrayCheck[]) =>
 
 /**
  * Set the topic's Goal without a mounted tray (used by the composer "+" →
- * "Set goal" entry). Reads the current state, writes the goal, and revalidates
+ * "Goal" entry). Reads the current state, writes the goal, and revalidates
  * the shared SWR key so the tray reflects it.
  */
 export const setTopicGoal = async (topicId: string, goal: string) => {

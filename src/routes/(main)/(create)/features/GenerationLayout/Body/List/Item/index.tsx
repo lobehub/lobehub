@@ -2,8 +2,7 @@
 
 import { Icon, Tooltip } from '@lobehub/ui';
 import { type MenuProps } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, Trash, UsersIcon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useState } from 'react';
@@ -30,7 +29,7 @@ interface TopicItemProps {
 const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
   const { useStore, namespace } = useGenerationTopicContext();
   const { t } = useTranslation([namespace, 'common']);
-  const { message } = App.useApp();
+
   const activeWorkspaceId = useActiveWorkspaceId();
   const [isUpdating, setIsUpdating] = useState(false);
   const isLoading = useStore((s) => s.loadingGenerationTopicIds.includes(topic.id));
@@ -54,7 +53,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
 
   const notifyDeleteError = (error: unknown) => {
     console.error('Delete topic failed:', error);
-    message.error(
+    toast.error(
       isForbiddenError(error)
         ? t('manageOnlyCreator', { ns: 'common' })
         : t('operationFailed', { ns: 'common' }),
@@ -64,14 +63,14 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
   const flipVisibility = async (next: 'private' | 'public') => {
     try {
       await setGenerationTopicVisibility(topic.id, next);
-      message.success(
+      toast.success(
         next === 'private'
           ? t('makePrivate.success', { ns: 'common' })
           : t('resources.publishToWorkspace.success', { ns: 'chat' }),
       );
     } catch (error) {
       console.error('Failed to change topic visibility:', error);
-      message.error(
+      toast.error(
         next === 'private'
           ? t('makePrivate.error', { ns: 'common' })
           : t('resources.publishToWorkspace.error', { ns: 'chat' }),
@@ -90,7 +89,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
     e.preventDefault();
 
     if (!canManage) {
-      message.warning(t('manageOnlyCreator', { ns: 'common' }));
+      toast.warning(t('manageOnlyCreator', { ns: 'common' }));
       return;
     }
 

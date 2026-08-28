@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { type TooltipProps } from 'antd';
 import { ConfigProvider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';

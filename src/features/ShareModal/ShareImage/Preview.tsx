@@ -1,6 +1,7 @@
-import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
+import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import { ModelTag } from '@lobehub/icons';
-import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { memo } from 'react';
 
@@ -59,7 +60,7 @@ const Preview = memo<PreviewProps>(
         agentSelectors.displayableAgentPlugins(s),
         agentSelectors.currentAgentSystemRole(s),
         builtinAgentSelectors.isInboxAgent(s),
-        agentSelectors.currentAgentTitle(s),
+        agentSelectors.currentAgentDisplayName(s),
         agentSelectors.currentAgentAvatar(s),
         agentSelectors.currentAgentBackgroundColor(s),
         resolvedHeaderAgentId
@@ -78,7 +79,9 @@ const Preview = memo<PreviewProps>(
     });
 
     const displayTitle =
-      (isHeaderInbox ?? isInbox) ? 'Lobe AI' : headerMeta?.title || title || currentTitle;
+      (isHeaderInbox ?? isInbox)
+        ? 'Lobe AI'
+        : agentDisplayName(headerMeta) || title || currentTitle;
     const displayAvatar = headerMeta?.avatar || currentAvatar;
     const displayBackgroundColor = headerMeta?.backgroundColor || currentBackgroundColor;
     const displayModel = headerModel || currentModel;

@@ -190,10 +190,10 @@ describe('SessionGroupModel', () => {
     });
 
     describe('ownership visibility filter', () => {
-      // Folders are a per-member concern in workspace mode: each member sees
-      // and manages ONLY their own folders regardless of visibility (which
-      // now merely decides the sidebar section a folder renders in).
-      it('should scope a member to their own folders only', async () => {
+      // Folders are the SHARED skeleton of a workspace sidebar: every member
+      // sees and manages every public folder. Only private folders stay
+      // scoped to their creator.
+      it('should list every public folder plus the caller’s own private ones', async () => {
         const ownerPrivate = await ownerModel.create({
           name: 'Owner Private',
           visibility: 'private',
@@ -207,15 +207,14 @@ describe('SessionGroupModel', () => {
           visibility: 'private',
         });
 
-        const seenByMember = await memberModel.query();
-        const ids = seenByMember.map((row) => row.id).sort();
+        const ids = (await memberModel.query()).map((row) => row.id);
 
         expect(ids).toContain(memberPrivate.id);
-        expect(ids).not.toContain(ownerPublic.id);
+        expect(ids).toContain(ownerPublic.id);
         expect(ids).not.toContain(ownerPrivate.id);
       });
 
-      it('should return undefined when a member reads another member’s folder by id', async () => {
+      it('should read another member’s public folder but not their private one', async () => {
         const ownerPrivate = await ownerModel.create({
           name: 'Owner Private',
           visibility: 'private',
@@ -226,21 +225,32 @@ describe('SessionGroupModel', () => {
         });
 
         expect(await memberModel.findById(ownerPrivate.id)).toBeUndefined();
-        expect(await memberModel.findById(ownerPublic.id)).toBeUndefined();
+        expect(await memberModel.findById(ownerPublic.id)).toBeDefined();
       });
 
-      it('should not delete another member’s folder even by id', async () => {
+      it('should let any member delete a shared folder, but not a private one', async () => {
         const ownerPublic = await ownerModel.create({
           name: 'Owner Public',
           visibility: 'public',
         });
+        const ownerPrivate = await ownerModel.create({
+          name: 'Owner Private',
+          visibility: 'private',
+        });
 
         await memberModel.delete(ownerPublic.id);
+        await memberModel.delete(ownerPrivate.id);
 
-        const stillThere = await serverDB.query.sessionGroups.findFirst({
-          where: eq(sessionGroups.id, ownerPublic.id),
-        });
-        expect(stillThere).toBeDefined();
+        expect(
+          await serverDB.query.sessionGroups.findFirst({
+            where: eq(sessionGroups.id, ownerPublic.id),
+          }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.sessionGroups.findFirst({
+            where: eq(sessionGroups.id, ownerPrivate.id),
+          }),
+        ).toBeDefined();
       });
     });
 

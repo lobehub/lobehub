@@ -142,4 +142,6 @@ export interface ServerCreateAgentToolsEngineParams {
   modelAbilities?: ModelAbilities;
   /** Provider name for function calling compatibility check */
   provider: string;
+  /** Final search-routing decision resolved by the caller. */
+  useApplicationBuiltinSearchTool?: boolean;
 }

@@ -97,16 +97,18 @@ const TRUNCATION_MARKER_RE =
 // Payload reconstruction
 // ---------------------------------------------------------------------------
 
-interface PayloadMessage {
+export interface PayloadMessage {
   content?: unknown;
   name?: string;
-  reasoning?: string;
+  /** String on most providers, `{ content }` on some — normalize before use. */
+  reasoning?: unknown;
+  reasoning_content?: unknown;
   role: string;
   tool_call_id?: string;
   tool_calls?: Array<{ function?: { arguments?: string; name?: string }; id?: string }>;
 }
 
-function contentText(m: PayloadMessage): string {
+export function contentText(m: PayloadMessage): string {
   if (typeof m.content === 'string') return m.content;
   if (Array.isArray(m.content)) {
     return m.content

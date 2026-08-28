@@ -1,5 +1,5 @@
-import { Alert, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
-import { Button, RadioGroup } from '@lobehub/ui/base-ui';
+import { Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
+import { Alert, Button, RadioGroup } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
 import { Divider, Form } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -340,7 +340,13 @@ const MCPManifestForm = ({
                 rules={[{ message: t('dev.mcp.command.required'), required: true }]}
                 tag={'command'}
               >
-                <MCPStdioCommandInput placeholder={t('dev.mcp.command.placeholder')} />
+                <MCPStdioCommandInput
+                  placeholder={t('dev.mcp.command.placeholder')}
+                  onParsedArgs={(args) => {
+                    const existing: string[] = form.getFieldValue(STDIO_ARGS) ?? [];
+                    form.setFieldValue(STDIO_ARGS, [...args, ...existing.filter(Boolean)]);
+                  }}
+                />
               </FormItem>
               <FormItem
                 desc={t('dev.mcp.args.desc')}

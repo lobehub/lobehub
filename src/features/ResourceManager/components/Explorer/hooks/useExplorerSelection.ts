@@ -2,13 +2,13 @@ import { useCallback, useMemo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
-import { useEventCallback } from '@/hooks/useEventCallback';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
   getExplorerSelectAllUiState,
   getExplorerSelectedCount,
   isExplorerItemSelected,
-} from '@/routes/(main)/resource/features/store/selectors';
+} from '@/features/ResourceManager/store/selectors';
+import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';

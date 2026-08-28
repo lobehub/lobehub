@@ -57,6 +57,10 @@ export class FileService {
     await lambdaClient.file.removeFile.mutate({ id });
   };
 
+  removeUnreferencedFile = async (id: string): Promise<void> => {
+    await lambdaClient.file.removeUnreferencedFile.mutate({ id });
+  };
+
   removeFiles = async (ids: string[]): Promise<void> => {
     await lambdaClient.file.removeFiles.mutate({ ids });
   };
@@ -147,12 +151,12 @@ export class FileService {
     return lambdaClient.file.updateFile.mutate({ id, ...data });
   };
 
-  getRecentFiles = async (limit?: number) => {
-    return lambdaClient.file.recentFiles.query({ limit });
+  getRecentFiles = async (limit?: number, visibility?: QueryFileListParams['visibility']) => {
+    return lambdaClient.file.recentFiles.query({ limit, visibility });
   };
 
-  getRecentPages = async (limit?: number) => {
-    return lambdaClient.file.recentPages.query({ limit });
+  getRecentPages = async (limit?: number, visibility?: QueryFileListParams['visibility']) => {
+    return lambdaClient.file.recentPages.query({ limit, visibility });
   };
 
   transferEntity = async (

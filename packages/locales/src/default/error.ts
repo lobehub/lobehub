@@ -235,14 +235,31 @@ export default {
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',
   'testConnectionFailed': 'Test connection failed: {{error}}',
   'tts.responseError': 'Service request failed, please check the configuration or try again',
+  'transfer.agentOwnedByGroup':
+    'This agent belongs to a chat group and cannot be moved on its own. Move the group instead, or remove the agent from it first.',
+  'transfer.groupHasInaccessibleMember':
+    'This group includes a member you do not have access to. Ask its owner to share it with the workspace, or remove it from the group, then try again.',
   'transfer.noPermission': "You don't have permission to move this resource.",
   'transfer.ownerOnly': 'Only workspace owners can transfer resources created by other members.',
   'transfer.resourceNotFound':
     'This resource no longer exists or you no longer have access. Refresh and try again.',
+  'transfer.copyInProgress':
+    'A previous copy of this agent is still duplicating its history. Try again once it finishes.',
+  'transfer.transferInProgress':
+    'A previous move of this resource is still migrating its history. Try again once it finishes.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
+  'transfer.targetIsCurrentOwner': 'This agent already belongs to that member. Pick someone else.',
   'transfer.targetNoWriteAccess':
     'You need Member or Owner access to move resources into the target workspace.',
+  'transfer.targetNotWorkspaceMember':
+    'The selected recipient is not an active member of this workspace. Refresh the member list and try again.',
+  'transfer.transferRequestPending':
+    'This agent already has a pending transfer request. Withdraw it or wait for the recipient to respond.',
+  'transfer.transferRequestExpired':
+    'This transfer request has expired. Ask for a new one to be sent.',
+  'transfer.transferRequestStale':
+    'The agent changed since this request was created, so it can no longer complete.',
   'unlock.addProxyUrl': 'Add OpenAI proxy URL (optional)',
   'unlock.apiKey.description': 'Enter your {{name}} API Key to start the session',
   'unlock.apiKey.imageGenerationDescription': 'Enter your {{name}} API Key to start generating',
@@ -271,6 +288,7 @@ export default {
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
   'upload.storageBlock.billingUnavailable':
     'Your subscription billing status cannot be verified. Please try again later or update your billing details.',
+  'upload.storageBlock.cleanupFiles': 'Free up space',
   'upload.storageBlock.monthlyCapReached': 'Your monthly storage spending cap has been reached.',
   'upload.storageBlock.noPaymentMethod': 'Please add a payment method to continue uploading.',
   'upload.storageBlock.viewUsage': 'View storage usage',

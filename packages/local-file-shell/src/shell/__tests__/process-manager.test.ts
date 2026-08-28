@@ -355,15 +355,22 @@ describe('ShellProcessManager', () => {
       expect(result.error).toContain('not found');
     });
 
-    it('should remove process from registry after killing', async () => {
+    it('should keep the output retrievable after killing', async () => {
       const process = createMockProcess();
-      manager.register('test-1', createShellProcess(manager, 'test-1', process));
+      const shellProcess = createShellProcess(manager, 'test-1', process);
+      manager.register('test-1', shellProcess);
+      writeOutput(shellProcess, 'partial output before kill');
 
       manager.kill('test-1');
+      // Simulate the tree kill terminating the child via signal (POSIX shape:
+      // no exit code) — getOutput must not wait for the observation timeout.
+      Object.defineProperty(process, 'signalCode', { configurable: true, value: 'SIGKILL' });
+      process.emit('exit', null, 'SIGKILL');
+      process.emit('close', null, 'SIGKILL');
 
-      const result = await manager.getOutput({ shell_id: 'test-1' });
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('not found');
+      const result = await manager.getOutput({ shell_id: 'test-1', timeout: 5000 });
+      expect(result.success).toBe(true);
+      expect(result.stdout).toBe('partial output before kill');
     });
 
     it('should handle kill error gracefully', () => {

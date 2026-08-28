@@ -94,6 +94,32 @@ describe('MessageModel Create Tests', () => {
       expect(result.userId).toBe(userId);
     });
 
+    it('finds a message by client id within the current user scope', async () => {
+      await Promise.all([
+        messageModel.create(
+          {
+            clientId: 'shared-client-id',
+            content: 'owned message',
+            role: 'assistant',
+          },
+          'owned-message',
+        ),
+        new MessageModel(serverDB, otherUserId).create(
+          {
+            clientId: 'shared-client-id',
+            content: 'other message',
+            role: 'assistant',
+          },
+          'other-message',
+        ),
+      ]);
+
+      await expect(messageModel.findByClientId('shared-client-id')).resolves.toMatchObject({
+        content: 'owned message',
+        id: 'owned-message',
+      });
+    });
+
     it('promotes metadata.usage into the dedicated usage column on create', async () => {
       const usage = { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 };
       const result = await messageModel.create({
@@ -340,6 +366,82 @@ describe('MessageModel Create Tests', () => {
         ),
       ).toHaveLength(1);
       expect(timingEvents.some((event) => event.includes('topic.touchUpdatedAt'))).toBe(false);
+    });
+
+    it('should honour caller-supplied ids for the pair', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-client-ids',
+        sessionId: '1',
+        title: 'Client ids',
+        userId,
+      });
+
+      // The client renders the optimistic pair under these ids before the row
+      // exists; honouring them verbatim is what removes the placeholder → real
+      // id swap from the send flow.
+      const userMessageId = 'msg_clientUser01';
+      const assistantMessageId = 'msg_clientAsst01';
+
+      const result = await messageModel.createUserAndAssistantMessages(
+        {
+          assistantMessage: {
+            content: '',
+            role: 'assistant',
+            sessionId: '1',
+            topicId: 'topic-client-ids',
+          },
+          userMessage: {
+            content: 'hello',
+            role: 'user',
+            sessionId: '1',
+            topicId: 'topic-client-ids',
+          },
+        },
+        { ids: { assistantMessageId, userMessageId } },
+      );
+
+      expect(result.userMessage.id).toBe(userMessageId);
+      expect(result.assistantMessage.id).toBe(assistantMessageId);
+      // The pair must still be linked, now through the supplied user id.
+      expect(result.assistantMessage.parentId).toBe(userMessageId);
+
+      const stored = await serverDB
+        .select({ id: messages.id })
+        .from(messages)
+        .where(eq(messages.topicId, 'topic-client-ids'))
+        .orderBy(asc(messages.createdAt));
+
+      expect(stored.map((row) => row.id)).toEqual([userMessageId, assistantMessageId]);
+    });
+
+    it('should mint ids when the caller supplies none', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-server-ids',
+        sessionId: '1',
+        title: 'Server ids',
+        userId,
+      });
+
+      // Back-compat: a client that predates client-minted ids sends none, and
+      // the model keeps generating them.
+      const result = await messageModel.createUserAndAssistantMessages({
+        assistantMessage: {
+          content: '',
+          role: 'assistant',
+          sessionId: '1',
+          topicId: 'topic-server-ids',
+        },
+        userMessage: {
+          content: 'hello',
+          role: 'user',
+          sessionId: '1',
+          topicId: 'topic-server-ids',
+        },
+      });
+
+      expect(result.userMessage.id).toMatch(/^msg_/);
+      expect(result.assistantMessage.id).toMatch(/^msg_/);
+      expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
     });
 
     it('should not touch topic updatedAt when creating a pair for an existing topic', async () => {

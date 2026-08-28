@@ -4,8 +4,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./fileSystem": "./src/prompts/fileSystem/index.ts",
-    "./understanding": "./src/chains/understanding.ts"
+    "./fileSystem": "./src/prompts/fileSystem/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {

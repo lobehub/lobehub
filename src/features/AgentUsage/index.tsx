@@ -1,12 +1,13 @@
 'use client';
 
-import { Block, Flexbox, Text } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Segmented, Text } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
@@ -69,13 +70,18 @@ const AgentUsage = memo(() => {
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader
-        styles={{ left: { paddingInlineStart: 24 } }}
-        left={
-          activeAgentId ? (
-            <AgentBreadcrumb agentId={activeAgentId} title={t('usageStats.title')} />
-          ) : null
-        }
-      />
+        // No section title — the Segmented beside it names the current tab.
+        left={activeAgentId ? <AgentBreadcrumb agentId={activeAgentId} /> : null}
+        // `relative` anchors the absolutely-centered switcher below.
+        style={{ position: 'relative' }}
+        styles={{
+          // Center on the header midpoint (equal gaps), not the leftover track.
+          center: AGENT_PROFILE_TABS_CENTER_STYLE,
+          left: { minWidth: 0, paddingInlineStart: 8 },
+        }}
+      >
+        {activeAgentId && <AgentProfileTabs active={'statistics'} agentId={activeAgentId} />}
+      </NavHeader>
       <Flexbox flex={1} style={styles.body} width={'100%'}>
         <WideScreenContainer>
           <Flexbox gap={16} paddingBlock={16}>

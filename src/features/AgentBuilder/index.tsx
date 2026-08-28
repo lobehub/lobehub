@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import RightPanel from '@/features/RightPanel';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -29,6 +29,7 @@ const AgentBuilder = memo(() => {
   return (
     <RightPanel
       stableLayout
+      collapseThreshold={320}
       defaultWidth={width}
       expand={showAgentBuilderPanel}
       onExpandChange={toggleAgentBuilderPanel}
@@ -44,7 +45,7 @@ const AgentBuilder = memo(() => {
           <AgentBuilderConversation agentId={agentBuilderId} />
         </AgentBuilderProvider>
       ) : (
-        <Loading debugId="AgentBuilder > Init" />
+        <ConversationSegmentSkeleton />
       )}
     </RightPanel>
   );

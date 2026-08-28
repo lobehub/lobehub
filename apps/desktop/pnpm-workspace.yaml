@@ -6,6 +6,8 @@ packages:
   - '../../packages/const'
   - '../../packages/electron-server-ipc'
   - '../../packages/electron-client-ipc'
+  - '../../packages/electron-mac-notifications'
+  - '../../packages/napi-loader'
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
   - '../../packages/device-control'
@@ -15,9 +17,11 @@ packages:
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
+  - '../../packages/ssrf-safe-fetch'
   - './stubs/business-const'
   - '../../packages/types'
   - '../../packages/model-bank'
+  - '../../packages/utils'
   - '.'
 allowBuilds:
   electron: set this to true or false

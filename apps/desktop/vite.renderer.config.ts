@@ -8,11 +8,14 @@ import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import {
+  createSharedRolldownOutput,
+  sharedModulePreload,
   sharedOptimizeDeps,
+  sharedRendererDedupe,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
+import { spaPublicDirNames } from '../../scripts/copySpaBuildCore';
 import {
   applyDesktopViteConfigExtension,
   CLOUD_ROOT_DIR,
@@ -20,23 +23,25 @@ import {
   DEV_VITE_PORT,
   isCloudDesktopBuild,
   loadDesktopEnv,
+  reactDevtoolsPlugin,
   RENDERER_CHROME_TARGET,
   ROOT_DIR,
 } from './vite.shared';
 
 const RENDERER_OUT_DIR = path.resolve(__dirname, 'dist/renderer');
-const WEB_SPA_BUILD_DIRECTORIES = ['_spa', '_spa-auth'];
 
 /**
  * The repository public directory can contain ignored web build outputs after
  * local SPA builds. Vite copies the whole directory by default, so remove only
  * those generated web outputs from the generated desktop renderer directory.
+ * The directory list is derived from the copy script's targets so a newly
+ * added SPA surface cannot silently ride into the desktop bundle again.
  */
 function excludeWebSpaBuildArtifactsPlugin(): PluginOption {
   return {
     async closeBundle() {
       await Promise.all(
-        WEB_SPA_BUILD_DIRECTORIES.map((directory) =>
+        spaPublicDirNames.map((directory) =>
           rm(path.join(RENDERER_OUT_DIR, directory), { force: true, recursive: true }),
         ),
       );
@@ -220,7 +225,7 @@ export default defineConfig(async (env) => {
     base: '/',
     build: {
       minify: true,
-      modulePreload: { polyfill: false },
+      modulePreload: { ...sharedModulePreload, polyfill: false },
       outDir: RENDERER_OUT_DIR,
       reportCompressedSize: false,
       rolldownOptions: {
@@ -229,7 +234,7 @@ export default defineConfig(async (env) => {
           overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
-        output: sharedRollupOutput,
+        output: createSharedRolldownOutput({ strictExecutionOrder: true }),
       },
       sourcemap: false,
       target: RENDERER_CHROME_TARGET,
@@ -245,12 +250,13 @@ export default defineConfig(async (env) => {
       isCloudDesktop && cloudTsconfigPathsPlugin(),
       isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
+      reactDevtoolsPlugin(),
       excludeWebSpaBuildArtifactsPlugin(),
       vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
-      dedupe: ['react', 'react-dom'],
+      dedupe: sharedRendererDedupe,
       tsconfigPaths: !isCloudDesktop,
     },
     root: ROOT_DIR,

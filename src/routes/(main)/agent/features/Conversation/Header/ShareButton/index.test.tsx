@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
     disabled,
     onClick,
@@ -55,13 +56,12 @@ vi.mock('@/features/ShareModal', () => ({
   }),
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: mocks.permission.allowed, reason: mocks.permission.reason }),
+vi.mock('@/features/Conversation/useAgentContext', () => ({
+  useAgentContext: () => ({ topicId: mocks.activeTopicId }),
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (state: { activeTopicId?: string }) => unknown) =>
-    selector({ activeTopicId: mocks.activeTopicId }),
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: mocks.permission.allowed, reason: mocks.permission.reason }),
 }));
 
 vi.mock('@/store/serverConfig', () => ({

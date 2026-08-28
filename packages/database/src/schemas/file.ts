@@ -130,9 +130,10 @@ export const documents = pgTable(
      * workspace member can see the document; `private` constrains it to the
      * creator (`user_id`). Within a documents tree (folder/Page hierarchy) the
      * value is kept strongly consistent across the whole subtree by the service
-     * layer — children mirror the root's visibility, and the only legal
-     * transition is `private → public` via `publishToWorkspace`. Ignored in
-     * personal mode where the row is implicitly private to its owner.
+     * layer — children mirror the root's visibility. Standalone pages publish
+     * via `private → public`; creator-owned pages inside a library synchronize
+     * bidirectionally with the library. Ignored in personal mode where the row
+     * is implicitly private to its owner.
      */
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
@@ -211,9 +212,10 @@ export const files = pgTable(
     /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see the file; `private` constrains it to the
-     * creator (`user_id`). The only legal transition is `private → public`
-     * via `publishToWorkspace`. Ignored in personal mode (`workspace_id IS NULL`)
-     * where the row is implicitly private to its owner.
+     * creator (`user_id`). Standalone files publish via `private → public`;
+     * creator-owned files inside a library synchronize bidirectionally with
+     * the library. Ignored in personal mode (`workspace_id IS NULL`) where the
+     * row is implicitly private to its owner.
      */
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
@@ -278,9 +280,10 @@ export const knowledgeBases = pgTable(
      * `private → public` via `publishKnowledgeBaseToWorkspace`. Ignored in
      * personal mode (`workspace_id IS NULL`).
      *
-     * Independent of `isPublic` (marketplace discovery) and `files.visibility`
-     * (file-level workspace visibility). This column only gates *KB list*
-     * enumeration; retrieval via a known KB id still goes through `ownership()`.
+     * Independent of `isPublic` (marketplace discovery). Files and documents
+     * keep their own visibility columns for direct-resource authorization, but
+     * creator-owned rows inside a KB are synchronized to this value when the
+     * library is published or made private.
      */
     visibility: text('visibility', { enum: KNOWLEDGE_BASE_VISIBILITY }).default('public').notNull(),
 

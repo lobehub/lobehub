@@ -1,4 +1,5 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -30,10 +31,13 @@ const Title = memo(() => {
   const name = detail?.name;
 
   return (
-    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+    <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
       {identifier && <span className={styles.identifier}>{identifier}</span>}
       {name && (
-        <Text className={oneLineEllipsis} style={{ color: cssVar.colorText, fontSize: 14 }}>
+        <Text
+          className={oneLineEllipsis}
+          style={{ color: cssVar.colorText, flex: 1, fontSize: 14, minWidth: 0 }}
+        >
           {name}
         </Text>
       )}

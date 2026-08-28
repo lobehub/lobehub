@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
+import type { Pricing } from 'model-bank';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
@@ -8,12 +9,15 @@ import {
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
+import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatibleFactory/generateObject';
+import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import {
   isKimiNativeThinkingModel,
   isKimiPreserveThinkingModel,
@@ -30,6 +34,7 @@ export interface MoonshotModelCard {
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1';
 const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
 const MOONSHOT_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MOONSHOT_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 type MoonshotSDKType = 'anthropic' | 'openai';
@@ -43,6 +48,14 @@ const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.
 
 const normalizeMoonshotAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeMoonshotOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (!baseURL) return DEFAULT_MOONSHOT_BASE_URL;
+
+  return baseURL
+    .replace(MOONSHOT_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
 
 /**
  * `sdkType` explicitly selects the Moonshot SDK wrapper for router-runtime channels.
@@ -86,9 +99,27 @@ const normalizeMessagesForAnthropic = (
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // Moonshot's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? null : buildThinkingBlock(reasoning);
     const effectiveBlock =
-      thinkingBlock || (forceThinking ? { thinking: ' ', type: 'thinking' as const } : null);
+      thinkingBlock ||
+      (!hasThinkingPart && forceThinking ? { thinking: ' ', type: 'thinking' as const } : null);
+
+    if (existingParts) {
+      const contentParts = effectiveBlock ? [effectiveBlock, ...existingParts] : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (isEmptyContent(message.content)) {
       const placeholder = { text: ' ', type: 'text' as const };
@@ -219,10 +250,11 @@ const buildMoonshotOpenAIPayload = (
 
     return {
       ...effortRest,
-      // K3 currently only accepts reasoning_effort 'max' (also the server default);
-      // a saved generic effort (the UI offers low/medium/high) would be rejected, so
-      // drop anything else instead of failing the whole request
-      ...(reasoning_effort === 'max' ? { reasoning_effort } : {}),
+      // K3 supports low/high/max. Filter generic values such as medium so stale
+      // cross-model settings cannot make the provider reject the whole request.
+      ...(reasoning_effort === 'low' || reasoning_effort === 'high' || reasoning_effort === 'max'
+        ? { reasoning_effort }
+        : {}),
       ...(max_tokens === undefined ? {} : { max_completion_tokens: max_tokens }),
       messages: normalizedMessages,
       model,
@@ -269,9 +301,73 @@ const buildMoonshotOpenAIPayload = (
 };
 
 /**
+ * Kimi's Anthropic-compatible endpoint maps forced tool choices to `specified`,
+ * which is incompatible with thinking mode, but accepts `{ type: "any" }`.
+ * With a single schema tool this still forces structured output.
+ * K2.x thinking models also require an explicit `thinking` parameter on this
+ * endpoint, while K3+ uses `reasoning_effort` and must omit it.
+ * Thinking-enabled assistant history must use the same placeholder-block
+ * normalization as chat requests before the generic Anthropic conversion.
+ * https://platform.kimi.com/docs/guide/kimi-k2-7-code-quickstart
+ * https://platform.kimi.com/docs/guide/claude-code-kimi
+ */
+const createMoonshotAnthropicGenerateObject = async (
+  client: Anthropic,
+  payload: GenerateObjectPayload,
+  options?: GenerateObjectOptions,
+  pricing?: Pricing,
+  config?: AnthropicGenerateObjectConfig,
+) => {
+  const { thinking } = payload;
+  const isThinkingToggle = isKimiThinkingToggleModel(payload.model);
+  const isNativeThinking = isKimiNativeThinkingModel(payload.model);
+  const isThinkingDisabled = isThinkingToggle && thinking?.type === 'disabled';
+  const isThinkingModel = isNativeThinking || isThinkingToggle;
+  const isThinkingEnabled = isThinkingModel && !isThinkingDisabled;
+  const schemaToolChoice = isThinkingDisabled ? 'tool' : 'any';
+  const thinkingParam = isThinkingDisabled
+    ? ({ type: 'disabled' } as const)
+    : isThinkingEnabled && !isKimiReasoningEffortModel(payload.model)
+      ? ({
+          budget_tokens: Math.min(
+            thinking?.budget_tokens || 1024,
+            (config?.maxTokens ?? 64_000) - 1,
+          ),
+          type: 'enabled',
+        } as const)
+      : undefined;
+  const normalizedPayload = isThinkingEnabled
+    ? {
+        ...payload,
+        messages: normalizeMessagesForAnthropic(
+          payload.messages as ChatStreamPayload['messages'],
+          true,
+        ) as GenerateObjectPayload['messages'],
+      }
+    : payload;
+
+  return createAnthropicGenerateObject(client, normalizedPayload, options, pricing, {
+    ...config,
+    ...(thinkingParam
+      ? {
+          requestParams: {
+            ...config?.requestParams,
+            thinking: thinkingParam,
+          },
+        }
+      : {}),
+    ...(isThinkingModel ? { schemaToolChoice } : {}),
+  });
+};
+
+/**
  * Fetch Moonshot models from the API using OpenAI client
  */
-const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<ChatModelCard[]> => {
+export const fetchMoonshotModels = async ({
+  client,
+}: {
+  client: OpenAI;
+}): Promise<ChatModelCard[]> => {
   const modelsPage = (await client.models.list()) as any;
   const modelList: MoonshotModelCard[] = modelsPage.data || [];
 
@@ -296,6 +392,7 @@ export const anthropicParams = createAnthropicCompatibleParams({
   debug: {
     chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
   },
+  generateObject: createMoonshotAnthropicGenerateObject,
   provider: ModelProvider.Moonshot,
 });
 
@@ -315,9 +412,21 @@ export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
   },
   // Kimi models support prompt_cache_key for multi-turn session cache optimization.
   // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
+  models: fetchMoonshotModels,
   promptCacheKeyModels: [/^kimi-/],
   provider: ModelProvider.Moonshot,
 });
+
+type MoonshotOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMoonshotOpenAI>[0];
+
+const fetchMoonshotModelsWithOpenAI = ({ options }: { options?: MoonshotOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMoonshotOpenAI({
+    ...options,
+    baseURL: normalizeMoonshotOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
 
 /**
  * RouterRuntime configuration for Moonshot
@@ -348,7 +457,7 @@ const createOpenAIRouter = () => ({
 
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Moonshot,
-  models: fetchMoonshotModels,
+  models: fetchMoonshotModelsWithOpenAI,
   routers: (options) => {
     const sdkType = resolveMoonshotSDKType(options.sdkType);
 

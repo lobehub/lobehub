@@ -6,16 +6,18 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
+import AppsSkeleton from '@/components/Skeleton/Apps';
+import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
-import {
-  acceptanceRouteMeta,
-  verifyReportsRouteMeta,
-  verifyRouteMeta,
-} from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
-import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
+import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
+
+const mobileChatElement = dynamicElement(
+  () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/chat')),
+  'Mobile > Chat',
+  { preloadId: 'mobile-agent' },
+);
 
 /**
  * Children shared between `/` and `/:workspaceSlug` for mobile. Mobile only
@@ -33,15 +35,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(mobile)/chat'), 'Mobile > Chat'),
+            element: mobileChatElement,
             handle: { meta: agentRouteMeta },
             index: true,
           },
           {
-            element: dynamicElement(
-              () => import('@/routes/(mobile)/chat'),
-              'Mobile > Chat > Topic',
-            ),
+            element: mobileChatElement,
             handle: { meta: agentRouteMeta },
             path: ':topicId',
           },
@@ -57,6 +56,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(mobile)/chat/_layout'),
           'Mobile > Chat > Layout',
+          { preloadId: 'mobile-agent' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',
@@ -82,6 +82,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/community/(list)/(home)'),
               'Mobile > Discover > List > Home',
+              { preloadId: 'mobile-community' },
             ),
             index: true,
           },
@@ -139,6 +140,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(
           () => import('@/routes/(mobile)/community/(list)/_layout'),
           'Mobile > Discover > List > Layout',
+          { preloadId: 'mobile-community' },
         ),
       },
       // Detail routes (with DetailLayout)
@@ -209,6 +211,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
     element: dynamicElement(
       () => import('@/routes/(mobile)/community/_layout'),
       'Mobile > Discover > Layout',
+      { preloadId: 'mobile-community' },
     ),
     errorElement: <ErrorBoundary />,
     path: 'community',
@@ -218,7 +221,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     children: [
       {
-        element: dynamicElement(() => import('@/routes/(main)/agents'), 'Mobile > Agents'),
+        element: dynamicElement(() => import('@/routes/(main)/agents'), 'Mobile > Agents', {
+          preloadId: 'mobile-agents',
+        }),
         index: true,
       },
     ],
@@ -232,7 +237,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks'),
+            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks', {
+              preloadId: 'mobile-tasks',
+            }),
             index: true,
           },
         ],
@@ -269,6 +276,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
     element: dynamicLayout(
       () => import('@/routes/(main)/(task-workspace)/_layout'),
       'Mobile > Task Workspace > Layout',
+      { preloadId: 'mobile-tasks' },
     ),
   },
 
@@ -281,11 +289,13 @@ export const mobileRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
-      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      // Apps page (personal-only — never mirrored under /:workspaceSlug)
       {
-        element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Mobile > Downloads'),
+        element: dynamicElement(() => import('@/routes/(main)/apps'), 'Mobile > Apps', {
+          fallback: <AppsSkeleton />,
+        }),
         errorElement: <ErrorBoundary />,
-        path: 'downloads',
+        path: 'apps',
       },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
@@ -295,6 +305,7 @@ export const mobileRoutes: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(mobile)/settings'),
               'Mobile > Settings',
+              { preloadId: 'mobile-settings' },
             ),
             index: true,
           },
@@ -329,6 +340,7 @@ export const mobileRoutes: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/settings'),
               'Mobile > Settings > Tab',
+              { preloadId: 'mobile-settings' },
             ),
             path: ':tab',
           },
@@ -336,6 +348,7 @@ export const mobileRoutes: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/settings'),
               'Mobile > Settings > Tab > Sub',
+              { preloadId: 'mobile-settings' },
             ),
             path: ':tab/:sub',
           },
@@ -343,6 +356,7 @@ export const mobileRoutes: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(mobile)/settings/_layout'),
           'Mobile > Settings > Layout',
+          { preloadId: 'mobile-settings' },
         ),
         errorElement: <ErrorBoundary />,
         path: 'settings',
@@ -405,13 +419,16 @@ export const mobileRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home'),
+            element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home', {
+              preloadId: 'mobile-home',
+            }),
             index: true,
           },
         ],
         element: dynamicLayout(
           () => import('@/routes/(mobile)/(home)/_layout'),
           'Mobile > Home > Layout',
+          { preloadId: 'mobile-home' },
         ),
       },
 
@@ -447,6 +464,29 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                  'Mobile > Workspace > Settings > Notification',
+                ),
+                path: 'notification',
+              },
+              // Channel detail level of the two-level notification settings —
+              // the page reads the channel id from the `sub` route param.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                  'Mobile > Workspace > Settings > Notification > Channel',
+                ),
+                path: 'notification/:sub',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labels'),
+                  'Mobile > Workspace > Settings > Labels',
+                ),
+                path: 'labels',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/plans'),
                   'Mobile > Workspace > Settings > Plans',
                 ),
@@ -458,6 +498,13 @@ export const mobileRoutes: RouteObject[] = [
                   'Mobile > Workspace > Settings > Billing',
                 ),
                 path: 'billing',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/budget'),
+                  'Mobile > Workspace > Settings > Budget',
+                ),
+                path: 'budget',
               },
               {
                 element: dynamicElement(
@@ -537,51 +584,9 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     path: '/onboarding',
   },
-  {
-    element: dynamicElement(
-      () => import('@/routes/onboarding/agent'),
-      'Mobile > Onboarding > Agent',
-    ),
-    errorElement: <ErrorBoundary />,
-    path: '/onboarding/agent',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/onboarding/classic'),
-      'Mobile > Onboarding > Classic',
-    ),
-    errorElement: <ErrorBoundary />,
-    path: '/onboarding/classic',
-  },
   ...BusinessMobileRoutesWithoutMainLayout,
 
-  // Share topic route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/share/t/[id]'), 'Mobile > Share > Topic'),
-        handle: { meta: shareTopicRouteMeta },
-        path: ':id',
-      },
-    ],
-    element: dynamicElement(
-      () => import('@/routes/share/t/[id]/_layout'),
-      'Mobile > Share > Topic > Layout',
-    ),
-    path: '/share/t',
-  },
-
-  // Share page route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Mobile > Share > Page'),
-        handle: { meta: sharePageRouteMeta },
-        path: ':id',
-      },
-    ],
-    path: '/share/page',
-  },
+  // `/share/*` is served by the standalone Share app (apps/share), not this router.
 
   // Messenger verify route (outside main layout)
   {
@@ -590,27 +595,6 @@ export const mobileRoutes: RouteObject[] = [
     path: '/verify-im',
   },
 
-  // Verify report workspace — standalone master-detail (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/verify/empty'),
-          'Mobile > Verify Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Mobile > VerifyReport'),
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Mobile > Verify'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: '/verify',
-  },
   {
     element: dynamicElement(
       () => import('@/routes/acceptance/[acceptanceId]'),
@@ -619,5 +603,14 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance/:acceptanceId',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/acceptance/[acceptanceId]'),
+      'Mobile > AcceptanceCheck',
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance/:acceptanceId/check/:checkId',
   },
 ];

@@ -15,10 +15,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-block-end: 12px;
   `,
   content: css`
-    overflow-y: auto;
+    /* ChatInput's maxHeight owns the vertical scrolling; an overflow:auto here
+      never scrolls itself but still severs position:sticky inside intervention
+      bodies from that real scroll container. */
+    overflow-y: visible;
     flex: 1;
     min-height: 0;
-    padding-block: 6px 8px;
+    padding-block: 0 8px;
   `,
   tab: css`
     cursor: pointer;
@@ -52,12 +55,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   tabCounter: css`
-    margin-inline-start: auto;
-    padding-block: 5px;
-    padding-inline: 10px;
-
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
     white-space: nowrap;
+  `,
+  tabTrailing: css`
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+    align-items: center;
+
+    margin-inline-start: auto;
+    padding-block: 4px;
+    padding-inline: 10px;
   `,
 }));

@@ -52,6 +52,8 @@ export interface AgentBuilderContext {
     avatar?: string;
     backgroundColor?: string;
     description?: string;
+    /** The agent's personal name, as opposed to `title` (the role it plays) */
+    name?: string;
     tags?: string[];
     title?: string;
   };
@@ -76,7 +78,13 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
 
   // Add meta section
   if (context.meta) {
-    const metaFields: string[] = [];
+    // `<name>` leads and always carries a usable label: an agent with no personal
+    // name falls back to its role, the same rule the UI renders by. An empty
+    // element was tried first and rejected — it made the builder treat "no name"
+    // as a hole to fill, when the product answer is simply to use the role.
+    const metaFields: string[] = [
+      `  <name>${escapeXml(context.meta.name?.trim() || context.meta.title?.trim() || '')}</name>`,
+    ];
     if (context.meta.title) metaFields.push(`  <title>${escapeXml(context.meta.title)}</title>`);
     if (context.meta.description)
       metaFields.push(`  <description>${escapeXml(context.meta.description)}</description>`);
@@ -87,9 +95,7 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
     if (context.meta.tags && context.meta.tags.length > 0)
       metaFields.push(`  <tags>${context.meta.tags.join(', ')}</tags>`);
 
-    if (metaFields.length > 0) {
-      parts.push(`<agent_meta>\n${metaFields.join('\n')}\n</agent_meta>`);
-    }
+    parts.push(`<agent_meta>\n${metaFields.join('\n')}\n</agent_meta>`);
   }
 
   // Add config section

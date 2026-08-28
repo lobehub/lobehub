@@ -1,4 +1,5 @@
-import { Accordion, AccordionItem, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { type Key, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,11 +31,15 @@ const ProcessFold = memo<ProcessFoldProps>(
     const expandedKeys = useMemo(() => (expanded ? [PROCESS_KEY] : []), [expanded]);
 
     const title = (
-      <Text style={{ minWidth: 0 }} type={'secondary'}>
-        {durationText
-          ? t('turnProcess.ranFor', { count: stepCount, duration: durationText })
-          : t('turnProcess.done', { count: stepCount })}
-      </Text>
+      // minHeight matches WorkflowCollapse's 24px status-icon row so the header
+      // keeps the same height when the workflow is swapped for this fold.
+      <Flexbox horizontal align={'center'} style={{ minHeight: 24, minWidth: 0 }}>
+        <Text style={{ minWidth: 0 }} type={'secondary'}>
+          {durationText
+            ? t('turnProcess.ranFor', { count: stepCount, duration: durationText })
+            : t('turnProcess.done', { count: stepCount })}
+        </Text>
+      </Flexbox>
     );
 
     return (

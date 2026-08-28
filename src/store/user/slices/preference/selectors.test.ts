@@ -82,6 +82,26 @@ describe('preferenceSelectors', () => {
   });
 
   describe('labPreferSelectors', () => {
+    it('keeps desktop split view disabled by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableDesktopSplitView(store)).toBe(false);
+    });
+
+    it('returns the configured desktop split view preference', () => {
+      store.preference.lab = { enableDesktopSplitView: true };
+
+      expect(labPreferSelectors.enableDesktopSplitView(store)).toBe(true);
+    });
+
+    it('should default project workspaces to disabled and honor the lab preference', () => {
+      store.preference.lab = undefined;
+      expect(labPreferSelectors.enableProjects(store)).toBe(false);
+
+      store.preference.lab = { enableProjects: true };
+      expect(labPreferSelectors.enableProjects(store)).toBe(true);
+    });
+
     it('returns false for message text selection actions by default', () => {
       store.preference.lab = undefined;
 
@@ -92,6 +112,30 @@ describe('preferenceSelectors', () => {
       store.preference.lab = { enableMessageTextSelectionActions: true };
 
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
+    });
+
+    it('keeps agent provider binding disabled by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(false);
+    });
+
+    it('returns the configured agent provider binding preference', () => {
+      store.preference.lab = { enableAgentProviderBinding: true };
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(true);
+    });
+
+    it('keeps the feature on for users who enabled it under the legacy Claude-specific key', () => {
+      store.preference.lab = { enableClaudeCodeApiMode: true };
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(true);
+    });
+
+    it('lets an explicit new-key choice override the legacy key', () => {
+      store.preference.lab = { enableAgentProviderBinding: false, enableClaudeCodeApiMode: true };
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(false);
     });
 
     it('keeps OAuth app management hidden by default', () => {

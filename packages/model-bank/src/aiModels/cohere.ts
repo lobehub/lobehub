@@ -4,6 +4,23 @@ const cohereChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      "Command A+ is Cohere's first Mixture of Experts model, combining vision input support, agentic, reasoning, and world-class translation capabilities into a single model. It supports 48 languages and can run on 1× B200 or 2× H100 GPUs.",
+    displayName: 'Command A+ 2605',
+    enabled: true,
+    family: 'command',
+    id: 'command-a-plus-05-2026',
+    maxOutput: 64_000,
+    releasedAt: '2026-05-20',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     contextWindowTokens: 256_000,
     description:
@@ -27,25 +44,6 @@ const cohereChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'command-r-plus is an alias of command-r-plus-04-2024, so using command-r-plus in the API points to that model.',
-    displayName: 'Command R+ 2404',
-    family: 'command',
-    id: 'command-r-plus-04-2024',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
       'Command R+ is an instruction-following chat model with higher quality, greater reliability, and a longer context window than previous models. It is best for complex RAG workflows and multi-step tool use.',
     displayName: 'Command R+ 2408',
     enabled: true,
@@ -57,25 +55,6 @@ const cohereChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'command-r is an instruction-following chat model that performs language tasks with higher quality, improved reliability, and longer context than previous models. It supports complex workflows such as code generation, RAG, tool use, and agents.',
-    displayName: 'Command R 2403',
-    family: 'command',
-    id: 'command-r-03-2024',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -120,72 +99,6 @@ const cohereChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 4000,
-    description:
-      'An instruction-following chat model that delivers higher quality and reliability on language tasks, with a longer context window than our base generative models.',
-    displayName: 'Command',
-    family: 'command',
-    id: 'command',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'To shorten the gap between major releases, we offer nightly Command builds. For the Command series this is called command-nightly. It is the newest, most experimental (and potentially unstable) version, updated regularly without notice, so it is not recommended for production.',
-    displayName: 'Command Nightly',
-    family: 'command',
-    id: 'command-nightly',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 4000,
-    description: 'A smaller, faster Command variant that is nearly as capable but faster.',
-    displayName: 'Command Light',
-    family: 'command',
-    id: 'command-light',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 4000,
-    description:
-      'To shorten the gap between major releases, we offer nightly Command builds. For the command-light series this is called command-light-nightly. It is the newest, most experimental (and potentially unstable) version, updated regularly without notice, so it is not recommended for production.',
-    displayName: 'Command Light Nightly',
-    family: 'command',
-    id: 'command-light-nightly',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 128_000,
     description:
       'Aya Expanse is a high-performance 32B multilingual model that uses instruction tuning, data arbitrage, preference training, and model merging to rival monolingual models. It supports 23 languages.',
@@ -193,23 +106,6 @@ const cohereChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'aya',
     id: 'c4ai-aya-expanse-32b',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8000,
-    description:
-      'Aya Expanse is a high-performance 8B multilingual model that uses instruction tuning, data arbitrage, preference training, and model merging to rival monolingual models. It supports 23 languages.',
-    displayName: 'Aya Expanse 8B',
-    enabled: true,
-    family: 'aya',
-    id: 'c4ai-aya-expanse-8b',
     maxOutput: 4000,
     pricing: {
       units: [
@@ -230,26 +126,6 @@ const cohereChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'aya',
     id: 'c4ai-aya-vision-32b',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 16_000,
-    description:
-      'Aya Vision is a state-of-the-art multimodal model that performs strongly on key language, text, and vision benchmarks. This 8B version focuses on low latency and strong performance.',
-    displayName: 'Aya Vision 8B',
-    enabled: true,
-    family: 'aya',
-    id: 'c4ai-aya-vision-8b',
     maxOutput: 4000,
     pricing: {
       units: [

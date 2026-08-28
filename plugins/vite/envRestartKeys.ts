@@ -74,16 +74,6 @@ export function viteEnvRestartKeys(keys: string[]): Plugin {
     name: 'vite-env-restart-keys',
     apply: 'serve',
 
-    config() {
-      return {
-        server: {
-          watch: {
-            ignored: ['**/.env', '**/.env.*', '**/*.test.ts', '**/*.test.tsx'],
-          },
-        },
-      };
-    },
-
     configResolved(config) {
       mode = config.mode;
       envDir = config.envDir || config.root;

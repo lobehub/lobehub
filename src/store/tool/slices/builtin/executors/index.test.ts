@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   getApiNamesForIdentifier,
+  getRegisteredIdentifiers,
   hasExecutor,
   invokeExecutor,
   registerBuiltinToolExecutors,
@@ -36,23 +37,37 @@ vi.hoisted(() => {
 
 describe('builtin executor registry', () => {
   it('does not register executors as an import side effect', () => {
-    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion)).toBe(false);
+    expect(getRegisteredIdentifiers()).toEqual([]);
   });
 
   it('registers web onboarding executor APIs explicitly', async () => {
     await registerBuiltinToolExecutors();
 
-    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion)).toBe(true);
-    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.finishOnboarding)).toBe(true);
+    await expect(
+      hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion),
+    ).resolves.toBe(true);
+    await expect(
+      hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.finishOnboarding),
+    ).resolves.toBe(true);
     expect(getApiNamesForIdentifier(WebOnboardingIdentifier)).toEqual(
       Object.values(WebOnboardingApiName),
     );
   }, 30_000);
 
-  it('registers visual understanding executor APIs', async () => {
+  it('registers multimodal understanding executor APIs', async () => {
     await registerBuiltinToolExecutors();
 
-    expect(hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeVisualMedia)).toBe(true);
+    await expect(hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)).resolves.toBe(
+      true,
+    );
+  }, 30_000);
+
+  it('registers the hook-only Grok Build executor without exposing invokable APIs', async () => {
+    await registerBuiltinToolExecutors();
+
+    expect(getRegisteredIdentifiers()).toContain('grok-build');
+    await expect(hasExecutor('grok-build', 'execute')).resolves.toBe(false);
+    expect(getApiNamesForIdentifier('grok-build')).toEqual([]);
   }, 30_000);
 
   it('rejects nested sub-agent execution', async () => {

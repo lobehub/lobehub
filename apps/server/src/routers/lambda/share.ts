@@ -31,6 +31,7 @@ export const shareRouter = router({
               avatar: share.agentAvatar,
               backgroundColor: share.agentBackgroundColor,
               marketIdentifier: share.agentMarketIdentifier,
+              name: share.agentName,
               slug: share.agentSlug,
               title: share.agentTitle,
             }

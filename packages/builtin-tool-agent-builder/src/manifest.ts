@@ -77,7 +77,7 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Update agent configuration and/or metadata. Use this to change model, provider, plugins, opening message, opening questions, chat settings, model parameters, title, description, avatar, tags, and toggle plugins. Only include fields you want to update. Use togglePlugin to enable/disable a specific plugin.',
+        'Update agent configuration and/or metadata. Use this to change model, provider, plugins, opening message, opening questions, chat settings, model parameters, name, title, description, avatar, tags, and toggle plugins. Only include fields you want to update. Use togglePlugin to enable/disable a specific plugin.',
       name: AgentBuilderApiName.updateAgentConfig,
       parameters: {
         properties: {
@@ -140,13 +140,19 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
                 description: 'Agent description',
                 type: 'string',
               },
+              name: {
+                description:
+                  'The agent\'s personal name — what a user calls it, like a person\'s given name ("Alice", "小艾"). Must be a real, common given name in the user\'s language, NOT a role or a description: "Alice" ✅, "小艾" ✅, "Health Assistant" ❌, "健康助手" ❌ (those are the `title`). A newly created agent already has a randomly assigned name; only change it when the user asks, or once you know the agent\'s purpose and the seeded name clashes with it.',
+                type: 'string',
+              },
               tags: {
                 description: 'Array of tags for categorization',
                 items: { type: 'string' },
                 type: 'array',
               },
               title: {
-                description: 'Agent display name',
+                description:
+                  'The role the agent plays, used as its label across the app ("Health Assistant", "健康助手"). This is the job, not the person — the person is `name`.',
                 type: 'string',
               },
             },

@@ -316,7 +316,14 @@ describe('skillIntent classifier', () => {
         ],
         model: 'gpt-test',
       }),
-      { metadata: { trigger: RequestTrigger.AgentSignal } },
+      expect.objectContaining({
+        metadata: { trigger: RequestTrigger.AgentSignal },
+        tracing: {
+          promptVersion: 'v1',
+          scenario: 'signal_skill_intent',
+          schemaName: 'agent_signal_skill_intent',
+        },
+      }),
     );
     expect(result).toEqual({
       actionIntent: 'create',

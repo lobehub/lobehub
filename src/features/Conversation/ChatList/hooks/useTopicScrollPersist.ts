@@ -37,11 +37,13 @@ interface UseTopicScrollPersistOptions {
 /**
  * Persists per-topic chat scroll position to localStorage.
  *
- * In practice `ChatList` shows a SkeletonList while `messagesInit` is false,
- * so VirtualizedList unmounts on every topic switch and this hook is
- * re-initialized fresh. The contextKey-change branch below still exists for
- * the in-place draft → real-id promotion path, where the same instance
- * survives the key change.
+ * The provider is not keyed by context, so switching to a topic whose messages
+ * are already cached keeps VirtualizedList mounted and lands in the
+ * contextKey-change branch below: re-stamp the topic being left, then restore
+ * (or scroll to bottom) for the new one. Switching to an uncached topic still
+ * unmounts VirtualizedList behind ChatList's SkeletonList and re-initializes
+ * the hook fresh. The draft → real-id promotion path also flows through the
+ * contextKey-change branch, preserving scroll instead of restoring.
  */
 export const useTopicScrollPersist = ({
   contextKey,

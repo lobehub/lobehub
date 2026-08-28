@@ -1,7 +1,8 @@
 'use client';
 
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Select, type SelectProps, Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -37,7 +38,7 @@ const AgentSelect = memo<AgentSelectProps>(
     const options = useMemo(
       () =>
         (agentsSWR.data ?? []).map((agent) => {
-          const title = agent.title || defaultAgentTitle;
+          const title = agentDisplayName(agent, defaultAgentTitle);
           return {
             label: (
               <Flexbox horizontal align={'center'} gap={8}>

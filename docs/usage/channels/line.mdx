@@ -1,9 +1,9 @@
 ---
 title: Connect LobeHub to LINE
 description: >-
-  Learn how to connect a LINE Messaging API bot to your LobeHub agent,
-  enabling your AI assistant to chat with users on LINE through direct messages and
-  group conversations.
+  Learn how to connect a LINE Messaging API bot to your LobeHub agent, enabling
+  your AI assistant to chat with users on LINE through direct messages and group
+  conversations.
 tags:
   - LINE
   - Message Channels
@@ -109,12 +109,13 @@ By default the LINE Official Account Manager auto-replies to user messages and s
   >   <summary>Manual alternative (if the button is unavailable)</summary>
   >
   >   ```bash
-  >   curl -H "Authorization: Bearer <YOUR_CHANNEL_ACCESS_TOKEN>" \
+  >   curl -H "Authorization: Bearer <YOUR_CHANNEL_ACCESS_TOKEN" \
   >     https://api.line.me/v2/bot/info
   >   ```
   >
   >   Copy the `userId` field from the response into the **Destination User ID** field.
-  > </details>
+  >
+</details>
 
   ### Save Configuration
 
@@ -189,7 +190,7 @@ LINE's Messaging API has a few specifics that LobeHub maps as follows:
 
 - **"Verify" fails in the LINE Developers Console.** The Channel Secret in LobeHub must match the value shown on the LINE Developers Console **Basic settings** tab exactly. Re-paste it, save, and try again.
 - **`Authentication failed.` on Save / Test Connection.** Your Channel Access Token is invalid or expired. Re-issue the long-lived token in the Messaging API tab and paste the new value into LobeHub.
-- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. Easiest fix: clear the field and click **Fetch from LINE** to re-pull the correct `userId`. The `Uxxx` shown in the error is also the userId the token actually belongs to — you can paste it in directly. (Manual check: `curl -H "Authorization: Bearer <token>" https://api.line.me/v2/bot/info`.)
+- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. Easiest fix: clear the field and click **Fetch from LINE** to re-pull the correct `userId`. The `Uxxx` shown in the error is also the userId the token actually belongs to — you can paste it in directly. (Manual check: `curl -H "Authorization: Bearer <token" https://api.line.me/v2/bot/info`.)
 - **Webhook delivery is rejected with `401 Invalid signature`.** The Channel Secret in LobeHub doesn't match the one shown in the LINE Developers Console. Update LobeHub with the correct Channel Secret.
 - **Bot doesn't respond.** Check that:
   1. **Use webhook** is toggled **ON** in the Messaging API tab.

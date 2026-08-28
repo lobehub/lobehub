@@ -18,7 +18,7 @@ import {
   workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
+import { HumanApprovalAlreadyResolvedError, MessageModel } from '../../message';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -493,6 +493,74 @@ describe('MessageModel Update Tests', () => {
       expect(result[0].state).toEqual({ key1: 'value1' });
     });
 
+    it('atomically preserves independent top-level keys across concurrent writers', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'concurrent-plugin-state',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'concurrent-plugin-state',
+        identifier: 'codex',
+        state: { executionProgress: { completed: 1, total: 2 } },
+        toolCallId: 'concurrent-tool-call',
+        userId,
+      });
+
+      await Promise.all([
+        messageModel.updatePluginState('concurrent-plugin-state', {
+          askUserAnswers: { environment: 'production' },
+        }),
+        messageModel.updatePluginState('concurrent-plugin-state', {
+          heterogeneousIntervention: {
+            action: 'approve_once',
+            status: 'resolved',
+          },
+        }),
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'concurrent-plugin-state'));
+
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        executionProgress: { completed: 1, total: 2 },
+        heterogeneousIntervention: {
+          action: 'approve_once',
+          status: 'resolved',
+        },
+      });
+    });
+
+    it('does not update plugin state outside the owner scope', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'other-owner-plugin-state',
+        role: 'tool',
+        userId: otherUserId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'other-owner-plugin-state',
+        identifier: 'codex',
+        state: { preserved: true },
+        toolCallId: 'other-owner-tool-call',
+        userId: otherUserId,
+      });
+
+      await expect(
+        messageModel.updatePluginState('other-owner-plugin-state', { overwritten: true }),
+      ).rejects.toThrowError('Plugin not found');
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'other-owner-plugin-state'));
+      expect(plugin.state).toEqual({ preserved: true });
+    });
+
     it('should throw an error if plugin does not exist', async () => {
       // Call updatePluginState method
       await expect(messageModel.updatePluginState('1', { key: 'value' })).rejects.toThrowError(
@@ -564,6 +632,173 @@ describe('MessageModel Update Tests', () => {
       const plugin = await messageModel.findMessagePlugin('non-existent-id');
 
       expect(plugin).toBeUndefined();
+    });
+  });
+
+  describe('resolveHumanApproval', () => {
+    const pendingIdentity = {
+      batchId: 'batch-approval-1',
+      itemIndex: 0,
+      operationId: 'operation-approval-1',
+      status: 'pending' as const,
+      stepIndex: 4,
+    };
+
+    const seedPendingTool = async (
+      id: string,
+      intervention: Record<string, unknown> = pendingIdentity,
+    ) => {
+      await serverDB.insert(messages).values({
+        content: 'pending content',
+        id,
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'editFile',
+        arguments: '{"path":"/tmp/a"}',
+        id,
+        identifier: 'lobe-local-system',
+        intervention,
+        state: { preserved: true },
+        toolCallId: `call-${id}`,
+        userId,
+      });
+    };
+
+    it('preserves sealed operation/batch identity while applying a claim patch', async () => {
+      await seedPendingTool('approval-preserves-identity');
+
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'approval-preserves-identity',
+          intervention: {
+            resolutionRequestId: 'resolution-1',
+            status: 'approved',
+          },
+          pluginState: { approvedBy: 'review' },
+        },
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'approval-preserves-identity'));
+      expect(plugin.intervention).toEqual({
+        ...pendingIdentity,
+        resolutionRequestId: 'resolution-1',
+        status: 'approved',
+      });
+      expect(plugin.state).toEqual({ approvedBy: 'review', preserved: true });
+    });
+
+    it('rejects the whole batch when any sibling already has a winner', async () => {
+      await seedPendingTool('approval-atomic-pending');
+      await seedPendingTool('approval-atomic-settled', {
+        ...pendingIdentity,
+        itemIndex: 1,
+        status: 'approved',
+      });
+
+      await expect(
+        messageModel.resolveHumanApproval([
+          {
+            content: 'must not commit',
+            id: 'approval-atomic-pending',
+            intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+          },
+          {
+            id: 'approval-atomic-settled',
+            intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+          },
+        ]),
+      ).rejects.toBeInstanceOf(HumanApprovalAlreadyResolvedError);
+
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'approval-atomic-pending'));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'approval-atomic-pending'));
+      expect(message.content).toBe('pending content');
+      expect(plugin.intervention).toEqual(pendingIdentity);
+    });
+
+    it('returns one applied owner and one idempotent follower for concurrent same-request claims', async () => {
+      await seedPendingTool('approval-concurrent-same-request');
+      const resolution = {
+        content: 'approved once',
+        id: 'approval-concurrent-same-request',
+        intervention: { resolutionRequestId: 'resolution-concurrent', status: 'approved' as const },
+      };
+
+      const results = await Promise.all([
+        messageModel.resolveHumanApproval([resolution]),
+        messageModel.resolveHumanApproval([resolution]),
+      ]);
+
+      expect(results.sort()).toEqual(['applied', 'idempotent']);
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, resolution.id));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, resolution.id));
+      expect(message.content).toBe('approved once');
+      expect(plugin.intervention).toMatchObject({
+        resolutionRequestId: 'resolution-concurrent',
+        status: 'approved',
+      });
+    });
+
+    it('restores the exact pre-claim snapshot only for the owning resolution request', async () => {
+      await seedPendingTool('approval-rollback');
+      const original = {
+        content: 'pending content',
+        id: 'approval-rollback',
+        intervention: pendingIdentity,
+        pluginState: { preserved: true },
+      };
+
+      await messageModel.resolveHumanApproval([
+        {
+          content: 'approved content',
+          id: original.id,
+          intervention: { resolutionRequestId: 'resolution-owner', status: 'approved' },
+          pluginState: { approvedBy: 'review' },
+        },
+      ]);
+      await messageModel.restoreHumanApproval([
+        { ...original, claimedResolutionRequestId: 'resolution-loser' },
+      ]);
+
+      let [message] = await serverDB.select().from(messages).where(eq(messages.id, original.id));
+      let [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, original.id));
+      expect(message.content).toBe('approved content');
+      expect(plugin.intervention).toMatchObject({
+        resolutionRequestId: 'resolution-owner',
+        status: 'approved',
+      });
+
+      await messageModel.restoreHumanApproval([
+        { ...original, claimedResolutionRequestId: 'resolution-owner' },
+      ]);
+
+      [message] = await serverDB.select().from(messages).where(eq(messages.id, original.id));
+      [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, original.id));
+      expect(message.content).toBe(original.content);
+      expect(plugin.intervention).toEqual(original.intervention);
+      expect(plugin.state).toEqual(original.pluginState);
     });
   });
 
@@ -652,6 +887,88 @@ describe('MessageModel Update Tests', () => {
       expect(pluginResult[0].state).toEqual({
         existingState: 'value1',
         newState: 'value2',
+      });
+    });
+
+    it('preserves independent pluginState patches across concurrent tool-message updates', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-msg-concurrent-patches',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-concurrent-patches',
+        identifier: 'codex',
+        state: { executionProgress: { completed: 1, total: 2 } },
+        toolCallId: 'tool-call-concurrent-patches',
+        userId,
+      });
+
+      const results = await Promise.all([
+        messageModel.updateToolMessage('tool-msg-concurrent-patches', {
+          pluginState: { askUserAnswers: { environment: 'production' } },
+        }),
+        messageModel.updateToolMessage('tool-msg-concurrent-patches', {
+          pluginState: {
+            heterogeneousIntervention: {
+              action: 'approve_once',
+              status: 'resolved',
+            },
+          },
+        }),
+      ]);
+
+      expect(results).toEqual([
+        { applied: true, success: true },
+        { applied: true, success: true },
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-msg-concurrent-patches'));
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        executionProgress: { completed: 1, total: 2 },
+        heterogeneousIntervention: {
+          action: 'approve_once',
+          status: 'resolved',
+        },
+      });
+    });
+
+    it('replaces a patched top-level pluginState key while preserving its siblings', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-msg-top-level-patch',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-top-level-patch',
+        identifier: 'codex',
+        state: {
+          askUserAnswers: { environment: 'production' },
+          heterogeneousIntervention: { resolving: true, status: 'pending' },
+        },
+        toolCallId: 'tool-call-top-level-patch',
+        userId,
+      });
+
+      await messageModel.updateToolMessage('tool-msg-top-level-patch', {
+        pluginState: {
+          heterogeneousIntervention: { action: 'approve_once', status: 'resolved' },
+        },
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-msg-top-level-patch'));
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        heterogeneousIntervention: { action: 'approve_once', status: 'resolved' },
       });
     });
 
@@ -1423,7 +1740,7 @@ describe('MessageModel Update Tests', () => {
       expect(result.success).toBe(true);
       // Query should complete within 100ms even with many messages
       // (indexed lookup should be O(1), not O(n))
-      expect(duration).toBeLessThan(30);
+      expect(duration).toBeLessThan(100);
 
       // Verify the update was correct
       const parentResult = await serverDB

@@ -3,7 +3,15 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { devices, users, workspaceInvitations, workspaceMembers, workspaces } from '../../schemas';
+import {
+  devices,
+  resourcePermissions,
+  tasks,
+  users,
+  workspaceInvitations,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -44,9 +52,9 @@ describe('WorkspaceMemberModel', () => {
     it('adds a member with an explicit role', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
-      const result = await model.addMember({ role: 'owner', userId: memberId, workspaceId });
+      const result = await model.addMember({ role: 'admin', userId: memberId, workspaceId });
 
-      expect(result.role).toBe('owner');
+      expect(result.role).toBe('admin');
     });
 
     it('upserts the role and revives a soft-deleted member on conflict', async () => {
@@ -56,9 +64,9 @@ describe('WorkspaceMemberModel', () => {
       await model.removeMember(workspaceId, memberId);
 
       // soft-deleted now; re-adding should revive and update the role
-      const revived = await model.addMember({ role: 'owner', userId: memberId, workspaceId });
+      const revived = await model.addMember({ role: 'admin', userId: memberId, workspaceId });
 
-      expect(revived.role).toBe('owner');
+      expect(revived.role).toBe('admin');
       expect(revived.deletedAt).toBeNull();
 
       // composite PK guarantees a single row per (workspace, user)
@@ -72,7 +80,7 @@ describe('WorkspaceMemberModel', () => {
     it('falls back to the default role when reviving without an explicit role', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
-      await model.addMember({ role: 'owner', userId: memberId, workspaceId });
+      await model.addMember({ role: 'admin', userId: memberId, workspaceId });
       const revived = await model.addMember({ userId: memberId, workspaceId });
 
       expect(revived.role).toBe('member');
@@ -234,6 +242,104 @@ describe('WorkspaceMemberModel', () => {
         .sort();
       expect(remaining).toEqual(['dep-personal', 'other-ws-private', 'team-box']);
     });
+
+    it('revokes the departing member grants, so a re-invite does not restore them', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(resourcePermissions).values([
+        // the departing member's grant, and one in another workspace
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: memberId,
+          workspaceId,
+        },
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-9',
+          resourceType: 'knowledgeBase',
+          userId: memberId,
+          workspaceId: otherWorkspaceId,
+        },
+        // another member's grant, and the workspace-wide row on the same resource
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: otherUserId,
+          workspaceId,
+        },
+        { accessLevel: 'use', resourceId: 'kb-1', resourceType: 'knowledgeBase', workspaceId },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+      // membership is only soft-deleted, and re-inviting revives that same row
+      await model.addMember({ userId: memberId, workspaceId });
+
+      const remaining = await serverDB
+        .select({
+          resourceId: resourcePermissions.resourceId,
+          userId: resourcePermissions.userId,
+          workspaceId: resourcePermissions.workspaceId,
+        })
+        .from(resourcePermissions);
+      expect(remaining).toEqual(
+        expect.arrayContaining([
+          { resourceId: 'kb-9', userId: memberId, workspaceId: otherWorkspaceId },
+          { resourceId: 'kb-1', userId: otherUserId, workspaceId },
+          { resourceId: 'kb-1', userId: null, workspaceId },
+        ]),
+      );
+      expect(remaining).toHaveLength(3);
+    });
+
+    it('clears only the departing member task assignments in that workspace', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values([
+        {
+          assigneeUserId: memberId,
+          createdByUserId: inviterId,
+          id: 'wm-task-departing-member',
+          identifier: 'WM-1',
+          instruction: 'Assigned to the departing member',
+          seq: 1,
+          workspaceId,
+        },
+        {
+          assigneeUserId: otherUserId,
+          createdByUserId: inviterId,
+          id: 'wm-task-other-member',
+          identifier: 'WM-2',
+          instruction: 'Assigned to another member',
+          seq: 2,
+          workspaceId,
+        },
+        {
+          assigneeUserId: memberId,
+          createdByUserId: otherUserId,
+          id: 'wm-task-other-workspace',
+          identifier: 'OTHER-1',
+          instruction: 'Assigned in another workspace',
+          seq: 1,
+          workspaceId: otherWorkspaceId,
+        },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+
+      const taskRows = await serverDB.select().from(tasks);
+      expect(
+        taskRows.find((task) => task.id === 'wm-task-departing-member')?.assigneeUserId,
+      ).toBeNull();
+      expect(taskRows.find((task) => task.id === 'wm-task-other-member')?.assigneeUserId).toBe(
+        otherUserId,
+      );
+      expect(taskRows.find((task) => task.id === 'wm-task-other-workspace')?.assigneeUserId).toBe(
+        memberId,
+      );
+    });
   });
 
   describe('updateMemberRole', () => {
@@ -241,10 +347,10 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       await model.addMember({ role: 'member', userId: memberId, workspaceId });
 
-      await model.updateMemberRole(workspaceId, memberId, 'owner');
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
 
       const found = await model.getMember(workspaceId, memberId);
-      expect(found?.role).toBe('owner');
+      expect(found?.role).toBe('admin');
     });
 
     it('does not update the role of a soft-deleted member', async () => {
@@ -252,13 +358,57 @@ describe('WorkspaceMemberModel', () => {
       await model.addMember({ role: 'member', userId: memberId, workspaceId });
       await model.removeMember(workspaceId, memberId);
 
-      await model.updateMemberRole(workspaceId, memberId, 'owner');
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
 
       const [row] = await serverDB
         .select()
         .from(workspaceMembers)
         .where(eq(workspaceMembers.userId, memberId));
       expect(row.role).toBe('member');
+    });
+
+    it('clears task assignments when a member becomes a viewer', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'member', userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values({
+        assigneeUserId: memberId,
+        createdByUserId: inviterId,
+        id: 'wm-task-role-downgrade',
+        identifier: 'WM-ROLE-1',
+        instruction: 'Assigned before the role downgrade',
+        seq: 1,
+        workspaceId,
+      });
+
+      await model.updateMemberRole(workspaceId, memberId, 'viewer');
+
+      const [task] = await serverDB
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, 'wm-task-role-downgrade'));
+      expect(task.assigneeUserId).toBeNull();
+    });
+
+    it('preserves task assignments when a member changes to another eligible role', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'member', userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values({
+        assigneeUserId: memberId,
+        createdByUserId: inviterId,
+        id: 'wm-task-eligible-role',
+        identifier: 'WM-ROLE-2',
+        instruction: 'Assigned before the eligible role change',
+        seq: 1,
+        workspaceId,
+      });
+
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
+
+      const [task] = await serverDB
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, 'wm-task-eligible-role'));
+      expect(task.assigneeUserId).toBe(memberId);
     });
   });
 
@@ -280,9 +430,9 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       const before = Date.now();
 
-      const result = await model.createInvitation({ role: 'owner', workspaceId });
+      const result = await model.createInvitation({ role: 'admin', workspaceId });
 
-      expect(result.role).toBe('owner');
+      expect(result.role).toBe('admin');
       expect(result.email).toBeNull();
       const expectedMs = INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
       const diff = result.expiresAt.getTime() - before;

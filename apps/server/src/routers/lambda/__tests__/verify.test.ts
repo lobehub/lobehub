@@ -1,5 +1,7 @@
+import { getHTTPStatusCodeFromError } from '@trpc/server/http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { verifyRouter } from '@/server/routers/lambda/verify';
 import { FileService } from '@/server/services/file';
 import type * as VerifyServiceModule from '@/server/services/verify';
@@ -12,6 +14,9 @@ const modelMocks = vi.hoisted(() => ({
   findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
   findResultById: vi.fn(),
+  generateCriteria: vi.fn(),
+  generateGoalCriteria: vi.fn(),
+  generateGoalPlan: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
   updateRun: vi.fn(),
@@ -50,8 +55,17 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
   ...(await importOriginal<typeof VerifyServiceModule>()),
   VerifyExecutorService: class VerifyExecutorService {},
   VerifyFeedbackService: class VerifyFeedbackService {},
-  VerifyPlanGeneratorService: class VerifyPlanGeneratorService {},
+  VerifyPlanGeneratorService: class VerifyPlanGeneratorService {
+    generateCriteria = modelMocks.generateCriteria;
+  },
   VerifyReporterService: class VerifyReporterService {},
+}));
+
+vi.mock('@/server/services/goal/criteriaGenerator', () => ({
+  GoalCriteriaGeneratorService: class GoalCriteriaGeneratorService {
+    generate = modelMocks.generateGoalCriteria;
+    generatePlan = modelMocks.generateGoalPlan;
+  },
 }));
 
 vi.mock('@/server/services/file', () => ({
@@ -81,6 +95,72 @@ describe('verifyRouter', () => {
           getFullFileUrl: modelMocks.getFullFileUrl,
         }) as any,
     );
+  });
+
+  describe('generateCriteria', () => {
+    it('preserves InvalidProviderAPIKey without returning a session-expired HTTP status', async () => {
+      modelMocks.generateCriteria.mockRejectedValueOnce({ errorType: 'InvalidProviderAPIKey' });
+
+      const error = await createCaller()
+        .generateCriteria({
+          goal: 'Ship a responsive task board',
+          modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+        })
+        .catch((error) => error);
+
+      expect(error).toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: 'InvalidProviderAPIKey',
+      });
+      expect(getHTTPStatusCodeFromError(error)).toBe(412);
+
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      createTRPCErrorLogger('/api/trpc')({
+        error,
+        path: 'verify.generateCriteria',
+        type: 'mutation',
+      });
+      expect(infoSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not rewrite unrelated generation failures', async () => {
+      const providerError = new Error('Provider timed out');
+      modelMocks.generateCriteria.mockRejectedValueOnce(providerError);
+
+      await expect(
+        createCaller().generateCriteria({
+          goal: 'Ship a responsive task board',
+          modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+        }),
+      ).rejects.toThrow('Provider timed out');
+    });
+  });
+
+  describe('generateGoalCriteria', () => {
+    it('does not accept a caller-selected model config', async () => {
+      modelMocks.generateGoalCriteria.mockResolvedValueOnce([]);
+
+      await createCaller().generateGoalCriteria({ goal: 'Ship a responsive task board' });
+
+      expect(modelMocks.generateGoalCriteria).toHaveBeenCalledWith({
+        goal: 'Ship a responsive task board',
+      });
+    });
+
+    it('returns the generated plan from the versioned endpoint', async () => {
+      const plan = {
+        criteria: [{ title: 'Responsive task board is shipped' }],
+        instruction: 'Ship a responsive task board.',
+        title: 'Ship task board',
+      };
+      modelMocks.generateGoalPlan.mockResolvedValueOnce(plan);
+
+      await expect(
+        createCaller().generateGoalPlan({ goal: 'Ship a responsive task board' }),
+      ).resolves.toEqual(plan);
+    });
   });
 
   describe('ingestResult', () => {
@@ -115,6 +195,29 @@ describe('verifyRouter', () => {
       const written = modelMocks.upsertByCheckItem.mock.calls[0][0];
       expect(written).toMatchObject({ status: 'errored', verifyRunId: 'run-1' });
       expect(written.verdict).toBeUndefined();
+    });
+
+    it('persists structured visualization metadata with the check result', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+      const metadata = {
+        visualization: {
+          datasets: [],
+          schemaVersion: 1,
+          views: [],
+        },
+      };
+
+      await createCaller().ingestResult({
+        checkItemId: 'check-1',
+        metadata,
+        verdict: 'passed',
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata }),
+      );
     });
 
     it('rejects a result with neither a verdict nor an explicit status', async () => {

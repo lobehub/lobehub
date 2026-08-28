@@ -3,21 +3,20 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
-  AMP_CLI_INSTALL_DOCS_URL,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_DOCS_URL,
-  type HeterogeneousAgentSessionError,
-  HeterogeneousAgentSessionErrorCode,
-  OPENCODE_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc';
-import {
+  buildHeterogeneousAgentAuthRequiredError,
   createMainAgentRunState,
+  isHeterogeneousAgentAuthRequired,
+  isHeterogeneousProviderBindingSupported,
+  isLocalHeterogeneousType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
   type MainAgentRunState,
   reduceMainAgent,
   rehydrateSubagentRunsState,
+  resolveHeterogeneousAgentCommand,
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
@@ -39,15 +38,20 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
+  unwrapServerDefaultHeterogeneousModel,
 } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import {
+  removeHeteroSessionBindingKeyForWorkingDirectory,
   removeHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionBindingKeyForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
 import { agentQuotaService } from '@/services/agentQuota';
@@ -58,6 +62,7 @@ import {
   messageService,
 } from '@/services/message';
 import { threadService } from '@/services/thread';
+import { workService } from '@/services/work';
 import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
@@ -74,6 +79,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
+import { getNativeHeteroSessionBindingKey } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
@@ -87,78 +93,13 @@ const markSkipMessageFetch = (event: AgentStreamEvent): void => {
   event.data = { ...event.data, skipMessageFetch: true };
 };
 
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-] as const;
-const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
-
-const buildCliAuthRequiredSessionError = (
-  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode',
-  rawMessage: string,
-): HeterogeneousAgentSessionError => {
-  switch (agentType) {
-    case 'amp': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-        message:
-          'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
-        stderr: rawMessage,
-      };
-    }
-    case 'claude-code': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-        message:
-          'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-        stderr: rawMessage,
-      };
-    }
-    case 'codex': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-        message:
-          'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
-        stderr: rawMessage,
-      };
-    }
-    case 'opencode': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-        message:
-          'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
-        stderr: rawMessage,
-      };
-    }
-  }
-};
-
 const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
 
 const maybeClassifyCliAuthRequiredError = (
   error: unknown,
   agentType?: string,
 ): HeterogeneousAgentSessionError | undefined => {
-  if (
-    agentType !== 'amp' &&
-    agentType !== 'claude-code' &&
-    agentType !== 'codex' &&
-    agentType !== 'opencode'
-  ) {
-    return;
-  }
+  if (!agentType || !isLocalHeterogeneousType(agentType)) return;
 
   const message =
     error instanceof Error
@@ -173,13 +114,9 @@ const maybeClassifyCliAuthRequiredError = (
           : undefined;
 
   if (!message) return;
-  const patterns =
-    agentType === 'amp'
-      ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-      : CLI_AUTH_REQUIRED_PATTERNS;
-  if (!patterns.some((pattern) => pattern.test(message))) return;
+  if (!isHeterogeneousAgentAuthRequired(agentType, message)) return;
 
-  return buildCliAuthRequiredSessionError(agentType, message);
+  return buildHeterogeneousAgentAuthRequiredError({ agentType, stderr: message });
 };
 
 const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageError): boolean => {
@@ -198,23 +135,6 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
   );
 
   return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
-};
-
-const getDefaultHeterogeneousCommand = (agentType: string): string => {
-  switch (agentType) {
-    case 'amp': {
-      return 'amp';
-    }
-    case 'codex': {
-      return 'codex';
-    }
-    case 'opencode': {
-      return 'opencode';
-    }
-    default: {
-      return 'claude';
-    }
-  }
 };
 
 const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
@@ -303,6 +223,7 @@ export interface HeterogeneousAgentExecutorParams {
   operationId: string;
   pageSelections?: PageSelection[];
   /** CC session ID from previous execution in this topic (for --resume) */
+  resumeBindingKey?: string;
   resumeSessionId?: string;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
@@ -312,25 +233,14 @@ const buildLocalHeterogeneousSystemContext = ({
   agentSystemContext,
   contextSelections,
   pageSelections,
-  workingDirectory,
 }: {
   agentSystemContext?: string;
   contextSelections?: ContextSelection[];
   pageSelections?: PageSelection[];
-  workingDirectory?: string;
 }): string | undefined => {
   const parts: string[] = [];
 
   if (agentSystemContext?.trim()) parts.push(agentSystemContext.trim());
-
-  if (workingDirectory?.trim()) {
-    parts.push(
-      [
-        '## Workspace',
-        `You are running on the user's own machine. Your working directory is \`${workingDirectory.trim()}\`.`,
-      ].join('\n'),
-    );
-  }
 
   const selectionContext =
     contextSelections && contextSelections.length > 0
@@ -354,23 +264,6 @@ const getTopicMetadataById = (
     const topic = topicData?.items?.find((item) => item.id === topicId);
     if (topic) return topic.metadata;
   }
-};
-
-/**
- * Map heterogeneousProvider.command to adapter type key.
- */
-const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
-  if (config.type) return config.type;
-  // Explicit adapterType in config takes priority
-  if ((config as any).adapterType) return (config as any).adapterType;
-
-  // Infer from command name
-  const cmd = config.command || 'claude';
-  if (cmd.includes('claude')) return 'claude-code';
-  if (cmd.includes('codex')) return 'codex';
-  if (cmd.includes('kimi')) return 'kimi-cli';
-
-  return 'claude-code'; // default
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -563,7 +456,7 @@ export const executeHeterogeneousAgent = async (
   params: HeterogeneousAgentExecutorParams,
 ): Promise<void> => {
   const {
-    heterogeneousProvider,
+    heterogeneousProvider: persistedHeterogeneousProvider,
     contextSelections,
     assistantMessageId,
     context,
@@ -571,12 +464,21 @@ export const executeHeterogeneousAgent = async (
     message,
     operationId,
     pageSelections,
+    resumeBindingKey,
     resumeSessionId,
     workingDirectory,
     workingDirectoryConfig,
   } = params;
 
-  const adapterType = resolveAdapterType(heterogeneousProvider);
+  const heterogeneousProvider = normalizeHeterogeneousProviderConfig(
+    persistedHeterogeneousProvider,
+  );
+  const adapterType = heterogeneousProvider.type;
+  const serverDefaultConfiguredModel =
+    heterogeneousProvider.authMode === 'api' &&
+    heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig.model.trim() || undefined
+      : undefined;
 
   // Which real provider account this run consumes, resolved once after spawn
   // from the FINAL env (so an agent-env override is attributed correctly, not
@@ -594,7 +496,11 @@ export const executeHeterogeneousAgent = async (
     model?: string;
     usage: unknown;
   }) => {
-    if (adapterType !== 'claude-code') return;
+    if (
+      adapterType !== 'claude-code' ||
+      (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription'
+    )
+      return;
     const u = intent.usage as ModelUsage;
     agentQuotaService
       .recordUsage({
@@ -689,7 +595,7 @@ export const executeHeterogeneousAgent = async (
     );
   };
 
-  let agentSessionId: string | undefined;
+  let ipcRunSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
   let completed = false;
   let fallbackPromise: Promise<void> | undefined;
@@ -907,6 +813,11 @@ export const executeHeterogeneousAgent = async (
 
     const topicMetadata = getTopicMetadataById(get(), context.topicId);
     await updateTopicMetadata(context.topicId, {
+      heteroSessionBindingKey: undefined,
+      heteroSessionBindingKeyByWorkingDirectory: removeHeteroSessionBindingKeyForWorkingDirectory(
+        topicMetadata,
+        workingDirectory,
+      ),
       heteroSessionId: undefined,
       heteroSessionIdByWorkingDirectory: removeHeteroSessionIdForWorkingDirectory(
         topicMetadata,
@@ -917,6 +828,7 @@ export const executeHeterogeneousAgent = async (
     });
   };
   let persistedResumeSessionId: string | undefined;
+  let activeSessionBindingKey = getNativeHeteroSessionBindingKey(adapterType);
   let pendingResumeSessionId: string | undefined;
   let resumeSessionPersistQueue: Promise<void> = Promise.resolve();
   const persistResumeSessionId = (sessionId: string, source: string): Promise<void> => {
@@ -932,6 +844,12 @@ export const executeHeterogeneousAgent = async (
       .then(async () => {
         const topicMetadata = getTopicMetadataById(get(), topicId);
         await updateTopicMetadata(topicId, {
+          heteroSessionBindingKey: activeSessionBindingKey,
+          heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
+            topicMetadata,
+            workingDirectory,
+            activeSessionBindingKey,
+          ),
           heteroSessionId: sessionId,
           heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
             topicMetadata,
@@ -1125,7 +1043,14 @@ export const executeHeterogeneousAgent = async (
     completed = true;
     fallbackPromise = (async () => {
       await clearStaleResumeMetadata().catch(console.error);
-      antdMessage?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      toast?.info?.(
+        t(
+          adapterType === 'cursor'
+            ? 'heteroAgent.resumeReset.cursorAcpIncompatible'
+            : 'heteroAgent.resumeReset.resumeFailed',
+          { ns: 'chat' },
+        ),
+      );
       await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
     })();
 
@@ -1870,6 +1795,19 @@ export const executeHeterogeneousAgent = async (
    * matches arrival.
    */
   const reduceAndApplyMain = async (event: AgentStreamEvent) => {
+    // Server-default CLIs report `lobehub/${catalogId}` (older Claude Code
+    // sessions used `lobehub-default`). Stamp the catalog id onto the message
+    // so the usage footer and model-card lookup resolve the real model.
+    if (serverDefaultConfiguredModel) {
+      const reported = event.data?.model;
+      if (typeof reported === 'string') {
+        const model = unwrapServerDefaultHeterogeneousModel(reported, serverDefaultConfiguredModel);
+        if (model && model !== reported) {
+          event = { ...event, data: { ...event.data, model } };
+        }
+      }
+    }
+
     // Capture the CC-native session id off the stream_start stream so every
     // message persisted below carries the session it belongs to (mirrors the
     // server handler). Stable per run; the copy makes a mid-topic fork visible.
@@ -1901,11 +1839,78 @@ export const executeHeterogeneousAgent = async (
 
   await rehydrateClientSubagentRuns();
 
+  const providerBindingActive = heterogeneousProvider.authMode === 'api';
+  const serverDefaultApiConfig =
+    providerBindingActive && heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const providerApiConfig =
+    providerBindingActive &&
+    heterogeneousProvider.apiConfig &&
+    heterogeneousProvider.apiConfig.source !== 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const serverDefaultBindingActive = !!serverDefaultApiConfig;
+  const userProviderBindingActive = !!providerApiConfig;
+  // The Labs flag gates every API-mode path, including the server-default
+  // binding: with the flag off, an api-auth agent must behave exactly as it
+  // did before the feature existed — blocked with a pointer to Labs.
+  if (
+    providerBindingActive &&
+    !labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())
+  ) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
+  if (providerBindingActive && !serverDefaultBindingActive && !userProviderBindingActive) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.configMissing', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
+
+  if (
+    userProviderBindingActive &&
+    (!isHeterogeneousProviderBindingSupported(adapterType) ||
+      !providerApiConfig.providerId ||
+      !providerApiConfig.model.trim())
+  ) {
+    const message = !isHeterogeneousProviderBindingSupported(adapterType)
+      ? t('heteroAgent.apiMode.agentUnsupported', { name: adapterType, ns: 'chat' })
+      : t('heteroAgent.apiMode.configMissing', { ns: 'chat' });
+    await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
+    return;
+  }
+
+  if (
+    serverDefaultBindingActive &&
+    (!serverDefaultApiConfig.model.trim() ||
+      (adapterType !== 'claude-code' && adapterType !== 'codex'))
+  ) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.defaultProviderConfigMissing', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
+
   try {
     // Account routing: realize the pinned/balanced account choice as spawn env
     // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
     // before; a quota-service failure must never block the run.
-    const quotaAccountPlan = await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
+    const quotaAccountPlan = providerBindingActive
+      ? { env: {}, externalAccountId: undefined }
+      : await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
 
     const sessionEnv = {
       // Tell the CLI which LobeHub conversation it is running inside. The child
@@ -1924,21 +1929,49 @@ export const executeHeterogeneousAgent = async (
       ...heterogeneousProvider.env,
     };
 
+    const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
+    const providerBinding = serverDefaultBindingActive
+      ? {
+          apiConfig: serverDefaultApiConfig,
+          kind: 'server-default' as const,
+          resumeBindingKey,
+        }
+      : userProviderBindingActive
+        ? {
+            apiConfig: providerApiConfig,
+            kind: 'provider' as const,
+            resumeBindingKey,
+          }
+        : undefined;
+
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: buildHeteroSpawnArgs(heterogeneousProvider),
-      command: heterogeneousProvider.command || getDefaultHeterogeneousCommand(adapterType),
+      args: spawnArgs,
+      command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
+      initialModel:
+        adapterType === 'trae' &&
+        heterogeneousProvider.model &&
+        heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+          ? heterogeneousProvider.model
+          : undefined,
+      providerBinding,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
+      useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
+    activeSessionBindingKey =
+      result.providerBindingKey ?? getNativeHeteroSessionBindingKey(adapterType);
+    if (providerBindingActive && resumeSessionId && resumeBindingKey !== activeSessionBindingKey) {
+      await clearStaleResumeMetadata();
+    }
 
     // Attribute the run to the login the FINAL env actually resolves to (an
     // agent-env CLAUDE_CONFIG_DIR beats routing, and unbound agents use the
     // default login). Falls back to the routed choice when the file read fails.
-    if (adapterType === 'claude-code') {
+    if (adapterType === 'claude-code' && !providerBindingActive) {
       heterogeneousAgentService
         .getClaudeCodeIdentity({ env: sessionEnv })
         .then((identity) => {
@@ -1948,15 +1981,15 @@ export const executeHeterogeneousAgent = async (
           runExternalAccountId = quotaAccountPlan.externalAccountId;
         });
     }
-    agentSessionId = result.sessionId;
-    if (!agentSessionId) throw new Error('Agent session returned no sessionId');
+    ipcRunSessionId = result.sessionId;
+    if (!ipcRunSessionId) throw new Error('Agent session returned no sessionId');
 
     writeTopicStatus('running');
 
     // Register cancel hook on the operation — when the user hits Stop, the op
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
-    const sidForCancel = agentSessionId;
+    const sidForCancel = ipcRunSessionId;
     get().onOperationCancel?.(operationId, () => {
       heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
     });
@@ -2191,7 +2224,7 @@ export const executeHeterogeneousAgent = async (
       }
     };
 
-    unsubscribe = subscribeBroadcasts(agentSessionId, {
+    unsubscribe = subscribeBroadcasts(ipcRunSessionId, {
       onStreamEvent: handleStreamEvent,
 
       onComplete: () => {
@@ -2204,6 +2237,16 @@ export const executeHeterogeneousAgent = async (
           }
 
           const isErrorTerminal = deferredTerminalEvent?.type === 'error';
+          // A run can also end WITHOUT failing and without completing: a stop
+          // terminates as `agent_runtime_end { reason: 'interrupted' }` (see
+          // the CC adapter). Everything gated on "not an error" must gate on
+          // this instead, or a stopped run would drain the queue and fire a
+          // "run finished" notification.
+          const isCleanCompletion =
+            !isErrorTerminal &&
+            isCompletedRuntimeEnd(
+              (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason,
+            );
 
           // Reset the sidebar "running" status BEFORE awaiting the persist queue.
           // Topic status is independent of message persistence, so a stalled queue
@@ -2212,10 +2255,9 @@ export const executeHeterogeneousAgent = async (
           // this guards against. Content persistence + the terminal forward still
           // wait for queued reducer state so terminal never flushes stale content.
           {
-            const reason = (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason;
             if (isErrorTerminal) {
               writeTopicStatus('failed');
-            } else if (!isAborted() && isCompletedRuntimeEnd(reason)) {
+            } else if (!isAborted() && isCleanCompletion) {
               // Clean completion: the viewer sees 'active'; a background topic gets
               // the unread badge (markTopicUnread self-guards on activeTopicId).
               if (get().activeTopicId === context.topicId) writeTopicStatus('active');
@@ -2324,8 +2366,10 @@ export const executeHeterogeneousAgent = async (
           // showNotification + setBadgeCount fan-out for non-client runtimes. We pass
           // the in-memory accumulated content (the store snapshot isn't durable yet);
           // the shared helper strips markdown + caps length + resolves the title.
-          // Skip for aborted runs and for error terminations.
-          if (!isAborted() && !isErrorTerminal) {
+          // Skip for aborted runs and for error terminations — including a run
+          // the CLI itself reported as stopped (`interrupted`), which is not a
+          // finished run and must not announce itself as one.
+          if (!isAborted() && isCleanCompletion) {
             await runLifecycle.afterRunComplete({
               context,
               notification: { content: finalContent },
@@ -2334,6 +2378,37 @@ export const executeHeterogeneousAgent = async (
               runScope,
               runtimeType: 'hetero',
             });
+
+            // Shell Work scan for this LOCAL run: no server operation exists, so
+            // the completion-time scan (`registerWorksForOperation`) can never
+            // fire — report the run's persisted tool message ids to the server,
+            // which replays the same scan (gh CLI → github Work cards) under a
+            // synthetic anchor-derived rootOperationId. Best-effort and
+            // idempotent server-side; a failure only costs the card, never the
+            // run. Mirrors the gateway path's error-skip: only clean completions
+            // scan. Capped to the server's input limit — a >500-tool run keeps
+            // its most recent calls, which are the ones that own trailing
+            // create/edit output.
+            const toolMessageIds = [...new Set(toolMsgIdByCallId.values())].slice(-500);
+            // Topicless runs can't scan: the server validates the anchor against
+            // the claimed topic, and a card has no conversation to render in.
+            if (toolMessageIds.length > 0 && mainState.currentAssistantId && context.topicId) {
+              try {
+                const scan = await workService.registerShellWorksForRun({
+                  anchorMessageId: mainState.currentAssistantId,
+                  messageIds: toolMessageIds,
+                  topicId: context.topicId,
+                });
+                if (scan.registered > 0) {
+                  // Re-pull the message list so the anchor's fresh
+                  // `metadata.work.rootOperationId` (and its works payload)
+                  // renders without a manual refresh.
+                  await workService.refreshConversation(context.topicId);
+                }
+              } catch (err) {
+                console.error('[HeterogeneousAgent] Failed to register shell works:', err);
+              }
+            }
           }
         });
       },
@@ -2394,7 +2469,6 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: heterogeneousProvider.systemContext,
       contextSelections,
       pageSelections,
-      workingDirectory,
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code
@@ -2417,7 +2491,7 @@ export const executeHeterogeneousAgent = async (
       operationId,
       prompt: message,
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
-      sessionId: agentSessionId,
+      sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
     });
@@ -2435,7 +2509,7 @@ export const executeHeterogeneousAgent = async (
     // IPC, which already returns the freshest `agentSessionId` main has
     // mirrored from `pipeline.sessionId`.
     const sessionInfo = await heterogeneousAgentService
-      .getSessionInfo(agentSessionId)
+      .getSessionInfo(ipcRunSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
       // Best-effort: a rejected metadata save must NOT throw past the queue
@@ -2459,7 +2533,14 @@ export const executeHeterogeneousAgent = async (
     // Cast: TS narrows the closure-mutated `deferredTerminalEvent` back to
     // `null` in linear flow (it can't see writes from the async IPC handler).
     const terminalEvent = deferredTerminalEvent as AgentStreamEvent | null;
-    if (!isAborted() && terminalEvent?.type !== 'error') {
+    // A stop reported by the CLI itself terminates as `agent_runtime_end
+    // { reason: 'interrupted' }` rather than an error, so testing for "not an
+    // error" is no longer enough — that would drain the queue on a stop the
+    // user made, which is exactly what this guard exists to prevent.
+    const drainableTerminal =
+      terminalEvent?.type !== 'error' &&
+      isCompletedRuntimeEnd((terminalEvent?.data as { reason?: string } | undefined)?.reason);
+    if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
       const remainingQueued = get().drainQueuedMessages?.(contextKey) ?? [];
       if (remainingQueued.length > 0) {
@@ -2526,8 +2607,18 @@ export const executeHeterogeneousAgent = async (
   } finally {
     await waitForCompletionCallback();
     unsubscribe?.();
-    // Don't stopSession here — keep it alive for multi-turn resume.
-    // Session cleanup happens on topic deletion or Electron quit.
+    // The desktop IPC session only owns this run's config and process handles.
+    // Multi-turn resume uses the native agentSessionId persisted above, so the
+    // IPC session must be released after every run instead of accumulating in
+    // the Electron main-process session map until quit.
+    if (ipcRunSessionId) {
+      try {
+        await heterogeneousAgentService.stopSession(ipcRunSessionId);
+      } catch (err) {
+        // Cleanup is best-effort and must not replace the run's real outcome.
+        console.error('[HeterogeneousAgent] IPC run session cleanup failed:', err);
+      }
+    }
 
     // Backstop: if neither onComplete nor onError ever ran (e.g. the
     // heteroAgentSessionComplete IPC was missed, or its listener was torn down

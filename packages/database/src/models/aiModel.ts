@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type {
+  AiModelConfig,
+  AiModelReasoningConfig,
   AiModelSortMap,
   AiProviderModelListItem,
   EnabledAiModel,
@@ -27,6 +29,12 @@ export class AiModelModel {
 
   private scopeWhere = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, aiModels);
+
+  /**
+   * Personal scope regardless of the active workspace (userId + workspaceId IS NULL).
+   * Used by the model-instance reasoning-config helpers, which are cross-workspace.
+   */
+  private personalScopeWhere = () => buildWorkspaceWhere({ userId: this.userId }, aiModels);
 
   private values<T extends object>(base: T) {
     return buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, base);
@@ -75,6 +83,26 @@ export class AiModelModel {
   private isEmptyArray(array: unknown[]): boolean {
     return array.length === 0;
   }
+
+  /**
+   * Whether a row exists only to persist the personal reasoning preference
+   * (`config.chatConfig`): created by {@link AiModelModel.updateModelReasoningConfig}
+   * or left behind when {@link AiModelModel.clearRemoteModels} demotes a remote
+   * row. Such shells carry no user-visible identity — list reads hide them and
+   * duplicate checks must not treat them as real models.
+   */
+  static isPreferenceOnlyRow = (row: {
+    contextWindowTokens?: number | null;
+    displayName?: string | null;
+    enabled?: boolean | null;
+    releasedAt?: string | null;
+    source?: string | null;
+  }) =>
+    row.source == null &&
+    row.enabled == null &&
+    row.displayName == null &&
+    row.contextWindowTokens == null &&
+    row.releasedAt == null;
 
   create = async (params: NewAiModelItem) => {
     const values = this.normalizeAiModelValues(params);
@@ -178,12 +206,84 @@ export class AiModelModel {
   update = async (id: string, providerId: string, value: Partial<AiModelSelectItem>) => {
     const normalizedValue = this.normalizeAiModelValues(value);
 
+    const set: Record<string, unknown> = { ...normalizedValue };
+    // Shallow-merge `config` instead of replacing the column: callers send partial
+    // config (the model-config modal only knows `deploymentName`), and a full
+    // replace would silently wipe sibling keys such as the user's `chatConfig`
+    // model-instance reasoning defaults.
+    if (normalizedValue.config !== undefined && normalizedValue.config !== null) {
+      set.config = sql`COALESCE(ai_models.config, '{}'::jsonb) || excluded.config`;
+    }
+
     return this.db
       .insert(aiModels)
       .values(this.values({ ...normalizedValue, id, providerId, updatedAt: new Date() }))
       .onConflictDoUpdate({
-        set: normalizedValue,
+        set,
         ...this.conflictTarget(),
+      });
+  };
+
+  /**
+   * Personal-scope read of the user's per-model-instance reasoning defaults
+   * (`config.chatConfig`). Deliberately ignores the active workspace: the
+   * preference is keyed by userId + providerId + modelId and shared across
+   * workspaces by design.
+   */
+  getModelReasoningConfig = async (
+    id: string,
+    providerId: string,
+  ): Promise<AiModelReasoningConfig | undefined> => {
+    const row = await this.db.query.aiModels.findFirst({
+      columns: { config: true },
+      where: and(
+        eq(aiModels.id, id),
+        eq(aiModels.providerId, providerId),
+        this.personalScopeWhere(),
+      ),
+    });
+
+    return (row?.config as AiModelConfig | null)?.chatConfig;
+  };
+
+  /**
+   * Personal-scope partial update of `config.chatConfig` (see
+   * getModelReasoningConfig for the scoping rationale).
+   */
+  updateModelReasoningConfig = async (
+    id: string,
+    providerId: string,
+    chatConfig: AiModelReasoningConfig,
+  ) => {
+    const config: AiModelConfig = { chatConfig };
+
+    return this.db
+      .insert(aiModels)
+      .values({
+        config,
+        id,
+        providerId,
+        updatedAt: new Date(),
+        userId: this.userId,
+        // No `enabled` / `source` on purpose: a row created only to hold the
+        // preference must not flip model visibility (enabled NULL falls back to
+        // the builtin default in AiInfraRepos.getEnabledModels) nor claim an
+        // origin that would block later remote-sync updates.
+        workspaceId: null,
+      })
+      .onConflictDoUpdate({
+        set: {
+          // Nested merge: keep sibling config keys (deploymentName, enabledSearch)
+          // and previously saved chatConfig fields absent from this partial write.
+          config: sql`jsonb_set(
+            COALESCE(ai_models.config, '{}'::jsonb),
+            '{chatConfig}',
+            COALESCE(ai_models.config -> 'chatConfig', '{}'::jsonb) || ${JSON.stringify(chatConfig)}::jsonb
+          )`,
+          updatedAt: new Date(),
+        },
+        target: [aiModels.id, aiModels.providerId, aiModels.userId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -367,7 +467,12 @@ export class AiModelModel {
             THEN COALESCE(ai_models.type, excluded.type)
             ELSE ai_models.type
           END`,
-          // source marks model origin (remote/custom/builtin); once set, never overwrite
+          // source marks model origin (remote/custom/builtin); once set, never
+          // overwrite. A preference-only row (source NULL, config.chatConfig —
+          // see updateModelReasoningConfig) IS claimed as remote here so the
+          // synced metadata stays clearable; clearRemoteModels then demotes
+          // rows carrying a chatConfig instead of deleting them, so the
+          // personal preference survives either way.
           source: sql`COALESCE(ai_models.source, excluded.source)`,
           updatedAt: sql`excluded.updated_at`,
           // Note: enabled is intentionally omitted to preserve user toggle state
@@ -424,15 +529,51 @@ export class AiModelModel {
   };
 
   clearRemoteModels(providerId: string) {
-    return this.db
-      .delete(aiModels)
-      .where(
-        and(
-          eq(aiModels.providerId, providerId),
-          eq(aiModels.source, AiModelSourceEnum.Remote),
-          this.scopeWhere(),
-        ),
-      );
+    return this.db.transaction(async (trx) => {
+      // A remote row that accumulated a personal reasoning preference
+      // (remote-first order: fetched, then the user saved an Effort default —
+      // see updateModelReasoningConfig) must not lose it. Demote the row to a
+      // preference-only shape (strip remote metadata, drop the remote source)
+      // instead of deleting it.
+      await trx
+        .update(aiModels)
+        .set({
+          abilities: null,
+          config: sql`jsonb_build_object('chatConfig', ${aiModels.config} -> 'chatConfig')`,
+          contextWindowTokens: null,
+          description: null,
+          displayName: null,
+          enabled: null,
+          organization: null,
+          parameters: null,
+          pricing: null,
+          releasedAt: null,
+          settings: null,
+          sort: null,
+          source: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(aiModels.providerId, providerId),
+            eq(aiModels.source, AiModelSourceEnum.Remote),
+            // NOT `config -> 'chatConfig' IS NOT NULL`: jsonb null tests in
+            // WHERE clauses crash the production engine (see jsonbNullTest)
+            sql`COALESCE(${aiModels.config} ->> 'chatConfig', '') <> ''`,
+            this.scopeWhere(),
+          ),
+        );
+
+      return trx
+        .delete(aiModels)
+        .where(
+          and(
+            eq(aiModels.providerId, providerId),
+            eq(aiModels.source, AiModelSourceEnum.Remote),
+            this.scopeWhere(),
+          ),
+        );
+    });
   }
 
   clearModelsByProvider(providerId: string) {

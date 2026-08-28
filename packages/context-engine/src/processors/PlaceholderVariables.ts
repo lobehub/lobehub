@@ -1,3 +1,4 @@
+import { truncateSurrogateSafe } from '@lobechat/utils';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -11,6 +12,8 @@ declare module '../types' {
 
 const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
 
+const CONTENT_PREVIEW_LENGTH = 200;
+
 /**
  * Build a short, log-safe preview of a message's content.
  *
@@ -18,16 +21,17 @@ const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
  * functions / symbols, so naively calling `.slice` on its result crashes —
  * this is exactly how a tool error result with `content: undefined`
  * (e.g. budget-exceeded errors) used to take down the whole processor.
- * Always coerce to a string before slicing.
+ * Always coerce to a string before slicing, and cut surrogate-safely so a
+ * mid-emoji slice cannot leave a lone surrogate in the preview.
  */
-const buildContentPreview = (content: unknown): string => {
-  if (typeof content === 'string') return content.slice(0, 200);
+export const buildContentPreview = (content: unknown): string => {
+  if (typeof content === 'string') return truncateSurrogateSafe(content, CONTENT_PREVIEW_LENGTH);
 
   try {
     const serialized = JSON.stringify(content);
-    return (serialized ?? String(content)).slice(0, 200);
+    return truncateSurrogateSafe(serialized ?? String(content), CONTENT_PREVIEW_LENGTH);
   } catch {
-    return String(content).slice(0, 200);
+    return truncateSurrogateSafe(String(content), CONTENT_PREVIEW_LENGTH);
   }
 };
 

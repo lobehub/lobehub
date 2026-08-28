@@ -1,8 +1,7 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Brain, ChartBar, MessageSquare, Play } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -106,7 +105,7 @@ interface IdleStateProps {
 
 const IdleState = memo<IdleStateProps>(({ run }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
+
   const startRun = useEvalStore((s) => s.startRun);
   const [starting, setStarting] = useState(false);
 
@@ -119,7 +118,7 @@ const IdleState = memo<IdleStateProps>(({ run }) => {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
         } catch (error: any) {
-          message.error(error?.message || 'Failed to start run');
+          toast.error(error?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }

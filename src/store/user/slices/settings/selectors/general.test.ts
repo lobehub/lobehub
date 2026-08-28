@@ -18,7 +18,7 @@ describe('settingsSelectors', () => {
 
       expect(result).toEqual({
         animationMode: 'agile',
-        costEstimateWarningThreshold: 2,
+        costEstimateWarningThreshold: 0.5,
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
         isDevMode: false,

@@ -25,11 +25,13 @@ import {
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { isUuid } from '@/database/utils/uuid';
 
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
 import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
+import { isRawTextAgentDocument } from './contentFormat';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
@@ -199,24 +201,28 @@ export class AgentDocumentsService {
   }
 
   private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
+    if (isRawTextAgentDocument(doc)) return doc;
+
     const snapshot = await exportEditorDataSnapshot({
       editorData: doc.editorData,
       fallbackContent: doc.content,
       litexml: true,
     });
 
-    // Hydration of stale editorData (older Lexical schemas) can silently fail
-    // and leave the editor empty. When that happens, hydrate from the markdown
-    // column directly so readDocument never returns an empty doc for a row that
-    // actually has content.
-    if (snapshot.content.trim().length === 0 && doc.content.trim().length > 0) {
-      const fromMarkdown = await exportEditorDataSnapshot({
-        editorData: undefined,
-        fallbackContent: doc.content,
-        litexml: true,
+    if (snapshot.recoveredFromMarkdown) {
+      // Persist the repaired snapshot before exposing its LiteXML IDs. A later
+      // node edit must hydrate this exact state or the IDs can no longer target it.
+      await this.agentDocumentModel.update(doc.id, {
+        content: snapshot.content,
+        editorData: snapshot.editorData,
       });
-      const content = fromMarkdown.content.trim().length > 0 ? fromMarkdown.content : doc.content;
-      return { ...doc, content, litexml: fromMarkdown.litexml };
+
+      return {
+        ...doc,
+        content: snapshot.content,
+        editorData: snapshot.editorData,
+        litexml: snapshot.litexml,
+      };
     }
 
     return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
@@ -407,7 +413,10 @@ export class AgentDocumentsService {
   }
 
   async getDocumentById(id: string, expectedAgentId?: string) {
-    return this.getDocumentByIdInAgent(id, expectedAgentId);
+    const doc = await this.findReadableDocumentById(id, expectedAgentId);
+    if (!doc) return undefined;
+
+    return this.projectDocumentContent(doc);
   }
 
   /**
@@ -420,11 +429,16 @@ export class AgentDocumentsService {
     return this.agentDocumentModel.findByDocumentId(agentId, documentId);
   }
 
-  async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
-    const doc = await this.agentDocumentModel.findById(id);
+  /** Read-only page projection addressed by the public `(agentId, documentId)` route. */
+  async getReaderDocument(agentId: string, documentId: string) {
+    const doc = await this.agentDocumentModel.findByDocumentId(agentId, documentId);
 
+    return this.projectDocumentContent(doc);
+  }
+
+  async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
+    const doc = await this.findReadableDocumentById(id, expectedAgentId);
     if (!doc) return undefined;
-    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
 
     return this.attachLiteXML(doc);
   }
@@ -434,6 +448,25 @@ export class AgentDocumentsService {
     if (!doc) return undefined;
 
     return this.attachLiteXML(doc);
+  }
+
+  /**
+   * Resolve either the agent-document binding id exposed as `id` or the backing
+   * `documents.id` exposed as `documentId`. Both identifiers appear in document
+   * discovery results, and older callers may pass the latter back to read APIs.
+   * Branch before querying the UUID column so a backing id cannot trigger a
+   * PostgreSQL 22P02 error.
+   */
+  private async findReadableDocumentById(id: string, expectedAgentId?: string) {
+    const doc = isUuid(id)
+      ? await this.agentDocumentModel.findById(id)
+      : expectedAgentId
+        ? await this.agentDocumentModel.findByDocumentId(expectedAgentId, id)
+        : undefined;
+    if (!doc) return undefined;
+    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
+
+    return doc;
   }
 
   private async getDocumentByIdInAgent(documentId: string, expectedAgentId?: string) {
@@ -737,13 +770,19 @@ export class AgentDocumentsService {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
 
-    await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
-
     const snapshot = await applyLiteXMLOperations({
       editorData: doc.editorData,
       fallbackContent: doc.content,
       operations,
     });
+
+    // History must capture the successfully hydrated pre-edit state. Persisted
+    // editorData may be the stale payload that forced Markdown recovery.
+    await this.documentService.trySaveCurrentDocumentHistory(
+      doc.documentId,
+      'llm_call',
+      snapshot.previousEditorData,
+    );
 
     await this.agentDocumentModel.update(documentId, {
       content: snapshot.content,

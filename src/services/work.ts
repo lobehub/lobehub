@@ -11,6 +11,7 @@ import type {
   WorkVersionEventItem,
   WorkVersionEventMap,
   WorkVersionItem,
+  WorkVisibility,
 } from '@lobechat/types';
 
 import { mutate } from '@/libs/swr';
@@ -56,28 +57,39 @@ export const didToolMutateWorkView = ({
 };
 
 class WorkService {
+  // This client ships the descriptor fallback for every registered Work type, so
+  // it always opts into the `file` type (and any future gated type). The flag is
+  // set here at the service boundary rather than per call site — an
+  // already-deployed client that predates the `file` type runs the old service
+  // without it and stays on the legacy set. See resolveAllowedWorkTypes.
   listByConversation = async (params: {
     limit?: number;
     threadId?: string | null;
     topicId?: string | null;
-  }): Promise<WorkListItem[]> => lambdaClient.work.listByConversation.query(params);
+  }): Promise<WorkListItem[]> =>
+    lambdaClient.work.listByConversation.query({ ...params, includeFileWorks: true });
 
   listByWorkspace = async (params: {
     cursor?: string | null;
     limit?: number;
+    originAgentId?: string | null;
     provider?: WorkSkillProvider;
     type?: WorkType | null;
-  }): Promise<WorkSummaryPage> => lambdaClient.work.listByWorkspace.query(params);
+    visibility?: WorkVisibility;
+  }): Promise<WorkSummaryPage> =>
+    lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });
 
   listByRootOperation = async (params: {
     limit?: number;
     rootOperationId?: string | null;
-  }): Promise<WorkVersionEventItem[]> => lambdaClient.work.listByRootOperation.query(params);
+  }): Promise<WorkVersionEventItem[]> =>
+    lambdaClient.work.listByRootOperation.query({ ...params, includeFileWorks: true });
 
   listByRootOperations = async (params: {
     limit?: number;
     rootOperationIds?: string[] | null;
-  }): Promise<WorkVersionEventMap> => lambdaClient.work.listByRootOperations.query(params);
+  }): Promise<WorkVersionEventMap> =>
+    lambdaClient.work.listByRootOperations.query({ ...params, includeFileWorks: true });
 
   listVersions = async (workId: string): Promise<WorkVersionItem[]> =>
     lambdaClient.work.listVersions.query({ workId });
@@ -94,6 +106,19 @@ class WorkService {
   handleSkillToolResult = async (
     params: RegisterSkillToolResultWorkParams,
   ): Promise<WorkItem | null> => lambdaClient.work.handleSkillToolResult.mutate(params);
+
+  /**
+   * Report a finished desktop-LOCAL hetero run's tool messages for the
+   * server-side shell Work scan (gh CLI → github Work cards). Local runs have
+   * no `agent_operations` row, so the server's completion scan never fires for
+   * them — the executor calls this at clean completion instead.
+   */
+  registerShellWorksForRun = async (params: {
+    anchorMessageId: string;
+    messageIds: string[];
+    topicId: string;
+  }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
+    lambdaClient.work.registerShellWorksForRun.mutate(params);
 
   /**
    * Invalidate everything a Work mutation can change for a conversation:

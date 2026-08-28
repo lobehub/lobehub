@@ -65,5 +65,6 @@
   "schedule": "on sunday before 6:00am",
   "separateMajorMinor": true,
   "separateMinorPatch": false,
-  "timezone": "UTC"
+  "timezone": "UTC",
+  "updateNotScheduled": false
 }

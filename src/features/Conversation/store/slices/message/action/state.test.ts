@@ -97,7 +97,13 @@ describe('MessageStateAction', () => {
         threadId: null,
         topicId: 'test-topic',
       });
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(restoredMessages);
+      expect(replaceMessagesSpy).toHaveBeenCalledWith(restoredMessages, {
+        expectedContext: {
+          agentId: 'test-agent',
+          threadId: null,
+          topicId: 'test-topic',
+        },
+      });
     });
   });
 
@@ -328,7 +334,13 @@ describe('MessageStateAction', () => {
       await store.getState().toggleCompressedGroupExpanded('group-1');
 
       // Assert
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(updatedMessages);
+      expect(replaceMessagesSpy).toHaveBeenCalledWith(updatedMessages, {
+        expectedContext: {
+          agentId: 'test-agent',
+          threadId: null,
+          topicId: 'test-topic',
+        },
+      });
     });
   });
 });

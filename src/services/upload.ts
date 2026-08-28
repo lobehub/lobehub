@@ -1,4 +1,4 @@
-import { parseDataUri } from '@lobechat/model-runtime';
+import { parseDataUri } from '@lobechat/model-runtime/utils/uriParser';
 import { uuid } from '@lobechat/utils';
 import dayjs from 'dayjs';
 import { sha256 } from 'js-sha256';

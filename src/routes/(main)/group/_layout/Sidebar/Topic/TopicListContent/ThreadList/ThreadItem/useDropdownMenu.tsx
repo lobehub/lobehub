@@ -32,6 +32,7 @@ export const useThreadItemDropdownMenu = ({
         onClick: () => {
           toggleEditing(true);
         },
+        sfSymbol: 'pencil',
       },
       {
         type: 'divider' as const,
@@ -54,6 +55,7 @@ export const useThreadItemDropdownMenu = ({
             title: t('delete', { ns: 'common' }),
           });
         },
+        sfSymbol: 'trash',
       },
     ].filter(Boolean) as MenuProps['items'];
   }, [id, canEditThread, removeThread, toggleEditing, t]);

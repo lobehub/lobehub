@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo } from 'react';
@@ -12,6 +13,8 @@ import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
 interface WriteFileArgs {
   content?: string;
+  file_path?: string;
+  filePath?: string;
   path?: string;
 }
 
@@ -20,7 +23,14 @@ export const createWriteLocalFileInspector = (translationKey: string) => {
     ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
       const { t } = useTranslation('plugin');
 
-      const filePath = args?.path || partialArgs?.path || '';
+      const filePath =
+        args?.path ||
+        args?.filePath ||
+        args?.file_path ||
+        partialArgs?.path ||
+        partialArgs?.filePath ||
+        partialArgs?.file_path ||
+        '';
       const lineCount = args?.content?.split('\n').length;
 
       if (isArgumentsStreaming) {

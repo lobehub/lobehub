@@ -45,18 +45,30 @@ const loadEditorContent = (
  * EditorCanvas with editorData mode - uses provided data directly
  */
 const EditorDataMode = memo<EditorDataModeProps>(
-  ({ editor, editorData, entityId, onContentChange, onInit, style, ...editorProps }) => {
+  ({
+    contentRevision,
+    editor,
+    editorData,
+    entityId,
+    onContentChange,
+    onInit,
+    style,
+    ...editorProps
+  }) => {
     const { t } = useTranslation('file');
     const isEditorReadyRef = useRef(false);
     const contentChangeLockRef = useRef(false);
     const lockIdRef = useRef(0);
     // Track the current entityId to detect entity changes
     const currentEntityIdRef = useRef<string | undefined>(undefined);
+    const currentContentRevisionRef = useRef<number | undefined>(undefined);
 
     // Check if we're editing a different entity
     // When entityId is undefined, always consider it as "changed" (backward compatibility)
     // When entityId is provided, check if it actually changed
     const isEntityChanged = entityId === undefined || currentEntityIdRef.current !== entityId;
+    const isContentRevisionChanged = currentContentRevisionRef.current !== contentRevision;
+    const shouldReloadContent = isEntityChanged || isContentRevisionChanged;
 
     const loadContentWithLock = useCallback(
       (editorInstance: IEditor) => {
@@ -64,6 +76,7 @@ const EditorDataMode = memo<EditorDataModeProps>(
         contentChangeLockRef.current = true;
         if (loadEditorContent(editorInstance, editorData)) {
           currentEntityIdRef.current = entityId;
+          currentContentRevisionRef.current = contentRevision;
         }
         queueMicrotask(() => {
           if (lockIdRef.current === lockId) {
@@ -71,24 +84,25 @@ const EditorDataMode = memo<EditorDataModeProps>(
           }
         });
       },
-      [editorData, entityId],
+      [contentRevision, editorData, entityId],
     );
 
     const handleInit = useCallback(
       (editorInstance: IEditor) => {
         isEditorReadyRef.current = true;
-        if (isEntityChanged) loadContentWithLock(editorInstance);
+        if (shouldReloadContent) loadContentWithLock(editorInstance);
         onInit?.(editorInstance);
       },
-      [isEntityChanged, loadContentWithLock, onInit],
+      [loadContentWithLock, onInit, shouldReloadContent],
     );
 
-    // Load content when entityId changes (switching to a different entity)
-    // Ignore editorData changes when entityId hasn't changed to prevent focus loss during auto-save
+    // Reload only for an entity switch or an explicit authoritative revision.
+    // editorData object churn and local autosave echoes keep the revision stable,
+    // so they cannot overwrite live input or reset the cursor.
     useEffect(() => {
-      if (!editor || !isEditorReadyRef.current || !isEntityChanged) return;
+      if (!editor || !isEditorReadyRef.current || !shouldReloadContent) return;
       loadContentWithLock(editor);
-    }, [editor, isEntityChanged, loadContentWithLock]);
+    }, [editor, loadContentWithLock, shouldReloadContent]);
 
     if (!editor) return null;
 

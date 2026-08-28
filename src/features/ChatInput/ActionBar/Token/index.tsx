@@ -12,14 +12,12 @@ const Token = memo<PropsWithChildren>(({ children }) => {
   return showTag && children;
 });
 
-const ContextWindow = memo(() => {
+const ContextWindow = () => {
   return (
     <Token>
       <LargeTokenContent />
     </Token>
   );
-});
-
-ContextWindow.displayName = 'ContextWindow';
+};
 
 export default ContextWindow;

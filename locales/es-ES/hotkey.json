@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Mostrar u ocultar el panel izquierdo",
   "toggleLeftPanel.title": "Alternar panel izquierdo",
   "toggleRightPanel.desc": "Mostrar u ocultar el panel derecho",
-  "toggleRightPanel.title": "Alternar panel derecho"
+  "toggleRightPanel.title": "Alternar panel derecho",
+  "toggleTerminalPanel.desc": "Mostrar u ocultar el panel de terminal inferior",
+  "toggleTerminalPanel.title": "Alternar panel de terminal"
 }

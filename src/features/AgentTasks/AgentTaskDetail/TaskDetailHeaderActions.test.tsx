@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
     } as Record<string, { createdByUserId?: string | null; visibility?: 'private' | 'public' }>,
   },
   transferItems: [
-    { key: 'transfer-task', label: 'Transfer to...' },
+    { key: 'transfer-task', label: 'Move to…' },
     { key: 'copy-task', label: 'Copy to...' },
   ] as MenuItem[],
   updateTaskVisibility: vi.fn(),
@@ -46,7 +46,9 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ title }: { title?: string }) => <button type="button">{title}</button>,
   confirmModal: (opts: unknown) => mocks.confirmModal(opts),
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('antd', () => ({
@@ -161,7 +163,7 @@ describe('TaskDetailHeaderActions', () => {
     expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
   });
 
-  it('hides "make private" from a workspace owner who is not the creator (LOBE-11760)', () => {
+  it('hides "make private" from a workspace owner who is not the creator ', () => {
     mocks.isWorkspaceOwner = true;
     mocks.taskState.taskDetailMap = {
       'T-1': { createdByUserId: 'someone-else', visibility: 'public' },

@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Riprova o scegli un metodo di accesso diverso",
   "authResult.failed.title": "Autorizzazione Fallita",
-  "authResult.success.desc": "Fai clic sul pulsante Avvia qui sotto per continuare a usare LobeHub Desktop",
-  "authResult.success.title": "Autorizzazione Riuscita",
   "back": "Indietro",
   "navigation.next": "Continua",
   "next": "Avanti",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "Annulla",
   "screen5.actions.connectToServer": "Connetti al Server",
   "screen5.actions.connecting": "Connessione in corso...",
+  "screen5.actions.done": "Fatto",
   "screen5.actions.signInCloud": "Accedi a LobeHub Cloud",
   "screen5.actions.signOut": "Esci",
   "screen5.actions.signingIn": "Accesso in corso...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Istanza Autogestita",
   "screen5.navigation.next": "Inizia",
   "screen5.selfhost.endpointPlaceholder": "Inserisci l'URL del tuo server (es. https://tuo-server.com)",
+  "screen5.status.cloud.title": "Connesso a LobeHub Cloud",
+  "screen5.status.description": "Agenti, Gruppi, impostazioni e Contesto si stanno sincronizzando su tutti i tuoi dispositivi.",
+  "screen5.status.selfhost.description": "Sincronizzazione di Agenti, Gruppi, impostazioni e Contesto con {{url}}.",
+  "screen5.status.selfhost.title": "Connesso al tuo server personale",
   "screen5.title": "Accedi per sincronizzare tra dispositivi",
   "screen5.title2": "Mantieni i tuoi dati sincronizzati ovunque",
   "screen5.title3": "I tuoi dati restano sotto il tuo controllo"

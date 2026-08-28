@@ -144,7 +144,7 @@ export class AiProviderModel {
     // The merge seeds from the workspace-scoped row on purpose: provider
     // vaults are workspace-shared and config writes are owner-gated at the
     // router, so a second owner editing the shared provider must still
-    // preserve the hidden fields of the row another owner created.
+    // preserve the hidden fields of a row created by another workspace member.
     let mergedKeyVaults = value.keyVaults || {};
 
     const existing = await this.db.query.aiProviders.findFirst({

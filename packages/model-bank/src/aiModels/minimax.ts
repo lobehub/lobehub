@@ -379,6 +379,44 @@ const minimaxImageModels: AIImageModelCard[] = [
 const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
+      'A unified text-to-video, image-to-video, and reference-to-video model with enhanced motion, consistency, and native audio capabilities.',
+    displayName: 'MiniMax H3',
+    enabled: true,
+    id: 'MiniMax-H3',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+      },
+      duration: { default: 6, max: 15, min: 4, step: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      imageUrls: {
+        default: [],
+        // The v2 API accepts at most 9 images total across the first-frame
+        // (imageUrl), reference-list (imageUrls), and last-frame (endImageUrl)
+        // slots, which all normalize into a single reference pool at runtime.
+        // Cap the reference array at 7 so the combined upload capacity
+        // (1 + 7 + 1) never exceeds 9 — otherwise the UI could assemble a
+        // payload that createVideo rejects.
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '768P',
+        enum: ['768P', '2K'],
+      },
+      watermark: { default: false },
+    },
+    releasedAt: '2026-07-31',
+    type: 'video',
+  },
+  {
+    description:
       'Brand-new video generation model with comprehensive upgrades in body motion, physical realism, and instruction following.',
     displayName: 'MiniMax Hailuo 2.3 Fast',
     enabled: true,

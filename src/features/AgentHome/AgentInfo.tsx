@@ -1,10 +1,13 @@
 'use client';
 
-import { Avatar, Flexbox, Markdown, Skeleton, Text } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox, Markdown, Skeleton } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useAgentStore } from '@/store/agent';
@@ -29,8 +32,8 @@ const AgentInfo = memo(() => {
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
 
   const displayTitle = isInbox
-    ? meta.title || 'Lobe AI'
-    : meta.title || t('defaultSession', { ns: 'common' });
+    ? agentDisplayName(meta, 'Lobe AI')
+    : agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
   const message = useMemo(() => {
     if (openingMessage) return openingMessage;
@@ -56,6 +59,7 @@ const AgentInfo = memo(() => {
       <Avatar
         avatar={isInbox ? meta.avatar || DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
         background={meta.backgroundColor}
+        name={displayTitle}
         shape={'square'}
         size={64}
       />

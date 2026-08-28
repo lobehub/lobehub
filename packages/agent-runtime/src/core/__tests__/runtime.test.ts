@@ -377,6 +377,58 @@ describe('AgentRuntime', () => {
         expect(result.newState.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
       });
 
+      // "Approve all" on a parallel batch resolves every pending tool in one
+      // action. The resume must run them as ONE call_tools_batch against the
+      // rows the approval pause already created — approving them one at a time
+      // instead continues the LLM once per tool, each seeing its not-yet-
+      // approved siblings as empty results.
+      it('should dispatch a single call_tools_batch when a batch of approvals resumes', async () => {
+        const agent = new MockAgent();
+        const batchExecutor = vi.fn().mockResolvedValue({
+          events: [],
+          newState: AgentRuntime.createInitialState({ operationId: 'test-session' }),
+        });
+        agent.executors = { call_tools_batch: batchExecutor } as any;
+
+        const runtime = new AgentRuntime(agent);
+        const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+
+        const approvedToolCalls = ['call_a', 'call_b'].map((id) => ({
+          apiName: 'calculate',
+          arguments: '{"expression": "2+2"}',
+          id,
+          identifier: 'lobe-calculator',
+          type: 'default' as const,
+        }));
+
+        await runtime.step(state, {
+          operationId: 'test-session',
+          phase: 'human_approved_tool',
+          payload: {
+            approvedToolCalls,
+            assistantMessageId: 'msg_seeded_placeholder',
+            parentMessageId: 'msg_assistant',
+            toolMessageIds: { call_a: 'tool-msg-a', call_b: 'tool-msg-b' },
+          },
+          session: {
+            sessionId: 'test-session',
+            messageCount: 0,
+            status: 'idle',
+            stepCount: 0,
+          },
+        } as any);
+
+        expect(batchExecutor).toHaveBeenCalledTimes(1);
+        expect(batchExecutor.mock.calls[0][0]).toEqual({
+          payload: {
+            existingToolMessageIds: { call_a: 'tool-msg-a', call_b: 'tool-msg-b' },
+            parentMessageId: 'msg_assistant',
+            toolsCalling: approvedToolCalls,
+          },
+          type: 'call_tools_batch',
+        });
+      });
+
       it('should stash a tool_result-seeded assistantMessageId as pendingAssistantMessageId', async () => {
         const agent = new MockAgent();
         agent.runner = vi.fn(async (_context: AgentRuntimeContext, state: AgentState) => {
@@ -1440,6 +1492,34 @@ describe('AgentRuntime', () => {
       // Should have 2 tool messages in state
       const toolMessages = result.newState.messages.filter((m) => m.role === 'tool');
       expect(toolMessages).toHaveLength(2);
+    });
+
+    it('should pass a stable index for each instruction in the same step', async () => {
+      const instructionIndexes: Array<number | undefined> = [];
+      const agent: Agent = {
+        async runner() {
+          return [
+            { payload: { messages: [] }, type: 'call_llm' as const },
+            { payload: { messages: [] }, type: 'call_llm' as const },
+          ];
+        },
+      };
+      const runtime = new AgentRuntime(agent, {
+        executors: {
+          call_llm: async (_instruction, state, context) => {
+            instructionIndexes.push(context?.instructionIndex);
+            return { events: [], newState: state };
+          },
+        },
+      });
+      const state = AgentRuntime.createInitialState({
+        messages: [{ content: 'Execute both calls', role: 'user' }],
+        operationId: 'instruction-index-test',
+      });
+
+      await runtime.step(state);
+
+      expect(instructionIndexes).toEqual([0, 1]);
     });
 
     it('should stop execution when encountering blocking status', async () => {

@@ -1,3 +1,5 @@
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat';
@@ -59,15 +61,30 @@ class MessengerService {
     return lambdaClient.messenger.pollWechatQrSession.mutate({ sessionId });
   };
 
-  getMessengerPushWindow = async (platform: MessengerPlatform) => {
-    return lambdaClient.messenger.getMessengerPushWindow.query({ platform: platform as 'wechat' });
+  getMessengerPushWindow = async (platform: MessengerPlatform, tenantId?: string) => {
+    return lambdaClient.messenger.getMessengerPushWindow.query({ platform, tenantId });
   };
 
-  sendMessengerPush = async (params: { content: string; platform: MessengerPlatform }) => {
-    return lambdaClient.messenger.sendMessengerPush.mutate({
-      ...params,
-      platform: params.platform as 'wechat',
-    });
+  sendMessengerPush = async (params: {
+    /**
+     * Referenced by id only — the server resolves each file to a stable access
+     * URL from the owned row. Deliberately no caller-supplied URL: the platform
+     * senders fetch it server-side.
+     */
+    attachments?: {
+      fileId: string;
+      type: 'image' | 'file' | 'video' | 'audio';
+    }[];
+    content?: string;
+    /**
+     * What to do with an image the platform will not take at full size:
+     * recompress it (default) or send the original as a download link.
+     */
+    oversizeImageStrategy?: MessengerOversizeImageStrategy;
+    platform: MessengerPlatform;
+    tenantId?: string;
+  }) => {
+    return lambdaClient.messenger.sendMessengerPush.mutate(params);
   };
 }
 

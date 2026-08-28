@@ -1,0 +1,40 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DocumentExplorerTree menu ownership > goes native for the folder row context menu, reached through a real contextmenu DOM event 1`] = `
+{
+  "menu": "ExplorerTree/documentNode",
+  "native": true,
+}
+`;
+
+exports[`DocumentExplorerTree menu ownership > goes native for the folder row context menu, reached through a real contextmenu DOM event 2`] = `
+[
+  {
+    "id": "0",
+    "label": "workingPanel.resources.tree.newFolder",
+    "sfSymbol": "folder.badge.plus",
+    "type": "normal",
+  },
+  {
+    "id": "1",
+    "label": "workingPanel.resources.tree.newDocument",
+    "sfSymbol": "doc.badge.plus",
+    "type": "normal",
+  },
+  {
+    "type": "separator",
+  },
+  {
+    "id": "3",
+    "label": "workingPanel.resources.tree.rename",
+    "sfSymbol": "pencil",
+    "type": "normal",
+  },
+  {
+    "id": "4",
+    "label": "delete",
+    "sfSymbol": "trash",
+    "type": "normal",
+  },
+]
+`;

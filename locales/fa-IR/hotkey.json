@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "نمایش یا پنهان کردن پنل سمت چپ",
   "toggleLeftPanel.title": "تغییر وضعیت پنل چپ",
   "toggleRightPanel.desc": "نمایش یا پنهان کردن پنل سمت راست",
-  "toggleRightPanel.title": "تغییر وضعیت پنل راست"
+  "toggleRightPanel.title": "تغییر وضعیت پنل راست",
+  "toggleTerminalPanel.desc": "نمایش یا پنهان کردن پنل ترمینال پایین",
+  "toggleTerminalPanel.title": "تغییر وضعیت پنل ترمینال"
 }

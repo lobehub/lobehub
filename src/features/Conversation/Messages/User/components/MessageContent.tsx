@@ -37,7 +37,9 @@ const UserMessageContent = memo<UIChatMessage>(
         {textBody && <CollapsibleContent>{textBody}</CollapsibleContent>}
         {imageList && imageList?.length > 0 && <ImageFileListViewer items={imageList} />}
         {videoList && videoList?.length > 0 && <VideoFileListViewer items={videoList} />}
-        {audioList && audioList?.length > 0 && <AudioFileListViewer items={audioList} />}
+        {audioList && audioList?.length > 0 && (
+          <AudioFileListViewer items={audioList} messageId={id} />
+        )}
         {fileList && fileList?.length > 0 && <FileListViewer items={fileList} />}
       </Flexbox>
     );

@@ -1,3 +1,4 @@
+import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -82,6 +83,21 @@ export const asrRouter = router({
     )
     .mutation(async ({ ctx, input }): Promise<{ text: string }> => {
       const workspaceId = ctx.workspaceId ?? undefined;
+
+      // the `fileId` path reads a stored file's bytes — a restricted key needs
+      // `file:read` on top of the namespace's `model:invoke` to use it
+      if (
+        input.fileId &&
+        ctx.apiKeyScopes !== undefined &&
+        !isFullAccessApiKey(ctx.apiKeyScopes) &&
+        !hasApiKeyScope(ctx.apiKeyScopes, 'file:read')
+      ) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            "This API key cannot transcribe a stored file ('fileId'): missing required scope 'file:read'.",
+        });
+      }
 
       const { bytes, fileName, mimeType } = await resolveAudio(ctx, input, workspaceId);
 

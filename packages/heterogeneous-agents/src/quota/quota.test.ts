@@ -13,6 +13,7 @@ import {
   parseCodexAccountIdentity,
 } from './identity';
 import { selectAccount } from './loadBalancer';
+import { buildClaudeQuotaWindows } from './readings';
 import type { QuotaLimitReading } from './types';
 import { CLAUDE_SESSION_WINDOW_SECONDS, windowSecondsForKind } from './types';
 import { mapClaudeUsageToReadings, parseResetsAt } from './usageApi';
@@ -171,6 +172,17 @@ describe('projectWindows', () => {
     expect(session.rateLimitedAt).toBe(reset - 2_000_000);
     const fable = windows.find((w) => w.scopeKey === 'Fable')!;
     expect(fable.limitType).toBe('weekly_scoped');
+  });
+
+  it('folds sub-second reset jitter around a minute boundary into one window', () => {
+    const windows = projectWindows([
+      mk({ resetsAt: reset - 483, utilization: 20 }),
+      mk({ resetsAt: reset + 43, utilization: 40 }),
+      mk({ resetsAt: reset + 938, utilization: 60 }),
+    ]);
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({ peakUtilization: 60, resetsAt: reset });
   });
 
   it('ignores readings without a resetsAt', () => {
@@ -367,6 +379,112 @@ describe('mapClaudeUsageToReadings', () => {
         utilization: 40,
       },
     ]);
+  });
+});
+
+// ── readings → display windows ────────────────────────────────────────────────
+describe('buildClaudeQuotaWindows', () => {
+  const now = Date.parse('2026-07-12T18:00:00Z');
+  const reading = (over: Partial<QuotaLimitReading> = {}): QuotaLimitReading => ({
+    capturedAt: now - 60_000,
+    limitType: 'session',
+    resetsAt: Date.parse('2026-07-12T20:50:00Z'),
+    scopeKey: '',
+    utilization: 26,
+    ...over,
+  });
+
+  it('maps session / weekly / scoped readings to their panel windows', () => {
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading(),
+        reading({
+          limitType: 'weekly_all',
+          resetsAt: Date.parse('2026-07-18T14:00:00Z'),
+          utilization: 29,
+        }),
+        reading({
+          limitType: 'weekly_scoped',
+          resetsAt: Date.parse('2026-07-18T14:00:00Z'),
+          scopeKey: 'Fable',
+          utilization: 38,
+        }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toEqual({
+      resetsAt: Date.parse('2026-07-12T20:50:00Z'),
+      usedPercent: 26,
+      windowMinutes: 300,
+    });
+    expect(windows.weekly).toMatchObject({ usedPercent: 29, windowMinutes: 10_080 });
+    expect(windows.scopedWeekly).toEqual({
+      modelName: 'Fable',
+      window: {
+        resetsAt: Date.parse('2026-07-18T14:00:00Z'),
+        usedPercent: 38,
+        windowMinutes: 10_080,
+      },
+    });
+  });
+
+  it('reports a rolled-over window as refilled instead of dropping the row', () => {
+    // The 5-hour window is the one that goes idle: after five quiet hours the
+    // provider still reports the last session's utilization against a reset
+    // that has passed. Hiding the row reads as "this plan has no session
+    // limit"; replaying 96% paints an exhausted meter over a free window.
+    const windows = buildClaudeQuotaWindows(
+      [reading({ resetsAt: now - 60_000, utilization: 96 })],
+      now,
+    );
+
+    expect(windows.session).toEqual({ resetsAt: null, usedPercent: 0, windowMinutes: 300 });
+  });
+
+  it('keeps a limit reported without a reset time until one full window passes', () => {
+    // An untouched model-scoped weekly arrives as `resets_at: null`; it can
+    // only speak for the window it was captured in.
+    const noReset = reading({ limitType: 'weekly_scoped', resetsAt: null, scopeKey: 'Fable' });
+
+    expect(buildClaudeQuotaWindows([noReset], now).scopedWeekly).toEqual({
+      modelName: 'Fable',
+      window: { resetsAt: null, usedPercent: 26, windowMinutes: 10_080 },
+    });
+    expect(
+      buildClaudeQuotaWindows([noReset], now + 8 * 24 * 60 * 60 * 1000).scopedWeekly,
+    ).toMatchObject({ window: { usedPercent: 0 } });
+  });
+
+  it('keeps the newest reading per bucket and tolerates renamed kinds', () => {
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading({ capturedAt: now - 600_000, limitType: 'five_hour', utilization: 10 }),
+        reading({ capturedAt: now - 1000, utilization: 42 }),
+        reading({ limitType: 'weekly', resetsAt: now + 60_000, utilization: 7 }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toMatchObject({ usedPercent: 42 });
+    // `weekly` (unscoped) still counts as the account-wide weekly window.
+    expect(windows.weekly).toMatchObject({ usedPercent: 7 });
+  });
+
+  it('clamps and rounds utilization the same way the persisted readings do', () => {
+    const windows = buildClaudeQuotaWindows([reading({ utilization: 140 })], now);
+    expect(windows.session?.usedPercent).toBe(100);
+    expect(
+      buildClaudeQuotaWindows([reading({ utilization: 62.5 })], now).session?.usedPercent,
+    ).toBe(63);
+  });
+
+  it('has no window for a limit the account never reported', () => {
+    expect(buildClaudeQuotaWindows([], now)).toEqual({
+      scopedWeekly: null,
+      session: null,
+      weekly: null,
+    });
   });
 });
 

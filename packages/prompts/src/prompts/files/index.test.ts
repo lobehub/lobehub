@@ -1,4 +1,4 @@
-import { createVisualFileRef } from '@lobechat/const/visualRef';
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -198,8 +198,8 @@ describe('filesPrompts', () => {
 
   it('should generate stable visual refs when message id is provided', () => {
     const messageId = 'message-with-visual-media';
-    const imageRef = createVisualFileRef({ index: 0, messageId, type: 'image' });
-    const videoRef = createVisualFileRef({ index: 0, messageId, type: 'video' });
+    const imageRef = createMediaFileRef({ index: 0, messageId, type: 'image' });
+    const videoRef = createMediaFileRef({ index: 0, messageId, type: 'video' });
 
     const result = filesPrompts({
       imageList: [mockImage],

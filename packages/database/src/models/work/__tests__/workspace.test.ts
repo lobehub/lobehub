@@ -1,7 +1,8 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { topics, workspaces } from '../../../schemas';
+import { topics, works, workspaces } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -128,6 +129,39 @@ describe('WorkModel · listByWorkspace', () => {
     expect(items[0].type).toBe('document');
   });
 
+  it('narrows to Works produced by one agent', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const firstTask = await taskModel.create({ instruction: 'First', name: 'First task' });
+    const secondTask = await taskModel.create({ instruction: 'Second', name: 'Second task' });
+    const firstWork = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-agent-filter-1',
+      toolCallId: 'tool-call-agent-filter-1',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      taskId: firstTask.id,
+      topicId,
+    });
+    await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-agent-filter-2',
+      toolCallId: 'tool-call-agent-filter-2',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      taskId: secondTask.id,
+      topicId,
+    });
+
+    await serverDB.update(works).set({ originAgentId: agentId }).where(eq(works.id, firstWork!.id));
+
+    const { items } = await workModel.listByWorkspace({
+      originAgentId: agentId,
+    });
+
+    expect(items.map((item) => item.id)).toEqual([firstWork!.id]);
+  });
+
   it('pages over the keyset cursor without gaps or overlaps', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
@@ -194,6 +228,57 @@ describe('WorkModel · listByWorkspace', () => {
     expect(work).toMatchObject({ userId, visibility: 'private' });
     expect((await ownerWorks.listByWorkspace({})).items).toHaveLength(1);
     expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
+  });
+
+  it('separates private and public Works for the Resources mode switch', async () => {
+    const workspaceId = 'work-test-gallery-visibility-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Gallery Visibility Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+
+    const taskModel = new TaskModel(serverDB, userId, workspaceId);
+    const workModel = new WorkModel(serverDB, userId, workspaceId);
+    const privateTask = await taskModel.create({
+      instruction: 'Private gallery task',
+      name: 'Private gallery task',
+      visibility: 'private',
+    });
+    const publicTask = await taskModel.create({
+      instruction: 'Public gallery task',
+      name: 'Public gallery task',
+      visibility: 'public',
+    });
+    const privateWork = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-gallery-private',
+      taskId: privateTask.id,
+      toolCallId: 'tool-call-gallery-private',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+    const publicWork = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-gallery-public',
+      taskId: publicTask.id,
+      toolCallId: 'tool-call-gallery-public',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+
+    const combined = await workModel.listByWorkspace({});
+    const privateOnly = await workModel.listByWorkspace({ visibility: 'private' });
+    const publicOnly = await workModel.listByWorkspace({ visibility: 'public' });
+
+    expect(combined.items.map((item) => item.id).sort()).toEqual(
+      [privateWork!.id, publicWork!.id].sort(),
+    );
+    expect(privateOnly.items.map((item) => item.id)).toEqual([privateWork!.id]);
+    expect(publicOnly.items.map((item) => item.id)).toEqual([publicWork!.id]);
   });
 
   it('flags an orphaned task work whose task was deleted without the tool', async () => {

@@ -86,13 +86,27 @@ export interface LocalFilePreviewImage {
   type: 'image';
 }
 
+/**
+ * Binary document (pdf / office) small enough to preview in-app, carried as
+ * base64 so it survives RPC serialization. Oversized documents stay on the
+ * `binary` / `pdf` unsupported variants.
+ */
+export interface LocalFilePreviewDocument {
+  base64: string;
+  contentType: string;
+  type: 'document';
+}
+
 export interface LocalFilePreviewUnsupported {
   contentType: string;
   type: 'binary' | 'pdf' | 'video';
 }
 
 export type LocalFilePreview =
-  LocalFilePreviewImage | LocalFilePreviewText | LocalFilePreviewUnsupported;
+  | LocalFilePreviewDocument
+  | LocalFilePreviewImage
+  | LocalFilePreviewText
+  | LocalFilePreviewUnsupported;
 
 export interface LocalFilePreviewResult {
   error?: string;
@@ -224,14 +238,16 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
  * Kept local so device-control remains a leaf package with no app/type-layer dependency.
  */
 export interface ListHeterogeneousAgentModelsParams {
+  args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode';
+  type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {
   id: string;
+  label?: string;
   modelId: string;
   providerId: string;
 }

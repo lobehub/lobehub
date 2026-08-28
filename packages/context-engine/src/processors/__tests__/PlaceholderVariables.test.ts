@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildContentPreview,
   formatPlaceholderValues,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
@@ -16,6 +17,22 @@ describe('PlaceholderVariablesProcessor', () => {
     random: () => '12345',
     nested: () => 'Value with {{date}} inside',
   };
+
+  describe('buildContentPreview', () => {
+    it('does not split an emoji at the string preview boundary', () => {
+      const preview = buildContentPreview(`${'a'.repeat(199)}😀tail`);
+
+      expect(preview).toBe('a'.repeat(199));
+      expect(preview).not.toMatch(/[\uD800-\uDFFF]/);
+    });
+
+    it('does not split an emoji in a serialized content preview', () => {
+      const preview = buildContentPreview({ value: `${'a'.repeat(189)}😀tail` });
+
+      expect(preview).toBe(`{"value":"${'a'.repeat(189)}`);
+      expect(preview).not.toMatch(/[\uD800-\uDFFF]/);
+    });
+  });
 
   describe('parsePlaceholderVariables', () => {
     it('should replace simple placeholder variables', () => {

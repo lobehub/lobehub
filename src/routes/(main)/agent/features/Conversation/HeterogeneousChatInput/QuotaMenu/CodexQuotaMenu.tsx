@@ -4,11 +4,10 @@ import type {
   CodexQuotaSnapshot,
   CodexQuotaWindow,
   CodexRateLimitResetCredit,
-  CodexRateLimitSnapshot,
 } from '@lobechat/electron-client-ipc';
 import { uuid } from '@lobechat/utils';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Collapse, Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -24,6 +23,11 @@ const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 const MONTHLY_WINDOW_MIN_MINUTES = 28 * 24 * 60;
 const MONTHLY_WINDOW_MAX_MINUTES = 31 * 24 * 60;
 
+const isConnectionError = (quota: CodexQuotaSnapshot) =>
+  /error sending request for url|fetch failed|\b(?:ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(
+    quota.error ?? '',
+  );
+
 const styles = createStaticStyles(({ css }) => ({
   credit: css`
     min-width: 0;
@@ -33,6 +37,9 @@ const styles = createStaticStyles(({ css }) => ({
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
+  `,
+  creditCollapse: css`
+    width: 100%;
   `,
   creditExpiry: css`
     flex: none;
@@ -142,7 +149,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   }, [sourceKey]);
 
   const fetchQuota = useCallback(
-    (options?: FetchQuotaOptions) =>
+    (options?: FetchQuotaOptions<CodexQuotaSnapshot>) =>
       heterogeneousAgentService.getCodexQuota({
         command,
         env,
@@ -171,19 +178,13 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
     [t],
   );
 
-  const getRateLimitWindowLabel = useCallback(
-    (rateLimit: CodexRateLimitSnapshot, window: CodexQuotaWindow, fallback: string) => {
-      const windowLabel = getWindowLabel(window, fallback);
-      if (rateLimit.limitId.toLowerCase() === 'codex') return windowLabel;
-
-      return `${rateLimit.limitName || rateLimit.limitId} · ${windowLabel}`;
-    },
-    [getWindowLabel],
-  );
-
   const getWindows = useCallback(
     (quota: CodexQuotaSnapshot): QuotaWindowItem[] => {
-      if (!quota.rateLimits?.length) {
+      const rateLimit = quota.rateLimits?.find(
+        (rateLimit) => rateLimit.limitId.toLowerCase() === 'codex',
+      );
+
+      if (!rateLimit) {
         return [
           {
             key: 'primary',
@@ -198,42 +199,33 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
         ];
       }
 
-      return quota.rateLimits.flatMap((rateLimit) => {
-        const windows: QuotaWindowItem[] = [];
-
-        if (rateLimit.primary) {
-          windows.push({
-            key: `${rateLimit.limitId}:primary`,
-            label: getRateLimitWindowLabel(
-              rateLimit,
-              rateLimit.primary,
-              t('heteroAgent.quota.session'),
-            ),
-            window: rateLimit.primary,
-          });
-        }
-
-        if (rateLimit.secondary) {
-          windows.push({
-            key: `${rateLimit.limitId}:secondary`,
-            label: getRateLimitWindowLabel(
-              rateLimit,
-              rateLimit.secondary,
-              t('heteroAgent.quota.weekly'),
-            ),
-            window: rateLimit.secondary,
-          });
-        }
-
-        return windows;
-      });
+      return [
+        {
+          key: `${rateLimit.limitId}:primary`,
+          label: getWindowLabel(rateLimit.primary, t('heteroAgent.quota.session')),
+          window: rateLimit.primary,
+        },
+        {
+          key: `${rateLimit.limitId}:secondary`,
+          label: getWindowLabel(rateLimit.secondary, t('heteroAgent.quota.weekly')),
+          window: rateLimit.secondary,
+        },
+      ];
     },
-    [getRateLimitWindowLabel, getWindowLabel, t],
+    [getWindowLabel, t],
   );
 
   const hasExtraData = useCallback(
     (quota: CodexQuotaSnapshot) => !!quota.rateLimitResetCredits,
     [],
+  );
+
+  const getErrorText = useCallback(
+    (quota: CodexQuotaSnapshot) =>
+      isConnectionError(quota)
+        ? t('heteroAgent.codexQuota.errorConnection')
+        : t('heteroAgent.codexQuota.errorGeneric'),
+    [t],
   );
 
   const consumeReset = useCallback(
@@ -349,84 +341,109 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
       }));
 
       return (
-        <Flexbox className={styles.resetCredits} gap={8}>
-          <Flexbox gap={2}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <Icon icon={RotateCcwIcon} size={14} />
-              <Text strong style={{ fontSize: 12 }}>
-                {t('heteroAgent.codexQuota.resetCredits', { count: resetCreditCount })}
-              </Text>
-            </Flexbox>
-            {resetCredits.totalEarnedCount !== undefined && (
-              <Text color={cssVar.colorTextTertiary} style={{ fontSize: 12 }}>
-                {t('heteroAgent.codexQuota.totalEarned', {
-                  count: resetCredits.totalEarnedCount,
-                })}
-              </Text>
-            )}
-          </Flexbox>
+        <Flexbox className={styles.resetCredits}>
+          <Collapse
+            className={styles.creditCollapse}
+            collapsible={resetCreditCount > 0 || !!resetFeedback}
+            defaultActiveKey={[]}
+            expandIconPlacement={'end'}
+            padding={0}
+            variant={'borderless'}
+            items={[
+              {
+                children: (
+                  <Flexbox gap={8}>
+                    {resetCreditItems.length > 0 && (
+                      <Flexbox className={styles.creditList}>
+                        {resetCreditItems.map(({ credit, index }) => {
+                          const fallbackExpiry =
+                            index === 1 ? resetCredits.nextExpiresAt : undefined;
+                          const expiresAt = credit ? credit.expiresAt : fallbackExpiry;
+                          const expiresIn = expiresAt ? formatDuration(expiresAt - now) : undefined;
 
-          {resetCreditItems.length > 0 && (
-            <Flexbox className={styles.creditList}>
-              {resetCreditItems.map(({ credit, index }) => {
-                const fallbackExpiry = index === 1 ? resetCredits.nextExpiresAt : undefined;
-                const expiresAt = credit ? credit.expiresAt : fallbackExpiry;
-                const expiresIn = expiresAt ? formatDuration(expiresAt - now) : undefined;
+                          return (
+                            <Flexbox
+                              horizontal
+                              align={'center'}
+                              className={styles.credit}
+                              gap={8}
+                              key={credit?.id ?? `reset-credit-${index}`}
+                            >
+                              <Text className={styles.creditIndex} style={{ fontSize: 12 }}>
+                                {`#${index}`}
+                              </Text>
+                              <Text strong className={styles.creditTitle} style={{ fontSize: 12 }}>
+                                {credit?.title || t('heteroAgent.codexQuota.resetCreditTitle')}
+                              </Text>
+                              <Text
+                                className={styles.creditExpiry}
+                                style={{ fontSize: 12 }}
+                                type="secondary"
+                              >
+                                {expiresAt
+                                  ? expiresIn
+                                    ? t('heteroAgent.codexQuota.expiresIn', {
+                                        duration: expiresIn,
+                                      })
+                                    : t('heteroAgent.codexQuota.expiresSoon')
+                                  : credit
+                                    ? t('heteroAgent.codexQuota.doesNotExpire')
+                                    : t('heteroAgent.codexQuota.resetCreditDetailsUnavailable')}
+                              </Text>
+                            </Flexbox>
+                          );
+                        })}
+                      </Flexbox>
+                    )}
 
-                return (
-                  <Flexbox
-                    horizontal
-                    align={'center'}
-                    className={styles.credit}
-                    gap={8}
-                    key={credit?.id ?? `reset-credit-${index}`}
-                  >
-                    <Text className={styles.creditIndex} style={{ fontSize: 12 }}>
-                      {`#${index}`}
-                    </Text>
-                    <Text strong className={styles.creditTitle} style={{ fontSize: 12 }}>
-                      {credit?.title || t('heteroAgent.codexQuota.resetCreditTitle')}
-                    </Text>
-                    <Text className={styles.creditExpiry} style={{ fontSize: 12 }} type="secondary">
-                      {expiresAt
-                        ? expiresIn
-                          ? t('heteroAgent.codexQuota.expiresIn', { duration: expiresIn })
-                          : t('heteroAgent.codexQuota.expiresSoon')
-                        : credit
-                          ? t('heteroAgent.codexQuota.doesNotExpire')
-                          : t('heteroAgent.codexQuota.resetCreditDetailsUnavailable')}
-                    </Text>
+                    {resetFeedback && (
+                      <div
+                        aria-live="polite"
+                        className={styles.feedback}
+                        data-kind={resetFeedback.kind}
+                        role={resetFeedback.kind === 'error' ? 'alert' : 'status'}
+                      >
+                        {resetFeedback.text}
+                      </div>
+                    )}
+
+                    {resetCreditCount > 0 && (
+                      <Button
+                        block
+                        icon={RotateCcwIcon}
+                        loading={resetting}
+                        size={'small'}
+                        type={'primary'}
+                        onClick={() => confirmReset(nextCredit?.id ?? undefined, applyQuota)}
+                      >
+                        {resetting
+                          ? t('heteroAgent.codexQuota.resetting')
+                          : t('heteroAgent.codexQuota.resetNow')}
+                      </Button>
+                    )}
                   </Flexbox>
-                );
-              })}
-            </Flexbox>
-          )}
-
-          {resetFeedback && (
-            <div
-              aria-live="polite"
-              className={styles.feedback}
-              data-kind={resetFeedback.kind}
-              role={resetFeedback.kind === 'error' ? 'alert' : 'status'}
-            >
-              {resetFeedback.text}
-            </div>
-          )}
-
-          {resetCreditCount > 0 && (
-            <Button
-              block
-              icon={RotateCcwIcon}
-              loading={resetting}
-              size={'small'}
-              type={'primary'}
-              onClick={() => confirmReset(nextCredit?.id ?? undefined, applyQuota)}
-            >
-              {resetting
-                ? t('heteroAgent.codexQuota.resetting')
-                : t('heteroAgent.codexQuota.resetNow')}
-            </Button>
-          )}
+                ),
+                key: 'reset-credits',
+                label: (
+                  <Flexbox gap={2}>
+                    <Flexbox horizontal align={'center'} gap={4}>
+                      <Icon icon={RotateCcwIcon} size={14} />
+                      <Text strong style={{ fontSize: 12 }}>
+                        {t('heteroAgent.codexQuota.resetCredits', { count: resetCreditCount })}
+                      </Text>
+                    </Flexbox>
+                    {resetCredits.totalEarnedCount !== undefined && (
+                      <Text color={cssVar.colorTextTertiary} style={{ fontSize: 12 }}>
+                        {t('heteroAgent.codexQuota.totalEarned', {
+                          count: resetCredits.totalEarnedCount,
+                        })}
+                      </Text>
+                    )}
+                  </Flexbox>
+                ),
+              },
+            ]}
+          />
         </Flexbox>
       );
     },
@@ -438,6 +455,8 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
       contentWidth={360}
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
+      getErrorText={getErrorText}
+      getRefreshErrorText={getErrorText}
       getWindows={getWindows}
       hasExtraData={hasExtraData}
       renderFooter={renderFooter}

@@ -13,7 +13,8 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   isDesktop: true,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({
     card: 'card',
     key: 'key',
@@ -35,7 +36,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => null,
   Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -45,7 +45,9 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: () => null,
   Tabs: () => null,
 }));
 
@@ -53,9 +55,13 @@ vi.mock('@/components/CodeEditorPane', () => ({
   default: () => <textarea data-testid="code-editor" />,
 }));
 
+const mockIsHtmlFile = vi.hoisted(() => vi.fn(() => false));
+
 vi.mock('@/components/HtmlPreview', () => ({
-  InlineHtmlPreview: () => <iframe title="html-preview" />,
-  isHtmlFile: () => false,
+  InlineHtmlPreview: ({ baseUrl }: { baseUrl?: string }) => (
+    <iframe data-base-url={baseUrl} title="html-preview" />
+  ),
+  isHtmlFile: mockIsHtmlFile,
 }));
 
 vi.mock('@/components/Loading/CircleLoading', () => ({
@@ -82,6 +88,12 @@ vi.mock('@/utils/skillMarkdown', () => ({
 
 vi.mock('./MarkdownImage', () => ({
   default: () => null,
+}));
+
+vi.mock('./PublishHtmlArtifactButton', () => ({
+  PublishHtmlArtifactLiveBar: () => null,
+  PublishHtmlArtifactProvider: ({ children }: { children: ReactNode }) => children,
+  PublishHtmlArtifactTrigger: () => null,
 }));
 
 const mockClearPortalStack = vi.hoisted(() => vi.fn());
@@ -139,6 +151,8 @@ vi.mock('@/store/chat/selectors', () => {
           files[0]
         );
       },
+      localFileBuffer: (tabId: string) => (state: Record<PropertyKey, unknown>) =>
+        (state.localFileBuffers as Record<string, string> | undefined)?.[tabId],
       openLocalFiles,
     },
   };
@@ -158,6 +172,8 @@ const createChatState = (activeTopicId: 'topic-a' | 'topic-b') => ({
   activeLocalFilePath: '/project-a/a.ts',
   activeTopicId,
   clearPortalStack: mockClearPortalStack,
+  saveLocalFile: vi.fn(),
+  setLocalFileBuffer: vi.fn(),
   openLocalFiles: [
     {
       filePath: '/project-a/a.ts',
@@ -189,6 +205,8 @@ describe('LocalFile Body', () => {
   beforeEach(() => {
     mockClearPortalStack.mockClear();
     mockProjectFileService.getLocalFilePreview.mockClear();
+    mockIsHtmlFile.mockReset();
+    mockIsHtmlFile.mockReturnValue(false);
     mockUseClientDataSWR.mockClear();
     mockUseClientDataSWR.mockReturnValue({
       isLoading: true,
@@ -256,5 +274,52 @@ describe('LocalFile Body', () => {
       path: '/tmp/worktree-switcher-demo.html',
       workingDirectory: '/tmp',
     });
+  });
+
+  it('requests workspace resources for a desktop HTML file and passes its base URL to preview', () => {
+    const htmlFileId = createLocalFileTabId({
+      filePath: '/project-a/pages/index.html',
+      workingDirectory: '/project-a',
+    });
+    mockIsHtmlFile.mockReturnValue(true);
+    mockChatState.current = {
+      ...createChatState('topic-a'),
+      activeLocalFileId: htmlFileId,
+      activeLocalFilePath: '/project-a/pages/index.html',
+      openLocalFiles: [
+        {
+          filePath: '/project-a/pages/index.html',
+          id: htmlFileId,
+          workingDirectory: '/project-a',
+        },
+      ],
+    };
+    mockUseClientDataSWR.mockReturnValue({
+      data: {
+        content: '<link rel="stylesheet" href="../assets/app.css">',
+        contentType: 'text/html',
+        resourceBaseUrl: 'localfile://preview-session/pages/',
+        type: 'text',
+      },
+      isLoading: false,
+      isValidating: false,
+      mutate: vi.fn(),
+    });
+
+    render(<Body />);
+
+    const fetcher = mockUseClientDataSWR.mock.calls.at(-1)?.[1] as () => Promise<unknown>;
+    void fetcher();
+    expect(mockProjectFileService.getLocalFilePreview).toHaveBeenCalledWith({
+      allowExternalFile: undefined,
+      deviceId: undefined,
+      path: '/project-a/pages/index.html',
+      resourceScope: 'workspace',
+      workingDirectory: '/project-a',
+    });
+    expect(screen.getByTitle('html-preview')).toHaveAttribute(
+      'data-base-url',
+      'localfile://preview-session/pages/',
+    );
   });
 });

@@ -26,4 +26,11 @@ describe('taskTemplate constants', () => {
       type: RecommendedSkillType.Lobehub,
     });
   });
+
+  it('keeps image generation default-installed as a recommended builtin', () => {
+    expect(RECOMMENDED_SKILLS).toContainEqual({
+      id: 'lobe-image-generation',
+      type: RecommendedSkillType.Builtin,
+    });
+  });
 });

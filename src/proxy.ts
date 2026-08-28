@@ -17,6 +17,8 @@ export const config = {
     '/',
     '/acceptance',
     '/acceptance(.*)',
+    '/apps',
+    '/apps(.*)',
     '/community',
     '/community(.*)',
     '/labs',

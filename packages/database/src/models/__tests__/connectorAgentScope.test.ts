@@ -352,9 +352,9 @@ describe('ConnectorModel agent-scoped resolution', () => {
 // target connector via `findById` before attaching it, and rely on its scoped
 // `ownership()` filter to reject cross-scope rows — that is what enforces
 // "workspace agent ⇒ workspace-only tools, personal agent ⇒ personal-only"
-// (LOBE-11681). These lock that filter so a future refactor can't silently let
+//. These lock that filter so a future refactor can't silently let
 // a personal connector be bound to a workspace agent (or vice versa).
-describe('ConnectorModel scope isolation (workspace vs personal) — LOBE-11681', () => {
+describe('ConnectorModel scope isolation (workspace vs personal)', () => {
   it('a workspace-scoped model cannot findById a personal connector', async () => {
     const personal = await insertConnector({
       identifier: 'gmail',
@@ -393,10 +393,10 @@ describe('ConnectorModel scope isolation (workspace vs personal) — LOBE-11681'
   });
 });
 
-// `queryAllAgentScoped` powers the unified connector-settings page (LOBE-11682):
+// `queryAllAgentScoped` powers the unified connector-settings page:
 // it lists every agent-OWNED connector across all agents in one scope, and must
-// stay scope-correct (no personal↔workspace leak — the LOBE-11681 invariant).
-describe('ConnectorModel.queryAllAgentScoped — LOBE-11682', () => {
+// stay scope-correct (no personal↔workspace leak — the invariant).
+describe('ConnectorModel.queryAllAgentScoped', () => {
   it('returns agent-owned rows across all agents and excludes base rows', async () => {
     const ownedA = await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'A' });
     const ownedB = await insertConnector({ agentId: agentB, identifier: 'slack', name: 'B' });

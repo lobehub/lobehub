@@ -10,13 +10,16 @@ const switchTopic = vi.fn();
 const useFetchTopics = vi.fn();
 
 vi.mock('@lobehub/ui', () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  Flexbox: ({ children }: any) => <div>{children}</div>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
   ActionIcon: ({ disabled, onClick, title }: any) => (
     <button disabled={disabled} type="button" onClick={onClick}>
       {title}
     </button>
   ),
-  DropdownMenu: ({ children }: any) => <div>{children}</div>,
-  Flexbox: ({ children }: any) => <div>{children}</div>,
 }));
 
 vi.mock('antd-style', () => ({

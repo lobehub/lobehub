@@ -45,6 +45,8 @@
   "toggleLeftPanel.title": "显示/隐藏左侧面板",
   "toggleRightPanel.desc": "显示或隐藏右侧面板",
   "toggleRightPanel.title": "显示/隐藏右侧面板",
+  "toggleTerminalPanel.desc": "显示或隐藏底部终端面板",
+  "toggleTerminalPanel.title": "显示/隐藏终端面板",
   "toggleZenMode.desc": "专注模式下，只显示当前会话，隐藏其他 UI",
   "toggleZenMode.title": "切换专注模式"
 }

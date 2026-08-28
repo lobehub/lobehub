@@ -2,7 +2,6 @@
 
 import { Center } from '@lobehub/ui';
 import { createStaticStyles, keyframes } from 'antd-style';
-import React, { memo } from 'react';
 
 const size = 28;
 
@@ -113,12 +112,12 @@ const styles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
-const DataLoading = memo(() => {
+const DataLoading = () => {
   return (
     <Center style={{ height: 80 }}>
       <div className={styles.loader} />
     </Center>
   );
-});
+};
 
 export default DataLoading;

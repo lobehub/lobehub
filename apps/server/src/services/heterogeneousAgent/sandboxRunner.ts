@@ -40,6 +40,8 @@ export interface SandboxRunParams {
   prompt: string;
   /** GitHub repos to clone before running the agent (e.g. ['owner/repo', ...]). */
   repos?: string[];
+  /** Full system context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**
    * Optional context injected as a text block BEFORE the user's prompt.
@@ -49,6 +51,8 @@ export interface SandboxRunParams {
   systemContext?: string;
   topicId: string;
   userId: string;
+  /** Topic/run workspace — injected as `LOBEHUB_WORKSPACE_ID` for ingest. */
+  workspaceId?: string;
 }
 
 /**
@@ -143,6 +147,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     resumeSessionId,
     topicId,
     userId,
+    workspaceId,
   } = params;
 
   // For cloud sandbox, default cwd is /workspace — must be explicit so CC stores and
@@ -183,6 +188,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList: params.imageList,
     prompt,
+    resumeFallbackSystemContext: params.resumeFallbackSystemContext,
     systemContext: params.systemContext,
   });
   const base64Payload = Buffer.from(stdinPayload).toString('base64');
@@ -195,6 +201,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     `LOBEHUB_JWT=${shellQuote(jwt)}`,
     `LOBEHUB_SERVER=${shellQuote(serverUrl)}`,
     `LOBEHUB_ASSISTANT_MESSAGE_ID=${shellQuote(assistantMessageId)}`,
+    ...(workspaceId ? [`LOBEHUB_WORKSPACE_ID=${shellQuote(workspaceId)}`] : []),
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),

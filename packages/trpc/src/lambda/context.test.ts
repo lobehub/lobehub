@@ -1,3 +1,4 @@
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -81,10 +82,10 @@ vi.mock('@/business/server/workspaceApiKey', () => ({
   canUseWorkspaceApiKeys: mockCanUseWorkspaceApiKeys,
 }));
 
-const mockHasWorkspaceOwnerAccess = vi.hoisted(() => vi.fn(async () => true));
+const mockHasActiveWorkspaceMembership = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock('@/database/models/workspace', () => ({
-  hasWorkspaceOwnerAccess: mockHasWorkspaceOwnerAccess,
+  hasActiveWorkspaceMembership: mockHasActiveWorkspaceMembership,
 }));
 
 describe('createContextInner', () => {
@@ -92,6 +93,7 @@ describe('createContextInner', () => {
     const context = await createContextInner();
 
     expect(context).toMatchObject({
+      clientMetadata: { type: 'unknown' },
       marketAccessToken: undefined,
       oidcAuth: undefined,
       userAgent: undefined,
@@ -112,6 +114,22 @@ describe('createContextInner', () => {
     });
 
     expect(context.userAgent).toBe('Mozilla/5.0');
+  });
+
+  it('should create context with client metadata', async () => {
+    const context = await createContextInner({
+      clientMetadata: {
+        platform: 'ios',
+        type: 'mobile',
+        version: '1.2.0',
+      },
+    });
+
+    expect(context.clientMetadata).toEqual({
+      platform: 'ios',
+      type: 'mobile',
+      version: '1.2.0',
+    });
   });
 
   it('should create context with market access token', async () => {
@@ -196,6 +214,22 @@ describe('createLambdaContext', () => {
     mockUpdateLastUsed.mockResolvedValue(undefined);
   });
 
+  it('should expose parsed web client metadata', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: {
+        'user-agent': 'Mozilla/5.0 Chrome/140.0.0.0',
+        'x-lobe-client-version': '2.2.10',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.clientMetadata).toEqual({
+      type: 'web',
+      version: '2.2.10',
+    });
+  });
+
   it('should authenticate with API key and skip session fallback', async () => {
     const apiKeyRecord = {
       accessedAt: new Date(),
@@ -207,6 +241,7 @@ describe('createLambdaContext', () => {
       keyHash: 'hashed-key',
       lastUsedAt: null,
       name: 'Test API Key',
+      scopes: null,
       updatedAt: new Date(),
       userId: 'api-user',
       workspaceId: null,
@@ -216,7 +251,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
       },
     });
 
@@ -238,6 +273,7 @@ describe('createLambdaContext', () => {
       keyHash: 'hashed-key',
       lastUsedAt: null,
       name: 'Test API Key',
+      scopes: null,
       updatedAt: new Date(),
       userId: 'api-user',
       workspaceId,
@@ -248,7 +284,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -265,7 +301,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-2',
       },
     });
@@ -281,7 +317,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
       },
     });
 
@@ -291,13 +327,13 @@ describe('createLambdaContext', () => {
     expect(context.workspaceId).toBe('ws-1');
   });
 
-  it('should reject a workspace API key whose issuer is no longer an owner', async () => {
+  it('should reject a workspace API key whose issuer is no longer an active member', async () => {
     vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
-    mockHasWorkspaceOwnerAccess.mockResolvedValueOnce(false);
+    mockHasActiveWorkspaceMembership.mockResolvedValueOnce(false);
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -306,7 +342,7 @@ describe('createLambdaContext', () => {
 
     expect(context.userId).toBeNull();
     expect(context.workspaceId).toBeUndefined();
-    expect(mockHasWorkspaceOwnerAccess).toHaveBeenCalledWith(expect.anything(), {
+    expect(mockHasActiveWorkspaceMembership).toHaveBeenCalledWith(expect.anything(), {
       userId: 'api-user',
       workspaceId: 'ws-1',
     });
@@ -318,7 +354,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -335,7 +371,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -352,7 +388,7 @@ describe('createLambdaContext', () => {
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
         'Oidc-Auth': 'oidc-token',
-        'X-API-Key': 'sk-lh-bbbbbbbbbbbbbbbb',
+        'X-API-Key': `${API_KEY_PREFIX}bbbbbbbbbbbbbbbb`,
       },
     });
 

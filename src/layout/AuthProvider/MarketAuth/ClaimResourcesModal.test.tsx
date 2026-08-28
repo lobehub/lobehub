@@ -77,9 +77,6 @@ vi.mock('antd', () => {
         },
       }),
     },
-    Checkbox: ({ checked }: { checked?: boolean }) => (
-      <input readOnly checked={checked} role="checkbox" type="checkbox" />
-    ),
     List,
   };
 });
@@ -112,19 +109,19 @@ describe('ClaimResourcesModal', () => {
     );
 
     await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+      const checkboxes = screen.getAllByRole('checkbox');
 
-      expect(checkboxes[0].checked).toBe(true);
-      expect(checkboxes[1].checked).toBe(true);
+      expect(checkboxes[0]).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxes[1]).toHaveAttribute('aria-checked', 'true');
     });
 
     fireEvent.click(screen.getByText('plugin-a'));
 
     await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+      const checkboxes = screen.getAllByRole('checkbox');
 
-      expect(checkboxes[0].checked).toBe(false);
-      expect(checkboxes[1].checked).toBe(true);
+      expect(checkboxes[0]).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxes[1]).toHaveAttribute('aria-checked', 'true');
     });
 
     rerender(
@@ -139,12 +136,12 @@ describe('ClaimResourcesModal', () => {
     );
 
     await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+      const checkboxes = screen.getAllByRole('checkbox');
 
       expect(screen.queryByText('plugin-a')).toBeNull();
       expect(screen.getByText('plugin-b')).toBeTruthy();
-      expect(checkboxes[0].checked).toBe(true);
-      expect(checkboxes[1].checked).toBe(true);
+      expect(checkboxes[0]).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxes[1]).toHaveAttribute('aria-checked', 'true');
     });
   });
 });

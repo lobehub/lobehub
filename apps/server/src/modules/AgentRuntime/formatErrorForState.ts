@@ -97,6 +97,18 @@ const buildPayloadBody = (
 };
 
 /**
+ * Cap a stack before it lands in `agent_operations.error` / trace snapshots.
+ * The top frames identify the throw site; the rest is runtime plumbing that
+ * would only bloat every stored error row.
+ */
+const STACK_MAX_CHARS = 1000;
+
+const truncateStack = (stack: string | undefined): string | undefined => {
+  if (!stack) return undefined;
+  return stack.length > STACK_MAX_CHARS ? `${stack.slice(0, STACK_MAX_CHARS)}…` : stack;
+};
+
+/**
  * Merge classification metadata from `ERROR_CODE_SPECS` onto a normalized
  * `ChatMessageError`. Codes that aren't in the spec table (fallbacks like
  * `InternalServerError`, or numeric ChatErrorType values) pass through
@@ -208,8 +220,14 @@ export const formatErrorForState = (error: unknown): ChatMessageError => {
       };
     }
 
+    // Unclassified harness throw: nothing upstream recognized it, so `name` +
+    // `message` are all the triage signal there is — and for a `SyntaxError`
+    // out of some `JSON.parse` those two say nothing about WHERE it blew up.
+    // Persist the stack (bounded; frames are what matter, not a runaway trace)
+    // the way the pg branch already persists `pg`, so a recurring 500 is
+    // locatable from the stored operation instead of needing a live repro.
     return enrichWithSpec({
-      body: { name: error.name },
+      body: { name: error.name, stack: truncateStack(error.stack) },
       message: error.message,
       type: ChatErrorType.InternalServerError,
     });

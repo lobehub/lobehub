@@ -2,6 +2,7 @@ import {
   AgentBuilderIdentifier,
   type GetAvailableModelsParams,
   type InstallPluginParams,
+  normalizeUpdateConfigParams,
   type SearchMarketToolsParams,
   type UpdateAgentConfigParams,
   type UpdatePromptParams,
@@ -11,10 +12,12 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { modelsResultsPrompt } from '@lobechat/prompts';
 import { getPluginMode, upsertPluginMode } from '@lobechat/types';
 
+import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { DiscoverService } from '@/server/services/discover';
+import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import { type ServerRuntimeRegistration } from './types';
@@ -31,15 +34,11 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     if (!context.userId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Agent Builder execution');
     }
+    const userId = context.userId;
 
-    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
-    const aiInfraRepos = new AiInfraRepos(
-      context.serverDB,
-      context.userId,
-      {},
-      context.workspaceId,
-    );
+    const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
+    const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
     const discoverService = new DiscoverService();
 
     return {
@@ -47,8 +46,16 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: GetAvailableModelsParams,
       ): Promise<ToolExecutionResult> => {
         try {
-          const allProviders = await aiInfraRepos.getAiProviderList();
-          const enabledProviders = allProviders.filter((p) => p.enabled);
+          const [allProviders, hiddenBuiltinModels] = await Promise.all([
+            aiInfraRepos.getAiProviderList(),
+            getHiddenBuiltinModelsForUser(userId),
+          ]);
+          /**
+           * An unresolved access policy must not be interpreted as an empty blocklist.
+           * Keep the model tool empty until the user-scoped policy can be loaded.
+           */
+          const enabledProviders =
+            hiddenBuiltinModels === undefined ? [] : allProviders.filter((p) => p.enabled);
 
           // LobeHub provider first, then by sort order
           enabledProviders.sort((a, b) => {
@@ -87,9 +94,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
               enabled: true,
               type: 'chat',
             });
+            const visibleChatModels = filterHiddenProviderModels(
+              enabledChatModels,
+              provider.id,
+              hiddenBuiltinModels,
+            );
 
             const remaining = MAX_MODELS - totalModels;
-            const sliced = enabledChatModels.slice(0, remaining);
+            const sliced = visibleChatModels.slice(0, remaining);
 
             if (sliced.length === 0) continue;
 
@@ -174,22 +186,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          let rawConfig: any = params.config;
-          if (typeof rawConfig === 'string') {
-            try {
-              rawConfig = JSON.parse(rawConfig);
-            } catch {
-              rawConfig = undefined;
-            }
-          }
-          let rawMeta: any = params.meta;
-          if (typeof rawMeta === 'string') {
-            try {
-              rawMeta = JSON.parse(rawMeta);
-            } catch {
-              rawMeta = undefined;
-            }
-          }
+          const { config: rawConfig, meta: rawMeta } = normalizeUpdateConfigParams(params);
 
           let finalConfig = rawConfig ? { ...rawConfig } : {};
           const updatedParts: string[] = [];
@@ -217,7 +214,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           if (Object.keys(finalConfig).length > 0) {
-            await agentModel.updateConfig(agentId, finalConfig);
+            // Domain tool plugins support structured entries, while the DB
+            // model's JSONB column still carries its legacy string[] annotation.
+            await agentModel.updateConfig(
+              agentId,
+              finalConfig as unknown as Parameters<typeof agentModel.updateConfig>[1],
+            );
             const nonPluginFields = Object.keys(finalConfig).filter((f) => f !== 'plugins');
             if (nonPluginFields.length > 0) {
               updatedParts.push(`config fields: ${nonPluginFields.join(', ')}`);

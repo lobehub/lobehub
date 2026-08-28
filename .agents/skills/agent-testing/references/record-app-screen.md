@@ -95,7 +95,7 @@ sleep 10
 
 For a short, time-based assertion (streaming output, a ticking timer, a loading
 state) attach a GIF from `scripts/record-gif.sh` to the case's evidence — it is
-lighter than a full recording and embeds inline on the verify page. Reach for a full
+lighter than a full recording and embeds inline on the acceptance page. Reach for a full
 MP4 recording only when a longer flow needs to be watched end to end.
 
 ## Prerequisites

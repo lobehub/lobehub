@@ -55,6 +55,7 @@ Review: (not configured)
 
 Activities:
   💬 19h ago Topic #1 制定大纲 ✓ completed  tpc_001
+      ↳ summary: 完成大纲
   📋 18h ago Brief [decision] 大纲完成 ✅ approve  brief_001
   💭 3h ago 👤 user 第5章后移，增加评测章节
   💭 2h ago 🤖 agent 已调整大纲
@@ -73,8 +74,10 @@ Review: (not configured)
 
 Activities:
   💬 19h ago Topic #1 制定大纲 ✓ completed  tpc_aaa
+      ↳ summary: 完成了大纲制定
   📋 18h ago Brief [decision] 大纲完成 [urgent] ✅ approve  brief_abc123
   💬 18h ago Topic #2 修订大纲 ✓ completed  tpc_bbb
+      ↳ summary: 修订了大纲并拆分子任务
   📋 18h ago Brief [decision] 建议拆分第4章 [normal]  brief_def456
 </task>"
 `;

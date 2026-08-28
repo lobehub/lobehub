@@ -3,6 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./content-search": "./src/contentSearch/index.ts",
+    "./file": "./src/file/index.ts",
+    "./file-search": "./src/fileSearch/index.ts",
+    "./git": "./src/git/index.ts",
+    "./logger": "./src/logger.ts",
+    "./shell": "./src/shell/index.ts",
+    "./types": "./src/types.ts"
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {

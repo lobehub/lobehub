@@ -1,6 +1,7 @@
 import type { Argument, Command } from 'commander';
 
-const ROOT_ALIASES = ['lobe', 'lobehub'];
+import { CLI_BIN_ALIASES as ROOT_ALIASES } from '../constants/identity';
+
 const HELP_COMMAND_NAME = 'help';
 
 interface DefinitionItem {

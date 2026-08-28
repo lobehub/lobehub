@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { HotkeyEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { useEffect } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
@@ -6,6 +7,7 @@ import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
 
 import { useHotkeyById } from './useHotkeyById';
 
@@ -18,6 +20,15 @@ export const useSaveTopicHotkey = () => {
 export const useOpenChatSettingsHotkey = () => {
   const openChatSettings = useOpenChatSettings();
   return useHotkeyById(HotkeyEnum.OpenChatSettings, openChatSettings);
+};
+
+export const useToggleTerminalPanelHotkey = () => {
+  const toggleTerminalPanel = useGlobalStore((s) => s.toggleTerminalPanel);
+
+  return useHotkeyById(HotkeyEnum.ToggleTerminalPanel, () => toggleTerminalPanel(), {
+    enableOnContentEditable: true,
+    enabled: isDesktop,
+  });
 };
 
 // Note: useRegenerateMessageHotkey has been moved to ConversationStore

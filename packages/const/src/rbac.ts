@@ -15,6 +15,15 @@ export const PERMISSION_ACTIONS = {
 
   AGENT_UPDATE: 'agent:update',
 
+  // ==================== Agent Label Management ====================
+  AGENT_LABEL_CREATE: 'agent_label:create',
+
+  AGENT_LABEL_DELETE: 'agent_label:delete',
+
+  AGENT_LABEL_READ: 'agent_label:read',
+
+  AGENT_LABEL_UPDATE: 'agent_label:update',
+
   // ==================== AI Infrastructure Management ====================
   AI_MODEL_CREATE: 'ai_model:create',
 
@@ -52,6 +61,15 @@ export const PERMISSION_ACTIONS = {
   DOCUMENT_READ: 'document:read',
 
   DOCUMENT_UPDATE: 'document:update',
+
+  // ==================== Document Comment Management ====================
+  DOCUMENT_COMMENT_CREATE: 'document_comment:create',
+
+  DOCUMENT_COMMENT_DELETE: 'document_comment:delete',
+
+  DOCUMENT_COMMENT_READ: 'document_comment:read',
+
+  DOCUMENT_COMMENT_UPDATE: 'document_comment:update',
 
   // ==================== File Management ====================
   FILE_DELETE: 'file:delete',
@@ -224,6 +242,20 @@ export const getAllowedScopesForAction = (
   // workspace_member.role + assigned permissions already pin who can do what.
   if (resource.startsWith('workspace')) return ['ALL'];
 
+  // Agent labels are a shared registry rather than per-author content: in a
+  // workspace every member sees and uses the same label set, and the model
+  // scopes reads and writes by `workspace_id` alone. An OWNER grant would
+  // therefore be a lie — it reads as "only labels you created" but would in
+  // fact authorize mutating every label in the workspace.
+  if (resource === 'agent_label') return ['ALL'];
+
+  // Sidebar folders became the same kind of thing: they are the shared
+  // skeleton of a workspace sidebar, and `SessionGroupModel.ownership()` now
+  // matches every public folder rather than only the caller's. An OWNER grant
+  // would read as "only folders you created" while authorizing renames and
+  // deletes across every shared Category.
+  if (resource === 'session_group') return ['ALL'];
+
   // user resource nuance: create/delete without OWNER; read/update allow OWNER
   if (resource === 'user') {
     if (action === 'create' || action === 'delete') return ['ALL'];
@@ -287,10 +319,11 @@ export const ROLE_DESCRIPTIONS = {
 
 /**
  * Built-in role names for workspace-scoped RBAC. Each workspace is seeded with
- * exactly these three system roles on creation; their `workspace_id` is the
+ * exactly these four system roles on creation; their `workspace_id` is the
  * owning workspace, distinguishing them from the global `super_admin` role.
  */
 export const WORKSPACE_SYSTEM_ROLES = {
+  ADMIN: 'workspace_admin',
   OWNER: 'workspace_owner',
   MEMBER: 'workspace_member',
   VIEWER: 'workspace_viewer',
@@ -303,12 +336,18 @@ const action = (key: keyof typeof PERMISSION_ACTIONS): string => PERMISSION_ACTI
 
 /**
  * Permission codes granted to each built-in workspace role. The lists are the
- * source of truth used both by `seedWorkspaceRoles` (DB seeding) and the
- * migration backfill SQL — keep them aligned.
+ * runtime source of truth: workspace requests expand the member's
+ * `workspace_members.role` through this matrix — no
+ * per-workspace role/permission rows are stored in the RBAC tables.
  *
  * Scope semantics:
  * - `workspace_owner` — every workspace-domain permission + every content
  *   permission (`:all`) so they can manage other members' resources too.
+ * - `workspace_admin` — workspace administration without billing, workspace
+ *   deletion, or ownership transfer. Holds `AGENT_UPDATE:all` so Agent
+ *   curation (rename, config, Member Permissions) is not blocked by another
+ *   member's General Access; every other content resource stays `:owner`, and
+ *   deleting or rehoming someone else's Agent remains Owner/creator-only.
  * - `workspace_member` — read workspace + members; create/update/delete their
  *   own content (`:owner`) on every content resource.
  * - `workspace_viewer` — strict read-only on workspace + members + content.
@@ -343,6 +382,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:all`,
     `${action('AGENT_DELETE')}:all`,
     `${action('AGENT_FORK')}:all`,
+    `${action('AGENT_LABEL_READ')}:all`,
+    `${action('AGENT_LABEL_CREATE')}:all`,
+    `${action('AGENT_LABEL_UPDATE')}:all`,
+    `${action('AGENT_LABEL_DELETE')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:all`,
     `${action('SESSION_UPDATE')}:all`,
@@ -372,10 +415,101 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('DOCUMENT_CREATE')}:all`,
     `${action('DOCUMENT_UPDATE')}:all`,
     `${action('DOCUMENT_DELETE')}:all`,
+    `${action('DOCUMENT_COMMENT_READ')}:all`,
+    `${action('DOCUMENT_COMMENT_CREATE')}:all`,
+    `${action('DOCUMENT_COMMENT_UPDATE')}:all`,
+    `${action('DOCUMENT_COMMENT_DELETE')}:all`,
     `${action('KNOWLEDGE_BASE_READ')}:all`,
     `${action('KNOWLEDGE_BASE_CREATE')}:all`,
     `${action('KNOWLEDGE_BASE_UPDATE')}:all`,
     `${action('KNOWLEDGE_BASE_DELETE')}:all`,
+    `${action('AI_MODEL_READ')}:all`,
+    `${action('AI_MODEL_INVOKE')}:all`,
+    `${action('AI_MODEL_CREATE')}:all`,
+    `${action('AI_MODEL_UPDATE')}:all`,
+    `${action('AI_MODEL_DELETE')}:all`,
+    `${action('AI_PROVIDER_READ')}:all`,
+    `${action('AI_PROVIDER_CREATE')}:all`,
+    `${action('AI_PROVIDER_UPDATE')}:all`,
+    `${action('AI_PROVIDER_DELETE')}:all`,
+    `${action('API_KEY_READ')}:all`,
+    `${action('API_KEY_CREATE')}:all`,
+    `${action('API_KEY_UPDATE')}:all`,
+    `${action('API_KEY_DELETE')}:all`,
+  ],
+  [WORKSPACE_SYSTEM_ROLES.ADMIN]: [
+    // Workspace management, excluding billing, deletion, and ownership transfer
+    `${action('WORKSPACE_READ')}:all`,
+    `${action('WORKSPACE_UPDATE')}:all`,
+    `${action('WORKSPACE_SETTINGS_UPDATE')}:all`,
+    // Members — Owner remains protected by the member lifecycle itself
+    `${action('WORKSPACE_MEMBER_READ')}:all`,
+    `${action('WORKSPACE_MEMBER_INVITE')}:all`,
+    `${action('WORKSPACE_MEMBER_REMOVE')}:all`,
+    `${action('WORKSPACE_MEMBER_UPDATE_ROLE')}:all`,
+    // Audit and custom roles
+    `${action('WORKSPACE_AUDIT_READ')}:all`,
+    `${action('WORKSPACE_ROLE_READ')}:all`,
+    `${action('WORKSPACE_ROLE_CREATE')}:all`,
+    `${action('WORKSPACE_ROLE_UPDATE')}:all`,
+    `${action('WORKSPACE_ROLE_DELETE')}:all`,
+    // Content — Admin curates shared Agents (`AGENT_UPDATE:all` is what lets
+    // `canPerformResourceAction` bypass a resource's Member Permissions, so
+    // General Access constrains members and viewers, not the Admin who has to
+    // keep the workspace's Agent list in order). Destructive / ownership
+    // actions stay with the creator or the workspace Owner: AGENT_DELETE and
+    // transfer are deliberately still `:owner`-scoped here.
+    `${action('AGENT_READ')}:all`,
+    `${action('AGENT_CREATE')}:owner`,
+    `${action('AGENT_UPDATE')}:all`,
+    `${action('AGENT_DELETE')}:owner`,
+    `${action('AGENT_FORK')}:owner`,
+    `${action('AGENT_LABEL_READ')}:all`,
+    `${action('AGENT_LABEL_CREATE')}:all`,
+    `${action('AGENT_LABEL_UPDATE')}:all`,
+    `${action('AGENT_LABEL_DELETE')}:all`,
+    `${action('SESSION_READ')}:all`,
+    `${action('SESSION_CREATE')}:owner`,
+    `${action('SESSION_UPDATE')}:owner`,
+    `${action('SESSION_DELETE')}:owner`,
+    `${action('SESSION_GROUP_READ')}:all`,
+    `${action('SESSION_GROUP_CREATE')}:all`,
+    `${action('SESSION_GROUP_UPDATE')}:all`,
+    `${action('SESSION_GROUP_DELETE')}:all`,
+    `${action('MESSAGE_READ')}:all`,
+    `${action('MESSAGE_CREATE')}:owner`,
+    `${action('MESSAGE_UPDATE')}:owner`,
+    `${action('MESSAGE_DELETE')}:owner`,
+    `${action('TOPIC_READ')}:all`,
+    `${action('TOPIC_CREATE')}:owner`,
+    `${action('TOPIC_UPDATE')}:owner`,
+    `${action('TOPIC_DELETE')}:owner`,
+    `${action('TOPIC_COMMENT_READ')}:all`,
+    `${action('TOPIC_COMMENT_CREATE')}:owner`,
+    `${action('TOPIC_COMMENT_UPDATE')}:owner`,
+    `${action('TOPIC_COMMENT_DELETE')}:owner`,
+    `${action('FILE_READ')}:all`,
+    `${action('FILE_UPLOAD')}:owner`,
+    `${action('FILE_UPDATE')}:owner`,
+    `${action('FILE_DELETE')}:owner`,
+    `${action('DOCUMENT_READ')}:all`,
+    `${action('DOCUMENT_CREATE')}:owner`,
+    `${action('DOCUMENT_UPDATE')}:owner`,
+    `${action('DOCUMENT_DELETE')}:owner`,
+    `${action('DOCUMENT_COMMENT_READ')}:all`,
+    `${action('DOCUMENT_COMMENT_CREATE')}:owner`,
+    `${action('DOCUMENT_COMMENT_UPDATE')}:owner`,
+    `${action('DOCUMENT_COMMENT_DELETE')}:all`,
+    `${action('KNOWLEDGE_BASE_READ')}:all`,
+    `${action('KNOWLEDGE_BASE_CREATE')}:owner`,
+    // `:all` marks admins as knowledge-base curators: it powers the
+    // resource-permission manage/browse bypass (restricted KBs stay visible to
+    // them). Row-level mutations are still creator/owner-gated by
+    // `assertWorkspaceRowManageable`, so this does not let admins edit other
+    // members' knowledge bases.
+    `${action('KNOWLEDGE_BASE_UPDATE')}:all`,
+    `${action('KNOWLEDGE_BASE_DELETE')}:owner`,
+    // Shared workspace configuration
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_MODEL_INVOKE')}:all`,
     `${action('AI_MODEL_CREATE')}:all`,
@@ -400,14 +534,15 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:owner`,
     `${action('AGENT_DELETE')}:owner`,
     `${action('AGENT_FORK')}:owner`,
+    `${action('AGENT_LABEL_READ')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:owner`,
     `${action('SESSION_UPDATE')}:owner`,
     `${action('SESSION_DELETE')}:owner`,
     `${action('SESSION_GROUP_READ')}:all`,
-    `${action('SESSION_GROUP_CREATE')}:owner`,
-    `${action('SESSION_GROUP_UPDATE')}:owner`,
-    `${action('SESSION_GROUP_DELETE')}:owner`,
+    `${action('SESSION_GROUP_CREATE')}:all`,
+    `${action('SESSION_GROUP_UPDATE')}:all`,
+    `${action('SESSION_GROUP_DELETE')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('MESSAGE_CREATE')}:owner`,
     `${action('MESSAGE_UPDATE')}:owner`,
@@ -428,6 +563,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('DOCUMENT_CREATE')}:owner`,
     `${action('DOCUMENT_UPDATE')}:owner`,
     `${action('DOCUMENT_DELETE')}:owner`,
+    `${action('DOCUMENT_COMMENT_READ')}:all`,
+    `${action('DOCUMENT_COMMENT_CREATE')}:owner`,
+    `${action('DOCUMENT_COMMENT_UPDATE')}:owner`,
+    `${action('DOCUMENT_COMMENT_DELETE')}:owner`,
     `${action('KNOWLEDGE_BASE_READ')}:all`,
     `${action('KNOWLEDGE_BASE_CREATE')}:owner`,
     `${action('KNOWLEDGE_BASE_UPDATE')}:owner`,
@@ -435,12 +574,18 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_MODEL_INVOKE')}:all`,
     `${action('AI_PROVIDER_READ')}:all`,
+    // API keys — members manage only the credentials they issued themselves.
+    `${action('API_KEY_READ')}:owner`,
+    `${action('API_KEY_CREATE')}:owner`,
+    `${action('API_KEY_UPDATE')}:owner`,
+    `${action('API_KEY_DELETE')}:owner`,
   ],
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: [
     // Read-only across the board
     `${action('WORKSPACE_READ')}:all`,
     `${action('WORKSPACE_MEMBER_READ')}:all`,
     `${action('AGENT_READ')}:all`,
+    `${action('AGENT_LABEL_READ')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_GROUP_READ')}:all`,
     `${action('MESSAGE_READ')}:all`,
@@ -448,6 +593,7 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('TOPIC_COMMENT_READ')}:all`,
     `${action('FILE_READ')}:all`,
     `${action('DOCUMENT_READ')}:all`,
+    `${action('DOCUMENT_COMMENT_READ')}:all`,
     `${action('KNOWLEDGE_BASE_READ')}:all`,
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_PROVIDER_READ')}:all`,
@@ -455,12 +601,14 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
 };
 
 export const WORKSPACE_ROLE_DESCRIPTIONS: Record<WorkspaceSystemRoleName, string> = {
+  [WORKSPACE_SYSTEM_ROLES.ADMIN]: 'Can manage workspace settings and members.',
   [WORKSPACE_SYSTEM_ROLES.OWNER]: 'Full access including billing, members, and all content.',
   [WORKSPACE_SYSTEM_ROLES.MEMBER]: 'Can create and edit own content, read shared content.',
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: 'Read-only access to workspace content.',
 };
 
 export const WORKSPACE_ROLE_DISPLAY_NAMES: Record<WorkspaceSystemRoleName, string> = {
+  [WORKSPACE_SYSTEM_ROLES.ADMIN]: 'Admin',
   [WORKSPACE_SYSTEM_ROLES.OWNER]: 'Owner',
   [WORKSPACE_SYSTEM_ROLES.MEMBER]: 'Member',
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: 'Viewer',
@@ -473,6 +621,9 @@ export const WORKSPACE_ROLE_DISPLAY_NAMES: Record<WorkspaceSystemRoleName, strin
  */
 export const legacyRoleToWorkspaceRole = (role: string): WorkspaceSystemRoleName | null => {
   switch (role) {
+    case 'admin': {
+      return WORKSPACE_SYSTEM_ROLES.ADMIN;
+    }
     case 'owner': {
       return WORKSPACE_SYSTEM_ROLES.OWNER;
     }
@@ -487,3 +638,123 @@ export const legacyRoleToWorkspaceRole = (role: string): WorkspaceSystemRoleName
     }
   }
 };
+
+/**
+ * Expand a `workspace_members.role` value into its permission-code set from
+ * the in-code matrix. This is the runtime permission source for workspace
+ * requests — `workspace_members.role` is the single source of truth for
+ * built-in roles and no per-workspace role/permission rows are stored in the
+ * RBAC tables. Unknown roles expand to an empty set.
+ */
+export const getWorkspaceRolePermissionCodes = (role: string): readonly string[] => {
+  const systemRole = legacyRoleToWorkspaceRole(role);
+  return systemRole ? WORKSPACE_ROLE_PERMISSIONS[systemRole] : [];
+};
+
+export const TASK_ASSIGNEE_PERMISSION_CODES = [
+  `${action('AGENT_UPDATE')}:all`,
+  `${action('AGENT_UPDATE')}:owner`,
+] as const;
+
+/** Whether a built-in workspace role can mutate and run assigned tasks. */
+export const canWorkspaceRoleBeTaskAssignee = (role?: string | null): boolean => {
+  if (!role) return false;
+  const permissions = getWorkspaceRolePermissionCodes(role);
+  return TASK_ASSIGNEE_PERMISSION_CODES.some((code) => permissions.includes(code));
+};
+
+/**
+ * Default permission codes every authenticated user holds over their OWN data
+ * in personal (non-workspace) context.
+ *
+ * Why this exists: ordinary accounts have no `rbac_user_roles`
+ * rows — roles are only assigned via the admin backend — so any personal-mode
+ * check that consulted the DB alone returned 403 for every registered user,
+ * making the OpenAPI surface admin-only in practice. Personal data is already
+ * isolated by `user_id` at the resource layer, so the implicit baseline is the
+ * `:owner` grant set (mirroring what `workspace_member` gets inside a
+ * workspace).
+ *
+ * Scope notes:
+ * - Content resources are granted `:owner` — resource queries stay pinned to
+ *   the caller, and `hasGlobalPermission`-style `:all` widenings still require
+ *   a real DB role.
+ * - `agent_label` / `session_group` only define an `:all` scope (shared
+ *   registries — see `getAllowedScopesForAction`); in personal mode their data
+ *   is still `user_id`-bound, so the `:all` grant does not widen anything.
+ * - Deliberately absent: `rbac:*`, `workspace*` domains, `user:create` /
+ *   `user:delete` — administration stays behind explicitly assigned DB roles.
+ */
+export const PERSONAL_DEFAULT_PERMISSIONS: readonly string[] = [
+  // Agents
+  `${action('AGENT_READ')}:owner`,
+  `${action('AGENT_CREATE')}:owner`,
+  `${action('AGENT_UPDATE')}:owner`,
+  `${action('AGENT_DELETE')}:owner`,
+  `${action('AGENT_FORK')}:owner`,
+  `${action('AGENT_LABEL_READ')}:all`,
+  `${action('AGENT_LABEL_CREATE')}:all`,
+  `${action('AGENT_LABEL_UPDATE')}:all`,
+  `${action('AGENT_LABEL_DELETE')}:all`,
+  // Chat
+  `${action('SESSION_READ')}:owner`,
+  `${action('SESSION_CREATE')}:owner`,
+  `${action('SESSION_UPDATE')}:owner`,
+  `${action('SESSION_DELETE')}:owner`,
+  `${action('SESSION_GROUP_READ')}:all`,
+  `${action('SESSION_GROUP_CREATE')}:all`,
+  `${action('SESSION_GROUP_UPDATE')}:all`,
+  `${action('SESSION_GROUP_DELETE')}:all`,
+  `${action('MESSAGE_READ')}:owner`,
+  `${action('MESSAGE_CREATE')}:owner`,
+  `${action('MESSAGE_UPDATE')}:owner`,
+  `${action('MESSAGE_DELETE')}:owner`,
+  `${action('TOPIC_READ')}:owner`,
+  `${action('TOPIC_CREATE')}:owner`,
+  `${action('TOPIC_UPDATE')}:owner`,
+  `${action('TOPIC_DELETE')}:owner`,
+  `${action('TOPIC_COMMENT_READ')}:owner`,
+  `${action('TOPIC_COMMENT_CREATE')}:owner`,
+  `${action('TOPIC_COMMENT_UPDATE')}:owner`,
+  `${action('TOPIC_COMMENT_DELETE')}:owner`,
+  `${action('TOPIC_COMMENT_RESTORE')}:owner`,
+  `${action('TRANSLATION_READ')}:owner`,
+  `${action('TRANSLATION_CREATE')}:owner`,
+  `${action('TRANSLATION_UPDATE')}:owner`,
+  `${action('TRANSLATION_DELETE')}:owner`,
+  // Files / knowledge
+  `${action('FILE_READ')}:owner`,
+  `${action('FILE_UPLOAD')}:owner`,
+  `${action('FILE_UPDATE')}:owner`,
+  `${action('FILE_DELETE')}:owner`,
+  `${action('DOCUMENT_READ')}:owner`,
+  `${action('DOCUMENT_CREATE')}:owner`,
+  `${action('DOCUMENT_UPDATE')}:owner`,
+  `${action('DOCUMENT_DELETE')}:owner`,
+  `${action('DOCUMENT_COMMENT_READ')}:owner`,
+  `${action('DOCUMENT_COMMENT_CREATE')}:owner`,
+  `${action('DOCUMENT_COMMENT_UPDATE')}:owner`,
+  `${action('DOCUMENT_COMMENT_DELETE')}:owner`,
+  `${action('KNOWLEDGE_BASE_READ')}:owner`,
+  `${action('KNOWLEDGE_BASE_CREATE')}:owner`,
+  `${action('KNOWLEDGE_BASE_UPDATE')}:owner`,
+  `${action('KNOWLEDGE_BASE_DELETE')}:owner`,
+  // Model infrastructure (personal provider/model config + invocation)
+  `${action('AI_MODEL_READ')}:owner`,
+  `${action('AI_MODEL_CREATE')}:owner`,
+  `${action('AI_MODEL_UPDATE')}:owner`,
+  `${action('AI_MODEL_DELETE')}:owner`,
+  `${action('AI_MODEL_INVOKE')}:owner`,
+  `${action('AI_PROVIDER_READ')}:owner`,
+  `${action('AI_PROVIDER_CREATE')}:owner`,
+  `${action('AI_PROVIDER_UPDATE')}:owner`,
+  `${action('AI_PROVIDER_DELETE')}:owner`,
+  // API keys (personal keys are self-managed)
+  `${action('API_KEY_READ')}:owner`,
+  `${action('API_KEY_CREATE')}:owner`,
+  `${action('API_KEY_UPDATE')}:owner`,
+  `${action('API_KEY_DELETE')}:owner`,
+  // Own profile
+  `${action('USER_READ')}:owner`,
+  `${action('USER_UPDATE')}:owner`,
+];

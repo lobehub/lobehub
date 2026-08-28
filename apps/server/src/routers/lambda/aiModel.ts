@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { type AiProviderModelListItem } from 'model-bank';
 import {
+  AiModelReasoningConfigSchema,
   AiModelTypeSchema,
   CreateAiModelSchema,
   ToggleAiModelEnableSchema,
@@ -20,6 +21,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getUserScopedAiProviderModelList } from '@/server/services/aiProviderAccess';
 import { type ProviderConfig } from '@/types/user/settings';
 
 const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
@@ -95,18 +97,18 @@ export const aiModelRouter = router({
     }),
 
   // Model deletes are workspace-wide at the model layer (no per-user narrowing),
-  // so they are owner-only in workspace mode, matching the admin-only provider
+  // so they are Admin-or-higher in workspace mode, matching the provider
   // settings UI. Per-caller upserts (toggle/update/order) stay member-accessible.
   clearModelsByProvider: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearModelsByProvider(input.providerId);
     }),
   clearRemoteModels: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearRemoteModels(input.providerId);
@@ -117,7 +119,24 @@ export const aiModelRouter = router({
     .input(CreateAiModelSchema)
     .mutation(async ({ input, ctx }) => {
       const existingModel = await ctx.aiModelModel.findByIdAndProvider(input.id, input.providerId);
-      if (existingModel) throwDuplicateAiModelError(input.id);
+      if (existingModel) {
+        // A preference-only shell (just a saved reasoning config, hidden from
+        // lists — e.g. left after clearing remote models) is not a real
+        // duplicate: promote it into the custom model being created. `update`
+        // upserts and shallow-merges `config`, preserving the chatConfig.
+        if (!AiModelModel.isPreferenceOnlyRow(existingModel)) {
+          throwDuplicateAiModelError(input.id);
+        }
+
+        // enabled defaults to true, matching the plain create() path
+        // (CreateAiModelSchema carries no enabled field)
+        await ctx.aiModelModel.update(input.id, input.providerId, {
+          ...input,
+          enabled: true,
+          source: 'custom',
+        });
+        return input.id;
+      }
 
       try {
         const data = await ctx.aiModelModel.create(input);
@@ -137,6 +156,15 @@ export const aiModelRouter = router({
       return ctx.aiModelModel.findById(input.id);
     }),
 
+  // Personal-scope by design (workspaceId ignored): the user's default reasoning
+  // params for a model instance are keyed by userId + providerId + modelId and
+  // shared across workspaces. See AiModelModel.getModelReasoningConfig.
+  getAiModelReasoningConfig: aiModelProcedure
+    .input(z.object({ id: z.string(), providerId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return await ctx.aiModelModel.getModelReasoningConfig(input.id, input.providerId);
+    }),
+
   getAiProviderModelList: aiModelProcedure
     .input(
       z.object({
@@ -148,17 +176,21 @@ export const aiModelRouter = router({
       }),
     )
     .query(async ({ ctx, input }): Promise<AiProviderModelListItem[]> => {
-      return ctx.aiInfraRepos.getAiProviderModelList(input.id, {
+      const options = {
         enabled: input.enabled,
         limit: input.limit,
         offset: input.offset,
         type: input.type,
-      });
+      };
+
+      return getUserScopedAiProviderModelList(ctx.userId, input.id, options, (scopedOptions) =>
+        ctx.aiInfraRepos.getAiProviderModelList(input.id, scopedOptions),
+      );
     }),
 
   removeAiModel: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
-    .use(requireWorkspaceRoleWhenScoped('owner'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ id: z.string(), providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.delete(input.id, input.providerId);
@@ -182,6 +214,23 @@ export const aiModelRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.update(input.id, input.providerId, input.value);
+    }),
+
+  // Intentionally NOT gated by `ai_model:update`: this writes a personal
+  // preference (scoped by userId with workspaceId NULL, see
+  // AiModelModel.updateModelReasoningConfig), so workspace members without the
+  // shared model-management permission must still be able to save it. Matches
+  // the ungated getAiModelReasoningConfig read above.
+  updateAiModelReasoningConfig: aiModelProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        providerId: z.string(),
+        value: AiModelReasoningConfigSchema,
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.aiModelModel.updateModelReasoningConfig(input.id, input.providerId, input.value);
     }),
 
   updateAiModelOrder: aiModelProcedure

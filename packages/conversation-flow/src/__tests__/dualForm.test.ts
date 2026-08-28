@@ -378,7 +378,93 @@ describe('dual-form message chain', () => {
     expect(r0.flatList.map((m) => m.id)).not.toContain('a2b');
   });
 
-  it('⑦ async-task summary with assistant-anchored parent stays out of the group', () => {
+  it('⑦ tool-anchored duplicate continuation omits the unselected sibling', () => {
+    const messages: Message[] = [
+      { content: 'q', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
+      {
+        agentId: 'agent-a',
+        content: 'step1',
+        createdAt: 1,
+        id: 'a1',
+        parentId: 'u1',
+        role: 'assistant',
+        tools: [
+          {
+            apiName: 'x',
+            arguments: '{}',
+            id: 'tc1',
+            identifier: 'x',
+            result_msg_id: 'a1__tc1',
+            type: 'default',
+          },
+        ],
+        updatedAt: 0,
+      },
+      {
+        content: 'r',
+        createdAt: 2,
+        id: 'a1__tc1',
+        parentId: 'a1',
+        role: 'tool',
+        tool_call_id: 'tc1',
+        updatedAt: 0,
+      },
+      {
+        agentId: 'agent-a',
+        content: 'duplicate output',
+        createdAt: 3,
+        id: 'a2-duplicate',
+        parentId: 'a1__tc1',
+        role: 'assistant',
+        updatedAt: 0,
+      },
+      {
+        agentId: 'agent-a',
+        content: 'selected output',
+        createdAt: 4,
+        id: 'a2-selected',
+        parentId: 'a1__tc1',
+        role: 'assistant',
+        updatedAt: 0,
+      },
+      {
+        content: 'next question',
+        createdAt: 5,
+        id: 'u2',
+        parentId: 'a2-selected',
+        role: 'user',
+        updatedAt: 0,
+      },
+      {
+        agentId: 'agent-a',
+        content: 'next answer',
+        createdAt: 6,
+        id: 'a3',
+        parentId: 'u2',
+        role: 'assistant',
+        updatedAt: 0,
+      },
+    ];
+
+    const result = parse(messages);
+
+    expect(shape(result.flatList)).toEqual([
+      { childIds: undefined, id: 'u1', role: 'user' },
+      {
+        childIds: [
+          { id: 'a1', tools: ['a1__tc1'] },
+          { id: 'a2-selected', tools: [] },
+        ],
+        id: 'a1',
+        role: 'assistantGroup',
+      },
+      { childIds: undefined, id: 'u2', role: 'user' },
+      { childIds: undefined, id: 'a3', role: 'assistant' },
+    ]);
+    expect(result.flatList.map((message) => message.id)).not.toContain('a2-duplicate');
+  });
+
+  it('⑧ async-task summary with assistant-anchored parent stays out of the group', () => {
     // a1 spawns async tasks under its tool; the follow-up summary uses the NEW
     // assistant-anchored parent (summary.parentId === a1). It must render after
     // the tasks aggregation (group → tasks → summary), NOT inside the group.

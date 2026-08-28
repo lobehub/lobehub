@@ -1,8 +1,13 @@
 'use client';
 
-import Page from '@/routes/(main)/settings/service-model';
+import Page from '@/features/Settings/service-model';
+import WorkspaceAdminOnly from '@/features/WorkspaceSetting/AdminOnly';
 
-const WorkspaceServiceModelSetting = () => <Page showSettingHeader={false} />;
+const WorkspaceServiceModelSetting = () => (
+  <WorkspaceAdminOnly>
+    <Page showSettingHeader={false} />
+  </WorkspaceAdminOnly>
+);
 
 WorkspaceServiceModelSetting.displayName = 'WorkspaceServiceModelSetting';
 

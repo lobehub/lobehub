@@ -4,7 +4,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
+/**
+ * Shared with the dropdown-style widgets (locale / workspace role), whose
+ * trigger has to be a plain element instead of a `<button>` with `onClick`.
+ */
+export const barButtonStyles = createStaticStyles(({ css }) => ({
   button: css`
     cursor: pointer;
 
@@ -33,10 +37,11 @@ interface BarButtonProps {
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  title?: string;
 }
 
-const BarButton = memo<BarButtonProps>(({ icon: Icon, label, onClick }) => (
-  <button className={styles.button} type={'button'} onClick={onClick}>
+const BarButton = memo<BarButtonProps>(({ icon: Icon, label, onClick, title }) => (
+  <button className={barButtonStyles.button} title={title} type={'button'} onClick={onClick}>
     <Icon size={11} />
     <span>{label}</span>
   </button>

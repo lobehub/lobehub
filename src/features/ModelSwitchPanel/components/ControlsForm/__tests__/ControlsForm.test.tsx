@@ -31,7 +31,10 @@ vi.mock('@lobehub/ui', () => {
   const MockForm = () => <div data-testid="controls-form" />;
   MockForm.useForm = () => [{ setFieldsValue: testState.setFieldsValue }];
 
-  return { Form: MockForm };
+  return {
+    Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Form: MockForm,
+  };
 });
 
 vi.mock('antd', () => {

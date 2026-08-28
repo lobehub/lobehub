@@ -1,8 +1,7 @@
 'use client';
 
 import { type UIChatMessage } from '@lobechat/types';
-import { ActionIcon } from '@lobehub/ui';
-import { FloatingSheet, type FloatingSheetProps } from '@lobehub/ui/base-ui';
+import { ActionIcon, FloatingSheet, type FloatingSheetProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -15,8 +14,10 @@ import {
   ConversationProvider,
 } from '@/features/Conversation';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
-import { type ConversationContext } from '@/features/Conversation/types';
+import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
+import CopilotToolbar from '@/features/PageEditor/Copilot/Toolbar';
+import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
 import { useAgentStore } from '@/store/agent';
@@ -53,6 +54,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: transparent;
     }
   `,
+  panelEmbedded: css`
+    flex: 1;
+    min-height: 0;
+    border-block-start: none;
+  `,
   sheetSeamless: css`
     border: none;
     border-radius: 0;
@@ -79,6 +85,8 @@ export interface FloatingChatPanelProps {
   agentDocumentId?: string;
   agentId: string;
   className?: string;
+  /** Whether the panel starts expanded. Defaults to collapsed for floating usages. */
+  defaultOpen?: boolean;
   dismissible?: boolean;
   /**
    * Active document id for the conversation context. Passed through so the
@@ -130,6 +138,8 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     agentDocumentId,
     actionsBar,
     hooks,
+    defaultOpen = false,
+    mode = 'overlay',
 
     width = '100%',
 
@@ -138,17 +148,21 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
   }) => {
     useSingleInstanceGuard();
     const { t } = useTranslation('chat');
+    const isEmbedded = mode === 'embedded';
+    const [embeddedTopicId, setEmbeddedTopicId] = useState<string | null>(topicId);
+    const activeTopicId = isEmbedded ? embeddedTopicId : topicId;
 
     const context = useMemo<ConversationContext>(
       () => ({
         agentId,
         ...(agentDocumentId ? { agentDocumentId } : {}),
         ...(documentId ? { documentId } : {}),
+        ...(isEmbedded ? { isolatedTopic: true } : {}),
         scope: 'main',
         threadId: null,
-        topicId,
+        topicId: activeTopicId,
       }),
-      [agentId, agentDocumentId, documentId, topicId],
+      [activeTopicId, agentDocumentId, agentId, documentId, isEmbedded],
     );
 
     const chatKey = useMemo(() => messageMapKey(context), [context]);
@@ -162,8 +176,8 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
     const replaceMessages = useChatStore((s) => s.replaceMessages);
     const handleMessagesChange = useCallback(
-      (next: UIChatMessage[], ctx: ConversationContext) => {
-        replaceMessages(next, { context: ctx });
+      (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
+        replaceMessages(next, { context: ctx, source: meta?.source });
       },
       [replaceMessages],
     );
@@ -171,8 +185,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const operationState = useOperationState(context);
     const defaultActionsBar = useActionsBarConfig();
     const resolvedActionsBar = actionsBar ?? defaultActionsBar;
-
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
     const [activeSnapPoint, setActiveSnapPoint] = useState<number>(MID_SNAP_POINT);
 
     const expand = useCallback(() => {
@@ -207,10 +220,13 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
             onBeforeSendMessage: async () => {
               expand();
             },
+            onTopicCreated: (createdTopicId) => {
+              if (isEmbedded) setEmbeddedTopicId(createdTopicId);
+            },
           },
           chatFollowUpHooks,
         ),
-      [hooks, chatFollowUpHooks, expand],
+      [chatFollowUpHooks, expand, hooks, isEmbedded],
     );
 
     const collapseAction = (
@@ -262,14 +278,27 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
         onMessagesChange={handleMessagesChange}
       >
         <div
-          className={styles.panel}
-          data-collapsed={isCollapsed}
+          className={`${styles.panel} ${isEmbedded ? styles.panelEmbedded : ''}`}
+          data-collapsed={isEmbedded ? false : isCollapsed}
+          data-mode={mode}
           data-testid="floating-chat-panel"
         >
-          <FloatingSheet {...sheetProps}>
-            <ChatBody />
-          </FloatingSheet>
-          <InputRow isCollapsed={isCollapsed} onExpand={expand} />
+          {isEmbedded ? (
+            <>
+              <PageAgentPanelOverrideProvider defaultExpand>
+                <CopilotToolbar topicId={activeTopicId} onTopicChange={setEmbeddedTopicId} />
+              </PageAgentPanelOverrideProvider>
+              <ChatBody />
+              <InputRow isCollapsed={false} showExpandBar={false} onExpand={expand} />
+            </>
+          ) : (
+            <>
+              <FloatingSheet {...sheetProps}>
+                <ChatBody />
+              </FloatingSheet>
+              <InputRow isCollapsed={isCollapsed} onExpand={expand} />
+            </>
+          )}
         </div>
       </ConversationProvider>
     );

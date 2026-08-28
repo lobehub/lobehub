@@ -42,6 +42,36 @@ describe('buildHeteroExecStdinPayload', () => {
     ]);
   });
 
+  it('reserves recovery history for the resume fallback prompt', () => {
+    const payload = buildHeteroExecStdinPayload({
+      imageList: [{ id: 'file-1', url: 'https://x/a.png' }],
+      prompt: 'continue',
+      resumeFallbackSystemContext:
+        'workspace rules\n\n<previous_conversation>history</previous_conversation>',
+      systemContext: 'workspace rules',
+    });
+    const parsed = JSON.parse(payload);
+
+    expect(parsed).toEqual({
+      content: [
+        { text: 'workspace rules', type: 'text' },
+        { text: 'continue', type: 'text' },
+        { source: { id: 'file-1', type: 'url', url: 'https://x/a.png' }, type: 'image' },
+      ],
+      resumeFallback: [
+        {
+          text: 'workspace rules\n\n<previous_conversation>history</previous_conversation>',
+          type: 'text',
+        },
+        { text: 'continue', type: 'text' },
+        { source: { id: 'file-1', type: 'url', url: 'https://x/a.png' }, type: 'image' },
+      ],
+    });
+    // Older CLIs already unwrap `{ content: [...] }`, so they safely run the
+    // history-free primary prompt and ignore the unknown fallback field.
+    expect(parsed.content[0].text).not.toContain('<previous_conversation>');
+  });
+
   it('treats an empty imageList like no images', () => {
     const payload = buildHeteroExecStdinPayload({ imageList: [], prompt: 'hello' });
     expect(payload).toBe(JSON.stringify('hello'));

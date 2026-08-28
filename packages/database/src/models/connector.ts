@@ -1,12 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import type {
-  ConnectorCredentials,
-  ConnectorStatus,
-  NewUserConnector,
-  UserConnectorItem,
-} from '../schemas';
-import { userConnectors, userConnectorTools } from '../schemas';
+import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
+import { ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -23,6 +18,25 @@ export interface ConnectorReference {
   id: string;
   isEnabled: boolean;
   status: string;
+}
+
+export interface PublicConnectorRecord {
+  agentId: string | null;
+  avatar: string | null;
+  createdAt: Date;
+  description: string | null;
+  hasCredentials: boolean;
+  id: string;
+  identifier: string;
+  isEnabled: boolean;
+  mcpConnectionType: string | null;
+  mcpServerUrl: string | null;
+  name: string;
+  sourceType: string;
+  status: string;
+  updatedAt: Date;
+  /** Row creator. Needed for row-level manage checks; never surfaced to API responses. */
+  userId: string;
 }
 
 export interface ComposioConnectorReference extends ConnectorReference {
@@ -66,6 +80,24 @@ export class ConnectorModel {
    */
   private baseScope = () => and(this.ownership(), isNull(userConnectors.agentId));
 
+  private publicSelection = {
+    agentId: userConnectors.agentId,
+    avatar: sql<string | null>`${userConnectors.metadata} ->> 'avatar'`,
+    createdAt: userConnectors.createdAt,
+    description: sql<string | null>`${userConnectors.metadata} ->> 'description'`,
+    hasCredentials: sql<boolean>`${userConnectors.credentials} IS NOT NULL`,
+    id: userConnectors.id,
+    identifier: userConnectors.identifier,
+    isEnabled: userConnectors.isEnabled,
+    mcpConnectionType: userConnectors.mcpConnectionType,
+    mcpServerUrl: userConnectors.mcpServerUrl,
+    name: userConnectors.name,
+    sourceType: userConnectors.sourceType,
+    status: userConnectors.status,
+    updatedAt: userConnectors.updatedAt,
+    userId: userConnectors.userId,
+  };
+
   /**
    * Candidate rows for agent-aware resolution within the current scope. For an
    * agent this is:
@@ -78,9 +110,13 @@ export class ConnectorModel {
    * rows are candidates.
    */
   private scopePredicate = (agentId?: string) => {
-    const mountedBy = sql`${userConnectors.metadata} ->> 'mountedByAgentId'`;
+    // COALESCE'd to a sentinel rather than null-tested: `->> … IS NULL` in a
+    // WHERE clause is one bm25 index on `user_connectors` away from taking every
+    // caller down at plan time. See the note on `TopicModel`. `''` is a safe
+    // sentinel — a mount reference is always a real agent id, never empty.
+    const mountedBy = sql`COALESCE(${userConnectors.metadata} ->> 'mountedByAgentId', '')`;
     if (!agentId) {
-      return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} IS NULL`);
+      return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} = ''`);
     }
     return and(
       this.ownership(),
@@ -88,7 +124,7 @@ export class ConnectorModel {
         eq(userConnectors.agentId, agentId),
         and(
           isNull(userConnectors.agentId),
-          or(sql`${mountedBy} = ${agentId}`, sql`${mountedBy} IS NULL`),
+          or(sql`${mountedBy} = ${agentId}`, sql`${mountedBy} = ''`),
         ),
       ),
     );
@@ -196,6 +232,14 @@ export class ConnectorModel {
   };
 
   /**
+   * Query base-scope connector metadata without selecting or decrypting any
+   * credential/OIDC fields. Intended for public API and read-only inventory.
+   */
+  queryPublic = async (): Promise<PublicConnectorRecord[]> => {
+    return this.db.select(this.publicSelection).from(userConnectors).where(this.baseScope());
+  };
+
+  /**
    * All connectors that belong to an agent's "Agent Tools" view: agent-OWNED
    * rows (`agent_id = agentId` — Copy / Connect-new) plus base rows MOUNTED by
    * this agent (`metadata.mountedByAgentId = agentId` — Linked). Powers the
@@ -225,14 +269,14 @@ export class ConnectorModel {
   /**
    * All agent-OWNED connector rows (`agent_id IS NOT NULL`) within the current
    * scope — i.e. every connector that belongs to some agent, across all agents.
-   * Powers the unified connector-settings view (LOBE-11682) which lists "which
+   * Powers the unified connector-settings view which lists "which
    * connector is bound to which agent" in one place, instead of one agent at a
    * time via {@link queryByAgent}.
    *
    * Scope-correct by construction: {@link ownership} carries the `workspace_id`
    * predicate, so in a workspace context this only returns rows owned by that
    * workspace's agents and never leaks personal-dimension rows (and vice versa)
-   * — the LOBE-11681 invariant applied to the aggregate view. Mounted/linked
+   * — the invariant applied to the aggregate view. Mounted/linked
    * base rows (`agent_id IS NULL`) are intentionally excluded; they already show
    * under the base {@link query} list.
    */
@@ -381,6 +425,19 @@ export class ConnectorModel {
     return decryptRow(row, gateKeeper);
   };
 
+  /**
+   * Find connector metadata without selecting or decrypting credentials.
+   */
+  findPublicById = async (id: string): Promise<PublicConnectorRecord | null> => {
+    const [row] = await this.db
+      .select(this.publicSelection)
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1);
+
+    return row ?? null;
+  };
+
   update = async (
     id: string,
     patch: UpdateConnectorParams,
@@ -408,6 +465,55 @@ export class ConnectorModel {
       .update(userConnectors)
       .set({ status, updatedAt: new Date() })
       .where(and(eq(userConnectors.id, id), this.ownership()));
+  };
+
+  /**
+   * Persists a terminal Composio connection-not-found health failure.
+   *
+   * Use when:
+   * - A provider boundary has confirmed that the remote connection no longer exists
+   *
+   * Expects:
+   * - `id` belongs to this model's user/workspace scope
+   * - `connectedAccountId` identifies the remote account that produced the failure
+   * - The caller has already normalized provider-specific error semantics
+   *
+   * Returns:
+   * - `true` when a scoped Composio connector was transitioned to FAILED/error
+   * - `false` for missing rows or non-Composio connectors
+   */
+  markComposioConnectionUnavailable = async (
+    id: string,
+    connectedAccountId: string,
+  ): Promise<boolean> => {
+    const [connector] = await this.db
+      .select({ metadata: userConnectors.metadata })
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1);
+    const composio = connector?.metadata?.composio;
+    if (!connector || !composio) return false;
+
+    const updated = await this.db
+      .update(userConnectors)
+      .set({
+        metadata: {
+          ...connector.metadata,
+          composio: { ...composio, status: 'FAILED' },
+        },
+        status: ConnectorStatus.error,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(userConnectors.id, id),
+          this.ownership(),
+          sql`${userConnectors.metadata}->'composio'->>'connectedAccountId' = ${connectedAccountId}`,
+        ),
+      )
+      .returning({ id: userConnectors.id });
+
+    return updated.length > 0;
   };
 }
 

@@ -1,5 +1,5 @@
-import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Badge } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { LucideRotateCw, LucideTrash2, RotateCwIcon } from 'lucide-react';
@@ -18,8 +18,9 @@ interface PluginStatusProps {
 }
 const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
   const { t } = useTranslation();
-  const [status, isCustom, reinstallCustomPlugin] = useToolStore((s) => [
+  const [status, installError, isCustom, reinstallCustomPlugin] = useToolStore((s) => [
     toolSelectors.getManifestLoadingStatus(id)(s),
+    toolSelectors.getPluginInstallError(id)(s),
     customPluginSelectors.isCustomPlugin(id)(s),
     s.reinstallCustomPlugin,
   ]);
@@ -51,7 +52,7 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
         return <Badge status={'success'} />;
       }
     }
-  }, [status]);
+  }, [id, reinstallCustomPlugin, status, t]);
 
   const tag =
     // Deprecated tag
@@ -67,10 +68,21 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
     ) : null;
 
   return (
-    <Flexbox horizontal gap={12} justify={'space-between'}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        {title || id}
-        {tag}
+    <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
+      <Flexbox gap={2}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {title || id}
+          {tag}
+        </Flexbox>
+        {installError ? (
+          <Text fontSize={12} type={'danger'}>
+            {t(`error.${installError.message}`, {
+              defaultValue: installError.cause,
+              error: installError.cause,
+              ns: 'plugin',
+            })}
+          </Text>
+        ) : null}
       </Flexbox>
 
       {deprecated ? (

@@ -1,4 +1,10 @@
 export {
+  type AcceptanceMergeSummary,
+  collectCheckIds,
+  mergeAcceptanceRounds,
+  planCheckIdRemap,
+} from './acceptanceMerge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,
@@ -10,6 +16,7 @@ export {
   buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
+export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
 export {
@@ -18,8 +25,20 @@ export {
   VerifyExecutorService,
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
+export { DEFAULT_GOAL_MAX_ROUNDS, resolveGoalRoundBudget } from './goalBudget';
+export {
+  goalExhaustedBriefCopy,
+  type GoalLoopOutcome,
+  goalReadyForReviewBriefCopy,
+  maybeContinueGoalLoop,
+  syncGoalToolState,
+} from './goalLoop';
 export { runVerifyOnCompletion } from './lifecycle';
-export { isHeterogeneousVerifyProvider, resolveVerifyModelConfig } from './modelConfig';
+export {
+  isHeterogeneousVerifyProvider,
+  resolveVerifyModelConfig,
+  REVIEW_PREDICT_MODEL_CONFIG,
+} from './modelConfig';
 export { type GeneratePlanParams, VerifyPlanGeneratorService } from './planGenerator';
 export { instantiateVerifyPlanOnStart } from './planInstantiation';
 export {
@@ -29,6 +48,15 @@ export {
   VerifyRepairService,
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
+export {
+  isCurrentReviewPrediction,
+  type PredictReviewParams,
+  REVIEW_PREDICT_CONCURRENCY,
+  shouldSurfaceProposal,
+  VerifyReviewPredictorService,
+} from './reviewPredictor';
 export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
+export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
+export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

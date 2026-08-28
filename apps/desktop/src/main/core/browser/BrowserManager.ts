@@ -2,6 +2,7 @@ import type {
   MainBroadcastEventKey,
   MainBroadcastParams,
   TopicPopupInfo,
+  WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
 import type { WebContents } from 'electron';
 
@@ -48,6 +49,10 @@ export class BrowserManager {
 
     browser.show();
     window.focus();
+  }
+
+  waitForMainWindowFirstFrame(timeoutMs?: number): Promise<void> {
+    return this.getMainWindow().waitForFirstFrame(timeoutMs);
   }
 
   broadcastToAllWindows = <T extends MainBroadcastEventKey>(
@@ -137,6 +142,7 @@ export class BrowserManager {
     templateId: WindowTemplateIdentifiers,
     path: string,
     uniqueId?: string,
+    windowSize?: WindowSizeParams,
   ) {
     const template = windowTemplates[templateId];
     if (!template) {
@@ -151,8 +157,10 @@ export class BrowserManager {
     // Create browser options from template
     const browserOpts: BrowserWindowOpts = {
       ...template,
+      ...windowSize,
       identifier: windowId,
       path,
+      restoreWindowState: windowSize === undefined,
     };
 
     logger.debug(`Creating multi-instance window: ${windowId} with path: ${path}`);
@@ -270,10 +278,27 @@ export class BrowserManager {
   private resolveMainWindowInitialPath(
     isOnboardingCompleted: boolean,
     pendingRestoreRoute: string,
+    lastWorkspaceSlug: string,
   ): string {
     if (!isOnboardingCompleted) return '/desktop-onboarding';
     if (pendingRestoreRoute) return pendingRestoreRoute;
+    // Shape guard: a corrupted store value must not produce an unloadable path.
+    if (lastWorkspaceSlug && /^[a-z0-9-]+$/.test(lastWorkspaceSlug)) {
+      return `/${lastWorkspaceSlug}`;
+    }
     return '/';
+  }
+
+  /**
+   * The account's remembered workspace slug, so the main window boots straight
+   * at `/{slug}` with no post-load redirect. The account comes from the stored
+   * OIDC token — no token (signed out) means no memory to apply.
+   */
+  private getLastWorkspaceSlug(remoteServerConfigCtr: RemoteServerConfigCtr): string {
+    const { userId } = remoteServerConfigCtr.getDesktopBootstrapIdentity();
+    if (!userId) return '';
+
+    return this.app.storeManager.get('lastWorkspaceSlugByAccount', {})[userId] ?? '';
   }
 
   /**
@@ -298,6 +323,7 @@ export class BrowserManager {
         const initialPath = this.resolveMainWindowInitialPath(
           isOnboardingCompleted,
           pendingRestoreRoute,
+          this.getLastWorkspaceSlug(remoteServerConfigCtr),
         );
         browser = {
           ...browser,
@@ -342,6 +368,16 @@ export class BrowserManager {
 
     browser.browserWindow.on('show', () => {
       if (browser.webContents) this.webContentsMap.set(browser.webContents, browser.identifier);
+    });
+
+    // Dynamic windows may use a stable identifier (for example, one window per
+    // workspace). Once such a window is closed, discard its Browser wrapper so
+    // reopening it can apply the latest path and inherited dimensions instead
+    // of recreating a BrowserWindow from the wrapper's original options.
+    browser.browserWindow.on('closed', () => {
+      if (!(identifier in appBrowsers) && this.browsers.get(identifier) === browser) {
+        this.browsers.delete(identifier);
+      }
     });
 
     return browser;

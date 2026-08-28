@@ -1,31 +1,43 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import {
-  ActionIcon,
-  Avatar,
   Block,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
   Markdown,
   stopPropagation,
-  Tag,
-  Text,
 } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal, SquarePen } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleDot,
+  CircleStop,
+  Copy,
+  ExternalLink,
+  MessageCircle,
+  MoreHorizontal,
+  Trash,
+} from 'lucide-react';
+import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CollapsibleContent from '@/components/CollapsibleContent';
+import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
+import RunVerifyDetail from './RunVerifyDetail';
+import RunVerifyTag from './RunVerifyTag';
+import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -40,13 +52,19 @@ const formatDuration = (ms: number): string => {
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
 // the shared collapse clamps it with a fade and offers "show more", while the
-// whole card still opens the run drawer for deeper reading. `pointerEvents: none`
-// keeps every click inside markdown falling through to the card.
+// run drawer remains available from the explicit overflow action. The preview
+// itself is reading content, not an unlabeled navigation target.
+//
+// It also stays interactive. While the whole card was one big button to the run
+// drawer, the body carried `pointer-events: none` so clicks fell through to it;
+// the card stopped being that button, and the rule was left behind killing every
+// link, code-copy and text selection in the output with nothing to fall through
+// to. Anything added here that swallows clicks has to earn it again.
 const RUN_CONTENT_MAX_HEIGHT = 160;
 
 const RunContent = memo<{ content: string }>(({ content }) => (
   <CollapsibleContent key={content} maxHeight={RUN_CONTENT_MAX_HEIGHT}>
-    <Markdown style={{ overflow: 'unset', pointerEvents: 'none' }} variant={'chat'}>
+    <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
       {content}
     </Markdown>
   </CollapsibleContent>
@@ -54,12 +72,20 @@ const RunContent = memo<{ content: string }>(({ content }) => (
 
 interface TopicCardProps {
   activity: TaskDetailActivity;
+  /**
+   * Whether the run body starts open. A goal loop can produce many rounds, and
+   * an all-expanded feed buries the newest result under older ones — the list
+   * opens only the latest and collapses the rest.
+   */
+  defaultExpanded?: boolean;
 }
 
-const TopicCard = memo<TopicCardProps>(({ activity }) => {
+const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) => {
   const { t } = useTranslation('chat');
+  const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
+  const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const addComment = useTaskStore((s) => s.addComment);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const { allowed: canEditTask } = usePermission('create_content');
@@ -71,6 +97,13 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   // active task.
   const runTaskId = activity.sourceTaskId ?? activeTaskId;
   const canFollowUp = canEditTask && !!runTaskId;
+  const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
+  const hasBody = Boolean(
+    activity.summary || activity.content || showRunFollowUp || activity.verify?.total,
+  );
+  // A verdict with no results behind it has nothing to move down to, so it
+  // stays in the header no matter what the body is doing.
+  const verifyDetailOpen = bodyExpanded && Boolean(activity.verify?.total);
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -90,8 +123,22 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   }, [isRunning, activity.time]);
 
   const handleOpen = useCallback(() => {
-    if (activity.id) openTopicDrawer(activity.id);
-  }, [activity.id, openTopicDrawer]);
+    if (!activity.id) return;
+    openTopicDrawer(activity.id, {
+      agentId:
+        activity.author?.type === 'agent' ? activity.author.id : activity.agentId || undefined,
+      title: activity.title,
+    });
+  }, [activity.agentId, activity.author, activity.id, activity.title, openTopicDrawer]);
+
+  const handleTitleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      handleOpen();
+    },
+    [handleOpen],
+  );
 
   const handleCopyId = useCallback(() => {
     if (activity.id) void navigator.clipboard.writeText(activity.id);
@@ -117,6 +164,36 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       title: t('taskDetail.topicMenu.stopConfirm.title', { defaultValue: 'Stop Run?' }),
     });
   }, [activity.id, cancelTopic, t]);
+
+  // The server gates `task.deleteTopic` behind the same edit permission as
+  // every other task mutation — a workspace viewer's confirm would only ever
+  // come back FORBIDDEN. Route that through the shared toast instead of
+  // letting the mutation reject silently into the confirm modal.
+  const handleDelete = useCallback(() => {
+    if (!canEditTask || !activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.deleteConfirm.content', {
+        defaultValue:
+          'This run and its messages will be permanently deleted. This action cannot be undone.',
+      }),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onOk: async () => {
+        try {
+          await deleteTopic(topicId);
+        } catch (error) {
+          toast.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
+      },
+      title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
+    });
+  }, [activity.id, canEditTask, deleteTopic, t]);
 
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
@@ -158,27 +235,43 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
       onClick: handleCopyOperationId,
     },
+    { type: 'divider' as const },
+    {
+      danger: true,
+      // A running topic is deleted server-side via interrupt-then-remove, but
+      // the row already offers an explicit Stop for that case — keep delete
+      // scoped to finished runs so this menu doesn't offer two destructive
+      // exits for the same in-flight state. Also gated on edit permission,
+      // matching the server's `task.deleteTopic` authorization.
+      disabled: !activity.id || isRunning || !canEditTask,
+      icon: Trash,
+      key: 'delete',
+      label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onClick: handleDelete,
+    },
   ];
 
   const isAgent = activity.author?.type === 'agent';
 
-  const avatarNode = activity.author?.avatar ? (
-    <Avatar avatar={activity.author.avatar} size={24} />
-  ) : (
-    <div className={styles.activityAvatar}>
-      <CircleDot size={12} />
-    </div>
-  );
+  // An agent that simply never set an avatar is still an agent — it gets the
+  // same default face it wears everywhere else, not a placeholder dot. The dot
+  // stays for rows with no author at all.
+  const avatarNode =
+    activity.author?.avatar || isAgent ? (
+      <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
+    ) : (
+      <div className={styles.activityAvatar}>
+        <CircleDot size={12} />
+      </div>
+    );
 
   return (
     <Block
-      clickable={!!activity.id}
       gap={8}
       paddingBlock={8}
       paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
-      onClick={activity.id ? handleOpen : undefined}
     >
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -203,7 +296,16 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               {activity.sourceTaskIdentifier}
             </Tag>
           )}
-          <Text ellipsis weight={500}>
+          <Text
+            ellipsis
+            aria-disabled={activity.id ? undefined : true}
+            role={activity.id ? 'button' : undefined}
+            style={{ cursor: activity.id ? 'pointer' : undefined }}
+            tabIndex={activity.id ? 0 : -1}
+            weight={500}
+            onClick={handleOpen}
+            onKeyDown={handleTitleKeyDown}
+          >
             {activity.title}
           </Text>
           {activity.seq != null && (
@@ -211,11 +313,25 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               #{activity.seq}
             </Text>
           )}
+          {/* Only mark machine-opened rounds: a `manual` tag on every row the
+              user started themselves is noise, absence already means manual. */}
+          {activity.trigger && activity.trigger !== 'manual' && (
+            <Tag
+              size={'small'}
+              style={{ flexShrink: 0 }}
+              title={t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            >
+              {t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            </Tag>
+          )}
           {durationText && (
             <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
               · {durationText}
             </Text>
           )}
+          {/* The verdict rides the header only while the run is folded; once
+              open it moves down to sit on the checklist that justifies it. */}
+          {!verifyDetailOpen && <RunVerifyTag verify={activity.verify} />}
         </Flexbox>
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
@@ -223,6 +339,16 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             <Text fontSize={12} title={startedAtTitle} type={'secondary'}>
               {startedAt}
             </Text>
+          )}
+          {hasBody && (
+            <Flexbox onClick={stopPropagation}>
+              <ActionIcon
+                icon={bodyExpanded ? ChevronDown : ChevronRight}
+                size={'small'}
+                title={t(bodyExpanded ? 'taskDetail.runCollapse' : 'taskDetail.runExpand')}
+                onClick={() => setBodyExpanded((open) => !open)}
+              />
+            </Flexbox>
           )}
           <Flexbox onClick={stopPropagation}>
             <DropdownMenu items={menuItems}>
@@ -232,7 +358,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
       </Flexbox>
 
-      {(activity.summary || activity.content || canFollowUp) && (
+      {hasBody && bodyExpanded && (
         <Flexbox gap={8} paddingInline={4}>
           {activity.summary && (
             <Text
@@ -243,7 +369,17 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             </Text>
           )}
           {activity.content && <RunContent content={activity.content} />}
-          {canFollowUp &&
+          {/* The verdict's evidence, next to the delivery it judged — reading
+              one should never require leaving for the acceptance page. */}
+          {activity.verify && (
+            <Flexbox onClick={stopPropagation}>
+              <RunVerifyDetail
+                extra={<RunVerifyTag verify={activity.verify} />}
+                operationId={activity.operationId}
+              />
+            </Flexbox>
+          )}
+          {showRunFollowUp &&
             (commenting ? (
               <Flexbox onClick={stopPropagation}>
                 <RunReplyEditor
@@ -257,7 +393,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             ) : (
               <Flexbox horizontal justify={'flex-end'} onClick={stopPropagation}>
                 <ActionIcon
-                  icon={SquarePen}
+                  icon={MessageCircle}
                   size={'small'}
                   title={t('taskDetail.runFollowUp')}
                   onClick={() => setCommenting(true)}

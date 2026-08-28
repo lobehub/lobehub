@@ -5,6 +5,7 @@ import * as swr from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
 import { type RecentItem } from '@/server/routers/lambda/recent';
+import { recentService } from '@/services/recent';
 import { useHomeStore } from '@/store/home';
 import { initialRecentState } from '@/store/home/slices/recent/initialState';
 
@@ -39,18 +40,24 @@ afterEach(() => {
 
 describe('RecentActionImpl', () => {
   describe('useFetchRecents onData scope guard', () => {
-    it('does not poll recents periodically', () => {
+    it('fetches only document and task recents without polling', async () => {
       const swrSpy = vi.spyOn(swr, 'useClientDataSWRWithSync').mockReturnValue({
         data: undefined,
         isValidating: false,
         mutate: vi.fn(),
       } as any);
+      const getAllSpy = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
 
       renderHook(() => useHomeStore.getState().useFetchRecents(true, 10, 'user-1:ws-A'));
 
       expect(swrSpy).toHaveBeenCalledWith(expect.any(Array), expect.any(Function), {
         onData: expect.any(Function),
       });
+
+      const fetcher = swrSpy.mock.calls[0][1] as () => Promise<RecentItem[]>;
+      await fetcher();
+
+      expect(getAllSpy).toHaveBeenCalledWith(11, ['document', 'task']);
     });
 
     it('applies data for the matching scope and tags recentsScope', () => {

@@ -5,10 +5,11 @@ const mockExecAgent = vi.hoisted(() => vi.fn());
 const mockFormatPrompt = vi.hoisted(() => vi.fn());
 const mockGetPlatform = vi.hoisted(() => vi.fn());
 const mockIsQueueAgentRuntimeEnabled = vi.hoisted(() => vi.fn());
+const mockTopicFindById = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
-    findById: vi.fn().mockResolvedValue(undefined),
+    findById: mockTopicFindById,
   })),
 }));
 
@@ -121,6 +122,13 @@ describe('AgentBridgeService', () => {
     mockGetPlatform.mockReturnValue({ id: 'discord', supportsMessageEdit: true });
     mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
     mockIsQueueAgentRuntimeEnabled.mockReturnValue(true);
+    // Default: the cached topic exists, belongs to the active agent, and is
+    // fresh — so subscribed-message tests exercise the continue-topic path.
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-1',
+      updatedAt: new Date(),
+    });
   });
 
   it('calls execAgent with hooks in queue mode for mention', async () => {
@@ -145,6 +153,55 @@ describe('AgentBridgeService', () => {
         ]),
       }),
     );
+  });
+
+  it('passes the /mode thread-state override to execAgent as toolModeOverride', async () => {
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread({ toolMode: 'chat' });
+    const message = createMessage();
+    const client = createClient();
+
+    await service.handleMention(thread, message, {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(mockExecAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ toolModeOverride: 'chat' }),
+    );
+  });
+
+  it('forwards toolModeOverride on the subscribed-message (continue topic) path too', async () => {
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread({ toolMode: 'agent', topicId: 'topic-1' });
+    const message = createMessage();
+    const client = createClient();
+
+    await service.handleSubscribedMessage(thread, message, {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(mockExecAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ appContext: { topicId: 'topic-1' }, toolModeOverride: 'agent' }),
+    );
+  });
+
+  it('leaves toolModeOverride unset when the conversation never used /mode', async () => {
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread();
+    const message = createMessage();
+    const client = createClient();
+
+    await service.handleMention(thread, message, {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(mockExecAgent.mock.calls[0][0].toolModeOverride).toBeUndefined();
   });
 
   it('constructs AiAgentService with workspaceId for workspace bot runs', async () => {
@@ -210,6 +267,124 @@ describe('AgentBridgeService', () => {
     );
   });
 
+  describe('stale cached topic recovery', () => {
+    // Regression tests for the Discord DM "Agent Execution Failed" with no
+    // operation id: the thread state kept a topicId whose row was gone
+    // (agent deleted → topics cascade-deleted, or out of scope after a
+    // scope switch) or belonged to a previously-active agent. The old guard
+    // only reset topics that still existed and were 4h+ stale, so execution
+    // reached the topic-start reservation and died with "Topic not found"
+    // before any operation was created.
+
+    it('resets the cached topicId and starts a new topic when the topic no longer exists', async () => {
+      mockTopicFindById.mockResolvedValue(undefined);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-deleted' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      // Fresh-mention path: execAgent must NOT receive the dead topicId.
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBeUndefined();
+    });
+
+    it('resets the cached topicId when the topic belongs to a different agent', async () => {
+      mockTopicFindById.mockResolvedValue({
+        agentId: 'agent-previous',
+        id: 'topic-1',
+        updatedAt: new Date(),
+      });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBeUndefined();
+    });
+
+    it('continues the cached topic when it exists, matches the agent, and is fresh', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBe('topic-1');
+    });
+
+    it('retries as a fresh mention when queue-mode execAgent reports Topic not found (delete race)', async () => {
+      // Pre-flight sees the topic, but it vanishes before the topic-start
+      // reservation — execAgent throws a plain "Topic not found" error.
+      mockExecAgent
+        .mockRejectedValueOnce(new Error('Topic not found: topic-1'))
+        .mockResolvedValueOnce({
+          assistantMessageId: 'assistant-msg-1',
+          createdAt: new Date().toISOString(),
+          operationId: 'op-2',
+          topicId: 'topic-2',
+        });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      expect(mockExecAgent).toHaveBeenCalledTimes(2);
+      expect(mockExecAgent.mock.calls[1][0].appContext?.topicId).toBeUndefined();
+      // The retry replaces the error reply — no "Agent Execution Failed" post.
+      const postedBodies = (thread.post as any).mock.calls.map((c: any[]) => c[0]?.markdown ?? '');
+      expect(postedBodies.join('\n')).not.toContain('Agent Execution Failed');
+    });
+
+    it('retries as a fresh mention on Topic not found in local (non-queue) mode too', async () => {
+      // Same delete race as above, but with the queue runtime disabled the
+      // error surfaces in executeWithCallback's local-mode catch — which used
+      // to swallow anything but the FK-violation form as a startup failure,
+      // leaving the dead topicId in thread state with no retry.
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      // Second call: abort so the local-mode promise resolves instead of
+      // waiting for a completion webhook that never comes in tests.
+      const abortError = new Error('Agent execution aborted');
+      abortError.name = 'AbortError';
+      mockExecAgent
+        .mockRejectedValueOnce(new Error('Topic not found: topic-1'))
+        .mockRejectedValueOnce(abortError);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      // The rethrow must reach handleSubscribedMessage and trigger the
+      // fresh-mention retry (second execAgent call without the dead topicId).
+      expect(mockExecAgent).toHaveBeenCalledTimes(2);
+      expect(mockExecAgent.mock.calls[1][0].appContext?.topicId).toBeUndefined();
+    });
+  });
+
   describe('progress message gating by supportsMessageEdit', () => {
     // Regression test for the QQ duplicate-reply bug:
     // QQ doesn't support message edits — the chat-adapter falls `editMessage`
@@ -233,8 +408,7 @@ describe('AgentBridgeService', () => {
     const progressMessageIdFromHooks = (): unknown => {
       const call = mockExecAgent.mock.calls.at(-1);
       const hooks = call?.[0]?.hooks as
-        | Array<{ id?: string; webhook?: { body?: Record<string, unknown> } }>
-        | undefined;
+        Array<{ id?: string; webhook?: { body?: Record<string, unknown> } }> | undefined;
       return hooks?.find((h) => h.id === 'bot-completion')?.webhook?.body?.progressMessageId;
     };
 

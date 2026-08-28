@@ -1,5 +1,5 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,11 +18,11 @@ const styles = createStaticStyles(({ css }) => ({
     background-size: 512px auto;
   `,
   footer_dark: css`
-    background-image: url('/images/community_footer_dark.webp');
+    background-image: url('/app-images/community_footer_dark.webp');
     background-blend-mode: screen;
   `,
   footer_light: css`
-    background-image: url('/images/community_footer_light.webp');
+    background-image: url('/app-images/community_footer_light.webp');
     background-blend-mode: multiply;
   `,
 }));

@@ -8,6 +8,10 @@ import {
 } from '@/database/models/agentDocuments';
 import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
+import {
+  getAgentDocumentContentType,
+  RAW_TEXT_DOCUMENT_FILE_TYPE,
+} from '../agentDocuments/contentFormat';
 import { createMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
 import { AgentDocumentVfsError } from './errors';
 import { createSkillMount } from './mounts/skills/createSkillMount';
@@ -55,6 +59,11 @@ interface AgentDocumentVfsContext {
 }
 
 interface AgentDocumentWriteOptions {
+  /**
+   * Raw writes bypass the Markdown editor snapshot because arbitrary tool or code output may
+   * contain markup that the editor legitimately normalizes or discards.
+   */
+  contentFormat?: 'markdown' | 'raw';
   createMode?: 'always-new' | 'if-missing' | 'must-exist';
 }
 
@@ -241,7 +250,7 @@ export class AgentDocumentVfsService {
 
     return {
       ...sliceReadContent(node.content, options.loc),
-      contentType: 'text/markdown',
+      contentType: getAgentDocumentContentType(node),
       path: normalizedPath,
     };
   }
@@ -272,7 +281,13 @@ export class AgentDocumentVfsService {
       return this.writeMountedSkill(normalizedPath, content, ctx, createMode);
     }
 
-    return this.writeOrdinaryDocument(normalizedPath, content, ctx, createMode);
+    return this.writeOrdinaryDocument(
+      normalizedPath,
+      content,
+      ctx,
+      createMode,
+      options.contentFormat ?? 'markdown',
+    );
   }
 
   /**
@@ -780,6 +795,7 @@ export class AgentDocumentVfsService {
     content: string,
     ctx: AgentDocumentVfsContext,
     createMode: NonNullable<AgentDocumentWriteOptions['createMode']>,
+    contentFormat: NonNullable<AgentDocumentWriteOptions['contentFormat']>,
   ): Promise<AgentDocumentStats> {
     if (path === './' || path === LOBE_PATH || path.startsWith(`${LOBE_PATH}/`)) {
       throw new AgentDocumentVfsError(`Cannot write reserved path: ${path}`, 'BAD_REQUEST');
@@ -798,11 +814,19 @@ export class AgentDocumentVfsService {
         throw new AgentDocumentVfsError(`Path already exists: ${writablePath}`, 'BAD_REQUEST');
       }
 
-      const snapshot = await createMarkdownEditorSnapshot(content);
-      await this.agentDocumentModel.update(existing.id, {
-        content: snapshot.content,
-        editorData: snapshot.editorData,
-      });
+      if (contentFormat === 'raw') {
+        await this.agentDocumentModel.update(existing.id, {
+          content,
+          editorData: null,
+          fileType: RAW_TEXT_DOCUMENT_FILE_TYPE,
+        });
+      } else {
+        const snapshot = await createMarkdownEditorSnapshot(content);
+        await this.agentDocumentModel.update(existing.id, {
+          content: snapshot.content,
+          editorData: snapshot.editorData,
+        });
+      }
 
       const updated = await this.resolveOrdinaryPath(writablePath, ctx.agentId);
 
@@ -843,6 +867,21 @@ export class AgentDocumentVfsService {
     }
 
     const normalizedFilename = buildDocumentFilename(filename);
+    if (contentFormat === 'raw') {
+      const created = await this.agentDocumentModel.create(
+        ctx.agentId,
+        normalizedFilename,
+        content,
+        {
+          fileType: RAW_TEXT_DOCUMENT_FILE_TYPE,
+          parentId: parentNode?.documentId ?? null,
+          title: normalizedFilename,
+        },
+      );
+
+      return this.toOrdinaryStats(created, buildOrdinaryPath(parentPath, normalizedFilename));
+    }
+
     const snapshot = await createMarkdownEditorSnapshot(content);
     const created = await this.agentDocumentModel.create(
       ctx.agentId,
@@ -955,7 +994,8 @@ export class AgentDocumentVfsService {
   private toOrdinaryStats(doc: AgentDocument, path: string): AgentDocumentStats {
     return {
       ...this.toOrdinaryNode(doc, path),
-      contentType: doc.fileType === DOCUMENT_FOLDER_TYPE ? undefined : 'text/markdown',
+      contentType:
+        doc.fileType === DOCUMENT_FOLDER_TYPE ? undefined : getAgentDocumentContentType(doc),
       deleteReason: doc.deleteReason,
       deletedAt: doc.deletedAt,
       metadata: doc.metadata ?? undefined,

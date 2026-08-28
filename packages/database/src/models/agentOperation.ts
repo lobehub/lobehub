@@ -1,5 +1,9 @@
-import type { VerifyRunStatus } from '@lobechat/types';
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import type {
+  AgentOperationCompletionReason,
+  AgentOperationStatus,
+  VerifyRunStatus,
+} from '@lobechat/types';
+import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -43,6 +47,21 @@ export interface RecordOperationStartParams {
   trigger?: string;
 }
 
+export interface AgentInterventionDispatchMarker {
+  deduplicationId: string;
+  messageId: string;
+  resolutionRequestId: string;
+  scheduledAt: string;
+  state: 'scheduled';
+}
+
+export interface AgentInterventionPreparationMarker {
+  deduplicationId: string;
+  resolutionRequestId: string;
+  state: 'ready';
+  stepIndex: number;
+}
+
 /** Terminal usage summed across every child operation of one parent. All-zero when it has none. */
 export interface ChildUsageRollup {
   llmCalls: number;
@@ -55,14 +74,7 @@ export interface ChildUsageRollup {
 
 export interface RecordOperationCompletionParams {
   completedAt?: Date;
-  completionReason?:
-    | 'done'
-    | 'error'
-    | 'interrupted'
-    | 'max_steps'
-    | 'cost_limit'
-    | 'waiting_for_human'
-    | 'waiting_for_async_tool';
+  completionReason?: AgentOperationCompletionReason;
   cost?: Record<string, unknown> | null;
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
@@ -74,8 +86,7 @@ export interface RecordOperationCompletionParams {
   processingTimeMs?: number | null;
   /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
   provider?: string | null;
-  status:
-    'running' | 'waiting_for_human' | 'waiting_for_async_tool' | 'done' | 'error' | 'interrupted';
+  status: Exclude<AgentOperationStatus, 'idle'>;
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -131,6 +142,31 @@ export class AgentOperationModel {
   }
 
   /**
+   * Newest operation in this topic that is parked waiting for tool approval.
+   *
+   * A parked run is stream-terminal, so the client marks its own operation
+   * completed and prunes it — by the time the user decides to stop, only the
+   * DB still knows which operation is holding the turn. Scoped by `userId` so
+   * one user can never resolve (and then terminate) another's run.
+   */
+  async findLatestParkedOperationId(topicId: string): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_human'),
+        ),
+      )
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(1);
+
+    return row?.id;
+  }
+
+  /**
    * Update the row when the operation reaches a terminal state. Scoped by
    * `userId` so a leaked operationId can't be used to flip another user's
    * row. No-op when the start row was never written.
@@ -138,7 +174,7 @@ export class AgentOperationModel {
   async recordCompletion(
     operationId: string,
     params: RecordOperationCompletionParams,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updates: Partial<NewAgentOperation> = {
       completionReason: params.completionReason,
       status: params.status,
@@ -165,10 +201,155 @@ export class AgentOperationModel {
     if (params.interruption !== undefined) updates.interruption = params.interruption;
     if (params.traceS3Key !== undefined) updates.traceS3Key = params.traceS3Key;
 
-    await this.db
+    const [row] = await this.db
       .update(agentOperations)
       .set(updates)
-      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          or(
+            inArray(agentOperations.status, [
+              'running',
+              'waiting_for_human',
+              'waiting_for_async_tool',
+            ]),
+            eq(agentOperations.status, params.status),
+          ),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
+   * Persist provider enqueue acknowledgement without replacing other runtime
+   * metadata. The provenance request id is checked in SQL so a stale/colliding
+   * operation can never be marked scheduled by another intervention.
+   */
+  async recordAgentInterventionDispatch(
+    operationId: string,
+    marker: AgentInterventionDispatchMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ agentInterventionDispatch: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`${agentOperations.metadata}->'agentInterventionContinuation'->>'resolutionRequestId' = ${marker.resolutionRequestId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Persist the crash-recovery boundary after runtime state and serialized
+   * hooks are complete, but before the first queue publish. A missing runtime
+   * state with this marker is therefore ambiguous (it may already have run)
+   * and must never be rebuilt from scratch.
+   */
+  async recordAgentInterventionPreparation(
+    operationId: string,
+    marker: AgentInterventionPreparationMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ agentInterventionPreparation: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`${agentOperations.metadata}->'agentInterventionContinuation'->>'resolutionRequestId' = ${marker.resolutionRequestId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
+  async settleRunning(
+    operationId: string,
+    status: 'done' | 'error' | 'interrupted',
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: status === 'interrupted' ? 'interrupted' : status,
+        status,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /** Refresh the durable liveness lease while an operation owns an execution step. */
+  async touchRunning(operationId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
+   * Atomically retire an operation whose liveness lease has expired. A concurrent
+   * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
+   */
+  async settleStaleRunning(
+    operationId: string,
+    staleBefore: Date,
+    latestTotalCost?: number,
+  ): Promise<boolean> {
+    const totalCost =
+      latestTotalCost !== undefined && Number.isFinite(latestTotalCost)
+        ? Math.max(0, latestTotalCost)
+        : undefined;
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+        ...(totalCost === undefined
+          ? {}
+          : {
+              totalCost: sql`greatest(coalesce(${agentOperations.totalCost}, 0), ${totalCost})`,
+            }),
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
   }
 
   /**
@@ -222,6 +403,77 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Total USD cost of every operation bound to a task — the goal outer loop's
+   * budget meter. Only root (task-bound) operations carry `taskId`, and each
+   * root's `totalCost` scalar already includes its direct children's rollup
+   * (see `persistCompletion`), so this sum covers verify / repair sub-runs
+   * without walking parent chains. Re-derived on every call — exact regardless
+   * of how many times a round settles.
+   */
+  async sumCostByTask(taskId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ totalCost: sql<string | null>`sum(${agentOperations.totalCost})` })
+      .from(agentOperations)
+      .where(and(eq(agentOperations.taskId, taskId), this.ownership()));
+
+    const parsed = Number(row?.totalCost ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  /**
+   * Per-operation cost and token totals for a set of runs, keyed by operation.
+   *
+   * Feeds the goal round rail's audit hover: a round's block should be able to
+   * say what it actually spent, and asking per round would be one query per
+   * block. Each root's `totalCost` already rolls up its direct children, so no
+   * parent-chain walk is needed here either.
+   */
+  async findUsageByOperations(
+    operationIds: string[],
+  ): Promise<Map<string, { cost: number; tokens: number }>> {
+    const ids = [...new Set(operationIds.filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({
+        id: agentOperations.id,
+        totalCost: agentOperations.totalCost,
+        totalTokens: agentOperations.totalTokens,
+      })
+      .from(agentOperations)
+      .where(and(inArray(agentOperations.id, ids), this.ownership()));
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        { cost: Number(row.totalCost ?? 0) || 0, tokens: Number(row.totalTokens ?? 0) || 0 },
+      ]),
+    );
+  }
+
+  /**
+   * Load an operation together with its direct child operations (`callSubAgent`
+   * children / isolated group members) — the (at most) two-layer operation
+   * tree. File-Work registration gathers every op in this tree so a round's
+   * tool calls, including those a sub-agent produced, are scanned together.
+   * Owner-scoped. The root op (`id === operationId`) is included in the result.
+   */
+  async listOperationTree(operationId: string) {
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            eq(agentOperations.id, operationId),
+            eq(agentOperations.parentOperationId, operationId),
+          ),
+        ),
+      );
   }
 
   /**

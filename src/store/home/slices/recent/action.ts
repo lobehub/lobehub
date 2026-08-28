@@ -5,7 +5,7 @@ import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { type RecentItem } from '@/server/routers/lambda/recent';
-import { recentService } from '@/services/recent';
+import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -68,7 +68,7 @@ export class RecentActionImpl {
   ): SWRResponse<RecentItem[]> => {
     return useClientDataSWRWithSync<RecentItem[]>(
       isLogin === true ? recentKeys.list(isLogin, limit, scope) : null,
-      async () => recentService.getAll(limit + 1),
+      async () => recentService.getAll(limit + 1, RECENT_SIDEBAR_TYPES),
       {
         onData: (data) => {
           if (getCacheScope() !== scope) return;

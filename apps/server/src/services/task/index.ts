@@ -1,4 +1,10 @@
+import { randomUUID } from 'node:crypto';
+
+import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
+import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
+  CreateTaskGoalInput,
+  GoalItem,
   TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
@@ -6,6 +12,7 @@ import type {
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskItem,
+  TaskSchedulerContext,
   TaskStatus,
   TaskTopicHandoff,
   WorkspaceData,
@@ -13,10 +20,15 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
-import { TaskModel } from '@/database/models/task';
+import { GoalModel } from '@/database/models/goal';
+import { ProjectModel } from '@/database/models/project';
+import { RbacModel } from '@/database/models/rbac';
+import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
+import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
@@ -25,6 +37,8 @@ import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { createTaskSchedulerModule } from '../taskScheduler';
+import { resolveTaskAcceptance } from '../verify/taskAcceptance';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -47,6 +61,7 @@ export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
+  config?: Record<string, unknown>;
   // Runtime-state pockets stored on the task row (tasks.context JSONB). Used at
   // creation to record `context.origin` — the creator conversation pointer.
   context?: TaskContext;
@@ -54,11 +69,17 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
+  /**
+   * Bind a goal entity (`goals` row) to the created task — the task becomes the
+   * goal's execution carrier and the outer verify-driven round loop applies.
+   */
+  goal?: CreateTaskGoalInput;
   identifierPrefix?: string;
   instruction: string;
   name?: string;
   parentTaskId?: string;
   priority?: number;
+  projectId?: string;
   schedulePattern?: string;
   scheduleTimezone?: string;
   sortOrder?: number;
@@ -88,6 +109,7 @@ export class TaskService {
   private agentModel: AgentModel;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
+  private projectModel: ProjectModel;
   private taskTopicModel: TaskTopicModel;
   private topicModel: TopicModel;
   private userId: string;
@@ -99,6 +121,7 @@ export class TaskService {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
@@ -112,14 +135,31 @@ export class TaskService {
    */
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
+    this.assertAutomationAssigneeCompat(input.automationMode, input.assigneeUserId);
 
-    const createData: CreateTaskInput & { config?: Record<string, unknown> } = { ...input };
+    const { goal, ...taskInput } = input;
+    const createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> } = {
+      ...taskInput,
+    };
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
       const parent = await this.resolveOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
       parentVisibility = parent.visibility;
+      if (createData.projectId && createData.projectId !== parent.projectId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Subtask must belong to the same project as its parent',
+        });
+      }
+      createData.projectId ??= parent.projectId ?? undefined;
+    }
+
+    if (createData.projectId) {
+      const project = await this.projectModel.findManageableById(createData.projectId);
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      createData.identifierPrefix ??= project.identifier;
     }
 
     // Pull the model/provider snapshot and the agent's visibility in a single
@@ -129,7 +169,7 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = agentInfo.snapshot;
+        if (agentInfo.snapshot) createData.config = { ...agentInfo.snapshot, ...createData.config };
         agentVisibility = agentInfo.visibility;
       }
     }
@@ -151,6 +191,15 @@ export class TaskService {
     // we have to assert here even though the inference path can't.
     this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
 
+    // Invariant: a private task can only be assigned to its creator — the
+    // resolved visibility (explicit, inherited, or agent-derived) is what
+    // counts, so this must run after the precedence chain above.
+    this.assertAssigneeUserVisibilityCompat(
+      createData.visibility,
+      createData.assigneeUserId,
+      this.userId,
+    );
+
     // Invariant: a subtask can never be more public than its parent.
     // Otherwise workspace members see an orphaned child whose parent is
     // hidden, leaking the existence of a private task. The inference path
@@ -158,7 +207,42 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    return this.taskModel.create(createData);
+    const task = await this.createTaskWithAssigneeLock(createData);
+
+    if (goal) {
+      // Goal creation stays separate from the task write because the task's
+      // membership-locked transaction has already committed. Compensate on
+      // failure — a task committed without its promised goal is a ghost on
+      // goal surfaces (it never lists as a goal), and a retry would stack
+      // another one.
+      let created: GoalItem;
+      try {
+        created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
+          agentId: task.assigneeAgentId,
+          // `null` is the user's explicit "no cap"; `undefined` means they never
+          // chose, which falls back to the documented default. The floor keeps a
+          // degenerate 1-round loop from ever passing verify-then-stop.
+          maxRounds:
+            goal.maxRounds === undefined
+              ? DEFAULT_GOAL_MAX_ROUNDS
+              : goal.maxRounds === null
+                ? null
+                : Math.max(2, goal.maxRounds),
+          maxTotalCost: goal.maxTotalCost ?? null,
+          projectId: task.projectId,
+          requirement: goal.requirement ?? null,
+          subjectId: task.id,
+          subjectType: 'task',
+          title: goal.title?.trim() || task.name?.trim() || task.instruction,
+        });
+      } catch (error) {
+        await this.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
+      return { ...task, goal: created };
+    }
+
+    return task;
   }
 
   /**
@@ -201,6 +285,49 @@ export class TaskService {
       code: 'BAD_REQUEST',
       message:
         'A public task cannot be assigned to a private agent. Either pick a workspace agent or make the task private first.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: a private task can only be assigned to its
+   * creator. A private task is visible to nobody else (ownership is
+   * creator-based), so assigning another member would hand them a task they
+   * can never see. Throws `BAD_REQUEST` on violation. Applies symmetrically
+   * to assigning on a private task and to demoting a member-assigned task to
+   * private.
+   */
+  assertAssigneeUserVisibilityCompat(
+    taskVisibility: 'private' | 'public' | undefined,
+    assigneeUserId: string | null | undefined,
+    creatorUserId: string,
+  ): void {
+    if (!assigneeUserId) return;
+    if (taskVisibility !== 'private') return;
+    if (assigneeUserId === creatorUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A private task can only be assigned to its creator. Unassign the member or keep the task visible to the workspace.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: an automated task (heartbeat / schedule) cannot
+   * be assigned to a human. Automation ticks always execute through an agent
+   * (falling back to the inbox agent), so a member assignee would be pure
+   * decoration that the next tick contradicts. Throws `BAD_REQUEST` on
+   * violation. Callers pass the POST-update effective values.
+   */
+  assertAutomationAssigneeCompat(
+    automationMode: 'heartbeat' | 'schedule' | null | undefined,
+    assigneeUserId: string | null | undefined,
+  ): void {
+    if (!automationMode) return;
+    if (!assigneeUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'An automated task cannot be assigned to a member. Remove the schedule first, or assign an agent.',
     });
   }
 
@@ -365,6 +492,20 @@ export class TaskService {
     const task = await this.taskModel.updateStatus(resolved.id, status, extra);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
+    // Canceling the carrier task cancels its goal: the loop has no executor
+    // left, and a "running" goal over a canceled task would be a lie. The
+    // user's positive sign-off (`achieved`) is never downgraded. Best-effort —
+    // goal state must not block the task transition.
+    if (status === 'canceled') {
+      try {
+        const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+        const goal = await goalModel.findBySubject('task', task.id);
+        if (goal && goal.status !== 'achieved') await goalModel.updateStatus(goal.id, 'canceled');
+      } catch (err) {
+        console.error('[TaskService.updateStatus] goal cancel mirror failed:', err);
+      }
+    }
+
     // Stamp the schedule run-count window each time the user (re)starts a
     // scheduled task. The cron dispatcher itself flips a task running →
     // scheduled on every tick, so we exclude that natural cycle by only
@@ -379,6 +520,60 @@ export class TaskService {
       await this.taskModel.updateContext(task.id, {
         scheduler: { scheduleStartedAt: new Date().toISOString() },
       });
+    }
+
+    // Heartbeat ticks are one-shot delayed messages that re-arm themselves
+    // after each run. Seed the very first message when a user starts/restarts
+    // the schedule; otherwise a fresh heartbeat task has no event capable of
+    // reaching the lifecycle re-arm path.
+    if (
+      status === 'scheduled' &&
+      task.automationMode === 'heartbeat' &&
+      task.heartbeatInterval &&
+      task.heartbeatInterval > 0 &&
+      resolved.status !== 'running' &&
+      resolved.status !== 'scheduled'
+    ) {
+      const scheduler = createTaskSchedulerModule();
+      const schedulerContext = (resolved.context as TaskContext | null)?.scheduler as
+        TaskSchedulerContext | undefined;
+      const previousTickMessageId = schedulerContext?.tickMessageId;
+      const tickToken = randomUUID();
+      let tickMessageId: string | undefined;
+
+      try {
+        // Invalidate the previous generation before publishing. This closes
+        // the race where an old QStash delivery arrives while the replacement
+        // message is being created.
+        await this.taskModel.updateContext(task.id, { scheduler: { tickToken } });
+        tickMessageId = await scheduler.scheduleNextTopic({
+          delay: task.heartbeatInterval,
+          taskId: task.id,
+          tickToken,
+          userId: this.userId,
+        });
+
+        await this.taskModel.updateContext(task.id, {
+          scheduler: {
+            consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
+            scheduledAt: new Date().toISOString(),
+            tickMessageId,
+            tickToken,
+          },
+        });
+      } catch (error) {
+        // Never expose a scheduled status without a persisted tick. Restore
+        // the user-visible state and cancel a newly published message when
+        // persistence was the failing step.
+        if (tickMessageId) await scheduler.cancelScheduled(tickMessageId).catch(() => undefined);
+        await this.taskModel.update(task.id, { context: resolved.context });
+        await this.taskModel.updateStatus(task.id, resolved.status);
+        throw error;
+      }
+
+      if (previousTickMessageId) {
+        await scheduler.cancelScheduled(previousTickMessageId).catch(() => undefined);
+      }
     }
 
     const unlocked: string[] = [];
@@ -483,6 +678,106 @@ export class TaskService {
     }
   }
 
+  /**
+   * A task can only be assigned to a human who can actually see it: an active
+   * member of the current workspace, or the caller themself in personal mode.
+   * NOT_FOUND (not FORBIDDEN) mirrors the agent-assignee path so membership of
+   * other workspaces is never leaked.
+   */
+  async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+  }
+
+  private async assertAssigneeUserAssignableWithDatabase(
+    db: LobeChatDatabase,
+    assigneeUserId?: string | null,
+    lockMember = false,
+  ): Promise<void> {
+    if (!assigneeUserId) return;
+
+    if (!this.workspaceId) {
+      if (assigneeUserId !== this.userId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Assignee user not found',
+        });
+      }
+      return;
+    }
+
+    const memberModel = new WorkspaceMemberModel(db, this.userId);
+    const member = lockMember
+      ? await memberModel.getMemberForUpdate(this.workspaceId, assigneeUserId)
+      : await memberModel.getMember(this.workspaceId, assigneeUserId);
+    if (!member) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user is not a member of this workspace',
+      });
+    }
+
+    const canManageTasks = await new RbacModel(db, assigneeUserId).hasAnyPermission(
+      [...TASK_ASSIGNEE_PERMISSION_CODES],
+      { userId: assigneeUserId, workspaceId: this.workspaceId },
+    );
+    if (!canManageTasks) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user cannot manage tasks in this workspace',
+      });
+    }
+  }
+
+  private async withAssigneeUserLock<T>(
+    assigneeUserId: string | null | undefined,
+    write: (db: LobeChatDatabase) => Promise<T>,
+  ): Promise<T> {
+    if (!assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+      return write(this.db);
+    }
+
+    return this.db.transaction(async (tx) => {
+      await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
+      return write(tx);
+    });
+  }
+
+  private async createTaskWithAssigneeLock(
+    createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> },
+  ): Promise<TaskItem> {
+    if (!createData.assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignable(createData.assigneeUserId);
+      return this.taskModel.create(createData);
+    }
+
+    // TaskModel's normal retry loop cannot continue after a unique violation
+    // inside an open Postgres transaction. Retry the whole lock + validation +
+    // insert transaction instead so concurrent identifier allocation remains
+    // safe while the membership row stays serialized with the write.
+    const maxRetries = 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await this.withAssigneeUserLock(createData.assigneeUserId, (db) =>
+          new TaskModel(db, this.userId, this.workspaceId).create(createData, { maxRetries: 1 }),
+        );
+      } catch (error) {
+        if (!isTaskIdentifierUniqueViolation(error) || attempt === maxRetries - 1) throw error;
+      }
+    }
+
+    throw new Error('Failed to create task after max retries');
+  }
+
+  async updateTaskWithAssigneeLock(
+    taskId: string,
+    data: Parameters<TaskModel['update']>[1],
+  ): Promise<TaskItem | null> {
+    return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
+      new TaskModel(db, this.userId, this.workspaceId).update(taskId, data),
+    );
+  }
+
   private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
@@ -514,13 +809,22 @@ export class TaskService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace] = await Promise.all([
-      this.taskModel.findAllDescendants(task.id),
-      this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
-      this.taskModel.getComments(task.id).catch(() => []),
-      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-    ]);
+    const [allDescendants, dependencies, directTopics, comments, workspace, goal, acceptance] =
+      await Promise.all([
+        this.taskModel.findAllDescendants(task.id),
+        this.taskModel.getDependencies(task.id),
+        this.taskTopicModel
+          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
+          .catch(() => []),
+        this.taskModel.getComments(task.id).catch(() => []),
+        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+        new GoalModel(this.db, this.userId, this.workspaceId)
+          .findBySubject('task', task.id)
+          .catch(() => undefined),
+        resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(
+          () => undefined,
+        ),
+      ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
@@ -627,8 +931,11 @@ export class TaskService {
                 },
               }
             : {}),
+          assigneeUserId: s.assigneeUserId,
           automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
+          createdByUserId: s.createdByUserId,
+          visibility: s.visibility,
           children: buildSubtaskTree(s.id),
           ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
           identifier: s.identifier,
@@ -646,6 +953,7 @@ export class TaskService {
             ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
             : {}),
           status: s.status,
+          updatedAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : undefined,
         };
       });
     };
@@ -719,6 +1027,13 @@ export class TaskService {
 
     const authorMap = await this.resolveAuthors(agentIds, userIds);
 
+    // Every run row answers "and did it pass?" on its own (with counts). Without this the
+    // activity feed lists rounds that all look alike, and the only way to learn
+    // a round's verdict is to leave for the acceptance page.
+    const verifyByOperation = await new VerifyRunModel(this.db, this.userId, this.workspaceId)
+      .findByOperations(topics.map((t) => t.operationId).filter((id): id is string => Boolean(id)))
+      .catch(() => new Map());
+
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
     const createdActivity: TaskDetailActivity | null =
       task.createdAt && creatorId
@@ -734,9 +1049,11 @@ export class TaskService {
       ...topics.map((t) => {
         const handoff = t.handoff as TaskTopicHandoff | null;
         const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
+        const verifyRun = t.operationId ? verifyByOperation.get(t.operationId) : undefined;
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
+          cost: t.totalCost == null ? null : Number(t.totalCost),
           // Raw last assistant message of the run, shown alongside
           // the synthesized summary on the run card.
           content: handoff?.content,
@@ -751,6 +1068,20 @@ export class TaskService {
           sourceTaskName: t.sourceTaskName,
           time: toISO(t.createdAt),
           title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
+          // What opened this round. Without it the feed cannot distinguish a run
+          // the user started from one the goal loop / scheduler opened on its
+          // own — they render identically apart from `#seq`.
+          trigger: t.trigger ?? null,
+          verify: verifyRun
+            ? {
+                acceptanceId: verifyRun.acceptanceId,
+                passed: verifyRun.passed,
+                roundIndex: verifyRun.roundIndex,
+                runId: verifyRun.id,
+                status: verifyRun.status,
+                total: verifyRun.total,
+              }
+            : null,
           type: 'topic' as const,
         };
       }),
@@ -780,6 +1111,7 @@ export class TaskService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const taskContext = task.context ? (task.context as TaskContext) : undefined;
     const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
 
     return {
@@ -801,14 +1133,17 @@ export class TaskService {
       editorData: task.editorData ?? undefined,
       error: task.error,
       files: taskFiles.length > 0 ? taskFiles : undefined,
+      goal: goal ?? null,
       heartbeat:
         task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
+              scheduledAt: taskContext?.scheduler?.scheduledAt,
               timeout: task.heartbeatTimeout,
             }
           : undefined,
+      id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
       name: task.name,
@@ -822,13 +1157,17 @@ export class TaskService {
               timezone: task.scheduleTimezone,
             }
           : undefined,
+      startedAt: task.startedAt ? new Date(task.startedAt).toISOString() : undefined,
       status: task.status,
       userId: task.assigneeUserId,
-      verify: this.taskModel.getVerifyConfig(task),
+      verify: acceptance
+        ? { ...acceptance.config, requirement: acceptance.requirement }
+        : this.taskModel.getVerifyConfig(task),
       visibility: task.visibility,
       subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,
+      updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined,
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
       workspaceId: task.workspaceId ?? null,
     };

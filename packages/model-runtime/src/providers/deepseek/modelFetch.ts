@@ -7,6 +7,12 @@ interface DeepSeekModelCard {
   id: string;
 }
 
+const loadStaticDeepSeekModels = async () => {
+  const { deepseek } = await import('model-bank');
+
+  return processModelList(deepseek, MODEL_LIST_CONFIGS.deepseek, 'deepseek');
+};
+
 export const fetchDeepSeekModels = async ({
   client,
 }: {
@@ -23,7 +29,5 @@ export const fetchDeepSeekModels = async ({
     return processModelList(modelList, MODEL_LIST_CONFIGS.deepseek, 'deepseek');
   }
 
-  const { deepseek } = await import('model-bank');
-
-  return processModelList(deepseek, MODEL_LIST_CONFIGS.deepseek, 'deepseek');
+  return loadStaticDeepSeekModels();
 };

@@ -1,8 +1,7 @@
 import os from 'node:os';
 
-import * as electronIs from 'electron-is';
-
 import { getDesktopEnv } from '@/env';
+import * as electronIs from '@/utils/platform';
 
 export const isDev = electronIs.dev();
 

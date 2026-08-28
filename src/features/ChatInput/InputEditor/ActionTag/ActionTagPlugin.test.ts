@@ -1,3 +1,4 @@
+import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
@@ -5,6 +6,7 @@ import {
   INLINE_ACTION_TAG_REGEX,
   isInCodeContext,
   resolveActionTagFromMatch,
+  writeActionTagMarkdown,
 } from './ActionTagPlugin';
 
 // Minimal Lexical-node stand-in for isInCodeContext, which only reads
@@ -91,6 +93,45 @@ describe('resolveActionTagFromMatch', () => {
       actionType: 'a',
       actionLabel: 'B',
     });
+  });
+});
+
+describe('writeActionTagMarkdown', () => {
+  it('serializes the goal chip back to the `/goal` prefix the runtime detects', () => {
+    const markdown = writeActionTagMarkdown({
+      actionCategory: 'command',
+      actionLabel: '设定目标',
+      actionType: 'goal',
+    });
+
+    // The chip is structured state; `/goal` is the wire format both the client
+    // tool gate and the server system role key off.
+    expect(markdown).toBe('/goal ');
+    expect(isGoalPrompt(`${markdown}ship the homepage`)).toBe(true);
+  });
+
+  it('keeps the other categories on the XML wire format', () => {
+    expect(
+      writeActionTagMarkdown({
+        actionCategory: 'command',
+        actionLabel: 'New Topic',
+        actionType: 'newTopic',
+      }),
+    ).toBe('<action type="newTopic" category="command" label="New Topic" />');
+    expect(
+      writeActionTagMarkdown({
+        actionCategory: 'skill',
+        actionLabel: 'UX',
+        actionType: 'ux-audit',
+      }),
+    ).toBe('<skill name="ux-audit" label="UX" />');
+    expect(
+      writeActionTagMarkdown({
+        actionCategory: 'tool',
+        actionLabel: 'Search',
+        actionType: 'search',
+      }),
+    ).toBe('<tool name="search" label="Search" />');
   });
 });
 

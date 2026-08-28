@@ -5,21 +5,28 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useSingleton } from '@/hooks/useSingleton';
 import { agentQuotaService } from '@/services/agentQuota';
-import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { fetchClaudeCodeQuotaSnapshot } from '@/services/heteroAgentQuota';
 
 import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
-import { buildClaudeSnapshotFromWindows, isQuotaStale } from './quotaViewModel';
+import {
+  buildClaudePanelSnapshot,
+  hasRenderableWindow,
+  isQuotaStale,
+  newestCapturedAt,
+} from './quotaViewModel';
 
 /**
- * Only hit the live Anthropic usage API when the persisted data is this stale.
- * Kept low-frequency (1h) — the panel reads from our DB, so it stays instant and
- * fresh-enough without hammering the rate-limited usage endpoint. A manual
- * refresh always forces a live fetch.
+ * Hit the live Anthropic usage API when the newest persisted reading is this
+ * stale, and auto-refresh on the same cadence so the badge stays near-live.
+ * The sampler-side snapshot cache (90 s fresh window in the desktop main
+ * process / device host) is what actually protects the rate-limited usage
+ * endpoint.
  */
-const QUOTA_REFRESH_MS = 60 * 60 * 1000;
+const QUOTA_REFRESH_MS = 2 * 60 * 1000;
 
 const createErrorSnapshot = (error: unknown): ClaudeCodeQuotaSnapshot => ({
   error: error instanceof Error ? error.message : String(error),
@@ -47,68 +54,114 @@ const unavailableSnapshot = (
 const isRateLimitError = (quota: ClaudeCodeQuotaSnapshot) => quota.error?.includes('429') ?? false;
 
 interface ClaudeCodeQuotaMenuProps {
+  /** Bound execution device to sample instead of the local desktop login. */
+  deviceId?: string;
   env?: Record<string, string>;
 }
 
-const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
+const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
-  const sourceKey = createQuotaSourceKey('claude-code', env);
+  const sourceKey = createQuotaSourceKey('claude-code', deviceId ?? 'local', env);
+  // A persisted account becomes eligible for a device only after this mounted
+  // menu has observed that device return the same external account identity.
+  // This avoids painting another machine's pinned/first account on a device
+  // switch while still preserving last-known-good data after later failures.
+  const trustedDeviceAccounts = useSingleton(() => new Map<string, string>());
 
   /**
-   * DB-first: render the persisted windows from our own database, and only fall
-   * back to the live Anthropic usage API to refresh + ingest when the newest
-   * persisted reading is older than QUOTA_REFRESH_MS (or the user forces it). So
-   * the panel shows data instantly and survives a failing live fetch.
+   * DB-first: render the persisted windows from our own database, and go to the
+   * live Anthropic usage API to refresh + ingest when the newest persisted
+   * reading is older than QUOTA_REFRESH_MS, the caller revalidates (focus /
+   * popover open), or the user forces it. The persisted snapshot paints first
+   * through onInterim, so the panel shows data instantly and survives a failing
+   * live fetch.
    */
   const fetchQuota = useCallback(
-    async (options?: FetchQuotaOptions): Promise<ClaudeCodeQuotaSnapshot> => {
+    async (
+      options?: FetchQuotaOptions<ClaudeCodeQuotaSnapshot>,
+    ): Promise<ClaudeCodeQuotaSnapshot> => {
       const force = !!options?.force;
 
       // 1) Resolve the account to display — pinned for this agent, else the first.
-      let accounts = await agentQuotaService.listAccounts().catch(() => []);
+      const [initialAccounts, bindings] = await Promise.all([
+        agentQuotaService.listAccounts().catch(() => []),
+        agentId ? agentQuotaService.listBindings(agentId).catch(() => []) : [],
+      ]);
+      let accounts = initialAccounts;
       let claude = accounts.filter((a) => a.provider === 'claude-code');
-      let pinnedId: string | undefined;
-      if (agentId) {
-        const bindings = await agentQuotaService.listBindings(agentId).catch(() => []);
-        pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
-      }
-      let account = claude.find((a) => a.id === pinnedId) ?? claude[0];
-      let windows = account ? await agentQuotaService.getWindows(account.id).catch(() => []) : [];
+      const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
+      const trustedExternalAccountId = deviceId ? trustedDeviceAccounts.get(deviceId) : undefined;
+      let account = deviceId
+        ? claude.find((a) => a.externalAccountId === trustedExternalAccountId)
+        : (claude.find((a) => a.id === pinnedId) ?? claude[0]);
+      let readings = account
+        ? await agentQuotaService.getLatestReadings(account.id).catch(() => [])
+        : [];
 
-      // 2) Throttled live refresh + ingest.
+      // 2) Throttled live refresh + ingest. Paint the persisted windows before
+      // awaiting the live fetch so the panel never blocks on it.
       let live: ClaudeCodeQuotaSnapshot | null = null;
-      if (force || isQuotaStale(windows, Date.now(), QUOTA_REFRESH_MS)) {
-        live = await heterogeneousAgentService
-          .getClaudeCodeQuota({ env, ...(force ? { force: true } : {}) })
-          .catch(() => null);
+      if (
+        force ||
+        options?.revalidate ||
+        (deviceId && !trustedExternalAccountId) ||
+        isQuotaStale(account?.updatedAt, Date.now(), QUOTA_REFRESH_MS)
+      ) {
+        if (account && readings.length > 0) {
+          const interim = buildClaudePanelSnapshot(account, readings, null);
+          if (hasRenderableWindow(interim)) options?.onInterim?.(interim);
+        }
+        live = await fetchClaudeCodeQuotaSnapshot({ deviceId, env, force }).catch(() => null);
 
         const externalAccountId = live?.identity?.externalAccountId;
         if (live?.status === 'ok' && externalAccountId && live.readings?.length) {
-          await agentQuotaService
-            .ingestClaudeSnapshot({ identity: live.identity!, readings: live.readings })
-            .catch(() => {});
-          accounts = await agentQuotaService.listAccounts().catch(() => accounts);
-          claude = accounts.filter((a) => a.provider === 'claude-code');
-          account =
-            claude.find((a) => a.externalAccountId === externalAccountId) ??
-            claude.find((a) => a.id === pinnedId) ??
-            claude[0];
-          windows = account
-            ? await agentQuotaService.getWindows(account.id).catch(() => windows)
-            : windows;
+          if (deviceId) trustedDeviceAccounts.set(deviceId, externalAccountId);
+
+          // A revalidation inside the main-process cache's fresh window gets the
+          // readings we already persisted echoed back (same capturedAt).
+          // Snapshots are append-only, so re-ingesting an echo would duplicate
+          // history rows and rerun calibration without new evidence — skip it.
+          const liveCapturedAt = live.readings.reduce((max, r) => Math.max(max, r.capturedAt), 0);
+          const matchingAccount = claude.find(
+            (candidate) => candidate.externalAccountId === externalAccountId,
+          );
+          const matchingReadings = matchingAccount
+            ? await agentQuotaService.getLatestReadings(matchingAccount.id).catch(() => [])
+            : [];
+          const isCachedEcho =
+            !!matchingAccount && liveCapturedAt <= newestCapturedAt(matchingReadings);
+
+          if (!isCachedEcho) {
+            await agentQuotaService
+              .ingestClaudeSnapshot({ deviceId, identity: live.identity!, readings: live.readings })
+              .catch(() => {});
+            accounts = await agentQuotaService.listAccounts().catch(() => accounts);
+            claude = accounts.filter((a) => a.provider === 'claude-code');
+            account =
+              claude.find((a) => a.externalAccountId === externalAccountId) ??
+              claude.find((a) => a.id === pinnedId) ??
+              claude[0];
+            readings = account
+              ? await agentQuotaService.getLatestReadings(account.id).catch(() => readings)
+              : readings;
+          } else {
+            account = matchingAccount;
+            readings = matchingReadings;
+          }
         }
       }
 
-      // 3) Persisted view wins — it survives a failed live fetch. Otherwise fall
-      // back to the live snapshot: identity may be unresolvable (no
-      // oauthAccount.accountUuid in ~/.claude.json, while the quota itself comes
-      // from the keychain), or every reading may lack a usable reset and project
-      // to zero windows. Either way real readings beat an empty panel.
-      if (account && windows.length > 0) return buildClaudeSnapshotFromWindows(account, windows);
-      return live ?? unavailableSnapshot();
+      // 3) The persisted view survives a failed live fetch, and an attributable
+      // live sample fills what it has no reading for (an ingest that failed, a
+      // limit this account has no history for) — merged per limit, newest
+      // reading wins. With no account resolved at all there is nothing to
+      // attribute the sample to, so the live snapshot stands on its own.
+      const merged = account ? buildClaudePanelSnapshot(account, readings, live) : null;
+      if (merged && hasRenderableWindow(merged)) return merged;
+      return live ?? merged ?? unavailableSnapshot();
     },
-    [env, agentId],
+    [agentId, deviceId, env, trustedDeviceAccounts],
   );
 
   const getWindows = useCallback(
@@ -183,6 +236,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
 
   return (
     <QuotaMenu
+      autoRefreshMs={QUOTA_REFRESH_MS}
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
       getErrorText={getErrorText}

@@ -10,7 +10,7 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import type { OIDCConfig } from '@/database/schemas';
+import type { ConnectorMetadata, OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -18,6 +18,7 @@ import {
   ConnectorToolPermission,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { getComposioClient } from '@/libs/composio';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -201,7 +202,7 @@ export const connectorRouter = router({
    * `agentId` and is enriched with the owning agent's `agentTitle`/`agentAvatar`
    * for attribution badges. Scope-correct via `ConnectorModel.ownership()` (and
    * `AgentModel.ownership()` for the titles) — a workspace context only returns
-   * that workspace's agent connectors (LOBE-11681 / LOBE-11682).
+   * that workspace's agent connectors ( /).
    */
   listAgentBound: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.queryAllAgentScoped();
@@ -218,7 +219,7 @@ export const connectorRouter = router({
     // plus their own private agents. A `user_connectors` row is scoped only by
     // `workspace_id`, so on its own it would surface connectors owned by another
     // member's PRIVATE agent. Gate on the visible-agent set so private-agent
-    // connector inventory never leaks across members (LOBE-11681).
+    // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 
@@ -235,6 +236,7 @@ export const connectorRouter = router({
           return {
             ...rest,
             agentAvatar: meta?.avatar ?? null,
+            agentName: meta?.name ?? null,
             agentTitle: meta?.title ?? null,
             oidcConfig: safeOidcConfig,
             tools,
@@ -342,10 +344,14 @@ export const connectorRouter = router({
         sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
-      return { id: existing.id };
+      // `isNew` lets clients tell a fresh row from an updated pre-existing one —
+      // client-side caches can't answer this reliably (the connector list may
+      // not be fetched yet), and rollback-on-sync-failure must never delete a
+      // connector the user already had.
+      return { id: existing.id, isNew: false };
     }
 
-    return ctx.connectorModel.create({
+    const created = await ctx.connectorModel.create({
       ...fields,
       agentId: agentId ?? null,
       identifier: input.identifier,
@@ -353,6 +359,7 @@ export const connectorRouter = router({
       sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
     });
+    return { id: created.id, isNew: true };
   }),
 
   /**
@@ -658,6 +665,24 @@ export const connectorRouter = router({
       // Missing row → keep the delete idempotent, nothing to authorize.
       if (!target) return;
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
+      const connectedAccountId = target.metadata?.composio?.connectedAccountId;
+      if (connectedAccountId) {
+        try {
+          await getComposioClient().connectedAccounts.delete(connectedAccountId);
+        } catch (error) {
+          // Keep deletion recoverable when the remote account is already gone or
+          // Composio is temporarily unavailable. This matches deleteConnection:
+          // the local connector must not become impossible to remove.
+          console.warn('[Composio] Failed to delete remote connection:', error);
+        }
+
+        // Personal Composio connections still carry the legacy plugin projection.
+        // Agent-scoped connections never create one, so do not remove a base
+        // plugin that may belong to a separate personal connection.
+        if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
+      }
+
       await ctx.connectorModel.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's
@@ -821,6 +846,48 @@ export const connectorRouter = router({
     }),
 
   /**
+   * Sync a client-fetched tool list into an EXISTING connector row. This is the
+   * install/refresh path for connectors the cloud server cannot reach itself:
+   * stdio MCP (the binary lives on the user's machine) and local/private-network
+   * HTTP endpoints. The desktop client connects locally, lists the tools, and
+   * reports them here — the server-side `syncTools` counterpart would otherwise
+   * try (and fail) to connect from the cloud (#16533).
+   *
+   * Also promotes the connector to `connected`, mirroring what
+   * `syncConnectorToolsById` does after a successful server-side sync.
+   */
+  syncToolsFromClientById: connectorWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        tools: z.array(
+          z.object({
+            description: z.string().optional(),
+            inputSchema: z.record(z.string(), z.unknown()).optional(),
+            toolName: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Same edit-class gate as `syncTools` — rewrites the connector's tool rows.
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
+      const syncInputs = input.tools.map((t) => ({
+        crudType: inferCrudType(t.toolName),
+        description: t.description,
+        inputSchema: t.inputSchema,
+        toolName: t.toolName,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
+      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
+      return { toolCount: syncInputs.length };
+    }),
+
+  /**
    * Bootstrap a connector entry for a builtin tool (lobe-creds, lobe-local-system, etc.)
    * by reading its manifest from @lobechat/builtin-tools.
    * Idempotent — safe to call on every open of the detail panel.
@@ -907,6 +974,7 @@ export const connectorRouter = router({
 
       const { connectorId, writable } = await upsertConnectorEntry(ctx, {
         avatar: plugin.manifest.meta?.avatar,
+        composio: plugin.customParams?.composio,
         description: plugin.manifest.meta?.description,
         identifier: input.identifier,
         name: plugin.manifest.meta?.title || input.identifier,
@@ -948,15 +1016,17 @@ async function upsertConnectorEntry(
   },
   params: {
     avatar?: string;
+    composio?: ConnectorMetadata['composio'];
     description?: string;
     identifier: string;
     name: string;
     sourceType: string;
   },
 ): Promise<{ connectorId: string; writable: boolean }> {
-  const metadata: Record<string, unknown> = {};
+  const metadata: ConnectorMetadata = {};
   if (params.description) metadata.description = params.description;
   if (params.avatar) metadata.avatar = params.avatar;
+  if (params.composio) metadata.composio = params.composio;
 
   // Viewers keep browse access: they resolve existing rows read-only below,
   // but must never create or rewrite connector state. These bootstrap
@@ -979,8 +1049,9 @@ async function upsertConnectorEntry(
     const row = existing[0];
     const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
     if (writable) {
-      // Update metadata with latest description/avatar from manifest
-      await ctx.connectorModel.update(row.id, { metadata });
+      // Preserve runtime-owned metadata (especially Composio account identity)
+      // while refreshing display fields from the latest plugin manifest.
+      await ctx.connectorModel.update(row.id, { metadata: { ...row.metadata, ...metadata } });
     }
     return { connectorId: row.id, writable };
   }

@@ -6,9 +6,9 @@ import type {
   HeteroSessionDirPref,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { Flexbox, Icon, NeuralNetworkLoading, ScrollShadow, SearchBar, Text } from '@lobehub/ui';
-import { Button, useModalContext } from '@lobehub/ui/base-ui';
-import { Checkbox, Progress } from 'antd';
+import { Flexbox, Icon, NeuralNetworkLoading, ScrollShadow, SearchBar } from '@lobehub/ui';
+import { Button, Checkbox, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { Progress } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -293,16 +293,13 @@ const Content = memo<ContentProps>(({ agentId }) => {
                 <Checkbox
                   checked={allChecked}
                   indeterminate={!allChecked && someChecked}
-                  onChange={(e) => toggleAll(e.target.checked)}
+                  onChange={toggleAll}
                 >
                   <Text fontSize={13} type="secondary">
                     {t('heteroImport.selectAll')}
                   </Text>
                 </Checkbox>
-                <Checkbox
-                  checked={hideImported}
-                  onChange={(e) => setHideImported(e.target.checked)}
-                >
+                <Checkbox checked={hideImported} onChange={setHideImported}>
                   <Text fontSize={13} type="secondary">
                     {t('heteroImport.hideImported')}
                   </Text>

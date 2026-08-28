@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "左側パネルの表示・非表示を切り替えます",
   "toggleLeftPanel.title": "左側パネルの表示/非表示",
   "toggleRightPanel.desc": "右側パネルの表示・非表示を切り替えます",
-  "toggleRightPanel.title": "右側パネルの表示/非表示"
+  "toggleRightPanel.title": "右側パネルの表示/非表示",
+  "toggleTerminalPanel.desc": "下部のターミナルパネルを表示または非表示にする",
+  "toggleTerminalPanel.title": "ターミナルパネルの切り替え"
 }

@@ -47,8 +47,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock electron-is
-vi.mock('electron-is', () => ({
+// Mock platform detection
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
   linux: vi.fn(() => false),

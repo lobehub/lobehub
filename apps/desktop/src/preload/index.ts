@@ -1,7 +1,9 @@
+import { setupBootProfiler } from './bootProfiler';
 import { setupElectronApi } from './electronApi';
 import { setupRouteInterceptors } from './routeInterceptor';
 
 const setupPreload = () => {
+  setupBootProfiler();
   setupElectronApi();
 
   // Setup route interception logic

@@ -1,7 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { copyToClipboard, createRawModal, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
   BookMinusIcon,
@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import RepoIcon from '@/components/LibIcon';
+import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -34,41 +35,54 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
-import MoveToFolderModal from '../MoveToFolderModal';
+import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
+  /**
+   * The underlying `files.id` when the row is a file. The unified resource
+   * list addresses a file that backs a derived page by the PAGE id
+   * (`COALESCE(d.id, f.id)` in KnowledgeRepo), so `id` alone cannot be used
+   * for file-table lookups such as the messenger push.
+   */
+  fileId?: string | null;
   filename: string;
   fileType: string;
   id: string;
   libraryId?: string;
   onRenameStart?: () => void;
+  /** Byte size when available — powers the push modal's oversize pre-warning. */
+  size?: number;
   sourceType?: string;
   url: string;
   userId?: string | null;
   visibility?: 'private' | 'public' | null;
 }
 
+type FileMenuItem = ItemType & { sfSymbol?: SFSymbol };
+
 interface UseFileItemDropdownReturn {
-  menuItems: () => ItemType[];
+  menuItems: () => FileMenuItem[];
 }
 
 /**
  * Shared with folder tree and explorer
  */
 export const useFileItemDropdown = ({
+  fileId,
   id,
   libraryId,
   url,
   filename,
   fileType,
+  size,
   sourceType,
   onRenameStart,
   userId,
   visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase', 'chat']);
-  const { message } = App.useApp();
+
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
@@ -116,6 +130,15 @@ export const useFileItemDropdown = ({
     !isOfficeFile &&
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
+  // Pages/documents have no storage URL to attach, so only real files get the
+  // "Send to chat platform" entry. The server resolves the attachment by
+  // `files.id`, but a file that backs a derived page is listed under the PAGE
+  // id — always prefer the row's underlying `fileId` when it carries one.
+  const sendToMessengerItem = useSendToMessengerMenuItem({
+    enabled: !isFolder && !isPage && !!url,
+    file: { fileType, id: fileId ?? id, name: filename, size },
+  });
+
   const menuItems = useCallback(() => {
     // Filter out current knowledge base and constrain by visibility scope:
     // a private file can only join a private KB, a workspace-public file can
@@ -138,7 +161,7 @@ export const useFileItemDropdown = ({
         domEvent.stopPropagation();
         try {
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(
+          toast.success(
             t('addToKnowledgeBase.addSuccess', {
               count: 1,
               ns: 'knowledgeBase',
@@ -151,9 +174,9 @@ export const useFileItemDropdown = ({
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -176,15 +199,15 @@ export const useFileItemDropdown = ({
           await moveResource(id, null);
           // Then add to target library
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
+          toast.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
         } catch (e: any) {
           console.error(e);
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -220,7 +243,7 @@ export const useFileItemDropdown = ({
                     onOk: async () => {
                       await removeFilesFromKnowledgeBase(libraryId, [id]);
 
-                      message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                      toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
                     },
                     title: t('FileManager.actions.removeFromLibrary'),
                   });
@@ -274,10 +297,10 @@ export const useFileItemDropdown = ({
                 onOk: async () => {
                   try {
                     await publishFileToWorkspace(id);
-                    message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+                    toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+                    toast.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
                   }
                 },
               });
@@ -300,20 +323,85 @@ export const useFileItemDropdown = ({
                 onOk: async () => {
                   try {
                     await setFileVisibility(id, 'private');
-                    message.success(t('makePrivate.success', { ns: 'common' }));
+                    toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('makePrivate.error', { ns: 'common' }));
+                    toast.error(t('makePrivate.error', { ns: 'common' }));
                   }
                 },
               });
             },
           },
         canEditResources && isOwnPublicFile && { type: 'divider' },
-        ...libraryRelatedActions,
-        hasKnowledgeBaseActions && {
+        {
+          icon: <Icon icon={LinkIcon} />,
+          key: 'copyUrl',
+          label: t('FileManager.actions.copyUrl'),
+          onClick: async ({ domEvent }) => {
+            domEvent.stopPropagation();
+
+            // For pages, use the route path instead of the storage URL
+            let urlToCopy = url;
+            if (isPage) {
+              if (libraryId) {
+                urlToCopy = `${appOrigin}/resource/library/${libraryId}?file=${id}`;
+              } else {
+                urlToCopy = `${appOrigin}/resource?file=${id}`;
+              }
+            }
+
+            await copyToClipboard(urlToCopy);
+            toast.success(t('FileManager.actions.copyUrlSuccess'));
+          },
+          sfSymbol: 'doc.on.doc',
+        },
+        !isFolder && {
+          icon: <Icon icon={DownloadIcon} />,
+          key: 'download',
+          label: t('download', { ns: 'common' }),
+          sfSymbol: 'square.and.arrow.down',
+          onClick: async ({ domEvent }) => {
+            domEvent.stopPropagation();
+            const downloadingToast = toast.loading(t('FileManager.actions.downloading'));
+
+            if (isPage) {
+              // For pages, download as markdown
+              try {
+                const doc = await documentService.getDocumentById(id);
+                if (doc?.content) {
+                  // Add title as markdown heading
+                  const title = doc.title || filename;
+                  const contentWithTitle = `# ${title}\n\n${doc.content}`;
+
+                  // Create a blob with the markdown content including title
+                  const blob = new Blob([contentWithTitle], { type: 'text/markdown' });
+                  const blobUrl = URL.createObjectURL(blob);
+
+                  // Ensure filename has .md extension
+                  const mdFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+
+                  await downloadFile(blobUrl, mdFilename);
+                  URL.revokeObjectURL(blobUrl);
+                } else {
+                  toast.error('Failed to download page: no content available');
+                }
+              } catch (error) {
+                console.error('Failed to download page:', error);
+                toast.error('Failed to download page');
+              }
+            } else {
+              // For regular files, download from URL
+              await downloadFile(url, filename);
+            }
+
+            downloadingToast.close();
+          },
+        },
+        sendToMessengerItem,
+        (hasKnowledgeBaseActions || (canEditResources && (isInLibrary || isFolder))) && {
           type: 'divider',
         },
+        ...libraryRelatedActions,
         canEditResources &&
           isInLibrary && {
             icon: <Icon icon={FolderInputIcon} />,
@@ -322,7 +410,7 @@ export const useFileItemDropdown = ({
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
 
-              createRawModal(MoveToFolderModal, {
+              openMoveToFolderModal({
                 fileId: id,
                 knowledgeBaseId: libraryId,
               });
@@ -345,74 +433,8 @@ export const useFileItemDropdown = ({
               if (!canManage) return;
               onRenameStart?.();
             },
+            sfSymbol: 'pencil',
           },
-        {
-          icon: <Icon icon={LinkIcon} />,
-          key: 'copyUrl',
-          label: t('FileManager.actions.copyUrl'),
-          onClick: async ({ domEvent }) => {
-            domEvent.stopPropagation();
-
-            // For pages, use the route path instead of the storage URL
-            let urlToCopy = url;
-            if (isPage) {
-              if (libraryId) {
-                urlToCopy = `${appOrigin}/resource/library/${libraryId}?file=${id}`;
-              } else {
-                urlToCopy = `${appOrigin}/resource?file=${id}`;
-              }
-            }
-
-            await copyToClipboard(urlToCopy);
-            message.success(t('FileManager.actions.copyUrlSuccess'));
-          },
-        },
-        !isFolder && {
-          icon: <Icon icon={DownloadIcon} />,
-          key: 'download',
-          label: t('download', { ns: 'common' }),
-          onClick: async ({ domEvent }) => {
-            domEvent.stopPropagation();
-            const key = 'file-downloading';
-            message.loading({
-              content: t('FileManager.actions.downloading'),
-              duration: 0,
-              key,
-            });
-
-            if (isPage) {
-              // For pages, download as markdown
-              try {
-                const doc = await documentService.getDocumentById(id);
-                if (doc?.content) {
-                  // Add title as markdown heading
-                  const title = doc.title || filename;
-                  const contentWithTitle = `# ${title}\n\n${doc.content}`;
-
-                  // Create a blob with the markdown content including title
-                  const blob = new Blob([contentWithTitle], { type: 'text/markdown' });
-                  const blobUrl = URL.createObjectURL(blob);
-
-                  // Ensure filename has .md extension
-                  const mdFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
-
-                  await downloadFile(blobUrl, mdFilename);
-                  URL.revokeObjectURL(blobUrl);
-                } else {
-                  message.error('Failed to download page: no content available');
-                }
-              } catch (error) {
-                console.error('Failed to download page:', error);
-                message.error('Failed to download page');
-              }
-            } else {
-              // For regular files, download from URL
-              await downloadFile(url, filename);
-            }
-
-            message.destroy(key);
-          },
-        },
         canEditResources && {
           type: 'divider',
         },
@@ -448,9 +470,9 @@ export const useFileItemDropdown = ({
                   void useTreeStore.getState().revalidate(parentId);
                   await refreshFileList({ revalidateResources: false });
 
-                  message.success(t('FileManager.actions.deleteSuccess'));
+                  toast.success(t('FileManager.actions.deleteSuccess'));
                 } catch (error) {
-                  message.error(
+                  toast.error(
                     isForbiddenError(error)
                       ? t('manageOnlyCreator', { ns: 'common' })
                       : t('operationFailed', { ns: 'common' }),
@@ -459,8 +481,9 @@ export const useFileItemDropdown = ({
               },
             });
           },
+          sfSymbol: 'trash',
         },
-      ] as ItemType[]
+      ] as FileMenuItem[]
     ).filter(Boolean);
   }, [
     addFilesToKnowledgeBase,
@@ -476,13 +499,13 @@ export const useFileItemDropdown = ({
     isPage,
     libraries,
     libraryId,
-    message,
     moveResource,
     onRenameStart,
     publishFileToWorkspace,
     setFileVisibility,
     refreshFileList,
     removeFilesFromKnowledgeBase,
+    sendToMessengerItem,
     sourceType,
     t,
     url,

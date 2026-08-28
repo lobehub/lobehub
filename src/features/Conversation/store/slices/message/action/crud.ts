@@ -21,6 +21,7 @@ import { type StateCreator } from 'zustand';
 import { messageService } from '@/services/message';
 
 import { type Store as ConversationStore } from '../../../action';
+import { isSameConversationContext } from '../../../utils/contextGuard';
 import { dataSelectors } from '../../data/selectors';
 
 /**
@@ -185,7 +186,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.updateMessage(messageId, { tools: [tool] }, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -196,7 +197,7 @@ export const messageCRUDSlice: StateCreator<
     await messageService.removeMessagesByAssistant(context.agentId, context.topicId ?? undefined);
 
     // Clear local state
-    replaceMessages([]);
+    replaceMessages([], { expectedContext: context });
   },
 
   // ===== Create ===== //
@@ -216,11 +217,15 @@ export const messageCRUDSlice: StateCreator<
       });
 
       // Replace with server response
-      replaceMessages(result.messages);
+      if (!isSameConversationContext(context, get().context)) return undefined;
+      replaceMessages(result.messages, { expectedContext: context });
+
       internal_toggleMessageLoading(false, tempId);
 
       return result.id;
     } catch (e) {
+      if (!isSameConversationContext(context, get().context)) return undefined;
+
       internal_toggleMessageLoading(false, tempId);
 
       // Update temp message with error
@@ -286,7 +291,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.removeMessage(id, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -326,7 +331,7 @@ export const messageCRUDSlice: StateCreator<
         : await messageService.removeMessages(ids, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -340,7 +345,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.removeMessages(ids, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -366,7 +371,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.removeMessage(id, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -390,7 +395,7 @@ export const messageCRUDSlice: StateCreator<
       );
 
       if (result?.success && result.messages) {
-        replaceMessages(result.messages);
+        replaceMessages(result.messages, { expectedContext: context });
       }
     }
   },
@@ -432,7 +437,7 @@ export const messageCRUDSlice: StateCreator<
     );
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -450,7 +455,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.updateMessage(id, { error }, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -464,7 +469,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.updateMessageMetadata(id, metadata, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -482,7 +487,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.updateMessagePlugin(id, value, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -493,7 +498,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.updateMessagePluginError(id, error, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -504,7 +509,7 @@ export const messageCRUDSlice: StateCreator<
     const result = await messageService.updateMessageRAG(id, data, context);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages);
+      replaceMessages(result.messages, { expectedContext: context });
     }
   },
 
@@ -529,7 +534,7 @@ export const messageCRUDSlice: StateCreator<
       );
 
       if (result?.success && result.messages) {
-        replaceMessages(result.messages);
+        replaceMessages(result.messages, { expectedContext: context });
       }
     }
   },
@@ -600,7 +605,7 @@ export const messageCRUDSlice: StateCreator<
     const updatePromise = (async () => {
       const result = await messageService.updateToolArguments(toolCallId, nextValue, context);
       if (result?.success && result.messages) {
-        replaceMessages(result.messages);
+        replaceMessages(result.messages, { expectedContext: context });
       }
     })();
 
@@ -616,16 +621,18 @@ export const messageCRUDSlice: StateCreator<
     try {
       await updatePromise;
     } finally {
-      // Remove the completed promise
-      set(
-        (state) => {
-          const newMap = new Map(state.pendingArgsUpdates);
-          newMap.delete(toolCallId);
-          return { pendingArgsUpdates: newMap };
-        },
-        false,
-        'updatePluginArguments/complete',
-      );
+      if (isSameConversationContext(context, get().context)) {
+        // Remove the completed promise
+        set(
+          (state) => {
+            const newMap = new Map(state.pendingArgsUpdates);
+            newMap.delete(toolCallId);
+            return { pendingArgsUpdates: newMap };
+          },
+          false,
+          'updatePluginArguments/complete',
+        );
+      }
     }
   },
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeGithubToolResult } from '../githubToolResult';
+import { normalizeGithubShellToolResult, normalizeGithubToolResult } from '../githubToolResult';
 
 /**
  * Pins the quoting edge cases of the hand-rolled shell tokenizer behind the
@@ -176,5 +176,139 @@ describe('normalizeGithubToolResult (url scheme allowlist)', () => {
     });
     expect(bad?.params.identifier).toBe('lobehub/lobehub#9');
     expect(bad?.params.url).toBeUndefined();
+  });
+});
+
+/**
+ * Heterogeneous / device shell surface (codex `command_execution`, claude-code
+ * `Bash`, lobe-local-system `runCommand`): same gh-CLI parsing, but no
+ * toolName gate — the caller has already scoped the record to a shell tool.
+ */
+describe('normalizeGithubShellToolResult', () => {
+  it('registers a codex-style gh pr create from command + stdout', () => {
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `git push -u origin fix/tray && gh pr create --title 'Fix tray' --body 'Details'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/17654\n',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#17654',
+      resourceId: 'lobehub/lobehub#17654',
+      resourceType: 'github_pull_request',
+      title: 'Fix tray',
+      toolName: 'command_execution',
+      url: 'https://github.com/lobehub/lobehub/pull/17654',
+    });
+  });
+
+  it('resolves a claude-code Bash edit target without an exit code', () => {
+    // claude-code persists no exitCode; failures are excluded upstream via the
+    // plugin error, so a missing exit code must not reject the record.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `gh issue edit 952 --repo lobehub/lobehub --title 'Better title'`,
+        output: 'https://github.com/lobehub/lobehub/issues/952',
+      },
+      toolName: 'Bash',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'updated',
+      identifier: 'lobehub/lobehub#952',
+      resourceType: 'github_issue',
+      title: 'Better title',
+    });
+  });
+
+  it('unwraps the codex login-shell wrapper before parsing', () => {
+    // Codex spawns every command as `/bin/zsh -lc '<payload>'` and the adapter
+    // records that argv verbatim (`adapters/codex.test.ts` fixtures).
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `/bin/zsh -lc 'git push -u origin fix/tray && gh pr create --title "Fix tray"'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/17654\n',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#17654',
+      resourceType: 'github_pull_request',
+      title: 'Fix tray',
+      url: 'https://github.com/lobehub/lobehub/pull/17654',
+    });
+  });
+
+  it('keeps outer segments chained after a -c wrapper', () => {
+    // The -c payload replaces only its own segment; `&& gh pr create ...`
+    // lives at the OUTER level and must still parse.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `bash -c 'git push' && gh pr create --repo lobehub/lobehub --title 'Outer chain'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/91',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#91',
+      title: 'Outer chain',
+    });
+  });
+
+  it('keeps a non--c shell invocation as an ordinary command chain', () => {
+    // `bash ./prepare.sh` runs a script, not a `-c` wrapper — the later gh
+    // segment must still parse from the original token stream.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `bash ./prepare.sh && gh pr create --repo lobehub/lobehub --title 'After script'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/90',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#90',
+      title: 'After script',
+    });
+  });
+
+  it('skips failed commands and non-gh shell output', () => {
+    expect(
+      normalizeGithubShellToolResult({
+        data: { command: `gh pr create --title 'x'`, exitCode: 1, output: 'error' },
+        toolName: 'command_execution',
+      }),
+    ).toBeNull();
+
+    expect(
+      normalizeGithubShellToolResult({
+        data: { command: 'ls -la', exitCode: 0, output: 'README.md' },
+        toolName: 'Bash',
+      }),
+    ).toBeNull();
+
+    // A github URL merely PRINTED by a non-create/edit command must not register.
+    expect(
+      normalizeGithubShellToolResult({
+        data: {
+          command: 'gh pr view 17654',
+          exitCode: 0,
+          output: 'https://github.com/lobehub/lobehub/pull/17654',
+        },
+        toolName: 'command_execution',
+      }),
+    ).toBeNull();
   });
 });

@@ -88,6 +88,13 @@ describe('ClientContextBuilder', () => {
     });
     const userMessage = { content: 'Question', id: 'user-1', role: 'user' as const };
     const assistantMessage = { content: '', id: 'assistant-1', role: 'assistant' as const };
+    const additionalContexts = [
+      {
+        content: { text: 'Inspect the question.', type: 'text' as const },
+        placement: 'stable_prefix' as const,
+        wrapper: { tag: 'inspection' },
+      },
+    ];
     const state = AgentRuntime.createInitialState({
       messages: [userMessage],
       operationId: 'operation-1',
@@ -106,6 +113,7 @@ describe('ClientContextBuilder', () => {
         messages: [userMessage, assistantMessage],
         model: 'test-model',
         provider: 'test-provider',
+        additionalContexts,
         tools: [],
       } as any,
       provider: 'test-provider',
@@ -122,6 +130,7 @@ describe('ClientContextBuilder', () => {
           enabledToolIds: ['dynamic-search'],
           tools: [activatedTool],
         }),
+        additionalContexts,
       }),
       expect.any(Object),
     );
@@ -132,5 +141,8 @@ describe('ClientContextBuilder', () => {
     expect(result.modelParameters).toMatchObject({
       params: { model: 'test-model', provider: 'test-provider', tools: [activatedTool] },
     });
+    expect(
+      (result.modelParameters as { params: Record<string, unknown> }).params,
+    ).not.toHaveProperty('additionalContexts');
   });
 });

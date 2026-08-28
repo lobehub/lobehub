@@ -10,6 +10,7 @@
     "./modules/agent-runtime": "./src/modules/agent-runtime/index.ts",
     "./modules/agent-signal": "./src/modules/agent-signal/index.ts",
     "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts",
+    "./modules/onboarding-understanding": "./src/modules/onboarding-understanding/index.ts",
     "./modules/upstash-workflow": "./src/modules/upstash-workflow/index.ts"
   },
   "dependencies": {

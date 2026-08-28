@@ -346,7 +346,7 @@ describe('agent command', () => {
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
         agentId: 'a1',
         value: {
-          chatConfig: {
+          agencyConfig: {
             enableGraphMode: true,
             graph,
           },
@@ -386,7 +386,7 @@ describe('agent command', () => {
       await program.parseAsync(['node', 'test', 'agent', 'edit', 'a1', '--graph-file', graphFile]);
 
       expect(log.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to read graph JSON: Invalid ReasoningGraph'),
+        expect.stringContaining('Failed to read graph JSON: Invalid AgentGraph'),
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
@@ -454,6 +454,167 @@ describe('agent command', () => {
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
+    });
+
+    // The dedicated flags cover six fields; everything else an agent may want
+    // to change about itself (opening message, tags, params, …) had no CLI
+    // path, even though `agent.updateAgentConfig` is a passthrough server-side.
+    it('should send arbitrary config fields from --config-file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const configFile = await writeGraphFixture({
+        openingMessage: 'Hi! Ask me about deploys.',
+        tags: ['devops'],
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--config-file',
+        configFile,
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { openingMessage: 'Hi! Ask me about deploys.', tags: ['devops'] },
+      });
+    });
+
+    it('should let explicit flags win over --config-file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const configFile = await writeGraphFixture({
+        description: 'from file',
+        title: 'from file',
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--config-file',
+        configFile,
+        '--title',
+        'from flag',
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { description: 'from file', title: 'from flag' },
+      });
+    });
+
+    it('should merge graph flags into an agencyConfig supplied by --config-file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const configFile = await writeGraphFixture({
+        agencyConfig: { modelSelectionPolicy: 'member' },
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--config-file',
+        configFile,
+        '--enable-graph',
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: { agencyConfig: { enableGraphMode: true, modelSelectionPolicy: 'member' } },
+      });
+    });
+
+    it('should merge graph flags into an agencyConfig supplied by --agency-config-file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const agencyConfigFile = await writeGraphFixture({
+        executionTarget: 'local',
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+        '--graph-file',
+        await writeGraphFixture({
+          edges: [{ from: '__root__', instruction: 'Write the final answer.', to: 'answer' }],
+          fields: {},
+          name: 'answer-graph',
+          nodes: { answer: { type: 'llm' } },
+          terminal: 'answer',
+        }),
+        '--enable-graph',
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: {
+          agencyConfig: {
+            executionTarget: 'local',
+            enableGraphMode: true,
+            graph: expect.any(Object),
+          },
+        },
+      });
+    });
+
+    it('should reject a non-object --config-file before updating', async () => {
+      const configFile = await writeGraphFixture(['not', 'an', 'object']);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--config-file',
+        configFile,
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('agent config JSON must be a plain object'),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
+    });
+
+    // Without this the caller can only assume the write landed — which is
+    // exactly how a silently mis-scoped edit goes unnoticed.
+    it('should print the updated agent with --json', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({
+        agent: { id: 'a1', title: 'Updated' },
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--title',
+        'Updated',
+        '--json',
+      ]);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify({ id: 'a1', title: 'Updated' }, null, 2),
+      );
     });
   });
 

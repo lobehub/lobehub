@@ -4,8 +4,8 @@ description: >
   Agentic end-to-end testing for any project: backend verification via the
   project CLI, frontend verification via agent-browser (web), and desktop
   verification via CDP (Electron). Drives the real surface, captures visually
-  confirmed evidence, and publishes a structured report to the LobeHub verify
-  platform. Triggers on 'cli test', 'test with cli', 'verify with cli',
+  confirmed evidence, and publishes a structured report to LobeHub Acceptance.
+  Triggers on 'cli test', 'test with cli', 'verify with cli',
   'backend test with cli', 'local test', 'test in electron', 'test desktop',
   'manual test', 'test report', or any local end-to-end verification task.
 ---
@@ -81,13 +81,50 @@ target selection.
   and `.agents/acceptance/probe-mock-patterns.md`, when they exist. These carry what
   earlier runs learned about THIS project.
 
-**The project layer is a living log — append to it during the run**, in English:
+**The project layer is an automatically maintained, curated living log, not a
+transcript of review feedback.** Every piece of negative feedback must trigger the
+admission check below. After the check, automatically append a qualifying new case or
+merge the learning into an existing case; do not wait for a separate user request.
 
-- User gives negative feedback → new case in `.agents/acceptance/common-mistakes.md`
-  (Wrong approach / Why / What it breaks / Correct approach).
-- You hit any probe/mock that is blocked, bypassed, or needs a workaround → new
-  item in `.agents/acceptance/probe-mock-patterns.md` (Situation / Doesn't work /
-  Works).
+1. **Durable:** would this mistake plausibly recur in a different feature or a later
+   Acceptance run? A one-off visual direction is not durable.
+2. **Project-specific:** does it depend on this project's product semantics,
+   environment, or infrastructure? If not, deduplicate it against the generic layer
+   and propose the generalized rule upstream instead.
+3. **Invariant-level:** does the entry state the behavior or evidence contract rather
+   than freezing one solution? Exact copy, pixel values, icon choices, component slot
+   order, and annotation coordinates belong in a feature specification, design
+   document, regression test, or historical field note.
+4. **Non-duplicative:** search both living-log layers and nearby entries first. Amend
+   or merge an existing case when the new incident has the same underlying failure.
+5. **Actionable:** can a future verifier use the rule to choose a different action or
+   reject invalid evidence? Pure product taste or an incident narrative is not a
+   verification mistake.
+
+Candidates passing all five checks must be recorded automatically:
+
+- Add a project-specific mistake to `.agents/acceptance/common-mistakes.md` in English
+  using the stable project id scheme and the shared structure (Wrong approach / Why
+  it fails / Correct approach).
+- Add a project-specific probe or mock workaround to
+  `.agents/acceptance/probe-mock-patterns.md` (Situation / Doesn't work / Works) only
+  when it is reusable beyond the current fixture.
+
+When a candidate fails the admission check only because it is too implementation-
+specific, route it automatically: product behavior to the feature specification, UI
+values to design/component code, regressions to a test, and long incident context to
+field notes. Feedback that is both non-durable and not useful in any of those places
+needs no persistent record. Do not skip the automatic living-log update merely
+because recording requires merging or abstracting the feedback first.
+
+This gate prevents a recurring failure mode in living logs: literal
+“negative feedback → append verbatim” turns local review decisions into global
+policy. Automatic recording remains required; the admission check controls the
+abstraction level and destination. This avoids an ever-growing mandatory checklist
+of duplicated generic rules, pixel-level prescriptions, and contradictory snapshots
+of old UI decisions. Periodic maintenance should merge overlapping cases, move
+implementation details downward, and retire rules whose product contract no longer
+exists.
 
 Write project-specific learnings to the **project layer only**. Never edit the
 generic layer from a consumer repo — it is read-only and updated by PR to the CLI
@@ -119,6 +156,12 @@ Prepare the proposed surface, cases, expected evidence, assumptions, and report
 deliverable. Do not ask for approval yet: Step 2 must establish the real
 environment state first so the user can approve one complete, evidence-backed plan
 instead of separate plan and environment prompts.
+
+**Case selection gate (hard rule):** every case must be a delivery outcome a
+person can judge. Never plan the repo's own programmatic gates — unit /
+integration tests, coverage, type-check, lint, a clean build — as cases; ingest
+drops them and a gates-only round fails to publish. Full rule:
+[references/plan.md](./references/plan.md#case-selection-gate-hard-rule).
 
 ### Step 2 — Confirm environment state and auth (mandatory)
 
@@ -263,6 +306,18 @@ Which of these surfaces the project actually has, and how each one launches, com
 from `PROJECT.md` §4. Escalate, don't duplicate: verify a backend change with the
 CLI first; only add a UI pass when the change actually affects the UI.
 
+**Separate the driver from the evidence surface.** Picking a surface for
+evidence does NOT mean every action must go through it — generating the state
+under test (running a flow, seeding data, triggering a job) and capturing the
+evidence (screenshot, DOM assertion, DB row) are independent choices. Pick the
+cheapest, most deterministic driver the project offers (a CLI run command, an
+API/endpoint call, a seed script — see `PROJECT.md` §4/§5 for what exists), and
+use the evidence surface only for what it alone can prove. Typing long prompts
+or multi-step inputs through browser automation when a CLI/API driver exists is
+a smell: the browser run is slower, flakier, and no more authentic — the
+server-side state it produces is identical. The reverse also holds: a CLI-driven
+state still needs UI evidence when the claim under test is about rendering.
+
 **Verify the change runs where you think it does — confirm runtime, don't assume.**
 Some features have two execution paths and the UI silently picks one (e.g. a client
 runtime vs a server/queue runtime). A test that exercises the wrong path can pass
@@ -350,6 +405,13 @@ run metadata so the report can render a separate interaction-cost section.
 
 ### Step 5 — Structured report (mandatory deliverable)
 
+**Read [references/report.md](./references/report.md) in full before writing the
+first line of `result.json`** — it is the schema, and this section is only a
+summary of it. Do not infer a field's shape from the snippets here; the nested
+ones are spelled out there and nowhere else. A field written in the wrong shape
+is dropped on ingest, so the run publishes green with its evidence silently
+degraded.
+
 Every automated test session ends with a structured, evidence-backed report — not
 a chat-only summary. Scaffold it up front and fill it as you test:
 
@@ -389,7 +451,7 @@ Hard rules worth front-loading:
   every human-facing string in `result.json` (case `name`/`observation`,
   `summary.conclusion`, scope `focus`/`entry`) in the language the user is
   conversing in. `result.json` keys/status values stay English.
-- **`result.json` is the report; the verify page renders it.** Each tested
+- **`result.json` is the report; the acceptance page renders it.** Each tested
   behavior is one entry in `cases[]` (`{ name, result, observation, evidence }`);
   the page builds the scope header from `scenario`+`context`, the check list from
   `plan[]`+`cases[]`, and the verdict from `summary.conclusion`. Do NOT hand-build
@@ -397,6 +459,20 @@ Hard rules worth front-loading:
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
+- **Structured data uses native Acceptance visualizations by default (hard
+  rule).** When a result contains metrics, time series, before/after model or
+  benchmark comparisons, distributions, matrices, or tabular data, encode the
+  review-sized values in `cases[].datasets` and declare the corresponding view
+  in `cases[].visualizations`. Keep the raw CSV/JSON, benchmark output, trace,
+  profile, or vectors in `evidence` so the chart remains auditable. Do NOT render
+  those values into a PNG/GIF yourself when a supported native renderer can
+  express them; static generated charts lose structured values, accessibility,
+  theme adaptation, and consistent comparison semantics. Generate a static
+  chart only when none of the supported renderers can faithfully represent the
+  result, and explain that limitation in the case observation. Supported views:
+  `metric-comparison`, `line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and
+  `table`. See
+  [references/report.md](./references/report.md#structured-visualizations).
 - **Non-visual behavioral claims use dual text evidence.** Attach two separate
   text artifacts to the same case: a reviewer-facing **reasoning** document and
   an audit-facing **execution** document. The reasoning artifact explains the
@@ -407,23 +483,39 @@ Hard rules worth front-loading:
   artifacts in the current round; never require a reviewer to join explanation
   from one immutable round with logs from another. See
   [references/report.md](./references/report.md#dual-text-evidence-for-non-visual-behavior).
-- **Final replies link ONLY the published `/acceptance/<id>` page — never a
-  `/verify/<id>` URL. Put no images or local file links in the chat reply.**
+- **Final replies expose ONLY the published `/acceptance/<id>` page. Put no
+  images, local paths, local file links, or internal run-page paths in the chat
+  reply.**
   The acceptance page is the stable cross-round decision surface and renders
   each round's evidence inline. For a fixed this-round snapshot, append
   `?r=<roundIndex>` to the same acceptance URL (the ingest CLI prints it as
-  `round snapshot`) — that deep-links this round's full report. You may mention
-  the local report directory as plain text. Always leave whitespace between a
-  URL and any following text — CJK punctuation glued right after it (`…4c74（本轮`)
+  `round snapshot`) — that deep-links this round's full report. Do not mention
+  any working-artifact location. Always leave whitespace between a URL and any
+  following text — CJK punctuation glued right after it (`…4c74（本轮`)
   gets swallowed into the href by chat autolinkers and breaks the link.
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
+  Keep the captured resolution by default. Before publishing, inspect the first,
+  middle, and final frames at readable size and reject evidence with colored
+  quantization noise, blurred text, or illegible one-pixel borders. Set
+  `GIF_WIDTH` only when the resulting dimensions are genuinely too large.
+- **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
+  alert tone: attach the clip the feature produced so the page renders a player.
+  Prose about a sound, or a screenshot of a waveform, proves nothing —
+  [references/report.md](./references/report.md).
+- **Programmatic gates are NEVER acceptance checks (hard rule, enforced).**
+  Unit / integration tests, coverage, type-check, lint, and a clean build are
+  preconditions of shipping; they belong in one line of `report.md` →
+  Verification and MUST NOT appear in `plan[]` / `cases[]` under any phrasing.
+  `acceptance run ingest` drops every matching item (matched on title, category,
+  and method) and a gates-only round fails to publish —
+  [references/report.md](./references/report.md#hard-rule--what-is-not-an-acceptance-check).
 
-### Step 6 — Publish to the LobeHub verify platform (mandatory)
+### Step 6 — Publish to LobeHub Acceptance (mandatory)
 
-The local report under `.records/reports/` is the working artifact; the
-**deliverable is the report opened on the verify platform**. Do not stop at local
+The report under `.records/reports/` is a private working artifact; the
+**deliverable is the report opened on the acceptance page**. Do not stop at local
 files — push the session up with the CLI so the user (and later reviewers) can open
 it at a stable URL with the evidence rendered inline.
 
@@ -454,6 +546,35 @@ older and fails only at this final step (`unknown option '--subject'`). Run
 `lh --version` first; when it is older than the marker version, publish through
 `npx @lobehub/cli@latest` instead of the PATH binary.
 
+#### Operation ID is optional for agent-testing (mandatory)
+
+An external project normally has no LobeHub Agent Operation, and that is valid.
+Do not ask the user for an Operation ID, invent one, or pass `--operation` merely
+because the report is being published to LobeHub.
+
+- Prefer `lh acceptance run ingest "$DIR" ...`. It creates a standalone
+  verification run and does not require an Operation ID.
+- `--operation <id>` means “this verification session evaluates this existing
+  LobeHub Agent Run.” Use it only when the user explicitly targets a real
+  operation that exists in the current LobeHub workspace.
+- `LOBEHUB_OPERATION_ID`, when present, identifies the in-app run that authored
+  the report. The CLI records it as optional origin metadata; its absence in a
+  plain terminal or external repository is not an error.
+- If atomic commands are genuinely needed, first run
+  `lh acceptance run create --json`, retain its returned `verifyRunId`, and pass
+  that value as `--run <verifyRunId>` to result/report/submit commands. Never
+  substitute an Operation ID for a missing Verify Run ID.
+
+Interpret common errors before retrying:
+
+- `Provide --run or --operation` means an atomic command lacks its verification
+  run handle; supply the returned `verifyRunId` through `--run`.
+- `Agent operation ... not found` means an invalid, stale, foreign, or fabricated
+  `--operation` was supplied; remove it for standalone agent-testing.
+- `Agent verifier failed to start (no operation id returned)` is a server-side
+  verifier-agent startup failure, not a requirement for the external harness to
+  provide an Operation ID.
+
 `acceptance run ingest` reads `$DIR` and, in one call, creates a new immutable
 verification run, attaches it to the subject acceptance, and uploads everything:
 
@@ -469,16 +590,38 @@ It prints the `verifyRunId`, `acceptanceId`, `roundIndex`, and the acceptance
 paths. The final reply leads with
 `https://app.lobehub.com/acceptance/<acceptanceId>` as the latest cross-round
 state; for a fixed per-round snapshot use the same URL with `?r=<roundIndex>`
-(printed as `round snapshot`). Never link `/verify/<id>` in the reply — the
-verify run stays the internal immutable record behind the acceptance page.
+(printed as `round snapshot`). Do not expose any other run path in the reply; the
+underlying immutable run is an internal record behind the acceptance page.
 
 #### Every run belongs to a subject acceptance (mandatory)
 
 Every run MUST be chained onto a task, topic, or document **acceptance aggregate**,
-so every round lands on one auditable decision page. When the harness runs inside a
-LobeHub topic, `acceptance run ingest` automatically uses `LOBEHUB_TOPIC_ID` as
-`topic:<id>` — do not ask the user for it and do not omit the acceptance. Outside a
-LobeHub topic, an explicit subject is required and publishing without one fails:
+so every round lands on one auditable decision page.
+
+**Choose the subject by business continuity, not by which object is easiest to
+create:**
+
+1. Honor an explicit subject or an instruction to reuse a specific Acceptance.
+2. Otherwise, when the verification continues work discussed and implemented in
+   the current LobeHub conversation, use its `topic:<id>`. This is the default for
+   iterative fixes, review feedback, and follow-up UI polish in the same thread.
+3. Use an existing `task:<id>` when that Task already owns the deliverable, or
+   when the work is intentionally independent, durable, spans multiple topics, or
+   the user explicitly wants task-level tracking.
+4. Use `document:<id>` only when the document itself is the acceptance subject.
+5. Create a new Task only when no relevant current Topic, Task, or Document exists.
+
+**Acceptance lifecycle and subject selection are separate decisions.** If an
+Acceptance on the relevant Topic is terminal and new work needs a new Acceptance,
+keep the same Topic subject and create the new Acceptance there when the product
+lifecycle supports it. Never create a Task merely to avoid appending to a closed
+Acceptance.
+
+When the harness runs inside a relevant LobeHub topic, `acceptance run ingest`
+automatically uses `LOBEHUB_TOPIC_ID` as `topic:<id>` — do not ask the user for it.
+Pass `--subject` explicitly when an existing Task or Document owns the work.
+Outside a LobeHub topic, an explicit subject is required and publishing without
+one fails:
 
 ```bash
 # SUBJECT is task:$TASK_ID, topic:$TOPIC_ID, or document:$DOC_ID
@@ -502,9 +645,9 @@ immutable round. The user closes the loop on `/acceptance/<acceptanceId>`; the
 same state is available through
 `lh acceptance view|accept|reject <id | type:id>`.
 
-When no subject exists yet (first verification in a repo, no tracked task),
-create one with the CLI instead of asking the user for an id — a dedicated task
-is the natural acceptance subject for the run:
+When no relevant subject exists (no current Topic carrying the work and no
+existing Task or Document owns it), create a Task with the CLI instead of asking
+the user for an id:
 
 ```bash
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
@@ -532,11 +675,18 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
   and reuse the exact stable check id so the next result lands on the same row.
 - For a semantic replacement, create a new id with `supersedes: ['old-id']`.
   A fresh id without `supersedes` creates an unrelated parallel check.
+- **`supersedes` is persistent plan lineage, not a one-round migration flag.**
+  Every later round that reuses the successor id MUST repeat its complete
+  `supersedes` list. The Acceptance union reads the latest plan snapshot for an
+  id; omitting the list later can resurrect the replaced check as a parallel row.
+  Before ingest, compare the new plan with `acceptance view`: if a reused id has
+  ever declared `supersedes`, carry that declaration forward unchanged (including
+  the full chain) unless the business meaning is explicitly being replaced again.
 - Treat `stale: true` feedback as history already consumed by a newer round.
 
 #### Every verification run is an immutable snapshot
 
-One call to `acceptance run ingest` creates one immutable `/verify/<id>` snapshot. Never
+One call to `acceptance run ingest` creates one immutable internal run snapshot. Never
 overwrite, replace, prune, or re-ingest into an earlier run. A fix followed by
 re-verification MUST create another run on the same acceptance, preserving the
 earlier plan, results, evidence, and verdict exactly as observed. Use a fresh
@@ -544,12 +694,18 @@ report directory for every execution round.
 
 Notes:
 
-- `result.json` cases use `{ id?, name, result, observation?, evidence? }`;
-  `evidence` is a path (or array) relative to `$DIR`. `result`/`verdict` map onto
+- `result.json` cases use
+  `{ id?, name, result, observation?, evidence?, datasets?, visualizations? }`;
+  structured views should retain raw benchmark/profile/vector files as evidence;
+  `evidence` is a path (or array) relative to `$DIR`. Supported structured views are
+  `metric-comparison`, `line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and `table`.
+  `result`/`verdict` map onto
   `passed | failed | uncertain`.
 - Finer control is available through the atomic commands — `acceptance run create`,
-  `acceptance run result ingest`, `acceptance run evidence upload` (`--file` or `--content`),
-  `acceptance run report upsert`.
+  `acceptance run result ingest`, `acceptance run evidence upload` (`--file` or
+  `--content`), `acceptance run report upsert`. Carry the `verifyRunId` returned by
+  `create` into later commands as `--run`; external projects must not fall back to
+  `--operation`.
 - File evidence uploads through the platform's storage. Against a stub or
   unreachable bucket (common in local dev) the PUT fails; `acceptance run ingest` warns,
   **skips that one artifact**, and still finishes — so the published session is

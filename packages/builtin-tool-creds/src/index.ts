@@ -1,4 +1,4 @@
-export { CredsExecutionRuntime, type ICredsService } from './ExecutionRuntime';
+export type { ICredsService } from './ExecutionRuntime';
 export {
   checkCredsSatisfied,
   type ComposioAppTypeLike,

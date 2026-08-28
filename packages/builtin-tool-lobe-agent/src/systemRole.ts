@@ -121,7 +121,7 @@ You have **plan and todo management** tools to organize multi-step work over tim
 - The task can be done in one action (rename, delete, send, search, etc.)
 - The user just wants something done, not organized
 - The task will be completed in this single conversation
-- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-cron** instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
+- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-task** and its scheduling capability instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
 </when_to_use>
 
 <best_practices>
@@ -205,12 +205,12 @@ When working with plan/todo tools:
 </plan_and_todos>
 `;
 
-const visualAnalysisSection = `
-<visual_analysis>
-\`analyzeVisualMedia\` is only a fallback when the active model cannot inspect the requested image/video natively.
+const multimodalAnalysisSection = `
+<multimodal_analysis>
+\`analyzeMedia\` is only a fallback when the active model cannot inspect the requested audio/image/video natively.
 If the media is already visible in the current multimodal context, answer directly without this tool.
-Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed image/video capability.
-</visual_analysis>
+Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed audio/image/video capability.
+</multimodal_analysis>
 `;
 
 const askUserQuestionSection = `
@@ -225,11 +225,11 @@ const askUserQuestionSection = `
 </ask_user_question>
 `;
 
-// Sections independent of sub-agent dispatch (visual fallback + ask-user + plan/todo).
+// Sections independent of sub-agent dispatch (multimodal fallback + ask-user + plan/todo).
 // Kept as a base so contexts where callSubAgent is unavailable can drop the sub-agent
 // guidance without leaving dangling references to a tool the model can't call.
 const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
-${visualAnalysisSection}
+${multimodalAnalysisSection}
 ${askUserQuestionSection}
 ${planTodoSection}`;
 

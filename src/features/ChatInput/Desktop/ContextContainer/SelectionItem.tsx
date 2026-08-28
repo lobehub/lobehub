@@ -1,9 +1,11 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { Tag, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Code2Icon, TextIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
+import { useChatInputStore } from '@/features/ChatInput/store';
 import { useFileStore } from '@/store/file';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -104,6 +106,7 @@ const getLocationText = ({
 
 const SelectionItem = memo<ChatContextContent>(
   ({ content, filePath, id, lineRange, preview, source, title }) => {
+    const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
     const [removeSelection] = useFileStore((s) => [s.removeChatContextSelection]);
 
     const displayText = useMemo(
@@ -149,7 +152,9 @@ const SelectionItem = memo<ChatContextContent>(
         closable
         icon={isCodeSelection ? <Code2Icon size={16} /> : <TextIcon size={16} />}
         size={'large'}
-        onClose={() => removeSelection(id)}
+        onClose={() => {
+          if (contextSelectionKey) removeSelection({ contextKey: contextSelectionKey, id });
+        }}
       >
         <Tooltip title={tooltip}>
           <span className={styles.name}>{displayText}</span>

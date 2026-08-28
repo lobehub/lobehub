@@ -1,9 +1,16 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createModal,
+  type ModalInstance,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { App, Typography } from 'antd';
+import { Typography } from 'antd';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +21,7 @@ import { useToolStore } from '@/store/tool';
 const ImportFromGithubContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const { message } = App.useApp();
+
   const importAgentSkillFromGitHub = useToolStore((s) => s.importAgentSkillFromGitHub);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +41,7 @@ const ImportFromGithubContent = memo(() => {
 
     try {
       await importAgentSkillFromGitHub({ gitUrl: trimmed });
-      message.success(t('agentSkillModal.importSuccess'));
+      toast.success(t('agentSkillModal.importSuccess'));
       close();
     } catch (err: any) {
       setError(err?.message || String(err));

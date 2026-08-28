@@ -28,6 +28,11 @@ export interface InputAction {
   commitScheduledSend: (message: string, files?: { id: string }[]) => Promise<boolean>;
 
   /**
+   * Fill the composer with editable text and move focus to the editor.
+   */
+  fillInputMessage: (message: string) => void;
+
+  /**
    * Report the floating overlay height (TodoProgress + QueueTray) so the
    * ChatList scroll container can reserve matching bottom padding.
    */
@@ -102,6 +107,16 @@ export const inputSlice: StateCreator<State & InputAction, [], [], InputAction> 
     );
 
     return true;
+  },
+
+  fillInputMessage: (message) => {
+    const { editor } = get();
+
+    set({ inputMessage: '' });
+    editor?.setDocument('text', '');
+    set({ inputMessage: message });
+    editor?.setDocument('text', message);
+    editor?.focus();
   },
 
   setChatInputOverlayHeight: (height) => {

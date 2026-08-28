@@ -4,8 +4,14 @@ import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../providers/openai/modelId';
-import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import type {
+  ChatStreamPayload,
+  MessageToolCall,
+  OpenAIChatMessage,
+  UserMessageContentPart,
+} from '../../types';
 import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
+import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
 
 export type ExtendedChatCompletionContentPart = {
@@ -19,7 +25,11 @@ type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
   model?: string;
+  provider?: string;
+  reasoningSignatureScope?: SignatureScope;
+  supportsAudioInput?: boolean;
   strictToolPairing?: boolean;
+  thoughtSignatureScope?: SignatureScope;
 };
 
 const isDeepSeekModel = (model: string | undefined) =>
@@ -28,14 +38,79 @@ const isDeepSeekModel = (model: string | undefined) =>
 type OpenAICompatibleContentPart =
   ExtendedChatCompletionContentPart | OpenAI.ChatCompletionContentPart | UserMessageContentPart;
 
+type ConvertibleMessageContentPart =
+  | ExtendedChatCompletionContentPart
+  | OpenAI.ChatCompletionContentPart
+  | Extract<UserMessageContentPart, { type: 'audio_url' }>;
+
+const OPENAI_AUDIO_INPUT_MAX_BYTES = 20 * 1024 * 1024;
+
+const detectOpenAIAudioFormat = (base64: string): 'mp3' | 'wav' | undefined => {
+  const header = Buffer.from(base64.replaceAll(/\s/g, '').slice(0, 64), 'base64');
+
+  if (
+    header.length >= 12 &&
+    header.toString('ascii', 0, 4) === 'RIFF' &&
+    header.toString('ascii', 8, 12) === 'WAVE'
+  ) {
+    return 'wav';
+  }
+
+  if (header.length >= 3 && header.toString('ascii', 0, 3) === 'ID3') return 'mp3';
+
+  const hasMpegFrameSync = header.length >= 2 && header[0] === 0xff && (header[1] & 0xe0) === 0xe0;
+  const hasMpegAudioLayer = header.length >= 2 && ((header[1] >> 1) & 0x03) !== 0;
+  if (hasMpegFrameSync && hasMpegAudioLayer) return 'mp3';
+
+  return undefined;
+};
+
+const convertAudioContent = async (
+  content: Extract<UserMessageContentPart, { type: 'audio_url' }>,
+  options?: ConvertMessageContentOptions,
+): Promise<OpenAI.ChatCompletionContentPartInputAudio> => {
+  if (!options?.supportsAudioInput) {
+    throw new TypeError('Audio input is not supported by this provider runtime');
+  }
+
+  const { base64, type } = parseDataUri(content.audio_url.url);
+
+  if (type === 'base64') {
+    const format = base64 ? detectOpenAIAudioFormat(base64) : undefined;
+    if (!base64 || !format) {
+      throw new TypeError('OpenAI audio input only supports base64 WAV or MP3 data');
+    }
+
+    return { input_audio: { data: base64, format }, type: 'input_audio' };
+  }
+
+  if (type === 'url') {
+    // imageUrlToBase64 is a generic binary downloader with SSRF-safe server fetching and
+    // magic-byte MIME detection. The OpenAI adapter narrows the result to WAV/MP3 below.
+    const converted = await imageUrlToBase64(content.audio_url.url, {
+      maxBytes: OPENAI_AUDIO_INPUT_MAX_BYTES,
+    });
+    const format = detectOpenAIAudioFormat(converted.base64);
+    if (!format) {
+      throw new TypeError('OpenAI audio input only supports WAV or MP3 files');
+    }
+
+    return { input_audio: { data: converted.base64, format }, type: 'input_audio' };
+  }
+
+  throw new TypeError(`Invalid audio URL: ${content.audio_url.url}`);
+};
+
 const isInternalThinkingContentPart = (
   content: OpenAICompatibleContentPart,
 ): content is Extract<UserMessageContentPart, { type: 'thinking' }> => content.type === 'thinking';
 
 export const convertMessageContent = async (
-  content: OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart,
+  content: ConvertibleMessageContentPart,
   options?: ConvertMessageContentOptions,
 ): Promise<OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart> => {
+  if (content.type === 'audio_url') return convertAudioContent(content, options);
+
   if (content.type === 'image_url') {
     const { type } = parseDataUri(content.image_url.url);
 
@@ -149,16 +224,27 @@ export const convertOpenAIMessages = async (
             : await Promise.all(
                 (message.content || [])
                   .filter((c) => !isInternalThinkingContentPart(c as OpenAICompatibleContentPart))
-                  .map((c) =>
-                    convertMessageContent(c as OpenAI.ChatCompletionContentPart, options),
-                  ),
+                  .map((c) => convertMessageContent(c as ConvertibleMessageContentPart, options)),
               ),
         role: msg.role,
       };
 
       // Add optional fields if they exist
       if (msg.name !== undefined) result.name = msg.name;
-      if (msg.tool_calls !== undefined) result.tool_calls = msg.tool_calls;
+      if (msg.tool_calls !== undefined) {
+        result.tool_calls = msg.tool_calls.map((toolCall: MessageToolCall) => {
+          if (!toolCall.thoughtSignature) return toolCall;
+
+          const { thoughtSignature, ...rest } = toolCall;
+          const resolvedSignature = resolveScopedSignature(
+            thoughtSignature,
+            options?.thoughtSignatureScope,
+            'thought_signature',
+          );
+
+          return resolvedSignature ? { ...rest, thoughtSignature: resolvedSignature } : rest;
+        });
+      }
       if (msg.tool_call_id !== undefined) result.tool_call_id = msg.tool_call_id;
       if (msg.function_call !== undefined) result.function_call = msg.function_call;
 
@@ -223,13 +309,64 @@ export const convertOpenAIResponseInputs = async (
   const inputGroups = await Promise.all(
     messages.map(async (message) => {
       const items: OpenAI.Responses.ResponseInputItem[] = [];
+      const reasoning = message.reasoning;
 
-      // if message has reasoning, add it as a separate reasoning item
-      if (message.reasoning?.content) {
-        items.push({
-          summary: [{ text: message.reasoning.content, type: 'summary_text' }],
-          type: 'reasoning',
-        } as OpenAI.Responses.ResponseReasoningItem);
+      /**
+       * Resolve persisted Responses reasoning items for stateless replay. Encrypted
+       * items must all match the current signature scope — a single foreign-scope item
+       * would make OpenAI reject the whole request, so fail closed to the legacy path.
+       */
+      const resolveResponseItems = (): OpenAI.Responses.ResponseReasoningItem[] | undefined => {
+        const responseItems = reasoning?.responseItems;
+        if (!responseItems?.length) return undefined;
+
+        const resolved: OpenAI.Responses.ResponseReasoningItem[] = [];
+        for (const item of responseItems) {
+          if (item.encrypted_content) {
+            const encryptedContent = resolveScopedSignature(
+              item.encrypted_content,
+              options?.reasoningSignatureScope,
+              'reasoning',
+            );
+            if (!encryptedContent) return undefined;
+
+            resolved.push({
+              ...item,
+              encrypted_content: encryptedContent,
+            } as OpenAI.Responses.ResponseReasoningItem);
+          } else {
+            /**
+             * Without encrypted content the server cannot look the item up by id in a
+             * stateless request, so drop the id and replay the visible summary only.
+             */
+            const { id: _id, ...rest } = item;
+            resolved.push(rest as unknown as OpenAI.Responses.ResponseReasoningItem);
+          }
+        }
+
+        return resolved;
+      };
+
+      const replayableResponseItems = resolveResponseItems();
+
+      if (replayableResponseItems) {
+        // Replay complete reasoning items verbatim and in original stream order.
+        items.push(...replayableResponseItems);
+      } else {
+        const encryptedContent = resolveScopedSignature(
+          reasoning?.signature,
+          options?.reasoningSignatureScope,
+          'reasoning',
+        );
+
+        // Preserve encrypted reasoning state for stateless Responses API requests.
+        if (reasoning?.content || encryptedContent) {
+          items.push({
+            encrypted_content: encryptedContent,
+            summary: reasoning?.content ? [{ text: reasoning.content, type: 'summary_text' }] : [],
+            type: 'reasoning',
+          } as OpenAI.Responses.ResponseReasoningItem);
+        }
       }
 
       // if message is assistant messages with tool calls , transform it to function type item
@@ -355,6 +492,9 @@ export const convertOpenAIResponseInputs = async (
                     type: 'input_video',
                   };
                 }
+                if (c.type === 'audio_url') {
+                  throw new TypeError('OpenAI raw audio input requires the Chat Completions API');
+                }
                 const image = await convertMessageContent(
                   c as OpenAI.ChatCompletionContentPart,
                   options,
@@ -378,13 +518,16 @@ export const convertOpenAIResponseInputs = async (
         return items;
       }
 
+      const {
+        model: _model,
+        provider: _provider,
+        reasoning: _reasoning,
+        ...responseMessage
+      } = message;
       const item = {
-        ...message,
+        ...responseMessage,
         content,
       } as OpenAI.Responses.ResponseInputItem;
-
-      // remove reasoning field from the message item
-      delete (item as any).reasoning;
 
       items.push(item);
       return items;

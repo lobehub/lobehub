@@ -44,6 +44,7 @@ const SUPPORTED_CHAT_DOCUMENT_EXTENSIONS = new Set([
   'htm',
   'html',
   'ini',
+  'ipynb',
   'java',
   'js',
   'json',

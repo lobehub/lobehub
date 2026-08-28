@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { useEffect } from 'react';
 
 import {
@@ -106,11 +107,16 @@ export class WorkspaceUserSettingsActionImpl {
             },
           }
         : {}),
-      ...(patch.sidebarGroupAssignments
+      // Mirror the server's deep merge (WorkspaceUserSettingsModel) so the
+      // optimistic cache never drops sibling notification toggles the DB keeps.
+      ...(patch.notification
+        ? { notification: mergeNotificationSettings(previous.notification, patch.notification) }
+        : {}),
+      ...(patch.sidebarAgentVisibilityOverrides
         ? {
-            sidebarGroupAssignments: {
-              ...previous.sidebarGroupAssignments,
-              ...patch.sidebarGroupAssignments,
+            sidebarAgentVisibilityOverrides: {
+              ...previous.sidebarAgentVisibilityOverrides,
+              ...patch.sidebarAgentVisibilityOverrides,
             },
           }
         : {}),

@@ -1,3 +1,5 @@
+import { convertIpynbToMarkdown, scrubIpynbFallbackText } from '@lobechat/file-loaders';
+
 import { SUPPORT_TEXT_LIST } from '../file';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../splitter';
 import { type DocumentChunk, type FileLoaderType } from '../types';
@@ -64,6 +66,15 @@ export class ChunkingLoader {
           return await EPubLoader(content);
         }
 
+        case 'ipynb': {
+          // Notebook JSON → markdown so chunks carry semantic text instead
+          // of base64 payloads; non-nbformat-v4 files fall back to raw text.
+          const markdown = convertIpynbToMarkdown(txt);
+          return markdown === null
+            ? await TextLoader(scrubIpynbFallbackText(txt))
+            : await MarkdownLoader(markdown);
+        }
+
         default: {
           throw new Error(
             `Unsupported file type [${type}], please check your file is supported, or create report issue here: https://github.com/lobehub/lobe-chat/discussions/3550`,
@@ -102,6 +113,10 @@ export class ChunkingLoader {
 
     if (filename.endsWith('epub')) {
       return 'epub';
+    }
+
+    if (filename.endsWith('ipynb')) {
+      return 'ipynb';
     }
 
     const ext = filename.split('.').pop();

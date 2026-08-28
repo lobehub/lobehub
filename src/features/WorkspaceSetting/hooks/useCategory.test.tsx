@@ -18,7 +18,9 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
-  isOwner: true,
+  canCreateContent: true,
+  canManageWorkspace: true,
+  canViewBilling: true,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -27,8 +29,16 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => mocks.isOwner,
+const permissionFlags: Record<string, () => boolean> = {
+  create_content: () => mocks.canCreateContent,
+  view_billing: () => mocks.canViewBilling,
+};
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: (action: string) => ({
+    allowed: permissionFlags[action]?.() ?? mocks.canManageWorkspace,
+    reason: '',
+  }),
 }));
 
 const initialUserStoreState = useUserStore.getState();
@@ -40,7 +50,9 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
-  mocks.isOwner = true;
+  mocks.canCreateContent = true;
+  mocks.canManageWorkspace = true;
+  mocks.canViewBilling = true;
 });
 
 afterEach(() => {
@@ -77,21 +89,21 @@ describe('workspace settings useCategory', () => {
     );
   });
 
-  it('places API Key in the owner-only Admin group', () => {
+  it('places API Key in the Developer group', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory());
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
     );
-    const agentGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Agent,
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
     );
 
-    expect(adminGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
-    expect(agentGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
+    expect(developerGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
-  it('does not expose API Key settings to non-owners', () => {
-    mocks.isOwner = false;
+  it('exposes API Key settings to members', () => {
+    mocks.canManageWorkspace = false;
 
     const itemKeys = getItemKeys();
     const { result } = renderHook(() => useWorkspaceSettingCategory());
@@ -99,6 +111,62 @@ describe('workspace settings useCategory', () => {
     expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Admin)).toBe(
       false,
     );
-    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.APIKey);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.APIKey);
+  });
+
+  // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
+  // request that immediately 403s.
+  it('hides API Key from viewers, and drops the empty Developer group', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+
+    expect(result.current.flatMap((group) => group.items.map((item) => item.key))).not.toContain(
+      WorkspaceSettingsTabs.APIKey,
+    );
+    expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Developer)).toBe(
+      false,
+    );
+  });
+
+  it('keeps the Developer group for viewers when OAuth Apps is enabled', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        lab: { ...initialUserStoreState.preference.lab, enableOAuthApps: true },
+      },
+    });
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    );
+
+    expect(developerGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.OAuthApps,
+    ]);
+  });
+
+  // Admin-or-higher reads the billing numbers; the pages keep the
+  // money-moving controls behind the narrower manage_subscription gate.
+  it('shows Credits and Billing to roles that may view billing', () => {
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
+  });
+
+  it('hides financial settings below Admin', () => {
+    mocks.canViewBilling = false;
+
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 });

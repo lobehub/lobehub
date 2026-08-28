@@ -5,10 +5,12 @@ import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentModel } from '@/database/models/agent';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
+import { resolveToolMode } from '@/helpers/executionTarget';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
@@ -58,6 +60,7 @@ import {
   renderFeedbackSubmitted,
   renderGroupRejected,
   renderInlineError,
+  renderModeStatus,
   renderSenderRejected,
 } from './replyTemplate';
 
@@ -121,6 +124,10 @@ interface CommandContext {
   /** Display name of the invoking user. Optional because some platforms
    *  surface only the ID, not a friendly label. */
   authorUserName?: string;
+  /** Read the conversation's persisted state (topicId / toolMode / …).
+   *  Wired to `thread.state` on text dispatch and `channel.state` on native
+   *  slash dispatch — the same store `setState` writes to on each path. */
+  getState: () => Promise<Record<string, any> | null>;
   post: (text: string) => Promise<any>;
   /**
    * Post a reply visible only to the invoker.
@@ -811,6 +818,7 @@ export class BotMessageRouter {
         id: string;
         post: (t: string) => Promise<any>;
         setState: (s: Record<string, any>, o?: { replace?: boolean }) => Promise<any>;
+        state: Promise<Record<string, any> | null>;
       },
       text: string | undefined,
       author: { userId?: string; userName?: string } | undefined,
@@ -823,6 +831,7 @@ export class BotMessageRouter {
         args: result.args,
         authorUserId: author?.userId,
         authorUserName: author?.userName,
+        getState: () => thread.state,
         post: (t) => thread.post(t),
         replyLocale,
         setState: (s, o) => thread.setState(s, o),
@@ -1608,10 +1617,83 @@ export class BotMessageRouter {
         description: 'Start a new conversation',
         handler: async (ctx) => {
           log('command /new: agent=%s, platform=%s', agentId, platform);
-          await ctx.setState({ topicId: undefined }, { replace: true });
+          // `replace: true` wipes the whole state (that's how topicId gets
+          // reliably cleared — a merged `undefined` is dropped by the JSON
+          // round-trip). Carry the `/mode` choice over: it's a conversation
+          // preference, and starting a new topic shouldn't silently revert it.
+          let toolMode: unknown;
+          try {
+            toolMode = (await ctx.getState())?.toolMode;
+          } catch (error) {
+            log('command /new: getState failed (mode not preserved): %O', error);
+          }
+          await ctx.setState(toolMode ? { toolMode, topicId: undefined } : { topicId: undefined }, {
+            replace: true,
+          });
           await ctx.post(renderCommandReply('cmdNewReset', ctx.replyLocale));
         },
         name: 'new',
+      },
+      {
+        description: 'Show or switch the conversation mode (agent | chat)',
+        // Declared so Discord/Slack surface a `/mode <mode>` argument in the
+        // slash picker; the no-arg form shows the current mode.
+        options: [
+          {
+            description: "Target mode: 'agent' or 'chat'; omit to show the current mode",
+            name: 'mode',
+            required: false,
+          },
+        ],
+        handler: async (ctx) => {
+          log('command /mode: agent=%s, platform=%s, args=%s', agentId, platform, ctx.args);
+          const arg = ctx.args.trim().toLowerCase();
+          if (!arg) {
+            let override: 'agent' | 'chat' | undefined;
+            try {
+              const state = await ctx.getState();
+              override =
+                state?.toolMode === 'agent' || state?.toolMode === 'chat'
+                  ? state.toolMode
+                  : undefined;
+            } catch (error) {
+              log('command /mode: getState failed: %O', error);
+            }
+            // No explicit override → report the EFFECTIVE mode (the agent's
+            // configured default) instead of an ambiguous "default" answer.
+            // Best-effort: a config lookup failure falls back to `agent` (the
+            // product default) rather than blocking the status reply.
+            let current = override;
+            if (!current) {
+              try {
+                const agent = await new AgentModel(
+                  serverDB,
+                  userId,
+                  info.workspaceId ?? undefined,
+                ).getAgentConfigById(agentId);
+                const chatConfig = (agent as any)?.chatConfig ?? undefined;
+                current = resolveToolMode(chatConfig) === 'chat' ? 'chat' : 'agent';
+              } catch (error) {
+                log('command /mode: agent config lookup failed: %O', error);
+                current = 'agent';
+              }
+            }
+            await ctx.post(renderModeStatus(current, ctx.replyLocale));
+            return;
+          }
+          if (arg !== 'agent' && arg !== 'chat') {
+            await ctx.post(renderCommandReply('cmdModeUsage', ctx.replyLocale));
+            return;
+          }
+          await ctx.setState({ toolMode: arg });
+          await ctx.post(
+            renderCommandReply(
+              arg === 'agent' ? 'cmdModeSetAgent' : 'cmdModeSetChat',
+              ctx.replyLocale,
+            ),
+          );
+        },
+        name: 'mode',
       },
       {
         description: 'Stop the current execution',
@@ -1888,6 +1970,7 @@ export class BotMessageRouter {
           args: event.text,
           authorUserId: authorLike.userId,
           authorUserName: authorLike.userName,
+          getState: () => event.channel.state,
           post: (text) => event.channel.post(text),
           // Wire chat-sdk's `postEphemeral` so commands that want a private
           // reply (e.g. `/feedback`) can opt in. `fallbackToDM: true` so
@@ -1933,6 +2016,7 @@ export class BotMessageRouter {
         args: result.args,
         authorUserId: message.author?.userId,
         authorUserName: message.author?.userName,
+        getState: () => thread.state,
         post: (text) => thread.post(text),
         replyLocale,
         setState: (state, opts) => thread.setState(state, opts),

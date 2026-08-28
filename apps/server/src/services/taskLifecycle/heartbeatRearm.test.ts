@@ -59,12 +59,14 @@ describe('TaskLifecycleService.maybeRearmHeartbeat', () => {
     expect(fakeScheduler.scheduleNextTopic).toHaveBeenCalledWith({
       delay: 30,
       taskId: 'task-1',
+      tickToken: expect.any(String),
       userId: 'user-1',
     });
     expect(updateContext).toHaveBeenCalledWith('task-1', {
       scheduler: expect.objectContaining({
         consecutiveFailures: 0,
         tickMessageId: 'msg-new',
+        tickToken: expect.any(String),
       }),
     });
   });

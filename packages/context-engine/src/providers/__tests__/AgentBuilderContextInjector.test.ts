@@ -33,6 +33,36 @@ describe('AgentBuilderContextInjector', () => {
     expect(injected).not.toContain(`${head}...`);
   });
 
+  it('should inject the agent name alongside the title', async () => {
+    const injector = new AgentBuilderContextInjector({
+      agentContext: {
+        meta: { name: '小艾', title: '健康助手' },
+      },
+      enabled: true,
+    });
+
+    const result = await injector.process(createContext());
+    const injected = result.messages[1].content;
+
+    expect(injected).toContain('<name>小艾</name>');
+    expect(injected).toContain('<title>健康助手</title>');
+  });
+
+  it('should fall back to the role when the agent has no personal name', async () => {
+    const injector = new AgentBuilderContextInjector({
+      agentContext: {
+        meta: { title: '健康助手' },
+      },
+      enabled: true,
+    });
+
+    const result = await injector.process(createContext());
+    const injected = result.messages[1].content;
+
+    expect(injected).toContain('<name>健康助手</name>');
+    expect(injected).toContain('<title>健康助手</title>');
+  });
+
   it('should truncate the systemRole only after 10000 characters', async () => {
     const head = 'A'.repeat(10_000);
     const tail = '\n## Hidden tail\nThis should not be injected.';

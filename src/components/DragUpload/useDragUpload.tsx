@@ -1,8 +1,8 @@
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -68,7 +68,7 @@ const getFileListFromDataTransferItems = async (items: DataTransferItem[]) => {
 
 export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) => {
   const { t } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const [isDragging, setIsDragging] = useState(false);
   // When a file is dragged to a different area, the 'dragleave' event may be triggered,
   // causing isDragging to be mistakenly set to false.
@@ -78,7 +78,7 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const agentId = useAgentStore((s) => s.activeAgentId ?? undefined);
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider, agentId);
+  const { canUploadImage, canUploadVideo } = useMediaUploadAbility(model, provider, agentId);
 
   const warnIfVisualUploadUnsupported = useCallback(
     (files: File[]) => {
@@ -86,13 +86,13 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
       const hasVideoFiles = files.some((file) => file.type.startsWith('video/'));
 
       if ((hasImageFiles && !canUploadImage) || (hasVideoFiles && !canUploadVideo)) {
-        message.warning(t('upload.clientMode.visionNotSupported'));
+        toast.warning(t('upload.clientMode.visionNotSupported'));
         return true;
       }
 
       return false;
     },
-    [canUploadImage, canUploadVideo, message, t],
+    [canUploadImage, canUploadVideo, t],
   );
 
   const handleDragEnter = useCallback((e: DragEvent) => {

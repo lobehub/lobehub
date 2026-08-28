@@ -1,3 +1,10 @@
+import {
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
+} from '../config';
 import type { HeterogeneousTerminalErrorData } from '../types';
 
 /**
@@ -13,7 +20,8 @@ import type { HeterogeneousTerminalErrorData } from '../types';
  *
  * This helper mirrors the desktop in-process classifier
  * (`HeterogeneousAgentCtr.getSessionErrorPayload`) for the two guide codes a
- * process-level failure can produce: `cli_not_found` and `auth_required`.
+ * process-level failure can produce: `cli_not_found`,
+ * `working_directory_not_found`, and `auth_required`.
  * The returned shape is persisted verbatim as the `ChatMessageError.body`, so
  * it must carry `agentType` + `code` — that pair is what
  * `isHeterogeneousAgentStatusGuideError` gates the dedicated UI on.
@@ -23,40 +31,12 @@ import type { HeterogeneousTerminalErrorData } from '../types';
  * Node reports a missing executable as an `ErrnoException` with
  * `code: 'ENOENT'` and message `spawn <command> ENOENT`. When only stderr text
  * is available (the raw error object was already flattened into the stderr
- * tail), match the message shape instead. Note ENOENT is also raised for a
- * missing `cwd` — same behavior as the desktop classifier; both mean "this
- * machine can't start the CLI as configured".
+ * tail), match the message shape instead. A missing `cwd` also produces
+ * ENOENT, so spawn sites validate it first and surface a distinct code.
  */
 const SPAWN_ENOENT_PATTERN = /\bspawn .+ ENOENT\b/;
 
-/** Mirrors `CLI_AUTH_REQUIRED_PATTERNS` in the desktop `HeterogeneousAgentCtr`. */
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-];
-
-const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
-  'claude-code':
-    'Claude Code CLI was not found on the machine running this agent. Install it and make sure `claude` can be executed.',
-  'codex':
-    'Codex CLI was not found on the machine running this agent. Install it and make sure `codex` can be executed.',
-  'opencode':
-    'OpenCode CLI was not found on the machine running this agent. Install it and make sure `opencode` can be executed.',
-};
-
-const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
-  'claude-code':
-    'Claude Code could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
-  'codex':
-    'Codex could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
-  'opencode':
-    'OpenCode could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
-};
-
+export const HETERO_WORKING_DIRECTORY_NOT_FOUND = 'HETERO_WORKING_DIRECTORY_NOT_FOUND';
 /**
  * Codes/agent types the client renders the dedicated status-guide card for.
  * Must stay in sync with `HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES` in
@@ -68,8 +48,11 @@ const STATUS_GUIDE_ERROR_CODES = new Set([
   'cli_not_found',
   'overloaded',
   'rate_limit',
+  'working_directory_not_found',
 ]);
-const STATUS_GUIDE_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode']);
+const STATUS_GUIDE_AGENT_TYPES = new Set(
+  HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type as string),
+);
 
 /**
  * Whether a terminal error payload (an adapter's in-stream `error` event data,
@@ -94,6 +77,8 @@ export const isHeteroStatusGuideErrorData = (
 export interface ClassifyHeteroProcessFailureParams {
   /** Adapter type key for a local CLI with a status guide. */
   agentType: string;
+  /** Configured CLI command, when the caller overrides the descriptor default. */
+  command?: string;
   /** Stderr tail / flattened error message to pattern-match. */
   detail?: string;
   /**
@@ -111,28 +96,34 @@ export interface ClassifyHeteroProcessFailureParams {
 export const classifyHeteroProcessFailure = (
   params: ClassifyHeteroProcessFailureParams,
 ): HeterogeneousTerminalErrorData | undefined => {
-  const { agentType, errnoCode } = params;
+  const { agentType, command, errnoCode } = params;
   const detail = params.detail?.trim();
 
-  const cliNotFoundMessage = CLI_NOT_FOUND_MESSAGES[agentType];
   // Unknown agent type → the client guide can't render it; don't classify.
-  if (!cliNotFoundMessage) return;
+  if (!isLocalHeterogeneousType(agentType)) return;
 
-  if (errnoCode === 'ENOENT' || (detail && SPAWN_ENOENT_PATTERN.test(detail))) {
+  if (errnoCode === HETERO_WORKING_DIRECTORY_NOT_FOUND) {
     return {
       agentType,
-      code: 'cli_not_found',
-      message: cliNotFoundMessage,
+      code: 'working_directory_not_found',
+      message: detail || 'The configured working directory no longer exists.',
       ...(detail ? { stderr: detail } : {}),
     };
   }
 
-  if (detail && CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(detail))) {
-    return {
+  if (errnoCode === 'ENOENT' || (detail && SPAWN_ENOENT_PATTERN.test(detail))) {
+    return buildHeterogeneousAgentCliNotFoundError({
       agentType,
-      code: 'auth_required',
-      message: AUTH_REQUIRED_MESSAGES[agentType],
+      command,
       stderr: detail,
-    };
+    });
+  }
+
+  if (detail && isHeterogeneousAgentAuthRequired(agentType, detail)) {
+    return buildHeterogeneousAgentAuthRequiredError({
+      agentType,
+      command,
+      stderr: detail,
+    });
   }
 };

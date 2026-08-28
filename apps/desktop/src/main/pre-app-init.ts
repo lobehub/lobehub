@@ -1,7 +1,8 @@
 import path from 'node:path';
 
 import { app } from 'electron';
-import * as electronIs from 'electron-is';
+
+import * as electronIs from '@/utils/platform';
 
 // Must run BEFORE any module captures `app.getPath('userData')` (e.g. `@/const/dir`
 // reads it at top level). Once a path is read, `setName` / `setPath` no-op for it.

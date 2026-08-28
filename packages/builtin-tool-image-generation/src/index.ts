@@ -1,7 +1,4 @@
-export {
-  ImageGenerationExecutionRuntime,
-  type ImageGenerationRuntimeService,
-} from './ExecutionRuntime';
+export type { ImageGenerationRuntimeService } from './ExecutionRuntime';
 export { ImageGenerationManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {

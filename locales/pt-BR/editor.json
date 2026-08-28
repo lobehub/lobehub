@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Os metadados não foram salvos. Tente novamente ou continue editando.",
   "skillFrontmatter.title": "Metadados da habilidade",
   "slash.compact": "Compactar contexto",
+  "slash.goal": "Definir meta",
+  "slash.goal.desc": "Planeje e inicie uma meta com critérios de aceitação editáveis",
   "slash.h1": "Título 1",
   "slash.h2": "Título 2",
   "slash.h3": "Título 3",

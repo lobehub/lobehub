@@ -2,6 +2,69 @@
 
 # Changelog
 
+## [Version 2.2.11](https://github.com/lobehub/lobe-chat/compare/v2.2.11-canary.67...v2.2.11)
+
+<sup>Released on **2026-07-23**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: narrow acceptance empty filter translation key.
+- **verify**: polish recovered acceptance changes.
+- **chat**: prevent mobile input auto-zoom.
+- **minimax**: normalize unsupported image detail "auto".
+- **ProviderConfig**: reset form fields to prevent leaking old values on provider switch.
+- **search**: surface marketplace agent failures.
+- **search**: surface web search provider failures.
+- **misc**: enforce agent step execution deadlines.
+- **model-runtime**: enable prompt cache keys for Grok.
+- **conversation-flow**: iterative message-tree traversal to avoid mobile stack overflow.
+
+#### 💄 Styles
+
+- **misc**: add existing subscription redirect copy.
+- **misc**: improve remote device tool UI.
+
+#### ✨ Features
+
+- **chat-terminal**: polish terminal panel with tabs, context menu and WebGL renderer.
+- **device**: add opt-in SRT sandbox runtime.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: narrow acceptance empty filter translation key, closes [#17504](https://github.com/lobehub/lobe-chat/issues/17504) ([89404a6](https://github.com/lobehub/lobe-chat/commit/89404a6))
+- **verify**: polish recovered acceptance changes, closes [#17484](https://github.com/lobehub/lobe-chat/issues/17484) ([d1c8d30](https://github.com/lobehub/lobe-chat/commit/d1c8d30))
+- **chat**: prevent mobile input auto-zoom, closes [#17013](https://github.com/lobehub/lobe-chat/issues/17013) ([ea6b92f](https://github.com/lobehub/lobe-chat/commit/ea6b92f))
+- **minimax**: normalize unsupported image detail "auto", closes [#17281](https://github.com/lobehub/lobe-chat/issues/17281) ([6851acb](https://github.com/lobehub/lobe-chat/commit/6851acb))
+- **ProviderConfig**: reset form fields to prevent leaking old values on provider switch, closes [#16839](https://github.com/lobehub/lobe-chat/issues/16839) ([83c9de9](https://github.com/lobehub/lobe-chat/commit/83c9de9))
+- **search**: surface marketplace agent failures, closes [#17488](https://github.com/lobehub/lobe-chat/issues/17488) ([15fb77f](https://github.com/lobehub/lobe-chat/commit/15fb77f))
+- **search**: surface web search provider failures, closes [#17100](https://github.com/lobehub/lobe-chat/issues/17100) ([1b8e12a](https://github.com/lobehub/lobe-chat/commit/1b8e12a))
+- **misc**: enforce agent step execution deadlines, closes [#17464](https://github.com/lobehub/lobe-chat/issues/17464) ([7bb24ed](https://github.com/lobehub/lobe-chat/commit/7bb24ed))
+- **model-runtime**: enable prompt cache keys for Grok, closes [#17489](https://github.com/lobehub/lobe-chat/issues/17489) ([17ba87e](https://github.com/lobehub/lobe-chat/commit/17ba87e))
+- **conversation-flow**: iterative message-tree traversal to avoid mobile stack overflow, closes [#17457](https://github.com/lobehub/lobe-chat/issues/17457) ([a4cc9bb](https://github.com/lobehub/lobe-chat/commit/a4cc9bb))
+
+#### Styles
+
+- **misc**: add existing subscription redirect copy, closes [#17501](https://github.com/lobehub/lobe-chat/issues/17501) ([550c706](https://github.com/lobehub/lobe-chat/commit/550c706))
+- **misc**: improve remote device tool UI, closes [#17487](https://github.com/lobehub/lobe-chat/issues/17487) ([e126fed](https://github.com/lobehub/lobe-chat/commit/e126fed))
+
+#### What's improved
+
+- **chat-terminal**: polish terminal panel with tabs, context menu and WebGL renderer, closes [#17494](https://github.com/lobehub/lobe-chat/issues/17494) ([86384c0](https://github.com/lobehub/lobe-chat/commit/86384c0))
+- **device**: add opt-in SRT sandbox runtime, closes [#17476](https://github.com/lobehub/lobe-chat/issues/17476) ([e3d25e4](https://github.com/lobehub/lobe-chat/commit/e3d25e4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.2.8](https://github.com/lobehub/lobe-chat/compare/v2.2.7...v2.2.8)
 
 <sup>Released on **2026-06-22**</sup>
@@ -150,7 +213,7 @@
 - **agent-runtime**: persist agent operations to `agent_operations` table.
 - **misc**: support slack mpim and fix discord dm problem.
 - **database**: add `agent_operations` table.
-- **markdown**: user_feedback card + task card polish + Run now context menu.
+- **markdown**: user\_feedback card + task card polish + Run now context menu.
 - **documents**: add optimistic create/delete and inline rename for document tree.
 - **devtools**: add dev-only feature flag override panel.
 - **misc**: add service model assignments settings.
@@ -207,7 +270,7 @@
 - **misc**: first inject the cloudecc runtime session should use the existingStatus.
 - **misc**: slack connect error & slash commands.
 - **misc**: polish task agent manager.
-- **agent-runtime**: recover malformed tool_call names instead of finishing silently.
+- **agent-runtime**: recover malformed tool\_call names instead of finishing silently.
 - **misc**: remove signin captcha flow.
 - **misc**: add temporary email auth error locale.
 - **misc**: add bot callback service.
@@ -248,7 +311,7 @@
 - **agent-runtime**: persist agent operations to `agent_operations` table, closes [#14736](https://github.com/lobehub/lobe-chat/issues/14736) ([a772341](https://github.com/lobehub/lobe-chat/commit/a772341))
 - **misc**: support slack mpim and fix discord dm problem, closes [#14733](https://github.com/lobehub/lobe-chat/issues/14733) ([729265a](https://github.com/lobehub/lobe-chat/commit/729265a))
 - **database**: add `agent_operations` table, closes [#14416](https://github.com/lobehub/lobe-chat/issues/14416) ([cb8b616](https://github.com/lobehub/lobe-chat/commit/cb8b616))
-- **markdown**: user_feedback card + task card polish + Run now context menu, closes [#14727](https://github.com/lobehub/lobe-chat/issues/14727) ([79152fa](https://github.com/lobehub/lobe-chat/commit/79152fa))
+- **markdown**: user\_feedback card + task card polish + Run now context menu, closes [#14727](https://github.com/lobehub/lobe-chat/issues/14727) ([79152fa](https://github.com/lobehub/lobe-chat/commit/79152fa))
 - **documents**: add optimistic create/delete and inline rename for document tree, closes [#14714](https://github.com/lobehub/lobe-chat/issues/14714) ([0007984](https://github.com/lobehub/lobe-chat/commit/0007984))
 - **devtools**: add dev-only feature flag override panel, closes [#14565](https://github.com/lobehub/lobe-chat/issues/14565) ([18b1c25](https://github.com/lobehub/lobe-chat/commit/18b1c25))
 - **misc**: add service model assignments settings, closes [#14712](https://github.com/lobehub/lobe-chat/issues/14712) ([eb924ec](https://github.com/lobehub/lobe-chat/commit/eb924ec))
@@ -305,7 +368,7 @@
 - **misc**: first inject the cloudecc runtime session should use the existingStatus, closes [#14592](https://github.com/lobehub/lobe-chat/issues/14592) ([09c66ff](https://github.com/lobehub/lobe-chat/commit/09c66ff))
 - **misc**: slack connect error & slash commands, closes [#14591](https://github.com/lobehub/lobe-chat/issues/14591) ([8274be0](https://github.com/lobehub/lobe-chat/commit/8274be0))
 - **misc**: polish task agent manager, closes [#14569](https://github.com/lobehub/lobe-chat/issues/14569) ([a02ecbc](https://github.com/lobehub/lobe-chat/commit/a02ecbc))
-- **agent-runtime**: recover malformed tool_call names instead of finishing silently, closes [#14577](https://github.com/lobehub/lobe-chat/issues/14577) ([5f8ec8b](https://github.com/lobehub/lobe-chat/commit/5f8ec8b))
+- **agent-runtime**: recover malformed tool\_call names instead of finishing silently, closes [#14577](https://github.com/lobehub/lobe-chat/issues/14577) ([5f8ec8b](https://github.com/lobehub/lobe-chat/commit/5f8ec8b))
 - **misc**: remove signin captcha flow, closes [#14573](https://github.com/lobehub/lobe-chat/issues/14573) ([181b7eb](https://github.com/lobehub/lobe-chat/commit/181b7eb))
 - **misc**: add temporary email auth error locale, closes [#14564](https://github.com/lobehub/lobe-chat/issues/14564) ([2bdd901](https://github.com/lobehub/lobe-chat/commit/2bdd901))
 - **misc**: add bot callback service, closes [#14570](https://github.com/lobehub/lobe-chat/issues/14570) ([e4b5e52](https://github.com/lobehub/lobe-chat/commit/e4b5e52))
@@ -820,7 +883,7 @@
 
 #### 🐛 Bug Fixes
 
-- **misc**: Fix multimodal content_part images rendered as base64 text.
+- **misc**: Fix multimodal content\_part images rendered as base64 text.
 
 <br/>
 
@@ -829,7 +892,7 @@
 
 #### What's fixed
 
-- **misc**: Fix multimodal content_part images rendered as base64 text, closes [#12210](https://github.com/lobehub/lobe-chat/issues/12210) ([00ff5b9](https://github.com/lobehub/lobe-chat/commit/00ff5b9))
+- **misc**: Fix multimodal content\_part images rendered as base64 text, closes [#12210](https://github.com/lobehub/lobe-chat/issues/12210) ([00ff5b9](https://github.com/lobehub/lobe-chat/commit/00ff5b9))
 
 </details>
 
@@ -1536,7 +1599,7 @@
 
 #### 🐛 Bug Fixes
 
-- **misc**: Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set.
+- **misc**: Hide password features when AUTH\_DISABLE\_EMAIL\_PASSWORD is set.
 
 <br/>
 
@@ -1545,7 +1608,7 @@
 
 #### What's fixed
 
-- **misc**: Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set, closes [#12023](https://github.com/lobehub/lobe-chat/issues/12023) ([e2fd28e](https://github.com/lobehub/lobe-chat/commit/e2fd28e))
+- **misc**: Hide password features when AUTH\_DISABLE\_EMAIL\_PASSWORD is set, closes [#12023](https://github.com/lobehub/lobe-chat/issues/12023) ([e2fd28e](https://github.com/lobehub/lobe-chat/commit/e2fd28e))
 
 </details>
 
@@ -1711,7 +1774,7 @@
 
 #### 🐛 Bug Fixes
 
-- **stream**: Update event handling to use 'text' instead of 'content_part' in gemini 2.5 models.
+- **stream**: Update event handling to use 'text' instead of 'content\_part' in gemini 2.5 models.
 
 #### 💄 Styles
 
@@ -1724,7 +1787,7 @@
 
 #### What's fixed
 
-- **stream**: Update event handling to use 'text' instead of 'content_part' in gemini 2.5 models, closes [#11235](https://github.com/lobehub/lobe-chat/issues/11235) ([a76a630](https://github.com/lobehub/lobe-chat/commit/a76a630))
+- **stream**: Update event handling to use 'text' instead of 'content\_part' in gemini 2.5 models, closes [#11235](https://github.com/lobehub/lobe-chat/issues/11235) ([a76a630](https://github.com/lobehub/lobe-chat/commit/a76a630))
 
 #### Styles
 
@@ -1745,7 +1808,7 @@
 
 #### 🐛 Bug Fixes
 
-- **auth**: Add AUTH_DISABLE_EMAIL_PASSWORD env to enable SSO-only mode.
+- **auth**: Add AUTH\_DISABLE\_EMAIL\_PASSWORD env to enable SSO-only mode.
 
 <br/>
 
@@ -1754,7 +1817,7 @@
 
 #### What's fixed
 
-- **auth**: Add AUTH_DISABLE_EMAIL_PASSWORD env to enable SSO-only mode, closes [#12009](https://github.com/lobehub/lobe-chat/issues/12009) ([f3210a3](https://github.com/lobehub/lobe-chat/commit/f3210a3))
+- **auth**: Add AUTH\_DISABLE\_EMAIL\_PASSWORD env to enable SSO-only mode, closes [#12009](https://github.com/lobehub/lobe-chat/issues/12009) ([f3210a3](https://github.com/lobehub/lobe-chat/commit/f3210a3))
 
 </details>
 
@@ -1995,7 +2058,7 @@
 
 #### 🐛 Bug Fixes
 
-- **model-runtime**: Include tool_calls in speed metrics & add getActiveTraceId.
+- **model-runtime**: Include tool\_calls in speed metrics & add getActiveTraceId.
 
 <br/>
 
@@ -2004,7 +2067,7 @@
 
 #### What's fixed
 
-- **model-runtime**: Include tool_calls in speed metrics & add getActiveTraceId, closes [#11927](https://github.com/lobehub/lobe-chat/issues/11927) ([b24da44](https://github.com/lobehub/lobe-chat/commit/b24da44))
+- **model-runtime**: Include tool\_calls in speed metrics & add getActiveTraceId, closes [#11927](https://github.com/lobehub/lobe-chat/issues/11927) ([b24da44](https://github.com/lobehub/lobe-chat/commit/b24da44))
 
 </details>
 

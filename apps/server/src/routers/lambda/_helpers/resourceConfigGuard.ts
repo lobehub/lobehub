@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   canPerformResourceAction,
   getResourceMeta,
+  isCollaborativeBuiltinAgent,
   type ResourceMeta,
 } from '@/server/services/resourcePermission';
 
@@ -62,13 +63,39 @@ export const getResourceConfigAccess = async (
   const workspaceId = ctx.workspaceId ?? undefined;
   if (!workspaceId) return 'full';
 
+  // Resolved once and threaded through: both the access evaluation and the
+  // builtin exemption below need it. Callers may hand over a partial meta —
+  // `protectGroupMemberConfigs` passes only userId/visibility/workspaceId — so the
+  // builtin markers are completed here, otherwise a linked builtin would fail the
+  // classification below and stay capped by its group.
+  // A meta we fetch ourselves already carries the builtin markers; a caller-supplied
+  // one may not (`protectGroupMemberConfigs` passes only userId / visibility /
+  // workspaceId), and classifying on that would leave a linked builtin capped by its
+  // group. Complete it with exactly one extra read, and none in the common cases.
+  const needsBuiltinMarkers =
+    !!knownMeta &&
+    resourceType === 'agent' &&
+    (knownMeta.slug === undefined || knownMeta.virtual === undefined);
+  const meta =
+    !knownMeta || needsBuiltinMarkers
+      ? ((await getResourceMeta(ctx.db, resourceType, resourceId)) ?? knownMeta)
+      : knownMeta;
+  if (!meta) return 'none';
+
   const ownAccess = await getSingleResourceConfigAccess(
     { ...ctx, workspaceId },
     resourceType,
     resourceId,
-    knownMeta,
+    meta,
   );
   if (resourceType !== 'agent' || ownAccess === 'none') return ownAccess;
+
+  // Collaborative builtins (Lobe AI, the builders, the page agent) are workspace
+  // infrastructure that happens to be `virtual: true`, so linking one into a group
+  // would otherwise cap its config access at that group's level — reinstating the
+  // lockout this whole change removes. They are not group-owned
+  // content, so the parent cap does not apply to them.
+  if (isCollaborativeBuiltinAgent(resourceType, meta)) return ownAccess;
 
   // A virtual member's effective config access cannot exceed any parent
   // group's access. This closes the direct agent-id path around a restricted
@@ -108,6 +135,7 @@ const AGENT_PROFILE_KEYS = [
   'isSupervisor',
   'marketIdentifier',
   'model',
+  'name',
   'openingMessage',
   'openingQuestions',
   'provider',
@@ -127,15 +155,18 @@ export const redactAgentConfig = <T extends Record<string, any>>(agent: T): T =>
 
   // Selection policies are authorization metadata, not executable Agent
   // config. Use/view members need them so the chat controls cannot mistake a
-  // redacted fixed Agent for the legacy `member` default. The execution target
-  // is a safe semantic summary shown by use-only members; keep every other
-  // agency field (device ids, provider args/env, working directories, etc.)
-  // behind edit-level config access.
+  // redacted fixed Agent for the legacy `member` default — same for
+  // `topicSharePolicy`, without which the share button would offer a member a
+  // link the server then refuses. The execution target is a safe semantic
+  // summary shown by use-only members; keep every other agency field (device
+  // ids, provider args/env, working directories, etc.) behind edit-level
+  // config access.
   if (agencyConfig) {
     const safeAgencySummary = pick(agencyConfig, [
       'executionTarget',
       'executionTargetSelectionPolicy',
       'modelSelectionPolicy',
+      'topicSharePolicy',
     ]);
     // The hetero marker is identity, not executable config: without it,
     // use/view members render an external-CLI agent as a plain runtime agent

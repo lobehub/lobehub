@@ -14,7 +14,9 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  chatPortalSelectors: { acceptancePortalId: () => 'acc-1' },
+  chatPortalSelectors: {
+    acceptancePortalId: () => 'acc-1',
+  },
 }));
 
 // P0 regression (blank "页面暂时不可用" crash): the portal pane is a layout
@@ -27,12 +29,18 @@ vi.mock('@/features/Conversation/store', () => ({
   },
 }));
 
-vi.mock('@/features/Verify', () => ({
-  AcceptanceViewer: (props: { onDraftToComposer?: (text: string) => boolean }) => {
+vi.mock('@/features/Acceptance', () => ({
+  AcceptanceViewer: (props: {
+    initialCheckId?: string;
+    onDraftToComposer?: (text: string) => boolean;
+  }) => {
     mocks.captured.onDraftToComposer = props.onDraftToComposer;
     return null;
   },
+  OriginConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
+
+vi.mock('@/features/Acceptance/Viewer/TopicPanel', () => ({ default: () => null }));
 
 describe('Portal Acceptance Body — draftToComposer via the global bus', () => {
   beforeEach(() => {

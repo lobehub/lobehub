@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Показване или скриване на левия панел",
   "toggleLeftPanel.title": "Превключване на левия панел",
   "toggleRightPanel.desc": "Показване или скриване на десния панел",
-  "toggleRightPanel.title": "Превключване на десния панел"
+  "toggleRightPanel.title": "Превключване на десния панел",
+  "toggleTerminalPanel.desc": "Показване или скриване на долния панел на терминала",
+  "toggleTerminalPanel.title": "Превключване на панела на терминала"
 }

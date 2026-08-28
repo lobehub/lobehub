@@ -38,6 +38,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
       operationId,
       stepIndex,
       context,
+      deduplicationId,
       endpoint,
       payload,
       delay = 50,
@@ -60,6 +61,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
           timestamp: Date.now(),
         },
         ...(qstashDelay === undefined ? {} : { delay: qstashDelay }),
+        ...(deduplicationId ? { deduplicationId } : {}),
         headers: {
           'Content-Type': 'application/json',
           'X-Agent-Operation-Id': operationId,

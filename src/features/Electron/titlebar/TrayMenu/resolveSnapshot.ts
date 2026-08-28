@@ -1,4 +1,5 @@
 import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
+import { agentDisplayName } from '@lobechat/types';
 
 import type { SidebarAgentItem } from '@/database/repositories/home';
 
@@ -70,7 +71,7 @@ export const resolveTrayNavigationSnapshot = ({
     if (!uniqueAgents.has(agent.id)) uniqueAgents.set(agent.id, agent);
   }
   const agentNames = new Map(
-    [...uniqueAgents.values()].map((agent) => [agent.id, agent.title || 'Untitled']),
+    [...uniqueAgents.values()].map((agent) => [agent.id, agentDisplayName(agent, 'Untitled')]),
   );
 
   const visitedPages = [...pinnedPages, ...recentPages].sort(
@@ -80,7 +81,7 @@ export const resolveTrayNavigationSnapshot = ({
   return {
     agents: [...uniqueAgents.values()].map((agent) => ({
       id: agent.id,
-      title: agent.title || 'Untitled',
+      title: agentDisplayName(agent, 'Untitled'),
       url:
         visitedPages.find((page) => getAgentIdFromUrl(page.tab.url) === agent.id)?.tab.url ??
         fallbackAgentUrl(scope, agent.id),

@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { authedProcedure } from '@/libs/trpc/lambda';
 import { trpc } from '@/libs/trpc/lambda/init';
 
-export type WorkspaceRole = 'member' | 'owner' | 'viewer';
+export type WorkspaceRole = 'admin' | 'member' | 'owner' | 'viewer';
 
 export const cloudWorkspaceAuth = trpc.middleware(async (opts) => opts.next());
 
@@ -27,5 +27,6 @@ export const wsProcedure = authedProcedure.use(requireWorkspaceId);
 export const wsMemberProcedure = authedProcedure;
 
 export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceId);
+export const wsAdminProcedure = authedProcedure.use(requireWorkspaceId);
 
 export const wsCompatProcedure = authedProcedure;

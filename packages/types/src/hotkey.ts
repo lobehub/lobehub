@@ -17,7 +17,8 @@ export type HotkeyId =
   | 'switchAgent'
   | 'switchTab'
   | 'toggleLeftPanel'
-  | 'toggleRightPanel';
+  | 'toggleRightPanel'
+  | 'toggleTerminalPanel';
 
 export type HotkeyGroupId = 'conversation' | 'essential';
 

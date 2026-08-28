@@ -1,8 +1,11 @@
-import type { DBMessageItem, FileItem } from '@lobechat/types';
 import { z } from 'zod';
 
-import type { SessionItem, TopicItem } from '@/database/schemas';
-
+import type {
+  PublicFile,
+  PublicMessage,
+  PublicSession,
+  PublicTopic,
+} from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -190,7 +193,9 @@ export interface MessagesDeleteBatchRequest {
 }
 
 export const MessagesDeleteBatchRequestSchema = z.object({
-  messageIds: z.array(z.string().min(1, 'Message ID cannot be empty')).min(1, 'Message ID array cannot be empty'),
+  messageIds: z
+    .array(z.string().min(1, 'Message ID cannot be empty'))
+    .min(1, 'Message ID array cannot be empty'),
 });
 
 // ==================== Message Response Types ====================
@@ -200,15 +205,15 @@ export interface MessageIdParam {
 }
 
 // Message type queried from database join, includes associated session and topic info
-export interface MessageResponseFromDatabase extends DBMessageItem {
-  filesToMessages: { file: FileItem; messageId: string }[] | null;
-  session: SessionItem | null;
-  topic: TopicItem | null;
+export interface MessageResponseFromDatabase extends PublicMessage {
+  filesToMessages: { file: PublicFile; messageId: string }[] | null;
+  session: PublicSession | null;
+  topic: PublicTopic | null;
 }
 
 // Return type for message query, includes associated session and topic info
 export interface MessageResponse extends Omit<MessageResponseFromDatabase, 'filesToMessages'> {
-  files: FileItem[] | null;
+  files: PublicFile[] | null;
 }
 
 export type MessageListResponse = PaginationQueryResponse<{

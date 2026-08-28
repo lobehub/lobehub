@@ -24,7 +24,8 @@ const exportProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
     ctx: { dataExporterRepos, drizzleMigration, messageModel, sessionModel },
   });
 });
-const workspaceExportProcedure = exportProcedure.use(withRbacPermission('workspace:update:all'));
+// Whole-workspace export is reserved for the unique Owner.
+const workspaceExportProcedure = exportProcedure.use(withRbacPermission('workspace:delete:all'));
 
 const REGULAR_FONT_URL =
   'https://cdn.jsdelivr.net/gh/adobe-fonts/source-han-sans@2.004R/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf';

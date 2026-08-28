@@ -1,30 +1,14 @@
-#### 💻 Change Type
+<!-- Brief and heads-up -->
 
-<!-- For change type, change [ ] to [x]. -->
+<!-- If this PR includes UI changes, please provide screenshots or videos. -->
 
-- [ ] ✨ feat
-- [ ] 🐛 fix
-- [ ] ♻️ refactor
-- [ ] 💄 style
-- [ ] 👷 build
-- [ ] ⚡️ perf
-- [ ] ✅ test
-- [ ] 📝 docs
-- [ ] 🔨 chore
+| Before | After |
+| ------ | ----- |
+| ...    | ...   |
 
-#### 🔗 Related Issue
+#### Test
 
-<!-- Link to the issue that is fixed by this PR -->
-
-<!-- Example: Fixes #xxx, Closes #xxx, Related to #xxx -->
-
-#### 🔀 Description of Change
-
-<!-- Thank you for your Pull Request. Please provide a description above. -->
-
-#### 🧪 How to Test
-
-<!-- Please describe how you tested your changes -->
+<!-- How you tested your changes -->
 
 <!-- For AI features, please include test prompts or scenarios -->
 
@@ -32,16 +16,8 @@
 - [ ] Added/updated tests
 - [ ] No tests needed
 
-#### 📸 Screenshots / Videos
+#### 🔗 Related Issue
 
-<!-- If this PR includes UI changes, please provide screenshots or videos -->
+<!-- Link to the issue that is fixed by this PR -->
 
-| Before | After |
-| ------ | ----- |
-| ...    | ...   |
-
-#### 📝 Additional Information
-
-<!-- Add any other context about the Pull Request here. -->
-
-<!-- Breaking changes? Migration guide? Performance impact? -->
+<!-- Example: Fixes #xxx, Closes #xxx, Related to #xxx -->

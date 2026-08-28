@@ -4,7 +4,9 @@ import { z } from 'zod';
 export const AGENT_GRAPH_ROOT_NODE_ID = '__root__';
 
 /**
- * Serializable reasoning graph snapshot stored on agent config.
+ * Serializable Agent Graph snapshot stored on agent config.
+ * One graph is one Graph Agent: the behavior body (node policies, routing
+ * conditions and data contracts) that the graph runtime executes.
  * Kept package-local so shared config types don't depend on runtime packages.
  */
 export type AgentGraphNode =
@@ -53,7 +55,7 @@ export interface AgentGraphEdge {
   to: string;
 }
 
-export interface ReasoningGraph {
+export interface AgentGraph {
   description?: string;
   edges: AgentGraphEdge[];
   fields: Record<string, AgentGraphField>;
@@ -136,7 +138,7 @@ const findSchemaDescriptionPath = (
   }
 };
 
-export const ReasoningGraphSchema: z.ZodType<ReasoningGraph> = z
+export const AgentGraphSchema: z.ZodType<AgentGraph> = z
   .object({
     description: z.string().optional(),
     fields: z.record(z.string(), AgentGraphFieldSchema),

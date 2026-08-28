@@ -16,6 +16,8 @@ export type {
 
 const PROCESS_PROVIDERS_PATH = '/api/workflows/onboarding/understanding/process-providers';
 const PROCESS_COLLECTED_PATH = '/api/workflows/onboarding/understanding/process-collected';
+const PROCESS_DETAILED_PERSONA_PATH =
+  '/api/workflows/onboarding/understanding/process-detailed-persona';
 
 export class UnderstandingWorkflowUnavailableError extends Error {
   readonly code = 'ONBOARDING_UNDERSTANDING_WORKFLOW_UNAVAILABLE';
@@ -69,6 +71,23 @@ export class OnboardingUnderstandingWorkflow {
       body: payload,
       headers: Object.fromEntries(traceHeaders.entries()),
       url: new URL(PROCESS_COLLECTED_PATH, baseUrl).toString(),
+      ...(options?.workflowRunId ? { workflowRunId: options.workflowRunId } : {}),
+    });
+  }
+
+  static async triggerDetailedPersona(
+    input: ProcessCollectedUnderstandingPayload,
+    options?: { workflowRunId?: string },
+  ) {
+    const baseUrl = this.assertAvailable();
+    const payload = ProcessCollectedUnderstandingPayloadSchema.parse(input);
+    const traceHeaders = new Headers();
+    injectActiveTraceHeaders(traceHeaders);
+
+    return workflowClient.trigger({
+      body: payload,
+      headers: Object.fromEntries(traceHeaders.entries()),
+      url: new URL(PROCESS_DETAILED_PERSONA_PATH, baseUrl).toString(),
       ...(options?.workflowRunId ? { workflowRunId: options.workflowRunId } : {}),
     });
   }

@@ -42,7 +42,7 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     const { canConfigureResource, canUseResource } = useChatInputResourceAccess();
     const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
     const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-    // Effective config = shared row + this member's device override (LOBE-11689),
+    // Effective config = shared row + this member's device override,
     // so `isDeviceMode` routes the working-directory section by the device THIS
     // member's run actually targets.
     const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);

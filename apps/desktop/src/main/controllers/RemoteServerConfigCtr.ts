@@ -1,7 +1,7 @@
 import querystring from 'node:querystring';
 import { URL } from 'node:url';
 
-import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import type { DataSyncConfig, DesktopBootstrapIdentity } from '@lobechat/electron-client-ipc';
 import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
@@ -180,6 +180,37 @@ export default class RemoteServerConfigCtr extends ControllerModule {
    * Used to control refresh frequency on app startup/activate
    */
   private lastRefreshAt?: number;
+
+  /**
+   * Resolve the cache-partition identity synchronously for the renderer preload.
+   * This deliberately avoids `getUserState()`: the encrypted OIDC token already
+   * contains the stable subject required for local isolation.
+   */
+  getDesktopBootstrapIdentity(): DesktopBootstrapIdentity {
+    if (!this.encryptedAccessToken) this.loadTokensFromStore();
+
+    if (!this.encryptedAccessToken) return { isIdentityResolved: true };
+
+    try {
+      const accessToken = safeStorage.isEncryptionAvailable()
+        ? safeStorage.decryptString(Buffer.from(this.encryptedAccessToken, 'base64'))
+        : this.encryptedAccessToken;
+      const parts = accessToken.split('.');
+      if (parts.length !== 3) return { isIdentityResolved: false };
+
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
+        sub?: unknown;
+      };
+      if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+        return { isIdentityResolved: false };
+      }
+
+      return { isIdentityResolved: true, userId: payload.sub };
+    } catch (error) {
+      logger.warn('Failed to resolve Desktop bootstrap identity from access token:', error);
+      return { isIdentityResolved: false };
+    }
+  }
 
   /**
    * Promise representing the ongoing token refresh operation.

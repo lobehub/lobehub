@@ -16,6 +16,20 @@ describe('isHeteroStatusGuideErrorData', () => {
     ).toBe(true);
     expect(
       isHeteroStatusGuideErrorData({
+        agentType: 'codebuddy',
+        code: 'auth_required',
+        message: 'Authentication required',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'codex',
+        code: 'working_directory_not_found',
+        message: 'Working directory does not exist: /tmp/gone',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
         agentType: 'codex',
         code: 'rate_limit',
         message: 'usage limit reached',
@@ -23,9 +37,30 @@ describe('isHeteroStatusGuideErrorData', () => {
     ).toBe(true);
     expect(
       isHeteroStatusGuideErrorData({
+        agentType: 'cursor',
+        code: 'auth_required',
+        message: 'Authentication required',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
         agentType: 'opencode',
         code: 'auth_required',
         message: 'ProviderAuthError',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'pi',
+        code: 'auth_required',
+        message: 'No API key found',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'qoder',
+        code: 'auth_required',
+        message: 'Not logged in · Please run /login',
       }),
     ).toBe(true);
   });
@@ -49,6 +84,20 @@ describe('isHeteroStatusGuideErrorData', () => {
 });
 
 describe('classifyHeteroProcessFailure', () => {
+  it('classifies a preflight working-directory failure separately from a missing CLI', () => {
+    const result = classifyHeteroProcessFailure({
+      agentType: 'codex',
+      detail: 'Working directory does not exist: /tmp/gone',
+      errnoCode: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+    });
+
+    expect(result).toMatchObject({
+      agentType: 'codex',
+      code: 'working_directory_not_found',
+      message: 'Working directory does not exist: /tmp/gone',
+    });
+  });
+
   it('classifies a raw spawn ErrnoException code as cli_not_found', () => {
     const result = classifyHeteroProcessFailure({
       agentType: 'claude-code',
@@ -74,6 +123,18 @@ describe('classifyHeteroProcessFailure', () => {
     expect(result?.message).toContain('`codex`');
   });
 
+  it('preserves a configured command in CLI-not-found guidance', () => {
+    const result = classifyHeteroProcessFailure({
+      agentType: 'claude-code',
+      command: '/opt/bin/claude-beta',
+      detail: 'Error: spawn /opt/bin/claude-beta ENOENT',
+      errnoCode: 'ENOENT',
+    });
+
+    expect(result).toMatchObject({ command: '/opt/bin/claude-beta' });
+    expect(result?.message).toContain('`/opt/bin/claude-beta`');
+  });
+
   it('classifies a missing OpenCode binary for the install guide', () => {
     const result = classifyHeteroProcessFailure({
       agentType: 'opencode',
@@ -83,6 +144,92 @@ describe('classifyHeteroProcessFailure', () => {
 
     expect(result).toMatchObject({ agentType: 'opencode', code: 'cli_not_found' });
     expect(result?.message).toContain('`opencode`');
+  });
+
+  it('classifies missing CodeBuddy and its real headless authentication prompt', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'codebuddy',
+        detail: 'Error: spawn codebuddy ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'codebuddy', code: 'cli_not_found' });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'codebuddy',
+        detail: 'Authentication required. Please use /login',
+      }),
+    ).toMatchObject({ agentType: 'codebuddy', code: 'auth_required' });
+  });
+
+  it('classifies missing Cursor and its real authentication prompt', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'cursor',
+        detail: 'Error: spawn agent ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'cursor', code: 'cli_not_found', command: 'agent' });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'cursor',
+        detail: 'Authentication required',
+      }),
+    ).toMatchObject({ agentType: 'cursor', code: 'auth_required' });
+  });
+
+  it('classifies missing Pi and Pi provider credentials', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'pi',
+        detail: 'Error: spawn pi ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'pi', code: 'cli_not_found' });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'pi',
+        detail: 'No API key found for provider anthropic',
+      }),
+    ).toMatchObject({ agentType: 'pi', code: 'auth_required' });
+  });
+
+  it('classifies missing Qoder and its successful-exit login message', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'qoder',
+        detail: 'Error: spawn qodercli ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'qoder', code: 'cli_not_found' });
+
+    const auth = classifyHeteroProcessFailure({
+      agentType: 'qoder',
+      detail: 'Not logged in · Please run /login',
+    });
+    expect(auth).toMatchObject({ agentType: 'qoder', code: 'auth_required' });
+    expect(auth?.message).toContain('Qoder');
+  });
+
+  it('keeps Qoder-specific login wording scoped to Qoder', () => {
+    expect(
+      classifyHeteroProcessFailure({ agentType: 'qoder', detail: 'Please run /login' }),
+    ).toMatchObject({ code: 'auth_required' });
+    expect(
+      classifyHeteroProcessFailure({ agentType: 'claude-code', detail: 'Please run /login' }),
+    ).toBeUndefined();
+  });
+
+  it('classifies Claude Code not-logged-in output without relying on the adapter', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'claude-code',
+        detail: 'Not logged in · Please run /login',
+      }),
+    ).toMatchObject({ agentType: 'claude-code', code: 'auth_required' });
   });
 
   it('does NOT treat an in-run ENOENT (no spawn context) as cli_not_found', () => {
@@ -120,11 +267,33 @@ describe('classifyHeteroProcessFailure', () => {
     expect(result?.code).toBe('cli_not_found');
   });
 
-  it('returns undefined for unsupported agent types', () => {
+  it('classifies missing and unauthenticated Amp installations', () => {
     expect(
       classifyHeteroProcessFailure({
         agentType: 'amp',
         detail: 'Error: spawn amp ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({
+      agentType: 'amp',
+      code: 'cli_not_found',
+      command: 'amp',
+      docsUrl: 'https://ampcode.com/manual',
+    });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'amp',
+        detail: 'Please log in with `amp login` or configure AMP_API_KEY.',
+      }),
+    ).toMatchObject({ agentType: 'amp', code: 'auth_required', command: 'amp' });
+  });
+
+  it('returns undefined for unsupported agent types', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'kimi-cli',
+        detail: 'Error: spawn kimi ENOENT',
         errnoCode: 'ENOENT',
       }),
     ).toBeUndefined();

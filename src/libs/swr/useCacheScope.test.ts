@@ -10,7 +10,7 @@ import {
 
 let mockUserId: string | null | undefined = undefined;
 let mockIsAuthLoaded = false;
-let mockIsUserStateInit = false;
+let mockIsIdentityResolved = false;
 let mockWorkspaceId: string | null = null;
 let mockIsDesktop = false;
 
@@ -22,7 +22,7 @@ vi.mock('@lobechat/const', () => ({
 vi.mock('@/store/user', () => ({
   getUserStoreState: () => ({
     isLoaded: mockIsAuthLoaded,
-    isUserStateInit: mockIsUserStateInit,
+    isIdentityResolved: mockIsIdentityResolved,
     user: { id: mockUserId },
   }),
 }));
@@ -64,7 +64,7 @@ describe('activeScopeKey + optimistic scope', () => {
     localStorage.clear();
     mockUserId = undefined;
     mockIsAuthLoaded = false;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     mockWorkspaceId = null;
     mockIsDesktop = false;
   });
@@ -97,13 +97,20 @@ describe('activeScopeKey + optimistic scope', () => {
     expect(getCacheScope()).toBe('anon:personal');
   });
 
-  it('getCacheScope keeps the persisted scope on desktop until user state initializes', () => {
-    // desktop hardcodes isLoaded=true on mount; userId lands with useInitUserState
+  it('getCacheScope keeps the persisted scope on desktop until bootstrap identity resolves', () => {
     localStorage.setItem('lobehub:active-scope', 'user_abc:w1');
     mockIsDesktop = true;
     mockIsAuthLoaded = true;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     expect(getCacheScope()).toBe('user_abc:w1');
+  });
+
+  it('getCacheScope uses the bootstrap user before full user-state initialization', () => {
+    localStorage.setItem('lobehub:active-scope', 'stale_user:w1');
+    mockIsDesktop = true;
+    mockIsIdentityResolved = true;
+    mockUserId = 'bootstrap_user';
+    expect(getCacheScope()).toBe('bootstrap_user:personal');
   });
 
   it('clearActiveScopeKey removes the persisted scope (logout)', () => {
@@ -118,7 +125,7 @@ describe('activeScopeKey + optimistic scope', () => {
 describe('isScopeTrusted', () => {
   beforeEach(() => {
     mockIsAuthLoaded = false;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     mockIsDesktop = false;
   });
 
@@ -132,17 +139,17 @@ describe('isScopeTrusted', () => {
     expect(isScopeTrusted()).toBe(true);
   });
 
-  it('on desktop, is untrusted until user state initializes even though isLoaded is true', () => {
+  it('on desktop, is untrusted until the preload identity resolves', () => {
     mockIsDesktop = true;
     mockIsAuthLoaded = true;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     expect(isScopeTrusted()).toBe(false);
   });
 
-  it('on desktop, is trusted once user state initializes', () => {
+  it('on desktop, is trusted from bootstrap without waiting for full user state', () => {
     mockIsDesktop = true;
     mockIsAuthLoaded = true;
-    mockIsUserStateInit = true;
+    mockIsIdentityResolved = true;
     expect(isScopeTrusted()).toBe(true);
   });
 });

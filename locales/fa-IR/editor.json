@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "فراداده ذخیره نشد. دوباره تلاش کنید یا به ویرایش ادامه دهید.",
   "skillFrontmatter.title": "فراداده مهارت",
   "slash.compact": "فشرده‌سازی زمینه",
+  "slash.goal": "تعیین هدف",
+  "slash.goal.desc": "برنامه‌ریزی و شروع یک هدف با معیارهای پذیرش قابل ویرایش",
   "slash.h1": "سرفصل ۱",
   "slash.h2": "سرفصل ۲",
   "slash.h3": "سرفصل ۳",

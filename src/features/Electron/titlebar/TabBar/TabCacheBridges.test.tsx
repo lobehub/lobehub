@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/spa/router/desktopRouter.config', () => ({
-  get desktopRoutes() {
+  get mainAreaMetaRoutes() {
     return mocks.routes.current;
   },
 }));

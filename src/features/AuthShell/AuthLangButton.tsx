@@ -1,13 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  DropdownMenu,
-  type DropdownMenuCheckboxItem,
-  Flexbox,
-  Text,
-} from '@lobehub/ui';
-import { Languages } from 'lucide-react';
+import { DropdownMenu, type DropdownMenuCheckboxItem, Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
+import { GlobeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,10 +14,11 @@ const setCookieSimple = (key: string, value: string, days: number) => {
   document.cookie = `${key}=${value};expires=${expires};path=/;`;
 };
 
-const AuthLangButton = memo<{ size?: number }>((props) => {
+const AuthLangButton = memo(() => {
   const { i18n } = useTranslation();
   const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
   const current = normalizeLocale(i18n.resolvedLanguage || i18n.language || browserLanguage);
+  const currentLabel = localeOptions.find((item) => item.value === current)?.label || 'English';
 
   const items = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
@@ -57,7 +53,18 @@ const AuthLangButton = memo<{ size?: number }>((props) => {
         },
       }}
     >
-      <ActionIcon icon={Languages} size={props.size || { blockSize: 32, size: 16 }} />
+      <Button
+        icon={GlobeIcon}
+        iconPosition="end"
+        size="small"
+        type="text"
+        style={{
+          height: 32,
+          paddingInline: 8,
+        }}
+      >
+        <Text fontSize={12}>{currentLabel}</Text>
+      </Button>
     </DropdownMenu>
   );
 });

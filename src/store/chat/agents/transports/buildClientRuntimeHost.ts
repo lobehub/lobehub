@@ -48,6 +48,10 @@ export const buildClientRuntimeHost = (context: {
 
   return {
     operation: {
+      // Same controller Stop already uses for the LLM stream. Threading it here
+      // lets an interrupt end a long-running tool at once instead of waiting
+      // for it to finish on its own.
+      abortSignal: context.get().operations[context.operationId]?.abortController?.signal,
       agentId: effectiveAgentId ?? undefined,
       groupId: groupId ?? undefined,
       operationId: context.operationId,

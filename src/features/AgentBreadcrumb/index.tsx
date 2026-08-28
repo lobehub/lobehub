@@ -1,6 +1,8 @@
 'use client';
 
-import { Icon, Text } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
@@ -10,11 +12,11 @@ import { Link, useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import {
   buildPrefixedAgentRoutePath,
   parseAgentPathname,
-} from '@/routes/(main)/agent/_layout/Sidebar/utils/agentPathname';
+} from '@/features/AgentSidebar/utils/agentPathname';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
@@ -39,8 +41,11 @@ interface AgentBreadcrumbProps {
   extraItems?: ReactNode[];
   /**
    * The current section under the agent, e.g. 话题 / 助理档案 / 用量与成本.
+   * Omit it where the page already names its own section — the profile group
+   * carries a Segmented switcher, so repeating the active tab here would render
+   * the same word twice in one 44px bar.
    */
-  title: ReactNode;
+  title?: ReactNode;
 }
 
 /**
@@ -51,7 +56,9 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
   const { t } = useTranslation(['chat', 'common']);
   const { pathname } = useLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agentTitle = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+  const agentTitle = useAgentStore((s) =>
+    agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
+  );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox
@@ -77,13 +84,17 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
             </Link>
           ),
         },
-        {
-          title: (
-            <Text as={'span'} color={'inherit'} weight={500}>
-              {title}
-            </Text>
-          ),
-        },
+        ...(title === undefined || title === null
+          ? []
+          : [
+              {
+                title: (
+                  <Text as={'span'} color={'inherit'} weight={500}>
+                    {title}
+                  </Text>
+                ),
+              },
+            ]),
         ...(extraItems ?? []).map((item, index) => ({
           key: `extra-${index}`,
           title: (

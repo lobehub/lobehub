@@ -11,12 +11,17 @@ export interface ServiceResult {
 // ==================== Params ====================
 
 export interface ListFilesParams {
+  /** Working directory a relative `directoryPath` resolves against on the service side. */
+  cwd?: string;
   directoryPath: string;
+  limit?: number;
   sortBy?: string;
   sortOrder?: string;
 }
 
 export interface ReadFileParams {
+  /** Working directory a relative `path` resolves against on the service side. */
+  cwd?: string;
   endLine?: number;
   path: string;
   startLine?: number;
@@ -25,11 +30,15 @@ export interface ReadFileParams {
 export interface WriteFileParams {
   content: string;
   createDirectories?: boolean;
+  /** Working directory a relative `path` resolves against on the service side. */
+  cwd?: string;
   path: string;
 }
 
 export interface EditFileParams {
   all?: boolean;
+  /** Working directory a relative `path` resolves against on the service side. */
+  cwd?: string;
   path: string;
   replace: string;
   search: string;
@@ -40,7 +49,7 @@ export interface SearchFilesParams {
   createdAfter?: string;
   createdBefore?: string;
   detailed?: boolean;
-  directory: string;
+  directory?: string;
   exclude?: string[];
   /** @deprecated Prefer `fileTypes` (plural). Retained for cloud sandbox back-compat. */
   fileType?: string;
@@ -58,6 +67,8 @@ export interface SearchFilesParams {
 }
 
 export interface MoveFilesParams {
+  /** Working directory each operation's relative paths resolve against on the service side. */
+  cwd?: string;
   operations: Array<{
     destination: string;
     source: string;
@@ -78,11 +89,20 @@ export interface GlobFilesParams {
 export interface RunCommandParams {
   background?: boolean;
   command: string;
+  /**
+   * Working directory the shell spawns in. Without it the service falls back to
+   * its own process cwd (the app install directory in a packaged desktop app).
+   */
+  cwd?: string;
+  description?: string;
+  env?: Record<string, string>;
   timeout?: number;
 }
 
 export interface GetCommandOutputParams {
   commandId: string;
+  /** Regex filter applied to the returned output lines. */
+  filter?: string;
   /**
    * Max time to wait for this observation before returning (does not kill the
    * process). Forwarded to the service so callers polling a running command can
@@ -95,11 +115,38 @@ export interface KillCommandParams {
   commandId: string;
 }
 
+/**
+ * Grep params mirror the tool manifest / IPC contract (`local-file-shell`'s
+ * `GrepContentParams`): the full flag set must survive to the service layer so
+ * the underlying rg/grep honors the agent's filters. `ComputerRuntime` itself
+ * only reads `pattern`; everything else is forwarded verbatim.
+ */
 export interface GrepContentParams {
-  directory: string;
-  filePattern?: string;
-  pattern: string;
-  recursive?: boolean;
+  '-A'?: number;
+  '-B'?: number;
+  '-C'?: number;
+  '-i'?: boolean;
+  '-n'?: boolean;
+  /** Legacy alias for the search root. Prefer `path`/`scope`. */
+  'cwd'?: string;
+  /** @deprecated Legacy alias for the search root. Prefer `path`/`scope`. */
+  'directory'?: string;
+  /** @deprecated Legacy alias for `glob`. */
+  'filePattern'?: string;
+  /** ripgrep-style glob filter on file paths. */
+  'glob'?: string;
+  'head_limit'?: number;
+  'multiline'?: boolean;
+  'output_mode'?: 'content' | 'count' | 'files_with_matches';
+  /** Absolute search root. Takes precedence over `scope` on the service side. */
+  'path'?: string;
+  'pattern': string;
+  'recursive'?: boolean;
+  /** Working directory scope limiting the search. */
+  'scope'?: string;
+  /** Preferred search tool. */
+  'tool'?: 'ag' | 'grep' | 'rg';
+  'type'?: string;
 }
 
 // ==================== State ====================
@@ -214,6 +261,16 @@ export interface RunCommandState {
     stderr: { path: string; size: number; truncated: boolean };
     stdout: { path: string; size: number; truncated: boolean };
   };
+  /**
+   * Whether the device sandbox actually confined this command.
+   *
+   * The execution-environment chip states the user's *intent*; this states the
+   * outcome. They can differ — a run routed somewhere the sandbox flag never
+   * reached executes unfenced while the chip still reads "Local sandbox" — and
+   * a security property nobody can observe is one nobody should trust.
+   * Undefined when no sandbox was requested.
+   */
+  sandboxed?: boolean;
   stderr?: string;
   stdout?: string;
   success: boolean;

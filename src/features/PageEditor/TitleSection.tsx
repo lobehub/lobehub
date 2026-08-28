@@ -17,6 +17,10 @@ import { truncateByWeightedLength } from '@/utils/textLength';
 import { usePageEditorStore } from './store';
 import { usePageEditable } from './usePageEditable';
 
+export const getTitleTextAreaInteractionProps = (canEdit: boolean) => ({
+  readOnly: !canEdit,
+});
+
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
@@ -114,8 +118,8 @@ const TitleSection = memo(() => {
       ) : (
         <TextArea
           autoSize={{ minRows: 1 }}
-          disabled={!canEdit}
           placeholder={t('pageEditor.titlePlaceholder')}
+          {...getTitleTextAreaInteractionProps(canEdit)}
           value={title}
           variant={'borderless'}
           style={{

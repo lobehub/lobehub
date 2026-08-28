@@ -212,7 +212,7 @@ export default {
     'You have connected to {{name}}. Click to disconnect.',
   'providerModels.config.oauth.cancel': 'Cancel',
   'providerModels.config.oauth.codeExpired': 'Authorization code has expired. Please try again.',
-  'providerModels.config.oauth.connect': 'Connect with {{name}}',
+  'providerModels.config.oauth.connect': 'Connect',
   'providerModels.config.oauth.connectDesc': 'Click to authorize via browser. No API key required.',
   'providerModels.config.oauth.connected': 'Connected',
   'providerModels.config.oauth.connecting': 'Connecting...',
@@ -223,11 +223,10 @@ export default {
   'providerModels.config.oauth.disconnect': 'Disconnect',
   'providerModels.config.oauth.disconnectConfirm':
     'Are you sure you want to disconnect? You will need to re-authorize to use this provider.',
-  'providerModels.config.oauth.enterCode': 'Enter the code on the opened page:',
-  'providerModels.config.oauth.openBrowser': 'Open browser to authorize',
+  'providerModels.config.oauth.enterCode':
+    'Enter the code below on the authorization page. If it did not open automatically, go to:',
   'providerModels.config.oauth.polling': 'Waiting for authorization...',
   'providerModels.config.oauth.retry': 'Retry',
-  'providerModels.config.oauth.serviceNote': 'Service provided by {{name}}',
   'providerModels.config.oauth.title': 'OAuth Authorization',
   'providerModels.config.responsesApi.desc':
     "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",
@@ -279,16 +278,22 @@ export default {
     'For GPT-5.6 series; controls reasoning intensity from None through Max.',
   'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
     'For GLM-5.2; controls reasoning effort with High and Max levels.',
+  'providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint':
+    'For GLM-5.3; controls reasoning effort with Low, High, and Max levels. Thinking cannot be disabled.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
     'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
   'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint':
     'For Grok 4.3 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint':
     'For Grok 4.5 series; controls reasoning intensity (low/medium/high, default high).',
+  'providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint':
+    'For Grok 4.6 series; controls reasoning intensity (low/medium/high/xhigh, default high). Reasoning cannot be disabled.',
   'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint':
     'For Hy3 models; controls reasoning intensity. no_think (ultra-fast response), low (quick reasoning), and high (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks.',
   'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint':
     'For Ring 2.6 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint':
+    'For DeepSeek V4 GA thinking mode; controls reasoning intensity. Adds a `low` tier on top of the original V4 levels. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
   'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
     'For DeepSeek V4 thinking mode; controls reasoning intensity. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
@@ -421,7 +426,6 @@ export default {
   'providerModels.list.search': 'Search Models...',
   'providerModels.list.searchResult': '{{count}} models found',
   'providerModels.list.title': 'Model List',
-  'providerModels.list.total': '{{count}} models available',
   'providerModels.searchNotFound': 'No search results found',
   'providerModels.tabs.all': 'All',
   'providerModels.tabs.asr': 'ASR',

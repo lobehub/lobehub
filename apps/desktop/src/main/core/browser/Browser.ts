@@ -12,6 +12,8 @@ import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
 import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
+import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
+import { SYSTEM_LANGUAGE_ARG_PREFIX } from '~common/systemLanguage';
 
 import type { App } from '../App';
 import { WindowStateManager } from './WindowStateManager';
@@ -69,6 +71,7 @@ export interface BrowserWindowOpts extends BrowserWindowConstructorOptions {
   keepAlive?: boolean;
   parentIdentifier?: string;
   path: string;
+  restoreWindowState?: boolean;
   showOnInit?: boolean;
   title?: string;
   width?: number;
@@ -82,6 +85,11 @@ export default class Browser {
   private readonly themeManager: WindowThemeManager;
 
   private _browserWindow?: BrowserWindow;
+  private hasPresentedFirstFrame = false;
+  private resolveFirstFrame!: () => void;
+  private readonly firstFramePromise = new Promise<void>((resolve) => {
+    this.resolveFirstFrame = resolve;
+  });
 
   readonly identifier: string;
   readonly options: BrowserWindowOpts;
@@ -154,6 +162,7 @@ export default class Browser {
       title,
       width,
       height,
+      restoreWindowState = true,
       // Strip platform visual effect props — these are managed exclusively
       // by WindowThemeManager.getPlatformConfig() to prevent config leaking
       // from appBrowsers/windowTemplates into the BrowserWindow constructor.
@@ -163,7 +172,9 @@ export default class Browser {
       ...rest
     } = this.options;
 
-    const resolvedState = this.stateManager.resolveState({ height, width });
+    const resolvedState = restoreWindowState
+      ? this.stateManager.resolveState({ height, width })
+      : { height, width };
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
@@ -177,6 +188,7 @@ export default class Browser {
       show: false,
       title,
       webPreferences: {
+        additionalArguments: [`${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`],
         backgroundThrottling: false,
         contextIsolation: true,
         preload: path.join(preloadDir, 'index.js'),
@@ -247,14 +259,12 @@ export default class Browser {
   }
 
   private initiateContentLoading(): void {
-    logger.debug(`[${this.identifier}] Initiating placeholder and URL loading sequence.`);
-    this.loadPlaceholder().then(() => {
-      this.loadUrl(this.options.path).catch((e) => {
-        logger.error(
-          `[${this.identifier}] Initial loadUrl error for path '${this.options.path}':`,
-          e,
-        );
-      });
+    logger.debug(`[${this.identifier}] Loading initial renderer URL directly.`);
+    this.loadUrl(this.options.path).catch((e) => {
+      logger.error(
+        `[${this.identifier}] Initial loadUrl error for path '${this.options.path}':`,
+        e,
+      );
     });
   }
 
@@ -327,6 +337,8 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Setting up 'ready-to-show' event listener.`);
     browserWindow.once('ready-to-show', () => {
       logger.debug(`[${this.identifier}] Window 'ready-to-show' event fired.`);
+      this.hasPresentedFirstFrame = true;
+      this.resolveFirstFrame();
       if (this.options.showOnInit) {
         logger.debug(`Showing window ${this.identifier} because showOnInit is true.`);
         this.show();
@@ -512,6 +524,21 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Splash screen placeholder loaded.`);
   };
 
+  /** Wait until Chromium has produced a presentable frame, with a safety timeout. */
+  waitForFirstFrame = async (timeoutMs: number = 5000): Promise<void> => {
+    if (this.hasPresentedFirstFrame) return;
+
+    let timeout: NodeJS.Timeout | undefined;
+    await Promise.race([
+      this.firstFramePromise,
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
+    if (timeout) clearTimeout(timeout);
+  };
+
   loadUrl = async (path: string): Promise<void> => {
     const initUrl = await this.app.buildRendererUrl(path);
     const urlWithLocale = this.buildUrlWithLocale(initUrl);
@@ -529,11 +556,12 @@ export default class Browser {
   };
 
   private buildUrlWithLocale(initUrl: string): string {
-    const storedLocale = this.app.storeManager.get('locale', 'auto');
-    if (storedLocale && storedLocale !== 'auto') {
-      return `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${storedLocale}`;
-    }
-    return initUrl;
+    // Always inject `lng` — including for `auto`, where the main process is the
+    // only side that can resolve the real OS language (the renderer's
+    // `navigator.language` reports English once packaging prunes the app's locales).
+    const locale = resolveUILocale(this.app.storeManager.get('locale', 'auto'));
+
+    return `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${locale}`;
   }
 
   private async handleLoadError(urlWithLocale: string): Promise<void> {

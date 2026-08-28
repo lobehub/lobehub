@@ -8,6 +8,7 @@ import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/util
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 
 const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
@@ -30,6 +31,11 @@ const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is 
  * @see https://github.com/pydantic/pydantic-ai/issues/3881
  */
 export const GEMINI_MAGIC_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
+
+interface GoogleMessageBuildOptions {
+  model?: string;
+  thoughtSignatureScope?: SignatureScope;
+}
 
 const getGeminiVersion = (model?: string) => {
   if (!model) return null;
@@ -71,16 +77,22 @@ const supportsFunctionCallId = (model?: string) => {
 
 const buildExternalUrlFileDataPart = async (
   url: string,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
+  fallbackMimeType?: string,
 ): Promise<Part | undefined> => {
   if (!supportsExternalUrlFileData(options?.model) || !isPublicExternalUrl(url)) return undefined;
 
   const validation = await validateExternalUrl(url);
   if (validation.isValid) {
+    const mimeType =
+      validation.contentType && validation.contentType !== 'application/octet-stream'
+        ? validation.contentType
+        : fallbackMimeType || validation.contentType;
+
     return {
       fileData: {
         fileUri: url,
-        mimeType: validation.contentType,
+        mimeType,
       },
       thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
     };
@@ -103,7 +115,7 @@ const buildExternalUrlFileDataPart = async (
  */
 export const buildGooglePart = async (
   content: UserMessageContentPart,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Part | undefined> => {
   switch (content.type) {
     default: {
@@ -192,6 +204,7 @@ export const buildGooglePart = async (
 
     case 'audio_url': {
       const { mimeType, base64, type } = parseDataUri(content.audio_url.url);
+      const recordedMimeType = content.audio_url.mimeType?.split(';')[0].trim();
 
       if (type === 'base64') {
         if (!base64) {
@@ -199,7 +212,7 @@ export const buildGooglePart = async (
         }
 
         return {
-          inlineData: { data: base64, mimeType: mimeType || 'audio/mp3' },
+          inlineData: { data: base64, mimeType: mimeType || recordedMimeType || 'audio/mp3' },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -207,16 +220,20 @@ export const buildGooglePart = async (
       if (type === 'url') {
         const url = content.audio_url.url;
 
-        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options, recordedMimeType);
         if (externalUrlPart) return externalUrlPart;
 
         // Fallback: convert URL to base64 (for private/local URLs or earlier model
         // generations that don't support external fileData URIs).
         // imageUrlToBase64 provides SSRF protection and works for any binary data.
         const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+        const resolvedMimeType =
+          urlMimeType && urlMimeType !== 'application/octet-stream'
+            ? urlMimeType
+            : recordedMimeType || urlMimeType || 'audio/mp3';
 
         return {
-          inlineData: { data: urlBase64, mimeType: urlMimeType || 'audio/mp3' },
+          inlineData: { data: urlBase64, mimeType: resolvedMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -232,7 +249,7 @@ export const buildGooglePart = async (
 export const buildGoogleMessage = async (
   message: OpenAIChatMessage,
   toolCallNameMap?: Map<string, string>,
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Content> => {
   const content = message.content as string | UserMessageContentPart[];
 
@@ -283,7 +300,11 @@ export const buildGoogleMessage = async (
             id: supportsFunctionCallId(options?.model) ? tool.id : undefined,
             name: tool.function.name,
           },
-          thoughtSignature: tool.thoughtSignature,
+          thoughtSignature: resolveScopedSignature(
+            tool.thoughtSignature,
+            options?.thoughtSignatureScope,
+            'thought_signature',
+          ),
         };
       }),
       role: 'model',
@@ -328,7 +349,7 @@ export const buildGoogleMessage = async (
  */
 export const buildGoogleMessages = async (
   messages: OpenAIChatMessage[],
-  options?: { model?: string },
+  options?: GoogleMessageBuildOptions,
 ): Promise<Content[]> => {
   const toolCallNameMap = new Map<string, string>();
 

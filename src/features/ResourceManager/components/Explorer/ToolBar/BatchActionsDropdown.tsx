@@ -1,7 +1,6 @@
 import { type DropdownItem } from '@lobehub/ui';
 import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import {
   BookMinusIcon,
   BookPlusIcon,
@@ -16,9 +15,9 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useKnowledgeBaseStore } from '@/store/library';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
@@ -38,7 +37,6 @@ interface BatchActionsDropdownProps {
 
 const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onActionClick }) => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { message } = App.useApp();
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
   const [resolveSelectedResourceIds, selectAllState, listVisibility] = useResourceManagerStore(
@@ -109,7 +107,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         try {
           const effectiveSelectedIds = await resolveSelectedResourceIds();
           await addFilesToKnowledgeBase(kb.id, effectiveSelectedIds);
-          message.success(
+          toast.success(
             t('addToKnowledgeBase.addSuccess', {
               count: selectAllState === 'all' ? effectiveSelectedIds.length : selectCount,
               ns: 'knowledgeBase',
@@ -117,7 +115,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
           );
         } catch (e) {
           console.error(e);
-          message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+          toast.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
         }
       },
     }));
@@ -140,7 +138,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
             okText: t('FileManager.actions.removeFromLibrary'),
             onOk: async () => {
               await onActionClick('removeFromKnowledgeBase');
-              message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+              toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
             },
             title: t('FileManager.actions.removeFromLibrary'),
           });
@@ -197,7 +195,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         onClick: async () => {
           const handleDelete = async () => {
             await onActionClick('delete');
-            message.success(t('FileManager.actions.deleteSuccess'));
+            toast.success(t('FileManager.actions.deleteSuccess'));
           };
 
           if (isWorkspaceOwnerDeleteAll) {
@@ -242,7 +240,6 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     addFilesToKnowledgeBase,
     resolveSelectedResourceIds,
     t,
-    message,
     knowledgeBases,
     canEditResources,
     listVisibility,

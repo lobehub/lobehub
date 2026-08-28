@@ -34,9 +34,10 @@ const currentActiveThread = (s: ChatStoreState): ThreadItem | undefined => {
 
 const isActiveThreadSubagent = (s: ChatStoreState): boolean => {
   const thread = currentActiveThread(s);
-  // Isolation threads (CC subagents + lobe-agent sub-agents) are driven by the
-  // parent agent, so the thread view is read-only regardless of origin.
-  return thread?.type === ThreadType.Isolation;
+  // Only tool-spawned subagent threads are externally owned and read-only.
+  // Direct @Agent isolation threads are ordinary target-Agent conversations
+  // after the delegated run completes, so users can continue chatting there.
+  return !!thread?.metadata?.sourceToolCallId;
 };
 
 const getThreadsByTopic = (topicId?: string) => (s: ChatStoreState) => {
@@ -49,6 +50,14 @@ const getThreadsBySourceMsgId = (id: string) => (s: ChatStoreState) => {
   const threads = currentTopicThreads(s);
 
   return threads.filter((t) => t.sourceMessageId === id);
+};
+
+const getIsolationThreadBySourceMsgId = (id: string) => (s: ChatStoreState) => {
+  const threads = currentTopicThreads(s);
+
+  return threads.find(
+    (thread) => thread.sourceMessageId === id && thread.type === ThreadType.Isolation,
+  );
 };
 
 const hasThreadBySourceMsgId = (id: string) => (s: ChatStoreState) => {
@@ -167,6 +176,7 @@ export const threadSelectors = {
   currentTopicThreads,
   getThreadChildMessages,
   getThreadDbMessages,
+  getIsolationThreadBySourceMsgId,
   getThreadsBySourceMsgId,
   getThreadsByTopic,
   hasThreadBySourceMsgId,

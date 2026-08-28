@@ -1,5 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { getPluginMode, MAX_ONBOARDING_STEPS, upsertPluginMode } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
@@ -16,6 +16,7 @@ export const createOnboardingSlice = (set: Setter, get: () => UserStore, _api?: 
 export class OnboardingActionImpl {
   readonly #get: () => UserStore;
   readonly #set: Setter;
+  #writeChain: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
@@ -23,114 +24,73 @@ export class OnboardingActionImpl {
     this.#get = get;
   }
 
-  finishOnboarding = async (): Promise<void> => {
-    const currentStep = onboardingSelectors.currentStep(this.#get());
-
-    await userService.updateOnboarding({
-      currentStep,
-      finishedAt: new Date().toISOString(),
-      version: CURRENT_ONBOARDING_VERSION,
-    });
-
-    await this.#get().refreshUserState();
+  #enqueueOnboardingWrite = (task: () => Promise<unknown>): Promise<unknown> => {
+    const run = this.#writeChain.then(task, task);
+    this.#writeChain = run.catch(() => undefined);
+    return run;
   };
 
-  resetOnboarding = async (): Promise<void> => {
+  finishOnboarding = async (): Promise<void> => {
+    const currentStep = onboardingSelectors.currentStep(this.#get());
+    const finishedAt = new Date().toISOString();
+
     this.#set(
       {
-        isProcessingStepQueue: false,
-        localOnboardingStep: 1,
-        stepUpdateQueue: [],
+        onboarding: {
+          ...this.#get().onboarding,
+          currentStep,
+          finishedAt,
+          version: CURRENT_ONBOARDING_VERSION,
+        },
       },
       false,
-      'resetOnboarding/optimistic',
+      'finishOnboarding/optimistic',
     );
 
-    await userService.updateOnboarding({
-      currentStep: 1,
-      version: CURRENT_ONBOARDING_VERSION,
-    });
+    await this.#enqueueOnboardingWrite(() =>
+      userService.updateOnboarding({
+        currentStep,
+        finishedAt,
+        version: CURRENT_ONBOARDING_VERSION,
+      }),
+    );
 
     await this.#get().refreshUserState();
   };
 
   goToNextStep = (): void => {
     const currentStep = onboardingSelectors.currentStep(this.#get());
-    if (currentStep === MAX_ONBOARDING_STEPS) return;
-
-    const nextStep = currentStep + 1;
-    this.#set({ localOnboardingStep: nextStep }, false, 'goToNextStep/optimistic');
-    this.#get().internal_queueStepUpdate(nextStep);
+    if (currentStep >= CLASSIC_ONBOARDING_MAX_STEP) return;
+    void this.setOnboardingStep(currentStep + 1);
   };
 
   goToPreviousStep = (): void => {
     const currentStep = onboardingSelectors.currentStep(this.#get());
-    if (currentStep === 1) return;
-
-    const prevStep = currentStep - 1;
-    this.#set({ localOnboardingStep: prevStep }, false, 'goToPreviousStep/optimistic');
-    this.#get().internal_queueStepUpdate(prevStep);
+    if (currentStep <= 1) return;
+    void this.setOnboardingStep(currentStep - 1);
   };
 
-  internal_processStepUpdateQueue = async (): Promise<void> => {
-    const { isProcessingStepQueue, stepUpdateQueue } = this.#get();
-    if (isProcessingStepQueue || stepUpdateQueue.length === 0) return;
+  resetOnboarding = async (): Promise<void> => {
+    this.#set({ localOnboardingStep: 1 }, false, 'resetOnboarding/optimistic');
 
-    this.#set({ isProcessingStepQueue: true }, false, 'processStepUpdateQueue/start');
+    await this.#enqueueOnboardingWrite(() =>
+      userService.updateOnboarding({ currentStep: 1, version: CURRENT_ONBOARDING_VERSION }),
+    );
 
-    while (this.#get().stepUpdateQueue.length > 0) {
-      const step = this.#get().stepUpdateQueue[0];
-      const finishedAt = onboardingSelectors.finishedAt(this.#get());
-
-      try {
-        await userService.updateOnboarding({
-          currentStep: step,
-          finishedAt,
-          version: CURRENT_ONBOARDING_VERSION,
-        });
-      } catch (error) {
-        console.error('Failed to update onboarding step:', error);
-      }
-
-      // Remove the completed task
-      this.#set(
-        { stepUpdateQueue: this.#get().stepUpdateQueue.slice(1) },
-        false,
-        'processStepUpdateQueue/shift',
-      );
-    }
-
-    this.#set({ isProcessingStepQueue: false }, false, 'processStepUpdateQueue/end');
-
-    // Sync with server state after all updates complete
     await this.#get().refreshUserState();
-  };
-
-  internal_queueStepUpdate = (step: number): void => {
-    const { stepUpdateQueue } = this.#get();
-
-    if (stepUpdateQueue.length === 0) {
-      // Queue is empty, add task and start processing
-      this.#set({ stepUpdateQueue: [step] }, false, 'queueStepUpdate/push');
-      this.#get().internal_processStepUpdateQueue();
-    } else if (stepUpdateQueue.length === 1) {
-      // One task is executing, add as pending
-      this.#set({ stepUpdateQueue: [...stepUpdateQueue, step] }, false, 'queueStepUpdate/push');
-    } else {
-      // Queue is full (length >= 2), replace the pending task
-      this.#set({ stepUpdateQueue: [stepUpdateQueue[0], step] }, false, 'queueStepUpdate/replace');
-    }
   };
 
   setOnboardingStep = async (step: number): Promise<void> => {
     // Optimistic update
     this.#set({ localOnboardingStep: step }, false, 'setOnboardingStep/optimistic');
 
-    const finishedAt = onboardingSelectors.finishedAt(this.#get());
-    await userService.updateOnboarding({
-      currentStep: step,
-      finishedAt,
-      version: CURRENT_ONBOARDING_VERSION,
+    await this.#enqueueOnboardingWrite(() => {
+      const finishedAt = onboardingSelectors.finishedAt(this.#get());
+      return userService.updateOnboarding({
+        currentStep: step,
+        finishedAt,
+        version: CURRENT_ONBOARDING_VERSION,
+      });
     });
 
     await this.#get().refreshUserState();
@@ -153,18 +113,6 @@ export class OnboardingActionImpl {
     await agentStore.updateAgentConfigById(inboxAgentId, {
       plugins: upsertPluginMode(inboxRawPlugins, id, shouldOpen ? 'pinned' : 'auto'),
     });
-  };
-
-  updateDefaultModel = async (model: string, provider: string): Promise<void> => {
-    const agentStore = getAgentStoreState();
-    const inboxAgentId = agentStore.builtinAgentIdMap[INBOX_SESSION_ID];
-
-    await Promise.all([
-      // 1. Update user settings' defaultAgentConfig
-      this.#get().updateDefaultAgent({ config: { model, provider } }),
-      // 2. Update inbox agent's model
-      inboxAgentId && agentStore.updateAgentConfigById(inboxAgentId, { model, provider }),
-    ]);
   };
 }
 

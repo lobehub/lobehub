@@ -12,7 +12,11 @@ import {
   pickMeaningful,
 } from './resolveRouteMeta';
 
-const agentMeta: RouteMeta = { icon: MessageSquare, titleKey: 'navigation.chat' };
+const agentMeta: RouteMeta = {
+  icon: MessageSquare,
+  tabTitleKey: 'navigation.newChat',
+  titleKey: 'navigation.chat',
+};
 
 const fixtureRoutes: RouteObject[] = [
   {
@@ -25,6 +29,7 @@ describe('matchRouteMeta', () => {
   it('returns the deepest static meta for a matched route', () => {
     const result = matchRouteMeta(fixtureRoutes, '/agent/abc');
     expect(result.static.icon).toBe(MessageSquare);
+    expect(result.static.tabTitleKey).toBe('navigation.newChat');
     expect(result.static.titleKey).toBe('navigation.chat');
     expect(result.params.aid).toBe('abc');
     expect(result.meta).toBe(agentMeta);

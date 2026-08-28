@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
-import { getComposioClient } from '@/libs/composio';
+import { getComposioClient, isComposioConnectedAccountNotFoundError } from '@/libs/composio';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
@@ -65,14 +65,29 @@ export const composioToolsRouter = router({
         });
       }
 
-      const result = await (ctx.composioClient.tools as any).execute(input.toolSlug, {
-        arguments: input.toolArgs || {},
-        connectedAccountId,
-        // Toolkit version resolves to "latest"; allow manual execution without a
-        // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
-        dangerouslySkipVersionCheck: true,
-        userId: ownerUserId ?? ctx.userId,
-      });
+      let result: unknown;
+      try {
+        result = await (ctx.composioClient.tools as any).execute(input.toolSlug, {
+          arguments: input.toolArgs || {},
+          connectedAccountId,
+          // Toolkit version resolves to "latest"; allow manual execution without a
+          // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
+          dangerouslySkipVersionCheck: true,
+          userId: ownerUserId ?? ctx.userId,
+        });
+      } catch (error) {
+        if (connector?.id && isComposioConnectedAccountNotFoundError(error)) {
+          try {
+            await ctx.connectorModel.markComposioConnectionUnavailable(
+              connector.id,
+              connectedAccountId,
+            );
+          } catch {
+            // Preserve the remote execution error if the secondary health write fails.
+          }
+        }
+        throw error;
+      }
 
       if (!result) {
         return {

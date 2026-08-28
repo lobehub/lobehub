@@ -4,10 +4,9 @@ import type { FollowUpChip } from '@lobechat/types';
 import { Reply } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 
-import { useConversationStore } from '@/features/Conversation';
+import { messageStateSelectors, useConversationStore } from '@/features/Conversation/store';
 import { followUpActionSelectors, useFollowUpActionStore } from '@/store/followUpAction';
 
-import { messageStateSelectors } from '../store';
 import { styles } from './style';
 
 interface FollowUpChipsProps {
@@ -25,21 +24,16 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ conversationKey, messageId }) 
     [childIdsKey, conversationKey, messageId],
   );
   const chips = useFollowUpActionStore(selector);
-  const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
-  const editor = useConversationStore((s) => s.editor);
+  const fillInputMessage = useConversationStore((s) => s.fillInputMessage);
   const isGenerating = useConversationStore(
     messageStateSelectors.isAssistantGroupItemGenerating(messageId),
   );
 
   const handleClick = useCallback(
     (chip: FollowUpChip) => {
-      updateInputMessage('');
-      editor?.setDocument('text', '');
-      updateInputMessage(chip.message);
-      editor?.setDocument('text', chip.message);
-      editor?.focus();
+      fillInputMessage(chip.message);
     },
-    [updateInputMessage, editor],
+    [fillInputMessage],
   );
 
   if (chips.length === 0 || isGenerating) return null;

@@ -1,6 +1,6 @@
-import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App, Form as AForm } from 'antd';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
+import { Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { useImperativeHandle, useState } from 'react';
@@ -175,7 +175,6 @@ const Settings = ({
     s.updatePluginSettings,
     s.updateInstallMcpPlugin,
   ]);
-  const { message } = App.useApp();
 
   useImperativeHandle(ref, () => ({
     reset: () => {
@@ -207,11 +206,11 @@ const Settings = ({
     try {
       await updateInstallPlugin(identifier!, values);
 
-      message.success(t('settings.messages.connectionUpdateSuccess'));
+      toast.success(t('settings.messages.connectionUpdateSuccess'));
       setIsEditingConnection(false);
     } catch (error) {
       console.error('Connection update failed:', error);
-      message.error(t('settings.messages.connectionUpdateFailed'));
+      toast.error(t('settings.messages.connectionUpdateFailed'));
     } finally {
       setConnectionLoading(false);
     }
@@ -226,10 +225,10 @@ const Settings = ({
     setLoading(true);
     try {
       await updatePluginSettings(identifier!, values.env || {}, { override: true });
-      message.success(t('settings.messages.envUpdateSuccess'));
+      toast.success(t('settings.messages.envUpdateSuccess'));
     } catch (error) {
       console.error('Settings update failed:', error);
-      message.error(t('settings.messages.envUpdateFailed'));
+      toast.error(t('settings.messages.envUpdateFailed'));
     } finally {
       setLoading(false);
     }
@@ -322,7 +321,16 @@ const Settings = ({
                       name={'command'}
                       rules={[{ message: t('settings.rules.commandRequired'), required: true }]}
                     >
-                      <MCPStdioCommandInput placeholder="npx, uv, python..." />
+                      <MCPStdioCommandInput
+                        placeholder="npx, uv, python..."
+                        onParsedArgs={(args) => {
+                          const existing: string[] = connectionForm.getFieldValue('args') ?? [];
+                          connectionForm.setFieldValue('args', [
+                            ...args,
+                            ...existing.filter(Boolean),
+                          ]);
+                        }}
+                      />
                     </AForm.Item>
 
                     <AForm.Item

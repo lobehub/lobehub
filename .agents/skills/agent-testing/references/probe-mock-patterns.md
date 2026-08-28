@@ -381,3 +381,19 @@ unquoted vars` — stashing `S="--session x --cdp 9226"` then `agent-browser $S`
 list` must print YOUR port and path. Same applies to ports: a worktree allocates its own
   `SERVER_PORT`/`SPA_PORT`, so re-run `test-env.sh` inside the worktree you are testing rather
   than assuming another checkout's ports.
+
+### B5. ✅ WORKS — client-service mock state must survive reloads; persisted SWR cache replays old terminal data under the same key
+
+- **Situation**: driving a polling flow's UI states (processing / failed / done) with an HMR
+  mock of the client service, switching modes between full page reloads via a `window.__MODE`
+  flag.
+- **Doesn't work**: `window` flags — a reload wipes them before the first fetch, so the run
+  races the mock's default mode. Worse, the persisted SWR cache (localStorage/IndexedDB, B3)
+  hydrates the PREVIOUS run's terminal result under the same SWR key at mount — a
+  "done"-triggered effect (auto-advance) can fire \~1s after load even though the mock now
+  returns an in-progress state, which reads as "the mode flag didn't take".
+- **Works**: read the mode from `localStorage` inside the mock (set it BEFORE the reload), and
+  make the mock's cache key vary with the mode (e.g. `topic-mock-${mode}`) so each mode gets a
+  fresh SWR key that the persisted cache has never seen. Also log every mock entrypoint call
+  into a `window.__CALLS` array — it is the cheapest proof of which contract fields the UI
+  actually sent (e.g. per-provider retry ids).

@@ -5,7 +5,13 @@ import {
   verifySurfaces,
   verifyVisibilities,
 } from '@lobechat/const/verify';
-import type { VerifyCheckItem, VerifyRunContext, VerifyRunScenario } from '@lobechat/types';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import type {
+  VerifyCheckItem,
+  VerifyCheckResultMetadata,
+  VerifyRunContext,
+  VerifyRunScenario,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -32,6 +38,8 @@ import {
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
+import { GoalCriteriaGeneratorService } from '@/server/services/goal/criteriaGenerator';
 import {
   AcceptanceService,
   createEvidenceFileResolver,
@@ -78,6 +86,7 @@ const evidenceTypeSchema = z.enum([
   'screenshot',
   'gif',
   'video',
+  'audio',
   'text',
   'markdown',
   'dom_snapshot',
@@ -265,6 +274,11 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
       executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
       tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
       feedbackService: new VerifyFeedbackService(ctx.serverDB, ctx.userId, workspaceId),
+      goalCriteriaGenerator: new GoalCriteriaGeneratorService(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      ),
       operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId),
       planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
       reportModel: new VerifyReportModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -341,6 +355,10 @@ export const verifyRouter = router({
       assertWorkspaceRowManageable(ctx, criterion.userId, 'verify criterion');
       return ctx.criterionModel.delete(input.id);
     }),
+
+  forkRubricCriteria: verifyWriteProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
 
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 
@@ -467,7 +485,7 @@ export const verifyRouter = router({
 
   /**
    * Config-time: turn a one-sentence acceptance requirement into proposed
-   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.VerifyPlanGen),
+   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.GoalCriteriaGen),
    * returns drafts only — nothing persisted, no operation needed.
    */
   generateCriteria: verifyWriteProcedure
@@ -479,7 +497,82 @@ export const verifyRouter = router({
         modelConfig: modelConfigSchema,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateCriteria(input)),
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.planGenerator.generateCriteria(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          // Runtime errors are plain payloads, so tRPC normalizes them into an Error cause.
+          // Mark the normalized cause that the shared handler actually receives.
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /** Draft the standing acceptance contract for the create-goal flow. */
+  generateGoalCriteria: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generate(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /** Draft the generated goal title, instruction, and standing acceptance contract. */
+  generateGoalPlan: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generatePlan(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
 
   /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
   createCriteria: verifyWriteProcedure
@@ -750,6 +843,7 @@ export const verifyRouter = router({
           checkItemIndex: z.number().optional(),
           checkItemTitle: z.string().optional(),
           confidence: z.number().min(0).max(1).optional(),
+          metadata: z.unknown().nullish(),
           required: z.boolean().optional(),
           status: checkStatusSchema.optional(),
           // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
@@ -782,6 +876,7 @@ export const verifyRouter = router({
         checkItemTitle: input.checkItemTitle,
         completedAt: new Date(),
         confidence: input.confidence,
+        metadata: input.metadata as VerifyCheckResultMetadata | null | undefined,
         required: input.required ?? true,
         // Prefer an explicit status; else derive from the verdict (the refine
         // guarantees at least one is present).

@@ -1,13 +1,12 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
 
 import Conversation from './features/Conversation';
 import ChatHydration from './features/Conversation/ChatHydration';
 import TelemetryNotification from './features/TelemetryNotification';
 
-const ChatPage = memo(() => {
+const ChatPage = () => {
   return (
     <>
       <ChatHydration />
@@ -21,6 +20,6 @@ const ChatPage = memo(() => {
       <TelemetryNotification mobile={false} />
     </>
   );
-});
+};
 
 export default ChatPage;

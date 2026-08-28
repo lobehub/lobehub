@@ -7,8 +7,6 @@ const taskListTotal = (s: TaskStoreState) => s.tasksTotal;
 
 const isTaskListInit = (s: TaskStoreState) => s.isTaskListInit;
 
-const viewMode = (s: TaskStoreState) => s.viewMode;
-
 const listVisibility = (s: TaskStoreState) => s.listVisibility;
 
 const statusDisplayMap: Record<string, string> = {
@@ -56,5 +54,4 @@ export const taskListSelectors = {
   taskGroups,
   taskList,
   taskListTotal,
-  viewMode,
 };

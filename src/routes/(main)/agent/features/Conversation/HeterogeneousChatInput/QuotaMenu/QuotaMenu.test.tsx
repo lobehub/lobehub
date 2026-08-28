@@ -3,6 +3,7 @@
  */
 import type * as LobechatConstModule from '@lobechat/const';
 import type * as ElectronClientIpcModule from '@lobechat/electron-client-ipc';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,9 +20,12 @@ const mockService = vi.hoisted(() => ({
 
 const effectiveAgencyConfig = vi.hoisted(() => ({
   current: {
-    boundDeviceId: 'personal-device',
+    boundDeviceId: 'personal-device' as string | undefined,
     executionTarget: 'local' as const,
-    heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+    heterogeneousProvider: {
+      command: 'codex',
+      type: 'codex',
+    } as HeterogeneousProviderConfig,
   },
   workspaceScoped: false,
 }));
@@ -38,6 +42,14 @@ vi.mock('@lobechat/electron-client-ipc', async (importOriginal) => ({
 
 vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
   default: () => <div data-testid="workspace-controls" />,
+}));
+
+vi.mock('@/features/ChatInput/ControlBar/HeteroDeviceSwitcher', () => ({
+  default: () => <div data-testid="hetero-device-switcher" />,
+}));
+
+vi.mock('@/features/AgentQuotaCalendar', () => ({
+  openQuotaCalendarModal: vi.fn(),
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
@@ -86,12 +98,20 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: mockService,
 }));
 
+// A `deviceId` routes the live sample through the device gateway TRPC instead
+// of Electron IPC (see `fetchClaudeCodeQuotaSnapshot`).
+const mockLambdaDeviceQuota = vi.hoisted(() => vi.fn());
+
+vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: { device: { getClaudeCodeQuota: { query: mockLambdaDeviceQuota } } },
+}));
+
 // The menu reads persisted quota through TRPC before falling back to the live
 // IPC fetch. Default to "nothing persisted yet" so these cases exercise the live
 // path without each one stalling on a real HTTP request; individual tests can
 // hand it persisted accounts/windows.
 const mockQuotaService = vi.hoisted(() => ({
-  getWindows: vi.fn(async (): Promise<unknown[]> => []),
+  getLatestReadings: vi.fn(async (): Promise<unknown[]> => []),
   ingestClaudeSnapshot: vi.fn(async () => undefined),
   listAccounts: vi.fn(async (): Promise<unknown[]> => []),
   listBindings: vi.fn(async (): Promise<unknown[]> => []),
@@ -123,38 +143,107 @@ vi.mock('antd-style', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ disabled, onClick }: { disabled?: boolean; onClick?: () => void }) => (
-    <button data-testid="refresh" disabled={disabled} type="button" onClick={onClick} />
-  ),
-  Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
-    <div className={className}>{children}</div>
-  ),
-  Icon: () => <svg />,
-  // Render the popover content unconditionally so window rows are assertable
-  // without driving the open/close interaction.
-  Popover: ({
-    children,
-    content,
-    onOpenChange,
-  }: {
-    children?: ReactNode;
-    content?: ReactNode;
-    onOpenChange?: (open: boolean) => void;
-  }) => (
-    <div>
-      <div data-testid="popover-content">{content}</div>
-      <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
-        {children}
+vi.mock('@lobehub/ui', async () => {
+  const { useState } = await import('react');
+
+  return {
+    ActionIcon: ({
+      disabled,
+      onClick,
+      title,
+    }: {
+      disabled?: boolean;
+      onClick?: () => void;
+      title?: string;
+    }) => (
+      <button
+        aria-label={title}
+        data-testid={title ? 'calendar' : 'refresh'}
+        disabled={disabled}
+        type="button"
+        onClick={onClick}
+      />
+    ),
+    Collapse: ({
+      defaultActiveKey = [],
+      items,
+    }: {
+      defaultActiveKey?: string[];
+      items: { children?: ReactNode; key: string; label?: ReactNode }[];
+    }) => {
+      const [activeKeys, setActiveKeys] = useState(defaultActiveKey);
+
+      return (
+        <div>
+          {items.map((item) => {
+            const expanded = activeKeys.includes(item.key);
+
+            return (
+              <div key={item.key}>
+                <button
+                  aria-expanded={expanded}
+                  type="button"
+                  onClick={() => setActiveKeys(expanded ? [] : [item.key])}
+                >
+                  {item.label}
+                </button>
+                {expanded && item.children}
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
+    Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
+      <div className={className}>{children}</div>
+    ),
+    Icon: () => <svg />,
+    // Render the popover content unconditionally so window rows are assertable
+    // without driving the open/close interaction.
+    Popover: ({
+      children,
+      content,
+      onOpenChange,
+    }: {
+      children?: ReactNode;
+      content?: ReactNode;
+      onOpenChange?: (open: boolean) => void;
+    }) => (
+      <div>
+        <div data-testid="popover-content">{content}</div>
+        <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
+          {children}
+        </div>
       </div>
-    </div>
-  ),
-  Skeleton: { Button: () => <div data-testid="skeleton" /> },
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
+    ),
+    Skeleton: { Button: () => <div data-testid="skeleton" /> },
+    Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+    Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  };
+});
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    onClick,
+    title,
+    disabled,
+  }: {
+    disabled?: boolean;
+    onClick?: (e: React.MouseEvent) => void;
+    title?: string;
+  }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? 'calendar' : 'refresh'}
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    />
+  ),
+  RadioGroup: () => null,
+  Switch: () => null,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  createModal: vi.fn(),
   Button: ({
     children,
     disabled,
@@ -190,6 +279,32 @@ const claudeSnapshot = (
   ...overrides,
 });
 
+const persistedAccount = (updatedAt = Date.now()) => ({
+  externalAccountId: 'ext-1',
+  id: 'acc-1',
+  provider: 'claude-code',
+  updatedAt: new Date(updatedAt),
+});
+
+/** The account's newest persisted session reading, captured at `capturedAt`. */
+const persistedSessionReading = (capturedAt: number) => ({
+  capturedAt,
+  limitType: 'session',
+  resetsAt: null,
+  scopeKey: '',
+  utilization: 8,
+});
+
+/** A live session reading as fossilized by the desktop sampler at `capturedAt`. */
+const liveSessionReading = (capturedAt: number) => ({
+  capturedAt,
+  isActive: true,
+  limitType: 'session',
+  resetsAt: null,
+  scopeKey: '',
+  utilization: 8,
+});
+
 const codexSnapshot = (
   overrides: Partial<ElectronClientIpcModule.CodexQuotaSnapshot> = {},
 ): ElectronClientIpcModule.CodexQuotaSnapshot => ({
@@ -216,7 +331,8 @@ beforeEach(() => {
   mockService.getCodexQuota.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
-  mockQuotaService.getWindows.mockResolvedValue([]);
+  mockQuotaService.getLatestReadings.mockResolvedValue([]);
+  mockQuotaService.ingestClaudeSnapshot.mockClear();
   mockQuotaService.listAccounts.mockResolvedValue([]);
   mockQuotaService.listBindings.mockResolvedValue([]);
 });
@@ -247,6 +363,32 @@ describe('HeteroControlBar', () => {
 
     expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
     expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not show Codex quota in API mode', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', command: 'codex', type: 'codex' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
+    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not show Claude Code quota in API mode', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' })).toBeNull();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
   });
 });
 
@@ -402,7 +544,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     mockQuotaService.listAccounts.mockResolvedValue([
       { externalAccountId: 'ext-1', id: 'acc-1', provider: 'claude-code' },
     ]);
-    mockQuotaService.getWindows.mockResolvedValue([]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([]);
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
     );
@@ -550,9 +692,325 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     expect(await screen.findByText('heteroAgent.quota.noData')).toBeTruthy();
   });
+
+  it('shows the live sample when the persisted window has already reset', async () => {
+    // A device offline since yesterday leaves a reading behind whose window has
+    // since reset. Its 100% describes spend that already refilled, so a sample
+    // attributable to the same account must lead.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      {
+        ...persistedSessionReading(Date.now() - 24 * 60 * 60_000),
+        resetsAt: Date.now() - 60 * 60_000,
+        utilization: 100,
+      },
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        identity: { externalAccountId: 'ext-1' },
+        readings: [{ ...liveSessionReading(Date.now()), utilization: 4 }],
+        session: { resetsAt: null, usedPercent: 4, windowMinutes: 300 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // 96% left from the live sample — not the reset row's 100%, and not empty.
+    expect(await screen.findByText('96%')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+  });
+
+  it('will not paint an unattributable sample under a named account', async () => {
+    // Same setup, except the sample carries no account identity (no
+    // `oauthAccount` in ~/.claude.json while the quota came from the keychain).
+    // With several logins on the machine it may belong to another account, so
+    // the panel keeps the account's own refilled window instead.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      {
+        ...persistedSessionReading(Date.now() - 24 * 60 * 60_000),
+        resetsAt: Date.now() - 60 * 60_000,
+        utilization: 100,
+      },
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ session: { resetsAt: null, usedPercent: 4, windowMinutes: 300 } }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // The reset window reads as refilled; the unattributable 96% is not shown.
+    expect(await screen.findByText('100%')).toBeTruthy();
+    expect(screen.queryByText('96%')).toBeNull();
+  });
+
+  it('keeps the 5-hour row on screen as refilled once its window resets', async () => {
+    // The regression: after five idle hours the session window rolls over and
+    // the panel used to drop the row entirely, leaving the weekly limit alone
+    // as if the plan had no session limit. A reset window is free, not absent.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      {
+        ...persistedSessionReading(Date.now() - 60_000),
+        resetsAt: Date.now() - 30 * 60_000,
+        utilization: 83,
+      },
+      {
+        capturedAt: Date.now() - 60_000,
+        limitType: 'weekly_all',
+        resetsAt: Date.now() + 4 * 24 * 60 * 60_000,
+        scopeKey: '',
+        utilization: 21,
+      },
+    ]);
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // Session refilled to 100% left, weekly still at 79% — two rows, not one.
+    expect(await screen.findByText('100%')).toBeTruthy();
+    expect(screen.getByText('79%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+  });
+
+  it('renders persisted windows without a live call while the newest reading is fresh', async () => {
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 60_000),
+    ]);
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+  });
+
+  it('refreshes from the live API when the newest persisted reading is stale', async () => {
+    // Under the previous 30 min policy this 31-minute-old reading is a
+    // conservative stale case; the gate now trips at 2 minutes.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 31 * 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 31 * 60_000),
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+    await waitFor(() =>
+      expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({ env: undefined }),
+    );
+  });
+
+  it('paints persisted windows while a stale live refresh is still in flight', async () => {
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 31 * 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 31 * 60_000),
+    ]);
+    const requests: Array<(snapshot: ElectronClientIpcModule.ClaudeCodeQuotaSnapshot) => void> = [];
+    mockService.getClaudeCodeQuota.mockImplementation(
+      () =>
+        new Promise<ElectronClientIpcModule.ClaudeCodeQuotaSnapshot>((resolve) => {
+          requests.push(resolve);
+        }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // The persisted snapshot lands before the live promise resolves — no skeleton.
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(screen.queryByTestId('skeleton')).toBeNull();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      requests[0](claudeSnapshot());
+    });
+
+    expect(screen.getByText('92%')).toBeTruthy();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('revalidates against the live API when the window regains focus', async () => {
+    // 90 s: fresh for the mount gate (2 min) but past the focus gate (60 s).
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 90_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 90_000),
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // Fresh persisted data: nothing hits the live API on mount…
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+
+    // …but regaining focus revalidates (the main-process cache rate-limits it).
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1));
+    expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({ env: undefined });
+  });
+
+  it('samples through the device gateway RPC when a deviceId is provided', async () => {
+    mockLambdaDeviceQuota.mockResolvedValue(
+      claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
+    );
+
+    render(<ClaudeCodeQuotaMenu deviceId="remote-device" />);
+
+    await waitFor(() =>
+      expect(mockLambdaDeviceQuota).toHaveBeenCalledWith({
+        deviceId: 'remote-device',
+        env: undefined,
+      }),
+    );
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse another device account when the newly selected device is unavailable', async () => {
+    const capturedAt = Date.now();
+    const account = persistedAccount();
+    mockQuotaService.listAccounts.mockResolvedValue([account]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([persistedSessionReading(capturedAt)]);
+    mockLambdaDeviceQuota.mockResolvedValueOnce(
+      claudeSnapshot({
+        identity: { externalAccountId: 'ext-1' },
+        readings: [liveSessionReading(capturedAt)],
+      }),
+    );
+
+    const { rerender } = render(<ClaudeCodeQuotaMenu deviceId="device-a" />);
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    mockLambdaDeviceQuota.mockResolvedValueOnce(null);
+    rerender(<ClaudeCodeQuotaMenu deviceId="device-b" />);
+
+    await waitFor(() =>
+      expect(mockLambdaDeviceQuota).toHaveBeenLastCalledWith({
+        deviceId: 'device-b',
+        env: undefined,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText('92%')).toBeNull());
+  });
+
+  it('auto-refreshes on the poll cadence while the tab stays visible', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+
+      mockQuotaService.listAccounts.mockResolvedValue([persistedAccount()]);
+      mockQuotaService.getLatestReadings.mockResolvedValue([
+        persistedSessionReading(Date.now() - 60_000),
+      ]);
+      mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
+
+      render(<ClaudeCodeQuotaMenu />);
+
+      expect(await screen.findByText('92%')).toBeTruthy();
+      expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2 * 60_000 + 500);
+      });
+
+      expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not re-ingest a cached live snapshot echoed back during revalidation', async () => {
+    // The sampler cache stays fresh for 90 s, so a focus revalidation can get
+    // the already-persisted readings back (same capturedAt). Snapshots are
+    // append-only — re-ingesting the echo would duplicate history rows.
+    // 90 s: fresh for the mount gate (2 min) but past the focus gate (60 s).
+    const persistedAt = Date.now() - 90_000;
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 90_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([persistedSessionReading(persistedAt)]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        identity: { externalAccountId: 'ext-1' },
+        readings: [liveSessionReading(persistedAt)],
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1));
+    expect(mockQuotaService.ingestClaudeSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('ingests genuinely fresh readings surfaced by a revalidation', async () => {
+    const persistedAt = Date.now() - 90_000;
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 90_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([persistedSessionReading(persistedAt)]);
+    const readings = [liveSessionReading(Date.now())];
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ identity: { externalAccountId: 'ext-1' }, readings }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() =>
+      expect(mockQuotaService.ingestClaudeSnapshot).toHaveBeenCalledWith({
+        deviceId: undefined,
+        identity: { externalAccountId: 'ext-1' },
+        readings,
+      }),
+    );
+  });
+
+  it('skips the focus revalidation while the snapshot is under a minute old', async () => {
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('CodexQuotaMenu', () => {
+  it.each([
+    [
+      'failed to fetch codex rate limits: error sending request for url (https://chatgpt.com/backend-api/wham/usage)',
+      'heteroAgent.codexQuota.errorConnection',
+    ],
+    ['unexpected RPC failure', 'heteroAgent.codexQuota.errorGeneric'],
+  ])('shows a friendly error instead of exposing %s', async (error, expectedMessage) => {
+    mockService.getCodexQuota.mockResolvedValue(codexSnapshot({ error, status: 'error' }));
+
+    render(<CodexQuotaMenu command="codex" />);
+
+    expect(await screen.findByText(expectedMessage)).toBeTruthy();
+    expect(screen.queryByText(error)).toBeNull();
+  });
+
   it('renders windows and the reset-credits footer', async () => {
     const resetsAt = Date.now() + 60 * 60_000;
     mockService.getCodexQuota.mockResolvedValue(
@@ -579,7 +1037,12 @@ describe('CodexQuotaMenu', () => {
     expect(
       screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),
     ).toHaveLength(2);
-    expect(screen.getByText('heteroAgent.codexQuota.resetCredits:4')).toBeTruthy();
+    const resetCreditsSummary = screen.getByText('heteroAgent.codexQuota.resetCredits:4');
+    expect(resetCreditsSummary.closest('button')?.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('#1')).toBeNull();
+
+    fireEvent.click(resetCreditsSummary);
+
     expect(screen.getByText('#1')).toBeTruthy();
     expect(screen.getByText('#2')).toBeTruthy();
     expect(screen.getByText('#3')).toBeTruthy();
@@ -598,7 +1061,7 @@ describe('CodexQuotaMenu', () => {
     });
   });
 
-  it('renders every Codex rate-limit bucket and uses the tightest window in the trigger', async () => {
+  it('hides model-specific rate-limit buckets and excludes them from the trigger', async () => {
     mockService.getCodexQuota.mockResolvedValue(
       codexSnapshot({
         rateLimits: [
@@ -622,15 +1085,15 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.compactLeft:2')).toBeTruthy();
+    expect(await screen.findByText('heteroAgent.quota.compactLeft:80')).toBeTruthy();
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
-    expect(screen.getByText('Codex Other · heteroAgent.quota.session')).toBeTruthy();
-    expect(screen.getByText('Codex Other · heteroAgent.codexQuota.monthly')).toBeTruthy();
+    expect(screen.queryByText('Codex Other · heteroAgent.quota.session')).toBeNull();
+    expect(screen.queryByText('Codex Other · heteroAgent.codexQuota.monthly')).toBeNull();
     expect(screen.getByText('90%')).toBeTruthy();
     expect(screen.getByText('80%')).toBeTruthy();
-    expect(screen.getByText('2%')).toBeTruthy();
-    expect(screen.getByText('60%')).toBeTruthy();
+    expect(screen.queryByText('2%')).toBeNull();
+    expect(screen.queryByText('60%')).toBeNull();
   });
 
   it('renders the credits-unavailable footer when the RPC omits credits', async () => {
@@ -675,6 +1138,8 @@ describe('CodexQuotaMenu', () => {
     );
 
     render(<CodexQuotaMenu />);
+
+    fireEvent.click(await screen.findByText('heteroAgent.codexQuota.resetCredits:3'));
 
     expect(await screen.findByText('Early reset')).toBeTruthy();
     expect(screen.getByText('Weekly rescue')).toBeTruthy();
@@ -734,6 +1199,7 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu command="codex" env={{ CODEX_HOME: '/custom' }} />);
 
+    fireEvent.click(await screen.findByText('heteroAgent.codexQuota.resetCredits:2'));
     fireEvent.click(await screen.findByRole('button', { name: 'heteroAgent.codexQuota.resetNow' }));
     expect(confirmModalMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -785,6 +1251,7 @@ describe('CodexQuotaMenu', () => {
     render(<CodexQuotaMenu />);
 
     expect(await screen.findByText('4%')).toBeTruthy();
+    fireEvent.click(screen.getByText('heteroAgent.codexQuota.resetCredits:1'));
 
     fireEvent.click(screen.getByTestId('refresh'));
 

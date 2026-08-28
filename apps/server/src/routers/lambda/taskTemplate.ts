@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { TaskTemplateService } from '@/server/services/taskTemplate';
 
 const listDailyRecommendSchema = z.object({
@@ -16,14 +17,16 @@ const templateIdSchema = z.object({
   templateId: z.number().int().positive(),
 });
 
-export const taskTemplateRouter = router({
-  dismiss: authedProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
+const taskTemplateProcedure = authedProcedure.use(serverDatabase);
 
-  listDailyRecommend: authedProcedure
+export const taskTemplateRouter = router({
+  dismiss: taskTemplateProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
+
+  listDailyRecommend: taskTemplateProcedure
     .input(listDailyRecommendSchema)
     .query(async ({ input, ctx }) => {
       try {
-        const service = new TaskTemplateService(ctx.userId);
+        const service = new TaskTemplateService(ctx.userId, ctx.serverDB);
         const data = await service.listDailyRecommend(input.interestKeys, {
           count: input.count,
           locale: input.locale,
@@ -40,5 +43,7 @@ export const taskTemplateRouter = router({
       }
     }),
 
-  recordCreated: authedProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
+  recordCreated: taskTemplateProcedure
+    .input(templateIdSchema)
+    .mutation(async () => ({ success: true })),
 });

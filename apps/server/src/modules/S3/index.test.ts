@@ -425,6 +425,25 @@ describe('FileS3', () => {
     });
   });
 
+  describe('createPreSignedUrlForDownload', () => {
+    it('should request attachment delivery with an encoded file name', async () => {
+      const s3 = new FileS3();
+
+      const result = await s3.createPreSignedUrlForDownload('video-file.mp4', '拼贴 动画.mp4');
+
+      expect(GetObjectCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'video-file.mp4',
+        ResponseContentDisposition:
+          "attachment; filename*=UTF-8''%E6%8B%BC%E8%B4%B4%20%E5%8A%A8%E7%94%BB.mp4",
+      });
+      expect(mockGetSignedUrl).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+        expiresIn: 7200,
+      });
+      expect(result).toBe('https://presigned-url.example.com');
+    });
+  });
+
   describe('uploadBuffer', () => {
     it('should upload buffer with correct parameters', async () => {
       const s3 = new FileS3();

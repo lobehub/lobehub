@@ -1,4 +1,5 @@
-import { createRawModal, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
@@ -9,7 +10,7 @@ import { type UploadFileItem } from '@/types/files/upload';
 import { UPLOAD_STATUS_SET } from '@/types/files/upload';
 
 import Content from './Content';
-import FilePreviewModal from './FilePreviewModal';
+import { openFilePreviewModal } from './FilePreviewModal.loader';
 import { getFileBasename } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -85,9 +86,7 @@ const ContextItem = memo<FileItemProps>((props) => {
   const progress = uploadState?.progress ?? 0;
 
   const handleClick = useEventCallback(() => {
-    createRawModal(FilePreviewModal, {
-      file: props,
-    });
+    void openFilePreviewModal(props);
   });
 
   const handleClose = useEventCallback(() => {

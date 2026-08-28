@@ -1105,6 +1105,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('failed to download or process media content', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('Unable to download the file. Please verify the URL and try again.'),
   },
   {
@@ -1252,6 +1256,30 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.ContextEnginePipelineError,
     match: sub('Processor ['),
     note: 'context-engine PipelineError: `Processor [<name>] execution failed`.',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HarnessJsonParseError — a `JSON.parse` inside the harness threw. Sits after
+  // every provider section so an upstream body that merely quotes a JSON parse
+  // failure is claimed by its provider pattern first, and before the
+  // AgentRuntimeError fallbacks so this class keeps its own code instead of
+  // dissolving into the generic crash bucket.
+  //
+  // V8 phrases every JSON.parse failure one of two ways, so these two patterns
+  // cover the whole family: "Bad escaped character in JSON at position N",
+  // "Unterminated string in JSON at position N", "Unexpected token 'x', … is
+  // not valid JSON", "Expected ',' or '}' after property value in JSON at
+  // position N" — and the position-less "Unexpected end of JSON input".
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.HarnessJsonParseError,
+    match: sub(' in JSON at position '),
+    note: 'V8 JSON.parse SyntaxError carrying a byte offset.',
+  },
+  {
+    code: AgentRuntimeErrorType.HarnessJsonParseError,
+    match: sub('Unexpected end of JSON input'),
+    note: 'V8 JSON.parse SyntaxError on a truncated payload (no offset).',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

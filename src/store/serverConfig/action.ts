@@ -46,6 +46,7 @@ export class ServerConfigActionImpl {
           this.#set(
             {
               billboard: data.billboard ?? null,
+              canAccessDevDock: data.serverFeatureFlags.enableDevDock === true,
               featureFlags: data.serverFeatureFlags,
               serverConfig: data.serverConfig,
               serverConfigInit: true,

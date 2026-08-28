@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "dialect": "sqlite",
+  "enums": {},
+  "id": "4337dd0f-12c1-4d06-9a8c-a030df8bb86f",
+  "internal": {
+    "indexes": {}
+  },
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "local_records": {
+      "name": "local_records",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "version": "6",
+  "views": {}
+}

@@ -1,0 +1,149 @@
+{
+  "appServer": [
+    {
+      "method": "turn/started",
+      "params": {
+        "threadId": "thread-1",
+        "turn": {
+          "id": "turn-1",
+          "items": [],
+          "itemsView": "full",
+          "status": "inProgress",
+          "error": null,
+          "startedAt": 1,
+          "completedAt": null,
+          "durationMs": null
+        }
+      }
+    },
+    {
+      "method": "item/started",
+      "params": {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "startedAtMs": 2,
+        "item": {
+          "type": "commandExecution",
+          "id": "command-1",
+          "command": "pwd",
+          "aggregatedOutput": null,
+          "exitCode": null,
+          "durationMs": null,
+          "status": "inProgress"
+        }
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "completedAtMs": 3,
+        "item": {
+          "type": "commandExecution",
+          "id": "command-1",
+          "command": "pwd",
+          "aggregatedOutput": "/workspace\n",
+          "exitCode": 0,
+          "durationMs": 1,
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "completedAtMs": 4,
+        "item": {
+          "type": "agentMessage",
+          "id": "message-1",
+          "text": "Done.",
+          "phase": "final_answer",
+          "memoryCitation": null
+        }
+      }
+    },
+    {
+      "method": "thread/tokenUsage/updated",
+      "params": {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "tokenUsage": {
+          "total": {
+            "totalTokens": 17,
+            "inputTokens": 10,
+            "cachedInputTokens": 2,
+            "cacheWriteInputTokens": 0,
+            "outputTokens": 7,
+            "reasoningOutputTokens": 3
+          },
+          "last": {
+            "totalTokens": 17,
+            "inputTokens": 10,
+            "cachedInputTokens": 2,
+            "cacheWriteInputTokens": 0,
+            "outputTokens": 7,
+            "reasoningOutputTokens": 3
+          },
+          "modelContextWindow": 200000
+        }
+      }
+    },
+    {
+      "method": "turn/completed",
+      "params": {
+        "threadId": "thread-1",
+        "turn": {
+          "id": "turn-1",
+          "items": [],
+          "itemsView": "full",
+          "status": "completed",
+          "error": null,
+          "startedAt": 1,
+          "completedAt": 2,
+          "durationMs": 1000
+        }
+      }
+    }
+  ],
+  "exec": [
+    { "type": "turn.started" },
+    {
+      "type": "item.started",
+      "item": {
+        "type": "command_execution",
+        "id": "command-1",
+        "command": "pwd",
+        "aggregated_output": null,
+        "exit_code": null,
+        "status": "in_progress"
+      }
+    },
+    {
+      "type": "item.completed",
+      "item": {
+        "type": "command_execution",
+        "id": "command-1",
+        "command": "pwd",
+        "aggregated_output": "/workspace\n",
+        "exit_code": 0,
+        "status": "completed"
+      }
+    },
+    {
+      "type": "item.completed",
+      "item": { "type": "agent_message", "id": "message-1", "text": "Done." }
+    },
+    {
+      "type": "turn.completed",
+      "usage": {
+        "input_tokens": 10,
+        "cached_input_tokens": 2,
+        "output_tokens": 7,
+        "reasoning_output_tokens": 3
+      }
+    }
+  ]
+}

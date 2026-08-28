@@ -1,10 +1,12 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { Avatar, Tag } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Tag } from '@lobehub/ui/base-ui';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -47,7 +49,7 @@ const CommandInput = memo(() => {
 
   const getPlaceholder = () => {
     if (hasSelectedAgent) {
-      return t('cmdk.askAgentPlaceholder', { agent: selectedAgent.title });
+      return t('cmdk.askAgentPlaceholder', { agent: agentDisplayName(selectedAgent) });
     }
     if (page === 'ask-ai') {
       return t('cmdk.aiModePlaceholder');
@@ -67,12 +69,13 @@ const CommandInput = memo(() => {
                   emojiScaleWithBackground
                   avatar={activeAgentMeta?.avatar || DEFAULT_AVATAR}
                   background={activeAgentMeta?.backgroundColor}
+                  name={agentDisplayName(activeAgentMeta, t('defaultAgent'))}
                   shape="square"
                   size={14}
                 />
               }
             >
-              {activeAgentMeta?.title || t('defaultAgent')}
+              {agentDisplayName(activeAgentMeta, t('defaultAgent'))}
             </Tag>
           ) : (
             menuContext !== 'general' && <Tag className={styles.contextTag}>{contextName}</Tag>
@@ -99,13 +102,14 @@ const CommandInput = memo(() => {
               <Avatar
                 emojiScaleWithBackground
                 avatar={selectedAgent.avatar}
+                name={agentDisplayName(selectedAgent)}
                 shape="square"
                 size={14}
               />
             }
             onClose={() => setSelectedAgent(undefined)}
           >
-            {selectedAgent.title}
+            {agentDisplayName(selectedAgent)}
           </Tag>
         )}
         <Command.Input

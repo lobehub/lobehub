@@ -12,7 +12,7 @@
 #
 #   AB_TARGET="--cdp 9222"             # Electron (default; CDP_PORT honored)
 #   AB_TARGET="--session your-session" # web agent-browser session
-#   GIF_WIDTH=960                      # output width (px), default 960
+#   GIF_WIDTH=1280                     # optional output width; default keeps source resolution
 #
 # Requires ffmpeg (`brew install ffmpeg`). Effective fps is capped by
 # screenshot latency (~0.3-0.5s per frame); 1-2 fps is the realistic range.
@@ -29,7 +29,7 @@ OUT="${1:?Usage: record-gif.sh <output.gif> <duration_seconds> [fps]}"
 DUR="${2:?Usage: record-gif.sh <output.gif> <duration_seconds> [fps]}"
 FPS="${3:-2}"
 AB_TARGET="${AB_TARGET:---cdp ${CDP_PORT:-9222}}"
-GIF_WIDTH="${GIF_WIDTH:-960}"
+GIF_WIDTH="${GIF_WIDTH:-}"
 
 command -v ffmpeg > /dev/null || {
   echo "ffmpeg not found — install with: brew install ffmpeg" >&2
@@ -54,8 +54,17 @@ CAPTURED=$(find "$TMP" -name 'frame-*.png' | wc -l | tr -d ' ')
   exit 1
 }
 
+SCALE_FILTER=''
+if [ -n "$GIF_WIDTH" ]; then
+  SCALE_FILTER="scale=$GIF_WIDTH:-1:flags=lanczos,"
+fi
+
+# Generate a palette for every frame and disable dithering. A single global
+# 256-color palette turns subtle neutral skeletons into colored noise; scaling
+# them down by default also makes labels and one-pixel borders illegible.
 ffmpeg -y -loglevel error -framerate "$FPS" -pattern_type glob -i "$TMP/frame-*.png" \
-  -vf "fps=$FPS,scale=$GIF_WIDTH:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+  -filter_complex \
+  "fps=$FPS,${SCALE_FILTER}split[s0][s1];[s0]palettegen=stats_mode=single:max_colors=256:reserve_transparent=0[p];[s1][p]paletteuse=new=1:dither=none" \
   "$OUT"
 
 echo "$OUT ($CAPTURED frames @ ${FPS}fps)"

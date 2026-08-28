@@ -62,3 +62,28 @@ export const normalizeAsyncError = (error: unknown): NormalizedAsyncError => {
 
   return { code, rawMessage, retryable, status };
 };
+
+/**
+ * Statuses an *automatic* backoff must not retry.
+ *
+ * Deliberately wider than {@link NormalizedAsyncError.retryable}, because the
+ * two answer different questions. `retryable` asks "could the user usefully
+ * press Retry?"; this asks "should a timer fire the same request again on its
+ * own?". `429` splits them: pressing Retry once the window has passed works
+ * fine, but an automatic backoff at 1s/2s/4s/8s/16s lands every attempt inside
+ * the very window that produced the `429` — turning one failed load into six
+ * requests that keep the bucket empty and make the error self-sustaining. So a
+ * `429` stays user-retryable while auto-retry stands down.
+ */
+const NON_AUTO_RETRYABLE_STATUS = new Set([401, 403, 429]);
+
+/**
+ * Whether SWR's error-retry loop should keep retrying this failure on a timer.
+ */
+export const isAutoRetryable = (error: unknown): boolean => {
+  const err = error as any;
+  if (err?.meta?.shouldRetry === false) return false;
+
+  const status = extractStatus(err);
+  return !(typeof status === 'number' && NON_AUTO_RETRYABLE_STATUS.has(status));
+};

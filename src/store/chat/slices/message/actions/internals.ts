@@ -1,5 +1,5 @@
 import { parse } from '@lobechat/conversation-flow';
-import { type TraceEventPayloads } from '@lobechat/types';
+import { type ConversationContext, type TraceEventPayloads } from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 
@@ -20,6 +20,12 @@ const log = debug('lobe-store:message-internals');
  */
 
 type Setter = StoreSetter<ChatStore>;
+type MessageDispatchContext = NonNullable<
+  Parameters<ChatStore['internal_getConversationContext']>[0]
+> & {
+  conversationContext?: ConversationContext;
+};
+
 export const messageInternals = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new MessageInternalsActionImpl(set, get, _api);
 
@@ -33,12 +39,10 @@ export class MessageInternalsActionImpl {
     this.#get = get;
   }
 
-  internal_dispatchMessage = (
-    payload: MessageDispatch,
-    context?: { operationId?: string },
-  ): void => {
+  internal_dispatchMessage = (payload: MessageDispatch, context?: MessageDispatchContext): void => {
     // Get full conversation context (including scope) from operation or global state
-    const ctx = this.#get().internal_getConversationContext(context);
+    const ctx =
+      context?.conversationContext ?? this.#get().internal_getConversationContext(context);
     log(
       '[internal_dispatchMessage] context: agentId=%s, topicId=%s, threadId=%s, scope=%s',
       ctx.agentId,

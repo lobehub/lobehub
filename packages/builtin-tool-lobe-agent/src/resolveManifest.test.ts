@@ -32,7 +32,7 @@ describe('resolveLobeAgentManifest', () => {
       // the rest of lobe-agent stays available
       expect(names).toContain(LobeAgentApiName.createPlan);
       expect(names).toContain(LobeAgentApiName.createTodos);
-      expect(names).toContain(LobeAgentApiName.analyzeVisualMedia);
+      expect(names).toContain(LobeAgentApiName.analyzeMedia);
       // exactly one API removed
       expect(names).toHaveLength(LobeAgentManifest.api.length - 1);
 

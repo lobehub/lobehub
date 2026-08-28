@@ -6,7 +6,7 @@ import type {
 } from '@lobechat/types';
 import { and, count, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
 
-import { messagePlugins, messages, threads, topics } from '../../schemas';
+import { agents, messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -56,13 +56,29 @@ export class HeteroSessionImporterRepo {
   private scopeWhere = (cols: { userId: any; workspaceId: any }) =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
 
+  /**
+   * The agent's heterogeneous runtime type (`claude-code`, `codex`, …), pinned
+   * onto every topic this importer creates. Resolved once per batch: it is the
+   * same agent for the whole call, and every reader that attributes a topic to
+   * a CLI runtime goes through `topics.provider`.
+   */
+  private resolveHeteroType = async (agentId: string): Promise<string | null> => {
+    const [agent] = await this.db
+      .select({ agencyConfig: agents.agencyConfig })
+      .from(agents)
+      .where(eq(agents.id, agentId));
+
+    return agent?.agencyConfig?.heterogeneousProvider?.type ?? null;
+  };
+
   importSessions = async (
     params: ImportHeteroSessionsParams,
   ): Promise<HeteroSessionImportResult[]> => {
     const results: HeteroSessionImportResult[] = [];
+    const heteroType = await this.resolveHeteroType(params.agentId);
     // one transaction per session: a corrupt session must not roll back the batch
     for (const session of params.sessions) {
-      results.push(await this.importSession(session, params.agentId, params.groupId));
+      results.push(await this.importSession(session, params.agentId, params.groupId, heteroType));
     }
     return results;
   };
@@ -71,6 +87,7 @@ export class HeteroSessionImporterRepo {
     session: HeteroSessionImportPayload,
     agentId: string,
     groupId?: string | null,
+    heteroType?: string | null,
   ): Promise<HeteroSessionImportResult> =>
     this.db.transaction(async (tx) => {
       // the source transcript's last raw-record timestamp — the picker compares it
@@ -130,6 +147,11 @@ export class HeteroSessionImporterRepo {
           groupId: groupId || null,
           id: topicId,
           metadata: { ...session.metadata, ...metadataPatch },
+          // An imported CLI session has no pinned model — the transcript's own
+          // records carry it per message — but the runtime is known, and a topic
+          // left with a NULL provider reads as "not a hetero session" to every
+          // provider-scoped query.
+          provider: heteroType ?? null,
           title: session.title || 'Imported Session',
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,

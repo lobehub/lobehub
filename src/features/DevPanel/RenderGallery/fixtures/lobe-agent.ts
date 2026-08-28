@@ -5,7 +5,7 @@ import { defineFixtures, single, variants } from './_helpers';
 export default defineFixtures({
   identifier: 'lobe-agent',
   fixtures: {
-    analyzeVisualMedia: single({
+    analyzeMedia: single({
       args: {
         question: 'Describe the primary controls and layout in this interface.',
         refs: ['msg_devtools.image_1'],

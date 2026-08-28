@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, ContextMenuTrigger, Flexbox, type GenericItemType, Tooltip } from '@lobehub/ui';
+import { ContextMenuTrigger, Flexbox, type GenericItemType, Tooltip } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { CSSProperties, MouseEvent } from 'react';
 import { memo } from 'react';

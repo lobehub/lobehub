@@ -1,101 +1,95 @@
-# Capturing portable evidence
+# Cross-surface evidence contract
 
-The goal is an artifact a human (and the review agent) can open and believe. Pick
-the lightest capture that proves the criterion, and prefer engine-level capture so
-it works the same locally and headless/cloud. UI capture uses `agent-browser`
-([agent-browser.md](./agent-browser.md)) on the surface you chose
-([web](../surfaces/web.md) / [electron](../surfaces/electron.md); backend/CLI →
-[cli](../surfaces/cli.md)).
+This reference defines the artifact contract shared by every surface. Capture
+commands belong to the selected surface guide; do not load another surface's
+instructions merely to learn how to submit an artifact.
 
-## Evidence type → how to capture
+## Evidence media
 
-### `screenshot` — UI state
+| Type           | Use when                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `text`         | Command output, logs, focused request/response data, or computed assertions prove the criterion   |
+| `markdown`     | Reviewer-facing prose (a reasoning write-up, structured findings) should render as body text      |
+| `dom_snapshot` | Structured content is stronger and smaller than pixels                                            |
+| `screenshot`   | A settled visual state, layout, or native rendering is the claim                                  |
+| `gif`          | A short temporal state should render inline, usually no more than about 10 seconds                |
+| `video`        | A longer animation, transition, gesture, or multi-step flow needs a player and better compression |
+| `audio`        | The deliverable is something the user **hears** — TTS output, a voice reply, an alert tone        |
+| `transcript`   | A conversation, event stream, or request log is itself the proof                                  |
 
-Screenshots via CDP (the browser engine) need no real display:
+The declared `requiredEvidence` type is binding. Do not replace a required video
+with a final screenshot or a required DOM snapshot with prose.
 
-```bash
-# web (named session)
-agent-browser --session app open "<url>"
-agent-browser --session app click @e1 # act, after snapshot -i to get refs
-agent-browser --session app screenshot ./proof/after.png
+## Audio deliverables
 
-# desktop (Electron, over CDP)
-agent-browser --cdp 9222 screenshot ./proof/desktop.png
-```
-
-Avoid macOS `screencapture` / osascript unless the criterion is explicitly
-native/local-only — they don't run in the cloud.
-
-### `dom_snapshot` — structure / content proof
-
-When the proof is "this element/text exists with these values", a DOM dump is
-smaller and more assertable than a pixel screenshot:
+A sound cannot be verified in prose, and a waveform screenshot proves only that
+a file exists. Upload the clip itself with `--type audio` and the acceptance
+page gives the reviewer a player.
 
 ```bash
-agent-browser --session app eval "document.querySelector('[data-testid=list]').outerHTML" > ./proof/list.html
+# The generated file is the evidence — attach the artifact the feature produced,
+# not a re-encode and not a screenshot of the player.
+lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type audio --file ./out/tts-zh-female.mp3 --by program \
+  --desc "TTS output for 「今天天气不错」, zh-CN female voice, 2.4s"
 ```
 
-Upload as `--type dom_snapshot --file ./proof/list.html`.
+- `mp3` / `wav` / `m4a` / `aac` / `flac` / `ogg` / `opus` are recognized by
+  extension, so `acceptance run ingest` types them as `audio` automatically.
+- **Listen before citing it.** Confirm the clip is non-silent and is the right
+  content (duration + a transcription pass, or a spectral check) — an empty or
+  truncated file looks identical to a good one in the file list.
+- Pair the clip with a short `text` artifact when the claim is about _what was
+  said_ (the input text, the voice/model, the measured duration). The player
+  proves it plays; the text artifact makes it auditable.
+- Capture what the product produced. A screen recording with system audio is a
+  fallback for "the UI plays it at the right moment" — for "the output is
+  correct", attach the file itself.
 
-### `text` — stdout, logs, computed values
+## Dual text evidence for non-visual behavior
 
-Backend / CLI behavior is best proven by the command output itself — upload inline,
-no file:
+CLI, API, backend, policy, security, and migration claims normally need two
+separate `text` artifacts on the same check:
+
+1. A reasoning artifact: claim, setup or threat model, method, pass criteria,
+   interpretation, and limitations.
+2. An execution artifact: exact command or request, relevant raw observations,
+   exit/status values, and a short mapping back to the pass criteria.
+
+Keep both artifacts in the current immutable round. Do not ask a reviewer to
+join an explanation from an older round with fresh execution output.
+
+## File versus inline content
+
+- Use `--file` for binary artifacts and larger text/DOM/transcript files.
+- Use `--content` for short text assertions. Pass exactly one of `--file` and
+  `--content`.
+- Keep the description factual: identify the action, observed state, and relevant
+  target. Do not place the verdict in the description unless explicitly asked.
 
 ```bash
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
-  --content "$(your-cli command --json)" \
-  --by cli --desc "command reports success after the change"
+# File artifact captured by the selected surface.
+lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type "$EVIDENCE_TYPE" --file "$ARTIFACT_PATH" --by "$PROVENANCE" \
+  --desc "Observed state after the planned action"
+
+# Short text assertion.
+lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type text --content "$ASSERTION_OUTPUT" --by cli \
+  --desc "Machine-readable assertion output"
 ```
-
-A network capture (HAR) or a request/response pair from a full-stack run also
-uploads as `text` (`--file ./proof/capture.har` or `--content`).
-
-### `transcript` — conversation / request log
-
-A saved agent conversation, request/response pair, or event log file:
-`--type transcript --file ./proof/run.jsonl`.
-
-### `gif` / `video` — behavior over time
-
-Required whenever a criterion asserts change over time (streaming output, a ticking
-timer, a loading→loaded transition, an animation, a multi-step flow) — a static
-screenshot cannot prove these. Record a clip and upload `--type gif` / `--type
-video --file …`. Full recipes (portable CDP frame-sequence → MP4/GIF, OS screen
-recording, GIF-vs-MP4): [recording.md](./recording.md).
 
 ## Provenance (`--by`)
 
-Tag how the artifact was produced so the reviewer can weigh it:
+Set `--by` to the producer named by the selected surface guide. Use the direct
+capture source for an unmodified artifact and `program` for a deterministic test,
+script, or media transform. Do not infer provenance from the file extension.
 
-- `agent-browser` — captured through agent-browser (screenshots, DOM, eval)
-- `cdp` — captured directly via Chrome DevTools Protocol
-- `cli` — command stdout / computed text
-- `program` — produced by a script or test you ran
+## Artifact safety
 
-## Headless / cloud portability
-
-The decisive constraint per surface is **how a screenshot is captured**: engine-level
-capture (CDP) needs no display; OS-level capture is macOS-only.
-
-| Surface    | macOS (local) | Linux / cloud (headless)                                        | Screenshot mechanism                             |
-| ---------- | ------------- | --------------------------------------------------------------- | ------------------------------------------------ |
-| CLI / text | ✅            | ✅                                                              | n/a — text output                                |
-| Web        | ✅            | ✅ headless Chromium works natively                             | CDP — no display needed                          |
-| Electron   | ✅            | ⚠️ runs but needs a display server: wrap launch with `xvfb-run` | CDP works under Xvfb; OS-window capture does NOT |
-
-Checklist:
-
-- ✅ `agent-browser screenshot` / `eval` (DOM, console) — engine-level, headless-safe
-- ✅ `--type text --content …` — pure text, always works
-- ❌ `screencapture`, osascript, native-app screen recording — macOS-only, not
-  cloud-safe
-
-When a run must stay cloud-portable, prefer CDP-based evidence over OS-level
-capture wherever both exist.
-
-## Don't leak secrets
-
-Evidence is visible to reviewers. Never capture a screenshot or text dump that
-contains a live token, cookie, password, or other secret — see
-[auth.md](./auth.md#boundaries--read-before-touching-cookies).
+- Inspect every image, clip, and generated document before citing it.
+- Never upload credentials, cookies, tokens, private user data, unrelated host
+  windows, or notifications.
+- Prefer a focused artifact over an unfiltered log or full-session recording.
+- Retain the raw source when submitting a derived chart, contact sheet, GIF, or
+  edited comparison image.

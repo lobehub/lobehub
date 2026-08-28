@@ -4,7 +4,8 @@ import {
   GROUP_CHAT_TOPIC_URL,
   GROUP_CHAT_URL,
 } from '@lobechat/const';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
@@ -24,6 +25,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -35,6 +37,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
 import { styles } from './styles';
+import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
 
 interface SearchResultsProps {
@@ -268,9 +271,12 @@ const SearchResults = memo<SearchResultsProps>(
             <Avatar
               avatar={result.agent.avatar || DEFAULT_AVATAR}
               background={result.agent.backgroundColor || undefined}
+              name={agentDisplayName(result.agent, t('defaultAgent'))}
               size={14}
             />
-            <span style={{ flex: 'none' }}>{result.agent.title || t('defaultAgent')}</span>
+            <span style={{ flex: 'none' }}>
+              {agentDisplayName(result.agent, t('defaultAgent'))}
+            </span>
             <span style={{ flex: 'none' }}>·</span>
             <span style={{ flex: 'none' }}>{formattedDate}</span>
             {description && (
@@ -361,8 +367,11 @@ const SearchResults = memo<SearchResultsProps>(
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
 
-    // Don't render anything if no results and not loading
-    if (!hasResults && !hasLocalTopicResults && !isLoading) {
+    // Don't render anything if no results and not loading — except in the
+    // unfiltered view, which always carries the permanent marketplace entries
+    // below (the aggregate response is DB-only, so a query whose matches live
+    // only in the marketplace would otherwise dead-end with no visible route).
+    if (!hasResults && !hasLocalTopicResults && !isLoading && typeFilter) {
       return null;
     }
 
@@ -407,13 +416,18 @@ const SearchResults = memo<SearchResultsProps>(
       );
     };
 
+    // Marketplace types are absent from the aggregate response (it is DB-only),
+    // so their "Search More" entries must not depend on a non-zero result count.
+    const MARKETPLACE_TYPES: ValidSearchType[] = ['mcp', 'plugin', 'communityAgent'];
+
     // Helper to render "Search More" button
     const renderSearchMore = (type: ValidSearchType, count: number) => {
       // Don't show if already filtering by this type
       if (typeFilter) return null;
 
-      // Show if there are results (might have more)
-      if (count === 0) return null;
+      // Show if there are results (might have more); marketplace entries always
+      // show — they are the only visible route into the explicit marketplace search
+      if (count === 0 && !MARKETPLACE_TYPES.includes(type)) return null;
 
       const typeLabel = getTypeLabel(type);
       const titleText = `${t('cmdk.search.searchMore', { type: typeLabel })} with "${searchQuery}"`;
@@ -593,6 +607,21 @@ const SearchResults = memo<SearchResultsProps>(
         {assistantResults.length > 0 && (
           <Command.Group forceMount>
             {assistantResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('communityAgent', assistantResults.length)}
+          </Command.Group>
+        )}
+
+        {/* Marketplace typed-search entries as the no-result fallback; see
+            shouldShowMarketplaceFallback for the rationale. */}
+        {shouldShowMarketplaceFallback({
+          hasLocalTopicResults,
+          hasResults,
+          isLoading,
+          typeFilter,
+        }) && (
+          <Command.Group forceMount>
+            {renderSearchMore('mcp', mcpResults.length)}
+            {renderSearchMore('plugin', pluginResults.length)}
             {renderSearchMore('communityAgent', assistantResults.length)}
           </Command.Group>
         )}

@@ -1,8 +1,8 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { resetPassword } from '@/libs/better-auth/auth-client';
 
 interface ResetPasswordFormValues {
@@ -23,7 +23,7 @@ export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPa
 
   const handleResetPassword = async (values: ResetPasswordFormValues) => {
     if (!token) {
-      message.error(t('betterAuth.resetPassword.invalidToken'));
+      toast.error(t('betterAuth.resetPassword.invalidToken'));
       return;
     }
 
@@ -31,15 +31,15 @@ export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPa
     try {
       const result = await resetPassword({ newPassword: values.newPassword, token });
       if (result.error) {
-        message.error(result.error.message || t('betterAuth.resetPassword.error'));
+        toast.error(result.error.message || t('betterAuth.resetPassword.error'));
         return;
       }
-      message.success(t('betterAuth.resetPassword.success'));
+      toast.success(t('betterAuth.resetPassword.success'));
       const redirectUrl = email ? `/signin?email=${encodeURIComponent(email)}` : '/signin';
       onSuccessRedirect(redirectUrl);
     } catch (error) {
       console.error('Reset password error:', error);
-      message.error(t('betterAuth.resetPassword.error'));
+      toast.error(t('betterAuth.resetPassword.error'));
     } finally {
       setLoading(false);
     }

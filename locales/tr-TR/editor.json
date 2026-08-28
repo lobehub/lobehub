@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Meta veriler kaydedilemedi. Tekrar deneyin veya düzenlemeye devam edin.",
   "skillFrontmatter.title": "Beceri meta verileri",
   "slash.compact": "Bağlamı sıkıştır",
+  "slash.goal": "Hedef belirle",
+  "slash.goal.desc": "Düzenlenebilir kabul kriterleriyle bir hedef planlayın ve başlatın",
   "slash.h1": "Başlık 1",
   "slash.h2": "Başlık 2",
   "slash.h3": "Başlık 3",

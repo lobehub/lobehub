@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "顯示或隱藏左側面板",
   "toggleLeftPanel.title": "顯示/隱藏左側面板",
   "toggleRightPanel.desc": "顯示或隱藏右側面板",
-  "toggleRightPanel.title": "顯示/隱藏右側面板"
+  "toggleRightPanel.title": "顯示/隱藏右側面板",
+  "toggleTerminalPanel.desc": "顯示或隱藏底部終端面板",
+  "toggleTerminalPanel.title": "切換終端面板"
 }

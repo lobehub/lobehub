@@ -9,15 +9,17 @@ const {
   mockFinishStreamingSystemRole,
   mockRefreshAgentConfig,
   mockStartStreamingSystemRole,
+  mockUpdateAgentConfig,
 } = vi.hoisted(() => ({
   mockAppendStreamingSystemRole: vi.fn(),
   mockFinishStreamingSystemRole: vi.fn(),
   mockRefreshAgentConfig: vi.fn().mockResolvedValue(undefined),
   mockStartStreamingSystemRole: vi.fn(),
+  mockUpdateAgentConfig: vi.fn(),
 }));
 
 vi.mock('@lobechat/agent-manager-runtime', () => ({
-  AgentManagerRuntime: vi.fn(() => ({})),
+  AgentManagerRuntime: vi.fn(() => ({ updateAgentConfig: mockUpdateAgentConfig })),
 }));
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
@@ -43,6 +45,32 @@ const createContext = (
     state: options.agentId ? { agentId: options.agentId } : undefined,
     success: options.success ?? true,
   },
+});
+
+describe('AgentBuilderExecutor.updateConfig', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdateAgentConfig.mockResolvedValue({ content: 'updated', success: true });
+  });
+
+  it('normalizes metadata nested under config for client-side execution', async () => {
+    const params = {
+      config: {
+        meta: { avatar: '🤖', title: 'GitHub PR/Issue Manager' },
+        model: 'gpt-4o',
+      },
+    } as unknown as Parameters<typeof agentBuilderExecutor.updateConfig>[0];
+
+    await agentBuilderExecutor.updateConfig(params, {
+      agentId: 'target-agent',
+      messageId: 'message-1',
+    });
+
+    expect(mockUpdateAgentConfig).toHaveBeenCalledWith('target-agent', {
+      config: { model: 'gpt-4o' },
+      meta: { avatar: '🤖', title: 'GitHub PR/Issue Manager' },
+    });
+  });
 });
 
 describe('AgentBuilderExecutor.onAfterCall', () => {

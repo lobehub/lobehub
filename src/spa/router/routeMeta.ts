@@ -3,6 +3,8 @@ import type { ComponentType } from 'react';
 
 export interface StaticRouteMeta {
   icon?: LucideIcon;
+  /** Optional Electron tab label when it should differ from the document title. */
+  tabTitleKey?: string;
   titleKey?: string;
 }
 
@@ -19,8 +21,15 @@ export interface DynamicRouteMetaProps {
   params: RouteMetaParams;
 }
 
+export type RouteSkeletonChrome = 'page' | 'body';
+
+export interface RouteSkeletonProps {
+  chrome?: RouteSkeletonChrome;
+}
+
 export interface RouteMeta extends StaticRouteMeta {
   DynamicMeta?: ComponentType<DynamicRouteMetaProps>;
+  Skeleton?: ComponentType<RouteSkeletonProps>;
 }
 
 export interface RouteHandle {

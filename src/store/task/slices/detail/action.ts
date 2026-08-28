@@ -1,8 +1,8 @@
-import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { CreateTaskGoalInput, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
@@ -27,12 +27,21 @@ type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['d
 // - heartbeat config will get a dedicated action once the upstream task scheduler infra is complete
 export interface TaskUpdatePayload {
   assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
   description?: string;
   editorData?: unknown;
   instruction?: string;
   name?: string;
   parentTaskId?: string | null;
   priority?: number;
+}
+
+export interface TaskUpdateOptions {
+  /**
+   * The mounted editor marks its own autosaves so they do not request an
+   * external-content reload. Tool calls and refetches are authoritative by default.
+   */
+  source?: 'editor' | 'external';
 }
 
 const TASK_DETAIL_POLL_INTERVAL = 10_000;
@@ -58,6 +67,15 @@ const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
       (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
     ) ?? false
   );
+};
+
+const hasInstructionSnapshotChanged = (
+  current: TaskDetailData | undefined,
+  next: TaskDetailData | undefined,
+): boolean => {
+  if (!current || !next) return false;
+
+  return current.instruction !== next.instruction || !isEqual(current.editorData, next.editorData);
 };
 
 type Setter = StoreSetter<TaskStore>;
@@ -138,20 +156,26 @@ export class TaskDetailSliceActionImpl {
       throw notFound;
     }
 
-    this.internal_dispatchTaskDetail({
-      id: detail.identifier,
-      type: 'setTaskDetail',
-      value: detail,
-    });
+    this.internal_dispatchTaskDetail(
+      {
+        id: detail.identifier,
+        type: 'setTaskDetail',
+        value: detail,
+      },
+      { instructionSource: 'external' },
+    );
 
     // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
     // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
     if (resolvedId !== detail.identifier) {
-      this.internal_dispatchTaskDetail({
-        id: resolvedId,
-        type: 'setTaskDetail',
-        value: detail,
-      });
+      this.internal_dispatchTaskDetail(
+        {
+          id: resolvedId,
+          type: 'setTaskDetail',
+          value: detail,
+        },
+        { instructionSource: 'external' },
+      );
     }
 
     return detail;
@@ -159,14 +183,19 @@ export class TaskDetailSliceActionImpl {
 
   createTask = async (params: {
     assigneeAgentId?: string;
+    assigneeUserId?: string;
     automationMode?: 'heartbeat' | 'schedule';
+    config?: Record<string, unknown>;
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
+    /** Bind a goal entity (`goals` row) to the created task. */
+    goal?: CreateTaskGoalInput;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    projectId?: string;
     schedulePattern?: string;
     scheduleTimezone?: string;
     visibility?: 'private' | 'public';
@@ -303,7 +332,7 @@ export class TaskDetailSliceActionImpl {
       // or publish the agent first.
       const raw = (error as { message?: string })?.message ?? '';
       const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
-      message.error(
+      toast.error(
         isPrivateAgentBlock
           ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
               defaultValue:
@@ -319,13 +348,23 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
-  updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
-    const { assigneeAgentId, ...rest } = data;
+  updateTask = async (
+    id: string,
+    data: TaskUpdatePayload,
+    options?: TaskUpdateOptions,
+  ): Promise<void> => {
+    const { assigneeAgentId, assigneeUserId, ...rest } = data;
     const optimisticRest = { ...rest };
     delete optimisticRest.parentTaskId;
+    // editTask may send only instruction while the detail store still holds old rich editorData.
+    // Mirror the server normalization so the optimistic render cannot prefer stale JSON.
+    if (optimisticRest.instruction !== undefined && optimisticRest.editorData === undefined) {
+      optimisticRest.editorData = null;
+    }
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
+      ...(assigneeUserId !== undefined ? { userId: assigneeUserId } : {}),
     };
 
     // Snapshot every map entry the optimistic patch will touch BEFORE dispatch.
@@ -343,7 +382,10 @@ export class TaskDetailSliceActionImpl {
       );
     };
 
-    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
+    this.internal_dispatchTaskDetail(
+      { id, type: 'updateTaskDetail', value: optimistic },
+      options?.source === 'editor' ? undefined : { instructionSource: 'external' },
+    );
 
     await runMutation(this.#set, this.#get, {
       mutate: () => taskService.update(id, data),
@@ -352,12 +394,27 @@ export class TaskDetailSliceActionImpl {
       // optimistic dispatch above is reconciled from the source of record.
       onError: async (error) => {
         await refreshPatchedTargets();
-        saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
+        /**
+         * The rollback refetch has already replaced the editor's failed local
+         * content. Treating Retry as another editor echo would update only the
+         * Store and server, leaving the mounted editor on the rollback snapshot.
+         */
+        const retry = () =>
+          void this.#get().updateTask(id, data, {
+            ...options,
+            source: 'external',
+          });
+        saveToast(error, { retry });
       },
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
 
-    if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
+    if (
+      assigneeAgentId !== undefined ||
+      assigneeUserId !== undefined ||
+      data.parentTaskId !== undefined ||
+      data.priority !== undefined
+    ) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };
@@ -392,11 +449,53 @@ export class TaskDetailSliceActionImpl {
     );
   };
 
-  internal_dispatchTaskDetail = (payload: TaskDetailDispatch): void => {
-    const currentMap = this.#get().taskDetailMap;
+  internal_dispatchTaskDetail = (
+    payload: TaskDetailDispatch,
+    options?: { instructionSource?: 'external' },
+  ): void => {
+    const state = this.#get();
+    const currentMap = state.taskDetailMap;
     const nextMap = taskDetailReducer(currentMap, payload);
+    const shouldIncrementInstructionRevision =
+      options?.instructionSource === 'external' &&
+      hasInstructionSnapshotChanged(currentMap[payload.id], nextMap[payload.id]);
+    const shouldDeleteInstructionRevision =
+      payload.type === 'deleteTaskDetail' &&
+      state.taskInstructionRevisionMap[payload.id] !== undefined;
 
-    if (isEqual(nextMap, currentMap)) return;
+    if (
+      isEqual(nextMap, currentMap) &&
+      !shouldIncrementInstructionRevision &&
+      !shouldDeleteInstructionRevision
+    ) {
+      return;
+    }
+
+    if (shouldIncrementInstructionRevision) {
+      this.#set(
+        {
+          taskDetailMap: nextMap,
+          taskInstructionRevisionMap: {
+            ...state.taskInstructionRevisionMap,
+            [payload.id]: (state.taskInstructionRevisionMap[payload.id] ?? 0) + 1,
+          },
+        },
+        false,
+        `internal_dispatchTaskDetail/${payload.type}`,
+      );
+      return;
+    }
+
+    if (shouldDeleteInstructionRevision) {
+      const taskInstructionRevisionMap = { ...state.taskInstructionRevisionMap };
+      delete taskInstructionRevisionMap[payload.id];
+      this.#set(
+        { taskDetailMap: nextMap, taskInstructionRevisionMap },
+        false,
+        `internal_dispatchTaskDetail/${payload.type}`,
+      );
+      return;
+    }
 
     this.#set({ taskDetailMap: nextMap }, false, `internal_dispatchTaskDetail/${payload.type}`);
   };

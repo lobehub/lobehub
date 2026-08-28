@@ -4,13 +4,32 @@ import { describe, expect, it, vi } from 'vitest';
 
 import HeaderActions from './index';
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? undefined : 'overflow-menu-button'}
+      onClick={onClick}
+    />
+  ),
+}));
+
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => <button data-testid={'overflow-menu-button'} />,
   DropdownMenu: ({ children, header }: { children?: ReactNode; header?: ReactNode }) => (
     <div>
       {header}
       {children}
     </div>
+  ),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ title, onClick }: { title?: string; onClick?: () => void }) => (
+    <button
+      aria-label={title}
+      data-testid={title ? undefined : 'overflow-menu-button'}
+      onClick={onClick}
+    />
   ),
 }));
 

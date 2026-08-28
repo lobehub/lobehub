@@ -21,10 +21,11 @@ export function parseFeatureFlag(flagString?: string): Partial<IFeatureFlags> {
       const key = flag.slice(1);
 
       const featureKey = key as keyof IFeatureFlags;
+      const value = operation === '+';
 
-      // Check if the key exists in FeatureFlagsSchema
-      if (FeatureFlagsSchema.shape[featureKey]) {
-        flags[featureKey] = operation === '+';
+      // Array-only flags (e.g. dev_dock_workspaces) reject the boolean and stay untouched.
+      if (FeatureFlagsSchema.shape[featureKey]?.safeParse(value).success) {
+        (flags as Record<string, boolean>)[featureKey] = value;
       }
     }
   }
