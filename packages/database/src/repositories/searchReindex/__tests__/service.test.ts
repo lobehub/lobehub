@@ -91,7 +91,10 @@ describe('SearchReindexService', () => {
 
   it('creates aliases only after all 14 entities complete', async () => {
     const { builder, client, repository, state } = createDependencies();
-    const service = new SearchReindexService(builder, repository, client);
+    const events: unknown[] = [];
+    const service = new SearchReindexService(builder, repository, client, {
+      onProgress: (event) => events.push(event),
+    });
 
     await expect(service.run('test', 1)).resolves.toMatchObject({
       status: 'ready_for_incremental_sync',
@@ -109,6 +112,13 @@ describe('SearchReindexService', () => {
     expect(client.ensureAlias).toHaveBeenCalledTimes(14);
     expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
     expect(state.progress.every(({ status }) => status === 'completed')).toBe(true);
+    expect(events).toEqual(
+      expect.arrayContaining(
+        SEARCH_DOCUMENT_ENTITIES.map((entity) =>
+          expect.objectContaining({ drift: 0, entity, type: 'reconciliation' }),
+        ),
+      ),
+    );
   });
 
   it('backfills independent entities with bounded concurrency', async () => {
@@ -226,6 +236,14 @@ describe('SearchReindexService', () => {
     expect(events).toContainEqual(
       expect.objectContaining({ attempt: 1, entity: 'agents', type: 'bulk_retry' }),
     );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        attempts: 2,
+        entity: 'agents',
+        result: 'success',
+        type: 'bulk_completed',
+      }),
+    );
   });
 
   it('pauses every non-empty entity after a bounded number of batches', async () => {
@@ -253,12 +271,14 @@ describe('SearchReindexService', () => {
 
   it('does not advance the cursor or create aliases after a request-level bulk failure', async () => {
     const { builder, client, repository, state } = createDependencies();
+    const events: unknown[] = [];
     builder.buildBatch
       .mockResolvedValueOnce([{ entity: 'agents', id: 'agent-1', source: { id: 'agent-1' } }])
       .mockResolvedValue([]);
     vi.mocked(client.bulk).mockRejectedValueOnce(new Error('gateway unavailable'));
     const service = new SearchReindexService(builder, repository, client, {
       maxRequestRetries: 0,
+      onProgress: (event) => events.push(event),
     });
 
     await expect(service.run('test', 1)).rejects.toThrow('gateway unavailable');
@@ -266,6 +286,14 @@ describe('SearchReindexService', () => {
     expect(repository.checkpointBatch).not.toHaveBeenCalled();
     expect(client.ensureAlias).not.toHaveBeenCalled();
     expect(state.progress[0].cursor).toBeNull();
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        attempts: 1,
+        entity: 'agents',
+        result: 'request_error',
+        type: 'bulk_completed',
+      }),
+    );
   });
 
   it('replays a partially successful concurrent batch before advancing its cursor', async () => {
@@ -342,6 +370,31 @@ describe('SearchReindexService', () => {
     expect(repository.checkpointBatch).toHaveBeenCalledWith(
       expect.objectContaining({ failures: [], indexedCount: 1 }),
     );
+  });
+
+  it('emits signed reconciliation drift before blocking alias creation', async () => {
+    const { client, repository } = createDependencies();
+    const events: unknown[] = [];
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 1 : 0,
+    );
+    const service = new SearchReindexService(
+      { buildBatch: vi.fn().mockResolvedValue([]), buildByIds: vi.fn().mockResolvedValue([]) },
+      repository,
+      client,
+      { onProgress: (event) => events.push(event) },
+    );
+
+    await expect(service.run('test', 1)).rejects.toThrow('Reindex count mismatch for agents');
+
+    expect(events).toContainEqual({
+      checkpointCount: 0,
+      drift: 1,
+      elasticsearchCount: 1,
+      entity: 'agents',
+      type: 'reconciliation',
+    });
+    expect(client.ensureAlias).not.toHaveBeenCalled();
   });
 
   it('persists only a safe Elasticsearch error type, never its source-text reason', async () => {

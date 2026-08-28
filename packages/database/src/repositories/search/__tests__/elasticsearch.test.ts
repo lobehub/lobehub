@@ -103,7 +103,22 @@ describe('ElasticsearchSearchBackend', () => {
       { _id: 'memory-deleted', _score: 10 },
       { _id: 'memory-own', _score: 8 },
     ]);
-    const backend = new ElasticsearchSearchBackend(db, { client, indexNamespace });
+    const operations: string[] = [];
+    const observer = {
+      observe: async <Result>(
+        _entity: string,
+        operation: string,
+        callback: () => Promise<Result>,
+      ) => {
+        operations.push(operation);
+        return callback();
+      },
+    };
+    const backend = new ElasticsearchSearchBackend(db, {
+      client,
+      indexNamespace,
+      observer,
+    });
 
     const response = await backend.search(
       request('userMemories', { scope: { workspaceId: undefined } }),
@@ -112,6 +127,7 @@ describe('ElasticsearchSearchBackend', () => {
     expect(response.items).toEqual([
       expect.objectContaining({ id: 'memory-own', memoryLayer: 'context', type: 'memory' }),
     ]);
+    expect(operations).toEqual(['candidate_query', 'pg_hydration']);
     expect(client.search).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({
@@ -131,7 +147,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'userMemories',
         index: 'lobehub-dev-user-memories',
+        pagination: 'bounded',
       }),
     );
   });
@@ -234,7 +252,9 @@ describe('ElasticsearchSearchBackend', () => {
         sort: [{ _score: 'desc' }, { id: 'asc' }],
         track_total_hits: true,
       },
+      entity: 'memoryContexts',
       index: 'lobehub-dev-memory-contexts',
+      pagination: 'bounded',
     });
   });
 
@@ -337,7 +357,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'topics',
         index: 'lobehub-dev-topics',
+        pagination: 'unbounded',
       }),
     );
     expect(client.search).toHaveBeenNthCalledWith(
@@ -351,7 +373,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'messages',
         index: 'lobehub-dev-messages',
+        pagination: 'unbounded',
       }),
     );
   });
@@ -387,6 +411,10 @@ describe('ElasticsearchSearchBackend', () => {
     expect(response.candidates).toHaveLength(1001);
     expect(response.total).toBe(1001);
     expect(client.search).toHaveBeenCalledTimes(2);
+    expect(client.search).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ entity: 'topics', pagination: 'unbounded' }),
+    );
     expect(client.search).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -494,7 +522,9 @@ describe('ElasticsearchSearchBackend', () => {
         size: 20,
         sort: [{ _score: 'desc' }, { id: 'asc' }],
       },
+      entity: 'agents',
       index: 'lobehub-dev-agents',
+      pagination: 'bounded',
     });
 
     const publicCaller = await backend.search(
@@ -557,7 +587,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'chatGroups',
         index: 'lobehub-dev-chat-groups',
+        pagination: 'bounded',
       }),
     );
   });
@@ -814,7 +846,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'messages',
         index: 'lobehub-dev-messages',
+        pagination: 'bounded',
       }),
     );
   });
@@ -955,7 +989,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'files',
         index: 'lobehub-dev-files',
+        pagination: 'bounded',
       }),
     );
   });
@@ -1051,7 +1087,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'documents',
         index: 'lobehub-dev-documents',
+        pagination: 'bounded',
       }),
     );
   });
@@ -1386,7 +1424,9 @@ describe('ElasticsearchSearchBackend', () => {
             }),
           },
         }),
+        entity: 'knowledgeBases',
         index: 'lobehub-dev-knowledge-bases',
+        pagination: 'bounded',
       }),
     );
   });

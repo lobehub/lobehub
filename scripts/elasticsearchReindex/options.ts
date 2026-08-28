@@ -4,6 +4,8 @@ export interface SearchReindexElasticsearchEnvironment {
   urlEnvironmentName: string;
 }
 
+export type SearchReindexTelemetryEnvironment = 'development' | 'preview' | 'production';
+
 const readEnvironmentVariableNameArgument = (args: readonly string[], name: string) => {
   const argument = args.find((item) => item.startsWith(`${name}=`));
   if (!argument) return;
@@ -43,6 +45,34 @@ export const resolveSearchReindexElasticsearchEnvironment = (
     expectedHostPrefix: readHostPrefixArgument(args),
     urlEnvironmentName: urlEnvironmentName ?? 'ES_URL',
   };
+};
+
+export const resolveSearchReindexTelemetryEnvironment = (
+  args: readonly string[],
+): SearchReindexTelemetryEnvironment | undefined => {
+  const name = '--telemetry-environment';
+  const argument = args.find((item) => item.startsWith(`${name}=`));
+  if (!argument) return;
+  const value = argument.slice(name.length + 1);
+  if (value !== 'development' && value !== 'preview' && value !== 'production') {
+    throw new Error(`${name} must be one of development, preview, or production`);
+  }
+  return value;
+};
+
+export const assertSearchReindexTelemetryExportConfigured = (
+  environment: Readonly<Record<string, string | undefined>>,
+) => {
+  const sharedEndpoint = Boolean(environment.OTEL_EXPORTER_OTLP_ENDPOINT);
+  const hasMetricsEndpoint =
+    sharedEndpoint || Boolean(environment.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT);
+  const hasTracesEndpoint =
+    sharedEndpoint || Boolean(environment.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
+  if (!hasMetricsEndpoint || !hasTracesEndpoint) {
+    throw new Error(
+      'OTLP metrics and traces export endpoints are required: set OTEL_EXPORTER_OTLP_ENDPOINT or both signal-specific endpoint variables',
+    );
+  }
 };
 
 export const assertSearchReindexElasticsearchHostname = (

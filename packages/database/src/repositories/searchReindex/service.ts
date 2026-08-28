@@ -66,6 +66,7 @@ export type SearchReindexProgressEvent =
       failed: number;
       indexed: number;
       processed: number;
+      checkpoint: { failed: number; indexed: number; scanned: number };
       type: 'batch';
     }
   | { count: number; entity: SearchDocumentEntity; type: 'entity_completed' }
@@ -89,9 +90,17 @@ export type SearchReindexProgressEvent =
       durationMs: number;
       entity: SearchDocumentEntity;
       operations: number;
+      result: 'request_error' | 'response_error' | 'success';
       type: 'bulk_completed';
     }
   | { entity: SearchDocumentEntity; type: 'entity_started' }
+  | {
+      checkpointCount: number;
+      drift: number;
+      elasticsearchCount: number;
+      entity: SearchDocumentEntity;
+      type: 'reconciliation';
+    }
   | { type: 'aliases_created' }
   | { type: 'run_paused' };
 
@@ -265,6 +274,15 @@ export class SearchReindexService {
         break;
       } catch (error) {
         if (!isRetryableRequestError(error) || attempts > this.options.maxRequestRetries) {
+          await this.emitProgress({
+            attempts,
+            bytes,
+            durationMs: Date.now() - startedAt,
+            entity,
+            operations: operations.length,
+            result: 'request_error',
+            type: 'bulk_completed',
+          });
           throw error;
         }
         const exponentialDelay = this.options.retryBaseDelayMs * 2 ** (attempts - 1);
@@ -280,19 +298,29 @@ export class SearchReindexService {
         await sleep(delayMs);
       }
     }
+    if (results.length !== operations.length) {
+      await this.emitProgress({
+        attempts,
+        bytes,
+        durationMs: Date.now() - startedAt,
+        entity,
+        operations: operations.length,
+        result: 'response_error',
+        type: 'bulk_completed',
+      });
+      throw new Error(
+        `Elasticsearch bulk returned ${results.length} items for ${operations.length} operations`,
+      );
+    }
     await this.emitProgress({
       attempts,
       bytes,
       durationMs: Date.now() - startedAt,
       entity,
       operations: operations.length,
+      result: 'success',
       type: 'bulk_completed',
     });
-    if (results.length !== operations.length) {
-      throw new Error(
-        `Elasticsearch bulk returned ${results.length} items for ${operations.length} operations`,
-      );
-    }
 
     const failures: SearchReindexBatchFailure[] = [];
     const indexedDocumentIds: string[] = [];
@@ -485,10 +513,19 @@ export class SearchReindexService {
         processedCount: documents.length,
         runId: state.run.id,
       });
+      const refreshed = await this.repository.getRun(state.run.id);
+      const checkpointProgress = refreshed?.progress.find((item) => item.entity === entity);
       if (checkpointed) {
+        if (!checkpointProgress)
+          throw new Error(`Missing refreshed reindex progress for ${entity}`);
         await this.emitProgress({
           bulkRequests: result.bulkRequests,
           bytes: result.bytes,
+          checkpoint: {
+            failed: checkpointProgress.failedCount,
+            indexed: checkpointProgress.indexedCount,
+            scanned: checkpointProgress.processedCount,
+          },
           cursor: documents.at(-1)!.id,
           durationMs: Date.now() - batchStartedAt,
           entity,
@@ -498,16 +535,14 @@ export class SearchReindexService {
           type: 'batch',
         });
       } else {
-        const refreshed = await this.repository.getRun(state.run.id);
         await this.emitProgress({
-          actualCursor: refreshed?.progress.find((item) => item.entity === entity)?.cursor ?? null,
+          actualCursor: checkpointProgress?.cursor ?? null,
           entity,
           expectedCursor: progress.cursor,
           type: 'checkpoint_conflict',
         });
       }
-      const refreshed = await this.repository.getRun(state.run.id);
-      progress = refreshed?.progress.find((item) => item.entity === entity);
+      progress = checkpointProgress;
       if (!progress) throw new Error(`Missing refreshed reindex progress for ${entity}`);
       processedBatches += 1;
       if (documents.length < this.options.batchSize) {
@@ -538,6 +573,13 @@ export class SearchReindexService {
     if (!finalProgress) throw new Error(`Missing final reindex progress for ${entity}`);
     await this.client.refresh(finalProgress.physicalIndex);
     const indexedCount = await this.client.count(finalProgress.physicalIndex);
+    await this.emitProgress({
+      checkpointCount: finalProgress.indexedCount,
+      drift: indexedCount - finalProgress.indexedCount,
+      elasticsearchCount: indexedCount,
+      entity,
+      type: 'reconciliation',
+    });
     if (indexedCount !== finalProgress.indexedCount) {
       throw new Error(
         `Reindex count mismatch for ${entity}: checkpoint=${finalProgress.indexedCount}, Elasticsearch=${indexedCount}`,

@@ -158,7 +158,9 @@ const messageTopicSessions = alias(sessions, 'search_message_topic_sessions');
 
 export interface ElasticsearchSearchInput {
   body: Record<string, unknown>;
+  entity: ElasticsearchSearchEntity;
   index: string;
+  pagination: 'bounded' | 'unbounded';
 }
 
 export interface ElasticsearchSearchResponse {
@@ -170,6 +172,7 @@ export interface ElasticsearchSearchResponse {
     }>;
     total?: number | { value: number };
   };
+  took?: number;
 }
 
 /** Minimal transport contract so deployments own credentials and HTTP/client policy. */
@@ -177,9 +180,21 @@ export interface ElasticsearchSearchClient {
   search: (input: ElasticsearchSearchInput) => Promise<ElasticsearchSearchResponse>;
 }
 
+export type ElasticsearchSearchOperation = 'candidate_query' | 'pg_hydration';
+
+/** Optional deployment-owned instrumentation that keeps the database package vendor-neutral. */
+export interface ElasticsearchSearchObserver {
+  observe: <Result>(
+    entity: ElasticsearchSearchEntity,
+    operation: ElasticsearchSearchOperation,
+    callback: () => Promise<Result>,
+  ) => Promise<Result>;
+}
+
 export interface ElasticsearchSearchBackendOptions {
   client: ElasticsearchSearchClient;
   indexNamespace: string;
+  observer?: ElasticsearchSearchObserver;
 }
 
 interface CandidateHit extends SearchBackendCandidate {
@@ -245,16 +260,26 @@ export class ElasticsearchSearchBackend implements SearchBackend {
 
   private readonly client: ElasticsearchSearchClient;
   private readonly indexNamespace: string;
+  private readonly observer?: ElasticsearchSearchObserver;
 
   constructor(
     private readonly db: LobeChatDatabase,
-    { client, indexNamespace }: ElasticsearchSearchBackendOptions,
+    { client, indexNamespace, observer }: ElasticsearchSearchBackendOptions,
   ) {
     const namespace = indexNamespace.trim();
     if (!namespace) throw new Error('Elasticsearch search index namespace is required');
 
     this.client = client;
     this.indexNamespace = namespace;
+    this.observer = observer;
+  }
+
+  private observe<Result>(
+    entity: ElasticsearchSearchEntity,
+    operation: ElasticsearchSearchOperation,
+    callback: () => Promise<Result>,
+  ): Promise<Result> {
+    return this.observer?.observe(entity, operation, callback) ?? callback();
   }
 
   async search(
@@ -285,7 +310,9 @@ export class ElasticsearchSearchBackend implements SearchBackend {
       return { candidates: [], items: [] };
     }
 
-    const candidateResult = await this.searchCandidates(request, target, query);
+    const candidateResult = await this.observe(entity, 'candidate_query', () =>
+      this.searchCandidates(request, target, query),
+    );
     const { hits } = candidateResult;
     const candidates = hits.map(({ id, score }) => ({ id, score }));
 
@@ -299,7 +326,9 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     if (entity === 'userMemories') {
       return {
         candidates,
-        items: await this.hydrateUserMemories(hits, request.scope, limit),
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateUserMemories(hits, request.scope, limit),
+        ),
         total: candidateResult.total,
       };
     }
@@ -310,47 +339,54 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     if (request.entity === 'agents') {
       return {
         candidates,
-        items: await this.hydrateAgents(hits, request.scope, limit),
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateAgents(hits, request.scope, limit),
+        ),
       };
     }
     if (request.entity === 'chatGroups') {
       return {
         candidates,
-        items: await this.hydrateChatGroups(hits, request.scope, limit),
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateChatGroups(hits, request.scope, limit),
+        ),
       };
     }
     if (entity === 'topics') {
       return {
         candidates,
-        items: await this.hydrateTopics(hits, request.scope, limit, request.filters.agentId),
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateTopics(hits, request.scope, limit, request.filters.agentId),
+        ),
       };
     }
 
     if (entity === 'messages') {
       return {
         candidates,
-        items: await this.hydrateMessages(hits, request.scope, limit, request.filters.agentId),
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateMessages(hits, request.scope, limit, request.filters.agentId),
+        ),
       };
     }
     if (entity === 'files') {
       return {
         candidates,
-        items: await this.hydrateFiles(
-          hits,
-          request.scope,
-          limit,
-          request.filters.excludeKnowledgeBaseIds,
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateFiles(hits, request.scope, limit, request.filters.excludeKnowledgeBaseIds),
         ),
       };
     }
     if (entity === 'knowledgeBases') {
       return {
         candidates,
-        items: await this.hydrateKnowledgeBases(
-          hits,
-          request.scope,
-          limit,
-          request.filters.excludeKnowledgeBaseIds,
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateKnowledgeBases(
+            hits,
+            request.scope,
+            limit,
+            request.filters.excludeKnowledgeBaseIds,
+          ),
         ),
       };
     }
@@ -360,33 +396,29 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     if (target.documentKind === 'folder') {
       return {
         candidates,
-        items: await this.hydrateFolders(
-          hits,
-          request.scope,
-          limit,
-          request.filters.excludeKnowledgeBaseIds,
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateFolders(hits, request.scope, limit, request.filters.excludeKnowledgeBaseIds),
         ),
       };
     }
     if (target.documentKind === 'page') {
       return {
         candidates,
-        items: await this.hydratePages(
-          hits,
-          request.scope,
-          limit,
-          request.filters.excludeKnowledgeBaseIds,
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydratePages(hits, request.scope, limit, request.filters.excludeKnowledgeBaseIds),
         ),
       };
     }
     if (target.documentKind === 'knowledgeBaseDocument') {
       return {
         candidates,
-        items: await this.hydrateKnowledgeBaseDocuments(
-          hits,
-          request.scope,
-          limit,
-          request.filters.knowledgeBaseIds ?? [],
+        items: await this.observe(entity, 'pg_hydration', () =>
+          this.hydrateKnowledgeBaseDocuments(
+            hits,
+            request.scope,
+            limit,
+            request.filters.knowledgeBaseIds ?? [],
+          ),
         ),
       };
     }
@@ -545,7 +577,9 @@ export class ElasticsearchSearchBackend implements SearchBackend {
           sort: [{ _score: 'desc' }, { id: 'asc' }],
           ...(trackTotalHits && isFirstPage ? { track_total_hits: true } : {}),
         },
+        entity,
         index: getSearchIndexAlias(this.indexNamespace, entity),
+        pagination: requestedLimit ? 'bounded' : 'unbounded',
       });
       if (isFirstPage) {
         const responseTotal = response.hits.total;

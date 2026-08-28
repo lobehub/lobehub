@@ -21,11 +21,29 @@ import {
 import { SearchSyncOutboxRepository } from '../../packages/database/src/repositories/searchSyncOutbox';
 import * as schema from '../../packages/database/src/schemas';
 import {
+  observeSearchReindexRun,
+  recordSearchReindexBatch,
+  recordSearchReindexBulkRequest,
+  recordSearchReindexBulkRetry,
+  recordSearchReindexReconciliation,
+} from '../../packages/observability-otel/src/modules/search-reindex';
+import { DiagLogLevel, register, shutdownSafely } from '../../packages/observability-otel/src/node';
+import {
   assertSearchReindexElasticsearchHostname,
+  assertSearchReindexTelemetryExportConfigured,
   resolveSearchReindexElasticsearchEnvironment,
+  resolveSearchReindexTelemetryEnvironment,
 } from './options';
 
 const { Pool } = pg;
+
+const REINDEX_BYTE_BUCKETS = [
+  0, 256, 1024, 4096, 16_384, 65_536, 262_144, 1_048_576, 4_194_304, 16_777_216, 52_428_800,
+];
+const REINDEX_COUNT_BUCKETS = [0, 1, 5, 10, 25, 50, 100, 250, 500, 1000];
+const REINDEX_DURATION_MS_BUCKETS = [
+  0, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 3000, 5000, 10_000, 30_000, 60_000,
+];
 
 const readPositiveIntegerArgument = (name: string) => {
   const argument = process.argv.find((item) => item.startsWith(`${name}=`));
@@ -60,6 +78,7 @@ const maxBatchesPerEntity = readPositiveIntegerArgument('--max-batches-per-entit
 const maxRequestRetries = readNonNegativeIntegerArgument('--max-request-retries');
 const requestTimeoutMs = readPositiveIntegerArgument('--request-timeout-ms');
 const retryBaseDelayMs = readNonNegativeIntegerArgument('--retry-base-delay-ms');
+const telemetryEnvironment = resolveSearchReindexTelemetryEnvironment(process.argv.slice(2));
 
 const knownArguments = new Set([
   '--apply',
@@ -85,7 +104,8 @@ const unknownArgument = process.argv
       !item.startsWith('--max-request-retries=') &&
       !item.startsWith('--request-timeout-ms=') &&
       !item.startsWith('--retry-base-delay-ms=') &&
-      !item.startsWith('--skip-failure='),
+      !item.startsWith('--skip-failure=') &&
+      !item.startsWith('--telemetry-environment='),
   );
 if (unknownArgument) throw new Error(`Unknown argument: ${unknownArgument}`);
 
@@ -134,7 +154,44 @@ if (apply && !elasticsearchUrl) {
 if ((apply || failureReference) && !configuredStateDirectory) {
   throw new Error('ES_REINDEX_STATE_DIR is required for reindex mutations and resume attempts');
 }
+if (process.env.ENABLE_TELEMETRY && !telemetryEnvironment) {
+  throw new Error('--telemetry-environment is required when ENABLE_TELEMETRY is set');
+}
+if (process.env.ENABLE_TELEMETRY) {
+  assertSearchReindexTelemetryExportConfigured(process.env);
+}
 
+const telemetrySdk = process.env.ENABLE_TELEMETRY
+  ? register({
+      autoDetectResources: false,
+      autoInstrumentations: false,
+      debug: DiagLogLevel.ERROR,
+      environment: telemetryEnvironment,
+      histogramViews: [
+        {
+          boundaries: [0, 1, 2, 3, 5, 10],
+          instrumentName: 'search_reindex_bulk_request_attempts',
+          meterName: 'search-reindex',
+        },
+        {
+          boundaries: REINDEX_BYTE_BUCKETS,
+          instrumentName: 'search_reindex_bulk_request_size',
+          meterName: 'search-reindex',
+        },
+        {
+          boundaries: REINDEX_DURATION_MS_BUCKETS,
+          instrumentName: 'search_reindex_bulk_request_duration',
+          meterName: 'search-reindex',
+        },
+        {
+          boundaries: REINDEX_COUNT_BUCKETS,
+          instrumentName: 'search_reindex_bulk_request_items',
+          meterName: 'search-reindex',
+        },
+      ],
+      name: 'lobehub-search-reindex',
+    })
+  : undefined;
 const pool = new Pool({ connectionString: databaseUrl });
 const db = drizzle(pool, { schema });
 const outbox = new SearchSyncOutboxRepository(db);
@@ -293,6 +350,24 @@ const run = async () => {
     maxBatchesPerEntity,
     maxRequestRetries,
     onProgress: async (event) => {
+      if (event.type === 'batch') {
+        recordSearchReindexBatch({
+          checkpoint: event.checkpoint,
+          entity: event.entity,
+          failed: event.failed,
+          indexed: event.indexed,
+          scanned: event.processed,
+        });
+      }
+      if (event.type === 'reconciliation') {
+        recordSearchReindexReconciliation(event);
+      }
+      if (event.type === 'bulk_retry') {
+        recordSearchReindexBulkRetry(event.entity);
+      }
+      if (event.type === 'bulk_completed') {
+        recordSearchReindexBulkRequest(event);
+      }
       console.log(JSON.stringify(event));
       await auditLogger!.append(event);
     },
@@ -313,7 +388,7 @@ const run = async () => {
   });
 };
 
-run()
+observeSearchReindexRun(run)
   .catch(async (error) => {
     console.error(error);
     if (auditLogger) {
@@ -337,5 +412,10 @@ run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await pool.end();
+    try {
+      await pool.end();
+    } finally {
+      /** Flush terminal run metrics and the root trace before the short-lived CLI exits. */
+      if (telemetrySdk) await shutdownSafely(telemetrySdk);
+    }
   });

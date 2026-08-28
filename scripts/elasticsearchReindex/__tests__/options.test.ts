@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertSearchReindexElasticsearchHostname,
+  assertSearchReindexTelemetryExportConfigured,
   resolveSearchReindexElasticsearchEnvironment,
+  resolveSearchReindexTelemetryEnvironment,
 } from '../options';
 
 describe('resolveSearchReindexElasticsearchEnvironment', () => {
@@ -46,5 +48,55 @@ describe('resolveSearchReindexElasticsearchEnvironment', () => {
     expect(() =>
       assertSearchReindexElasticsearchHostname('dev-search-abc.example.com', 'dev-search-'),
     ).not.toThrow();
+  });
+});
+
+describe('resolveSearchReindexTelemetryEnvironment', () => {
+  it('requires an explicit, bounded environment label when provided', () => {
+    expect(resolveSearchReindexTelemetryEnvironment([])).toBeUndefined();
+    expect(resolveSearchReindexTelemetryEnvironment(['--telemetry-environment=development'])).toBe(
+      'development',
+    );
+    expect(() =>
+      resolveSearchReindexTelemetryEnvironment(['--telemetry-environment=Production']),
+    ).toThrow('must be one of development, preview, or production');
+    expect(() =>
+      resolveSearchReindexTelemetryEnvironment(['--telemetry-environment=staging']),
+    ).toThrow('must be one of development, preview, or production');
+  });
+});
+
+describe('assertSearchReindexTelemetryExportConfigured', () => {
+  it('accepts a shared OTLP endpoint', () => {
+    expect(() =>
+      assertSearchReindexTelemetryExportConfigured({
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector.example.com',
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts separate metrics and traces endpoints', () => {
+    expect(() =>
+      assertSearchReindexTelemetryExportConfigured({
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: 'https://collector.example.com/v1/metrics',
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'https://collector.example.com/v1/traces',
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses telemetry without both export destinations', () => {
+    expect(() => assertSearchReindexTelemetryExportConfigured({})).toThrow(
+      'OTLP metrics and traces export endpoints are required',
+    );
+    expect(() =>
+      assertSearchReindexTelemetryExportConfigured({
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: 'https://collector.example.com/v1/metrics',
+      }),
+    ).toThrow('OTLP metrics and traces export endpoints are required');
+    expect(() =>
+      assertSearchReindexTelemetryExportConfigured({
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'https://collector.example.com/v1/traces',
+      }),
+    ).toThrow('OTLP metrics and traces export endpoints are required');
   });
 });

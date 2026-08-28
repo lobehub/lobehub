@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { env } from 'node:process';
 
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
@@ -8,9 +9,16 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import type { DetectedResourceAttributes } from '@opentelemetry/resources';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { AggregationType, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+
+/**
+ * One opaque ID per Node.js process matches the Vercel instance lifetime, including Fluid
+ * Compute reuse across concurrent invocations.
+ * @see https://opentelemetry.io/docs/specs/semconv/resource/service/
+ */
+const SERVICE_INSTANCE_ID = randomUUID();
 
 export function attributesForVercel(): DetectedResourceAttributes {
   return {
@@ -51,6 +59,7 @@ export function attributesForEnv(): DetectedResourceAttributes {
 export function attributesCommon(): DetectedResourceAttributes {
   return {
     [ATTR_SERVICE_NAME]: 'lobehub',
+    'service.instance.id': SERVICE_INSTANCE_ID,
     ...attributesForEnv(),
   };
 }
@@ -92,12 +101,23 @@ function debugLogLevelFromString(level?: string | null): DiagLogLevel | undefine
 }
 
 export function register(options?: {
+  autoDetectResources?: boolean;
+  autoInstrumentations?: boolean;
   debug?: true | DiagLogLevel;
+  environment?: string;
+  histogramViews?: {
+    boundaries: readonly number[];
+    instrumentName: string;
+    meterName?: string;
+  }[];
   name?: string;
   version?: string;
 }) {
   const attributes = attributesCommon();
 
+  if (typeof options?.environment !== 'undefined') {
+    attributes.env = options.environment;
+  }
   if (typeof options?.name !== 'undefined') {
     attributes[ATTR_SERVICE_NAME] = options.name;
   }
@@ -122,11 +142,11 @@ export function register(options?: {
   }
 
   const sdk = new NodeSDK({
-    instrumentations: [
-      new PgInstrumentation(),
-      new HttpInstrumentation(),
-      getNodeAutoInstrumentations(),
-    ],
+    autoDetectResources: options?.autoDetectResources,
+    instrumentations:
+      options?.autoInstrumentations === false
+        ? []
+        : [new PgInstrumentation(), new HttpInstrumentation(), getNodeAutoInstrumentations()],
     metricReaders: [
       new PeriodicExportingMetricReader({
         exportIntervalMillis: metricsExporterInterval,
@@ -135,9 +155,27 @@ export function register(options?: {
     ],
     resource: resourceFromAttributes(attributes),
     traceExporter: new OTLPTraceExporter(),
+    views: options?.histogramViews?.map(({ boundaries, instrumentName, meterName }) => ({
+      aggregation: {
+        options: { boundaries: [...boundaries] },
+        type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM,
+      },
+      instrumentName,
+      meterName,
+    })),
   });
 
   sdk.start();
+  return sdk;
 }
+
+export const shutdownSafely = async (sdk: Pick<NodeSDK, 'shutdown'>): Promise<void> => {
+  try {
+    await sdk.shutdown();
+  } catch (error) {
+    /** Exporter shutdown failures must not change the caller's business result or exit status. */
+    diag.error('[observability-otel] failed to shut down telemetry', error);
+  }
+};
 
 export { DiagLogLevel } from '@opentelemetry/api';
