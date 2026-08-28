@@ -39,16 +39,24 @@ const errorDetail = (payload: { error?: unknown } | undefined, response: Respons
  * `<url>/<procedure>` with the superjson-serialized input as the body, and a
  * `{ result: { data } }` / `{ error }` envelope back, both superjson payloads.
  */
-const lambdaMutation = async <T>(
+export const callLambdaMutation = async <T>(
   { accessToken, serverUrl }: LambdaCallContext,
   procedure: string,
   input: unknown,
 ): Promise<T> => {
   const base = serverUrl.replace(/\/$/, '');
 
+  // Deliberately no workspace header: every Desktop-main lambda call runs
+  // under the personal OIDC identity. Provider binding is personal-agent /
+  // local-execution only — `selectRuntimeType` rejects API-mode runs for any
+  // workspace agent (including the author, who otherwise CAN spawn one
+  // in-process) — so a workspace scope must never leak in here.
   const response = await fetch(`${base}/trpc/lambda/${procedure}`, {
     body: JSON.stringify(superjson.serialize(input)),
-    headers: { 'Content-Type': 'application/json', 'Oidc-Auth': accessToken },
+    headers: {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': accessToken,
+    },
     method: 'POST',
   });
 
@@ -75,7 +83,16 @@ const lambdaMutation = async <T>(
 export const createLambdaFileStorePort = async (
   auth: RemoteServerAuth,
 ): Promise<FileStorePort | undefined> => {
-  const [serverUrl, accessToken] = await Promise.all([auth.getServerUrl(), auth.getAccessToken()]);
+  // Sequential on purpose. Both reads are local (settings store + `safeStorage`
+  // decryption), so there is nothing to win by parallelizing — while
+  // `Promise.all([auth.getServerUrl(), auth.getAccessToken()])` is a trap: the
+  // argument list is evaluated first, so a callback that throws *synchronously*
+  // abandons the array before `Promise.all` ever subscribes to its sibling,
+  // orphaning that rejection. In Electron main an unhandled rejection is fatal
+  // (`process-error-handlers` re-throws it), so an injected-callback bug would
+  // kill the app instead of degrading to "no image upload".
+  const serverUrl = await auth.getServerUrl();
+  const accessToken = await auth.getAccessToken();
 
   if (!serverUrl || !accessToken) {
     logger.debug('No authed remote server — skipping tool_result image upload');
@@ -85,8 +102,8 @@ export const createLambdaFileStorePort = async (
   const ctx: LambdaCallContext = { accessToken, serverUrl };
 
   return {
-    checkFileHash: (input) => lambdaMutation(ctx, 'file.checkFileHash', input),
-    createFile: (input) => lambdaMutation(ctx, 'file.createFile', input),
-    createS3PreSignedUrl: (input) => lambdaMutation(ctx, 'upload.createS3PreSignedUrl', input),
+    checkFileHash: (input) => callLambdaMutation(ctx, 'file.checkFileHash', input),
+    createFile: (input) => callLambdaMutation(ctx, 'file.createFile', input),
+    createS3PreSignedUrl: (input) => callLambdaMutation(ctx, 'upload.createS3PreSignedUrl', input),
   };
 };

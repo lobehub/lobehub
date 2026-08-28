@@ -1,6 +1,6 @@
-import type { AssistantContentBlock } from '@/types/index';
+import type { AssistantGroupSemanticBlock } from '@lobechat/conversation-flow';
 
-export interface RenderableAssistantContentBlock extends AssistantContentBlock {
+export interface RenderableAssistantContentBlock extends AssistantGroupSemanticBlock {
   contentOverride?: string;
   disableMarkdownStreaming?: boolean;
   domId?: string;

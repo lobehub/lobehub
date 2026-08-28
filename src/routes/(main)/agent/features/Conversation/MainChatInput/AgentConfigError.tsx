@@ -1,7 +1,6 @@
 'use client';
 
-import { Alert } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

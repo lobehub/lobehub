@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrock fournit aux entreprises des modèles avancés de langage et de vision, incluant Anthropic Claude et Meta Llama 3.1, allant d’options légères à haute performance pour les tâches de texte, de conversation et d’image.",
   "bfl.description": "Un laboratoire de recherche de pointe en IA visuelle construisant l'infrastructure visuelle de demain.",
   "cerebras.description": "Cerebras est une plateforme d'inférence basée sur son système CS-3, axée sur une latence ultra-faible et un débit élevé pour les charges de travail en temps réel comme la génération de code et les agents intelligents.",
+  "chatgpt.description": "Utilisez les modèles inclus dans votre abonnement ChatGPT via Codex, sans clé API de la plateforme OpenAI.",
   "cloudflare.description": "Exécutez des modèles ML alimentés par GPU sans serveur sur le réseau mondial de Cloudflare.",
   "cohere.description": "Cohere propose des modèles multilingues de pointe, une recherche avancée et des espaces de travail IA pour les entreprises modernes, le tout sur une plateforme sécurisée.",
   "cometapi.description": "CometAPI donne accès à des modèles de pointe d’OpenAI, Anthropic, Google et d’autres, permettant aux utilisateurs de choisir le meilleur modèle et tarif selon leurs besoins.",

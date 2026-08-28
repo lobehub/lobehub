@@ -32,6 +32,16 @@ describe('resolveAgentModelSelectionPolicy', () => {
       }),
     ).toBe('fixed');
   });
+
+  it('forces member selection on a personal-selection Agent', () => {
+    expect(
+      resolveAgentModelSelectionPolicy({
+        ...workspaceShared,
+        agencyConfig: { modelSelectionPolicy: 'fixed' },
+        personalModelSelection: true,
+      }),
+    ).toBe('member');
+  });
 });
 
 describe('resolveAgentModelConfig', () => {
@@ -73,6 +83,19 @@ describe('resolveAgentModelConfig', () => {
         { model: 'member-model', provider: 'member-provider' },
       ),
     ).toEqual({ model: 'shared-model', provider: 'shared-provider' });
+  });
+
+  it('applies the member override on a personal-selection Agent even for an admin', () => {
+    expect(
+      resolveAgentModelConfig(
+        {
+          ...workspaceShared,
+          canManage: true,
+          personalModelSelection: true,
+        },
+        { model: 'member-model', provider: 'member-provider' },
+      ),
+    ).toEqual({ model: 'member-model', provider: 'member-provider' });
   });
 
   it('ignores the member override while the workspace Agent is private', () => {

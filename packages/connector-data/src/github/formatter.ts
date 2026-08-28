@@ -1,9 +1,9 @@
 import type {
+  GitHubContributedRepository,
   GitHubContribution,
   GitHubOrganization,
   GitHubPullRequest,
   GitHubRepository,
-  GitHubRepositoryContributor,
   GitHubUserContext,
 } from './types';
 
@@ -21,7 +21,7 @@ const clip = (value: string | undefined, limit: number) => {
   return `${clean.slice(0, limit).trimEnd()}...`;
 };
 
-const formatProfile = (context: GitHubUserContext, pinnedRepositories: GitHubRepository[]) => {
+const formatProfile = (context: GitHubUserContext) => {
   const { organizations = [], profile } = context;
   const lines = [
     profile.name && `Name: ${clip(profile.name, MAX_DESCRIPTION_LENGTH)}`,
@@ -36,15 +36,6 @@ const formatProfile = (context: GitHubUserContext, pinnedRepositories: GitHubRep
     lines.push('Organizations:');
     lines.push(...organizations.map(formatOrganization));
   }
-  if (pinnedRepositories.length > 0) {
-    lines.push(
-      `Pinned: ${pinnedRepositories
-        .map(({ nameWithOwner }) => clip(nameWithOwner, MAX_DESCRIPTION_LENGTH))
-        .filter(Boolean)
-        .join(', ')}`,
-    );
-  }
-
   return ['## GitHub Profile', '', ...lines].join('\n');
 };
 
@@ -145,17 +136,14 @@ const formatProfileReadme = (profileReadme: string | undefined) => {
   return ['## Profile README', '', ...summary].join('\n').slice(0, MAX_PROFILE_README_OUTPUT_CHARS);
 };
 
-const formatPinnedRepositories = (
-  repositories: GitHubRepository[],
-  contributorsByRepository: Record<string, GitHubRepositoryContributor[]>,
-) => {
+const formatPinnedRepositories = (repositories: GitHubRepository[]) => {
   if (repositories.length === 0) return '';
   return [
-    '## Pinned Repositories',
+    '## Other Profile-curated Pinned Repositories',
+    '',
+    'Interpretation: profile curation only. Pinning does not prove ownership, contribution, current activity, expertise, employment, or identity.',
     '',
     ...repositories.map((repository) => {
-      const contributors = contributorsByRepository[repository.nameWithOwner] ?? [];
-
       const details = [
         repository.primaryLanguage &&
           `language: ${clip(repository.primaryLanguage, MAX_DESCRIPTION_LENGTH)}`,
@@ -165,11 +153,6 @@ const formatPinnedRepositories = (
           `topics: ${repository.topics
             .map((topic) => clip(topic, MAX_DESCRIPTION_LENGTH))
             .filter(Boolean)
-            .join(', ')}`,
-        contributors.length > 0 && `contributors sampled: ${contributors.length}`,
-        contributors.length > 0 &&
-          `top contributors: ${contributors
-            .map(({ login }) => clip(login, MAX_DESCRIPTION_LENGTH) ?? 'unknown')
             .join(', ')}`,
       ].filter(Boolean);
 
@@ -195,6 +178,50 @@ const formatRecentRepositories = (repositories: GitHubRepository[]) => {
       ].filter(Boolean);
 
       return `- ${clip(repository.nameWithOwner, MAX_DESCRIPTION_LENGTH) ?? 'Repository'}${repository.description ? ` - ${clip(repository.description, MAX_DESCRIPTION_LENGTH)}` : ''}${details.length > 0 ? ` (${details.join('; ')})` : ''}`;
+    }),
+  ].join('\n');
+};
+
+const formatContributedRepositories = (
+  repositories: GitHubContributedRepository[],
+  maximum: number,
+  heading: string,
+  interpretation: string,
+) => {
+  if (repositories.length === 0) return '';
+
+  return [
+    `## ${heading}`,
+    '',
+    `Interpretation: ${interpretation}`,
+    '',
+    ...repositories.slice(0, maximum).map((repository) => {
+      const { commits, issues, pullRequests, reviews } = repository.contributions;
+      const activity = [
+        commits > 0 && `${commits} commit${commits === 1 ? '' : 's'}`,
+        pullRequests > 0 && `${pullRequests} PR${pullRequests === 1 ? '' : 's'}`,
+        reviews > 0 && `${reviews} review${reviews === 1 ? '' : 's'}`,
+        issues > 0 && `${issues} issue${issues === 1 ? '' : 's'}`,
+      ].filter(Boolean);
+      const details = [
+        repository.primaryLanguage &&
+          `language: ${clip(repository.primaryLanguage, MAX_DESCRIPTION_LENGTH)}`,
+        repository.stargazerCount !== undefined && `stars: ${repository.stargazerCount}`,
+        repository.forkCount !== undefined && `forks: ${repository.forkCount}`,
+        repository.topics.length > 0 &&
+          `topics: ${repository.topics
+            .map((topic) => clip(topic, MAX_DESCRIPTION_LENGTH))
+            .filter(Boolean)
+            .join(', ')}`,
+        activity.length > 0 && `activity: ${activity.join(', ')}`,
+        repository.lastContributionAt &&
+          `last contribution: ${singleLine(repository.lastContributionAt)?.slice(0, 10)}`,
+      ].filter(Boolean);
+      const description = clip(repository.description, MAX_DESCRIPTION_LENGTH);
+
+      return `- ${clip(repository.nameWithOwner, MAX_DESCRIPTION_LENGTH) ?? 'Repository'}${description ? ` — ${description}` : ''}${
+        details.length > 0 ? ` (${details.join('; ')})` : ''
+      }`;
     }),
   ].join('\n');
 };
@@ -252,28 +279,107 @@ const formatContributions = (input: GitHubContribution[]) => {
   return lines.join('\n');
 };
 
+/**
+ * Fits the GitHub brief while preserving a chronological activity tail.
+ *
+ * Repository summaries answer where the user contributes; recent history independently answers
+ * what they are doing now, so a large repository catalog must not truncate the latter away.
+ */
+const joinEvidenceSections = (
+  primarySections: string[],
+  recentSection: string,
+  maxLength: number,
+) => {
+  const cleanPrimary = primarySections.filter(Boolean).join('\n\n').replaceAll('\u0000', '');
+  const cleanRecent = recentSection.replaceAll('\u0000', '');
+  if (!cleanRecent) return cleanPrimary.slice(0, maxLength);
+
+  const separator = cleanPrimary ? '\n\n' : '';
+  const recentBudget = Math.min(cleanRecent.length, Math.floor(maxLength * 0.4));
+  const primaryBudget = Math.max(0, maxLength - separator.length - recentBudget);
+  return `${cleanPrimary.slice(0, primaryBudget)}${separator}${cleanRecent.slice(0, recentBudget)}`;
+};
+
+/** Output budgets for the GitHub understanding source brief. */
 export interface ToGitHubUserContextMarkdownOptions {
+  /** Maximum recent high-frequency repositories rendered into the source brief. @default 12 */
+  maxContributedRepositories?: number;
+  /** Maximum high-impact contributed repositories rendered into the source brief. @default 8 */
+  maxInfluentialRepositories?: number;
+  /** Maximum output length in characters. @default 20000 */
   maxLength?: number;
+  /** Maximum pinned repositories with corroborating contribution evidence. @default 8 */
+  maxPinnedContributedRepositories?: number;
 }
 
+/**
+ * Formats normalized GitHub profile and contribution evidence as a bounded source brief.
+ *
+ * Use when:
+ * - Supplying GitHub evidence to an understanding writer
+ * - Inspecting the connector's human-readable evidence projection
+ *
+ * Expects:
+ * - Already normalized connector-domain values
+ *
+ * Returns:
+ * - Markdown with independent repository-summary and recent-activity sections
+ */
 export const toGitHubUserContextMarkdown = (
   context: GitHubUserContext,
-  { maxLength = DEFAULT_MAX_LENGTH }: ToGitHubUserContextMarkdownOptions = {},
+  {
+    maxContributedRepositories = 12,
+    maxInfluentialRepositories = 8,
+    maxLength = DEFAULT_MAX_LENGTH,
+    maxPinnedContributedRepositories = 8,
+  }: ToGitHubUserContextMarkdownOptions = {},
 ) => {
+  const contributedRepositories = context.contributedRepositories ?? [];
+  const influentialRepositories = context.influentialRepositories ?? [];
   const pinnedRepositories = context.pinnedRepositories ?? [];
+  const pinnedContributedRepositories = context.pinnedContributedRepositories ?? [];
   const recentContributions = context.recentContributions ?? [];
-  const hasPrimaryProfileEvidence = Boolean(
-    context.profileReadme || pinnedRepositories.length > 0 || recentContributions.length > 0,
+  const hasStructuredContributionEvidence =
+    contributedRepositories.length > 0 || recentContributions.length > 0;
+
+  const pinnedContributionNames = new Set(
+    pinnedContributedRepositories.map(({ nameWithOwner }) => nameWithOwner),
+  );
+  const otherPinnedRepositories = pinnedRepositories.filter(
+    ({ nameWithOwner }) => !pinnedContributionNames.has(nameWithOwner),
   );
 
   const sections = [
-    formatProfile(context, pinnedRepositories),
+    formatProfile(context),
     formatProfileReadme(context.profileReadme),
-    formatPinnedRepositories(pinnedRepositories, context.repositoryContributors ?? {}),
-    hasPrimaryProfileEvidence ? '' : formatRecentRepositories(context.recentRepositories ?? []),
-    hasPrimaryProfileEvidence ? '' : formatPullRequests(context.recentPullRequests ?? []),
-    formatContributions(recentContributions),
+    formatContributedRepositories(
+      pinnedContributedRepositories,
+      maxPinnedContributedRepositories,
+      'Pinned Contributions',
+      'repositories with both time-bounded contribution evidence and deliberate profile curation',
+    ),
+    formatPinnedRepositories(otherPinnedRepositories),
+    formatContributedRepositories(
+      influentialRepositories,
+      maxInfluentialRepositories,
+      'High-impact Contributions',
+      'contributed repositories ordered by repository stars; impact does not imply current focus',
+    ),
+    formatContributedRepositories(
+      contributedRepositories,
+      maxContributedRepositories,
+      'Recent Contribution Frequency',
+      'repositories shortlisted by time-bounded commit, pull request, review, and issue frequency',
+    ),
+    hasStructuredContributionEvidence
+      ? ''
+      : formatRecentRepositories(context.recentRepositories ?? []),
+    hasStructuredContributionEvidence ? '' : formatPullRequests(context.recentPullRequests ?? []),
   ].filter(Boolean);
 
-  return sections.join('\n\n').replaceAll('\u0000', '').slice(0, Math.max(0, maxLength));
+  return joinEvidenceSections(
+    sections,
+    formatContributions(recentContributions),
+    Math.max(0, maxLength),
+  );
 };

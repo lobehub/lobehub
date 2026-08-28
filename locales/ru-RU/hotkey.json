@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Показать или скрыть левую панель",
   "toggleLeftPanel.title": "Переключить левую панель",
   "toggleRightPanel.desc": "Показать или скрыть правую панель",
-  "toggleRightPanel.title": "Переключить правую панель"
+  "toggleRightPanel.title": "Переключить правую панель",
+  "toggleTerminalPanel.desc": "Показать или скрыть нижнюю панель терминала",
+  "toggleTerminalPanel.title": "Переключить панель терминала"
 }

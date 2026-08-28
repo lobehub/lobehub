@@ -10,14 +10,35 @@
  * but ignored by the push implementation.
  */
 export interface PushDeliveryContext {
-  /** URL to navigate to when user taps the notification (sent as `data.url`) */
+  /**
+   * URL to navigate to when the user taps the notification (sent verbatim as
+   * `data.url`). Universal-link/cold-start surfaces should provide an absolute
+   * HTTPS URL; legacy in-app routes may remain relative.
+   */
   actionUrl?: string;
   /** Notification body text */
   content: string;
   /** Underlying notifications.id — sent as `data.notificationId` for tracing */
   notificationId: string;
+  /** Optional native presentation hints for notification service extensions. */
+  pushPresentation?: {
+    /** Extra JSON-safe string values merged into Expo's custom data payload. */
+    data?: Record<string, string>;
+    /**
+     * Device ids that already received the same notification through another
+     * system surface (for example ActivityKit). They are excluded from the
+     * ordinary Expo push while all other registered devices retain fallback.
+     */
+    excludeDeviceIds?: string[];
+    /** Public HTTPS image used by supported system notification surfaces. */
+    image?: string;
+    /** Sets APNs `mutable-content: 1` so an iOS service extension can enrich the alert. */
+    mutableContent?: boolean;
+  };
   /** Notification title */
   title: string;
+  /** Scenario identifier sent in custom data for client/native routing. */
+  type?: string;
   /** Ignored by push (kept for cloud `NotificationChannel` compatibility) */
   userEmail?: string;
   /** Target user — push channel fans out to all of this user's `push_tokens` */

@@ -1,13 +1,17 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { FilePlusIcon, FolderPlusIcon } from 'lucide-react';
-import { memo } from 'react';
+import { FilePlusIcon, FolderPlusIcon, PlusIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
-    padding-block: 4px;
-    padding-inline: 12px 4px;
+    /* padding-inline start matches a tree row's content edge:
+       --trees-padding-inline (4) - --trees-item-margin-x (4), clamped at 0,
+       plus the row's own margin (4) and padding (8). */
+    padding-block: 8px 4px;
+    padding-inline: 12px 8px;
     color: ${cssVar.colorTextSecondary};
   `,
   title: css`
@@ -25,25 +29,36 @@ interface Props {
 
 const DocumentExplorerToolbar = memo<Props>(({ onCreateDocument, onCreateFolder }) => {
   const { t } = useTranslation('chat');
+  const createMenuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        icon: <Icon icon={FilePlusIcon} />,
+        key: 'new-document',
+        label: t('workingPanel.resources.tree.newDocument'),
+        onClick: onCreateDocument,
+      },
+      {
+        icon: <Icon icon={FolderPlusIcon} />,
+        key: 'new-folder',
+        label: t('workingPanel.resources.tree.newFolder'),
+        onClick: onCreateFolder,
+      },
+    ],
+    [onCreateDocument, onCreateFolder, t],
+  );
+
   return (
     <Flexbox horizontal align={'center'} className={styles.toolbar} distribution={'space-between'}>
       <Text className={styles.title} type={'secondary'}>
         {t('workingPanel.resources.filter.documents')}
       </Text>
-      <Flexbox horizontal gap={2}>
+      <DropdownMenu items={createMenuItems} placement={'bottomRight'}>
         <ActionIcon
-          icon={FolderPlusIcon}
+          icon={PlusIcon}
           size={'small'}
-          title={t('workingPanel.resources.tree.newFolder')}
-          onClick={onCreateFolder}
+          title={t('workingPanel.resources.tree.create')}
         />
-        <ActionIcon
-          icon={FilePlusIcon}
-          size={'small'}
-          title={t('workingPanel.resources.tree.newDocument')}
-          onClick={onCreateDocument}
-        />
-      </Flexbox>
+      </DropdownMenu>
     </Flexbox>
   );
 });

@@ -30,8 +30,10 @@ import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
   logTimingSink as logTiming,
+  readAudioDurationMs,
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
+import { isPlainRecord } from '@lobechat/utils/object';
 import type { HeatmapsProps } from '@lobehub/charts';
 import dayjs from 'dayjs';
 import type { SQL } from 'drizzle-orm';
@@ -47,6 +49,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   not,
   or,
   sql,
@@ -76,11 +79,29 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
+
+export class HumanApprovalAlreadyResolvedError extends Error {
+  constructor(messageId: string) {
+    super(`Human approval is no longer pending for tool message ${messageId}`);
+    this.name = 'HumanApprovalAlreadyResolvedError';
+  }
+}
+
+export interface HumanApprovalResolution {
+  /** Conditional owner checked by rollback; never accepted as client authority. */
+  claimedResolutionRequestId?: string;
+  content?: string;
+  id: string;
+  intervention: Record<string, unknown>;
+  pluginState?: Record<string, unknown> | null;
+  replacePluginState?: boolean;
+}
 
 /**
  * Read the operation-final Work root id stamped on a message's metadata by the
@@ -101,6 +122,11 @@ export interface QueryMessagesOptions {
    * Current page number (0-indexed)
    */
   current?: number;
+  /**
+   * Opt-in for `file` work summaries in the payload (see
+   * `QueryMessageParams.includeFileWorks`).
+   */
+  includeFileWorks?: boolean;
   /**
    * Number of messages per page
    */
@@ -149,10 +175,35 @@ interface MessageRelatedFile {
   fileType: string | null;
   id: string;
   messageId: string;
+  metadata: unknown;
   name: string | null;
   size: number | null;
   url: string;
 }
+
+const materializeChatAudioItem = ({
+  fileType,
+  id,
+  metadata,
+  name,
+  url,
+}: MessageRelatedFile): ChatAudioItem => {
+  const value = isPlainRecord(metadata) ? metadata : {};
+  const durationMs = readAudioDurationMs(metadata);
+
+  return {
+    alt: name!,
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : {}),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    id,
+    ...(typeof value.mimeType === 'string'
+      ? { mimeType: value.mimeType }
+      : fileType
+        ? { mimeType: fileType }
+        : {}),
+    url,
+  };
+};
 
 interface MessageChunkRelation {
   fileId: string;
@@ -180,6 +231,14 @@ interface MessageThreadRelation {
   title: string | null;
 }
 
+interface ActiveBranchSnapshot {
+  activeBranchId?: string;
+  activeBranchIndex: number;
+  metadata: Record<PropertyKey, unknown>;
+  parentId: string;
+  wasOptimistic: boolean;
+}
+
 interface MessageFileRelations {
   documentsMap: Record<string, string>;
   relatedFileList: MessageRelatedFile[];
@@ -191,6 +250,19 @@ interface CreateUserAndAssistantMessagesParams {
 }
 
 interface CreateUserAndAssistantMessagesOptions {
+  /**
+   * Ids minted by the caller (the client) for the pair. Either side may be
+   * omitted, in which case this model mints that one — an older client that
+   * sends no ids keeps working unchanged.
+   *
+   * Honouring a caller-supplied id is what lets the UI render the pair under
+   * its final ids immediately, instead of showing placeholders and re-keying
+   * them once this insert returns.
+   */
+  ids?: {
+    assistantMessageId?: string;
+    userMessageId?: string;
+  };
   timing?: ModelTimingContext;
 }
 
@@ -362,6 +434,40 @@ export class MessageModel {
   // **************** Query *************** //
 
   /**
+   * The newest user message of each given topic, keyed by topic id. Used to
+   * pre-inject recent same-channel history for IM platforms that can't read
+   * chat history at runtime (e.g. WeChat). Only `role = 'user'` rows with
+   * non-empty text are considered.
+   */
+  queryLastUserMessageByTopics = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([messages.topicId], {
+        content: messages.content,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'user'),
+          isNotNull(messages.content),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(messages.topicId, desc(messages.createdAt));
+
+    const result = new Map<string, string>();
+    for (const row of rows) {
+      const content = (row.content ?? '').trim();
+      if (row.topicId && content) result.set(row.topicId, content);
+    }
+    return result;
+  };
+
+  /**
    * Query messages by params (high-level API)
    *
    * This is the main query method that handles common query patterns.
@@ -371,6 +477,7 @@ export class MessageModel {
     {
       agentId,
       current = 0,
+      includeFileWorks,
       pageSize = 1000,
       sessionId,
       skipWorks,
@@ -419,14 +526,18 @@ export class MessageModel {
         () => this.buildThreadQueryCondition(threadId),
         { hasThreadId: true },
       );
+      // A topic thread may contain replies from delegated agents. When the topic is known,
+      // scope the complete thread to it instead of filtering those replies by the parent agent.
+      const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
         current,
+        includeFileWorks,
         pageSize,
         postProcessUrl: options.postProcessUrl,
         skipWorks,
         timing,
-        // Thread queries optionally add agent/session scope if provided
-        where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
+        topicId: topicId ?? undefined,
+        where: threadScopeCondition ? and(threadScopeCondition, threadCondition) : threadCondition,
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -447,6 +558,7 @@ export class MessageModel {
 
       const messageItems = await this.queryWithWhere({
         current,
+        includeFileWorks,
         pageSize,
         postProcessUrl: options.postProcessUrl,
         skipWorks,
@@ -461,16 +573,23 @@ export class MessageModel {
       return messageItems;
     }
 
-    // Standard query with session/topic/group filters
+    // A concrete topic is the conversation boundary and may legitimately
+    // contain messages from multiple agents (for example callAgent replies).
+    // Inbox queries have no topic, so they still require agent/session scope.
+    const conversationCondition = topicId
+      ? this.matchTopic(topicId)
+      : and(agentCondition ?? this.matchSession(sessionId), this.matchTopic(topicId));
+
+    // Standard query with conversation/topic/group filters
     const whereCondition = and(
-      agentCondition ?? this.matchSession(sessionId),
-      this.matchTopic(topicId),
+      conversationCondition,
       this.matchGroup(groupId),
       this.matchThread(threadId),
     );
 
     const messageItems = await this.queryWithWhere({
       current,
+      includeFileWorks,
       pageSize,
       postProcessUrl: options.postProcessUrl,
       skipWorks,
@@ -583,6 +702,7 @@ export class MessageModel {
     const {
       where,
       current = 0,
+      includeFileWorks,
       pageSize = 1000,
       postProcessUrl,
       skipWorks,
@@ -626,9 +746,13 @@ export class MessageModel {
             targetId: messages.targetId,
 
             sender: {
+              // `id` MUST be the first selected field: drizzle decides whether a
+              // left-joined nested selection is null from its first column, so
+              // leading with a nullable column (avatar) collapsed every
+              // avatar-less sender to `sender: null`.
+              id: users.id,
               avatar: users.avatar,
               fullName: users.fullName,
-              id: users.id,
               username: users.username,
             },
 
@@ -676,7 +800,7 @@ export class MessageModel {
           // `asc + limit` truncated exactly the newest batch, which is the worst
           // possible slice for a chat transcript. The page is reversed back to
           // ascending immediately below, so every downstream consumer is
-          // unaffected; only *which* rows are fetched changed. See LOBE-12011.
+          // unaffected; only *which* rows are fetched changed. See.
           .orderBy(desc(messages.createdAt), desc(messages.id))
           .limit(pageSize)
           .offset(offset),
@@ -699,7 +823,7 @@ export class MessageModel {
     //
     // Scope: this only serves the single "most recent page" load (`current === 0`),
     // which is the only page the chat read path ever requests — `current`/`pageSize`
-    // offset paging is dead code here (the very premise of LOBE-12011). The trim is
+    // offset paging is dead code here (the very premise of). The trim is
     // deliberately NOT offset-exact: the rows it drops from page 0 also fall outside
     // page 1's `offset = pageSize` window, so a hypothetical offset walk would skip
     // them. That is acceptable because nothing offset-walks this path; loading older
@@ -741,7 +865,7 @@ export class MessageModel {
       this.queryMessageThreadRelations(taskMessageIds, timing),
       skipWorks
         ? ({} as Record<string, WorkSummaryItem[]>)
-        : this.queryMessageWorkSummaries(result, timing),
+        : this.queryMessageWorkSummaries(result, includeFileWorks, timing),
     ]);
 
     if (messageIds.length === 0 && messageGroupNodes.length === 0) {
@@ -854,8 +978,7 @@ export class MessageModel {
               works: worksByMessageId[item.id as string],
               audioList: audioList
                 .filter((relation) => relation.messageId === item.id)
-
-                .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+                .map<ChatAudioItem>(materializeChatAudioItem),
             } as unknown as UIChatMessage;
           },
         ),
@@ -959,6 +1082,7 @@ export class MessageModel {
             fileType: files.fileType,
             id: messagesFiles.fileId,
             messageId: messagesFiles.messageId,
+            metadata: files.metadata,
             name: files.name,
             size: files.size,
             url: files.url,
@@ -1097,6 +1221,7 @@ export class MessageModel {
    */
   private queryMessageWorkSummaries = async (
     rows: { id: unknown; metadata: unknown }[],
+    includeFileWorks?: boolean,
     timing?: ModelTimingContext,
   ): Promise<Record<string, WorkSummaryItem[]>> => {
     const anchorByRootId = new Map<string, string>();
@@ -1111,6 +1236,7 @@ export class MessageModel {
       'db.message.queryWithWhere.workSummaries',
       () =>
         new WorkModel(this.db, this.userId, this.workspaceId).listSummariesByRootOperations({
+          includeFileWorks,
           rootOperationIds: Array.from(anchorByRootId.keys()),
         }),
       { rootOperationCount: anchorByRootId.size },
@@ -1257,6 +1383,15 @@ export class MessageModel {
         agentId: messages.agentId,
         targetId: messages.targetId,
 
+        sender: {
+          // `id` MUST be the first selected field — see queryWithWhere's sender
+          // selection for why (drizzle left-join nested-object nullification).
+          id: users.id,
+          avatar: users.avatar,
+          fullName: users.fullName,
+          username: users.username,
+        },
+
         tools: messages.tools,
         tool_call_id: messagePlugins.toolCallId,
 
@@ -1286,6 +1421,7 @@ export class MessageModel {
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+      .leftJoin(users, eq(users.id, messages.userId))
       .orderBy(asc(messages.createdAt));
 
     if (result.length === 0) return [];
@@ -1300,6 +1436,7 @@ export class MessageModel {
           fileType: files.fileType,
           id: messagesFiles.fileId,
           messageId: messagesFiles.messageId,
+          metadata: files.metadata,
           name: files.name,
           size: files.size,
           url: files.url,
@@ -1430,10 +1567,23 @@ export class MessageModel {
 
     // 6. Transform messages to UIChatMessage format
     return result.map(
-      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+      ({
+        model,
+        provider,
+        translate,
+        ttsId,
+        ttsFile,
+        ttsContentMd5,
+        ttsVoice,
+        sender,
+        ...item
+      }) => {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
         return {
           ...item,
+          // Same presence contract as queryWithWhere: collapse a null-id sender
+          // (deleted account) to `null` so clients can rely on `sender?.id`.
+          sender: sender?.id ? sender : null,
           chunksList: chunksList
             .filter((relation) => relation.messageId === item.id)
             .map((c) => ({
@@ -1490,7 +1640,7 @@ export class MessageModel {
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
           audioList: audioList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+            .map<ChatAudioItem>(materializeChatAudioItem),
         } as unknown as UIChatMessage;
       },
     );
@@ -1708,6 +1858,12 @@ export class MessageModel {
   findById = async (id: string) => {
     return this.db.query.messages.findFirst({
       where: and(eq(messages.id, id), this.ownership()),
+    });
+  };
+
+  findByClientId = async (clientId: string) => {
+    return this.db.query.messages.findFirst({
+      where: and(eq(messages.clientId, clientId), this.ownership()),
     });
   };
 
@@ -1991,7 +2147,7 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(and(this.ownership(), isNotNull(messages.model)))
+      .where(and(this.ownership(), isNotNull(messages.model), notCopiedTranscript()))
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -2079,6 +2235,7 @@ export class MessageModel {
         genWhere([
           this.ownership(),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,
@@ -2336,10 +2493,10 @@ export class MessageModel {
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
-    { timing }: CreateUserAndAssistantMessagesOptions = {},
+    { ids, timing }: CreateUserAndAssistantMessagesOptions = {},
   ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
-    const userMessageId = this.genId();
-    const assistantMessageId = this.genId();
+    const userMessageId = ids?.userMessageId ?? this.genId();
+    const assistantMessageId = ids?.assistantMessageId ?? this.genId();
     const createdAt = Date.now();
     const defaultUserCreatedAt = createdAt;
     const defaultAssistantCreatedAt = createdAt + 1;
@@ -2569,15 +2726,17 @@ export class MessageModel {
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
-    const item = await this.db.query.messagePlugins.findFirst({
-      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-    });
-    if (!item) throw new Error('Plugin not found');
-
-    await this.db
+    const updated = await this.db
       .update(messagePlugins)
-      .set({ state: merge(item.state || {}, state) })
-      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
+      .set({
+        // Plugin-state patches own complete top-level keys. Merge them in SQL so
+        // concurrent writers of different keys cannot overwrite each other.
+        state: sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(state)}::jsonb`,
+      })
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+      .returning({ id: messagePlugins.id });
+
+    if (updated.length === 0) throw new Error('Plugin not found');
   };
 
   updateMessagePlugin = async (id: string, value: Partial<MessagePluginItem>) => {
@@ -2590,6 +2749,130 @@ export class MessageModel {
       .update(messagePlugins)
       .set(value)
       .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
+  };
+
+  /**
+   * Resolve an approval batch at one row-locking boundary. Every target is
+   * checked before any write, so Web, Mobile, Stop, and notification actions
+   * cannot each win a subset of the same assistant turn.
+   */
+  resolveHumanApproval = async (
+    resolutions: HumanApprovalResolution[],
+  ): Promise<'applied' | 'idempotent'> => {
+    if (resolutions.length === 0) return 'idempotent';
+
+    const ids = resolutions.map(({ id }) => id);
+    if (new Set(ids).size !== ids.length) {
+      throw new Error('Human approval batch contains duplicate tool messages');
+    }
+
+    return this.db.transaction(async (trx) => {
+      const lockedRows = await trx
+        .select({
+          id: messagePlugins.id,
+          intervention: messagePlugins.intervention,
+          state: messagePlugins.state,
+        })
+        .from(messagePlugins)
+        .where(and(inArray(messagePlugins.id, ids), this.pluginsOwnership()))
+        .for('update');
+      const lockedById = new Map(lockedRows.map((row) => [row.id, row]));
+
+      const rowStates = resolutions.map((resolution) => {
+        const row = lockedById.get(resolution.id);
+        if (!row) throw new Error(`Plugin not found: ${resolution.id}`);
+        if (row.intervention?.status === 'pending') return 'pending' as const;
+
+        const sameRequest =
+          Boolean(resolution.intervention.resolutionRequestId) &&
+          row.intervention?.resolutionRequestId === resolution.intervention.resolutionRequestId;
+        const sameDecision = Object.entries(resolution.intervention).every(
+          ([key, value]) =>
+            JSON.stringify(row.intervention?.[key as keyof typeof row.intervention]) ===
+            JSON.stringify(value),
+        );
+        if (sameRequest && sameDecision) return 'idempotent' as const;
+        throw new HumanApprovalAlreadyResolvedError(resolution.id);
+      });
+      const pendingCount = rowStates.filter((state) => state === 'pending').length;
+      if (pendingCount === 0) return 'idempotent';
+      if (pendingCount !== resolutions.length) {
+        throw new Error('Human approval batch contains a partial idempotent claim');
+      }
+
+      for (const resolution of resolutions) {
+        const row = lockedById.get(resolution.id)!;
+        if (resolution.content !== undefined) {
+          const [updatedMessage] = await trx
+            .update(messages)
+            .set({ content: resolution.content })
+            .where(and(eq(messages.id, resolution.id), this.ownership()))
+            .returning({ id: messages.id });
+          if (!updatedMessage) throw new Error(`Message not found: ${resolution.id}`);
+        }
+
+        const [updatedPlugin] = await trx
+          .update(messagePlugins)
+          .set({
+            // Status/result is a claim patch, not a replacement. Preserve the
+            // authoritative operation/batch/item identity stamped when the
+            // parked tool row was created so subsequent source reads, Stop,
+            // and rollback still address the same sealed batch.
+            intervention: merge(row.intervention || {}, resolution.intervention),
+            ...(resolution.pluginState !== undefined && {
+              state: resolution.replacePluginState
+                ? resolution.pluginState
+                : merge(row.state || {}, resolution.pluginState || {}),
+            }),
+          })
+          .where(and(eq(messagePlugins.id, resolution.id), this.pluginsOwnership()))
+          .returning({ id: messagePlugins.id });
+        if (!updatedPlugin) throw new Error(`Plugin not found: ${resolution.id}`);
+      }
+
+      return 'applied';
+    });
+  };
+
+  /** Restore the exact pre-claim snapshot when continuation startup fails. */
+  restoreHumanApproval = async (resolutions: HumanApprovalResolution[]): Promise<void> => {
+    if (resolutions.length === 0) return;
+
+    await this.db.transaction(async (trx) => {
+      const ids = resolutions.map(({ id }) => id);
+      const lockedRows = await trx
+        .select({ id: messagePlugins.id, intervention: messagePlugins.intervention })
+        .from(messagePlugins)
+        .where(and(inArray(messagePlugins.id, ids), this.pluginsOwnership()))
+        .for('update');
+      const lockedById = new Map(lockedRows.map((row) => [row.id, row]));
+
+      for (const resolution of resolutions) {
+        const locked = lockedById.get(resolution.id);
+        if (!locked) throw new Error(`Plugin not found: ${resolution.id}`);
+        if (
+          resolution.claimedResolutionRequestId &&
+          locked.intervention?.resolutionRequestId !== resolution.claimedResolutionRequestId
+        ) {
+          continue;
+        }
+        if (resolution.content !== undefined) {
+          const [updatedMessage] = await trx
+            .update(messages)
+            .set({ content: resolution.content })
+            .where(and(eq(messages.id, resolution.id), this.ownership()))
+            .returning({ id: messages.id });
+          if (!updatedMessage) throw new Error(`Message not found: ${resolution.id}`);
+        }
+        await trx
+          .update(messagePlugins)
+          .set({
+            intervention: resolution.intervention,
+            ...(resolution.pluginState !== undefined && { state: resolution.pluginState }),
+          })
+          .where(and(eq(messagePlugins.id, resolution.id), this.pluginsOwnership()));
+      }
+    });
   };
 
   /**
@@ -2666,6 +2949,237 @@ export class MessageModel {
       type: row.type ?? 'default',
       userId: row.userId,
     }));
+  };
+
+  /**
+   * List the tool/plugin rows produced by ONE agent operation, for the
+   * per-operation file-edit scan.
+   *
+   * An operation has no direct foreign key on `message_plugins`, so its rows are
+   * bracketed two ways, OR-ed together:
+   * 1. Time window — same `topicId` + `threadId`, with the owning message's
+   *    `createdAt` inside `[startedAt, completedAt]` (`completedAt` falls back to
+   *    now for an op still finalizing). The primary path for in-process runs.
+   * 2. Heterogeneous match — the message carries
+   *    `metadata.heterogeneousToolStateOperationId === operationId` directly,
+   *    which a CLI-backed run stamps regardless of when the row lands. Mirrors
+   *    the jsonb predicate in {@link findVerifyMessageByOperationId}.
+   *
+   * TRADE-OFF (v1): the time window is racy — two operations running
+   * concurrently in the SAME topic+thread can bleed each other's tool calls into
+   * the window. Accepted for now; the heterogeneous path is exact where it
+   * applies. Rows carry `createdAt` so the caller can globally order tool calls
+   * merged across an operation tree before folding them.
+   */
+  listMessagePluginsForOperation = async (params: {
+    completedAt?: Date | null;
+    operationId: string;
+    startedAt: Date;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
+    const completedAt = params.completedAt ?? new Date();
+
+    const withinWindow = and(
+      eq(messages.topicId, params.topicId),
+      params.threadId ? eq(messages.threadId, params.threadId) : isNull(messages.threadId),
+      gte(messages.createdAt, params.startedAt),
+      lte(messages.createdAt, completedAt),
+    );
+
+    // The two branches are resolved SEPARATELY — never OR-ed into one WHERE (an
+    // `... AND (withinWindow OR heteroMatch)` is unindexable and seq-scans every
+    // plugin row the user owns). They are also SHAPED differently on purpose:
+    //
+    // - Time window: one index-friendly range scan joined to its plugin rows.
+    // - Heterogeneous match: resolved id-FIRST, not as a plugin JOIN. The
+    //   `metadata->>'heterogeneousToolStateOperationId'` predicate carries a 0.5%
+    //   default selectivity estimate, so joining it to `message_plugins` makes the
+    //   planner scan / nested-loop the user's ENTIRE plugin history (100k+ rows,
+    //   100s+ per call for heavy users — it returns ~0 rows but pays the full scan
+    //   every time, since most ops never stamp the key). Looking up the few
+    //   matching message ids in a JOIN-free query first, then fetching those rows
+    //   by primary key, leaves the planner no join to mis-order: the lookup is
+    //   single-table (index-served once the metadata expression is indexed; a
+    //   bounded scan otherwise) and the fetch is a pure PK access. Kept
+    //   topic-agnostic to preserve the prior behaviour exactly — a late CLI row
+    //   can land outside the op's window (and, rarely, its topic).
+    const projection = {
+      apiName: messagePlugins.apiName,
+      arguments: messagePlugins.arguments,
+      clientId: messagePlugins.clientId,
+      // The tool message's text body. Heterogeneous CLI adapters (claude-code
+      // Bash) persist the command's stdout here rather than in a structured
+      // `state` field, and the completion-time github Work scan reads the gh
+      // CLI's printed entity URL from it.
+      content: messages.content,
+      createdAt: messages.createdAt,
+      error: messagePlugins.error,
+      id: messagePlugins.id,
+      identifier: messagePlugins.identifier,
+      intervention: messagePlugins.intervention,
+      state: messagePlugins.state,
+      toolCallId: messagePlugins.toolCallId,
+      type: messagePlugins.type,
+      userId: messagePlugins.userId,
+    };
+
+    const scan = (condition: SQL | undefined) =>
+      this.db
+        .select(projection)
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messagePlugins.id, messages.id))
+        .where(and(this.ownership(), this.pluginsOwnership(), condition));
+
+    const fetchHeterogeneous = async () => {
+      const idRows = await this.db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            this.ownership(),
+            sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`,
+          ),
+        );
+      const ids = idRows.map((row) => row.id);
+      if (ids.length === 0) return [];
+      return scan(inArray(messagePlugins.id, ids));
+    };
+
+    const [windowRows, heterogeneousRows] = await Promise.all([
+      scan(withinWindow),
+      fetchHeterogeneous(),
+    ]);
+
+    const byId = new Map<string, (typeof windowRows)[number]>();
+    for (const row of windowRows) byId.set(row.id, row);
+    for (const row of heterogeneousRows) if (!byId.has(row.id)) byId.set(row.id, row);
+
+    const rows = [...byId.values()].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return rows.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
+   * Load specific tool-call rows by their message ids, ownership-scoped and
+   * pinned to one topic. Serves the LOCAL hetero run work scan
+   * (`work.registerShellWorksForRun`): a desktop-local CLI run has no
+   * `agent_operations` row, so the client reports the exact tool message ids it
+   * persisted instead of the server reconstructing an operation window. The
+   * topic pin means a caller can never scan rows outside the conversation it
+   * claims to complete.
+   */
+  listMessagePluginsByIds = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
+    if (params.ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        arguments: messagePlugins.arguments,
+        clientId: messagePlugins.clientId,
+        // The tool message's text body — claude-code Bash persists the
+        // command's stdout here (see listMessagePluginsForOperation).
+        content: messages.content,
+        createdAt: messages.createdAt,
+        error: messagePlugins.error,
+        id: messagePlugins.id,
+        identifier: messagePlugins.identifier,
+        intervention: messagePlugins.intervention,
+        state: messagePlugins.state,
+        toolCallId: messagePlugins.toolCallId,
+        type: messagePlugins.type,
+        userId: messagePlugins.userId,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          inArray(messagePlugins.id, params.ids),
+          eq(messages.topicId, params.topicId),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      );
+
+    const sorted = [...rows].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return sorted.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
+   * Resolve the tool result message id for a toolCallId — the stable identifier
+   * the model emitted for the call. Lets server-side services push async state
+   * onto a tool card when all they hold is the call id recorded at creation
+   * time (e.g. the goal loop updating the `createGoal` card via
+   * `task.context.origin.toolCallId`).
+   */
+  findToolMessageIdByToolCallId = async (
+    toolCallId: string,
+    /**
+     * Restrict the match to calls made by one assistant message.
+     *
+     * `tool_call_id` is provider-supplied and only unique in practice — the
+     * column carries a plain index, not a unique constraint. Callers that act
+     * on the row (rather than just reading it) should scope the match, or a
+     * reused id from another turn resolves to an unrelated historical result.
+     */
+    parentId?: string,
+  ): Promise<string | null> => {
+    const rows = parentId
+      ? await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .innerJoin(messages, eq(messages.id, messagePlugins.id))
+          .where(
+            and(
+              eq(messagePlugins.toolCallId, toolCallId),
+              eq(messages.parentId, parentId),
+              this.pluginsOwnership(),
+            ),
+          )
+          .limit(1)
+      : await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
+          .limit(1);
+
+    return rows[0]?.id ?? null;
   };
 
   /**
@@ -2764,34 +3278,32 @@ export class MessageModel {
 
         // Update messagePlugins table (pluginState, pluginError)
         if (pluginState !== undefined || pluginError !== undefined) {
-          const pluginItem = await trx.query.messagePlugins.findFirst({
-            where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-          });
+          const pluginUpdateData: Record<string, any> = {};
+
+          if (pluginState !== undefined) {
+            // Snapshot writes replace the whole runtime state. Ordinary patches
+            // own complete top-level keys and merge inside the UPDATE so an
+            // answer write cannot race away an intervention-terminal write.
+            pluginUpdateData.state = heterogeneousToolState
+              ? pluginState
+              : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(pluginState)}::jsonb`;
+          }
+
+          if (pluginError !== undefined) {
+            pluginUpdateData.error = pluginError;
+          }
+
+          const [updatedPlugin] = await trx
+            .update(messagePlugins)
+            .set(pluginUpdateData)
+            .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+            .returning({ id: messagePlugins.id });
 
           // A plugin-only patch never touches `messages`, so the plugin row is
           // the only evidence the tool message exists.
-          if (matchedRow === undefined) matchedRow = !!pluginItem;
+          if (matchedRow === undefined) matchedRow = !!updatedPlugin;
 
-          if (pluginItem) {
-            const pluginUpdateData: Record<string, any> = {};
-
-            if (pluginState !== undefined) {
-              pluginUpdateData.state = heterogeneousToolState
-                ? pluginState
-                : merge(pluginItem.state || {}, pluginState);
-            }
-
-            if (pluginError !== undefined) {
-              pluginUpdateData.error = pluginError;
-            }
-
-            if (Object.keys(pluginUpdateData).length > 0) {
-              await trx
-                .update(messagePlugins)
-                .set(pluginUpdateData)
-                .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
-            }
-          } else if (heterogeneousToolState) {
+          if (!updatedPlugin && heterogeneousToolState) {
             throw new Error(`No tool plugin matched id ${id}`);
           }
         }
@@ -2907,6 +3419,41 @@ export class MessageModel {
     this.getLatestSpineMessageId({ topicId, threadId: null });
 
   /**
+   * Whether `descendantId` belongs to the branch rooted at `ancestorId`.
+   *
+   * Used when reconciling a client-selected conversation tail with the latest
+   * server row: a newer row may be a sibling from a historical callback fork,
+   * not an advancement of the branch the user is viewing.
+   */
+  isMessageDescendantOf = async ({
+    ancestorId,
+    descendantId,
+    topicId,
+  }: {
+    ancestorId: string;
+    descendantId: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE ancestors(id, parent_id) AS (
+        SELECT id, parent_id
+        FROM messages
+        WHERE id = ${descendantId}
+          AND topic_id = ${topicId}
+          AND ${this.ownership()}
+        UNION
+        SELECT parent.id, parent.parent_id
+        FROM messages parent
+        JOIN ancestors child ON parent.id = child.parent_id
+        WHERE parent.topic_id = ${topicId}
+      )
+      SELECT 1 AS hit FROM ancestors WHERE id = ${ancestorId} LIMIT 1
+    `);
+
+    return result.rows.length > 0;
+  };
+
+  /**
    * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of
    * the latest "spine" message (the most recent message that is NOT a tool and
    * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread
@@ -2976,7 +3523,7 @@ export class MessageModel {
    * persist the new turn with `parentId: undefined` — a second root that forks
    * the conversation tree. The renderer walks that forest depth-first, so an
    * earlier root's long-running subtree gets emitted before a later root and the
-   * newest reply surfaces ABOVE older messages (LOBE-11489).
+   * newest reply surfaces ABOVE older messages.
    *
    * `role:'tool'` stays excluded: tool results are inline children of their
    * assistant turn, and anchoring a normal turn onto one orphans it under the
@@ -3071,6 +3618,105 @@ export class MessageModel {
 
   // **************** Delete *************** //
 
+  /**
+   * Preserve the selected branch by identity across a deletion. Branch metadata
+   * stores a positional index, while deleting or reparenting children can change
+   * that index space. If the selected branch itself is deleted, remove the stale
+   * index so conversation-flow can infer the remaining active branch instead of
+   * mistaking `index === branchCount` for an optimistic branch creation.
+   */
+  private captureActiveBranchSnapshots = async (
+    tx: Transaction,
+    parentIds: string[],
+  ): Promise<ActiveBranchSnapshot[]> => {
+    const uniqueParentIds = [...new Set(parentIds)];
+    if (uniqueParentIds.length === 0) return [];
+
+    const parentRows = await tx
+      .select({ id: messages.id, metadata: messages.metadata })
+      .from(messages)
+      .where(and(this.ownership(), inArray(messages.id, uniqueParentIds)));
+    const branchIdsByParent = await this.queryDirectBranchIds(tx, uniqueParentIds);
+    const snapshots: ActiveBranchSnapshot[] = [];
+
+    for (const parent of parentRows) {
+      if (!isPlainRecord(parent.metadata)) continue;
+
+      const activeBranchIndex = parent.metadata.activeBranchIndex;
+      if (typeof activeBranchIndex !== 'number' || activeBranchIndex < 0) continue;
+
+      const branchIds = branchIdsByParent.get(parent.id) ?? [];
+      snapshots.push({
+        activeBranchId: branchIds[activeBranchIndex],
+        activeBranchIndex,
+        metadata: parent.metadata,
+        parentId: parent.id,
+        wasOptimistic: activeBranchIndex === branchIds.length,
+      });
+    }
+
+    return snapshots;
+  };
+
+  private queryDirectBranchIds = async (tx: Transaction, parentIds: string[]) => {
+    const branchRows = await tx
+      .select({ id: messages.id, parentId: messages.parentId })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.parentId, parentIds),
+          not(eq(messages.role, 'tool')),
+        ),
+      )
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+    const branchIdsByParent = new Map<string, string[]>();
+
+    for (const branch of branchRows) {
+      if (!branch.parentId) continue;
+      const branchIds = branchIdsByParent.get(branch.parentId) ?? [];
+      branchIds.push(branch.id);
+      branchIdsByParent.set(branch.parentId, branchIds);
+    }
+
+    return branchIdsByParent;
+  };
+
+  private reconcileActiveBranchSnapshots = async (
+    tx: Transaction,
+    snapshots: ActiveBranchSnapshot[],
+  ) => {
+    if (snapshots.length === 0) return;
+
+    const branchIdsByParent = await this.queryDirectBranchIds(
+      tx,
+      snapshots.map((snapshot) => snapshot.parentId),
+    );
+
+    for (const snapshot of snapshots) {
+      const branchIds = branchIdsByParent.get(snapshot.parentId) ?? [];
+      const survivingBranchIndex = snapshot.activeBranchId
+        ? branchIds.indexOf(snapshot.activeBranchId)
+        : -1;
+      const activeBranchIndex = snapshot.wasOptimistic
+        ? branchIds.length
+        : survivingBranchIndex >= 0
+          ? survivingBranchIndex
+          : undefined;
+
+      if (activeBranchIndex === snapshot.activeBranchIndex) continue;
+
+      const metadata = { ...snapshot.metadata };
+      delete metadata.activeBranchIndex;
+      if (activeBranchIndex !== undefined) metadata.activeBranchIndex = activeBranchIndex;
+
+      await tx
+        .update(messages)
+        .set({ metadata })
+        .where(and(eq(messages.id, snapshot.parentId), this.ownership()));
+    }
+  };
+
   deleteMessage = async (id: string) => {
     return this.db.transaction(async (tx) => {
       // 1. Query the complete information of the message to be deleted
@@ -3082,6 +3728,11 @@ export class MessageModel {
 
       // If the message to be deleted is not found, return directly
       if (message.length === 0) return;
+
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        message[0].parentId ? [message[0].parentId] : [],
+      );
 
       // 2. Update child messages' parentId to the current message's parentId
       // This preserves the tree structure when deleting a node
@@ -3114,6 +3765,8 @@ export class MessageModel {
       await tx
         .delete(messages)
         .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       // 7. Keep the topic's usage rollup in sync (pure derived — a removed
       // assistant message must drop out of the topic totals).
@@ -3171,6 +3824,11 @@ export class MessageModel {
         findFinalAncestor(id);
       }
 
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        [...new Set(finalAncestorMap.values())].filter((id): id is string => id !== null),
+      );
+
       // 4. Query child messages whose parentId points to messages being deleted
       const children = await tx
         .select({ id: messages.id, parentId: messages.parentId })
@@ -3190,6 +3848,8 @@ export class MessageModel {
 
       // 6. Delete the messages
       await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, ids)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       // 7. Recompute the usage rollup for every affected topic (pure derived).
       const affectedTopicIds = [

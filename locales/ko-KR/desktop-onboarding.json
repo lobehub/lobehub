@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "다시 시도하거나 다른 로그인 방법을 선택하세요",
   "authResult.failed.title": "인증 실패",
-  "authResult.success.desc": "계속 사용하려면 아래의 시작 버튼을 클릭하세요",
-  "authResult.success.title": "인증 성공",
   "back": "뒤로",
   "navigation.next": "계속",
   "next": "다음",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "취소",
   "screen5.actions.connectToServer": "서버에 연결",
   "screen5.actions.connecting": "연결 중...",
+  "screen5.actions.done": "완료",
   "screen5.actions.signInCloud": "LobeHub 클라우드에 로그인",
   "screen5.actions.signOut": "로그아웃",
   "screen5.actions.signingIn": "로그인 중...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "자가 호스팅 인스턴스",
   "screen5.navigation.next": "시작하기",
   "screen5.selfhost.endpointPlaceholder": "서버 URL 입력 (예: https://your-server.com)",
+  "screen5.status.cloud.title": "LobeHub 클라우드에 연결됨",
+  "screen5.status.description": "에이전트, 그룹, 설정 및 컨텍스트가 모든 기기에서 동기화되고 있습니다.",
+  "screen5.status.selfhost.description": "에이전트, 그룹, 설정 및 컨텍스트를 {{url}}와(과) 동기화 중입니다.",
+  "screen5.status.selfhost.title": "자체 서버에 연결됨",
   "screen5.title": "기기 간 동기화를 위해 로그인",
   "screen5.title2": "모든 곳에서 데이터를 동기화하세요",
   "screen5.title3": "데이터는 항상 당신의 통제 하에 있습니다"

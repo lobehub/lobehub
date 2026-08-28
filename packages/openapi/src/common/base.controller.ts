@@ -34,7 +34,7 @@ export abstract class BaseController {
    * @param message Response message
    * @returns Formatted success response
    */
-  protected success<T>(c: Context, data?: T, message?: string): Response {
+  protected success<T>(c: Context, data?: T, message?: string, statusCode: number = 200): Response {
     const response: ApiResponse<T> = {
       data,
       message,
@@ -42,7 +42,7 @@ export abstract class BaseController {
       timestamp: new Date().toISOString(),
     };
 
-    return c.json(response);
+    return c.json(response, statusCode as any);
   }
 
   /**
@@ -93,9 +93,17 @@ export abstract class BaseController {
         return this.error(c, error.message, 403);
       }
 
+      if (error.name === 'ConflictError') {
+        return this.error(c, error.message, 409);
+      }
+
       // Handle not found errors
       if (error.name === 'NotFoundError') {
         return this.error(c, error.message, 404);
+      }
+
+      if (error.name === 'ValidationError') {
+        return this.error(c, error.message, 400);
       }
 
       // Other errors

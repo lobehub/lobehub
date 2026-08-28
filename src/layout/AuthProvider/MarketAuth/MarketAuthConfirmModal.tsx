@@ -1,7 +1,8 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Block, Text } from '@lobehub/ui';
+import { Block } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -17,14 +18,14 @@ const styles = createStaticStyles(({ css }) => ({
   container: css`
     padding-block-start: 32px;
 
-    background-image: url('/images/community_header_light.webp');
+    background-image: url('/app-images/community_header_light.webp');
     background-repeat: no-repeat;
     background-position: 400% 0;
     background-size: 400px auto;
     background-blend-mode: multiply;
   `,
   container_dark: css`
-    background-image: url('/images/community_header_dark.webp');
+    background-image: url('/app-images/community_header_dark.webp');
     background-blend-mode: screen;
   `,
 }));

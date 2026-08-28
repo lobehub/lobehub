@@ -52,7 +52,7 @@ describe('createCompletionPolicy', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('ignores runs that carry no marker payload, regardless of agent', async () => {
+  it('does not project a self-iteration receipt for an ordinary run', async () => {
     const onSelfIterationCompleted = vi.fn();
     const [handler] = installAndCapture(createCompletionPolicy({ onSelfIterationCompleted }));
 

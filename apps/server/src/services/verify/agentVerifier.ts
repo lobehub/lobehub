@@ -1,18 +1,15 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
-import type { VerifyCheckItem } from '@lobechat/types';
-import { ThreadType } from '@lobechat/types';
+import { buildVerifierPrompt } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
-import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook, AgentHookEvent } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import type { VerifierAgentRunner } from './executor';
-import { describeEvidence, type JudgeEvidence } from './prompts';
 import { settleVerifierCheckFromTerminal } from './verifierTerminal';
 
 const log = debug('lobe-server:verify-agent-verifier');
@@ -26,30 +23,6 @@ const log = debug('lobe-server:verify-agent-verifier');
  * verifier judges against the run goal AND this evidence — it's the verifier's
  * primary Data, not a competing verdict.
  */
-export const buildVerifierPrompt = (params: {
-  checkItem: VerifyCheckItem;
-  deliverable: string;
-  evidence?: JudgeEvidence[];
-  goal: string;
-  instruction?: string;
-}): string => {
-  const { checkItem, deliverable, evidence, goal, instruction } = params;
-  const capturedEvidence = describeEvidence(evidence);
-  return [
-    `## Check to verify\ncheckItemId: ${checkItem.id}\nTitle: ${checkItem.title}`,
-    checkItem.description ? `Summary: ${checkItem.description}` : '',
-    instruction ? `\n## Judging instruction\n${instruction}` : '',
-    `\n## Run goal\n${goal}`,
-    deliverable ? `\n## Deliverable / final output\n${deliverable}` : '',
-    capturedEvidence
-      ? `\n## Captured evidence (builder self-evidence — primary Data, weight above prose)${capturedEvidence}`
-      : '',
-    `\n## Your task\nInvestigate whether the deliverable satisfies this check, judging against the run goal and the judging instruction. Weight the captured evidence above as primary Data; gather more yourself only where it's missing or insufficient. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-};
-
 /**
  * Build a {@link VerifierAgentRunner} that runs each `agent`-type check as a
  * **verify agent**: it opens an isolated thread and `execAgent`s (headless) with
@@ -73,14 +46,25 @@ export const createVerifierAgentRunner = (params: {
   /** Verify-safe model selected by the completion lifecycle. */
   model?: string | null;
   provider?: string | null;
+  /** Parent task scope so the verifier can inspect the task and its pinned documents. */
+  taskId?: string | null;
   topicId?: string | null;
   userId: string;
   /** Task-pinned verify agent. Falls back to the builtin verify agent when unset/missing. */
   verifierAgentId?: string | null;
   workspaceId?: string;
 }): VerifierAgentRunner | undefined => {
-  const { db, deliverable, model, provider, topicId, userId, verifierAgentId, workspaceId } =
-    params;
+  const {
+    db,
+    deliverable,
+    model,
+    provider,
+    taskId,
+    topicId,
+    userId,
+    verifierAgentId,
+    workspaceId,
+  } = params;
   if (!topicId) return undefined;
 
   return async ({ checkItem, evidence, goal, operationId }) => {
@@ -96,7 +80,6 @@ export const createVerifierAgentRunner = (params: {
     // its own agency config drives execution target/provider — we don't override
     // its model/provider. The builtin fallback runs by `slug` with the verify-safe
     // model/provider selected by lifecycle.
-    let threadAgentId: string;
     let agentRef: { agentId: string } | { slug: string };
     let useProvidedModelConfig = false;
     // A pinned agent (selected for its runtime/device) carries only its own
@@ -106,7 +89,6 @@ export const createVerifierAgentRunner = (params: {
     let extraPluginIds: string[] = [];
 
     if (verifierAgentId && (await agentModel.existsById(verifierAgentId))) {
-      threadAgentId = verifierAgentId;
       agentRef = { agentId: verifierAgentId };
       extraPluginIds = [VerifyToolIdentifier];
     } else {
@@ -119,20 +101,8 @@ export const createVerifierAgentRunner = (params: {
         log('verify agent unavailable, cannot run agent verifier for check %s', checkItem.id);
         return null;
       }
-      threadAgentId = builtin.id;
       agentRef = { slug: BUILTIN_AGENT_SLUGS.verifyAgent };
       useProvidedModelConfig = true;
-    }
-
-    const thread = await new ThreadModel(db, userId, workspaceId).create({
-      agentId: threadAgentId,
-      title: `Verify: ${checkItem.title}`,
-      topicId,
-      type: ThreadType.Isolation,
-    });
-    if (!thread) {
-      log('failed to create verifier thread for check %s', checkItem.id);
-      return null;
     }
 
     // Attach the builder-captured file artifacts (screenshots / videos / large
@@ -173,6 +143,13 @@ export const createVerifierAgentRunner = (params: {
         },
       },
     ];
+    const verifierPrompt = buildVerifierPrompt({
+      checkItem,
+      deliverable,
+      evidence,
+      goal,
+      instruction,
+    });
 
     // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
     // aiAgent import cycle is safe statically: every use here is call-time (inside
@@ -180,7 +157,11 @@ export const createVerifierAgentRunner = (params: {
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
-      appContext: { threadId: thread.id, topicId },
+      // A fresh topic keeps the verifier isolated without inheriting the
+      // parent topic's thread message processors. Those processors can filter
+      // the verifier user turn during queued resume and leave only system
+      // messages for the first LLM call.
+      appContext: { taskId },
       autoStart: true,
       ...(evidenceFileIds.length ? { fileIds: evidenceFileIds } : {}),
       hooks,
@@ -188,7 +169,7 @@ export const createVerifierAgentRunner = (params: {
       // a pinned agent keeps its own runtime config.
       ...(useProvidedModelConfig && model ? { model } : {}),
       parentOperationId: operationId,
-      prompt: buildVerifierPrompt({ checkItem, deliverable, evidence, goal, instruction }),
+      prompt: verifierPrompt,
       ...(useProvidedModelConfig && provider ? { provider } : {}),
       ...agentRef,
       userInterventionConfig: { approvalMode: 'headless' },

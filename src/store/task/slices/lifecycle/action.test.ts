@@ -24,7 +24,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
     activeTaskId: 'T-1',
+    listGroupBy: 'status',
+    listGroupExcludeStatuses: undefined,
     taskDetailMap: { 'T-1': { ...mockDetail } },
+    taskGroups: [],
+    tasks: [],
   });
 });
 
@@ -33,9 +37,10 @@ describe('TaskLifecycleSliceAction', () => {
     it('should optimistically set status to running and call service', async () => {
       vi.mocked(taskService.run).mockResolvedValue({ success: true } as any);
 
-      await useTaskStore.getState().runTask('T-1');
+      const result = await useTaskStore.getState().runTask('T-1');
 
       expect(taskService.run).toHaveBeenCalledWith('T-1', undefined);
+      expect(result).toEqual({ success: true });
     });
 
     it('should pass prompt and continueTopicId', async () => {
@@ -60,6 +65,29 @@ describe('TaskLifecycleSliceAction', () => {
 
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
+
+    it('should surface the run failure when the caller requires it', async () => {
+      vi.mocked(taskService.run).mockRejectedValue(new Error('fail'));
+
+      await expect(
+        useTaskStore.getState().runTask('T-1', undefined, { throwOnError: true }),
+      ).rejects.toThrow('fail');
+    });
+
+    it('should preserve a successful run result when cache refreshes fail', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.run).mockResolvedValue({ topicId: 'tpc-1' } as any);
+      vi.mocked(mutate)
+        .mockRejectedValueOnce(new Error('detail refresh failed'))
+        .mockRejectedValueOnce(new Error('list refresh failed'))
+        .mockRejectedValueOnce(new Error('group refresh failed'));
+
+      const result = await useTaskStore
+        .getState()
+        .runTask('T-1', undefined, { throwOnError: true });
+
+      expect(result).toEqual({ topicId: 'tpc-1' });
+    });
   });
 
   describe('updateTaskStatus', () => {
@@ -78,6 +106,149 @@ describe('TaskLifecycleSliceAction', () => {
       });
 
       await useTaskStore.getState().updateTaskStatus('T-1', 'paused');
+    });
+
+    it('should immediately synchronize list and kanban collections', async () => {
+      useTaskStore.setState({
+        taskGroups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+        ] as any,
+        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockImplementation(async () => {
+        const state = useTaskStore.getState();
+
+        expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
+        expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+          tasks: [],
+          total: 0,
+        });
+        expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+          tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+          total: 1,
+        });
+
+        return { success: true } as any;
+      });
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+    });
+
+    it('should preserve assignee grouping when a task status changes', async () => {
+      useTaskStore.setState({
+        listGroupBy: 'assignee',
+        taskGroups: [
+          {
+            assigneeAgentId: 'agent-1',
+            key: 'assignee:agent-1',
+            tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
+        ] as any,
+        tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockImplementation(async () => {
+        expect(useTaskStore.getState().taskGroups[0]).toMatchObject({
+          key: 'assignee:agent-1',
+          tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+          total: 1,
+        });
+        return { success: true } as any;
+      });
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+    });
+
+    it('should roll list and kanban collections back when the status update fails', async () => {
+      useTaskStore.setState({
+        taskGroups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+        ] as any,
+        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('fail'));
+
+      await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
+        'fail',
+      );
+
+      const state = useTaskStore.getState();
+      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('backlog');
+      expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'backlog' })],
+        total: 1,
+      });
+      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+        tasks: [],
+        total: 0,
+      });
+    });
+
+    it('should preserve the committed status when cache refreshes fail', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        taskGroups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+        ] as any,
+        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate)
+        .mockRejectedValueOnce(new Error('detail refresh failed'))
+        .mockRejectedValueOnce(new Error('list refresh failed'))
+        .mockRejectedValueOnce(new Error('group refresh failed'));
+
+      await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).resolves.toBe(
+        'T-1',
+      );
+
+      const state = useTaskStore.getState();
+      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
+      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+        total: 1,
+      });
+    });
+
+    it('should not let an older failed request roll back a newer status', async () => {
+      let rejectFirstRequest: (reason: Error) => void = () => {};
+      useTaskStore.setState({
+        taskGroups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+          { key: 'canceled', tasks: [], total: 0 },
+        ] as any,
+        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus)
+        .mockImplementationOnce(
+          async () =>
+            new Promise((_, reject) => {
+              rejectFirstRequest = reject;
+            }),
+        )
+        .mockResolvedValueOnce({ success: true } as any);
+
+      const firstRequest = useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+      const secondRequest = useTaskStore.getState().updateTaskStatus('T-1', 'canceled');
+
+      await secondRequest;
+      rejectFirstRequest(new Error('first request failed'));
+      await expect(firstRequest).rejects.toThrow('first request failed');
+
+      const state = useTaskStore.getState();
+      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('canceled');
+      expect(state.taskGroups.find((group) => group.key === 'canceled')).toMatchObject({
+        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'canceled' })],
+        total: 1,
+      });
+      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+        tasks: [],
+        total: 0,
+      });
     });
 
     it('should call updateStatus with canceled', async () => {

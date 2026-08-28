@@ -1,8 +1,8 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Avatar, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -163,7 +163,7 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
       })
     : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
 
-  // Publish / make-private for workspace enrollments (LOBE-11690). Reuses the
+  // Publish / make-private for workspace enrollments. Reuses the
   // shared visibility-confirm body so the consequences copy matches agents /
   // files. Success feedback is the row itself moving to the other tab after
   // the list refresh.
@@ -194,7 +194,7 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
 
   // Only persisted workspace rows carry a visibility to toggle — ghosts
   // (unregistered) and personal devices don't. The toggle is enroller-only
-  // (LOBE-11760): an owner demoting another member's public device would
+  //: an owner demoting another member's public device would
   // move it into that member's private list, appropriating their data. The
   // server rejects non-enroller writes as the backstop.
   const isEnroller = !!currentUserId && device.enroller?.userId === currentUserId;
@@ -219,7 +219,7 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
           ]
       : [];
 
-  // Share-to-workspace entry for personal enrollments (LOBE-11699). The share
+  // Share-to-workspace entry for personal enrollments. The share
   // handshake needs a live connection to mint the workspace identity, so the
   // item stays disabled (with an explanatory desc) while the device is offline.
   const shareItems =

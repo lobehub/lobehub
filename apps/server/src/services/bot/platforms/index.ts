@@ -75,9 +75,12 @@ export {
   getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
+  platformFromThreadId,
   resolveBotProviderConfig,
   resolveConnectionMode,
 } from './utils';
+export type { BotProviderFieldValues, FieldFormatViolation } from './validateFieldFormats';
+export { collectFieldFormatViolations, formatFieldFormatViolations } from './validateFieldFormats';
 
 // --------------- Platform definitions ---------------
 export { discord } from './discord/definition';

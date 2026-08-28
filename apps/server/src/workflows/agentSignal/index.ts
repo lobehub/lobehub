@@ -2,8 +2,8 @@ import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
-import { workflowClient } from '@/libs/qstash';
 
+import { scheduleLocalAgentSignalRun } from './impls';
 import type { AgentSignalWorkflowRunPayload } from './types';
 
 export type { AgentSignalWorkflowRunPayload, AgentSignalWorkflowSourceEventInput } from './types';
@@ -32,18 +32,18 @@ const getWorkflowUrl = (path: string): string => {
  * Agent Signal workflow trigger helper.
  *
  * Use when:
- * - Server-owned ingress wants to hand off execution to Upstash Workflow
+ * - Server-owned ingress wants to hand off execution to the configured background runtime
  * - The caller already normalized the source event
  *
  * Expects:
  * - `sourceEvent.scopeKey` is stable for the policy coordination scope
  *
  * Returns:
- * - Upstash workflow trigger metadata including `workflowRunId`
+ * - Queue mode returns Upstash workflow trigger metadata
+ * - Local mode returns a synthetic `workflowRunId` and executes in-process without durability
  */
 export class AgentSignalWorkflow {
-  static triggerRun(payload: AgentSignalWorkflowRunPayload) {
-    const url = getWorkflowUrl(WORKFLOW_PATHS.run);
+  static async triggerRun(payload: AgentSignalWorkflowRunPayload) {
     const traceHeaders = new Headers();
 
     // NOTICE:
@@ -57,6 +57,13 @@ export class AgentSignalWorkflow {
     // - Safe to simplify only if Upstash adds native trace-context propagation for workflow
     //   triggers or we stop relying on Workflow/QStash as the async hop.
     injectActiveTraceHeaders(traceHeaders);
+
+    if (!appEnv.enableQueueAgentRuntime) {
+      return scheduleLocalAgentSignalRun(payload, traceHeaders);
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.run);
+    const { workflowClient } = await import('@/libs/qstash');
 
     log('Triggering run workflow payload=%O', {
       agentId: payload.agentId,

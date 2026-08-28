@@ -22,7 +22,7 @@ export const params = {
               ? reasoning.content
               : undefined;
 
-        if (message.role === 'assistant' && model === 'hy3-preview') {
+        if (message.role === 'assistant' && (model === 'hy3-preview' || model === 'hy3')) {
           return {
             ...rest,
             reasoning_content: reasoningContent ?? '',

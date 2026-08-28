@@ -1,11 +1,11 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { MessageTranslationController } from '../controllers';
 import { requireAuth } from '../middleware';
-import { requireAnyPermission } from '../middleware/permission-check';
+import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import {
   MessageTranslateInfoUpdateSchema,
   MessageTranslateQueryRequestSchema,
@@ -27,6 +27,8 @@ MessageTranslationRoutes.post(
     getAllScopePermissions('TRANSLATION_CREATE'),
     'You do not have permission to translate message',
   ),
+  // Translation invokes a model, so restricted API keys also need `model:invoke`
+  requireApiKeyScope('model:invoke'),
   zValidator('param', MessageTranslateQueryRequestSchema),
   zValidator('json', MessageTranslateTriggerRequestSchema),
   (c) => {

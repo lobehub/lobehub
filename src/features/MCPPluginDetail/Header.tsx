@@ -1,18 +1,8 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Avatar,
-  Flexbox,
-  Icon,
-  stopPropagation,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
   BookmarkIcon,
@@ -59,7 +49,7 @@ const styles = createStaticStyles(({ css }) => {
 
 const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile, inModal }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const {
     name,
     author,
@@ -110,15 +100,15 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
     try {
       if (isFavorited) {
         await socialService.removeFavorite('plugin', identifier);
-        message.success(t('assistant.unfavoriteSuccess'));
+        toast.success(t('assistant.unfavoriteSuccess'));
       } else {
         await socialService.addFavorite('plugin', identifier);
-        message.success(t('assistant.favoriteSuccess'));
+        toast.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
     } catch (error) {
       console.error('Favorite action failed:', error);
-      message.error(t('assistant.favoriteFailed'));
+      toast.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
     }

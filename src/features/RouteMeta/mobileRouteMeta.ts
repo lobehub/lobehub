@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
 import { Settings } from 'lucide-react';
 
@@ -12,8 +13,8 @@ const MobileAgentSettingsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaP
 
   usePublishDynamicRouteMeta(
     {
-      title: meta.title
-        ? t('header.sessionWithName', { name: meta.title, ns: 'setting' })
+      title: agentDisplayName(meta)
+        ? t('header.sessionWithName', { name: agentDisplayName(meta), ns: 'setting' })
         : t('header.session', { ns: 'setting' }),
     },
     onResolve,

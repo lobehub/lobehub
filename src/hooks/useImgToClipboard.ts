@@ -1,15 +1,14 @@
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 
-import { getImageUrl,ImageType } from './useScreenshot';
+import { getImageUrl, ImageType } from './useScreenshot';
 
 export const useImgToClipboard = ({
   id = '#preview',
   width,
 }: { id?: string; width?: number } = {}) => {
   const [loading, setLoading] = useState(false);
-  const { message } = App.useApp();
 
   const handleCopy = async () => {
     setLoading(true);
@@ -18,7 +17,7 @@ export const useImgToClipboard = ({
       const blob = await fetch(dataUrl).then((res) => res.blob());
       navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       setLoading(false);
-      message.success(t('copySuccess', { ns: 'common' }));
+      toast.success(t('copySuccess', { ns: 'common' }));
     } catch (error) {
       console.error('Failed to copy image', error);
       setLoading(false);

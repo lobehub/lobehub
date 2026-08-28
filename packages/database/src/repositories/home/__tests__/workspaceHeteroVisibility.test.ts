@@ -1,4 +1,4 @@
-// Regression for LOBE-11758: a workspace heterogeneous agent flipped back to
+// Regression for a workspace heterogeneous agent flipped back to
 // `private` must stay visible to its creator (Private bucket) and invisible
 // to other members across the whole sidebar payload.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -31,7 +31,7 @@ afterEach(async () => {
   await clientDB.delete(Schema.workspaces);
 });
 
-describe('workspace hetero agent visibility flip (LOBE-11758)', () => {
+describe('workspace hetero agent visibility flip ', () => {
   it('hetero agent stays visible to creator after public -> private', async () => {
     const agentModel = new AgentModel(clientDB, creator, ws);
 

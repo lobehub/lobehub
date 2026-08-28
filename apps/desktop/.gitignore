@@ -8,3 +8,5 @@ standalone
 release
 
 bin
+
+build/entitlements.mac.comm.generated.plist

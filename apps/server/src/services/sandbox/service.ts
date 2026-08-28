@@ -102,7 +102,11 @@ export class SandboxMiddlewareService implements SandboxService {
     }
   }
 
-  async exportAndUploadFile(path: string, filename: string): Promise<SandboxExportFileResult> {
+  async exportAndUploadFile(
+    path: string,
+    filename: string,
+    options?: { storageName?: string },
+  ): Promise<SandboxExportFileResult> {
     const { fileService, topicId } = this.options;
 
     if (!fileService) {
@@ -113,12 +117,25 @@ export class SandboxMiddlewareService implements SandboxService {
       };
     }
 
-    log('Exporting file: %s from path: %s, topicId: %s', filename, path, topicId);
+    // The object's storage key uses `storageName` when provided so callers can
+    // guarantee a collision-proof, immutable object per (operation, path); the
+    // file record's display `name` always stays the user-facing `filename`, so a
+    // download never surfaces the mangled key. Defaults to `filename` for the
+    // common case where display name and key are the same.
+    const storageName = options?.storageName ?? filename;
+
+    log(
+      'Exporting file: %s (key: %s) from path: %s, topicId: %s',
+      filename,
+      storageName,
+      path,
+      topicId,
+    );
 
     try {
       const now = Date.now();
       const today = new Date(now).toISOString().split('T')[0];
-      const key = `code-interpreter-exports/${today}/${topicId}/${filename}`;
+      const key = `code-interpreter-exports/${today}/${topicId}/${storageName}`;
       const upload = await fileService.createPreSignedUpload(key);
 
       const exported = await this.provider.exportFileToUploadUrl({

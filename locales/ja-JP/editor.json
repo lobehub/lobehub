@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "メタデータが保存されませんでした。再試行するか、編集を続けてください。",
   "skillFrontmatter.title": "スキルメタデータ",
   "slash.compact": "コンテキストを圧縮",
+  "slash.goal": "目標を設定",
+  "slash.goal.desc": "編集可能な受け入れ基準を使用して目標を計画し、開始する",
   "slash.h1": "見出し1",
   "slash.h2": "見出し2",
   "slash.h3": "見出し3",

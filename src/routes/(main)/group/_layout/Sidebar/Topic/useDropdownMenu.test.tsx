@@ -45,6 +45,7 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: confirmModalMock,
+  toast: messageMock,
 }));
 
 vi.mock('react-i18next', () => ({

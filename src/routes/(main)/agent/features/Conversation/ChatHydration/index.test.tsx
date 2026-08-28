@@ -163,6 +163,33 @@ describe('ChatHydration', () => {
     });
   });
 
+  it('keeps topic navigation inside a project conversation route', async () => {
+    useParamsMock.mockReturnValue({ projectId: 'prj_1' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/project/prj_1/conversation',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+
+    render(
+      <ChatHydration
+        getConversationPath={() => '/project/prj_1/conversation'}
+        getTopicPath={(_agentId, topicId) => `/project/prj_1/conversation/${topicId}`}
+      />,
+    );
+
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: 'tpc_project' }, false);
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/project/prj_1/conversation/tpc_project', {
+        replace: true,
+      });
+    });
+  });
+
   it('preserves the routed topic when the workspace activates after mount', async () => {
     useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_previous' });
     useLocationMock.mockReturnValue({

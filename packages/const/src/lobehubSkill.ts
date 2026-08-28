@@ -113,12 +113,12 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     authorUrl: OFFICIAL_SITE,
     defaultVisible: true,
     description:
-      'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
+      'X is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
     icon: SiX,
     id: 'twitter',
     readme:
-      'Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
-    label: 'X (Twitter)',
+      'Connect to X to publish posts, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
+    label: 'X',
   },
   {
     author: 'LobeHub',

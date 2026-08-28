@@ -15,6 +15,8 @@ import { type ChatThreadState } from './slices/thread/initialState';
 import { initialThreadState } from './slices/thread/initialState';
 import { type ChatTopicState } from './slices/topic/initialState';
 import { initialTopicState } from './slices/topic/initialState';
+import { type ChatVoiceMessageState } from './slices/voiceMessage/initialState';
+import { initialVoiceMessageState } from './slices/voiceMessage/initialState';
 
 export type ChatStoreState = ChatTopicState &
   ChatMessageState &
@@ -23,7 +25,8 @@ export type ChatStoreState = ChatTopicState &
   ChatThreadState &
   ChatPortalState &
   ChatAIAgentState &
-  ChatOperationState;
+  ChatOperationState &
+  ChatVoiceMessageState;
 
 export const initialState: ChatStoreState = {
   ...initialMessageState,
@@ -34,6 +37,7 @@ export const initialState: ChatStoreState = {
   ...initialChatPortalState,
   ...initialOperationState,
   ...initialAiAgentState,
+  ...initialVoiceMessageState,
 
   // cloud
 };

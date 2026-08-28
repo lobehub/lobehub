@@ -1,11 +1,19 @@
 # agent-browser CLI reference
 
 Generic reference for the `agent-browser` CLI — automate Chromium-based apps
-(Electron, Chrome, web) via Chrome DevTools Protocol. This is the capture engine
-for all UI evidence in this skill. Per-surface patterns live in
-[../surfaces/web.md](../surfaces/web.md) and
-[../surfaces/electron.md](../surfaces/electron.md); auth recipes in
-[auth.md](./auth.md).
+(Electron, Chrome, web) via Chrome DevTools Protocol. This is the shared driver
+for Web and Electron evidence; native surfaces use their own tools. Per-surface
+setup, authentication, capture, and boundary decisions remain in the selected
+surface guide.
+
+## Contents
+
+- [Core workflow](#core-workflow)
+- [Essential commands](#essential-commands)
+- [Batch execution](#batch-execution)
+- [JavaScript evaluation](#javascript-evaluation-eval)
+- [Connect to an existing browser or app](#connect-to-an-existing-browser--app)
+- [Gotchas](#gotchas)
 
 Install via `npm i -g agent-browser`, `brew install agent-browser`, or
 `cargo install agent-browser`. Run `agent-browser install` to download Chrome.
@@ -176,8 +184,8 @@ agent-browser --session site2 open https://site-b.com
 agent-browser session list
 ```
 
-A named `--session` auto-saves and restores cookies + localStorage, which is the
-basis for the auth recipes in [auth.md](./auth.md).
+A named `--session` auto-saves and restores cookies + localStorage across
+commands.
 
 ## Connect to an existing browser / app
 

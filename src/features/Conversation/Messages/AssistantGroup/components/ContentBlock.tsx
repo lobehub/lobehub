@@ -3,15 +3,12 @@ import { memo, useCallback } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
-import ErrorMessageExtra, {
-  isHeterogeneousAgentStatusGuideError,
-  useErrorContent,
-} from '@/features/Conversation/Error';
+import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
-import Reasoning from '../../components/Reasoning';
+import Reasoning, { hasRenderableReasoning } from '../../components/Reasoning';
 import { Tools } from '../Tools';
 import MessageContent from './MessageContent';
 import type { RenderableAssistantContentBlock } from './types';
@@ -37,46 +34,30 @@ const ContentBlock = memo<ContentBlockProps>(
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
-    const [isReasoning, deleteMessage, continueGeneration, continueHeteroAfterError] =
-      useConversationStore((s) => [
-        messageStateSelectors.isMessageInReasoning(id)(s),
-        s.deleteDBMessage,
-        s.continueGeneration,
-        s.continueHeteroAfterError,
-      ]);
+    const [isReasoning, retryFailedAssistantStep] = useConversationStore((s) => [
+      messageStateSelectors.isMessageInReasoning(id)(s),
+      s.retryFailedAssistantStep,
+    ]);
     // The group's parent user message id — the stable scope key for auto-retry
     // (survives the delete+recreate a retry performs) and the regenerate target.
     const groupParentId = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(assistantId)(s)?.parentId,
     );
-    const isHeteroError = isHeterogeneousAgentStatusGuideError(error?.body);
     const hasTools = !!tools?.length;
-    const showReasoning =
-      (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+    const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
-    const handleRegenerate = useCallback(async () => {
-      // `continueGeneration` is a silent no-op for hetero CLIs (they have no
-      // "continue a cut-off response" primitive), so an errored hetero turn goes
-      // through its own path: drop just the failed step and resume the CLI
-      // session, keeping every step that already succeeded. Routed through the
-      // GROUP id — the child block id isn't a top-level displayMessage. It falls
-      // back to a whole-turn regenerate when there's nothing left to resume.
-      if (isHeteroError) {
-        void continueHeteroAfterError(assistantId);
-        return;
-      }
-      await deleteMessage(id);
-      continueGeneration(assistantId);
-    }, [
-      assistantId,
-      continueGeneration,
-      continueHeteroAfterError,
-      deleteMessage,
-      id,
-      isHeteroError,
-    ]);
+    // The store owns the whole decision (resume a hetero session, continue the
+    // group in place, or replace the turn) because only it can guarantee a
+    // terminal outcome. Deleting the failed block here and then hoping
+    // `continueGeneration` still found something to continue is what silently
+    // ate the turn. Routed through the GROUP id — the child block id isn't a
+    // top-level displayMessage.
+    const handleRegenerate = useCallback(
+      () => retryFailedAssistantStep(assistantId, id),
+      [assistantId, id, retryFailedAssistantStep],
+    );
 
     const errorBlock = error ? (
       <ErrorContent
@@ -98,6 +79,15 @@ const ContentBlock = memo<ContentBlockProps>(
     // whole block.
     if (error && (content === LOADING_FLAT || !content)) {
       return errorBlock;
+    }
+
+    // A freshly created step block can mount before anything about it is
+    // renderable — no content/reasoning has streamed yet and the reasoning op
+    // hasn't started. Mounting the wrapper anyway would consume a flex `gap`
+    // slot in the parent block list, visibly pushing the next sibling (e.g. the
+    // message footer) down a beat before the block's content appears.
+    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock) {
+      return null;
     }
 
     return (

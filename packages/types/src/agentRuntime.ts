@@ -1,3 +1,15 @@
+/** Request-scoped pricing inputs resolved before model execution. */
+export interface ModelPricingContext {
+  plan: string;
+  scope: 'personal';
+}
+
+/** Request-scoped data available to dynamic model router resolution. */
+export interface RouterRuntimeRequestContext {
+  model?: string;
+  pricingContext?: ModelPricingContext;
+}
+
 export enum RequestTrigger {
   AgentSignal = 'agent_signal',
   Api = 'api',
@@ -9,6 +21,7 @@ export enum RequestTrigger {
   FileEmbedding = 'file_embedding',
   Image = 'image',
   Memory = 'memory',
+  MultimodalAnalysis = 'multimodal_analysis',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
@@ -18,7 +31,6 @@ export enum RequestTrigger {
   SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',
   Video = 'video',
-  VisualAnalysis = 'visual_analysis',
 }
 
 // ******* Runtime Biz Error ******* //
@@ -128,6 +140,13 @@ export const AgentRuntimeErrorType = {
    */
   ModelEmptyCompletion: 'ModelEmptyCompletion',
   /**
+   * The model explicitly refused an otherwise empty completion. This stays
+   * separate from ModelEmptyCompletion so users receive an actionable refusal
+   * message and operations can distinguish intentional provider behavior from
+   * unexplained blank responses.
+   */
+  ModelRefusal: 'ModelRefusal',
+  /**
    * A persistence-layer query / transaction failed (Drizzle "Failed query:
    * …"). Harness-side: the DB write/read or txn could not complete and
    * surfaced as an unhandled error instead of being retried / degraded.
@@ -156,6 +175,16 @@ export const AgentRuntimeErrorType = {
    * to this code in the spec table).
    */
   ContextEnginePipelineError: 'ContextEnginePipelineError',
+  /**
+   * A `JSON.parse` inside the harness threw on data the harness itself
+   * produced, stored or round-tripped — V8 reports it as `SyntaxError: … in
+   * JSON at position N` / `Unexpected end of JSON input`. Always our bug: the
+   * value should have been valid JSON by construction, so a failure means some
+   * serialization step corrupted or truncated it. Kept out of the
+   * `AgentRuntimeError` catch-all so this class stays countable on its own
+   * instead of hiding inside the generic fallback bucket.
+   */
+  HarnessJsonParseError: 'HarnessJsonParseError',
 
   InvalidGithubToken: 'InvalidGithubToken',
   InvalidGithubCopilotToken: 'InvalidGithubCopilotToken',

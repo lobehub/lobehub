@@ -200,10 +200,10 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
   it('emits a Linear skill Work intent after a successful server-side LobeHub Skill tool call', async () => {
     mocks.executeLobehubSkill.mockResolvedValueOnce({
       content: JSON.stringify({
-        id: 'LOBE-10966',
+        id: 'LINEAR-10966',
         status: 'In Progress',
         title: 'Linear Work issue',
-        url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
+        url: 'https://linear.app/lobehub/issue/LINEAR-10966/linear-work-issue',
       }),
       success: true,
     });
@@ -211,7 +211,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     const result = await executor.execute(
       {
         apiName: 'save_issue',
-        arguments: '{"id":"LOBE-10966","state":"In Progress"}',
+        arguments: '{"id":"LINEAR-10966","state":"In Progress"}',
         id: 'tool-call-linear',
         identifier: 'linear',
         source: 'lobehubSkill',
@@ -222,7 +222,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
 
     expect(result.success).toBe(true);
     expect(mocks.executeLobehubSkill).toHaveBeenCalledWith({
-      args: { id: 'LOBE-10966', state: 'In Progress' },
+      args: { id: 'LINEAR-10966', state: 'In Progress' },
       context: { topicId: 'topic-1' },
       provider: 'linear',
       timeoutMs: 45_000,
@@ -232,12 +232,12 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     // carrying the UNTRUNCATED payload; provenance + cost are stamped by the
     // agent runtime at persist time.
     expect(result.workRegistration).toEqual({
-      args: { id: 'LOBE-10966', state: 'In Progress' },
+      args: { id: 'LINEAR-10966', state: 'In Progress' },
       data: {
-        id: 'LOBE-10966',
+        id: 'LINEAR-10966',
         status: 'In Progress',
         title: 'Linear Work issue',
-        url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
+        url: 'https://linear.app/lobehub/issue/LINEAR-10966/linear-work-issue',
       },
       provider: 'linear',
       toolName: 'save_issue',

@@ -82,6 +82,11 @@ export interface OAuthDeviceFlowKeyVault {
    */
   oauthAccessToken?: string;
   /**
+   * Provider account identifier associated with the OAuth token.
+   * Some OAuth-backed inference endpoints require it as a request header.
+   */
+  oauthAccountId?: string;
+  /**
    * OAuth refresh token. May rotate on every refresh (e.g. xAI) — always
    * persist the value returned by the latest refresh response.
    */
@@ -259,12 +264,32 @@ export interface AiProviderConfig {
   enableResponseApi?: boolean;
 }
 
+export const AiProviderBaseURLSchema = z.url({ protocol: /^https?$/ });
+
+/** Provider vaults support scalar secrets and string-valued custom header maps. */
+const AiProviderKeyVaultValueSchema = z
+  .union([z.string(), z.record(z.string(), z.string())])
+  .optional();
+
+const AiProviderKeyVaultsSchema = z
+  .record(z.string(), AiProviderKeyVaultValueSchema)
+  .superRefine((keyVaults, ctx) => {
+    const baseURL = keyVaults.baseURL;
+    if (!baseURL || AiProviderBaseURLSchema.safeParse(baseURL).success) return;
+
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Invalid baseURL',
+      path: ['baseURL'],
+    });
+  });
+
 // create
 export const CreateAiProviderSchema = z.object({
   config: z.object({}).passthrough().optional(),
   description: z.string().optional(),
   id: z.string(),
-  keyVaults: z.any().optional(),
+  keyVaults: AiProviderKeyVaultsSchema.optional(),
   logo: z.string().optional(),
   name: z.string(),
   sdkType: z.enum(AiProviderSdkTypes).optional(),
@@ -363,15 +388,7 @@ export const UpdateAiProviderConfigSchema = z.object({
     })
     .optional(),
   fetchOnClient: z.boolean().nullish(),
-  keyVaults: z
-    .record(
-      z.string(),
-      z.union([
-        z.string().optional(),
-        z.record(z.string(), z.string()).optional(), // Support nested objects, e.g. customHeaders
-      ]),
-    )
-    .optional(),
+  keyVaults: AiProviderKeyVaultsSchema.optional(),
 });
 
 export type UpdateAiProviderConfigParams = z.infer<typeof UpdateAiProviderConfigSchema>;
@@ -405,11 +422,31 @@ export interface AiProviderRuntimeConfig {
   settings: AiProviderSettings;
 }
 
+export interface BuiltinModelIdentifier {
+  id: string;
+  providerId: string;
+}
+
 export interface AiProviderRuntimeState {
   enabledAiModels: EnabledAiModel[];
   enabledAiProviders: EnabledProvider[];
   enabledChatAiProviders: EnabledProvider[];
   enabledImageAiProviders: EnabledProvider[];
   enabledVideoAiProviders: EnabledProvider[];
+  hiddenBuiltinModels?: BuiltinModelIdentifier[];
+  /** False when the server could not resolve the current user's hidden-model policy. */
+  hiddenBuiltinModelsResolved?: boolean;
+  /**
+   * Retired `${providerId}/${modelId}` → successor model id (same provider).
+   * Requests for a key are transparently served by its successor, so clients can
+   * render "superseded by X" instead of "removed". Keys are provider-scoped so a
+   * same-named model under an unrelated provider is never treated as redirected.
+   */
+  modelRedirects?: Record<string, string>;
+  /**
+   * Secret-free provider-binding capabilities resolved by the server.
+   * Renderer consumers use this instead of inspecting provider runtime config.
+   */
+  providerBindingAgentTypes?: Record<string, string[]>;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

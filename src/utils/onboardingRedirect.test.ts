@@ -6,6 +6,8 @@ import {
   consumeOnboardingCallbackUrl,
   isSafeRedirectPath,
   peekOnboardingCallbackUrl,
+  POST_ONBOARDING_HOME_TASK_URL,
+  resolvePostOnboardingTargetUrl,
   stashOnboardingCallbackUrl,
 } from './onboardingRedirect';
 
@@ -95,6 +97,19 @@ describe('stash/peek/consumeOnboardingCallbackUrl', () => {
     stashOnboardingCallbackUrl('?entry=skip');
 
     expect(peekOnboardingCallbackUrl()).toBe('/discover');
+  });
+});
+
+describe('resolvePostOnboardingTargetUrl', () => {
+  it('should use the stashed callbackUrl when one exists', () => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2Fagent%2Fabc%3Fmessage%3Dhi');
+
+    expect(resolvePostOnboardingTargetUrl()).toBe('/agent/abc?message=hi');
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
+  });
+
+  it('should mark the home entry for task mode when no callbackUrl exists', () => {
+    expect(resolvePostOnboardingTargetUrl()).toBe(POST_ONBOARDING_HOME_TASK_URL);
   });
 });
 

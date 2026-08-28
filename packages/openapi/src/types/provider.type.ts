@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import type { AiProviderSelectItem } from '@/database/schemas';
 import type { AiProviderConfig, AiProviderSettings } from '@/types/aiProvider';
 
+import type { PublicProvider } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -10,9 +10,7 @@ import { PaginationQuerySchema } from './common.type';
 
 export type ProviderKeyVaults = Record<string, string | undefined>;
 
-export type ProviderDetailResponse = Omit<AiProviderSelectItem, 'keyVaults'> & {
-  keyVaults?: ProviderKeyVaults;
-};
+export type ProviderDetailResponse = PublicProvider;
 
 export type GetProvidersResponse = PaginationQueryResponse<{
   providers: ProviderDetailResponse[];

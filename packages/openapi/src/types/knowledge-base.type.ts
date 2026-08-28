@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { KnowledgeBaseItem } from '@/database/schemas';
-
+import type { PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -37,7 +36,9 @@ export interface KnowledgeBaseFileBatchRequest {
 }
 
 export const KnowledgeBaseFileBatchSchema = z.object({
-  fileIds: z.array(z.string().min(1, 'File ID cannot be empty')).min(1, 'File ID list cannot be empty'),
+  fileIds: z
+    .array(z.string().min(1, 'File ID cannot be empty'))
+    .min(1, 'File ID list cannot be empty'),
 });
 
 /**
@@ -83,7 +84,7 @@ export interface MoveKnowledgeBaseFilesResponse {
  */
 export type KnowledgeBaseAccessType = 'owner' | 'userGrant' | 'roleGrant' | 'public';
 
-export interface KnowledgeBaseListItem extends KnowledgeBaseItem {
+export interface KnowledgeBaseListItem extends PublicKnowledgeBase {
   /** The access source type for the current user on this knowledge base */
   accessType?: KnowledgeBaseAccessType;
 }
@@ -117,7 +118,10 @@ export interface CreateKnowledgeBaseRequest {
 export const CreateKnowledgeBaseSchema = z.object({
   avatar: z.string().url('Avatar must be a valid URL').optional(),
   description: z.string().max(1000, 'Knowledge base description is too long').optional(),
-  name: z.string().min(1, 'Knowledge base name cannot be empty').max(255, 'Knowledge base name is too long'),
+  name: z
+    .string()
+    .min(1, 'Knowledge base name cannot be empty')
+    .max(255, 'Knowledge base name is too long'),
 });
 
 /**
@@ -125,7 +129,7 @@ export const CreateKnowledgeBaseSchema = z.object({
  */
 export interface CreateKnowledgeBaseResponse {
   /** Knowledge base info */
-  knowledgeBase: KnowledgeBaseItem;
+  knowledgeBase: PublicKnowledgeBase;
 }
 
 /**
@@ -143,7 +147,11 @@ export interface UpdateKnowledgeBaseRequest {
 export const UpdateKnowledgeBaseSchema = z.object({
   avatar: z.string().url('Avatar must be a valid URL').optional(),
   description: z.string().max(1000, 'Knowledge base description is too long').optional(),
-  name: z.string().min(1, 'Knowledge base name cannot be empty').max(255, 'Knowledge base name is too long').optional(),
+  name: z
+    .string()
+    .min(1, 'Knowledge base name cannot be empty')
+    .max(255, 'Knowledge base name is too long')
+    .optional(),
 });
 
 /**
@@ -151,7 +159,7 @@ export const UpdateKnowledgeBaseSchema = z.object({
  */
 export interface KnowledgeBaseDetailResponse {
   /** Knowledge base info */
-  knowledgeBase: KnowledgeBaseItem;
+  knowledgeBase: PublicKnowledgeBase;
 }
 
 /**

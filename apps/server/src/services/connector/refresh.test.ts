@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -18,6 +19,7 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   }),
 }));
 vi.mock('./sync', () => ({ syncConnectorToolsById: vi.fn().mockResolvedValue({ toolCount: 3 }) }));
+vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: { isConfigured: false } }));
 
 const ctx = {} as any;
 const NOW = 1_000_000_000_000;
@@ -43,6 +45,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   deferred.length = 0;
   vi.mocked(syncConnectorToolsById).mockResolvedValue({ toolCount: 3 });
+  (deviceGateway as any).isConfigured = false;
 });
 
 describe('buildLastSyncedAtMap', () => {
@@ -116,6 +119,33 @@ describe('scheduleStaleConnectorToolsRefresh — eligibility', () => {
     );
     await flushDeferred();
     expect(syncConnectorToolsById).not.toHaveBeenCalled();
+  });
+
+  it('skips local/private-network endpoints on a cloud deployment (device gateway configured)', async () => {
+    (deviceGateway as any).isConfigured = true;
+    const id = nextId();
+    scheduleStaleConnectorToolsRefresh(
+      [{ id, mcpConnectionType: 'http', mcpServerUrl: 'http://192.168.1.10:8080/mcp' }],
+      new Map(),
+      ctx,
+      NOW,
+    );
+    await flushDeferred();
+    expect(syncConnectorToolsById).not.toHaveBeenCalled();
+  });
+
+  it('still refreshes local endpoints when self-hosted (no device gateway)', async () => {
+    // A self-hosted server may share a LAN with the endpoint — the cloud-only
+    // skip must not fire there.
+    const id = nextId();
+    scheduleStaleConnectorToolsRefresh(
+      [{ id, mcpConnectionType: 'http', mcpServerUrl: 'http://192.168.1.10:8080/mcp' }],
+      new Map(),
+      ctx,
+      NOW,
+    );
+    await flushDeferred();
+    expect(syncConnectorToolsById).toHaveBeenCalledWith(id, ctx);
   });
 
   it('throttles a second call for the same connector at the same instant', async () => {

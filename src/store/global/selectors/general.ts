@@ -1,5 +1,6 @@
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales } from '@/locales/resources';
+import { getSystemLanguage } from '@/utils/client/systemLanguage';
 import { isOnServerSide } from '@/utils/env';
 
 import { type GlobalState } from '../initialState';
@@ -13,7 +14,7 @@ const currentLanguage = (s: GlobalState) => {
   if (locale === 'auto') {
     if (isOnServerSide) return DEFAULT_LANG;
 
-    return navigator.language as Locales;
+    return getSystemLanguage() as Locales;
   }
 
   return locale as Locales;

@@ -30,6 +30,8 @@ If you only do step 1, Linear watchers (often non-engineers) hit the issue and s
 
 When creating issues with `mcp__linear-server__create_issue`, add the `claude code` label. Reason: the label is how the team filters/audits AI-generated issues; without it those issues vanish into the general backlog and the team loses visibility into AI contribution patterns.
 
+Unless the user explicitly specifies another assignee or asks for the issue to remain unassigned, pass `assignee: "me"` so the issue is assigned to the authenticated Linear user. Always honor explicit assignment instructions over this default.
+
 ## Language
 
 Match the issue language to the conversation that produced it — if you're discussing in 中文，write the issue in 中文；if discussing in English, write it in English. Reason: the issue is a continuation of the conversation, and forcing a language switch creates translation friction for the collaborator who started the thread.
@@ -47,7 +49,7 @@ When breaking a parent issue into a tree of sub-issues (e.g., task decomposition
 
 ### 1. Prefix titles with an ordering index
 
-The Linear Sub-issues panel orders children by `sortOrder`, which **defaults to newest-first** (most recently created appears on top). Neither parallel nor serial creation produces the intended top-to-bottom reading order, and the MCP `save_issue` tool does **not expose a `sortOrder` parameter** — you can't set order at create time.
+Linear itself supports sub-issue ordering: its public API exposes `subIssueSortOrder` on both `IssueCreateInput` and `IssueUpdateInput`, and the app offers per-user sub-issue sorting. The limitation is the current Linear MCP `save_issue` tool, which exposes neither `subIssueSortOrder` nor `sortOrder`; therefore, an agent cannot set sub-issue order through this MCP at create or update time.
 
 Workaround: encode execution order in the title itself:
 

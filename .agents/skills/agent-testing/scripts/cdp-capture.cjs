@@ -12,7 +12,7 @@
 // Requires the `ws` package to be resolvable from this file's own location —
 // Node's require() walks up ancestor node_modules automatically, so this works
 // whether the skill ships inside @lobehub/cli's own node_modules or a hoisted
-// monorepo root; no manual NODE_PATH wiring needed. A `lh verify install`-copied
+// monorepo root; no manual NODE_PATH wiring needed. An installed
 // skill dir lives inside a consumer repo's harness skills dir, though, so the
 // ancestor walk from there never reaches @lobehub/cli's node_modules — fall
 // back to the `cliRoot` recorded in the sibling `.skill-meta.json`.

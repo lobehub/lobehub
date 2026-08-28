@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { DeviceConnectModal, DeviceManager, useDeviceList } from '@/features/DeviceManager';
 
 /**
- * Workspace device settings: two pools behind tabs (LOBE-11690) —
+ * Workspace device settings: two pools behind tabs —
  * - Workspace: the shared (public-visibility) pool every member sees.
  * - Private: the caller's own private enrollments in this workspace.
  * The tab also parameterises the connect wizard, so a device enrolled from the

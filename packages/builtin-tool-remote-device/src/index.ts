@@ -1,4 +1,4 @@
-export { RemoteDeviceExecutionRuntime, type RemoteDeviceRuntimeService } from './ExecutionRuntime';
+export type { RemoteDeviceRuntimeService } from './ExecutionRuntime';
 export type { DeviceAttachment } from './ExecutionRuntime/types';
 export { RemoteDeviceManifest } from './manifest';
 export { generateSystemPrompt, systemPrompt } from './systemRole';

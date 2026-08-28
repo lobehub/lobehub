@@ -11,10 +11,11 @@ import { z } from 'zod';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 
-import { MAX_SOURCE_BRIEF_LENGTH } from './sanitizer';
-
 const SOURCE_STORE_PREFIX = 'onboarding_understanding:context';
 const SOURCE_STORE_TTL_SECONDS = 3 * 24 * 60 * 60;
+
+/** Maximum provider context size accepted by the Understanding source store. */
+export const MAX_SOURCE_BRIEF_LENGTH = 64_000;
 
 interface SessionReference {
   sessionId: string;

@@ -1,8 +1,8 @@
 'use client';
 
 import { Input, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { cssVar } from 'antd-style';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +38,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
 }) => {
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
-  const { message } = App.useApp();
+
   const [form] = Form.useForm();
   const [identifierTouched, setIdentifierTouched] = useState(false);
   const updateBenchmark = useEvalStore((s) => s.updateBenchmark);
@@ -72,11 +72,11 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
         name: values.name.trim(),
         tags: values.tags?.length > 0 ? values.tags : undefined,
       });
-      message.success(t('benchmark.edit.success'));
+      toast.success(t('benchmark.edit.success'));
       close();
       onSuccess?.();
     } catch {
-      message.error(t('benchmark.edit.error'));
+      toast.error(t('benchmark.edit.error'));
     } finally {
       onLoadingChange?.(false);
     }

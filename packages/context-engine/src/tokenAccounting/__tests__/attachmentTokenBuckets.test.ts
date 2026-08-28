@@ -82,6 +82,38 @@ describe('attachment token buckets', () => {
     expect(result.audioTokens).toBe(0);
   });
 
+  it('uses persisted audio duration and falls back per item when duration is missing', () => {
+    const result = estimateSentMessageAttachmentTokenBuckets(
+      [
+        mkMsg({
+          audioList: [
+            {
+              alt: 'known.mp3',
+              durationMs: 40_000,
+              id: 'known-audio',
+              url: 'https://example.com/known.mp3',
+            },
+            {
+              alt: 'unknown.mp3',
+              id: 'unknown-audio',
+              url: 'https://example.com/unknown.mp3',
+            },
+          ],
+          role: 'user',
+        }),
+      ],
+      {
+        audioTokenEstimate: 1200,
+        audioTokensPerSecond: 32,
+        canUseAudio: true,
+        canUseVideo: false,
+        canUseVision: false,
+      },
+    );
+
+    expect(result.audioTokens).toBe(1280 + 1200);
+  });
+
   it('estimates pending upload buckets with text fallback and loaded text content', () => {
     const files = [
       mkUploadFile({ id: 'text-file', name: 'note.txt', size: 40, type: 'text/plain' }),

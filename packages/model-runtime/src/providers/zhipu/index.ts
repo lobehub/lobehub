@@ -11,7 +11,7 @@ import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createZhipuImage } from './createImage';
 import { createZhipuVideo } from './createVideo';
-import { isToolStreamSupportedGLMModel } from './modelId';
+import { isAlwaysOnThinkingGLMModel, isToolStreamSupportedGLMModel } from './modelId';
 
 export interface ZhipuModelCard {
   description: string;
@@ -73,6 +73,10 @@ export const params = {
             clear_thinking: !preserveThinking,
           }
         : thinkingPayload;
+      // GLM-5.3+ rejects thinking.type=disabled; keep effort-only control.
+      const enforcedThinking = isAlwaysOnThinkingGLMModel(model)
+        ? { ...resolvedThinking, type: 'enabled' as const }
+        : resolvedThinking;
 
       const zhipuTools = enabledSearch
         ? [
@@ -123,12 +127,12 @@ export const params = {
         stream &&
         isToolStreamSupportedGLMModel(model);
       const shouldDropReasoningEffort = Boolean(
-        isFireworks && reasoning_effort && resolvedThinking?.type === 'disabled',
+        isFireworks && reasoning_effort && enforcedThinking?.type === 'disabled',
       );
       // Example rejected by Fireworks GLM-5.2:
       // { thinking: { type: 'enabled' }, reasoning_effort: 'max' }.
       const shouldDropThinking = Boolean(
-        isFireworks && reasoning_effort && resolvedThinking?.type !== 'disabled',
+        isFireworks && reasoning_effort && enforcedThinking?.type !== 'disabled',
       );
 
       return {
@@ -139,7 +143,7 @@ export const params = {
         ...(reasoning_effort && !shouldDropReasoningEffort ? { reasoning_effort } : {}),
         ...(isFireworks && preserveThinking ? { reasoning_history: 'preserved' } : {}),
         stream,
-        thinking: shouldDropThinking ? undefined : resolvedThinking,
+        thinking: shouldDropThinking ? undefined : enforcedThinking,
         tool_stream: shouldEnableToolStream ? true : undefined,
         tools: zhipuTools,
       } as any;

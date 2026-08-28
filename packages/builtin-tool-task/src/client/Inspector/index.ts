@@ -1,6 +1,7 @@
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { TaskApiName } from '../../types';
+import CreateGoalInspector from './CreateGoal';
 import { CreateTaskInspector } from './CreateTask';
 import { CreateTasksInspector } from './CreateTasks';
 import { DeleteTaskInspector } from './DeleteTask';
@@ -27,6 +28,7 @@ import { ViewTaskInspector } from './ViewTask';
 export const TaskInspectors: Record<string, BuiltinInspector> = {
   [TaskApiName.addTaskComment]: AddTaskCommentInspector as BuiltinInspector,
   [TaskApiName.createTask]: CreateTaskInspector as BuiltinInspector,
+  [TaskApiName.createGoal]: CreateGoalInspector as BuiltinInspector,
   [TaskApiName.createTasks]: CreateTasksInspector as BuiltinInspector,
   [TaskApiName.deleteTask]: DeleteTaskInspector as BuiltinInspector,
   [TaskApiName.deleteTaskComment]: DeleteTaskCommentInspector as BuiltinInspector,
@@ -41,6 +43,7 @@ export const TaskInspectors: Record<string, BuiltinInspector> = {
   [TaskApiName.viewTask]: ViewTaskInspector as BuiltinInspector,
 };
 
+export { default as CreateGoalInspector } from './CreateGoal';
 export { CreateTaskInspector } from './CreateTask';
 export { CreateTasksInspector } from './CreateTasks';
 export { DeleteTaskInspector } from './DeleteTask';

@@ -22,7 +22,8 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { DiscordApi } from './api';
-import { patchDiscordForwardedInteractions, patchDiscordThreadRecovery } from './patch';
+import { DISCORD_BOT_TOKEN_PATTERN, DISCORD_PUBLIC_KEY_PATTERN } from './const';
+import { patchDiscordForwardedInteractions } from './patch';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
@@ -211,7 +212,6 @@ class DiscordGatewayClient implements PlatformClient {
 
   applyChatPatches(chatBot: ChatBot<any>): void {
     patchDiscordForwardedInteractions(chatBot);
-    patchDiscordThreadRecovery(chatBot);
   }
 
   createAdapter(): Record<string, any> {
@@ -526,6 +526,22 @@ export class DiscordClientFactory extends ClientFactory {
     if (!credentials.botToken) errors.push({ field: 'botToken', message: 'Bot Token is required' });
     if (!credentials.publicKey)
       errors.push({ field: 'publicKey', message: 'Public Key is required' });
+
+    if (errors.length > 0) return { errors, valid: false };
+
+    // Name the actual problem before spending a round-trip on it — a
+    // malformed public key can't be caught by the API call at all, and a
+    // malformed token would come back as a generic auth failure.
+    if (!new RegExp(DISCORD_PUBLIC_KEY_PATTERN).test(credentials.publicKey))
+      errors.push({
+        field: 'publicKey',
+        message: 'Public Key must be a 64-character hex string',
+      });
+    if (!new RegExp(DISCORD_BOT_TOKEN_PATTERN).test(credentials.botToken))
+      errors.push({
+        field: 'botToken',
+        message: 'Bot Token must be three dot-separated segments, as shown in the Discord portal',
+      });
 
     if (errors.length > 0) return { errors, valid: false };
 

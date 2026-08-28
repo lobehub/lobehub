@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { type ChatStoreState } from '@/store/chat/initialState';
 import { topicSelectors } from '@/store/chat/selectors';
 import { getElectronStoreState } from '@/store/electron';
@@ -25,10 +25,15 @@ import { getElectronStoreState } from '@/store/electron';
  * bound to the topic that *started* the request, not whatever topic is active
  * now — the user may switch topics mid-stream. Omit it (prompt-build time) to
  * resolve against the active topic.
+ *
+ * Pass `agentId` when the caller has captured a specific agent (e.g. from the
+ * operation context) so the agent-level fallback resolves against the
+ * request-starting agent, not the currently active one.
  */
 export const resolveEffectiveWorkingDirectory = (
   chatState: ChatStoreState,
   topicId?: string | null,
+  agentId?: string | null,
 ): string | undefined => {
   if (!isDesktop) return undefined;
 
@@ -36,6 +41,15 @@ export const resolveEffectiveWorkingDirectory = (
   if (topicWorkingDir) return topicWorkingDir;
 
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  if (agentId) {
+    return (
+      agentByIdSelectors.getAgentWorkingDirectoryById(
+        agentId,
+        currentDeviceId,
+      )(getAgentStoreState()) ?? undefined
+    );
+  }
+
   return (
     agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(getAgentStoreState()) ?? undefined
   );

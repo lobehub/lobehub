@@ -4,23 +4,19 @@ import { type ConversationContext } from '@lobechat/types';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { createModal, type ModalInstance, Tabs } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import ShareDataProvider, { useShareData } from './ShareDataProvider';
-import ShareImage from './ShareImage';
-import ShareJSON from './ShareJSON';
-import SharePdf from './SharePdf';
-import ShareText from './ShareText';
+import { loadShareTabRenderer, ShareTab, type ShareTabRenderer } from './tabRegistry';
 
-enum Tab {
-  JSON = 'json',
-  PDF = 'pdf',
-  Screenshot = 'screenshot',
-  Text = 'text',
-}
+type ShareTabRendererState =
+  | { status: 'loading' }
+  | { error: unknown; status: 'error'; tab: ShareTab }
+  | { render: ShareTabRenderer; status: 'ready'; tab: ShareTab };
 
 export interface OpenShareModalOptions {
   afterClose?: () => void;
@@ -28,27 +24,49 @@ export interface OpenShareModalOptions {
 }
 
 const ShareModalContent = memo(() => {
-  const [tab, setTab] = useState<Tab>(Tab.Screenshot);
+  const [tab, setTab] = useState<ShareTab>(ShareTab.Screenshot);
+  const [rendererAttempt, setRendererAttempt] = useState(0);
+  const [rendererState, setRendererState] = useState<ShareTabRendererState>({ status: 'loading' });
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();
   const { dbMessages, isLoading } = useShareData();
 
+  useEffect(() => {
+    let active = true;
+    setRendererState({ status: 'loading' });
+
+    void loadShareTabRenderer(tab).then(
+      (render) => {
+        if (active) setRendererState({ render, status: 'ready', tab });
+      },
+      (error: unknown) => {
+        if (active) setRendererState({ error, status: 'error', tab });
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [rendererAttempt, tab]);
+
+  const retryRenderer = useCallback(() => setRendererAttempt((value) => value + 1), []);
+
   const tabItems = useMemo(
     () => [
       {
-        key: Tab.Screenshot,
+        key: ShareTab.Screenshot,
         label: t('shareModal.screenshot'),
       },
       {
-        key: Tab.Text,
+        key: ShareTab.Text,
         label: t('shareModal.text'),
       },
       {
-        key: Tab.PDF,
+        key: ShareTab.PDF,
         label: t('shareModal.pdf'),
       },
       {
-        key: Tab.JSON,
+        key: ShareTab.JSON,
         label: 'JSON',
       },
     ],
@@ -69,19 +87,20 @@ const ShareModalContent = memo(() => {
           list: { display: 'flex', width: '100%' },
           tab: { flex: 1 },
         }}
-        onChange={(key) => setTab(key as Tab)}
+        onChange={(key) => setTab(key as ShareTab)}
       />
       {isLoading && dbMessages.length === 0 ? (
         <Flexbox gap={12} paddingBlock={8}>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Flexbox>
+      ) : rendererState.status === 'error' && rendererState.tab === tab ? (
+        <AsyncError error={rendererState.error} variant={'block'} onRetry={retryRenderer} />
+      ) : rendererState.status === 'ready' && rendererState.tab === tab ? (
+        rendererState.render({ mobile: isMobile })
       ) : (
-        <>
-          {tab === Tab.Screenshot && <ShareImage mobile={isMobile} />}
-          {tab === Tab.Text && <ShareText />}
-          {tab === Tab.PDF && <SharePdf />}
-          {tab === Tab.JSON && <ShareJSON />}
-        </>
+        <Flexbox gap={12} paddingBlock={8}>
+          <Skeleton active paragraph={{ rows: 8 }} />
+        </Flexbox>
       )}
     </Flexbox>
   );

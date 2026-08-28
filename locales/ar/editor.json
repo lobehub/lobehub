@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "لم يتم حفظ البيانات الوصفية. حاول مرة أخرى أو استمر في التحرير.",
   "skillFrontmatter.title": "بيانات وصفية للمهارة",
   "slash.compact": "ضغط السياق",
+  "slash.goal": "حدد الهدف",
+  "slash.goal.desc": "خطط وابدأ هدفًا مع معايير قبول قابلة للتعديل",
   "slash.h1": "عنوان 1",
   "slash.h2": "عنوان 2",
   "slash.h3": "عنوان 3",

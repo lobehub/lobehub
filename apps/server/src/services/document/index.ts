@@ -7,11 +7,12 @@ import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -55,6 +56,7 @@ export class DocumentService {
   private documentModel: DocumentModel;
   private documentHistoryServiceInstance?: DocumentHistoryService;
   private fileServiceInstance?: FileService;
+  private knowledgeBaseModel: KnowledgeBaseModel;
   private editLockService: EditLockService;
   private db: LobeChatDatabase;
   private callerAgentVisibility?: 'private' | 'public' | null;
@@ -72,6 +74,7 @@ export class DocumentService {
     this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
     this.fileModel = new FileModel(db, userId, workspaceId);
+    this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId, callerAgentVisibility);
     this.editLockService = new EditLockService(userId);
   }
@@ -146,13 +149,22 @@ export class DocumentService {
     const totalLineCount = content?.split('\n').length || 0;
 
     // Resolve visibility upfront so the KB mirror file uses the same policy
-    // as the document. Parent documents are navigation only and do not pass
-    // visibility or ACL to children. Personal mode leaves it undefined —
-    // the ownership filter ignores the column there.
+    // as the document. A library-root document inherits the KB visibility;
+    // parent documents remain navigation-only and do not pass visibility or
+    // ACL to children. Personal mode leaves it undefined — the ownership
+    // filter ignores the column there.
     let resolvedVisibility: 'private' | 'public' | undefined = visibility;
-    if (!resolvedVisibility && this.workspaceId) {
-      resolvedVisibility = 'private';
+    if (this.workspaceId && knowledgeBaseId) {
+      const knowledgeBase = await this.knowledgeBaseModel.findById(
+        knowledgeBaseId,
+        this.callerAgentVisibility,
+      );
+      if (!knowledgeBase) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      }
+      resolvedVisibility = knowledgeBase.visibility;
     }
+    if (!resolvedVisibility && this.workspaceId) resolvedVisibility = 'private';
 
     let fileId: string | null = null;
 
@@ -264,6 +276,7 @@ export class DocumentService {
    */
   async queryDocuments(params?: {
     current?: number;
+    excludeKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
     sourceTypes?: string[];
@@ -518,10 +531,11 @@ export class DocumentService {
   async trySaveCurrentDocumentHistory(
     documentId: string,
     saveSource: DocumentHistorySaveSource,
+    editorDataOverride?: Record<string, any>,
   ): Promise<SaveDocumentHistoryResult | undefined> {
     try {
       const currentDocument = await this.documentModel.findById(documentId);
-      const editorData = currentDocument?.editorData;
+      const editorData = editorDataOverride ?? currentDocument?.editorData;
       if (!isValidEditorData(editorData)) return undefined;
 
       const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
@@ -797,8 +811,14 @@ export class DocumentService {
   }
 
   /**
-   * Parse file content
+   * Parse file content.
    *
+   * Idempotent: returns the document already stored for the file, and serializes
+   * the cache write per file so two concurrent calls cannot both insert one.
+   *
+   * The database handle must not be an open transaction — the advisory lock is
+   * transaction scoped, so a nested call would hold it until the outer
+   * transaction commits instead of releasing it after the insert.
    */
   async parseFile(fileId: string): Promise<LobeDocument> {
     // Idempotent: return existing document if already parsed
@@ -825,19 +845,48 @@ export class DocumentService {
         file.name.replace(/\.(pdf|docx?|md|markdown)$/i, '') ||
         'Untitled';
 
-      const document = await this.documentModel.create({
-        content: fileDocument.content,
-        fileId,
-        fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
-        filename: title,
-        metadata: fileDocument.metadata,
-        pages: fileDocument.pages,
-        parentId: file.parentId,
-        source: file.url,
-        sourceType: 'file',
-        title,
-        totalCharCount: fileDocument.totalCharCount,
-        totalLineCount: fileDocument.totalLineCount,
+      const document = await this.db.transaction(async (tx) => {
+        // The existence check above ran before the download and the parse, so
+        // another request can have published its own row for this file in the
+        // meantime. Serialize the write per file so two concurrent `parseFile`
+        // calls cannot both insert one. `hashtext` returns int4 while
+        // `pg_advisory_xact_lock` takes bigint, so cast. Under the default READ
+        // COMMITTED isolation the re-check below takes a fresh snapshot once the
+        // lock is granted, so it sees whatever the holder committed. The parse
+        // itself stays outside the transaction: it downloads and reads the whole
+        // file, and holding a connection that long would turn every large upload
+        // into pool pressure.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
+        );
+
+        const transactionDb = tx as unknown as LobeChatDatabase;
+        const transactionDocumentModel = new DocumentModel(
+          transactionDb,
+          this.userId,
+          this.workspaceId,
+          this.callerAgentVisibility,
+        );
+
+        // Whoever inserted first wins; discard this parse rather than adding a
+        // second document for the same file.
+        const raced = await transactionDocumentModel.findByFileId(fileId);
+        if (raced) return raced;
+
+        return transactionDocumentModel.create({
+          content: fileDocument.content,
+          fileId,
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
+          filename: title,
+          metadata: fileDocument.metadata,
+          pages: fileDocument.pages,
+          parentId: file.parentId,
+          source: file.url,
+          sourceType: 'file',
+          title,
+          totalCharCount: fileDocument.totalCharCount,
+          totalLineCount: fileDocument.totalLineCount,
+        });
       });
 
       return document as LobeDocument;

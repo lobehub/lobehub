@@ -1,6 +1,7 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { ComputerRuntime } from './ComputerRuntime';
+import { resolveArgsWithScope, resolvePathWithScope } from './pathScope';
 import type { ServiceResult } from './types';
 
 /**
@@ -43,6 +44,56 @@ const SERVICE_METHOD_MAP: Record<string, keyof ILocalSystemService> = {
 };
 
 /**
+ * Legacy API name aliases used by older gateway versions. Normalized to the
+ * current tool names before dispatch.
+ */
+const LEGACY_API_ALIASES: Record<string, string> = {
+  editLocalFile: 'editFile',
+  globLocalFiles: 'globFiles',
+  listLocalFiles: 'listFiles',
+  moveLocalFiles: 'moveFiles',
+  readLocalFile: 'readFile',
+  renameLocalFile: 'renameFile',
+  searchLocalFiles: 'searchFiles',
+  writeLocalFile: 'writeFile',
+};
+
+/**
+ * Default cap for glob/search results when the caller didn't ask for a limit.
+ * Matches the manifest's documented default.
+ */
+const DEFAULT_FILE_SEARCH_LIMIT = 100;
+
+const normalizeLimit = (limit?: number) =>
+  Number.isFinite(limit) && limit && limit > 0 ? Math.floor(limit) : DEFAULT_FILE_SEARCH_LIMIT;
+
+export interface ExecuteLocalToolOptions {
+  /**
+   * Whether `args.cwd` may be trusted as a search/spawn root.
+   *
+   * `cwd` is not a manifest field for any api, so a model can never legitimately
+   * set one — but the gateway and CLI paths receive args that the server runtime
+   * already sanitized (it strips every inbound `cwd` and re-injects the
+   * device-bound value; see `serverRuntimes/localSystem.ts`), and that injected
+   * value has to survive.
+   *
+   * Callers must state which side of that boundary they are on rather than
+   * letting the runtime infer it: a renderer call for an agent with no
+   * configured working directory is indistinguishable from a gateway call if the
+   * runtime only looks at whether `workingDirectory` is set.
+   *
+   * @default false
+   */
+  trustArgsCwd?: boolean;
+  /**
+   * The agent's effective working directory (absolute). Sourced from the same
+   * place as the `{{workingDirectory}}` prompt placeholder, so what tools
+   * operate on matches what the prompt promises.
+   */
+  workingDirectory?: string;
+}
+
+/**
  * Local System Execution Runtime
  *
  * Extends ComputerRuntime for standard computer operations via Electron IPC.
@@ -55,6 +106,166 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
   constructor(service: ILocalSystemService) {
     super();
     this.service = service;
+  }
+
+  /**
+   * Single entry point for dispatching a raw tool call (manifest / IPC shaped
+   * args, snake_case field names) to the typed ComputerRuntime methods.
+   *
+   * This is THE place where three concerns converge — every caller (renderer
+   * executor, desktop gateway, CLI) used to keep its own partial copy of them,
+   * which is how the "half-fixed cwd injection" family of bugs happened:
+   *
+   * 1. **Legacy alias normalization** — older gateways send `readLocalFile`
+   *    etc.; normalized to the current tool names.
+   * 2. **Working-directory anchoring** — mirrors the server runtime's
+   *    `WORKING_DIR_ARG` injection. Shell + file ops get `cwd`, search ops get
+   *    their search root resolved via {@link resolvePathWithScope}. Without it
+   *    the service layer falls back to its own `process.cwd()` — the app
+   *    install directory in a packaged desktop app (or `/`), NOT the user's
+   *    workspace. Server-injected values already present in `args` win: they
+   *    are resolved against the working directory rather than replaced.
+   * 3. **Field mapping** — IPC names (`file_path`, `shell_id`,
+   *    `run_in_background`, `loc`) → the normalized names ComputerRuntime
+   *    reads when building state/content. `denormalizeParams` maps them back
+   *    to IPC names right before the service call.
+   *
+   * Returns `null` when `apiName` is not a local-system tool so callers can
+   * fall back to their own tools (platform agents, browser, …).
+   */
+  async executeToolCall(
+    apiName: string,
+    args: Record<string, any>,
+    options?: ExecuteLocalToolOptions,
+  ): Promise<BuiltinServerRuntimeOutput | null> {
+    const name = LEGACY_API_ALIASES[apiName] ?? apiName;
+    const workingDirectory = options?.workingDirectory;
+    // Trust boundary — `cwd` is never a manifest field, so no legitimate call
+    // carries a model-chosen one, and the out-of-scope intervention audit does
+    // not inspect it (it reads `path`/`file_path`/`directory`/`scope`). Left
+    // trusted, `readFile({ path: 'passwd', cwd: '/etc' })` would look
+    // workspace-relative to the audit and then execute against `/etc`.
+    //
+    // Which side of the boundary a call is on comes from the caller's explicit
+    // `trustArgsCwd`, never from whether `workingDirectory` happens to be set:
+    // a renderer call for an agent with no configured working directory leaves
+    // both undefined, and inferring "no workingDirectory ⇒ server-sanitized"
+    // would hand that call the model's own `cwd`.
+    const trustedArgsCwd = options?.trustArgsCwd ? args.cwd : undefined;
+    const cwd = workingDirectory ?? trustedArgsCwd;
+
+    switch (name) {
+      case 'listFiles': {
+        return this.listFiles({
+          cwd,
+          directoryPath: args.path,
+          limit: args.limit,
+          sortBy: args.sortBy,
+          sortOrder: args.sortOrder,
+        });
+      }
+
+      case 'readFile': {
+        return this.readFile({
+          cwd,
+          endLine: args.loc?.[1],
+          path: args.path,
+          startLine: args.loc?.[0],
+        });
+      }
+
+      case 'readFiles': {
+        return this.readFiles({ ...args, cwd });
+      }
+
+      case 'writeFile': {
+        return this.writeFile({ content: args.content, cwd, path: args.path });
+      }
+
+      case 'editFile': {
+        return this.editFile({
+          all: args.replace_all,
+          cwd,
+          path: args.file_path,
+          replace: args.new_string,
+          search: args.old_string,
+        });
+      }
+
+      case 'moveFiles': {
+        return this.moveFiles({
+          cwd,
+          operations:
+            args.items?.map((item: { newPath: string; oldPath: string }) => ({
+              destination: item.newPath,
+              source: item.oldPath,
+            })) ?? [],
+        });
+      }
+
+      case 'renameFile': {
+        return this.renameFile({ newName: args.newName, oldPath: args.path });
+      }
+
+      case 'runCommand': {
+        // ComputerRuntime's RunCommandState reads `background` for `isBackground`;
+        // the manifest exposes `run_in_background`. Keep the original field too —
+        // the IPC handler reads `run_in_background` itself.
+        return this.runCommand({
+          ...args,
+          background: args.run_in_background,
+          command: args.command,
+          cwd,
+        });
+      }
+
+      case 'getCommandOutput': {
+        return this.getCommandOutput({
+          commandId: args.shell_id,
+          filter: args.filter,
+          timeout: args.timeout,
+        });
+      }
+
+      case 'killCommand': {
+        return this.killCommand({ commandId: args.shell_id });
+      }
+
+      case 'grepContent': {
+        // Anchor the search root on the working directory and forward the FULL
+        // param set (glob / output_mode / -i / -A / … ) — stripping flags here
+        // silently defeated the agent's filters in the past. `cwd` is a legacy
+        // search-root alias that takes precedence downstream — strip a
+        // model-supplied one on the audited path (see trust boundary above).
+        return this.grepContent({
+          ...resolveArgsWithScope(args, 'path', workingDirectory),
+          // `cwd` outranks the resolved `path` downstream, so the resolved root
+          // must not be shadowed by an untrusted value; keep it only when the
+          // caller vouched for it (gateway / CLI, post-sanitization).
+          cwd: workingDirectory ? undefined : trustedArgsCwd,
+          pattern: args.pattern,
+        });
+      }
+
+      case 'globFiles': {
+        // `cwd` is a legacy alias for `scope` — only honored when trusted (see
+        // trust boundary above).
+        return this.globFiles({
+          directory: resolvePathWithScope(args.scope, cwd),
+          limit: normalizeLimit(args.limit),
+          pattern: args.pattern,
+        });
+      }
+
+      case 'searchFiles': {
+        const resolved = resolveArgsWithScope(args, 'directory', workingDirectory);
+        return this.searchFiles({ ...resolved, limit: normalizeLimit(resolved.limit) });
+      }
+
+      default: {
+        return null;
+      }
+    }
   }
 
   protected async callService(
@@ -82,6 +293,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
     switch (toolName) {
       case 'editLocalFile': {
         return {
+          cwd: params.cwd,
           file_path: params.path,
           new_string: params.replace,
           old_string: params.search,
@@ -91,6 +303,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'listLocalFiles': {
         return {
+          cwd: params.cwd,
           limit: params.limit,
           path: params.directoryPath,
           sortBy: params.sortBy,
@@ -100,6 +313,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'moveLocalFiles': {
         return {
+          cwd: params.cwd,
           items: params.operations?.map((op: any) => ({
             newPath: op.destination,
             oldPath: op.source,
@@ -127,7 +341,14 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
           params.startLine !== undefined || params.endLine !== undefined
             ? [params.startLine ?? 0, params.endLine ?? 200]
             : undefined;
-        return { fullContent: params.fullContent, loc, path: params.path };
+        return { cwd: params.cwd, fullContent: params.fullContent, loc, path: params.path };
+      }
+
+      case 'runCommand': {
+        // Map the normalized `background` back to the IPC `run_in_background`
+        // (kept when already present). `cwd` rides through via the spread —
+        // without it the shell spawns in the service's own process cwd.
+        return { ...params, run_in_background: params.run_in_background ?? params.background };
       }
 
       case 'globLocalFiles': {
@@ -188,6 +409,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'runCommand': {
         // RunCommandResult has snake_case fields from local-file-shell
         return {
+          // Surface raw.error at the top level so ComputerRuntime.errorOutput
+          // has a real message to render. Its priority chain reads the
+          // ServiceResult's own `error`, then `state.stderr`, then
+          // `state.error` — a runCommand that fails before spawning fills none
+          // of those (there is no process, so no stderr), so every such failure
+          // collapsed to the generic "[UNKNOWN_EXEC_ERROR] Tool execution
+          // failed" with the reason discarded. That hid, among others, every
+          // Local Sandbox refusal: "requires a working directory", "unavailable
+          // on this device". Mirrors editLocalFile / grep / glob below.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             error: raw.error,
             exitCode: raw.exit_code,
@@ -195,6 +426,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             commandId: raw.shell_id,
             durationMs: raw.duration_ms,
             outputFiles: raw.output_files,
+            // Carried through so the run itself can say whether it was fenced.
+            // The picker's chip only shows the user's intent, and a run that
+            // lost the flag somewhere in between looks identical otherwise.
+            sandboxed: raw.sandboxed,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,

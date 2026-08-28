@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +23,7 @@ const ThreadChatList = memo(() => {
   // Get agent info for better empty state
   const agents = useSessionStore(sessionSelectors.currentGroupAgents);
   const currentAgent = agents?.find((agent) => agent.id === activeThreadAgentId);
-  const agentTitle = currentAgent?.title || 'this agent';
+  const agentTitle = agentDisplayName(currentAgent, 'this agent');
 
   // Get thread message IDs using the chat selector with the active agent ID
   const data = useChatStore(chatSelectors.getThreadMessageIDs(activeThreadAgentId));

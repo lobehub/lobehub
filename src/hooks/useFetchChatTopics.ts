@@ -1,6 +1,6 @@
 import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
+import { useAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
-import { useAgentTopicGroupMode } from '@/routes/(main)/agent/_layout/Sidebar/Topic/hooks/useAgentTopicGroupMode';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';

@@ -53,6 +53,38 @@ const isInboxAgent = (s: AgentStoreState) => {
   return !!id && s.activeAgentId === id;
 };
 
+/** Every provisioned builtin slug, for classifying a hydrated agent row. */
+const BUILTIN_SLUG_SET: ReadonlySet<string> = new Set<string>([
+  ...Object.values(BUILTIN_AGENT_SLUGS),
+  INBOX_SESSION_ID,
+]);
+
+/**
+ * Whether `agentId` is one of the builtin agent rows (inbox, the builders, the
+ * page/task agents, …). Ownership actions must never be offered for these: they
+ * are provisioned infrastructure, so deleting or rehoming one would break the
+ * workspace (or the personal account) rather than remove user content.
+ *
+ * Read from the hydrated row's own `slug` + `virtual` — the same pair the server
+ * uses (`isCollaborativeBuiltinAgent`), so a legacy ordinary agent that merely
+ * holds a reserved slug stays ordinary here too and keeps its owner's Delete
+ * action. `builtinAgentIdMap` only holds the builtins this session happened to
+ * initialize, so opening e.g. `/agent/<page-agent-id>/profile` without having
+ * visited the Page editor would otherwise misclassify a real builtin as ordinary
+ * content; it remains the fallback for rows whose config is not hydrated (the
+ * agent *list* payload carries neither marker).
+ */
+const isBuiltinAgent = (agentId?: string) => (s: AgentStoreState) => {
+  if (!agentId) return false;
+
+  const agent = s.agentMap[agentId];
+  if (agent?.slug && agent.virtual !== undefined) {
+    return agent.virtual === true && BUILTIN_SLUG_SET.has(agent.slug);
+  }
+
+  return Object.values(s.builtinAgentIdMap).includes(agentId);
+};
+
 /**
  * Get web onboarding agent id (convenience selector)
  */
@@ -72,6 +104,7 @@ export const builtinAgentSelectors = {
   getBuiltinAgentId,
   groupAgentBuilderId,
   inboxAgentId,
+  isBuiltinAgent,
   isBuiltinAgentInit,
   isInboxAgent,
   isInboxAgentConfigInit,

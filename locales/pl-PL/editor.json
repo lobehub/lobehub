@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Metadane nie zostały zapisane. Spróbuj ponownie lub kontynuuj edycję.",
   "skillFrontmatter.title": "Metadane umiejętności",
   "slash.compact": "Kompresuj kontekst",
+  "slash.goal": "Ustaw cel",
+  "slash.goal.desc": "Zaplanuj i rozpocznij cel z edytowalnymi kryteriami akceptacji",
   "slash.h1": "Nagłówek 1",
   "slash.h2": "Nagłówek 2",
   "slash.h3": "Nagłówek 3",

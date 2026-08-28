@@ -10,6 +10,50 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
+      'Hunyuan Hy3 is optimized for production agent workloads, with improvements in coding agents, long-document understanding, multi-turn context retention, search question answering, and complex task execution. It provides more reliable task completion and engineering usability for cross-file development, office automation, and multi-step agent workflows.',
+    displayName: 'Hy3',
+    enabled: true,
+    family: 'hunyuan',
+    generation: 'hunyuan-3',
+    id: 'hy3',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          rate: 0.25,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          rate: 1,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          rate: 4,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-07-06',
+    settings: {
+      extendParams: ['hy3ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
       'Hunyuan Hy3 Preview is designed for agent workloads, adopting a Mixture-of-Experts (MoE) architecture with 295B total parameters and 21B activated parameters. It offers three modes within a single model—**no_think** (ultra-fast response), **think_low** (quick reasoning), and **think_high** (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks. It achieves near state-of-the-art performance on coding benchmarks such as SWE-bench Verified, and supports a 256K context window for cross-file code refactoring and long-document analysis. This model is well-suited for developers who require reliable task completion while remaining sensitive to inference cost.',
     displayName: 'Hy3 preview',
     enabled: true,

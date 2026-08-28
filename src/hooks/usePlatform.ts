@@ -1,5 +1,6 @@
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import {
   getBrowser,
   getPlatform,
@@ -9,23 +10,21 @@ import {
 } from '@/utils/platform';
 
 export const usePlatform = () => {
-  const platform = useRef(getPlatform());
-  const browser = useRef(getBrowser());
+  const platform = useSingleton(getPlatform);
+  const browser = useSingleton(getBrowser);
 
   const platformInfo = {
-    isAndroid: platform.current?.toLowerCase() === 'android',
-    isApple: platform.current && ['mac os', 'ios'].includes(platform.current?.toLowerCase()),
+    isAndroid: platform?.toLowerCase() === 'android',
+    isApple: platform && ['mac os', 'ios'].includes(platform?.toLowerCase()),
     isArc: isArc(),
-    isChrome: browser.current?.toLowerCase() === 'chrome',
-    isChromium:
-      browser.current &&
-      ['chrome', 'edge', 'opera', 'brave'].includes(browser.current?.toLowerCase()),
-    isEdge: browser.current?.toLowerCase() === 'edge',
-    isFirefox: browser.current?.toLowerCase() === 'firefox',
-    isIOS: platform.current?.toLowerCase() === 'ios',
-    isMacOS: platform.current?.toLowerCase() === 'mac os',
+    isChrome: browser?.toLowerCase() === 'chrome',
+    isChromium: browser && ['chrome', 'edge', 'opera', 'brave'].includes(browser?.toLowerCase()),
+    isEdge: browser?.toLowerCase() === 'edge',
+    isFirefox: browser?.toLowerCase() === 'firefox',
+    isIOS: platform?.toLowerCase() === 'ios',
+    isMacOS: platform?.toLowerCase() === 'mac os',
     isPWA: isInStandaloneMode(),
-    isSafari: browser.current?.toLowerCase() === 'safari',
+    isSafari: browser?.toLowerCase() === 'safari',
     isSonomaOrLaterSafari: isSonomaOrLaterSafari(),
   };
 

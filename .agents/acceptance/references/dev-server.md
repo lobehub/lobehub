@@ -78,7 +78,7 @@ in doubt.
 | Change location                                 | Restart? |
 | ----------------------------------------------- | -------- |
 | `apps/server/src/` (routers, services, modules) | Yes      |
-| `src/server/` (agent-hono, workflows-hono)      | Yes      |
+| `apps/server/src/router-hono/`                  | Yes      |
 | `packages/database/` (models)                   | Yes      |
 | `packages/types/`                               | Yes      |
 | `packages/prompts/`                             | Yes      |

@@ -112,6 +112,67 @@ describe('AgentQuotaService.ingestSnapshot', () => {
   });
 });
 
+describe('AgentQuotaService.listLatestReadings', () => {
+  const now = Date.parse('2026-07-02T00:00:00Z');
+  const weeklyReading = {
+    capturedAt: now - 60_000,
+    limitType: 'weekly_all',
+    resetsAt: now + 3 * 24 * HOUR,
+    scopeKey: '',
+    utilization: 21,
+  };
+
+  it('carries a limit the provider reports without a reset time', async () => {
+    // An untouched model-scoped weekly arrives as `resets_at: null`. Windows are
+    // keyed by that instant, so it can only ever exist as a reading — reading
+    // the panel off windows is what made the Fable row invisible.
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        weeklyReading,
+        {
+          capturedAt: now - 60_000,
+          limitType: 'weekly_scoped',
+          resetsAt: null,
+          scopeKey: 'Fable',
+          utilization: 0,
+        },
+      ],
+    });
+
+    expect(await windows.listByAccount(account.id)).toHaveLength(1);
+    expect(await service.listLatestReadings(account.id)).toContainEqual(
+      expect.objectContaining({ limitType: 'weekly_scoped', resetsAt: null, scopeKey: 'Fable' }),
+    );
+  });
+
+  it('counts a rolled-over session window as free when balancing accounts', async () => {
+    // Left at 100% six hours ago: that window has since reset, so the account
+    // is idle — not benched behind an exhausted session.
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        weeklyReading,
+        {
+          capturedAt: now - 6 * HOUR,
+          limitType: 'session',
+          resetsAt: now - HOUR,
+          scopeKey: '',
+          utilization: 100,
+        },
+      ],
+    });
+
+    const [load] = await service.resolveAccountLoads([account.id], now);
+
+    expect(load.sessionUtil).toBe(0);
+    expect(load.rateLimitedUntil).toBeNull();
+    expect(load.weeklyUtil).toBe(21);
+  });
+});
+
 describe('AgentQuotaService.recordUsage', () => {
   it('attributes the turn to the account and computes cost from model-bank rates', async () => {
     const account = await service.ingestSnapshot({

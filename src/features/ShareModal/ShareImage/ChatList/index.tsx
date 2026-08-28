@@ -2,7 +2,9 @@ import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { ConversationProvider, MessageItem, useConversationStore } from '@/features/Conversation';
+import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
+import MessageItem from '@/features/Conversation/Messages';
+import { useConversationStore } from '@/features/Conversation/store';
 
 interface ChatListContentProps {
   ids: string[];

@@ -1,8 +1,7 @@
 'use client';
 
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { FileTextIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +22,7 @@ const AgentDocumentsEmpty = memo(() => {
   const { aid } = useParams<{ aid: string }>();
   const agentId = aid ?? '';
   const navigate = useWorkspaceAwareNavigate();
-  const { message } = App.useApp();
+
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async () => {
@@ -40,7 +39,7 @@ const AgentDocumentsEmpty = memo(() => {
       // list, so the new doc shows up in the right panel for the user to open.
       if (documentId) navigate(buildAgentDocumentPath(agentId, documentId));
     } catch (error) {
-      message.error(
+      toast.error(
         error instanceof Error
           ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
           : t('workingPanel.resources.tree.createError'),

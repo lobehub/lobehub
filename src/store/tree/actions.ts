@@ -16,21 +16,25 @@ export const sortTreeItems = <T extends TreeItem>(items: T[]): T[] => {
 };
 
 export const toTreeItem = (item: {
+  fileId?: string | null;
   fileType: string;
   id: string;
   metadata?: Record<string, any> | null;
   name: string;
+  size?: number | null;
   slug?: string | null;
   sourceType?: string;
   url?: string;
   userId?: string | null;
   visibility?: 'private' | 'public' | null;
 }): TreeItem => ({
+  fileId: item.fileId,
   fileType: item.fileType,
   id: item.id,
   isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
   name: item.name,
+  size: item.size ?? undefined,
   slug: item.slug,
   sourceType: item.sourceType,
   url: item.url ?? '',

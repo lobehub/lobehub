@@ -239,6 +239,213 @@ describe('AiModelModel', () => {
         userId,
       });
     });
+
+    it('should merge config instead of replacing it, preserving chatConfig', async () => {
+      const { id } = await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'azure' });
+      await aiProviderModel.updateModelReasoningConfig(id, 'azure', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      // The old model-config modal only knows deploymentName; saving it must not
+      // wipe the sibling chatConfig namespace.
+      await aiProviderModel.update(id, 'azure', { config: { deploymentName: 'my-deploy' } });
+
+      const row = await aiProviderModel.findByIdAndProvider(id, 'azure');
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'high' },
+        deploymentName: 'my-deploy',
+      });
+    });
+  });
+
+  describe('model reasoning config (personal scope)', () => {
+    it('should create a preference-only row without flipping enabled or source', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'xhigh',
+        reasoningMode: 'pro',
+      });
+
+      const row = await serverDB.query.aiModels.findFirst({
+        where: and(eq(aiModels.id, 'gpt-5.6-sol'), eq(aiModels.userId, userId)),
+      });
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+      });
+      // A row that exists only to hold the preference must not change model
+      // visibility (enabled NULL falls back to builtin defaults) nor claim an
+      // origin that would block later remote-sync updates.
+      expect(row!.enabled).toBeNull();
+      expect(row!.source).toBeNull();
+      expect(row!.workspaceId).toBeNull();
+    });
+
+    it('should merge partial chatConfig writes and preserve sibling config keys', async () => {
+      await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'openai' });
+      await aiProviderModel.update('gpt-5.6-sol', 'openai', {
+        config: { deploymentName: 'keep-me' },
+      });
+
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        reasoningMode: 'pro',
+      });
+
+      const config = await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai');
+      expect(config).toEqual({ gpt5_6ReasoningEffort: 'high', reasoningMode: 'pro' });
+
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(row!.config).toMatchObject({ deploymentName: 'keep-me' });
+    });
+
+    it('should read/write the personal row even when scoped to a workspace', async () => {
+      await workspaceAiModelModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'low',
+      });
+
+      // Written to the personal row (workspaceId NULL), not the workspace row
+      const rows = await serverDB.query.aiModels.findMany({
+        where: and(eq(aiModels.id, 'gpt-5.6-sol'), eq(aiModels.userId, userId)),
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].workspaceId).toBeNull();
+
+      // And readable through both scopes — the preference is cross-workspace
+      expect(await workspaceAiModelModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'low',
+      });
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'low',
+      });
+    });
+
+    it('should isolate configs across providers and users', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'azure')).toBeUndefined();
+
+      const otherUserModel = new AiModelModel(serverDB, 'user2');
+      expect(await otherUserModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toBeUndefined();
+    });
+
+    it('should survive a remote model list sync', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        } as AiProviderModelListItem,
+      ]);
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+    });
+
+    it('should survive clearing remote models after a sync', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      // Sync claims the preference row as remote too (so its synced metadata
+      // stays clearable); clearRemoteModels demotes chatConfig-holding remote
+      // rows instead of deleting them, so the preference still survives
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        },
+        { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
+      ] as AiProviderModelListItem[]);
+      await aiProviderModel.clearRemoteModels('openai');
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      // Demoted back to a hidden preference-only shell — the synced metadata
+      // must not linger as a ghost list entry after clearing remote models
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(AiModelModel.isPreferenceOnlyRow(row!)).toBe(true);
+      // The plain remote row is still cleared as before
+      expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
+        undefined,
+      );
+    });
+
+    it('should survive clearing remote models saved in remote-first order', async () => {
+      // Row created by the remote fetch first...
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        },
+        { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
+      ] as AiProviderModelListItem[]);
+      // ...then the user saves a preference onto the remote row
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await aiProviderModel.clearRemoteModels('openai');
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      // Demoted to a preference-only row: remote identity and metadata stripped
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(row!.source).toBeNull();
+      expect(row!.displayName).toBeNull();
+      expect(row!.contextWindowTokens).toBeNull();
+      expect(row!.enabled).toBeNull();
+      // The plain remote row is still cleared
+      expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
+        undefined,
+      );
+    });
+
+    it('should identify preference-only shells', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+      await aiProviderModel.create({ enabled: true, id: 'real-model', providerId: 'openai' });
+
+      const shell = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      const realModel = await aiProviderModel.findByIdAndProvider('real-model', 'openai');
+
+      expect(AiModelModel.isPreferenceOnlyRow(shell!)).toBe(true);
+      expect(AiModelModel.isPreferenceOnlyRow(realModel!)).toBe(false);
+
+      // Promoting a shell via update (the createAiModel duplicate-bypass path)
+      // keeps the saved preference
+      await aiProviderModel.update('gpt-5.6-sol', 'openai', {
+        displayName: 'Recreated',
+        enabled: true,
+        source: 'custom',
+      });
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      const promoted = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(AiModelModel.isPreferenceOnlyRow(promoted!)).toBe(false);
+    });
   });
 
   describe('getModelListByProviderId', () => {

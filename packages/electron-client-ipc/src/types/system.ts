@@ -1,5 +1,7 @@
 export interface ElectronAppState {
   arch?: string; // e.g., 'x64', 'arm64'
+  /** Human-readable name of the shell that `runCommand` uses (e.g. "PowerShell 7+ (pwsh)"). */
+  defaultShell?: string;
   isLinux?: boolean;
   isMac?: boolean;
   isWindows?: boolean;

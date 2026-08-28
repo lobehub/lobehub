@@ -56,6 +56,29 @@ describe('buildAcceptanceCheckUnion', () => {
     ]);
   });
 
+  it('joins different run-local item ids through their stable source criterion', () => {
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('run-1-item', 'failed')],
+        run: run('r1', 1, [
+          planItem('run-1-item', { sourceCriterionId: 'criterion-1', title: 'Stable check' }),
+        ]),
+      },
+      {
+        results: [result('run-2-item', 'passed')],
+        run: run('r2', 2, [
+          planItem('run-2-item', { sourceCriterionId: 'criterion-1', title: 'Stable check' }),
+        ]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('criterion-1');
+    expect(rows[0].state).toBe('passed');
+    expect(rows[0].fixed).toBe(true);
+    expect(rows[0].history.map((entry) => entry.roundIndex)).toEqual([1, 2]);
+  });
+
   it('marks an item planned later but never re-run as carried forward', () => {
     const plan = [planItem('prefs')];
     const rows = buildAcceptanceCheckUnion([

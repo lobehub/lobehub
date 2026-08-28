@@ -13,3 +13,9 @@ export const HETEROGENEOUS_TYPE_LABELS: Record<string, string> = Object.fromEntr
   ...HETEROGENEOUS_AGENT_CONFIGS.map((config) => [config.type, config.title]),
   ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((config) => [config.type, config.title]),
 ]);
+
+export const getHeterogeneousTypeLabel = (type?: string | null): string | undefined => {
+  if (!type) return undefined;
+
+  return Object.hasOwn(HETEROGENEOUS_TYPE_LABELS, type) ? HETEROGENEOUS_TYPE_LABELS[type] : type;
+};

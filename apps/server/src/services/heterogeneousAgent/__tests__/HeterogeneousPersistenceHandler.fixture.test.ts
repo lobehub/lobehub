@@ -186,6 +186,18 @@ const createHarness = () => {
       return { success: true };
     }),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    getLatestSpineMessageId: vi.fn(
+      async ({ threadId, topicId }: { threadId?: string | null; topicId: string }) => {
+        const match = [...messages.values()].findLast(
+          (message) =>
+            message.topicId === topicId &&
+            message.role !== 'tool' &&
+            message.threadId === (threadId ?? null) &&
+            !(message as any).metadata?.signal,
+        );
+        return match?.id;
+      },
+    ),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 

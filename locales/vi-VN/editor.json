@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Siêu dữ liệu không được lưu. Thử lại hoặc tiếp tục chỉnh sửa.",
   "skillFrontmatter.title": "Siêu dữ liệu kỹ năng",
   "slash.compact": "Nén ngữ cảnh",
+  "slash.goal": "Đặt mục tiêu",
+  "slash.goal.desc": "Lên kế hoạch và bắt đầu một mục tiêu với các tiêu chí chấp nhận có thể chỉnh sửa",
   "slash.h1": "Tiêu đề 1",
   "slash.h2": "Tiêu đề 2",
   "slash.h3": "Tiêu đề 3",

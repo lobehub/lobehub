@@ -25,7 +25,6 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'message-delete-test';
 const otherUserId = 'message-delete-test-other';
 const messageModel = new MessageModel(serverDB, userId);
-const embeddingsId = uuid();
 
 beforeEach(async () => {
   // Clear tables before each test case
@@ -99,6 +98,86 @@ describe('MessageModel Delete Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
       expect(result).toHaveLength(1);
+    });
+
+    it('should clear a stale active branch index when the selected branch is deleted', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 1, collapsed: true },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessage('branch-b');
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ collapsed: true });
+    });
+
+    it('should remap the selected branch by identity when an earlier branch is deleted', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 1 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'tool result',
+          createdAt: new Date('2026-01-01T00:00:00.500Z'),
+          id: 'tool',
+          parentId: 'parent',
+          role: 'tool',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessage('branch-a');
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 0 });
     });
 
     it('should update child messages parentId to deleted message parentId', async () => {
@@ -209,6 +288,86 @@ describe('MessageModel Delete Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
       expect(result).toHaveLength(1);
+    });
+
+    it('should remap the selected branch after deleting earlier branches in a batch', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 2 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch C',
+          createdAt: new Date('2026-01-01T00:00:03.000Z'),
+          id: 'branch-c',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessages(['branch-a', 'branch-b']);
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 0 });
+    });
+
+    it('should preserve an optimistic branch marker when deleting a sibling', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 2 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessages(['branch-a']);
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 1 });
     });
 
     it('should update child messages parentId when deleting parent chain', async () => {

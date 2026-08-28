@@ -341,9 +341,28 @@ describe('parseClaudeCodeSessionDigest', () => {
     expect(digest.tokens).toBe(60);
   });
 
-  it('strips the injected Workspace preamble from title fallbacks', () => {
+  it('strips the historical local Workspace preamble from title fallbacks', () => {
     const preambled =
       "## Workspace\nYou are running on the user's own machine. Your working directory is `/repo`.帮我修个 bug";
+    const transcript = [
+      userRecord('u1', null, preambled),
+      assistantRecord('a1', 'u1', 'msg_1', { text: 'ok', type: 'text' }),
+    ].join('\n');
+
+    const digest = parseClaudeCodeSessionDigest(transcript, '/tmp/x.jsonl')!;
+    expect(digest.firstPrompt).toBe('帮我修个 bug');
+    expect(digest.title).toBe('帮我修个 bug');
+  });
+
+  it('strips the complete historical remote-device Workspace preamble', () => {
+    const preambled = [
+      '## Workspace',
+      "You are running on the user's own machine. Your working directory is `/repo`.",
+      'This is a persistent local filesystem — changes are not lost when the task ends, so',
+      'there is no need to commit or push purely to preserve your work.',
+      '',
+      '帮我修个 bug',
+    ].join('\n');
     const transcript = [
       userRecord('u1', null, preambled),
       assistantRecord('a1', 'u1', 'msg_1', { text: 'ok', type: 'text' }),

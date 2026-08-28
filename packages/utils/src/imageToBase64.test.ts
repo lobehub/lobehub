@@ -116,4 +116,34 @@ describe('imageUrlToBase64', () => {
 
     await expect(imageUrlToBase64('https://example.com/image.jpg')).rejects.toThrow('Fetch failed');
   });
+
+  it('should cancel a streaming download once it exceeds the configured byte limit', async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array(5) })
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array(5) });
+    mockFetch.mockResolvedValue({
+      body: { getReader: () => ({ cancel, read }) },
+      headers: { get: () => null },
+    });
+
+    await expect(
+      imageUrlToBase64('https://example.com/large-audio.wav', { maxBytes: 8 }),
+    ).rejects.toThrow('8-byte download limit');
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('should cancel a response whose declared length already exceeds the byte limit', async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    mockFetch.mockResolvedValue({
+      body: { cancel },
+      headers: { get: (key: string) => (key === 'content-length' ? '9' : null) },
+    });
+
+    await expect(
+      imageUrlToBase64('https://example.com/declared-large.wav', { maxBytes: 8 }),
+    ).rejects.toThrow('8-byte download limit');
+    expect(cancel).toHaveBeenCalledOnce();
+  });
 });

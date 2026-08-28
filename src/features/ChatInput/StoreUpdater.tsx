@@ -1,7 +1,7 @@
 'use client';
 
 import { type ForwardedRef } from 'react';
-import { memo, useEffect, useImperativeHandle } from 'react';
+import { memo, useEffect, useImperativeHandle, useLayoutEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { type ChatInputEditor } from './hooks/useChatInputEditor';
@@ -17,7 +17,9 @@ export interface StoreUpdaterProps extends Partial<PublicState> {
 const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     agentId,
+    canRecordVoiceMessage,
     chatInputEditorRef,
+    contextSelectionKey,
     contextWindowMessages,
     draftKey,
     feature = DEFAULT_CHAT_INPUT_FEATURE,
@@ -26,20 +28,32 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     leftActions,
     rightActions,
     onSend,
+    onVoiceMessageSend,
     onMarkdownContentChange,
     sendMenu,
     mentionItems,
     allowExpand,
     slashPlacement,
     getMessages,
+    resolveSendBlocked,
   }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
     const editor = useChatInputEditor();
 
     useStoreUpdater('agentId', agentId);
+    useStoreUpdater('canRecordVoiceMessage', canRecordVoiceMessage);
+    useStoreUpdater('contextSelectionKey', contextSelectionKey);
     useStoreUpdater('contextWindowMessages', contextWindowMessages);
-    useStoreUpdater('draftKey', draftKey);
+
+    // Sync draftKey before paint: the draft-transition subscriber
+    // (useChatInputDraft) swaps the editor document on this change, and doing
+    // it post-paint would flash the previous topic's draft for one frame.
+    useLayoutEffect(() => {
+      if (draftKey !== undefined && storeApi.getState().draftKey !== draftKey) {
+        storeApi.setState({ draftKey });
+      }
+    }, [draftKey, storeApi]);
     useStoreUpdater('mobile', mobile!);
     useStoreUpdater('mentionItems', mentionItems);
     useStoreUpdater('leftActions', leftActions!);
@@ -50,7 +64,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('getMessages', getMessages);
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
+    useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
     useStoreUpdater('onSend', onSend);
+    useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
 
     useEffect(() => {

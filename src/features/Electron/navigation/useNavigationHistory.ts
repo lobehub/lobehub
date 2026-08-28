@@ -1,125 +1,55 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { useCallback, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
-import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
-import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
+// Import the manager directly, not the `@/features/Electron/TabHost` barrel,
+// whose `TabHost` re-export statically drags `desktopRouter.config` into the
+// navigation graph (see activeTabNavigate for the boot-init TDZ this avoids).
+import type { HistorySnapshot } from '@/features/Electron/TabHost/tabHistoryTracker';
+import {
+  getTabHistorySnapshot,
+  getTabRouter,
+  subscribeTabHistory,
+} from '@/features/Electron/TabHost/tabRouterManager';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useElectronStore } from '@/store/electron';
 
+const DEFAULT_SNAPSHOT: HistorySnapshot = { canGoBack: false, canGoForward: false };
+
 export const useNavigationHistory = () => {
-  const { t } = useTranslation('electron');
-  const navigate = useWorkspaceAwareNavigate();
-  const location = useLocation();
-
-  const isNavigatingHistory = useElectronStore((s) => s.isNavigatingHistory);
-  const historyCurrentIndex = useElectronStore((s) => s.historyCurrentIndex);
-  const historyEntries = useElectronStore((s) => s.historyEntries);
-  const currentRouteMeta = useElectronStore((s) => s.currentRouteMeta);
-  const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
-  const pushHistory = useElectronStore((s) => s.pushHistory);
-  const replaceHistory = useElectronStore((s) => s.replaceHistory);
-  const setIsNavigatingHistory = useElectronStore((s) => s.setIsNavigatingHistory);
-  const storeGoBack = useElectronStore((s) => s.goBack);
-  const storeGoForward = useElectronStore((s) => s.goForward);
-  const canGoBackFn = useElectronStore((s) => s.canGoBack);
-  const canGoForwardFn = useElectronStore((s) => s.canGoForward);
-  const getCurrentEntry = useElectronStore((s) => s.getCurrentEntry);
+  const location = useActiveLocation();
+  const activeTabId = useElectronStore((s) => s.activeTabId);
   const addRecentPage = useElectronStore((s) => s.addRecentPage);
+  const prevUrlRef = useRef<string | null>(null);
 
-  const prevLocationRef = useRef<string | null>(null);
-
-  const canGoBack = historyCurrentIndex > 0;
-  const canGoForward = historyCurrentIndex < historyEntries.length - 1;
+  const subscribe = useCallback(
+    (listener: () => void) => (activeTabId ? subscribeTabHistory(activeTabId, listener) : () => {}),
+    [activeTabId],
+  );
+  const getSnapshot = useCallback(
+    () => (activeTabId ? getTabHistorySnapshot(activeTabId) : DEFAULT_SNAPSHOT),
+    [activeTabId],
+  );
+  const { canGoBack, canGoForward } = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   const goBack = useCallback(() => {
-    if (!canGoBackFn()) return;
-
-    const targetEntry = storeGoBack();
-    if (targetEntry) navigate(targetEntry.url, { escape: true });
-  }, [canGoBackFn, storeGoBack, navigate]);
+    if (activeTabId) void getTabRouter(activeTabId)?.navigate(-1);
+  }, [activeTabId]);
 
   const goForward = useCallback(() => {
-    if (!canGoForwardFn()) return;
-
-    const targetEntry = storeGoForward();
-    if (targetEntry) navigate(targetEntry.url, { escape: true });
-  }, [canGoForwardFn, storeGoForward, navigate]);
+    if (activeTabId) void getTabRouter(activeTabId)?.navigate(1);
+  }, [activeTabId]);
 
   useEffect(() => {
     const currentUrl = location.pathname + location.search;
-
-    if (isNavigatingHistory) {
-      setIsNavigatingHistory(false);
-      prevLocationRef.current = currentUrl;
-      return;
-    }
-
-    if (prevLocationRef.current === currentUrl) return;
-
-    const currentEntry = getCurrentEntry();
-    if (currentEntry?.url === currentUrl) {
-      prevLocationRef.current = currentUrl;
-      return;
-    }
-
-    const staticMeta = matchRouteMeta(desktopRoutes, currentUrl).static;
-    const presetTitle = staticMeta.titleKey
-      ? (t(staticMeta.titleKey as never) as string)
-      : (t('navigation.lobehub') as string);
-
-    pushHistory({
-      metadata: { timestamp: Date.now() },
-      title: presetTitle,
-      url: currentUrl,
-    });
-
+    if (prevUrlRef.current === currentUrl) return;
+    prevUrlRef.current = currentUrl;
     addRecentPage(currentUrl);
+  }, [location.pathname, location.search, addRecentPage]);
 
-    prevLocationRef.current = currentUrl;
-  }, [
-    location.pathname,
-    location.search,
-    isNavigatingHistory,
-    setIsNavigatingHistory,
-    getCurrentEntry,
-    pushHistory,
-    addRecentPage,
-    t,
-  ]);
+  useWatchBroadcast('historyGoBack', goBack);
+  useWatchBroadcast('historyGoForward', goForward);
 
-  useEffect(() => {
-    const dynamicTitle = currentRouteMeta?.title;
-    if (!dynamicTitle || !currentRouteMetaUrl) return;
-
-    const currentEntry = getCurrentEntry();
-    if (!currentEntry) return;
-    if (normalizeTabUrl(currentEntry.url) !== normalizeTabUrl(currentRouteMetaUrl)) return;
-    if (currentEntry.title === dynamicTitle) return;
-
-    replaceHistory({ ...currentEntry, title: dynamicTitle });
-    addRecentPage(currentEntry.url, currentRouteMeta ?? undefined);
-  }, [currentRouteMeta, currentRouteMetaUrl, getCurrentEntry, replaceHistory, addRecentPage]);
-
-  useWatchBroadcast('historyGoBack', () => {
-    goBack();
-  });
-
-  useWatchBroadcast('historyGoForward', () => {
-    goForward();
-  });
-
-  return {
-    canGoBack,
-    canGoForward,
-    currentEntry: getCurrentEntry(),
-    goBack,
-    goForward,
-    historyEntries,
-    historyIndex: historyCurrentIndex,
-  };
+  return { canGoBack, canGoForward, goBack, goForward };
 };

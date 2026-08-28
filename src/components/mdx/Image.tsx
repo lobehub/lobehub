@@ -4,8 +4,6 @@ import { Image } from '@lobehub/ui/mdx';
 import { getPlaiceholder } from 'plaiceholder';
 import { type FC } from 'react';
 
-import Img from '@/libs/next/Image';
-
 const DEFAULT_WIDTH = 800;
 
 const fetchImage = async (url: string) => {
@@ -31,15 +29,13 @@ const ImageWrapper: FC<{ alt: string; src: string }> = async ({ alt, src, ...res
         height={height}
         src={src}
         width={DEFAULT_WIDTH}
-        placeholder={
-          <Img
-            alt={alt}
-            height={height}
-            src={base64}
-            style={{ filter: 'blur(24px)', height: 'auto', scale: 1.2, width: '100%' }}
-            width={DEFAULT_WIDTH}
-          />
-        }
+        styles={{
+          wrapper: {
+            backgroundImage: `url(${base64})`,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+          },
+        }}
       />
     );
   } catch {

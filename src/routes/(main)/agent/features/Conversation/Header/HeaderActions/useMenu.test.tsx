@@ -29,6 +29,10 @@ vi.mock('@/const/version', () => ({
   isDesktop: true,
 }));
 
+vi.mock('@/features/Conversation/useAgentContext', () => ({
+  useAgentContext: () => ({ agentId: 'agent-1', topicId: 'topic-1' }),
+}));
+
 vi.mock('@lobehub/ui', () => ({
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -58,8 +62,8 @@ vi.mock('react-router', () => ({
 
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
-    currentActiveTopic: (state: Record<string, unknown>) => state.activeTopic,
-    currentTopicWorkingDirectory: (state: Record<string, unknown>) => state.workingDirectory,
+    getTopicById: (id: string) => (state: { topics: Record<string, unknown> }) => state.topics[id],
+    getTopicWorkingDirectory: () => (state: Record<string, unknown>) => state.workingDirectory,
   },
 }));
 
@@ -67,12 +71,19 @@ vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       activeAgentId: 'agent-1',
-      activeTopic: {
-        favorite: false,
-        id: 'topic-1',
-        title: 'Topic 1',
-        updatedAt: '2026-05-27T00:15:00.000Z',
-        userId: 'user-1',
+      activeTopicId: 'topic-other-pane',
+      topics: {
+        'topic-1': {
+          favorite: false,
+          id: 'topic-1',
+          title: 'Topic 1',
+          updatedAt: '2026-05-27T00:15:00.000Z',
+          userId: 'user-1',
+        },
+        'topic-other-pane': {
+          id: 'topic-other-pane',
+          title: 'Other pane topic',
+        },
       },
       autoRenameTopicTitle: autoRenameTopicTitleMock,
       favoriteTopic: favoriteTopicMock,
@@ -111,9 +122,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const popupItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'openInPopupWindow',
-    );
+    const popupItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
 
     expect(popupItem).toBeDefined();
     if (!isActionItem(popupItem)) {
@@ -133,9 +144,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const popupItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'openInPopupWindow',
-    );
+    const popupItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
 
     expect(popupItem).toBeUndefined();
   });
@@ -145,9 +156,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const topicInfoItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'topic-info',
-    );
+    const topicInfoItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'topic-info');
 
     expect(topicInfoItem).toBeUndefined();
     expect(result.current.menuHeader).toBeDefined();

@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerHeteroCommand } from './hetero';
+import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
 const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
   mockResolveHeteroSpawnCommand: vi.fn(),
@@ -102,17 +104,13 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (agentType: 'amp' | 'claude-code' | 'codex' | 'opencode', command?: string) => ({
-        command:
-          command ??
-          (agentType === 'amp'
-            ? 'amp'
-            : agentType === 'codex'
-              ? 'codex'
-              : agentType === 'opencode'
-                ? 'opencode'
-                : 'claude'),
-      }),
+      async (agentType: LocalHeterogeneousAgentType, command?: string) => {
+        const defaultCommand = HETEROGENEOUS_AGENT_CONFIGS.find(
+          ({ type }) => type === agentType,
+        )!.defaultCommand;
+
+        return { command: command ?? defaultCommand };
+      },
     );
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
@@ -157,6 +155,12 @@ describe('hetero exec command', () => {
     }
   };
 
+  it('supports exactly the local agent descriptor types', () => {
+    expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
+      HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+    );
+  });
+
   it('rejects unsupported agent types via process.exit(2)', async () => {
     await runCmd(['hetero', 'exec', '--type', 'kimi-cli', '--prompt', 'hi']);
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -200,6 +204,89 @@ describe('hetero exec command', () => {
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
+  it('runs Qoder with its default command and forwards model and effort', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'qoder',
+      '--prompt',
+      'do thing',
+      '--model',
+      'Claude Sonnet 4.5',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('qoder', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'qoder',
+        command: 'qodercli',
+        extraArgs: ['--model', 'Claude Sonnet 4.5', '--reasoning-effort', 'high'],
+        prompt: 'do thing',
+      }),
+    );
+  });
+
+  it('runs Kimi Code with its default command and forwards model but not effort', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'kimi-code',
+      '--prompt',
+      'do thing',
+      '--model',
+      'kimi-for-coding',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('kimi-code', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        extraArgs: ['--model', 'kimi-for-coding'],
+        prompt: 'do thing',
+      }),
+    );
+  });
+
+  it('runs TRAE Enterprise with ACP model selection and only native provider arguments', async () => {
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'traecli' });
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'trae',
+      '--prompt',
+      'do thing',
+      '--model',
+      'gpt-5.4',
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('trae', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'trae',
+        command: 'traecli',
+        extraArgs: ['--feature', 'test'],
+        initialModel: 'gpt-5.4',
+        prompt: 'do thing',
+      }),
+    );
+  });
+
   it('uses the provided --operation-id verbatim', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -216,6 +303,15 @@ describe('hetero exec command', () => {
 
     const call = mockSpawnAgent.mock.calls[0][0];
     expect(call.operationId).toBe('op-server-allocated');
+    expect(call.includePartialMessages).toBe(true);
+  });
+
+  it('does not request Claude partial-message framing for other heterogeneous agents', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'hi']);
+
+    expect(mockSpawnAgent.mock.calls[0][0].includePartialMessages).toBe(false);
   });
 
   it('passes Claude Code --model and --effort through as spawnAgent extraArgs', async () => {
@@ -237,6 +333,54 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
       extraArgs: ['--model', 'opus', '--effort', 'high'],
+    });
+  });
+
+  it('passes CodeBuddy --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codebuddy',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.4',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('codebuddy', undefined);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      agentType: 'codebuddy',
+      command: 'codebuddy',
+      extraArgs: ['--model', 'gpt-5.4', '--effort', 'high'],
+    });
+  });
+
+  it('passes Grok Build --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'grok-build',
+      '--prompt',
+      'hi',
+      '--model',
+      'grok-4.6',
+      '--effort',
+      'xhigh',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('grok-build', undefined);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      agentType: 'grok-build',
+      command: 'grok',
+      extraArgs: ['--model', 'grok-4.6', '--effort', 'xhigh'],
     });
   });
 
@@ -329,6 +473,20 @@ describe('hetero exec command', () => {
     });
   });
 
+  it('translates the Amp mode selector into its native --mode flag', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'amp', '--prompt', 'do thing', '--mode', 'ultra']);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'amp',
+        command: 'amp',
+        extraArgs: ['--mode', 'ultra'],
+      }),
+    );
+  });
+
   it('runs AMP and forwards only native agent args', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -353,6 +511,62 @@ describe('hetero exec command', () => {
         agentType: 'amp',
         command: 'amp',
         extraArgs: ['--mode', 'high'],
+      }),
+    );
+  });
+
+  it('runs Cursor with model, resume, and native args', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'cursor',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'cursor-session',
+      '--model',
+      'sonnet-4-thinking',
+      '--agent-arg=--mode',
+      '--agent-arg=plan',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('cursor', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        askUserBridge: undefined,
+        command: 'agent',
+        extraArgs: ['--mode', 'plan', '--model', 'sonnet-4-thinking'],
+        resumeSessionId: 'cursor-session',
+      }),
+    );
+  });
+
+  it('passes an intervention bridge to server-ingest Cursor runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'cursor',
+      '--prompt',
+      'do thing',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-cursor-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        askUserBridge: expect.objectContaining({ pending: expect.any(Function) }),
       }),
     );
   });
@@ -386,6 +600,39 @@ describe('hetero exec command', () => {
         command: 'opencode',
         extraArgs: ['--variant', 'max', '--model', 'anthropic/claude-sonnet-4'],
         resumeSessionId: 'session-open-1',
+      }),
+    );
+  });
+
+  it('runs Pi with model, resume, and native args while ignoring effort and speed', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'pi',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'pi-session-1',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+      '--effort',
+      'high',
+      '--speed',
+      'fast',
+      '--agent-arg=--provider',
+      '--agent-arg=anthropic',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('pi', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'pi',
+        command: 'pi',
+        extraArgs: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        resumeSessionId: 'pi-session-1',
       }),
     );
   });
@@ -429,6 +676,32 @@ describe('hetero exec command', () => {
 
     await runCmd(['hetero', 'exec', '--type', 'claude-code', '--prompt', 'hi']);
     expect(exitSpy).toHaveBeenCalledWith(7);
+  });
+
+  it('exits non-zero when a terminal protocol error is emitted despite a clean child exit', async () => {
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: {
+              agentType: 'amp',
+              code: 'protocol_error',
+              message: 'Amp stream ended without the required terminal `result` event.',
+            },
+            operationId: 'op-amp',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'error',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd(['hetero', 'exec', '--type', 'amp', '--prompt', 'hi']);
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining('"code":"protocol_error"'));
   });
 
   it('maps SIGINT (code === null) to POSIX exit code 130', async () => {
@@ -707,6 +980,38 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('preserves a working-directory error when spawnAgent rejects before streaming', async () => {
+    mockSpawnAgent.mockRejectedValue(
+      Object.assign(new Error('Working directory does not exist: /deleted/worktree'), {
+        code: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: { code: 'working_directory_not_found' },
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('finishes server-ingest runs with error when the agent event stream fails', async () => {
     mockSpawnAgent.mockReturnValue(
       createFakeHandle({ eventsError: new Error('adapter choked on malformed JSONL') }),
@@ -835,6 +1140,95 @@ describe('hetero exec command', () => {
   });
 
   describe('--resume auto-retry on session-not-found', () => {
+    it('uses recovery history only for the retry without native resume', async () => {
+      const dir = await mkdtemp(`${tmpdir()}/hetero-resume-fallback-`);
+      const file = path.join(dir, 'input.json');
+      const primaryPrompt = [
+        { text: 'workspace rules', type: 'text' },
+        { text: 'continue', type: 'text' },
+      ];
+      const fallbackPrompt = [
+        { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+        { text: 'continue', type: 'text' },
+      ];
+      await writeFile(
+        file,
+        JSON.stringify({ content: primaryPrompt, resumeFallback: fallbackPrompt }),
+      );
+      const resumeNotFoundEvent = {
+        data: { message: 'No conversation found with session ID cc-stale' },
+        operationId: 'op-fallback',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [resumeNotFoundEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      try {
+        await runCmd([
+          'hetero',
+          'exec',
+          '--type',
+          'claude-code',
+          '--input-json',
+          file,
+          '--resume',
+          'cc-stale',
+          '--operation-id',
+          'op-fallback',
+        ]);
+      } finally {
+        await rm(dir, { force: true, recursive: true });
+      }
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+        prompt: primaryPrompt,
+        resumeSessionId: 'cc-stale',
+      });
+      expect(mockSpawnAgent.mock.calls[1][0]).toMatchObject({ prompt: fallbackPrompt });
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+    });
+
+    it('does not consume the recovery prompt when native resume succeeds', async () => {
+      const dir = await mkdtemp(`${tmpdir()}/hetero-resume-primary-`);
+      const file = path.join(dir, 'input.json');
+      const primaryPrompt = [{ text: 'continue', type: 'text' }];
+      await writeFile(
+        file,
+        JSON.stringify({
+          content: primaryPrompt,
+          resumeFallback: [{ text: 'previous conversation', type: 'text' }, ...primaryPrompt],
+        }),
+      );
+      mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: 0 }));
+
+      try {
+        await runCmd([
+          'hetero',
+          'exec',
+          '--type',
+          'codex',
+          '--input-json',
+          file,
+          '--resume',
+          'thread-existing',
+        ]);
+      } finally {
+        await rm(dir, { force: true, recursive: true });
+      }
+
+      expect(mockSpawnAgent).toHaveBeenCalledOnce();
+      expect(mockSpawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: primaryPrompt,
+          resumeSessionId: 'thread-existing',
+        }),
+      );
+    });
+
     it('retries without --resume when the error stream event indicates the session is gone', async () => {
       // First spawn: exits non-zero, emits a resume-not-found error event
       const resumeNotFoundEvent = {
@@ -902,6 +1296,84 @@ describe('hetero exec command', () => {
       expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
       expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
       expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('retries a missing Grok ACP session from its structured filesystem error', async () => {
+      const missingSessionEvent = {
+        data: {
+          agentType: 'grok-build',
+          details: {
+            code: -32_603,
+            data: { code: 'FS_NOT_FOUND', detail: 'missing session' },
+            method: 'session/load',
+          },
+          message: 'Path not found.',
+        },
+        operationId: 'op-grok-resume',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [missingSessionEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'grok-build',
+        '--prompt',
+        'continue',
+        '--resume',
+        'missing-session',
+        '--operation-id',
+        'op-grok-resume',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+        resumeSessionId: 'missing-session',
+      });
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('does not retry a Grok filesystem error from a request other than session/load', async () => {
+      const promptErrorEvent = {
+        data: {
+          agentType: 'grok-build',
+          details: {
+            code: -32_603,
+            data: { code: 'FS_NOT_FOUND', detail: 'missing prompt file' },
+            method: 'session/prompt',
+          },
+          message: 'Path not found.',
+        },
+        operationId: 'op-grok-prompt-error',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent.mockReturnValueOnce(
+        createFakeHandle({ events: [promptErrorEvent], exitCode: 1 }),
+      );
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'grok-build',
+        '--prompt',
+        'continue',
+        '--resume',
+        'valid-session',
+        '--operation-id',
+        'op-grok-prompt-error',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
     it('retries without --resume when the error indicates context overflow', async () => {

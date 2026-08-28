@@ -63,6 +63,21 @@ export enum SortType {
   Desc = 'desc',
 }
 
+/**
+ * How a resource came to exist, as the explorer lets the user narrow it.
+ * Reads `files.source`, which is NULL for everything a human put there.
+ *
+ * `Acceptance` is the one value that widens the result set rather than
+ * narrowing it: verification evidence is hidden from every listing by default
+ * (`LIBRARY_HIDDEN_FILE_SOURCES`) and only comes back when explicitly asked for.
+ */
+export enum ResourceSourceFilter {
+  Acceptance = 'acceptance',
+  All = 'all',
+  Generated = 'generated',
+  Uploaded = 'uploaded',
+}
+
 export const QueryFileListSchema = z.object({
   category: z.string().optional(),
   knowledgeBaseId: z.string().optional(),
@@ -73,6 +88,11 @@ export const QueryFileListSchema = z.object({
   showFilesInKnowledgeBase: z.boolean().default(false),
   sortType: z.enum(['desc', 'asc']).optional(),
   sorter: z.enum(['createdAt', 'size']).optional(),
+  /**
+   * Origin narrowing driven by the explorer's source filter. Absent / `all`
+   * keeps the historical pool (everything except hidden sources).
+   */
+  sourceFilter: z.nativeEnum(ResourceSourceFilter).optional(),
   /**
    * Workspace-mode visibility filter. Absent / undefined means "all"
    * (already ownership-filtered by the server). `'private'` narrows to
@@ -94,6 +114,7 @@ export interface QueryFileListParams {
   showFilesInKnowledgeBase?: boolean;
   sorter?: string;
   sortType?: string;
+  sourceFilter?: ResourceSourceFilter;
   visibility?: 'private' | 'public';
 }
 

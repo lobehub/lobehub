@@ -1,5 +1,3 @@
-import { memo } from 'react';
-
-const PageMetaBar = memo(() => null);
+const PageMetaBar = () => null;
 
 export default PageMetaBar;

@@ -13,6 +13,10 @@ const globalStoreMock = vi.hoisted(() => ({
   toggleRightPanel: vi.fn(),
 }));
 
+const deviceStoreMock = vi.hoisted(() => ({
+  devices: [] as { deviceId: string; online: boolean }[],
+}));
+
 const gitHookMocks = vi.hoisted(() => ({
   mutateAheadBehind: vi.fn(),
   mutateBranch: vi.fn(),
@@ -34,7 +38,19 @@ vi.mock('../WorktreeSwitcher', () => ({
   default: () => <span data-testid="worktree-switcher" />,
 }));
 
+vi.mock('../StaleGitSnapshot', () => ({
+  default: ({ git }: { git: { branch?: string } }) => (
+    <span data-branch={git.branch} data-testid="stale-git-snapshot" />
+  ),
+}));
+
 vi.mock('@/store/device', () => ({
+  deviceSelectors: {
+    getDeviceById: (deviceId?: string) => (state: typeof deviceStoreMock) =>
+      state.devices.find((d) => d.deviceId === deviceId),
+  },
+  useDeviceStore: (selector: (state: typeof deviceStoreMock) => unknown) =>
+    selector(deviceStoreMock),
   useFetchGitAheadBehind: gitHookMocks.useFetchGitAheadBehind,
   useFetchGitBranch: gitHookMocks.useFetchGitBranch,
   useFetchGitLinkedPR: gitHookMocks.useFetchGitLinkedPR,
@@ -97,6 +113,7 @@ vi.mock('react-i18next', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  deviceStoreMock.devices = [{ deviceId: 'device-1', online: true }];
   globalStoreMock.status.showRightPanel = false;
   globalStoreMock.status.workingSidebarTab = 'resources';
 
@@ -144,6 +161,7 @@ describe('GitStatus', () => {
       'unstaged',
       undefined,
       'device-1',
+      true,
     );
     expect(screen.getByText('+3')).toBeInTheDocument();
     expect(screen.getByText('-1')).toBeInTheDocument();
@@ -177,6 +195,153 @@ describe('GitStatus', () => {
     // opening a topic must never mutate its stored branch/PR here.
     await waitFor(() => {
       expect(screen.getByText('#123')).toBeInTheDocument();
+    });
+  });
+
+  describe('deleted working directory', () => {
+    // The recorded worktree gets removed once its task is done, but the topic
+    // keeps pointing at it — the live branch probe then reads nothing and the
+    // whole cluster used to collapse, while the sidebar hover card (which reads
+    // the same persisted snapshot, no probe) still showed branch + PR.
+    const fallbackGit = {
+      activeWorktree: '/tmp/lobehub-wt-subtask',
+      branch: 'feat/task-list-subtask-nesting',
+      isWorktree: true,
+    };
+
+    beforeEach(() => {
+      // `getGitBranch` resolves to `{}` for a path it can't read — a SETTLED
+      // probe that found no branch, not a pending one.
+      gitHookMocks.useFetchGitBranch.mockReturnValue({
+        data: {},
+        mutate: gitHookMocks.mutateBranch,
+      });
+    });
+
+    it('hands off to the topic snapshot instead of collapsing', () => {
+      render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+          sourcePath="/repo"
+        />,
+      );
+
+      expect(screen.getByTestId('stale-git-snapshot')).toHaveAttribute(
+        'data-branch',
+        'feat/task-list-subtask-nesting',
+      );
+      expect(screen.queryByTestId('worktree-switcher')).not.toBeInTheDocument();
+    });
+
+    it('skips the linked-PR lookup, which has no directory to run `gh` in', () => {
+      render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      expect(gitHookMocks.useFetchGitLinkedPR).toHaveBeenCalledWith(
+        undefined,
+        '/tmp/lobehub-wt-subtask',
+        undefined,
+        true,
+      );
+    });
+
+    it('stays empty while the probe is still pending, so no stale flash', () => {
+      gitHookMocks.useFetchGitBranch.mockReturnValue({
+        data: undefined,
+        mutate: gitHookMocks.mutateBranch,
+      });
+
+      const { container } = render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing when the topic carries no git snapshot either', () => {
+      const { container } = render(
+        <GitStatus isGithub agentId="agent-1" path="/tmp/lobehub-wt-subtask" />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('stops probing the directory it just declared gone', () => {
+      render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      // Left enabled, the diff poll alone keeps shelling out to git every 10s
+      // against a path that cannot be read.
+      expect(gitHookMocks.useReviewPatches).toHaveBeenCalledWith(
+        '/tmp/lobehub-wt-subtask',
+        'unstaged',
+        undefined,
+        undefined,
+        false,
+      );
+      expect(gitHookMocks.useFetchGitAheadBehind).toHaveBeenCalledWith(undefined, undefined);
+      expect(gitHookMocks.useFetchGitWorktrees).toHaveBeenCalledWith(undefined, undefined);
+    });
+
+    // A remote device that is offline answers `undefined`, which the service
+    // normalizes into the same empty shape a deleted directory produces. Reading
+    // that as "gone" would tell the user a live worktree no longer exists — and
+    // offer to drop the override pointing at it.
+    it('does not read an unreachable device as a deleted directory', () => {
+      deviceStoreMock.devices = [{ deviceId: 'device-1', online: false }];
+
+      const { container } = render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          deviceId="device-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+      // …and the reads stay enabled, so the cluster comes back on reconnect.
+      expect(gitHookMocks.useFetchGitWorktrees).toHaveBeenCalledWith(
+        'device-1',
+        '/tmp/lobehub-wt-subtask',
+      );
+    });
+
+    it('hands off once that same device is reachable again', () => {
+      deviceStoreMock.devices = [{ deviceId: 'device-1', online: true }];
+
+      render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          deviceId="device-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      expect(screen.getByTestId('stale-git-snapshot')).toBeInTheDocument();
     });
   });
 

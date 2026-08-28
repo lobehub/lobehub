@@ -1,8 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } from 'lucide-react';
 import qs from 'query-string';
@@ -29,7 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const data = useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
@@ -78,14 +77,14 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     try {
       if (isFavorited) {
         await socialService.removeFavorite('agent-group', identifier);
-        message.success(t('assistant.unfavoriteSuccess'));
+        toast.success(t('assistant.unfavoriteSuccess'));
       } else {
         await socialService.addFavorite('agent-group', identifier);
-        message.success(t('assistant.favoriteSuccess'));
+        toast.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
     } catch {
-      message.error(t('assistant.favoriteFailed'));
+      toast.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
     }
@@ -173,7 +172,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             <PublishedTime className={styles.time} date={createdAt as string} />
             <GroupAgentForkTag />
             {!!forkCount && forkCount > 0 && (
-              <Tag bordered={false} color="default" icon={<Icon icon={GitBranchIcon} />}>
+              <Tag color="default" icon={<Icon icon={GitBranchIcon} />}>
                 {forkCount} {t('fork.forks')}
               </Tag>
             )}

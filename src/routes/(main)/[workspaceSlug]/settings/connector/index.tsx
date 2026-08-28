@@ -1,6 +1,6 @@
 'use client';
 
-import { ToolSettings } from '@/routes/(main)/settings/skill';
+import { ToolSettings } from '@/features/Settings/skill';
 
 const WorkspaceConnectorSetting = () => <ToolSettings viewMode="connector" />;
 

@@ -36,8 +36,8 @@ const ModelDetailPage = memo<ModelDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileModelPage = memo<{ mobile?: boolean }>(() => {
+export const MobileModelPage = (_props: { mobile?: boolean }) => {
   return <ModelDetailPage mobile={true} />;
-});
+};
 
 export default ModelDetailPage;

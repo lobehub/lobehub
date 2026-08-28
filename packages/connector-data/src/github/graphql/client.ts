@@ -122,47 +122,42 @@ export const execute = async <Response, Variables extends Record<string, unknown
   transport,
   variables,
 }: ExecuteOptions<Response, Variables>): Promise<Response> =>
-  withConnectorRetry(
-    async () => {
-      let response: unknown;
+  withConnectorRetry(async () => {
+    let response: unknown;
 
-      try {
-        response = await transport.request({ operation, query, variables });
-      } catch (error) {
-        const errors = getGraphQLErrors(error);
-        const status = getErrorStatus(error);
-        log('GraphQL request failed: %O', {
-          errorName: getErrorName(error),
-          ...(errors === undefined ? {} : { errors }),
-          operation,
-          ...(status === undefined ? {} : { status }),
-        });
-        throw error;
-      }
-
-      const result = schema.safeParse(response);
-      if (result.success) return result.data;
-
-      log('GraphQL response validation failed: %O', {
-        issues: result.error.issues.slice(0, MAX_ISSUES).map(({ code, path }) => ({
-          code,
-          path: getIssuePath(path),
-        })),
+    try {
+      response = await transport.request({ operation, query, variables });
+    } catch (error) {
+      const errors = getGraphQLErrors(error);
+      const status = getErrorStatus(error);
+      log('GraphQL request failed: %O', {
+        errorName: getErrorName(error),
+        ...(errors === undefined ? {} : { errors }),
         operation,
+        ...(status === undefined ? {} : { status }),
       });
-      throw new ConnectorDataError({
-        code: 'github_response_invalid',
-        operation,
-        provider: 'github',
-        retryable: false,
-      });
-    },
-    {
-      code: 'github_request_failed',
+      throw error;
+    }
+
+    const result = schema.safeParse(response);
+    if (result.success) return result.data;
+
+    log('GraphQL response validation failed: %O', {
+      issues: result.error.issues.slice(0, MAX_ISSUES).map(({ code, path }) => ({
+        code,
+        path: getIssuePath(path),
+      })),
+      operation,
+    });
+    throw new ConnectorDataError({
+      cause: result.error,
+      code: 'github_response_invalid',
+      message: result.error.message,
       operation,
       provider: 'github',
-    },
-  );
+      retryable: false,
+    });
+  });
 
 /** @internal */
 export const createOctokitTransport = (accessToken: string): GitHubConnectorTransport => {

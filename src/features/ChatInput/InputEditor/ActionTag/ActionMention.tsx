@@ -1,13 +1,14 @@
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cx } from 'antd-style';
-import { TerminalIcon, WrenchIcon } from 'lucide-react';
+import { TargetIcon, TerminalIcon, WrenchIcon } from 'lucide-react';
 import type { FC, MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { styles } from './style';
-import type { ActionTagCategory } from './types';
+import type { ActionTagCategory, ActionTagType } from './types';
+import { GOAL_COMMAND_TYPE } from './types';
 
 export interface ActionMentionProps {
   category: ActionTagCategory;
@@ -25,6 +26,11 @@ export interface ActionMentionProps {
   description?: string;
   label: string;
   onClick?: () => void;
+  /**
+   * The tag's own type, used only to pick a more specific icon than the
+   * category's default (a goal is not a terminal command).
+   */
+  type?: ActionTagType;
 }
 
 const CATEGORY_ICON: Record<ActionTagCategory, FC<any>> = {
@@ -33,6 +39,11 @@ const CATEGORY_ICON: Record<ActionTagCategory, FC<any>> = {
   projectSkill: SkillsIcon,
   skill: SkillsIcon,
   tool: WrenchIcon,
+};
+
+// Per-type icon overrides, applied before the category default.
+const TYPE_ICON: Record<string, FC<any>> = {
+  [GOAL_COMMAND_TYPE]: TargetIcon,
 };
 
 const CATEGORY_I18N_KEY: Record<ActionTagCategory, string> = {
@@ -63,12 +74,12 @@ const CATEGORY_STYLE_KEY: Record<
 };
 
 export const ActionMention = memo<ActionMentionProps>(
-  ({ category, label, description, clickable, onClick }) => {
+  ({ category, label, description, clickable, onClick, type }) => {
     const { t } = useTranslation('editor');
 
     const categoryLabel = t(CATEGORY_I18N_KEY[category] as any);
     const categoryDescription = t(CATEGORY_TOOLTIP_I18N_KEY[category] as any);
-    const IconComponent = CATEGORY_ICON[category];
+    const IconComponent = (type && TYPE_ICON[type]) || CATEGORY_ICON[category];
     const styleKey = CATEGORY_STYLE_KEY[category];
 
     const isClickable = clickable ?? !!onClick;

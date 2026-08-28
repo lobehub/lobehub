@@ -2,16 +2,20 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useConversationStoreApi } from './store';
+import { createEphemeralResetState } from './store/initialState';
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
+  createComposerTarget,
+  type MessagesChangeMeta,
   type OperationState,
 } from './types';
 
@@ -22,6 +26,7 @@ export interface StoreUpdaterProps {
    * Actions bar configuration by message type
    */
   actionsBar?: ActionsBarConfig;
+  composerTarget?: ComposerTarget;
   context: ConversationContext;
   /**
    * Whether external messages have been initialized
@@ -35,7 +40,11 @@ export interface StoreUpdaterProps {
   /**
    * Callback when messages are fetched or changed internally
    */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
+  onMessagesChange?: (
+    messages: UIChatMessage[],
+    context: ConversationContext,
+    meta?: MessagesChangeMeta,
+  ) => void;
   /**
    * External operation state (from ChatStore)
    */
@@ -49,6 +58,7 @@ export interface StoreUpdaterProps {
 const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     actionsBar,
+    composerTarget,
     context,
     hasInitMessages,
     hooks,
@@ -61,8 +71,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const useStoreUpdater = createStoreUpdater(storeApi);
     const prevMessagesRef = useRef<UIChatMessage[] | undefined>(undefined);
     const contextKey = messageMapKey(context);
+    const resolvedComposerTarget = useMemo(
+      () => composerTarget ?? createComposerTarget(contextKey),
+      [composerTarget, contextKey],
+    );
 
     useStoreUpdater('actionsBar', actionsBar);
+    useStoreUpdater('composerTarget', resolvedComposerTarget);
     useStoreUpdater('context', context);
     useStoreUpdater('hooks', hooks!);
     useStoreUpdater('onMessagesChange', onMessagesChange);
@@ -84,15 +99,19 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         // Update context first so replaceMessages uses the correct context
         // when calling onMessagesChange (otherwise writes to the old topic key)
         storeApi.setState({
+          ...createEphemeralResetState(),
           context,
           dbMessages: messages ?? [],
           displayMessages: [],
           messagesInit: false,
         });
 
-        // If messages are already available, sync them immediately
+        // If messages are already available, sync them immediately.
+        // skipOnMessagesChange: this is external → internal sync; echoing back
+        // through onMessagesChange would re-write the SWR cache with the (possibly
+        // partial) bucket and discard an in-flight switch-time revalidation.
         if (messages) {
-          storeApi.getState().replaceMessages(messages);
+          storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
           storeApi.setState({ messagesInit: true });
         }
       }
@@ -118,7 +137,10 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         );
 
         prevMessagesRef.current = messages;
-        storeApi.getState().replaceMessages(messages);
+        // External → internal sync: never echo back through onMessagesChange
+        // (would poison the SWR cache with the possibly-partial bucket and
+        // discard an in-flight revalidation — see DataAction.replaceMessages).
+        storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
       }
     }, [messages, storeApi, contextKey]);
 

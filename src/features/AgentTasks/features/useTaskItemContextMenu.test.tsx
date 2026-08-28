@@ -1,11 +1,14 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { canGoNative } from '@/libs/contextMenu/canGoNative';
+
 import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
 const mocks = vi.hoisted(() => ({
+  closeContextMenu: vi.fn(),
   copyToClipboard: vi.fn(),
   deleteTask: vi.fn(),
   messageSuccess: vi.fn(),
@@ -13,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   refreshTaskList: vi.fn(),
   runTask: vi.fn(),
   transferItems: [
-    { key: 'transfer-task', label: 'Transfer to...' },
+    { key: 'transfer-task', label: 'Move to…' },
     { key: 'copy-task', label: 'Copy to...' },
   ],
   updateTask: vi.fn(),
@@ -21,11 +24,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  closeContextMenu: vi.fn(),
   copyToClipboard: mocks.copyToClipboard,
   Flexbox: ({ children }: { children?: ReactNode }) => React.createElement('div', {}, children),
   Icon: ({ icon: Icon }: { icon?: React.ComponentType }) =>
     Icon ? React.createElement(Icon) : React.createElement('span'),
+}));
+
+vi.mock('@/libs/contextMenu', () => ({
+  closeContextMenu: mocks.closeContextMenu,
 }));
 
 vi.mock('antd', () => ({
@@ -131,5 +137,77 @@ describe('useTaskItemContextMenu', () => {
     });
 
     expect(mocks.copyToClipboard).toHaveBeenCalledWith('https://example.com/task/T-1');
+  });
+
+  it('runs a member-assigned task without replacing its assignee with the inbox agent', async () => {
+    const { result } = renderHook(() =>
+      useTaskItemContextMenu({
+        assigneeUserId: 'user-1',
+        identifier: 'T-1',
+        priority: 0,
+        status: 'backlog',
+      }),
+    );
+
+    const runNowItem = result.current.items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'runNow',
+    );
+
+    await (runNowItem as { onClick: (info: unknown) => Promise<void> }).onClick({
+      domEvent: { stopPropagation: vi.fn() },
+    });
+
+    expect(mocks.updateTask).not.toHaveBeenCalled();
+    expect(mocks.runTask).toHaveBeenCalledWith('T-1');
+  });
+
+  it('routes the keyboard-shortcut submenu selection through @/libs/contextMenu', () => {
+    const { result } = renderHook(() =>
+      useTaskItemContextMenu({
+        identifier: 'T-1',
+        priority: 0,
+        status: 'backlog',
+      }),
+    );
+
+    act(() => {
+      result.current.onContextMenu();
+    });
+
+    const statusItem = result.current.items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'status',
+    ) as { onTitleMouseEnter?: () => void };
+
+    act(() => {
+      statusItem.onTitleMouseEnter?.();
+    });
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
+    });
+
+    expect(mocks.closeContextMenu).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('menu ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('must stay web because the status/priority submenus depend on number-shortcut extra badges', () => {
+    const { result } = renderHook(() =>
+      useTaskItemContextMenu({
+        identifier: 'T-1',
+        priority: 0,
+        status: 'backlog',
+      }),
+    );
+
+    expect(canGoNative(result.current.items)).toBe(false);
+    expect({
+      menu: 'AgentTasks/taskItem',
+      native: canGoNative(result.current.items),
+    }).toMatchSnapshot();
   });
 });

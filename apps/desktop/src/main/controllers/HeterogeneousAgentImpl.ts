@@ -1,0 +1,3037 @@
+import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { existsSync, unlinkSync } from 'node:fs';
+import { access, appendFile, mkdir, unlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import type { Readable, Writable } from 'node:stream';
+import { finished as streamFinished } from 'node:stream/promises';
+
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
+  HeterogeneousAgentSessionError,
+  HeterogeneousCliAgentType,
+} from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
+import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
+import {
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  formatHeterogeneousProviderBindingError,
+  getHeterogeneousAgentConfigOrThrow,
+  isHeterogeneousAgentAuthRequired,
+  resolveHeterogeneousAgentCommand,
+  resolveHeterogeneousProviderBinding,
+} from '@lobechat/heterogeneous-agents';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import type {
+  LobeBuiltinMcpServer,
+  McpToolResult,
+} from '@lobechat/heterogeneous-agents/builtinMcp';
+import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
+import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import {
+  buildHeteroExecStdinPayload,
+  buildHeterogeneousPrompt,
+} from '@lobechat/heterogeneous-agents/protocol';
+import {
+  CLAUDE_CODE_QUOTA_FRESH_MS,
+  createQuotaCacheKey,
+  fetchClaudeCodeQuota,
+  QuotaSnapshotCache,
+  readClaudeCodeIdentity,
+} from '@lobechat/heterogeneous-agents/quota-sampler';
+import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
+import {
+  AcpRpcResponseError,
+  AgentStreamPipeline,
+  buildAgentInput,
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  buildCursorAcpArgs,
+  buildCursorAcpPrompt,
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
+  ClaudeAgentSdkSession,
+  CodexAppServerClient,
+  CodexThreadSession,
+  createFileStoreImageUploader,
+  CursorAcpSession,
+  ensureClaudeCodeResumeTranscript,
+  getCodexAppServerUnsupportedArgs,
+  GrokAcpSession,
+  isCodexAppServerCompatibilityError,
+  isCursorAcpSessionNotFoundError,
+  readCodexSessionModel,
+  resolveCliSpawnPlan,
+  resolveCodexInitialModel,
+  TraeAcpSession,
+} from '@lobechat/heterogeneous-agents/spawn';
+import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
+import {
+  describeUnusableWorkingDirectory,
+  isSpawnableDirectory,
+  resolveHeteroSpawnCwd,
+} from '@lobechat/heterogeneous-agents/workingDirectory';
+import type {
+  HeterogeneousAgentModelCatalog,
+  HeterogeneousServerDefaultApiConfig,
+  HeteroSessionImportMessage,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
+import { app as electronApp, BrowserWindow } from 'electron';
+import { isPlainObject } from 'es-toolkit';
+import semver from 'semver';
+
+import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
+import type { App } from '@/core/App';
+import { detectHeterogeneousCliCommand } from '@/modules/binaries';
+import { resolveCliScript } from '@/modules/cliEmbedding';
+import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import {
+  consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
+  fetchCodexQuota,
+} from '@/modules/heterogeneousAgent/codexQuota';
+import {
+  createLambdaFileStorePort,
+  type RemoteServerAuth,
+} from '@/modules/heterogeneousAgent/fileStorePort';
+import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
+import {
+  gcHostedProviderBindingProfiles,
+  prepareHostedProviderBinding,
+  prepareHostedServerDefaultBinding,
+} from '@/modules/heterogeneousAgent/providerBindingHost';
+import {
+  beginServerDefaultOperation,
+  getProviderBindingRuntime,
+  getServerDefaultEndpoint,
+  settleServerDefaultOperation,
+} from '@/modules/heterogeneousAgent/providerBindingPort';
+import type {
+  HeterogeneousAgentBuildPlan,
+  HeterogeneousAgentImageAttachment,
+} from '@/modules/heterogeneousAgent/types';
+import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
+import { createLogger } from '@/utils/logger';
+
+import BrowserControlCtr from './BrowserControlCtr';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
+
+const logger = createLogger('controllers:HeterogeneousAgentCtr');
+
+// Anthropic auth env vars that must NOT be inherited from the desktop process
+// when spawning a local CLI agent. A developer with `ANTHROPIC_API_KEY` (or an
+// auth token / base url) exported in their shell would otherwise have it
+// forwarded to `claude`, which then switches from its own subscription login to
+// that key — an expired / wrong key surfaces as a baffling "Invalid API key"
+// and the run exits non-zero. Agents that genuinely want an API key still set
+// it through `session.env`, which is spread AFTER the inherited env below and
+// therefore wins.
+const STRIPPED_INHERITED_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+] as const;
+
+/**
+ * Inherited `process.env` with the Anthropic auth vars removed. Keep this pure
+ * and exported so the "never leak host Anthropic creds into the CLI" invariant
+ * can be unit-tested directly.
+ */
+export const buildInheritedSpawnEnv = (
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv => {
+  const env = { ...sourceEnv };
+  for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
+  return env;
+};
+
+const appendLoopbackNoProxy = (env: NodeJS.ProcessEnv): void => {
+  const entries = new Set(
+    [env.NO_PROXY, env.no_proxy]
+      .filter((value): value is string => !!value)
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  entries.add('127.0.0.1');
+  entries.add('localhost');
+  const noProxy = [...entries].join(',');
+  env.NO_PROXY = noProxy;
+  env.no_proxy = noProxy;
+};
+const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
+  /no conversation found/i,
+  /thread .*not found/i,
+  /conversation .*not found/i,
+  /resume.*not found/i,
+] as const;
+const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
+  /working directory/i,
+  /\bcwd\b/i,
+  /different directory/i,
+  /directory.*mismatch/i,
+] as const;
+
+/** Directory under appStoragePath for caching downloaded files */
+const FILE_CACHE_DIR = HETERO_AGENT_FILES_DIR;
+const CLI_TRACE_DIR = '.heerogeneous-tracing';
+const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
+const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
+const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WARN)\s+/;
+const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
+const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
+const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+
+const waitForHeteroSessionCompleteGrace = () =>
+  new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
+
+export const redactPromptArgs = (
+  args: string[],
+  agentType: HeterogeneousCliAgentType,
+): string[] => {
+  let redactNext = false;
+  const supportsShortPromptFlag = agentType === 'kimi-code';
+
+  return args.map((arg) => {
+    if (redactNext) {
+      redactNext = false;
+      return '[REDACTED]';
+    }
+
+    if (arg === '--prompt' || (supportsShortPromptFlag && arg === '-p')) {
+      redactNext = true;
+      return arg;
+    }
+
+    if (arg.startsWith('--prompt=')) return '--prompt=[REDACTED]';
+    if (supportsShortPromptFlag && arg.startsWith('-p=')) return '-p=[REDACTED]';
+
+    return arg;
+  });
+};
+
+// ─── IPC types ───
+
+interface StartSessionParams {
+  /** Agent type key (e.g., 'claude-code'). Defaults to 'claude-code'. */
+  agentType?: HeterogeneousCliAgentType;
+  /** Additional CLI arguments */
+  args?: string[];
+  /** Command to execute */
+  command: string;
+  /** Working directory */
+  cwd?: string;
+  /** Environment variables */
+  env?: Record<string, string>;
+  /** Protocol-native model selected after session setup (TRAE ACP only). */
+  initialModel?: string;
+  /** Credential-free LobeHub Provider reference. Desktop main resolves its secrets. */
+  providerBinding?: HeterogeneousProviderBindingReference;
+  /** Session ID to resume (for multi-turn) */
+  resumeSessionId?: string;
+  /** Run claude-code prompts through the Claude Agent SDK instead of CLI spawn (lab preference) */
+  useClaudeCodeSdk?: boolean;
+  /** Run Codex prompts through codex app-server instead of one-shot codex exec (lab preference) */
+  useCodexAppServer?: boolean;
+}
+
+export interface StartSessionResult {
+  providerBindingKey?: string;
+  sessionId: string;
+}
+
+/** Run identity the browser MCP tools need to reach the right in-app page. */
+interface BrowserRunBinding {
+  agentId?: string;
+  topicId?: string;
+}
+
+interface SendPromptParams {
+  /**
+   * Agent this run belongs to. Rides along to the renderer so it can tell
+   * whether revealing the browser panel would yank the user's view to a run
+   * they aren't watching.
+   */
+  agentId?: string;
+  /** Image attachments to include in the prompt (downloaded from url, cached by id) */
+  imageList?: HeterogeneousAgentImageAttachment[];
+  /**
+   * Renderer-side operation id stamped onto every emitted `AgentStreamEvent`.
+   * Required: producer-side conversion is the V3 contract — by the time events
+   * reach the renderer they must already carry the operation they belong to.
+   */
+  operationId: string;
+  prompt: string;
+  /**
+   * Prior conversation turns used to rebuild a Claude Code transcript that the
+   * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
+   * when resuming and the on-disk transcript is missing — see
+   * `ensureClaudeCodeResumeTranscript`. Without it, `--resume <staleId>` fails
+   * with "No conversation found with session ID".
+   */
+  resumeReplayMessages?: HeteroSessionImportMessage[];
+  sessionId: string;
+  /** Extra context injected before the user prompt without mutating the prompt text. */
+  systemContext?: string;
+  /**
+   * Topic this run belongs to. Binds the op to its in-app browser session
+   * (`topic:<topicId>`) so the browser MCP tools act on the right page.
+   *
+   * Not to be confused with `sessionId`, which is the CC/Codex agent session —
+   * a different namespace entirely.
+   */
+  topicId?: string;
+}
+
+interface CancelSessionParams {
+  sessionId: string;
+}
+
+interface SubmitInterventionParams {
+  cancelled?: boolean;
+  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
+  cancelReason?: 'timeout' | 'user_cancelled';
+  /** Operation id stamped on the request the renderer is responding to. */
+  operationId: string;
+  /** Structured user answer; ignored when `cancelled` is true. */
+  result?: unknown;
+  /** Correlation key carried on the original `agent_intervention_request`. */
+  toolCallId: string;
+}
+
+interface StopSessionParams {
+  sessionId: string;
+}
+
+interface GetSessionInfoParams {
+  sessionId: string;
+}
+
+interface GetCodexQuotaParams {
+  command?: string;
+  env?: Record<string, string>;
+  force?: boolean;
+}
+
+interface ConsumeCodexRateLimitResetCreditParams {
+  command?: string;
+  creditId?: string;
+  env?: Record<string, string>;
+  idempotencyKey: string;
+}
+
+interface GetClaudeCodeQuotaParams {
+  env?: Record<string, string>;
+  force?: boolean;
+}
+
+export interface SessionInfo {
+  agentSessionId?: string;
+}
+
+// ─── Internal session tracking ───
+
+interface AgentSession {
+  agentSessionId?: string;
+  agentType: HeterogeneousCliAgentType;
+  appServerSession?: CodexThreadSession;
+  args: string[];
+  /**
+   * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
+   * The `exit` handler uses this to route signal-induced non-zero exits through
+   * the `complete` broadcast instead of surfacing them as runtime errors —
+   * SIGINT(130) / SIGTERM(143) / SIGKILL(137) from our own kill paths are
+   * intentional, not agent failures.
+   */
+  cancelledByUs?: boolean;
+  codexAppServerFallback?: boolean;
+  command: string;
+  cursorAcpSession?: CursorAcpSession;
+  cwd?: string;
+  env?: Record<string, string>;
+  grokAcpSession?: GrokAcpSession;
+  hostedProviderBinding?: HostedProviderBinding;
+  model?: string;
+  modelSource?: string;
+  modelVerificationLastAttemptAt?: number;
+  modelVerificationLastAttemptSessionId?: string;
+  process?: ChildProcess;
+  /**
+   * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
+   * when the configured command is bare: detection can find the CLI through
+   * the login-shell PATH or a well-known install location (e.g. an app-bundled
+   * Codex CLI) that plain spawn() with the inherited env can't resolve.
+   */
+  resolvedCommandPath?: string;
+  /**
+   * PATH the preflight detector used to resolve `resolvedCommandPath`, set only
+   * when it fell back to the login-shell PATH. Merged into the child PATH at
+   * spawn so a `#!/usr/bin/env node` shim still finds its interpreter — the
+   * shim resolving in preflight doesn't guarantee `node` is on the leaner
+   * inherited PATH (Finder-launched Electron).
+   */
+  resolvedCommandSearchPath?: string;
+  resumeSessionId?: string;
+  sdkSession?: ClaudeAgentSdkSession;
+  /** Present iff the session runs on the server-default (LobeHub) binding. */
+  serverDefaultApiConfig?: HeterogeneousServerDefaultApiConfig;
+  serverOperationToken?: string;
+  sessionId: string;
+  traeAcpSession?: TraeAcpSession;
+  useClaudeCodeSdk?: boolean;
+  useCodexAppServer?: boolean;
+  verifiedModel?: string;
+  verifiedModelContextWindow?: number;
+  verifiedModelProvider?: string;
+  verifiedModelSessionId?: string;
+  verifiedModelSourceFile?: string;
+}
+
+type SessionErrorPayload = HeterogeneousAgentSessionError | string;
+
+interface CliTraceSession {
+  dir: string;
+  writeQueue: Promise<void>;
+}
+
+/**
+ * External Agent Controller — manages external agent CLI processes via Electron IPC.
+ *
+ * Agent-agnostic: delegates spawn-plan construction and stdout framing to a
+ * per-agent driver so Claude Code, Codex, and future CLIs can differ in
+ * prompt transport, resume semantics, and raw stream shape without turning
+ * this controller into a giant `switch`.
+ *
+ * Lifecycle: startSession → sendPrompt → (heteroAgentEvent broadcasts) → stopSession
+ */
+interface InterventionSlot {
+  bridge: AskUserBridge;
+  /** Resolves once bridge.events() iterator ends (after `cancelAll`). */
+  pumpDone?: Promise<void>;
+  /** Path to the per-op temp `mcp.json` we wrote for `--mcp-config`. */
+  tmpConfigPath?: string;
+}
+
+export default class HeterogeneousAgentCtr {
+  /**
+   * Remote-server credentials for the tool_result image upload.
+   *
+   * Injected by the eager `HeterogeneousAgentCtr` wrapper rather than resolved
+   * here: this file is a deferred chunk, and reaching back into the App's
+   * controller registry from it is exactly what broke — the lookup resolved to
+   * `undefined`, and the resulting TypeError escaped as an unhandled rejection
+   * that killed the main process. The fallback keeps standalone construction
+   * (tests, future call sites) working and never throws.
+   */
+  private readonly remoteServerAuth: RemoteServerAuth;
+
+  constructor(
+    public app: App,
+    remoteServerAuth?: RemoteServerAuth,
+  ) {
+    this.remoteServerAuth = remoteServerAuth ?? {
+      getAccessToken: async () => (await this.remoteServerConfigCtr?.getAccessToken()) ?? null,
+      getServerUrl: async () => (await this.remoteServerConfigCtr?.getRemoteServerUrl()) ?? null,
+    };
+  }
+
+  private sessions = new Map<string, AgentSession>();
+  /**
+   * Per-operation AskUserQuestion bridge state. Keyed by `operationId` so the
+   * `submitIntervention` IPC can route an answer to the right pending MCP
+   * handler regardless of which `sessionId` it belongs to (one session can
+   * fire many ops over its lifetime).
+   */
+  private opIdToIntervention = new Map<string, InterventionSlot>();
+  /**
+   * Op → run identity for browser MCP tool session resolution. The main process
+   * otherwise has no idea which topic an operation belongs to, and the browser
+   * session is keyed by topic (`topic:<topicId>`).
+   */
+  private opIdToBrowserBinding = new Map<string, BrowserRunBinding>();
+  /** Lazy single MCP server, started on first claude-code prompt. */
+  private builtinMcpServer?: LobeBuiltinMcpServer;
+  private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
+  /** One lazy, long-lived native Codex app-server connection shared by thread sessions. */
+  private codexAppServerClient?: CodexAppServerClient;
+  // Fresh window sits under the renderer's 2-minute auto-refresh so each
+  // scheduled poll reaches the usage API instead of a cache echo.
+  private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
+    freshMs: CLAUDE_CODE_QUOTA_FRESH_MS,
+  });
+  private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
+
+  /**
+   * Typed as optional on purpose: a deferred chunk cannot assume the registry
+   * hands back the controller it asks for.
+   */
+  private get remoteServerConfigCtr(): RemoteServerConfigCtr | undefined {
+    return this.app.getController(RemoteServerConfigCtr);
+  }
+
+  /**
+   * Uploads a base64 tool_result image (CC `Read` on an image file) to the file
+   * store, so the persisted event carries a `{ fileId, url }` reference instead
+   * of heavy base64. Mirrors what `lh hetero exec` does for the gateway path.
+   */
+  private uploadResultImage = createFileStoreImageUploader(() =>
+    createLambdaFileStorePort(this.remoteServerAuth),
+  );
+
+  private resolveSessionCommand(session: AgentSession): string {
+    return resolveHeterogeneousAgentCommand(session.agentType, session.command);
+  }
+
+  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentCliNotFoundError({
+      agentType: session.agentType,
+      command: session.command,
+    });
+  }
+
+  private resolveSessionWorkingDirectory(session: AgentSession): string {
+    return session.cwd || electronApp.getPath('desktop');
+  }
+
+  private buildWorkingDirectoryMissingError(
+    session: AgentSession,
+    workingDirectory: string,
+  ): HeterogeneousAgentSessionError {
+    return {
+      agentType: session.agentType,
+      code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
+      command: this.resolveSessionCommand(session),
+      message: describeUnusableWorkingDirectory(workingDirectory),
+      workingDirectory,
+    };
+  }
+
+  private buildCliAuthRequiredError(
+    session: AgentSession,
+    stderr: string,
+  ): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentAuthRequiredError({
+      agentType: session.agentType,
+      command: session.command,
+      stderr,
+    });
+  }
+
+  private getErrorMessage(error: unknown): string | undefined {
+    return typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === 'object' &&
+            error &&
+            'message' in error &&
+            typeof error.message === 'string'
+          ? error.message
+          : undefined;
+  }
+
+  private buildCodexResumeError(
+    code:
+      | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+      | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+    stderr: string,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError {
+    const message =
+      code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+        ? 'The saved Codex thread can only be resumed from its original working directory.'
+        : 'The saved Codex thread could not be found, so it can no longer be resumed.';
+
+    return {
+      agentType: 'codex',
+      code,
+      command: session.command,
+      message,
+      resumeSessionId: session.resumeSessionId,
+      stderr,
+      workingDirectory: session.cwd,
+    };
+  }
+
+  private getCodexResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (session.agentType !== 'codex' || !session.resumeSessionId) return;
+
+    const message = this.getErrorMessage(error);
+
+    if (!message) return;
+
+    if (CODEX_RESUME_CWD_MISMATCH_PATTERNS.some((pattern) => pattern.test(message))) {
+      return this.buildCodexResumeError(
+        HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch,
+        message,
+        session,
+      );
+    }
+
+    if (CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(message))) {
+      return this.buildCodexResumeError(
+        HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message,
+        session,
+      );
+    }
+  }
+
+  private getGrokResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'grok-build' ||
+      !session.resumeSessionId ||
+      !(error instanceof AcpRpcResponseError) ||
+      error.method !== 'session/load' ||
+      !isPlainObject(error.rpcError.data) ||
+      error.rpcError.data.code !== 'FS_NOT_FOUND'
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'grok-build',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message: 'The saved Grok Build session could not be found, so it can no longer be resumed.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
+  private getCursorResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'cursor' ||
+      !session.resumeSessionId ||
+      !isCursorAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'cursor',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        message: error.rpcError.message,
+      },
+      message:
+        'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
+  private getCliAuthRequiredError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    const message = this.getErrorMessage(error);
+
+    if (!message) return;
+    if (!isHeterogeneousAgentAuthRequired(session.agentType, message)) return;
+
+    return this.buildCliAuthRequiredError(session, message);
+  }
+
+  private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
+      const workingDirectory = this.resolveSessionWorkingDirectory(session);
+      if (!isSpawnableDirectory(workingDirectory)) {
+        return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+      }
+
+      const cliMissingError = this.buildCliMissingError(session);
+      if (cliMissingError) return cliMissingError;
+    }
+
+    const resumeError =
+      this.getCodexResumeError(error, session) ??
+      this.getGrokResumeError(error, session) ??
+      this.getCursorResumeError(error, session);
+    if (resumeError) return resumeError;
+
+    const authRequiredError = this.getCliAuthRequiredError(error, session);
+    if (authRequiredError) return authRequiredError;
+
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  private getRelevantCodexStderr(stderr: string): string {
+    const keptLines: string[] = [];
+    let droppingWarnBlock = false;
+
+    for (const line of stderr.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === CODEX_STDERR_STATUS_LINE) {
+        continue;
+      }
+
+      if (CODEX_WARN_LOG_PATTERN.test(trimmed)) {
+        droppingWarnBlock = true;
+        continue;
+      }
+
+      if (CODEX_LOG_PATTERN.test(trimmed)) {
+        droppingWarnBlock = false;
+        keptLines.push(line);
+        continue;
+      }
+
+      if (droppingWarnBlock && !CLI_ERROR_LINE_PATTERN.test(trimmed)) {
+        continue;
+      }
+
+      droppingWarnBlock = false;
+      keptLines.push(line);
+    }
+
+    return keptLines.join('\n').trim();
+  }
+
+  private getExitErrorMessage(
+    code: number | null,
+    session: AgentSession,
+    stderrOutput: string,
+  ): string {
+    const relevantStderr =
+      session.agentType === 'codex' ? this.getRelevantCodexStderr(stderrOutput) : stderrOutput;
+
+    return relevantStderr || `Agent exited with code ${code}`;
+  }
+
+  private async getSpawnPreflightError(
+    session: AgentSession,
+  ): Promise<HeterogeneousAgentSessionError | undefined> {
+    const workingDirectory = this.resolveSessionWorkingDirectory(session);
+    if (!isSpawnableDirectory(workingDirectory)) {
+      return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+    }
+
+    const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
+
+    const command = this.resolveSessionCommand(session);
+    const status =
+      command === defaultCommand
+        ? await this.app.binaryManager?.detect?.(defaultCommand, true)
+        : await detectHeterogeneousCliCommand(session.agentType, command);
+
+    if (!status || status.available) {
+      if (
+        session.agentType === 'kimi-code' &&
+        session.hostedProviderBinding &&
+        status?.version &&
+        semver.lt(status.version, '0.6.0')
+      ) {
+        return {
+          agentType: session.agentType,
+          code: 'cli_version_unsupported',
+          command,
+          message: `Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
+          workingDirectory,
+        };
+      }
+
+      // Spawn through the detector-resolved absolute path when the configured
+      // command is bare — detection may have located the CLI somewhere plain
+      // spawn() can't (login-shell PATH, app-bundled Codex CLI, …).
+      const useResolvedPath = Boolean(status?.path) && !command.includes(path.sep);
+      session.resolvedCommandPath = useResolvedPath ? status!.path : undefined;
+      // Carry the login-shell PATH the detector resolved through, so a
+      // `#!/usr/bin/env node` shim spawned by absolute path still finds `node`.
+      session.resolvedCommandSearchPath = useResolvedPath ? status!.resolvedPathEnv : undefined;
+      return;
+    }
+
+    return this.buildCliMissingError(session);
+  }
+
+  /**
+   * Global env override (`LOBE_CLAUDE_CODE_SDK`) for the SDK runtime; the
+   * per-user Labs toggle arrives per session as `session.useClaudeCodeSdk`.
+   */
+  private get isClaudeCodeSdkLabEnabled(): boolean {
+    return HETERO_RUNTIME_LAB_ENABLED_VALUES.has(
+      String(process.env.LOBE_CLAUDE_CODE_SDK ?? '').toLowerCase(),
+    );
+  }
+
+  /** Environment override for development and automated app-server verification. */
+  private get isCodexAppServerLabEnabled(): boolean {
+    return HETERO_RUNTIME_LAB_ENABLED_VALUES.has(
+      String(process.env.LOBE_CODEX_APP_SERVER ?? '').toLowerCase(),
+    );
+  }
+
+  private buildSessionSpawnEnv(session: AgentSession): NodeJS.ProcessEnv {
+    // Forward the user's proxy settings to the CLI/SDK subprocess. The
+    // main-process undici dispatcher doesn't reach child processes — they need
+    // env vars.
+    const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
+    const inheritedEnv = buildInheritedSpawnEnv();
+    // When preflight resolved the CLI via the login-shell PATH, spawn with
+    // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
+    // shim finds its interpreter. `session.env` still wins if it sets PATH.
+    if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
+    const env: NodeJS.ProcessEnv = {
+      ...inheritedEnv,
+      ...proxyEnv,
+      ...(session.agentType === 'codebuddy'
+        ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' }
+        : {}),
+      ...session.env,
+    };
+    if (session.serverOperationToken) {
+      if (session.agentType === 'claude-code')
+        env.ANTHROPIC_AUTH_TOKEN = session.serverOperationToken;
+      if (session.agentType === 'codex') env.LOBEHUB_HETERO_TOKEN = session.serverOperationToken;
+    }
+    if (
+      session.agentType === 'kimi-code' &&
+      session.hostedProviderBinding &&
+      env.KIMI_MODEL_BASE_URL?.startsWith('http://127.0.0.1:')
+    ) {
+      appendLoopbackNoProxy(env);
+    }
+    if (session.agentType === 'grok-build' && session.hostedProviderBinding) {
+      // Empty XAI_API_KEY values still count as configured in Grok and can
+      // trigger an empty-key probe. Remove both current and legacy inherited
+      // credentials so the managed model's env_key is the only BYOK source.
+      delete env.GROK_CODE_XAI_API_KEY;
+      delete env.XAI_API_KEY;
+    }
+    return env;
+  }
+
+  private get shouldTraceCliOutput(): boolean {
+    if (process.env.NODE_ENV === 'test') return false;
+    // Dev builds always trace. Packaged builds trace only when the user has
+    // flipped the Help-menu developer toggle — so production issues can be
+    // captured on demand without polluting normal runs.
+    if (!electronApp.isPackaged) return true;
+    return this.app.storeManager.get('heteroTracingEnabled', false);
+  }
+
+  /**
+   * Root directory for CLI trace sessions.
+   *
+   * When the user has explicitly opted in via the `heteroTracingEnabled`
+   * Help-menu toggle, centralize traces under the app storage dir
+   * (`<appStoragePath>/heteroAgent/tracing`) — this is the only path packaged
+   * builds ever trace through, and it keeps traces out of the user's real
+   * project directory while staying reachable from one stable Help-menu entry.
+   *
+   * Otherwise (a plain dev run with the toggle off) keep writing into the
+   * working directory (`cwd/.heerogeneous-tracing`) — devs expect traces to
+   * show up alongside the repo they're running in.
+   */
+  private resolveTraceRootDir(cwd: string): string {
+    if (this.app.storeManager.get('heteroTracingEnabled', false)) {
+      return path.join(this.app.appStoragePath, HETERO_AGENT_TRACING_DIR);
+    }
+    return path.join(cwd, CLI_TRACE_DIR);
+  }
+
+  private formatTraceTimestamp(date: Date): string {
+    const pad = (value: number) => value.toString().padStart(2, '0');
+
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      '-',
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join('');
+  }
+
+  private sanitizeTracePathSegment(value: string): string {
+    const sanitized = value
+      .replaceAll(path.sep, '-')
+      .replaceAll(/[^\w.-]+/g, '-')
+      .replaceAll(/^-+|-+$/g, '')
+      .slice(0, 80);
+
+    return sanitized || 'unknown';
+  }
+
+  private getAttachmentTraceSummary(image: HeterogeneousAgentImageAttachment) {
+    let urlKind = 'unknown';
+
+    try {
+      urlKind = new URL(image.url).protocol.replace(/:$/, '') || urlKind;
+    } catch {
+      urlKind = image.url.startsWith('data:') ? 'data' : 'unknown';
+    }
+
+    return {
+      id: image.id,
+      urlKind,
+    };
+  }
+
+  private async createCliTraceSession({
+    cliArgs,
+    cwd,
+    imageList,
+    session,
+    stdinPayload,
+  }: {
+    cliArgs: string[];
+    cwd: string;
+    imageList: HeterogeneousAgentImageAttachment[];
+    session: AgentSession;
+    stdinPayload?: string;
+  }): Promise<CliTraceSession | undefined> {
+    if (!this.shouldTraceCliOutput) return;
+
+    // Don't materialize the cwd via mkdir — if the caller passed a stale or
+    // typo'd path, we want spawn() to fail loudly instead of silently running
+    // the agent in an empty auto-created directory.
+    try {
+      await access(cwd);
+    } catch {
+      return;
+    }
+
+    const createdAt = new Date();
+    const rootDir = this.resolveTraceRootDir(cwd);
+    const agentDir = path.join(rootDir, this.sanitizeTracePathSegment(session.agentType));
+    const traceId = `${this.formatTraceTimestamp(createdAt)}-${this.sanitizeTracePathSegment(
+      session.sessionId,
+    )}`;
+    const dir = path.join(agentDir, traceId);
+
+    try {
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(rootDir, '.last-live-trace'), `${dir}\n`);
+      await writeFile(path.join(dir, 'stdout.jsonl'), '');
+      await writeFile(path.join(dir, 'stderr.log'), '');
+      if (stdinPayload !== undefined) {
+        await writeFile(path.join(dir, 'stdin.txt'), '');
+      }
+      await writeFile(
+        path.join(dir, 'meta.json'),
+        `${JSON.stringify(
+          {
+            agentSessionId: session.agentSessionId,
+            agentType: session.agentType,
+            args: redactPromptArgs(cliArgs, session.agentType),
+            attachments: imageList.map((image) => this.getAttachmentTraceSummary(image)),
+            command: session.command,
+            createdAt: createdAt.toISOString(),
+            cwd,
+            envKeys: session.env ? Object.keys(session.env).sort() : [],
+            model: session.model,
+            modelSource: session.modelSource,
+            resumeSessionId: session.resumeSessionId,
+            sessionId: session.sessionId,
+            stdinBytes: stdinPayload === undefined ? 0 : Buffer.byteLength(stdinPayload),
+            stdinFile: stdinPayload === undefined ? undefined : 'stdin.txt',
+            stderrFile: 'stderr.log',
+            stdoutFile: 'stdout.jsonl',
+            verifiedModel: session.verifiedModel,
+            verifiedModelContextWindow: session.verifiedModelContextWindow,
+            verifiedModelProvider: session.verifiedModelProvider,
+            verifiedModelSessionId: session.verifiedModelSessionId,
+            verifiedModelSourceFile: session.verifiedModelSourceFile,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      return { dir, writeQueue: Promise.resolve() };
+    } catch (error) {
+      logger.warn('Failed to initialize CLI trace directory:', error);
+    }
+  }
+
+  private queueCliTraceWrite(
+    trace: CliTraceSession | undefined,
+    write: () => Promise<void>,
+  ): Promise<void> | undefined {
+    if (!trace) return;
+
+    trace.writeQueue = trace.writeQueue.then(write).catch((error) => {
+      logger.warn('Failed to write CLI trace file:', error);
+    });
+
+    return trace.writeQueue;
+  }
+
+  private appendCliTraceFile(
+    trace: CliTraceSession | undefined,
+    fileName: string,
+    data: Buffer | string,
+  ): Promise<void> | undefined {
+    if (!trace) return;
+
+    const filePath = path.join(trace.dir, fileName);
+
+    return this.queueCliTraceWrite(trace, () => appendFile(filePath, data));
+  }
+
+  private writeCliTraceFile(
+    trace: CliTraceSession | undefined,
+    fileName: string,
+    data: string,
+  ): Promise<void> | undefined {
+    if (!trace) return;
+
+    const filePath = path.join(trace.dir, fileName);
+
+    return this.queueCliTraceWrite(trace, () => writeFile(filePath, data));
+  }
+
+  private writeCliTraceJson(
+    trace: CliTraceSession | undefined,
+    fileName: string,
+    payload: unknown,
+  ): Promise<void> | undefined {
+    return this.writeCliTraceFile(trace, fileName, `${JSON.stringify(payload, null, 2)}\n`);
+  }
+
+  private async flushCliTrace(trace: CliTraceSession | undefined): Promise<void> {
+    await trace?.writeQueue;
+  }
+
+  // ─── Broadcast ───
+
+  private broadcast<T>(channel: string, data: T) {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(channel, data);
+      }
+    }
+  }
+
+  // ─── AskUserQuestion MCP server () ───
+
+  /** Register and broadcast a native ACP intervention without starting an MCP server. */
+  private setupAcpInterventionForOp(
+    operationId: string,
+    sessionId: string,
+  ): {
+    bridge: AskUserBridge;
+    cleanup: () => Promise<void>;
+  } {
+    // Cursor reuses the Claude Code AskUserQuestion renderer, but provider is
+    // explicit so consumers never mistake renderer compatibility for origin.
+    const bridge = new AskUserBridge(operationId, {
+      identifier: 'claude-code',
+      provider: 'cursor',
+    });
+    const pumpDone = (async () => {
+      for await (const event of bridge.events()) {
+        this.broadcast('heteroAgentEvent', { event, sessionId });
+      }
+    })().catch((error) => {
+      logger.warn('ACP AskUserQuestion bridge pump error:', error);
+    });
+    const slot: InterventionSlot = { bridge, pumpDone };
+    this.opIdToIntervention.set(operationId, slot);
+
+    return {
+      bridge,
+      cleanup: async () => {
+        bridge.cancelAll('session_ended');
+        await pumpDone;
+        this.opIdToIntervention.delete(operationId);
+      },
+    };
+  }
+
+  /**
+   * Lazy single-instance MCP server for CC's AskUserQuestion replacement.
+   * First claude-code prompt triggers `start()`; subsequent prompts reuse
+   * the same listener. Concurrent first-callers de-dupe via the in-flight
+   * promise so we don't bind two ports.
+   */
+  private async ensureBuiltinMcpServerStarted(): Promise<LobeBuiltinMcpServer> {
+    if (this.builtinMcpServer) return this.builtinMcpServer;
+    if (!this.builtinMcpStartPromise) {
+      this.builtinMcpStartPromise = (async () => {
+        const [{ LobeBuiltinMcpServer }, { buildBrowserMcpTools }] = await Promise.all([
+          import('@lobechat/heterogeneous-agents/builtinMcp'),
+          import('@/modules/heterogeneousAgent/browserMcpTools'),
+        ]);
+        const server = new LobeBuiltinMcpServer({
+          // In-app browser control tools ride the same per-op MCP server so
+          // CC can drive the browser sidebar ( M3, hetero path).
+          extraTools: buildBrowserMcpTools((operationId, apiName, args) =>
+            this.runBrowserMcpTool(operationId, apiName, args),
+          ),
+        });
+        await server.start();
+        this.builtinMcpServer = server;
+        logger.info('AskUserQuestion MCP server started:', server.url);
+        return server;
+      })().catch((err) => {
+        // Reset so a later sendPrompt can retry; surface the error.
+        this.builtinMcpStartPromise = undefined;
+        logger.error('Failed to start AskUserQuestion MCP server:', err);
+        throw err;
+      });
+    }
+    return this.builtinMcpStartPromise;
+  }
+
+  /**
+   * Register a per-op AskUserQuestion bridge, write its temp `mcp.json`,
+   * and stash it for the spawn path. The actual bridge event pump is started
+   * from `handleSpawnedAgentProcess`, where it can share the stdout broadcast
+   * queue instead of racing the adapter pipeline as a second producer.
+   */
+  private async setupInterventionForOp(
+    operationId: string,
+    provider: 'claude-code' | 'qoder',
+    browserBinding?: BrowserRunBinding,
+  ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
+    const server = await this.ensureBuiltinMcpServerStarted();
+    const bridge = server.registerOperation(
+      operationId,
+      new AskUserBridge(operationId, { identifier: provider, provider }),
+    );
+    if (browserBinding?.agentId || browserBinding?.topicId) {
+      this.opIdToBrowserBinding.set(operationId, browserBinding);
+    }
+    const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+
+    // `alwaysLoad: true` is the undocumented CC flag that promotes our
+    // server's tool out of the deferred set so the model calls it directly
+    // (no ToolSearch hop). See spike notes — falls back to the
+    // 2-hop ToolSearch path if a future CC drops the flag, no breakage.
+    const config = {
+      mcpServers: {
+        lobe_cc: {
+          alwaysLoad: true,
+          type: 'http' as const,
+          url: server.urlForOperation(operationId),
+        },
+      },
+    };
+    await writeFile(tmpConfigPath, JSON.stringify(config), 'utf8');
+
+    const slot: InterventionSlot = { bridge, tmpConfigPath };
+    this.opIdToIntervention.set(operationId, slot);
+
+    const cleanup = async () => {
+      // Unregistering on the server cancels all bridge pendings AND closes
+      // the events iterator (cancelAll fires from within unregisterOperation).
+      this.builtinMcpServer?.unregisterOperation(operationId);
+      await slot.pumpDone;
+      this.opIdToIntervention.delete(operationId);
+      this.opIdToBrowserBinding.delete(operationId);
+      await unlink(tmpConfigPath).catch(() => {
+        /* file may already be gone if app crashed mid-prompt */
+      });
+    };
+
+    return { bridge, cleanup, tmpConfigPath };
+  }
+
+  /**
+   * Execute one in-app browser api call on behalf of a CC MCP tool. Forwards
+   * through `BrowserControlCtr.runGatewayToolCall` — the same funnel cloud
+   * gateway calls use — so the renderer-side `browserExecutor` (webview
+   * mount, snapshot refs, cursor overlay) stays the single source of truth.
+   */
+  private async runBrowserMcpTool(
+    operationId: string,
+    apiName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolResult> {
+    const binding = this.opIdToBrowserBinding.get(operationId);
+    if (!binding?.agentId || !binding.topicId) {
+      return {
+        content: [
+          {
+            text: 'The in-app browser is not available for this run (no topic binding). Continue without it.',
+            type: 'text',
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const result = await this.app.getController(BrowserControlCtr).runGatewayToolCall(apiName, {
+      ...args,
+      __agentId: binding.agentId,
+      __topicId: binding.topicId,
+    });
+
+    const text =
+      result.content ?? result.error?.message ?? (result.success ? 'OK' : 'Browser action failed');
+    const content: McpToolResult['content'] = [{ text, type: 'text' }];
+
+    // Screenshot: hand the image back as an MCP image block so CC can
+    // actually see the page (unlike the homogeneous runtime's text-only echo).
+    if (apiName === 'screenshot') {
+      const dataUrl = (result.state as { dataUrl?: string } | undefined)?.dataUrl;
+      const match =
+        typeof dataUrl === 'string' ? dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/) : null;
+      if (match) content.push({ data: match[2], mimeType: match[1], type: 'image' });
+    }
+
+    return { content, isError: !result.success };
+  }
+
+  // ─── File cache ───
+
+  private get fileCacheDir(): string {
+    return path.join(this.app.appStoragePath, FILE_CACHE_DIR);
+  }
+
+  /**
+   * Build a Claude Code stream-json user message with text + base64 images.
+   * Semantic context is assembled by the shared prompt engine before the
+   * provider-specific serializer runs.
+   */
+  private async buildStreamJsonInput(
+    prompt: string,
+    imageList: HeterogeneousAgentImageAttachment[] = [],
+    systemContext?: string,
+  ): Promise<string> {
+    const promptInput = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+    const plan = await buildAgentInput('claude-code', promptInput, {
+      cacheDir: this.fileCacheDir,
+    });
+    return plan.stdin;
+  }
+
+  // ─── IPC methods ───
+
+  /**
+   * Create a session (stores config, process spawned on sendPrompt).
+   */
+  async startSession(params: StartSessionParams): Promise<StartSessionResult> {
+    const sessionId = randomUUID();
+    const agentType = params.agentType || 'claude-code';
+    const driver = getHeterogeneousAgentDriver(agentType);
+    let hostedProviderBinding: HostedProviderBinding | undefined;
+
+    if (params.providerBinding && params.providerBinding.kind !== 'server-default') {
+      const bindingRuntime = await getProviderBindingRuntime(
+        this.remoteServerAuth,
+        params.providerBinding,
+      );
+      const bindingResult = resolveHeterogeneousProviderBinding({
+        agentType,
+        apiConfig: params.providerBinding.apiConfig,
+        checkCredentials: true,
+        // Server-resolved list — makes main authoritative on model
+        // availability even when the renderer's store state is stale.
+        enabledModels: bindingRuntime.enabledModels,
+        providerEnabled: bindingRuntime.enabled,
+        runtimeConfig: bindingRuntime.runtimeConfig,
+      });
+      if (bindingResult.error) {
+        throw new Error(formatHeterogeneousProviderBindingError(bindingResult.error));
+      }
+
+      hostedProviderBinding = await prepareHostedProviderBinding({
+        agentType,
+        appStoragePath: this.app.appStoragePath,
+        args: params.args || [],
+        driver,
+        env: params.env,
+        reference: params.providerBinding,
+        resolution: bindingResult.resolution,
+        sessionId,
+      });
+
+      // Opportunistic sweep of long-unused binding profiles (provider deleted,
+      // endpoint changed, identity version bumped). The profile in use was just
+      // touched by prepare, so it is never a candidate. Never blocks the run.
+      gcHostedProviderBindingProfiles(this.app.appStoragePath)
+        .then((removedProfiles) => {
+          if (removedProfiles.length > 0)
+            logger.info('Removed stale provider-binding profiles:', removedProfiles);
+        })
+        .catch((error) => logger.warn('Provider-binding profile GC failed:', error));
+    } else if (params.providerBinding?.kind === 'server-default') {
+      hostedProviderBinding = await prepareHostedServerDefaultBinding({
+        agentType,
+        appStoragePath: this.app.appStoragePath,
+        args: params.args || [],
+        driver,
+        endpoint: await getServerDefaultEndpoint(this.remoteServerAuth),
+        env: params.env,
+        model: params.providerBinding.apiConfig.model,
+        sessionId,
+      });
+    }
+
+    const resumeSessionId =
+      !hostedProviderBinding ||
+      params.providerBinding?.resumeBindingKey === hostedProviderBinding.bindingKey
+        ? params.resumeSessionId
+        : undefined;
+
+    this.sessions.set(sessionId, {
+      // If resuming, pre-set the agent session ID so sendPrompt adds --resume
+      agentSessionId: resumeSessionId,
+      agentType,
+      args: hostedProviderBinding?.args ?? params.args ?? [],
+      command: params.command,
+      cwd: params.cwd,
+      env: hostedProviderBinding?.env ?? params.env,
+      hostedProviderBinding,
+      serverDefaultApiConfig:
+        params.providerBinding?.kind === 'server-default'
+          ? params.providerBinding.apiConfig
+          : undefined,
+      model: params.initialModel,
+      sessionId,
+      resumeSessionId,
+      useClaudeCodeSdk: params.useClaudeCodeSdk,
+      useCodexAppServer: params.useCodexAppServer,
+    });
+
+    logger.info('Session created:', {
+      agentType,
+      providerBinding: !!hostedProviderBinding,
+      sessionId,
+    });
+    return { providerBindingKey: hostedProviderBinding?.bindingKey, sessionId };
+  }
+
+  /**
+   * Send a prompt to an agent session.
+   *
+   * Spawns the CLI process with preset flags. Pipes each stdout chunk through
+   * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
+   * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
+   */
+  async sendPrompt(params: SendPromptParams): Promise<void> {
+    const session = this.sessions.get(params.sessionId);
+    if (session) session.cancelledByUs = false;
+    const serverDefaultApiConfig = session?.serverDefaultApiConfig;
+    if (!session || !serverDefaultApiConfig) return this.sendPromptImpl(params);
+    if (!params.topicId) throw new Error('Server-default execution requires a topic');
+    if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
+      throw new Error(`Server-default execution does not support ${session.agentType}`);
+    }
+
+    const operation = await beginServerDefaultOperation(this.remoteServerAuth, {
+      agentType: session.agentType,
+      agentId: params.agentId,
+      model: serverDefaultApiConfig.model,
+      operationId: params.operationId,
+      topicId: params.topicId,
+    });
+    let result: 'done' | 'error' = 'error';
+    try {
+      if (session.cancelledByUs) {
+        await this.completeCancelledSessionBeforeLaunch(session);
+        return;
+      }
+
+      session.serverOperationToken = operation.token;
+      await this.sendPromptImpl(params);
+      if (!session.cancelledByUs) result = 'done';
+    } finally {
+      session.serverOperationToken = undefined;
+      await settleServerDefaultOperation(this.remoteServerAuth, {
+        cancelled: session.cancelledByUs,
+        operationId: params.operationId,
+        result,
+      }).catch((error) => logger.warn('Failed to settle server-default operation:', error));
+    }
+  }
+
+  private async sendPromptImpl(params: SendPromptParams): Promise<void> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) throw new Error(`Session not found: ${params.sessionId}`);
+
+    let preflightError;
+    try {
+      preflightError = await this.getSpawnPreflightError(session);
+    } catch (error) {
+      await session.hostedProviderBinding?.cleanup();
+      throw error;
+    }
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+    if (preflightError) {
+      this.broadcast('heteroAgentSessionError', {
+        error: preflightError,
+        sessionId: session.sessionId,
+      });
+      await session.hostedProviderBinding?.cleanup();
+      throw new Error(preflightError.message);
+    }
+
+    // Revive a Claude Code session whose local transcript the CLI already
+    // garbage-collected (`cleanupPeriodDays`, default 30 days). Rebuilding it
+    // from the turns LobeHub still holds turns a hard
+    // "No conversation found with session ID" into a normal `--resume` that
+    // hydrates the native history. No-ops when the transcript still exists.
+    // MUST run before the Claude SDK early return — both transports read the
+    // same on-disk transcript for resume.
+    if (
+      session.agentType === 'claude-code' &&
+      session.agentSessionId &&
+      session.cwd &&
+      params.resumeReplayMessages?.length
+    ) {
+      try {
+        const ensured = await ensureClaudeCodeResumeTranscript({
+          configDir: session.hostedProviderBinding?.profileDir,
+          cwd: session.cwd,
+          messages: params.resumeReplayMessages,
+          sessionId: session.agentSessionId,
+        });
+        if (ensured.written)
+          logger.info('Rebuilt GC-ed Claude Code transcript for resume:', {
+            path: ensured.path,
+            turns: params.resumeReplayMessages.length,
+          });
+      } catch (error) {
+        // Never block the run on this — worst case CC starts a fresh session.
+        logger.warn('Failed to rebuild Claude Code resume transcript:', error);
+      }
+    }
+
+    if (
+      session.agentType === 'claude-code' &&
+      (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
+    ) {
+      try {
+        return await this.sendPromptWithClaudeSdk(params, session);
+      } finally {
+        // The SDK helper owns cleanup once `run()` starts; this outer guard
+        // also covers input/trace/session construction failures before that try/finally.
+        await session.hostedProviderBinding?.cleanup();
+      }
+    }
+
+    if (
+      session.agentType === 'codex' &&
+      !session.hostedProviderBinding &&
+      !session.codexAppServerFallback &&
+      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+    ) {
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        if (await this.sendPromptWithCodexAppServer(params, session)) return;
+      } else if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      } else {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+          sessionId: session.sessionId,
+          unsupportedArgs,
+        });
+      }
+    }
+
+    if (session.agentType === 'grok-build') {
+      return this.sendPromptWithGrokAcp(params, session);
+    }
+
+    if (session.agentType === 'cursor') {
+      return this.sendPromptWithCursorAcp(params, session);
+    }
+
+    if (session.agentType === 'trae') {
+      return this.sendPromptWithTraeAcp(params, session);
+    }
+
+    // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
+    // building the spawn plan so the driver can wire the temp config path
+    // into `--mcp-config`. Other agents skip this entirely.
+    const intervention =
+      session.agentType === 'claude-code' || session.agentType === 'qoder'
+        ? await this.setupInterventionForOp(params.operationId, session.agentType, {
+            agentId: params.agentId,
+            topicId: params.topicId,
+          }).catch((err) => {
+            logger.warn('Failed to set up AskUserQuestion bridge — proceeding without it:', err);
+            return undefined;
+          })
+        : undefined;
+
+    let spawnPlan;
+    let traceSession;
+    let cwd: string;
+    let initialCumulativeUsage: UsageData | undefined;
+    let resolvedCliSpawnPlan;
+    let spawnEnv: NodeJS.ProcessEnv;
+    try {
+      const driver = getHeterogeneousAgentDriver(session.agentType);
+      const promptInput = buildHeterogeneousPrompt({
+        imageList: params.imageList,
+        prompt: params.prompt,
+        systemContext: params.systemContext,
+      });
+      spawnPlan = await driver.buildSpawnPlan({
+        args: session.args,
+        helpers: {
+          buildAgentInput: async (agentType, input) => {
+            try {
+              return await buildAgentInput(agentType, input, { cacheDir: this.fileCacheDir });
+            } catch (error) {
+              logger.error('Failed to prepare heterogeneous agent input:', error);
+              throw new Error(
+                `Failed to attach image(s) to CLI: ${this.getErrorMessage(error) || 'Unknown error'}`,
+                { cause: error },
+              );
+            }
+          },
+        },
+        mcpConfigPath: intervention?.tmpConfigPath,
+        promptInput,
+        resumeSessionId: session.agentSessionId,
+      });
+
+      const spawnArgs =
+        spawnPlan.argvPayload === undefined
+          ? spawnPlan.args
+          : [...spawnPlan.args, spawnPlan.argvPayload];
+      resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+        session.resolvedCommandPath ?? session.command,
+        spawnArgs,
+      );
+
+      // Fall back to the user's Desktop so the process never inherits
+      // the Electron parent's cwd (which is `/` when launched from Finder).
+      cwd = session.cwd || electronApp.getPath('desktop');
+
+      spawnEnv = this.buildSessionSpawnEnv(session);
+
+      if (session.agentType === 'codex') {
+        const initialModel = await resolveCodexInitialModel({
+          args: spawnPlan.args,
+          env: spawnEnv,
+        });
+        if (initialModel?.model) {
+          session.model = initialModel.model;
+          session.modelSource = initialModel.source;
+        }
+
+        if (session.agentSessionId) {
+          initialCumulativeUsage = (
+            await readCodexSessionModel(session.agentSessionId, { env: spawnEnv })
+          )?.cumulativeUsage;
+        }
+      }
+
+      traceSession = await this.createCliTraceSession({
+        cliArgs: spawnPlan.args,
+        cwd,
+        imageList: params.imageList ?? [],
+        session,
+        stdinPayload: spawnPlan.stdinPayload,
+      });
+    } catch (err) {
+      // We never made it to spawn — the `proc.on('exit')` cleanup path
+      // won't run, so tear the intervention bridge down right here.
+      if (intervention) {
+        await intervention.cleanup().catch((cleanupErr) => {
+          logger.warn('AskUserQuestion cleanup error during pre-spawn failure:', cleanupErr);
+        });
+      }
+      await session.hostedProviderBinding?.cleanup();
+      throw err;
+    }
+
+    if (session.cancelledByUs) {
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after pre-launch cancellation:', cleanupError);
+      });
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const useStdin = spawnPlan.stdinPayload !== undefined;
+
+    logger.info(
+      'Spawning agent:',
+      resolvedCliSpawnPlan.command,
+      [
+        ...redactPromptArgs(spawnPlan.args, session.agentType),
+        ...(spawnPlan.argvPayload === undefined ? [] : ['<argv payload redacted>']),
+      ].join(' '),
+      `(cwd: ${cwd})`,
+    );
+
+    // `detached: true` on Unix puts the child in a new process group so we
+    // can SIGINT/SIGKILL the whole tree (claude + any tool subprocesses)
+    // via `process.kill(-pid, sig)` on cancel. Without this, SIGINT to just
+    // the claude binary can leave bash/grep/etc. tool children running and
+    // the CLI hung waiting on them. Windows has different semantics — use
+    // taskkill /T /F there; no detached flag needed.
+    const spawnOptions = {
+      cwd,
+      detached: process.platform !== 'win32',
+      // Strip host Anthropic creds from the inherited env so a developer's
+      // shell `ANTHROPIC_API_KEY` can't hijack the CLI's own auth. `session.env`
+      // is spread last, so an agent that explicitly configures a key still wins.
+      env: spawnEnv,
+      stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
+    };
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
+        this.handleSpawnedAgentProcess({
+          cwd,
+          intervention,
+          params,
+          proc,
+          reject,
+          resolve,
+          session,
+          initialCumulativeUsage,
+          spawnEnv,
+          traceSession,
+          useStdin,
+          spawnPlan,
+        });
+      });
+    } catch (error) {
+      // A synchronous spawn failure has no process event to own teardown.
+      // Process-emitted failures may already have cleaned these resources;
+      // both cleanup operations are intentionally idempotent.
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after process failure:', cleanupError);
+      });
+      await session.hostedProviderBinding?.cleanup();
+      throw error;
+    }
+  }
+
+  private async completeCancelledSessionBeforeLaunch(session: AgentSession): Promise<void> {
+    await session.hostedProviderBinding?.cleanup();
+    this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+  }
+
+  private async sendPromptWithClaudeSdk(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const stdinPayload = await this.buildStreamJsonInput(
+      params.prompt,
+      params.imageList ?? [],
+      params.systemContext,
+    );
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: ['sdk-stream', ...session.args],
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload,
+    });
+
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', stdinPayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const sdkSession = new ClaudeAgentSdkSession({
+      args: session.args,
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      operationId: params.operationId,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+      stdinPayload,
+      uploadImage: this.uploadResultImage,
+    });
+
+    session.sdkSession = sdkSession;
+
+    logger.info('Starting Claude Code SDK session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await sdkSession.run();
+      session.sdkSession = undefined;
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'claude-sdk',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      session.sdkSession = undefined;
+      logger.error('Claude SDK session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'claude-sdk',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await session.hostedProviderBinding?.cleanup();
+    }
+  }
+
+  private async sendPromptWithCodexAppServer(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<boolean> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    let inputPlan;
+    try {
+      inputPlan = await buildAgentInput('codex', promptInput, { cacheDir: this.fileCacheDir });
+    } catch (error) {
+      logger.error('Failed to prepare Codex app-server input:', error);
+      throw new Error(
+        `Failed to attach image(s) to Codex app-server: ${this.getErrorMessage(error) || 'Unknown error'}`,
+        { cause: error },
+      );
+    }
+
+    const input = buildCodexAppServerInput(inputPlan);
+    const appServerArgs = buildCodexAppServerArgs(session.args);
+    const initialModel = await resolveCodexInitialModel({ args: session.args, env: spawnEnv });
+    if (initialModel?.model) {
+      session.model = initialModel.model;
+      session.modelSource = initialModel.source;
+    }
+    const initialCumulativeUsage = session.agentSessionId
+      ? (await readCodexSessionModel(session.agentSessionId, { env: spawnEnv }))?.cumulativeUsage
+      : undefined;
+    const inputPayload = `${JSON.stringify(input)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: appServerArgs,
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: inputPayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', inputPayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return true;
+    }
+
+    const clientOptions = {
+      args: appServerArgs.slice(0, -1),
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+    };
+    const existingClient = this.codexAppServerClient;
+    if (existingClient && !existingClient.canReuseFor(clientOptions)) {
+      if (!existingClient.hasConsumers) {
+        existingClient.close();
+        if (this.codexAppServerClient === existingClient) this.codexAppServerClient = undefined;
+      } else {
+        const message =
+          'The running Codex app-server uses a different binary, global configuration, or environment';
+        logger.error('Cannot reuse the native Codex app-server client:', {
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'process-error.json', {
+          message,
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentSessionError', {
+          error: message,
+          sessionId: session.sessionId,
+        });
+        throw new Error(message);
+      }
+    }
+
+    const client =
+      this.codexAppServerClient ??
+      (this.codexAppServerClient = new CodexAppServerClient(clientOptions));
+    const appServerSession =
+      session.appServerSession ??
+      new CodexThreadSession({
+        client,
+        initialCumulativeUsage,
+        initialModel: session.model,
+        initialThreadId: session.agentSessionId,
+        threadName: truncateTitle(params.prompt),
+        onEvents: async (events) => {
+          for (const event of events) {
+            this.broadcast('heteroAgentEvent', {
+              event,
+              sessionId: session.sessionId,
+            });
+          }
+        },
+        onModel: (model) => {
+          session.model = model;
+          session.modelSource = 'codex-app-server';
+        },
+        onRuntimeStatus: (status) => {
+          this.broadcast('heteroAgentRuntimeStatus', status);
+        },
+        onSessionId: (agentSessionId) => {
+          if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+        },
+        sessionId: session.sessionId,
+        threadParams: buildCodexAppServerThreadParams(session.args, cwd, session.model),
+      });
+    session.appServerSession = appServerSession;
+
+    logger.info('Starting Codex app-server session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await appServerSession.run({
+        input,
+        onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+        operationId: params.operationId,
+      });
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'codex-app-server',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+      return true;
+    } catch (error) {
+      if (appServerSession.canFallbackToExec && isCodexAppServerCompatibilityError(error)) {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because native app-server is unavailable:', {
+          message: this.getErrorMessage(error),
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'fallback.json', {
+          message: this.getErrorMessage(error),
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentEvent', {
+          event: {
+            data: {
+              message:
+                'Codex app-server is unavailable or incompatible. Upgrade Codex to use the Labs transport; continuing with codex exec.',
+            },
+            operationId: params.operationId,
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'stream_retry',
+          } satisfies AgentStreamEvent,
+          sessionId: session.sessionId,
+        });
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+        if (!client.hasConsumers) {
+          client.close();
+          if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
+        }
+        return false;
+      }
+
+      logger.error('Codex app-server session error:', error);
+      appServerSession.close();
+      if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'codex-app-server',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return true;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    }
+  }
+
+  private async sendPromptWithGrokAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    let prompt;
+    try {
+      prompt = await buildGrokAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    } catch (error) {
+      logger.error('Failed to prepare Grok Build ACP input:', error);
+      throw new Error(
+        `Failed to attach image(s) to Grok Build: ${this.getErrorMessage(error) || 'Unknown error'}`,
+        { cause: error },
+      );
+    }
+
+    const traceInput = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildGrokAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: traceInput,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', traceInput);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const acpSession = new GrokAcpSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.grokAcpSession = acpSession;
+
+    logger.info('Starting Grok Build ACP session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await acpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'acp-stdio',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      logger.error('Grok Build ACP session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'acp-stdio',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await session.hostedProviderBinding?.cleanup();
+      if (session.grokAcpSession === acpSession) session.grokAcpSession = undefined;
+    }
+  }
+
+  private async sendPromptWithCursorAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = buildCursorAcpPrompt(promptInput);
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildCursorAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(params.operationId, session.sessionId);
+    const cursorAcpSession = new CursorAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.cursorAcpSession = cursorAcpSession;
+
+    try {
+      await cursorAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'cursor-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'cursor-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = isCursorAcpSessionNotFoundError(error)
+        ? error
+        : stderr
+          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+              cause: error,
+            })
+          : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await intervention.cleanup();
+      if (session.cursorAcpSession === cursorAcpSession) session.cursorAcpSession = undefined;
+    }
+  }
+
+  private async sendPromptWithTraeAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildTraeAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildTraeAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+
+    const traeAcpSession = new TraeAcpSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'trae-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.traeAcpSession = traeAcpSession;
+
+    try {
+      await traeAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'trae-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'trae-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = stderr
+        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+            cause: error,
+          })
+        : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      if (session.traeAcpSession === traeAcpSession) session.traeAcpSession = undefined;
+    }
+  }
+
+  private async verifyCodexSessionModel({
+    env,
+    pipeline,
+    session,
+    traceSession,
+  }: {
+    env: NodeJS.ProcessEnv;
+    pipeline: AgentStreamPipeline;
+    session: AgentSession;
+    traceSession: CliTraceSession | undefined;
+  }): Promise<AgentStreamEvent[]> {
+    if (
+      session.agentType !== 'codex' ||
+      !pipeline.sessionId ||
+      session.verifiedModelSessionId === pipeline.sessionId
+    ) {
+      return [];
+    }
+
+    const now = Date.now();
+    if (
+      session.modelVerificationLastAttemptSessionId === pipeline.sessionId &&
+      session.modelVerificationLastAttemptAt &&
+      now - session.modelVerificationLastAttemptAt < 1000
+    ) {
+      return [];
+    }
+    session.modelVerificationLastAttemptSessionId = pipeline.sessionId;
+    session.modelVerificationLastAttemptAt = now;
+
+    const sessionModel = await readCodexSessionModel(pipeline.sessionId, { env });
+    if (!sessionModel?.model) return [];
+
+    const previousModel = session.model;
+    session.verifiedModel = sessionModel.model;
+    session.verifiedModelContextWindow = sessionModel.contextWindow;
+    session.verifiedModelProvider = sessionModel.provider;
+    session.verifiedModelSessionId = pipeline.sessionId;
+    session.verifiedModelSourceFile = sessionModel.sourceFile;
+
+    void this.writeCliTraceJson(traceSession, 'model.json', {
+      initialModel: previousModel,
+      initialModelSource: session.modelSource,
+      sessionId: pipeline.sessionId,
+      verifiedAt: new Date().toISOString(),
+      verifiedContextWindow: sessionModel.contextWindow,
+      verifiedLine: sessionModel.line,
+      verifiedModel: sessionModel.model,
+      verifiedModelProvider: sessionModel.provider,
+      verifiedSourceFile: sessionModel.sourceFile,
+    });
+
+    if (previousModel === sessionModel.model) return [];
+
+    session.model = sessionModel.model;
+    session.modelSource = 'codex-session';
+    return pipeline.configureSession({ model: sessionModel.model });
+  }
+
+  private handleSpawnedAgentProcess({
+    cwd,
+    initialCumulativeUsage,
+    intervention,
+    params,
+    proc,
+    reject,
+    resolve,
+    session,
+    spawnEnv,
+    spawnPlan,
+    traceSession,
+    useStdin,
+  }: {
+    cwd: string;
+    intervention?: Awaited<ReturnType<HeterogeneousAgentCtr['setupInterventionForOp']>>;
+    params: SendPromptParams;
+    proc: ChildProcess;
+    reject: (reason?: unknown) => void;
+    resolve: () => void;
+    session: AgentSession;
+    initialCumulativeUsage?: UsageData | undefined;
+    spawnEnv: NodeJS.ProcessEnv;
+    spawnPlan: HeterogeneousAgentBuildPlan;
+    traceSession: CliTraceSession | undefined;
+    useStdin: boolean;
+  }) {
+    proc.on('error', (err) => {
+      logger.error('Agent process error:', err);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: err.message,
+        name: err.name,
+      });
+      void this.flushCliTrace(traceSession);
+      const sessionError = this.getSessionErrorPayload(err, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      void session.hostedProviderBinding?.cleanup();
+      reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
+    });
+
+    // In stdin mode, write the prepared payload and close stdin.
+    if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
+      void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
+      const stdin = proc.stdin as Writable;
+      stdin.write(spawnPlan.stdinPayload, () => {
+        stdin.end();
+      });
+    }
+
+    session.process = proc;
+
+    // Producer-side conversion (V3 contract): JSONL framing + adapter +
+    // toStreamEvent all run inside the shared pipeline, so renderer + future
+    // server `heteroIngest` see the same `AgentStreamEvent` wire shape with
+    // no per-consumer adapter. The pipeline auto-wires the Codex
+    // file-change diff/stat tracker when `agentType === 'codex'`, so this
+    // controller stays agent-agnostic.
+    const pipeline = new AgentStreamPipeline({
+      agentType: session.agentType,
+      cwd,
+      initialCumulativeUsage,
+      initialModel: session.model,
+      operationId: params.operationId,
+      uploadImage: this.uploadResultImage,
+    });
+    let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
+
+    const broadcastStreamEvents = (events: AgentStreamEvent[]) => {
+      for (const event of events) {
+        this.broadcast('heteroAgentEvent', {
+          event,
+          sessionId: session.sessionId,
+        });
+      }
+    };
+
+    const broadcastPipelineBatch = (produce: () => ReturnType<AgentStreamPipeline['push']>) => {
+      stdoutBroadcastQueue = stdoutBroadcastQueue
+        .then(async () => {
+          const events = await produce();
+          // Adapter-extracted CC/Codex session id powers `--resume` on the
+          // next prompt; surface it through the existing `getSessionInfo`
+          // IPC by mirroring the freshest value onto the session record.
+          if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
+            session.agentSessionId = pipeline.sessionId;
+          }
+          events.push(
+            ...(await this.verifyCodexSessionModel({
+              env: spawnEnv,
+              pipeline,
+              session,
+              traceSession,
+            })),
+          );
+          broadcastStreamEvents(events);
+        })
+        .catch((error) => {
+          logger.error('Failed to broadcast agent stream batch:', error);
+        });
+    };
+
+    const broadcastBridgeEvent = (event: AgentStreamEvent) => {
+      stdoutBroadcastQueue = stdoutBroadcastQueue
+        .then(() => {
+          broadcastStreamEvents([event]);
+        })
+        .catch((error) => {
+          logger.error('Failed to broadcast AskUserQuestion bridge event:', error);
+        });
+    };
+
+    if (intervention) {
+      const pumpDone = (async () => {
+        for await (const event of intervention.bridge.events()) {
+          broadcastBridgeEvent(event);
+        }
+        await stdoutBroadcastQueue;
+      })().catch((err) => {
+        logger.warn('AskUserQuestion bridge pump error:', err);
+      });
+      const slot = this.opIdToIntervention.get(params.operationId);
+      if (slot) slot.pumpDone = pumpDone;
+    }
+
+    // Stream stdout events through the producer pipeline.
+    const stdout = proc.stdout as Readable;
+    stdout.on('data', (chunk: Buffer) => {
+      void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
+      broadcastPipelineBatch(() => pipeline.push(chunk));
+    });
+    stdout.on('end', () => {
+      broadcastPipelineBatch(() => pipeline.flush());
+    });
+
+    // Capture stderr
+    const stderrChunks: string[] = [];
+    const stderr = proc.stderr as Readable;
+    stderr.on('data', (chunk: Buffer) => {
+      void this.appendCliTraceFile(traceSession, 'stderr.log', chunk);
+      stderrChunks.push(chunk.toString('utf8'));
+    });
+
+    proc.on('exit', (code, signal) => {
+      // Node may emit `'exit'` BEFORE stdio finishes draining (documented:
+      // child_process docs note "stdio streams might still be open" at exit
+      // time). Wait for stdout to fully end/close so the `stdout.on('end')`
+      // handler has scheduled `pipeline.flush()` onto `stdoutBroadcastQueue`,
+      // THEN wait for the queue itself to settle. Without this two-step
+      // gate, trailing flushed events (final synthesized tool_end /
+      // tool_result) would race against — and lose to — the
+      // `heteroAgentSessionComplete` broadcast, leaving renderer-side
+      // persistence to finalize on incomplete state.
+      const stdoutDrained = streamFinished(stdout, { writable: false }).catch(() => {
+        /* end / close / error are all "done"; we still want to settle. */
+      });
+
+      void stdoutDrained
+        .then(() => stdoutBroadcastQueue)
+        .finally(async () => {
+          // Tear down the AskUserQuestion bridge / temp `mcp.json` for this
+          // op. Pending MCP handlers get a `session_ended` cancellation so
+          // they return cleanly even if CC was killed mid-tool-call.
+          if (intervention) {
+            await intervention.cleanup().catch((err) => {
+              logger.warn('AskUserQuestion cleanup error:', err);
+            });
+          }
+          await session.hostedProviderBinding?.cleanup();
+
+          void this.writeCliTraceJson(traceSession, 'exit.json', {
+            code,
+            finishedAt: new Date().toISOString(),
+            signal,
+          });
+          await this.flushCliTrace(traceSession);
+          await waitForHeteroSessionCompleteGrace();
+
+          logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
+          session.process = undefined;
+
+          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
+          // exit as a clean shutdown — surfacing it as an error would make a
+          // user-initiated cancel look like an agent failure, and an Electron
+          // shutdown affecting OTHER running CC sessions would pollute their
+          // topics with a misleading "Agent exited with code 143" message.
+          if (session.cancelledByUs) {
+            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+            resolve();
+            return;
+          }
+
+          if (code === 0) {
+            broadcastStreamEvents(pipeline.validateCompletion());
+            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+            resolve();
+          } else {
+            const stderrOutput = stderrChunks.join('').trim();
+            const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
+            const sessionError = this.getSessionErrorPayload(errorMsg, session);
+            this.broadcast('heteroAgentSessionError', {
+              error: sessionError,
+              sessionId: session.sessionId,
+            });
+            reject(
+              new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
+            );
+          }
+        });
+    });
+  }
+
+  /**
+   * Get session info (agent's internal session ID for multi-turn resume).
+   */
+  async getSessionInfo(params: GetSessionInfoParams): Promise<SessionInfo> {
+    const session = this.sessions.get(params.sessionId);
+    return { agentSessionId: session?.agentSessionId };
+  }
+
+  /** Query a heterogeneous CLI's model catalog using the same rules as a real local session. */
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
+    const env = {
+      ...buildInheritedSpawnEnv(),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+
+    return listHeterogeneousAgentModels({
+      ...params,
+      cwd: params.cwd || electronApp.getPath('desktop'),
+      env,
+    });
+  }
+
+  async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
+    const command = params.command?.trim() || 'codex';
+    const sourceEnv = {
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
+
+    return this.codexQuotaCache.get(
+      sourceKey,
+      async () => {
+        const status = await detectHeterogeneousCliCommand('codex', command);
+        const env = {
+          ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+          ...sourceEnv,
+        };
+
+        return fetchCodexQuota({
+          command: status.available && status.path ? status.path : command,
+          env: Object.keys(env).length > 0 ? env : undefined,
+        });
+      },
+      { force: params.force },
+    );
+  }
+
+  /**
+   * Redeem one earned Codex rate-limit reset, then bypass the quota cache so
+   * every renderer receives the post-reset windows and remaining inventory.
+   */
+  async consumeCodexRateLimitResetCredit(
+    params: ConsumeCodexRateLimitResetCreditParams,
+  ): Promise<CodexRateLimitResetResult> {
+    const command = params.command?.trim() || 'codex';
+    const sourceEnv = {
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...sourceEnv,
+    };
+    const requestOptions = {
+      command: status.available && status.path ? status.path : command,
+      env: Object.keys(env).length > 0 ? env : undefined,
+    };
+
+    const outcome = await consumeCodexRateLimitResetCreditRequest({
+      ...requestOptions,
+      creditId: params.creditId,
+      idempotencyKey: params.idempotencyKey,
+    });
+    this.codexQuotaCache.invalidate(sourceKey);
+    const quota = await this.codexQuotaCache.get(sourceKey, () => fetchCodexQuota(requestOptions), {
+      force: true,
+    });
+
+    return { outcome, quota };
+  }
+
+  /**
+   * Read the Claude Code subscription quota. No CLI is spawned: the quota
+   * comes from Anthropic's OAuth usage API using the local `claude` login,
+   * and the request goes through the app's global proxy dispatcher.
+   */
+  /**
+   * Identity of the Claude login a spawn with this env would use. Pure local
+   * file read (`.claude.json` of the resolved profile) — cheap enough to call
+   * once per run for usage→account attribution; never touches the network.
+   */
+  async getClaudeCodeIdentity(params: { env?: Record<string, string> } = {}) {
+    return readClaudeCodeIdentity({ env: params.env });
+  }
+
+  async getClaudeCodeQuota(
+    params: GetClaudeCodeQuotaParams = {},
+  ): Promise<ClaudeCodeQuotaSnapshot> {
+    const sourceKey = createQuotaCacheKey('claude-code', params.env);
+
+    return this.claudeCodeQuotaCache.get(
+      sourceKey,
+      () => fetchClaudeCodeQuota({ env: params.env }),
+      { force: params.force },
+    );
+  }
+
+  /**
+   * Signal the whole process tree spawned by this session.
+   *
+   * On Unix the child was spawned with `detached: true`, so negating the pid
+   * signals the process group — reaching tool subprocesses (bash, grep, etc.)
+   * that would otherwise orphan after a parent-only kill. Falls back to the
+   * direct signal if the group kill raises (ESRCH when the leader is already
+   * gone). On Windows we shell out to `taskkill /T /F` which walks the tree.
+   */
+  private killProcessTree(proc: ChildProcess, signal: NodeJS.Signals): void {
+    if (!proc.pid || proc.killed) return;
+
+    if (process.platform === 'win32') {
+      try {
+        spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch (err) {
+        logger.warn('taskkill failed:', err);
+      }
+      return;
+    }
+
+    try {
+      process.kill(-proc.pid, signal);
+    } catch {
+      try {
+        proc.kill(signal);
+      } catch {
+        // already exited
+      }
+    }
+  }
+
+  /**
+   * Cancel an ongoing session: SIGINT the CC tree, escalate to SIGKILL after
+   * 2s if the CLI hasn't exited (some tool calls swallow SIGINT). The
+   * `exit` handler on the spawned proc broadcasts completion and clears
+   * `session.process`, so the escalation is a no-op when the graceful path
+   * already landed.
+   */
+  async cancelSession(params: CancelSessionParams): Promise<void> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) return;
+
+    session.cancelledByUs = true;
+    if (session.grokAcpSession) {
+      session.grokAcpSession.interrupt();
+      return;
+    }
+    if (session.cursorAcpSession) {
+      session.cursorAcpSession.interrupt();
+      return;
+    }
+    if (session.appServerSession) {
+      const appServerSession = session.appServerSession;
+      try {
+        await appServerSession.interrupt();
+      } catch (error) {
+        logger.warn('Codex app-server interrupt failed; closing session:', error);
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+      }
+      return;
+    }
+    if (session.traeAcpSession) {
+      await session.traeAcpSession.interrupt();
+      return;
+    }
+    if (session.sdkSession) {
+      session.sdkSession.close();
+      return;
+    }
+
+    if (!session.process || session.process.killed) {
+      await session.hostedProviderBinding?.cleanup();
+      return;
+    }
+    const proc = session.process;
+    this.killProcessTree(proc, 'SIGINT');
+
+    setTimeout(() => {
+      if (session.process === proc && !proc.killed) {
+        logger.warn('Session did not exit after SIGINT, escalating to SIGKILL:', params.sessionId);
+        this.killProcessTree(proc, 'SIGKILL');
+      }
+    }, 2000);
+  }
+
+  /**
+   * Stop and clean up a session.
+   */
+  async stopSession(params: StopSessionParams): Promise<void> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) return;
+
+    if (session.grokAcpSession) {
+      session.cancelledByUs = true;
+      session.grokAcpSession.close();
+    }
+
+    if (session.cursorAcpSession) {
+      session.cancelledByUs = true;
+      session.cursorAcpSession.close();
+    }
+
+    if (session.appServerSession) {
+      session.cancelledByUs = true;
+      try {
+        await session.appServerSession.interrupt();
+      } catch (error) {
+        logger.warn('Codex app-server interrupt failed while stopping the session:', error);
+      }
+      session.appServerSession.close();
+    }
+
+    if (session.traeAcpSession) {
+      session.cancelledByUs = true;
+      session.traeAcpSession.close();
+    }
+
+    if (session.sdkSession) {
+      session.cancelledByUs = true;
+      session.sdkSession.close();
+    }
+
+    if (session.process && !session.process.killed) {
+      session.cancelledByUs = true;
+      const proc = session.process;
+      this.killProcessTree(proc, 'SIGTERM');
+      setTimeout(() => {
+        if (session.process === proc && !proc.killed) {
+          this.killProcessTree(proc, 'SIGKILL');
+        }
+      }, 3000);
+    }
+
+    await session.hostedProviderBinding?.cleanup();
+    this.sessions.delete(params.sessionId);
+  }
+
+  async respondPermission(): Promise<void> {
+    // No-op for CLI mode (permissions handled by --permission-mode flag)
+  }
+
+  /**
+   * Renderer → main: deliver the user's answer to a pending CC AskUserQuestion
+   * (or signal cancellation). The matching bridge resolves its blocked
+   * `pending()` Promise, the local MCP handler returns to CC, and CC's
+   * `tool_result` flows back through the normal stream pipeline.
+   *
+   * Idempotent — late submissions for already-resolved tool calls are no-ops.
+   * No-op when called for an unknown opId; the bridge may have been cleaned
+   * up already (op finished / cancelled).
+   */
+  async submitIntervention(params: SubmitInterventionParams): Promise<void> {
+    const slot = this.opIdToIntervention.get(params.operationId);
+    if (!slot) {
+      logger.warn('submitIntervention: no active intervention for operationId', params.operationId);
+      return;
+    }
+    slot.bridge.resolve(params.toolCallId, {
+      cancelReason: params.cancelled ? (params.cancelReason ?? 'user_cancelled') : undefined,
+      cancelled: params.cancelled,
+      result: params.result,
+    });
+  }
+
+  /**
+   * Synchronously unlink every pending intervention's temp `mcp.json`. The
+   * async exit-handler cleanup loses to Electron's main-process teardown
+   * often enough that we'd leak `lobe-cc-mcp-<opId>.json` files into
+   * `os.tmpdir()` on real shutdowns; sync unlink here is the only reliable
+   * guarantee. Safe to call multiple times.
+   */
+  private unlinkPendingInterventionConfigsSync = (): void => {
+    for (const [, intervention] of this.opIdToIntervention) {
+      if (!intervention.tmpConfigPath) continue;
+      try {
+        unlinkSync(intervention.tmpConfigPath);
+      } catch {
+        /* file may already be gone — fine */
+      }
+    }
+  };
+
+  /**
+   * Cleanup on app quit. `before-quit` covers the user-driven Cmd+Q /
+   * `app.quit()` path; SIGTERM / SIGINT cover external kills (test
+   * harnesses, OS shutdown) where Electron's lifecycle events never fire.
+   */
+  afterAppReady() {
+    electronApp.on('before-quit', () => {
+      this.unlinkPendingInterventionConfigsSync();
+      for (const [, session] of this.sessions) {
+        session.hostedProviderBinding?.cleanupSync();
+        if (session.grokAcpSession) {
+          session.cancelledByUs = true;
+          session.grokAcpSession.close();
+        }
+        if (session.cursorAcpSession) {
+          session.cancelledByUs = true;
+          session.cursorAcpSession.close();
+        }
+        if (session.appServerSession) {
+          session.cancelledByUs = true;
+          session.appServerSession.close();
+        }
+        if (session.traeAcpSession) {
+          session.cancelledByUs = true;
+          session.traeAcpSession.close();
+        }
+        if (session.sdkSession) {
+          session.cancelledByUs = true;
+          session.sdkSession.close();
+        }
+        if (session.process && !session.process.killed) {
+          session.cancelledByUs = true;
+          this.killProcessTree(session.process, 'SIGTERM');
+        }
+      }
+      this.codexAppServerClient?.close();
+      this.codexAppServerClient = undefined;
+      this.sessions.clear();
+      // The exit handlers will tear each per-op intervention down, but if
+      // CC's stdio close races shutdown we'd leave the MCP server bound to
+      // a port. Stopping it here cancels every still-pending bridge with
+      // `session_ended` and closes the listener.
+      void this.builtinMcpServer?.stop().catch((err) => {
+        logger.warn('AskUserQuestion MCP server stop error:', err);
+      });
+    });
+
+    const onSignal = (signal: NodeJS.Signals) => {
+      this.unlinkPendingInterventionConfigsSync();
+      // Defer to Electron's normal quit flow so the rest of the app gets a
+      // chance to tear down. The `before-quit` handler above is idempotent.
+      try {
+        electronApp.quit();
+      } catch {
+        /* during late shutdown app.quit may throw — fine */
+      }
+      // Last-resort exit if Electron is wedged and won't quit on its own.
+      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 1000).unref();
+    };
+    process.on('SIGTERM', onSignal);
+    process.on('SIGINT', onSignal);
+  }
+
+  /**
+   * Spawn the embedded CLI's `hetero exec` for gateway-driven agent runs.
+   * The bundled CLI handles everything downstream — no local
+   * AgentStreamPipeline or IPC broadcast needed. Mirrors
+   * `spawnHeteroSandbox()` on the server side.
+   *
+   * Resolves only after the child either starts or fails to start. Node reports
+   * failures such as an inaccessible cwd asynchronously through `error`, so an
+   * eager accepted ack would strand the server operation without a producer.
+   */
+  spawnLhHeteroExec(params: {
+    agentType: string;
+    assistantMessageId?: string;
+    /** Resolved `lh hetero exec` wrapper args. */
+    args?: string[];
+    cwd?: string;
+    /** Image attachments (signed URLs) appended as image content blocks. */
+    imageList?: HeteroExecImageRef[];
+    jwt: string;
+    operationId: string;
+    prompt: string;
+    resumeFallbackSystemContext?: string;
+    resumeSessionId?: string;
+    serverUrl: string;
+    systemContext?: string;
+    topicId: string;
+    /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
+    workspaceId?: string;
+  }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
+    const {
+      agentType,
+      assistantMessageId,
+      args: extraArgs,
+      cwd,
+      imageList,
+      jwt,
+      operationId,
+      prompt,
+      resumeFallbackSystemContext,
+      resumeSessionId,
+      serverUrl,
+      systemContext,
+      topicId,
+      workspaceId,
+    } = params;
+    const workDir = cwd ?? process.cwd();
+    // Let the embedded CLI classify a stale project path and finish the
+    // operation through heteroFinish instead of failing this wrapper spawn as
+    // the misleading `spawn LobeHub.exe ENOENT`.
+    const workDirUsable = isSpawnableDirectory(workDir);
+    const spawnCwd = resolveHeteroSpawnCwd(workDir);
+
+    // When CLI tracing is enabled (dev builds, or the Help-menu toggle in
+    // packaged builds), have `lh hetero exec` persist the agent process's RAW
+    // stream-json (pre-adapter) on this device. The remote-device path
+    // otherwise leaves no local record — the CLI consumes stdout internally and
+    // only POSTs adapted events to the server — so without this there's nothing
+    // to inspect when a remote run misbehaves. Do not pass a cwd-relative dump
+    // path for a missing workDir: RawStreamDump would recreate the deleted
+    // directory before spawnAgent can report it.
+    const rawDumpDir =
+      this.shouldTraceCliOutput && workDirUsable ? this.resolveTraceRootDir(workDir) : undefined;
+
+    const args = [
+      'hetero',
+      'exec',
+      '--type',
+      agentType,
+      '--operation-id',
+      operationId,
+      '--topic',
+      topicId,
+      '--render',
+      'none',
+      '--input-json',
+      '-',
+      '--cwd',
+      workDir,
+      ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+      ...(rawDumpDir ? ['--raw-dump', rawDumpDir] : []),
+      ...(extraArgs ?? []),
+    ];
+
+    const stdinPayload = buildHeteroExecStdinPayload({
+      imageList,
+      prompt,
+      resumeFallbackSystemContext,
+      systemContext,
+    });
+    const cliScript = resolveCliScript();
+    if (!existsSync(cliScript)) {
+      return Promise.resolve({
+        reason: `Embedded CLI not found at ${cliScript}`,
+        status: 'rejected',
+      });
+    }
+
+    const env = {
+      ...process.env,
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ELECTRON_RUN_AS_NODE: '1',
+      LOBEHUB_JWT: jwt,
+      ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
+      LOBEHUB_SERVER: serverUrl,
+      // Same reason `runHeteroTask` injects this for notify: without it the
+      // CLI's heteroIngest/heteroFinish fall back to personal scope and the
+      // workspace topic 404s (empty assistant, topic stuck `running`).
+      ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
+    };
+
+    logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);
+
+    // Execute the CLI shipped with this desktop build. A bare `lh` would prefer
+    // an older global install earlier on PATH, letting model discovery report a
+    // capability that the actual execution runtime does not support.
+    const child = spawn(process.execPath, [cliScript, ...args], {
+      cwd: spawnCwd,
+      env,
+      stdio: ['pipe', 'inherit', 'inherit'],
+    });
+
+    child.on('exit', (code, signal) => {
+      logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
+    });
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (result: { reason?: string; status: 'accepted' | 'rejected' }) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      child.stdin.once('error', (err) => {
+        logger.error(
+          'spawnLhHeteroExec: stdin write failed — op=%s error=%s',
+          operationId,
+          err.message,
+        );
+        settle({ reason: err.message, status: 'rejected' });
+      });
+
+      child.once('spawn', () => {
+        try {
+          child.stdin.write(stdinPayload);
+          child.stdin.end();
+          settle({ status: 'accepted' });
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          logger.error(
+            'spawnLhHeteroExec: stdin write threw — op=%s error=%s',
+            operationId,
+            reason,
+          );
+          settle({ reason, status: 'rejected' });
+        }
+      });
+
+      child.once('error', (err) => {
+        logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
+        settle({ reason: err.message, status: 'rejected' });
+      });
+    });
+  }
+}

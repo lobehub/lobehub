@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
@@ -16,12 +17,19 @@ const routerMocks = vi.hoisted(() => {
     businessFileTransferStorageCheck: vi.fn(),
     hasWorkspaceScopedPermission: vi.fn(),
     serverDB: {
+      // `where` doubles as an awaitable empty result (restricted-KB lookups)
+      // and as a `.limit()` chain (workspace-role lookups).
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-          })),
-        })),
+        from: vi.fn(() => {
+          const whereResult = () =>
+            Object.assign(Promise.resolve([]), {
+              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+            });
+          return {
+            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+            where: vi.fn(whereResult),
+          };
+        }),
       })),
       transaction: vi.fn(async (callback: (trx: unknown) => unknown) =>
         callback(transactionClient),
@@ -41,6 +49,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
     findByIds: vi.fn().mockResolvedValue([]),
     query: vi.fn().mockResolvedValue([]),
     delete: vi.fn().mockResolvedValue(undefined),
+    deleteUnreferenced: vi.fn().mockResolvedValue(undefined),
     deleteMany: vi.fn().mockResolvedValue([]),
     updateGlobalFile: vi.fn().mockResolvedValue(undefined),
     clear: vi.fn().mockResolvedValue({} as any),
@@ -81,12 +90,18 @@ function createCallerWithCtx(partialCtx: any = {}) {
 
   const ctx = {
     serverDB: {
+      // Same dual-shape `where` as the module-level mock above.
       select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-          })),
-        })),
+        from: vi.fn(() => {
+          const whereResult = () =>
+            Object.assign(Promise.resolve([]), {
+              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+            });
+          return {
+            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
+            where: vi.fn(whereResult),
+          };
+        }),
       })),
     } as any,
     userId: 'test-user',
@@ -152,6 +167,7 @@ vi.mock('@/database/models/chunk', () => ({
 const mockFileModelCheckHash = vi.fn();
 const mockFileModelCreate = vi.fn();
 const mockFileModelDelete = vi.fn();
+const mockFileModelDeleteUnreferenced = vi.fn();
 const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
@@ -166,6 +182,7 @@ vi.mock('@/database/models/file', () => ({
     checkHash: mockFileModelCheckHash,
     create: mockFileModelCreate,
     delete: mockFileModelDelete,
+    deleteUnreferenced: mockFileModelDeleteUnreferenced,
     deleteMany: mockFileModelDeleteMany,
     findById: mockFileModelFindById,
     findByIds: mockFileModelFindByIds,
@@ -177,13 +194,22 @@ vi.mock('@/database/models/file', () => ({
   })),
 }));
 
+const mockKnowledgeBaseFindById = vi.fn();
+
+vi.mock('@/database/models/knowledgeBase', () => ({
+  KnowledgeBaseModel: vi.fn(() => ({
+    findById: mockKnowledgeBaseFindById,
+  })),
+}));
+
 const mockFileServiceGetFullFileUrl = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
+const mockFileServiceDeleteFile = vi.fn();
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(() => ({
-    deleteFile: vi.fn(),
+    deleteFile: mockFileServiceDeleteFile,
     deleteFiles: vi.fn(),
     getFileAccessUrl: mockFileServiceGetFileAccessUrl,
     getFullFileUrl: mockFileServiceGetFullFileUrl,
@@ -237,6 +263,7 @@ describe('fileRouter', () => {
     routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
+    mockKnowledgeBaseFindById.mockResolvedValue({ id: 'kb-1', visibility: 'public' });
 
     mockFile = {
       id: 'test-id',
@@ -348,6 +375,48 @@ describe('fileRouter', () => {
         id: 'new-file-id',
         url: 'https://lobehub.com/f/new-file-id',
       });
+    });
+
+    it('should persist a known upload source so the origin filter can see it', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: FileSource.PageEditor,
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: FileSource.PageEditor }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should drop an unrecognised source instead of failing the upload', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'image/png',
+        metadata: {},
+        name: 'pasted.png',
+        size: 100,
+        source: 'some-future-client',
+        url: 'files/pasted.png',
+      });
+
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ source: undefined }),
+        true,
+        routerMocks.transactionClient,
+      );
     });
 
     it('should refresh global file metadata when an existing hash points to a missing object', async () => {
@@ -462,6 +531,53 @@ describe('fileRouter', () => {
           workspaceId: 'workspace-1',
         }),
       );
+    });
+
+    it('should use workspace knowledge-base visibility over an explicit value', async () => {
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        knowledgeBaseId: 'kb-1',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+        visibility: 'private',
+        metadata: {},
+      });
+
+      expect(mockKnowledgeBaseFindById).toHaveBeenCalledWith('kb-1');
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          knowledgeBaseId: 'kb-1',
+          visibility: 'public',
+        }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should reject a workspace upload when the knowledge base is not accessible', async () => {
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockKnowledgeBaseFindById.mockResolvedValue(undefined);
+
+      await expect(
+        caller.createFile({
+          hash: 'test-hash',
+          fileType: 'text',
+          knowledgeBaseId: 'missing-kb',
+          name: 'test.txt',
+          size: 100,
+          url: 'files/test.txt',
+          metadata: {},
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
     });
 
     it('should use actual file size from S3 instead of client-provided size (security fix)', async () => {
@@ -770,6 +886,27 @@ describe('fileRouter', () => {
     });
   });
 
+  describe('removeUnreferencedFile', () => {
+    it('keeps object storage when the file became referenced before cleanup', async () => {
+      mockFileModelFindById.mockResolvedValue({ id: 'voice-file', userId: 'test-user' });
+      mockFileModelDeleteUnreferenced.mockResolvedValue(undefined);
+
+      await caller.removeUnreferencedFile({ id: 'voice-file' });
+
+      expect(mockFileModelDeleteUnreferenced).toHaveBeenCalledWith('voice-file', false);
+      expect(mockFileServiceDeleteFile).not.toHaveBeenCalled();
+    });
+
+    it('removes object storage after the unreferenced database row is deleted', async () => {
+      mockFileModelFindById.mockResolvedValue({ id: 'voice-file', userId: 'test-user' });
+      mockFileModelDeleteUnreferenced.mockResolvedValue({ url: 'voice/file.webm' });
+
+      await caller.removeUnreferencedFile({ id: 'voice-file' });
+
+      expect(mockFileServiceDeleteFile).toHaveBeenCalledWith('voice/file.webm');
+    });
+  });
+
   describe('removeFiles', () => {
     it('should do nothing when no files found', async () => {
       ctx.fileModel.deleteMany.mockResolvedValue([]);
@@ -892,6 +1029,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         creatorUserId: 'test-user',
+        excludeKnowledgeBaseIds: [],
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
@@ -905,6 +1043,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         creatorUserId: undefined,
+        excludeKnowledgeBaseIds: [],
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,

@@ -77,8 +77,7 @@ describe('LobeAzureOpenAI', () => {
 
     describe('streaming response', () => {
       it('should use responses API and append web_search tool when enabledSearch is true', async () => {
-        const mockProdStream = new ReadableStream() as any;
-        const mockDebugStream = new ReadableStream() as any;
+        const mockStream = new ReadableStream() as any;
         const mockPricing = { units: [] };
 
         instance = new LobeAzureOpenAI({
@@ -90,9 +89,7 @@ describe('LobeAzureOpenAI', () => {
         vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
           new ReadableStream() as any,
         );
-        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
-          tee: () => [mockProdStream, mockDebugStream],
-        } as any);
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
         vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
 
@@ -122,7 +119,7 @@ describe('LobeAzureOpenAI', () => {
         );
 
         expect(streamsModule.OpenAIResponsesStream).toHaveBeenCalledWith(
-          mockProdStream,
+          mockStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
             payload: expect.objectContaining({
@@ -136,12 +133,9 @@ describe('LobeAzureOpenAI', () => {
       });
 
       it('should preserve GPT-5.6 Pro mode and Max effort in Responses payloads', async () => {
-        const mockProdStream = new ReadableStream() as any;
-        const mockDebugStream = new ReadableStream() as any;
+        const mockStream = new ReadableStream() as any;
 
-        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
-          tee: () => [mockProdStream, mockDebugStream],
-        } as any);
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
         vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
 
@@ -163,8 +157,7 @@ describe('LobeAzureOpenAI', () => {
       });
 
       it('should use deploymentName for Azure Responses API requests while keeping logical model for pricing', async () => {
-        const mockProdStream = new ReadableStream() as any;
-        const mockDebugStream = new ReadableStream() as any;
+        const mockStream = new ReadableStream() as any;
         const mockPricing = { units: [] };
 
         instance = new LobeAzureOpenAI({
@@ -176,9 +169,7 @@ describe('LobeAzureOpenAI', () => {
         vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
           new ReadableStream() as any,
         );
-        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
-          tee: () => [mockProdStream, mockDebugStream],
-        } as any);
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
         vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
 
@@ -198,7 +189,7 @@ describe('LobeAzureOpenAI', () => {
         expect(createCall.deploymentName).toBeUndefined();
 
         expect(streamsModule.OpenAIResponsesStream).toHaveBeenCalledWith(
-          mockProdStream,
+          mockStream,
           expect.objectContaining({
             payload: expect.objectContaining({
               apiMode: 'responses',
@@ -211,8 +202,7 @@ describe('LobeAzureOpenAI', () => {
       });
 
       it('should strip unsupported params for Azure reasoning models and include usage in stream options', async () => {
-        const mockProdStream = new ReadableStream() as any;
-        const mockDebugStream = new ReadableStream() as any;
+        const mockStream = new ReadableStream() as any;
         const mockPricing = { units: [] };
 
         instance = new LobeAzureOpenAI({
@@ -221,9 +211,7 @@ describe('LobeAzureOpenAI', () => {
           id: 'lobehub',
         });
 
-        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue({
-          tee: () => [mockProdStream, mockDebugStream],
-        } as any);
+        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
         vi.spyOn(streamsModule, 'OpenAIStream').mockReturnValue(new ReadableStream());
 
@@ -262,7 +250,7 @@ describe('LobeAzureOpenAI', () => {
           undefined,
         );
         expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
-          mockProdStream,
+          mockStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
             payload: expect.objectContaining({
@@ -277,11 +265,8 @@ describe('LobeAzureOpenAI', () => {
       });
 
       it('should handle multiple data chunks correctly', async () => {
-        const mockProdStream = new ReadableStream() as any;
-        const mockDebugStream = new ReadableStream() as any;
-        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue({
-          tee: () => [mockProdStream, mockDebugStream],
-        } as any);
+        const mockStream = new ReadableStream() as any;
+        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(mockStream);
         vi.spyOn(streamsModule, 'OpenAIStream').mockReturnValue(
           new ReadableStream({
             start(controller) {
@@ -304,7 +289,7 @@ describe('LobeAzureOpenAI', () => {
 
         expect(result).toBeInstanceOf(Response);
         expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
-          mockProdStream,
+          mockStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
             payload: expect.objectContaining({

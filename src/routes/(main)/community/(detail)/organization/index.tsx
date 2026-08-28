@@ -66,8 +66,8 @@ const OrganizationDetailPage = memo<OrganizationDetailPageProps>(({ mobile }) =>
   );
 });
 
-export const MobileOrganizationDetailPage = memo(() => {
+export const MobileOrganizationDetailPage = () => {
   return <OrganizationDetailPage mobile={true} />;
-});
+};
 
 export default OrganizationDetailPage;

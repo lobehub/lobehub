@@ -6,8 +6,8 @@ evidence: a passing assertion or a correct JSON result is harder to fake than a
 screenshot, and it runs anywhere (no browser, no display).
 
 Use this surface when your change is verifiable by running something and reading
-what it prints. Escalate to [web.md](./web.md) or [electron.md](./electron.md)
-only when the criterion is actually about rendered UI.
+what it prints. Return to the surface router only when the criterion is actually
+about rendered UI.
 
 ## How to verify
 
@@ -41,7 +41,8 @@ Provenance: `cli` for command stdout, `program` for a script/test you ran. See
 
 The `lh` CLI you upload with is already authed. A _different_ product CLI under
 test carries its own auth (API key or stored login) — configure it before
-capturing its output. See [../references/auth.md](../references/auth.md#cli--backend-surface).
+capturing its output, and verify the credential belongs to the intended test
+environment.
 
 ## Boundaries
 
@@ -51,4 +52,4 @@ capturing its output. See [../references/auth.md](../references/auth.md#cli--bac
   criterion (or describe them in `--desc`), not a 10k-line log the reviewer must
   scan.
 - **Never upload secrets.** Strip tokens/keys from output before uploading — see
-  [../references/auth.md](../references/auth.md#boundaries--read-before-touching-cookies).
+  [../references/evidence.md](../references/evidence.md#artifact-safety).

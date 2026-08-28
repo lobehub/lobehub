@@ -1,8 +1,7 @@
 'use client';
 
-import { downloadFile } from '@lobechat/utils/client';
 import { FilePlugin, UploadPlugin, useLexicalComposerContext } from '@lobehub/editor';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { DownloadIcon } from 'lucide-react';
 import {
@@ -19,8 +18,10 @@ import { useTranslation } from 'react-i18next';
 import FileIcon from '@/components/FileIcon';
 import { formatSize, formatSpeed, formatTime } from '@/utils/format';
 
+import { preserveInsertedFileSize } from './editorAttachments';
 import type { EditorFileUploadTracker } from './editorFileUploadTracker';
 import { createEditorFileUploadTracker } from './editorFileUploadTracker';
+import { openFileDownload } from './fileDownload';
 import type { EditorAttachmentUpload } from './useImageUpload';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -241,7 +242,7 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node, uploadTracker }
     event.stopPropagation();
     event.preventDefault();
     if (!fileUrl) return;
-    void downloadFile(fileUrl, name);
+    openFileDownload(fileUrl);
   };
 
   return (
@@ -284,6 +285,7 @@ const LinearFilePlugin: FC<LinearFilePluginProps> = ({ handleUpload, theme }) =>
   const uploadTracker = uploadTrackerRef.current;
   const trackedHandleUpload = useCallback<EditorAttachmentUpload>(
     async (file) => {
+      preserveInsertedFileSize(file);
       const uploadId = uploadTracker.start(file);
 
       try {

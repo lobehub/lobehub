@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
+import type { FileItem, MessageItem, SessionItem, TopicItem } from '@/database/schemas';
 import { messages, messagesFiles } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
@@ -7,6 +8,12 @@ import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import {
+  projectPublicFile,
+  projectPublicMessage,
+  projectPublicSession,
+  projectPublicTopic,
+} from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   MessageListResponse,
@@ -53,23 +60,23 @@ export class MessageService extends BaseService {
 
     return await Promise.all(
       messages.map(async (message) => {
-        const messageWithoutFiles = { ...message };
-        delete (messageWithoutFiles as any).filesToMessages;
-
         return {
-          ...messageWithoutFiles,
+          ...projectPublicMessage(message as MessageItem),
           files: await Promise.all(
             message.filesToMessages?.map(async ({ file }) => {
+              const publicFile = projectPublicFile(file as FileItem);
               if (file.url.startsWith('http')) {
-                return file;
+                return publicFile;
               }
 
               return {
-                ...file,
+                ...publicFile,
                 url: await this.coreFileService.getFullFileUrl(file.url),
               };
             }) ?? [],
           ),
+          session: message.session ? projectPublicSession(message.session as SessionItem) : null,
+          topic: message.topic ? projectPublicTopic(message.topic as TopicItem) : null,
         };
       }),
     );

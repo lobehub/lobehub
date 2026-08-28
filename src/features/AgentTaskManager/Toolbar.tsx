@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox, Popover, Text } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

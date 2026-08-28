@@ -39,6 +39,7 @@ const patchSubtaskInTree = (
     if (subtask.identifier === id) {
       if (value.name !== undefined) subtask.name = value.name;
       if (value.priority !== undefined) subtask.priority = value.priority;
+      if (value.userId !== undefined) subtask.assigneeUserId = value.userId;
       if (value.agentId !== undefined) {
         // null = unassigned (clear it). For a real agentId, only patching assignee.id
         // is enough — AssigneeAvatar resolves title/avatar/backgroundColor reactively

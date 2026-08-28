@@ -196,210 +196,6 @@ describe('MessageCollector', () => {
     });
   });
 
-  describe('findLastNodeInAssistantGroup', () => {
-    it('should return the node itself if no tool children', () => {
-      const messageMap = new Map<string, Message>();
-      const childrenMap = new Map<string | null, string[]>();
-      const collector = new MessageCollector(messageMap, childrenMap);
-
-      const idNode: IdNode = {
-        children: [],
-        id: 'msg-1',
-      };
-
-      const result = collector.findLastNodeInAssistantGroup(idNode);
-
-      expect(result).toEqual(idNode);
-    });
-
-    it('should return last tool node if no assistant children', () => {
-      const messageMap = new Map<string, Message>([
-        [
-          'msg-1',
-          {
-            content: 'test',
-            createdAt: 0,
-            id: 'msg-1',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'tool-1',
-          {
-            content: 'result',
-            createdAt: 0,
-            id: 'tool-1',
-            parentId: 'msg-1',
-            role: 'tool',
-            updatedAt: 0,
-          },
-        ],
-      ]);
-      const childrenMap = new Map<string | null, string[]>();
-      const collector = new MessageCollector(messageMap, childrenMap);
-
-      const idNode: IdNode = {
-        children: [{ children: [], id: 'tool-1' }],
-        id: 'msg-1',
-      };
-
-      const result = collector.findLastNodeInAssistantGroup(idNode);
-
-      expect(result?.id).toBe('tool-1');
-    });
-
-    it('should follow assistant chain recursively', () => {
-      const messageMap = new Map<string, Message>([
-        [
-          'msg-1',
-          {
-            content: 'test1',
-            createdAt: 0,
-            id: 'msg-1',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'tool-1',
-          {
-            content: 'result1',
-            createdAt: 0,
-            id: 'tool-1',
-            parentId: 'msg-1',
-            role: 'tool',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'msg-2',
-          {
-            content: 'test2',
-            createdAt: 0,
-            id: 'msg-2',
-            parentId: 'tool-1',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-      ]);
-      const childrenMap = new Map<string | null, string[]>();
-      const collector = new MessageCollector(messageMap, childrenMap);
-
-      const idNode: IdNode = {
-        children: [
-          {
-            children: [{ children: [], id: 'msg-2' }],
-            id: 'tool-1',
-          },
-        ],
-        id: 'msg-1',
-      };
-
-      const result = collector.findLastNodeInAssistantGroup(idNode);
-
-      expect(result?.id).toBe('msg-2');
-    });
-
-    it('skips signal-tagged callbacks when locating the group tail', () => {
-      // when [signal callback, next tool-using assistant]
-      // both live under the same tool, the tail finder must follow the
-      // real main-chain assistant — taking children[0] blindly lands on
-      // the callback (which is a leaf) and truncates the AssistantGroup.
-      const messageMap = new Map<string, Message>([
-        [
-          'ast-0',
-          {
-            agentId: 'agent-x',
-            content: '',
-            createdAt: 0,
-            id: 'ast-0',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'tool-1',
-          {
-            content: '',
-            createdAt: 0,
-            id: 'tool-1',
-            parentId: 'ast-0',
-            role: 'tool',
-            tool_call_id: 'toolu_mon',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'cb-1',
-          {
-            agentId: 'agent-x',
-            content: '',
-            createdAt: 0,
-            id: 'cb-1',
-            metadata: {
-              signal: {
-                sequence: 1,
-                sourceToolCallId: 'toolu_mon',
-                sourceToolName: 'Monitor',
-                type: 'tool-stdout',
-              },
-            } as any,
-            parentId: 'tool-1',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'ast-4',
-          {
-            agentId: 'agent-x',
-            content: '',
-            createdAt: 0,
-            id: 'ast-4',
-            parentId: 'tool-1',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'tool-2',
-          {
-            content: '',
-            createdAt: 0,
-            id: 'tool-2',
-            parentId: 'ast-4',
-            role: 'tool',
-            updatedAt: 0,
-          },
-        ],
-      ]);
-      const collector = new MessageCollector(messageMap, new Map());
-
-      const idNode: IdNode = {
-        children: [
-          {
-            children: [
-              { children: [], id: 'cb-1' },
-              {
-                children: [{ children: [], id: 'tool-2' }],
-                id: 'ast-4',
-              },
-            ],
-            id: 'tool-1',
-          },
-        ],
-        id: 'ast-0',
-      };
-
-      const result = collector.findLastNodeInAssistantGroup(idNode, 'agent-x');
-
-      // Tail must be tool-2 (descended through ast-4), NOT cb-1.
-      expect(result?.id).toBe('tool-2');
-    });
-  });
-
   // ────────────────────────────────────────────────────
   // external signal callback collection
   // ────────────────────────────────────────────────────
@@ -794,6 +590,75 @@ describe('MessageCollector', () => {
 
       expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B', 'ast-final']);
       expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
+    });
+
+    it('uses the latest user descendant when the default resolver selects a continuation', () => {
+      const astRoot = mkAssistant('ast-root', {
+        parentId: 'user-root',
+        tools: [bashTool('tc-1')],
+      });
+      const tool = mkTool('tool-1', { parentId: 'ast-root', tool_call_id: 'tc-1' });
+      const astOld = mkAssistant('ast-old', { createdAt: 2, parentId: 'tool-1' });
+      const astCurrent = mkAssistant('ast-current', { createdAt: 3, parentId: 'tool-1' });
+      const userOld: Message = {
+        content: 'old follow-up',
+        createdAt: 4,
+        id: 'user-old',
+        parentId: 'ast-old',
+        role: 'user',
+        updatedAt: 4,
+      };
+      const userCurrent: Message = {
+        content: 'current follow-up',
+        createdAt: 5,
+        id: 'user-current',
+        parentId: 'ast-current',
+        role: 'user',
+        updatedAt: 5,
+      };
+      const allMessages = [astRoot, tool, astOld, astCurrent, userOld, userCurrent];
+      const messageMap = new Map(allMessages.map((message) => [message.id, message]));
+      const childrenMap = new Map<string | null, string[]>([
+        ['tool-1', ['ast-old', 'ast-current']],
+        ['ast-old', ['user-old']],
+        ['ast-current', ['user-current']],
+      ]);
+      const collector = new MessageCollector(messageMap, childrenMap);
+
+      const assistantChain: Message[] = [];
+      collector.collectAssistantChain(astRoot, allMessages, assistantChain, [], new Set());
+
+      expect(assistantChain.map((message) => message.id)).toEqual(['ast-root', 'ast-current']);
+    });
+
+    it('preserves activeBranchIndex when filtered continuations use a smaller candidate set', () => {
+      const astRoot = mkAssistant('ast-root', {
+        metadata: { activeBranchIndex: 2 },
+        parentId: 'user-root',
+        tools: [bashTool('tc-1')],
+      });
+      const tool = mkTool('tool-1', { parentId: 'ast-root', tool_call_id: 'tc-1' });
+      const otherAgent = mkAssistant('ast-other-agent', {
+        agentId: 'agent-y',
+        createdAt: 1,
+        parentId: 'ast-root',
+      });
+      const astOld = mkAssistant('ast-old', { createdAt: 2, parentId: 'ast-root' });
+      const astCurrent = mkAssistant('ast-current', { createdAt: 3, parentId: 'ast-root' });
+      const allMessages = [astRoot, tool, otherAgent, astOld, astCurrent];
+      const messageMap = new Map(allMessages.map((message) => [message.id, message]));
+      const childrenMap = new Map<string | null, string[]>([
+        ['ast-root', ['tool-1', 'ast-other-agent', 'ast-old', 'ast-current']],
+      ]);
+      const collector = new MessageCollector(messageMap, childrenMap);
+
+      const assistantChain: Message[] = [];
+      const processedIds = new Set<string>();
+      collector.collectAssistantChain(astRoot, allMessages, assistantChain, [], processedIds);
+
+      expect(assistantChain.map((message) => message.id)).toEqual(['ast-root', 'ast-current']);
+      expect(processedIds.has('ast-old')).toBe(true);
+      expect(processedIds.has('ast-other-agent')).toBe(false);
     });
 
     it('continues past a duplicate edge to the current turn own tool result', () => {

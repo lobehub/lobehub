@@ -8,7 +8,7 @@ import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessa
 import DisplayContent from '../../components/DisplayContent';
 import FileChunks from '../../components/FileChunks';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
-import Reasoning from '../../components/Reasoning';
+import Reasoning, { hasRenderableReasoning } from '../../components/Reasoning';
 import SearchGrounding from '../../components/SearchGrounding';
 import { useMarkdown } from '../useMarkdown';
 
@@ -30,8 +30,7 @@ const MessageContent = memo<UIChatMessage>(
     // remove \n to avoid empty content
     // refs: https://github.com/lobehub/lobe-chat/pull/6153
     const showReasoning =
-      (!!props.reasoning && props.reasoning.content?.trim() !== '') ||
-      (!props.reasoning && isReasoning);
+      hasRenderableReasoning(props.reasoning) || (!props.reasoning && isReasoning);
 
     const showFileChunks = !!chunksList && chunksList.length > 0;
 

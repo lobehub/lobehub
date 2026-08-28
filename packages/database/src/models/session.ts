@@ -621,13 +621,14 @@ export class SessionModel {
       });
 
       // Filter and map results, ensuring valid session associations
-      return (
-        results
-          .filter((item) => item.agentsToSessions && item.agentsToSessions.length > 0)
-          // @ts-expect-error
-          .map((item) => item.agentsToSessions[0].session)
-          .filter((session) => session !== null && session !== undefined)
-      );
+      return results
+        .filter((item) => item.agentsToSessions && item.agentsToSessions.length > 0)
+        .map(
+          (item) =>
+            (item.agentsToSessions as Array<{ session: SessionItem | null | undefined }>)[0]
+              ?.session,
+        )
+        .filter((session) => session !== null && session !== undefined);
     } catch (e) {
       console.error('findSessionsByKeywords error:', e, { keyword });
       return [];

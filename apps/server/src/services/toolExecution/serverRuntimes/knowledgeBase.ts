@@ -4,6 +4,7 @@ import { KnowledgeBaseExecutionRuntime } from '@lobechat/builtin-tool-knowledge-
 import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import { ProjectModel } from '@/database/models/project';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
@@ -13,13 +14,14 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { userId, serverDB, agentId, agentVisibility, workspaceId } = context;
+    const { userId, serverDB, agentId, agentVisibility, taskId, workspaceId } = context;
     if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Knowledge Base execution');
     }
 
     const fileModel = new FileModel(serverDB, userId, workspaceId);
     const knowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
+    const projectModel = new ProjectModel(serverDB, userId, workspaceId);
     const knowledgeRepo = new KnowledgeRepo(serverDB, userId, workspaceId);
     const documentService = new DocumentService(serverDB, userId, workspaceId, agentVisibility);
     const fileService = new FileService(serverDB, userId, workspaceId);
@@ -32,10 +34,17 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 
     const resolveAgentKnowledgeBaseIds = async (override?: string[]): Promise<string[]> => {
-      if (override && override.length > 0) return override;
-      if (!agentModel || !agentId) return [];
-      const knowledge = await agentModel.getAgentAssignedKnowledge(agentId);
-      return knowledge.knowledgeBases.filter((k) => k.enabled && k.id).map((k) => k.id as string);
+      const agentKnowledgeBaseIds = async () => {
+        if (override && override.length > 0) return override;
+        if (!agentModel || !agentId) return [];
+        const knowledge = await agentModel.getAgentAssignedKnowledge(agentId);
+        return knowledge.knowledgeBases.filter((k) => k.enabled && k.id).map((k) => k.id as string);
+      };
+      const [agentIds, projectIds] = await Promise.all([
+        agentKnowledgeBaseIds(),
+        taskId ? projectModel.getEnabledKnowledgeBaseIdsForTask(taskId) : Promise.resolve([]),
+      ]);
+      return [...new Set([...agentIds, ...projectIds])];
     };
 
     return new KnowledgeBaseExecutionRuntime(

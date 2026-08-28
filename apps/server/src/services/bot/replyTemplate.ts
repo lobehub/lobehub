@@ -223,6 +223,10 @@ type SystemStrings = {
   cmdFeedbackSubmitted: string;
   cmdFeedbackSubmittedWithLink: (issueUrl: string) => string;
   cmdFeedbackUsage: string;
+  cmdModeSetAgent: string;
+  cmdModeSetChat: string;
+  cmdModeStatus: (mode?: 'agent' | 'chat') => string;
+  cmdModeUsage: string;
   cmdNewReset: string;
   cmdStopNotActive: string;
   cmdStopRequested: string;
@@ -239,6 +243,7 @@ type SystemStrings = {
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
   errorEmptyCompletion: string;
+  errorModelRefusal: string;
   errorHarnessInternal: string;
   errorInsufficientCredits: string;
   errorLocationNotSupported: string;
@@ -284,6 +289,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `Thanks — your feedback has been sent to the LobeHub team. Tracked at: ${issueUrl}`,
     cmdFeedbackUsage:
       'Usage: `/feedback <your message>` — sends feedback directly to the LobeHub team (no AI reply).',
+    cmdModeSetAgent: 'Switched to Agent Mode — replies can use tools and run multi-step tasks.',
+    cmdModeSetChat: 'Switched to Chat Mode — replies are plain conversation without tools.',
+    cmdModeStatus: (mode) =>
+      mode
+        ? `Current mode: ${mode === 'agent' ? 'Agent Mode' : 'Chat Mode'}. Use \`/mode agent\` or \`/mode chat\` to switch.`
+        : "Current mode: default (follows the agent's configuration). Use `/mode agent` or `/mode chat` to switch.",
+    cmdModeUsage: 'Usage: `/mode agent` or `/mode chat`.',
     cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
@@ -307,6 +319,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
     errorEmptyCompletion:
       "**The model provider returned an empty response.**\nEven without visible content, this request may still incur charges. You can retry, or switch models in the agent's settings and try again.",
+    errorModelRefusal:
+      '**The model declined to answer this request.**\nTry rephrasing it, or switch models in the agent settings and try again.',
     errorHarnessInternal:
       '**Something went wrong on our side.**\nThe agent run hit an internal error, which has been logged. Please try again — if it keeps happening, share the Operation ID below with support.',
     errorInsufficientCredits:
@@ -364,6 +378,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `已收到，感谢反馈，已转交 LobeHub 团队。跟踪链接：${issueUrl}`,
     cmdFeedbackUsage:
       '用法：`/feedback <你的反馈内容>` —— 反馈会直达 LobeHub 团队，不会触发 AI 回复。',
+    cmdModeSetAgent: '已切换到 Agent 模式 —— 回复可调用工具并执行多步任务。',
+    cmdModeSetChat: '已切换到 Chat 模式 —— 仅进行纯对话，不调用工具。',
+    cmdModeStatus: (mode) =>
+      mode
+        ? `当前模式：${mode === 'agent' ? 'Agent 模式' : 'Chat 模式'}。使用 \`/mode agent\` 或 \`/mode chat\` 切换。`
+        : '当前模式：默认（跟随 Agent 配置）。使用 `/mode agent` 或 `/mode chat` 切换。',
+    cmdModeUsage: '用法：`/mode agent` 或 `/mode chat`。',
     cmdNewReset: '对话已重置，下一条消息会开启新话题。',
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
@@ -384,6 +405,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
     errorEmptyCompletion:
       '**模型供应商返回了空内容**\n即使没有可显示的内容，本次请求仍可能产生费用。你可以重试，或在 Agent 设置中切换模型后再试。',
+    errorModelRefusal:
+      '**模型拒绝回答该请求**\n请尝试调整表述，或在 Agent 设置中切换其他模型后重试。',
     errorHarnessInternal:
       '**我们这边出了点问题**\nAgent 执行遇到内部错误，已记录。请重试；如果持续出现，请把下方 Operation ID 提供给支持人员。',
     errorInsufficientCredits:
@@ -464,7 +487,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   QuotaLimitReached: 'errorQuotaLimitReached',
   // ── transient provider / capacity (attribution: provider) ──
   ModelEmptyCompletion: 'errorEmptyCompletion',
+  ModelRefusal: 'errorModelRefusal',
   NoAvailableChannel: 'errorProviderUnavailable',
+  ProviderContentPolicyViolation: 'errorContentModeration',
   ProviderServiceUnavailable: 'errorProviderUnavailable',
   RateLimitExceeded: 'errorRateLimited',
   // ── network / infra (attribution: system) ──
@@ -599,6 +624,9 @@ export type CommandReplyKey =
   | 'cmdFeedbackError'
   | 'cmdFeedbackSubmitted'
   | 'cmdFeedbackUsage'
+  | 'cmdModeSetAgent'
+  | 'cmdModeSetChat'
+  | 'cmdModeUsage'
   | 'cmdNewReset'
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
@@ -611,6 +639,15 @@ export type CommandReplyKey =
  */
 export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): string {
   return getSystemStrings(lng)[key];
+}
+
+/**
+ * Render the `/mode` status reply (no-arg invocation). `mode` is the explicit
+ * per-conversation override when one was set via `/mode agent|chat`; undefined
+ * means the conversation follows the agent's configured default.
+ */
+export function renderModeStatus(mode?: 'agent' | 'chat', lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdModeStatus(mode);
 }
 
 /**

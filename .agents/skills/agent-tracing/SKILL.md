@@ -132,7 +132,55 @@ agent-tracing inspect <partialOperationId> -p
 
 # Clean up stale partial snapshots
 agent-tracing partial clean
+
+# Map the context window composition of every LLM call (cm / map are aliases)
+agent-tracing ctx-map
+agent-tracing ctx-map <operationId|traceId|path.json>
+agent-tracing ctx-map --html            # standalone report under .agent-tracing/_reports/
+agent-tracing ctx-map --html out.html
 ```
+
+## ctx-map — Context Window Composition
+
+`ctx-map` renders one row per `call_llm` step: the messages that call sent to the model, split
+into typed segments (system / injected block / user / reasoning / tool call / tool result) with
+width proportional to tokens, laid against the model's context window.
+
+The second axis is what `ctx-lint` cannot show: each row is diffed against the previous call, so
+the longest identical **message prefix** — the part a provider's prefix cache can reuse — is
+marked, along with the first message that mutated and the tokens re-processed behind it. A small
+injected block carrying a relative timestamp (`1m ago` → `now`) invalidates every token after it,
+which shows up as a break marker early in the row.
+
+Reading a row:
+
+- **Block colors** encode role directly: orange system, green user, blue assistant, gray tool.
+  Assistant reasoning, content, and tool calls use different steps of the same blue scale;
+  framework-injected blocks use a lighter orange than the system prompt. Every value is a step
+  index into a LobeHub scale vendored in `viewer/contextMapScales.ts`, with assignments in
+  `viewer/contextMapPalette.ts`. The HTML report ships both themes and follows the system theme.
+- **Neutral message frames** group segments that belong to the same payload message. Every role
+  uses the same frame color: the outline communicates structure only, while the block fill carries
+  role and subtype semantics. The original framed layout uses padding inside each message and a
+  small track gap between messages, keeping each payload message visually distinct.
+- **Fill** says whether the provider reused it: shaded `▓` (HTML: 60%-opaque hatch) was served
+  from the prefix cache; solid `█` (HTML: flat) was re-processed by the model.
+- **The line under the track** is the cache ledger — a bracket / green band spanning exactly the
+  cached prefix, then the break marker (`▲` in the terminal, a red rule through the track in
+  HTML) at the column where reuse stopped, with the reason and the re-processed tokens.
+
+| Flag            | Short | Description                                                |
+| --------------- | ----- | ---------------------------------------------------------- |
+| `--html [path]` |       | Standalone HTML report (hover a segment for its content)   |
+| `--width <n>`   | `-w`  | Track width in terminal columns                            |
+| `--window <n>`  |       | Override the model context window used as the track        |
+| `--full-window` |       | Always scale to the full window, never to the largest call |
+| `--json`        | `-j`  | Per-call segments + cache stats                            |
+
+The track scales to the context window; when the window dwarfs the payloads (a 50k payload on a
+1M window) it falls back to the largest call so the composition stays readable, and the header
+says which basis is in use. Analysis lives in `analysis/contextMap.ts` and is exported as
+`buildContextMap()` for downstream corpus work.
 
 ## Inspect Flag Reference
 

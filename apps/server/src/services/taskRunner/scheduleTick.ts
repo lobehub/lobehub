@@ -101,7 +101,7 @@ export async function runScheduleTick(
       const startedAt = new Date(startedAtIso);
       const topicModel = new TaskTopicModel(db, userId, wsId);
       // Only automation ticks count against the quota — ad-hoc manual runs must
-      // not consume scheduled executions (LOBE-11391).
+      // not consume scheduled executions.
       const runCount = await topicModel.countByTask(taskId, {
         since: startedAt,
         triggers: ['schedule'],

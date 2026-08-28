@@ -1,11 +1,11 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { MessageController } from '../controllers';
 import { requireAuth } from '../middleware';
-import { requireAnyPermission } from '../middleware/permission-check';
+import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import {
   MessageIdParamSchema,
   MessagesCountQuerySchema,
@@ -80,6 +80,7 @@ MessageRoutes.post(
 );
 
 // POST /api/v1/messages/replies - Create a user message and generate an AI reply (requires message write permission)
+// Generating the reply invokes a model, so restricted API keys also need `model:invoke`
 MessageRoutes.post(
   '/replies',
   requireAuth,
@@ -87,6 +88,7 @@ MessageRoutes.post(
     getAllScopePermissions('MESSAGE_CREATE'),
     'You do not have permission to create messages',
   ),
+  requireApiKeyScope('model:invoke'),
   zValidator('json', MessagesCreateWithReplyRequestSchema),
   (c) => {
     const controller = new MessageController();

@@ -1,33 +1,123 @@
-export { AmpAdapter, ClaudeCodeAdapter } from './adapters';
+export {
+  AmpAdapter,
+  ClaudeCodeAdapter,
+  CodeBuddyAdapter,
+  GrokBuildAdapter,
+  QoderAdapter,
+} from './adapters';
+export {
+  buildClaudeCodeDirectEnv,
+  type BuildClaudeCodeDirectEnvInput,
+  type BuildClaudeCodeDirectEnvResult,
+  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR,
+  normalizeAnthropicSdkBaseURL,
+  sanitizeClaudeCodeDirectArgs,
+  sanitizeClaudeCodeDirectEnv,
+} from './claudeCodeDirectEnv';
 export type {
+  HeterogeneousAgentCliError,
+  HeterogeneousAgentDescriptor,
+  HeterogeneousAgentMenuLabelKey,
   HeterogeneousAgentType,
+  LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from './config';
 export {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEBUDDY_CLI_INSTALL_COMMANDS,
+  CODEBUDDY_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  CURSOR_CLI_INSTALL_COMMANDS,
+  CURSOR_CLI_INSTALL_DOCS_URL,
   getHeterogeneousAgentConfig,
+  getHeterogeneousAgentConfigOrThrow,
+  GROK_BUILD_CLI_INSTALL_COMMANDS,
+  GROK_BUILD_CLI_INSTALL_DOCS_URL,
   HETEROGENEOUS_AGENT_CONFIGS,
+  isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+  resolveHeterogeneousAgentCommand,
 } from './config';
-export { HETEROGENEOUS_TYPE_LABELS } from './labels';
+export type {
+  HeteroErrorAttribution,
+  HeteroErrorCategory,
+  HeteroErrorKind,
+  HeteroErrorSeverity,
+  HeteroErrorSpec,
+  HeteroGuideCode,
+} from './errors';
+export {
+  formatHeteroErrorId,
+  getHeteroErrorSpec,
+  HETERO_CATEGORY_NUMERIC_PREFIX,
+  HETERO_ERROR_SPECS,
+  isUserSideHeteroError,
+} from './errors';
+export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,
   MainAgentIntent,
+  MainAgentInterventionState,
+  MainAgentInterventionTransition,
   MainAgentReduceCtx,
   MainAgentRunState,
   MainAgentTurnToolState,
   MainPersistToolBatchIntent,
   MainRecordUsageIntent,
   MainResolveToolResultIntent,
+  MainSetToolInterventionIntent,
   MainStreamContentIntent,
   MainUpdateToolStateIntent,
   PersistAssistantIntent,
   SetErrorIntent,
 } from './mainAgentCoordinator';
 export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
-export { createAdapter, listAgentTypes } from './registry';
-export { isHeteroStatusGuideErrorData } from './spawn/classifyProcessFailure';
+export type {
+  EnabledProviderBindingModelRef,
+  HeterogeneousProviderBindingCapability,
+  HeterogeneousProviderBindingError,
+  HeterogeneousProviderBindingProtocol,
+  HeterogeneousProviderBindingReference,
+  HeterogeneousProviderBindingResolution,
+  HeterogeneousProviderBindingRuntime,
+  ResolveHeterogeneousProviderBindingInput,
+  ResolveHeterogeneousProviderBindingResult,
+} from './providerBinding';
+export {
+  formatHeterogeneousProviderBindingError,
+  getHeterogeneousProviderBindingCapability,
+  getProviderInferenceProtocols,
+  HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
+  isHeterogeneousProviderBindingSupported,
+  resolveHeterogeneousProviderBinding,
+  resolveProviderBindingProtocol,
+} from './providerBinding';
+export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
+export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
+export {
+  classifyHeteroProcessFailure,
+  isHeteroStatusGuideErrorData,
+} from './spawn/classifyProcessFailure';
 export type {
   CreateMessageIntent,
   CreateThreadIntent,

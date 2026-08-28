@@ -13,10 +13,12 @@ import { lambdaClient } from '@/libs/trpc/client';
 class AgentQuotaService {
   /** Persist a live Claude snapshot (identity + readings) captured over IPC. */
   ingestClaudeSnapshot = async (params: {
+    deviceId?: string;
     identity: ClaudeCodeAccountIdentity;
     readings: ClaudeCodeQuotaReading[];
   }) =>
     lambdaClient.agentQuota.ingestSnapshot.mutate({
+      deviceId: params.deviceId,
       identity: params.identity,
       provider: 'claude-code',
       readings: params.readings.map((r) => ({ ...r, scopeKey: r.scopeKey ?? '' })),
@@ -24,7 +26,25 @@ class AgentQuotaService {
 
   listAccounts = async () => lambdaClient.agentQuota.listAccounts.query();
 
-  getWindows = async (accountId: string) => lambdaClient.agentQuota.getWindows.query({ accountId });
+  /**
+   * Newest reading per limit bucket — what the panel renders. Windows are keyed
+   * by `resets_at`, so a limit reported without one (an untouched model-scoped
+   * weekly) only exists here.
+   */
+  getLatestReadings = async (accountId: string) =>
+    lambdaClient.agentQuota.getLatestReadings.query({ accountId });
+
+  /** Recent concrete windows (weekly + session), newest reset first — calendar read model. */
+  getWindows = async (accountId: string, limit?: number) =>
+    lambdaClient.agentQuota.getWindows.query({ accountId, limit });
+
+  /** Full reading series (oldest first) for the burn-down chart / calendar heat. */
+  listSnapshots = async (accountId: string, sinceDays?: number) =>
+    lambdaClient.agentQuota.listSnapshots.query({ accountId, sinceDays });
+
+  /** Per-turn token + cost spend (oldest first) for the calendar's daily totals. */
+  listUsageTurns = async (accountId: string, sinceDays?: number) =>
+    lambdaClient.agentQuota.listUsageTurns.query({ accountId, sinceDays });
 
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
 

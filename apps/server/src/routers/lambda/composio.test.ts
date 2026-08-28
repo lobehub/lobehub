@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   authConfigsCreate: vi.fn(),
   authConfigsList: vi.fn(),
   connectedAccountsDelete: vi.fn(),
+  connectedAccountsGet: vi.fn(),
   connectedAccountsLink: vi.fn(),
+  connectedAccountsList: vi.fn(),
   connectorCreate: vi.fn(),
   connectorDelete: vi.fn(),
   connectorFindScopedByIdentifier: vi.fn(),
@@ -59,7 +61,12 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/libs/composio', () => ({
   getComposioClient: () => ({
     authConfigs: { create: mocks.authConfigsCreate, list: mocks.authConfigsList },
-    connectedAccounts: { delete: mocks.connectedAccountsDelete, link: mocks.connectedAccountsLink },
+    connectedAccounts: {
+      delete: mocks.connectedAccountsDelete,
+      get: mocks.connectedAccountsGet,
+      link: mocks.connectedAccountsLink,
+      list: mocks.connectedAccountsList,
+    },
     tools: { getRawComposioTools: mocks.getRawComposioTools },
   }),
 }));
@@ -71,6 +78,50 @@ beforeEach(() => {
   mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
   mocks.connectorCreate.mockResolvedValue({ id: 'conn-new' });
   mocks.pluginFindById.mockResolvedValue(undefined);
+});
+
+/** @example OAuth callback polling reports whether Gmail can be read. */
+describe('composioRouter.getConnection', () => {
+  /** @example An ACTIVE Gmail account with read-only scope is marked readable. */
+  it('returns confirmed Gmail read permission', async () => {
+    const account = {
+      data: {
+        email: 'ada@example.com',
+        scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+      },
+      id: 'ca-1',
+      status: 'ACTIVE',
+      toolkit: { slug: 'gmail' },
+    };
+    mocks.connectedAccountsGet.mockResolvedValue(account);
+    mocks.connectedAccountsList.mockResolvedValue({ items: [account] });
+
+    await expect(caller().getConnection({ connectedAccountId: 'ca-1' })).resolves.toMatchObject({
+      connectedAccountId: 'ca-1',
+      gmailReadPermission: true,
+      status: 'ACTIVE',
+    });
+  });
+
+  /** @example An ACTIVE Gmail account with identity-only scopes triggers the recovery UI. */
+  it('returns missing Gmail read permission', async () => {
+    const account = {
+      data: {
+        email: 'ada@example.com',
+        scopes: ['openid', 'https://www.googleapis.com/auth/userinfo.email'],
+      },
+      id: 'ca-1',
+      status: 'ACTIVE',
+      toolkit: { slug: 'gmail' },
+    };
+    mocks.connectedAccountsGet.mockResolvedValue(account);
+    mocks.connectedAccountsList.mockResolvedValue({ items: [account] });
+
+    await expect(caller().getConnection({ connectedAccountId: 'ca-1' })).resolves.toMatchObject({
+      gmailReadPermission: false,
+      status: 'ACTIVE',
+    });
+  });
 });
 
 describe('composioRouter.createConnection dual-write', () => {

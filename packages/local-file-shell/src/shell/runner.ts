@@ -4,7 +4,7 @@ import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
-import { getShellConfig } from './utils';
+import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
 
 export interface RunCommandOptions {
   logger?: {
@@ -12,6 +12,19 @@ export interface RunCommandOptions {
     error: (...args: any[]) => void;
     info: (...args: any[]) => void;
   };
+  /**
+   * The sandbox could not be established for this command (unsupported host,
+   * missing dependency, a runtime that refused the policy). Fired only for
+   * failures raised while building the launch plan — never for a command that
+   * ran sandboxed and exited non-zero.
+   *
+   * Exists because the cheap capability probe is not the whole truth: the
+   * backend can report itself available and still fail when the first real
+   * process is spawned (the egress fence is only verified then). Callers use
+   * this to downgrade what they advertise instead of offering an environment
+   * that fails on every command.
+   */
+  onSandboxUnavailable?: (error: Error) => void;
   processManager: ShellProcessManager;
   sandboxPolicy?: SandboxPolicy;
 }
@@ -25,7 +38,7 @@ export async function runCommand(
     run_in_background,
     timeout = 30_000,
   }: RunCommandParams,
-  { processManager, logger, sandboxPolicy }: RunCommandOptions,
+  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
@@ -34,10 +47,23 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
-  const shellConfig = getShellConfig(command);
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+
+  // On Windows, rewrite env-var references the target shell cannot resolve
+  // natively into its own syntax (see normalizeEnvVarRefs), so a command
+  // authored in another shell dialect still resolves against the actual env.
+  // We do NOT rewrite on macOS/Linux: /bin/sh handles its own variable syntax,
+  // and rewriting here would break shell-local variables (e.g. `for x; do echo $x`).
+  const effectiveCommand =
+    process.platform === 'win32'
+      ? normalizeEnvVarRefs(command, requestedEnv, (await detectWindowsShell()).type)
+      : command;
+  const shellConfig = await getShellConfig(effectiveCommand);
   let outputFiles: ShellOutputFiles | undefined;
   let releaseSandbox: (() => void) | undefined;
+  // What actually happened, reported back so nothing downstream has to infer a
+  // security property from the request that asked for it.
+  let sandboxed: boolean | undefined;
 
   try {
     let launchCommand = shellConfig;
@@ -47,15 +73,26 @@ export async function runCommand(
     // explicitly supplies a policy, and avoid loading the experimental runtime on the default path.
     if (sandboxPolicy) {
       const { createSandboxLaunchPlan } = await import('@lobechat/device-sandbox');
-      const launchPlan = await createSandboxLaunchPlan({
-        command: shellConfig,
-        cwd,
-        env: requestedEnv,
-        policy: sandboxPolicy,
-      });
+      // Narrow try/catch: only a failure to BUILD the sandbox counts as the
+      // sandbox being unavailable. Everything after this — spawn errors, a
+      // non-zero exit — is the command's own failure and must not make the
+      // caller think the environment is broken.
+      let launchPlan;
+      try {
+        launchPlan = await createSandboxLaunchPlan({
+          command: shellConfig,
+          cwd,
+          env: requestedEnv,
+          policy: sandboxPolicy,
+        });
+      } catch (error) {
+        onSandboxUnavailable?.(error as Error);
+        throw error;
+      }
       launchCommand = launchPlan;
       launchEnv = launchPlan.env as NodeJS.ProcessEnv;
       releaseSandbox = launchPlan.release;
+      sandboxed = launchPlan.sandboxed;
     }
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
@@ -66,6 +103,11 @@ export async function runCommand(
       env: launchEnv,
       shell: false,
       stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
+      // The Electron main process is a GUI process without a console, so on
+      // Windows spawning a console program (powershell.exe / cmd.exe) allocates
+      // a new console window that flashes up for every command. windowsHide
+      // defaults to false in Node, so it must be set explicitly.
+      windowsHide: true,
     });
 
     const shellProcess: ShellProcess = {
@@ -81,6 +123,13 @@ export async function runCommand(
 
     childProcess.on('error', (error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
+      const cwdContext = cwd ? ` (working directory: ${cwd})` : '';
+      shellProcess.spawnError = new Error(
+        `Failed to start command${cwdContext}: ${error.message}`,
+        {
+          cause: error,
+        },
+      );
       shellProcess.exitCode = 1;
     });
     childProcess.once('close', () => releaseSandbox?.());
@@ -94,6 +143,7 @@ export async function runCommand(
       return {
         output: '',
         output_files: processManager.getOutputFilesInfo(shellOutputFiles),
+        sandboxed,
         shell_id: shellId,
         success: true,
       };
@@ -106,6 +156,7 @@ export async function runCommand(
 
     return {
       ...observation,
+      sandboxed,
       shell_id: shellId,
     };
   } catch (error) {

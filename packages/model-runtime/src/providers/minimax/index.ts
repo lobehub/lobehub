@@ -14,12 +14,14 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { createMiniMaxImage } from './createImage';
 import { createMiniMaxVideo } from './createVideo';
 
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com/v1';
 const DEFAULT_MINIMAX_ANTHROPIC_BASE_URL = 'https://api.minimax.io/anthropic';
 const MINIMAX_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
@@ -29,7 +31,10 @@ type MiniMaxSDKType = 'anthropic' | 'openai';
 const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
 
-const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
+// Require non-empty text: an empty-string `thinking` has never been validated
+// against MiniMax's Anthropic-compatible endpoint.
+const hasReasoningContent = (reasoning: any) =>
+  typeof reasoning?.content === 'string' && reasoning.content !== '';
 
 // MiniMax accepts `low`, `default`, and `high`, but rejects OpenAI's `auto`.
 // Omit `auto` so MiniMax applies its equivalent `default` behavior.
@@ -57,6 +62,20 @@ const normalizeMiniMaxImageDetail = (content: OpenAIChatMessage['content']) => {
 const normalizeMiniMaxAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
 
+const normalizeMiniMaxOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (
+    !baseURL ||
+    normalizeMiniMaxAnthropicBaseURL(baseURL)?.replace(/\/$/, '') ===
+      DEFAULT_MINIMAX_ANTHROPIC_BASE_URL
+  ) {
+    return DEFAULT_MINIMAX_BASE_URL;
+  }
+
+  return baseURL
+    .replace(MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
+
 const resolveMiniMaxSDKType = (sdkType: unknown): MiniMaxSDKType | undefined => {
   if (sdkType === undefined || sdkType === null || sdkType === '') return undefined;
   if (sdkType === 'anthropic' || sdkType === 'openai') return sdkType;
@@ -79,7 +98,24 @@ const normalizeMessagesForAnthropic = (messages: ChatStreamPayload['messages']) 
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // MiniMax's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? undefined : buildThinkingBlock(reasoning);
+
+    if (existingParts) {
+      const contentParts = thinkingBlock ? [thinkingBlock, ...existingParts] : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (!thinkingBlock) return rest;
 
@@ -339,6 +375,17 @@ export const openAIParams = {
 
 export const LobeMinimaxOpenAI = createOpenAICompatibleRuntime(openAIParams);
 
+type MiniMaxOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMinimaxOpenAI>[0];
+
+const fetchMiniMaxModelsWithOpenAI = ({ options }: { options?: MiniMaxOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMinimaxOpenAI({
+    ...options,
+    baseURL: normalizeMiniMaxOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
+
 export const anthropicParams = createAnthropicCompatibleParams({
   baseURL: DEFAULT_MINIMAX_ANTHROPIC_BASE_URL,
   chatCompletion: {
@@ -379,6 +426,7 @@ const createOpenAIRouter = () => ({
 
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Minimax,
+  models: fetchMiniMaxModelsWithOpenAI,
   routers: (options) => {
     const sdkType = resolveMiniMaxSDKType(options.sdkType);
 

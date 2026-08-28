@@ -1,4 +1,5 @@
-import { Avatar, Center, Icon } from '@lobehub/ui';
+import { Center, Icon } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleUser } from 'lucide-react';
 import { memo } from 'react';

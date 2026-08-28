@@ -1,11 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
 
+import AgentHome from '@/features/AgentHome';
 import { ChatList } from '@/features/Conversation';
 
-const ChatBody = memo(() => {
+const ChatBody = () => {
   return (
     <Flexbox
       data-testid="floating-chat-panel-body"
@@ -14,11 +14,9 @@ const ChatBody = memo(() => {
       style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
       width={'100%'}
     >
-      <ChatList />
+      <ChatList welcome={<AgentHome />} />
     </Flexbox>
   );
-});
-
-ChatBody.displayName = 'FloatingChatPanelBody';
+};
 
 export default ChatBody;

@@ -20,16 +20,16 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/routes/(main)/resource/features/hooks/useCurrentFolderId', () => ({
+vi.mock('@/features/ResourceManager/hooks/useCurrentFolderId', () => ({
   useCurrentFolderId: () => null,
 }));
 
-vi.mock('@/routes/(main)/resource/features/store', () => ({
+vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: typeof mocks.resourceManagerState) => unknown) =>
     selector(mocks.resourceManagerState),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store/selectors', () => ({
+vi.mock('@/features/ResourceManager/store/selectors', () => ({
   sortFileList: (items: unknown[]) => items,
 }));
 

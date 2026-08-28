@@ -2,6 +2,17 @@
   {
     "children": {
       "fixes": [
+        "narrow acceptance empty filter translation key.",
+        "enforce agent step execution deadlines."
+      ],
+      "improvements": ["add existing subscription redirect copy.", "improve remote device tool UI."]
+    },
+    "date": "2026-07-23",
+    "version": "2.2.11"
+  },
+  {
+    "children": {
+      "fixes": [
         "drop legacy task template recommendations.",
         "drop legacy task template recommendations."
       ]

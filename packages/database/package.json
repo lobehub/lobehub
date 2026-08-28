@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@lobechat/agent-templates": "workspace:*",
+    "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/business-const": "workspace:*",
     "@lobechat/business-model-bank": "workspace:*",
     "@lobechat/const": "workspace:*",
@@ -22,6 +23,7 @@
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "random-words": "^2.0.1",
+    "remove-markdown": "^0.6.4",
     "ts-md5": "^2.0.1",
     "type-fest": "^5.7.0",
     "ws": "^8.21.0"

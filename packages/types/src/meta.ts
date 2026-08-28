@@ -14,10 +14,16 @@ export const LobeMetaDataSchema = z.object({
    * Market agent identifier for published agents
    */
   marketIdentifier: z.string().optional(),
+  /**
+   * Personal name of an agent (e.g. "Alice", "小艾") — the identity it is
+   * addressed by, as opposed to `title`, which names the role it plays.
+   * Only agents carry it; other metadata holders leave it empty.
+   */
+  name: z.string().optional(),
 
   tags: z.array(z.string()).optional(),
   /**
-   * Name
+   * Display label — for agents this is the role ("Health Assistant"), see `name`
    */
   title: z.string().optional(),
 });

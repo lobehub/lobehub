@@ -23,8 +23,16 @@ const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-    <button aria-label={title} onClick={onClick}>
+  ActionIcon: ({
+    icon,
+    onClick,
+    title,
+  }: {
+    icon?: { displayName?: string; name?: string };
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} data-icon={icon?.displayName ?? icon?.name} onClick={onClick}>
       {title}
     </button>
   ),
@@ -37,8 +45,38 @@ vi.mock('@lobehub/ui/icons', () => ({
   SkillsIcon: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({
+    icon,
+    onClick,
+    title,
+  }: {
+    icon?: { displayName?: string; name?: string };
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} data-icon={icon?.displayName ?? icon?.name} onClick={onClick}>
+      {title}
+    </button>
+  ),
   confirmModal: modalConfirm,
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children: ReactNode;
+    items: { key: string; label: string; onClick: () => void }[];
+  }) => (
+    <div>
+      {children}
+      {items.map((item) => (
+        <button data-testid={`create-menu-${item.key}`} key={item.key} onClick={item.onClick}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('antd', () => ({
@@ -140,7 +178,16 @@ vi.mock('@/features/ExplorerTree', () => {
 
   return {
     DISABLE_ROW_TEXT_SELECTION_CSS: '',
+    DOCUMENT_TREE_ROW_CSS: '',
     DOCUMENT_TREE_ICON_CSS: '',
+    DOCUMENT_TREE_LAYOUT: {
+      fontSize: 14,
+      iconGap: 8,
+      iconSize: 16,
+      iconWidth: 16,
+      itemHeight: 36,
+      levelGap: 8,
+    },
     ExplorerTree,
     FOLDER_ICON_CSS: '',
     HIDE_POINTER_FOCUS_RING_CSS: '',
@@ -197,6 +244,23 @@ describe('DocumentExplorerTree', () => {
     openDocumentMock.mockReset();
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'skill-bundle-row' });
+  });
+
+  it('uses one plus menu for creating documents and folders', () => {
+    render(
+      <DocumentExplorerTree agentId="agent-1" data={[createDocument({})]} mutate={vi.fn()} />,
+      { wrapper: MemoryRouter },
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'workingPanel.resources.tree.create' }),
+    ).toHaveAttribute('data-icon', 'Plus');
+    expect(screen.getByTestId('create-menu-new-document')).toHaveTextContent(
+      'workingPanel.resources.tree.newDocument',
+    );
+    expect(screen.getByTestId('create-menu-new-folder')).toHaveTextContent(
+      'workingPanel.resources.tree.newFolder',
+    );
   });
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {

@@ -18,7 +18,7 @@ project's commands.
 
 `.agents/acceptance/` is **committed** (the adapter and the project living logs are
 shared, versioned team assets). The report output directory `.records/` is
-**gitignored** — reports are per-run artifacts, published to the verify platform,
+**gitignored** — reports are per-run artifacts, published to LobeHub Acceptance,
 not committed.
 
 ## Fixed section skeleton

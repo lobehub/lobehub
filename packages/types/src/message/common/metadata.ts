@@ -185,7 +185,18 @@ export const MessageWorkMetadataSchema = z.object({
   userMessageId: z.string().optional(),
 });
 
+export const AgentDispatchMetadataSchema = z.object({
+  kind: z.enum(['callAgent']),
+  visibility: z.literal('internal'),
+});
+
+export interface AgentDispatchMetadata {
+  kind: 'callAgent';
+  visibility: 'internal';
+}
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
+  agentDispatch: AgentDispatchMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
@@ -201,6 +212,10 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  // Creation provenance (agent operation that produced this message). Listed
+  // here so zod does NOT strip the runtime's stamp from writes going through
+  // CreateMessageParamsSchema / UpdateMessageParamsSchema.
+  operationId: z.string().min(1).optional(),
   orchestrationRole: z.enum(['supervisor', 'member']).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
@@ -270,6 +285,11 @@ export interface MessageMetadata {
    */
   agentCouncil?: boolean;
   /**
+   * Explicit transport semantics for an internal cross-agent dispatch turn.
+   * Renderers consume this marker instead of inferring intent from the message tree.
+   */
+  agentDispatch?: AgentDispatchMetadata;
+  /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
    */
@@ -280,6 +300,15 @@ export interface MessageMetadata {
    * Page selections remain mirrored in `pageSelections` for compatibility.
    */
   contextSelections?: ContextSelection[];
+  /**
+   * This row is a DUPLICATED transcript (agent/group copy, workspace import),
+   * not a generation event in its current scope: the tokens were consumed by
+   * the source, so usage REPORTS exclude it. The row keeps its own token/cost
+   * figures — they describe the generation the transcript records, and the
+   * chat UI and context engine read them — so this marker is the only thing
+   * separating "what this scope spent" from "what this transcript shows".
+   */
+  copied?: boolean;
   /** @deprecated use the top-level message `usage` field instead */
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
@@ -368,6 +397,16 @@ export interface MessageMetadata {
    * and so the standard message `role` stays `'assistant'` (training-friendly).
    * Supersedes the boolean {@link isSupervisor}, which is kept for back-compat.
    */
+  /**
+   * Creation provenance: id of the agent operation that produced this message
+   * (`agent_operations.id`), stamped when the runtime creates the assistant
+   * row. Always the message's OWN operation — for sub-agent (callAgent) turns
+   * this is the sub-operation, not the root; climb `parent_operation_id` for
+   * the root. Do not confuse with `work.rootOperationId` (Work display anchor,
+   * root op, only on Work-producing rounds) or `verifyOperationId` (the run a
+   * verify card verifies).
+   */
+  operationId?: string;
   orchestrationRole?: 'supervisor' | 'member';
   /** @deprecated use the top-level message `usage` field instead */
   outputAudioTokens?: number;

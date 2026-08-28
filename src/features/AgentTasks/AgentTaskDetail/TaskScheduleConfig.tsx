@@ -1,6 +1,6 @@
 import type { TaskAutomationMode } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Icon, InputNumber, Popover, Text } from '@lobehub/ui';
-import { Button, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, InputNumber, Popover } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Select, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
@@ -194,17 +194,16 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
 
   const finalTaskId = taskId ?? activeTaskId;
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
 
   const enabled = !!automationMode;
   const [isStartingSchedule, setIsStartingSchedule] = useState(false);
-  // Heartbeat tasks are re-armed only by maybeRearmHeartbeat after a topic
-  // completes; there is no dispatcher that picks up `scheduled` heartbeat tasks,
-  // so flipping one to `scheduled` from here would leave it dormant.
   const canStartSchedule =
-    automationMode === 'schedule' &&
+    ((automationMode === 'schedule' && !!schedulePattern) ||
+      (automationMode === 'heartbeat' && finalCurrentInterval > 0)) &&
     !!finalTaskId &&
     status !== 'scheduled' &&
     status !== 'running';
@@ -228,17 +227,13 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     return null;
   }, [automationMode, finalCurrentInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
-  const [nowTick, setNowTick] = useState(0);
-  useEffect(() => {
-    if (!enabled) return;
-    const id = setInterval(() => setNowTick((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, [enabled]);
-
   const nextRun = useMemo(() => {
     if (!enabled) return null;
     if (automationMode === 'heartbeat') {
-      return nextHeartbeatFiring(detail?.heartbeat?.lastAt, finalCurrentInterval);
+      return nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        finalCurrentInterval,
+      );
     }
     if (automationMode === 'schedule' && schedulePattern) {
       return nextScheduleFiring(schedulePattern, scheduleTimezone);
@@ -247,11 +242,11 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   }, [
     automationMode,
     detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
     enabled,
     finalCurrentInterval,
     schedulePattern,
     scheduleTimezone,
-    nowTick,
   ]);
 
   const nextRunText = useMemo(() => {
@@ -312,6 +307,15 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
         </Flexbox>
         <Switch checked={enabled} disabled={!canEditTask} onChange={handleEnableChange} />
       </Flexbox>
+
+      {!enabled && !!assigneeUserId && (
+        <Flexbox horizontal align="center" className={styles.preview} gap={10}>
+          <Icon color={cssVar.colorTextDescription} icon={TimerIcon} size={16} />
+          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+            {t('taskSchedule.memberAssigneeHint')}
+          </Text>
+        </Flexbox>
+      )}
 
       {enabled && nextRunText && (
         <Flexbox horizontal align="center" className={styles.preview} gap={10}>

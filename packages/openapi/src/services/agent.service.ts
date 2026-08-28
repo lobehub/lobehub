@@ -1,13 +1,21 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
-import type { NewAgent } from '@/database/schemas';
+import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
+import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 import { BaseService } from '../common/base.service';
+import { resolveClearedAgencyConfig } from '../helpers/agent-policy-keys';
+import { mergeJsonPatch } from '../helpers/json-patch';
 import { processPaginationConditions } from '../helpers/pagination';
+import {
+  projectPublicAgent,
+  projectPublicFile,
+  projectPublicKnowledgeBase,
+} from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   AgentDeleteRequest,
@@ -61,7 +69,7 @@ export class AgentService extends BaseService {
       this.log('info', `found ${agentsList.length} agents`);
 
       return {
-        agents: agentsList,
+        agents: agentsList.map(projectPublicAgent),
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
@@ -82,6 +90,7 @@ export class AgentService extends BaseService {
         // Prepare creation data
         const newAgentData: NewAgent = {
           accessedAt: new Date(),
+          agencyConfig: request.agencyConfig || null,
           avatar: request.avatar || null,
           chatConfig: request.chatConfig || null,
           createdAt: new Date(),
@@ -104,7 +113,7 @@ export class AgentService extends BaseService {
           slug: createdAgent.slug,
         });
 
-        return createdAgent;
+        return projectPublicAgent(createdAgent);
       });
     } catch (error) {
       this.handleServiceError(error, 'create agent');
@@ -149,8 +158,45 @@ export class AgentService extends BaseService {
         // Only update fields actually provided in the request to avoid overwriting existing values with undefined
         const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
+        if (request.agencyConfig !== undefined) {
+          // Merged, not replaced. The request schema exposes only the graph
+          // slice of `agencyConfig`, while the column also carries the member
+          // permission policies, device bindings and execution settings
+          // written elsewhere — so replacing the object would silently delete
+          // every one of them, including the topic-share policy that keeps a
+          // restricted agent's conversations from being published.
+          //
+          // An explicit `null` still clears the column, as it always did. What
+          // survives that clear depends on authority: this endpoint authorizes
+          // on `AGENT_UPDATE`, which workspace Admins hold for *everyone's*
+          // agents, while the policy keys are the agent creator's and the
+          // workspace primary owner's alone — the same gate `updateAgentConfig`
+          // applies. Without this an Admin could reset a `restricted` policy by
+          // clearing a column whose policy keys the schema cannot even express.
+          const canWritePolicies =
+            existingAgent.userId === this.userId ||
+            (!!existingAgent.workspaceId &&
+              (await isWorkspacePrimaryOwner({
+                db: tx,
+                userId: this.userId,
+                workspaceId: existingAgent.workspaceId,
+              })));
+
+          updateData.agencyConfig =
+            request.agencyConfig === null
+              ? resolveClearedAgencyConfig(existingAgent.agencyConfig, canWritePolicies)
+              : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
+        }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
-        if (request.chatConfig !== undefined) updateData.chatConfig = request.chatConfig ?? null;
+        if (request.chatConfig !== undefined) {
+          // Same reason as `agencyConfig` above: the schema exposes 13 of
+          // `LobeAgentChatConfig`'s fields, so replacing the object would drop
+          // the two dozen a caller has no way to send back.
+          updateData.chatConfig =
+            request.chatConfig === null
+              ? null
+              : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
+        }
         if (request.description !== undefined) updateData.description = request.description ?? null;
         if (request.model !== undefined) updateData.model = request.model ?? null;
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
@@ -159,19 +205,7 @@ export class AgentService extends BaseService {
 
         // Merge params instead of fully overwriting
         if (request.params !== undefined) {
-          const existingParams = (existingAgent.params as Record<string, unknown>) ?? {};
-          const incomingParams = request.params ?? {};
-          const mergedParams = { ...existingParams };
-
-          for (const [key, value] of Object.entries(incomingParams)) {
-            if (value === undefined) {
-              delete mergedParams[key];
-            } else {
-              mergedParams[key] = value;
-            }
-          }
-
-          updateData.params = mergedParams;
+          updateData.params = mergeJsonPatch(existingAgent.params, request.params);
         }
 
         // Update database
@@ -185,7 +219,7 @@ export class AgentService extends BaseService {
           id: updatedAgent.id,
           slug: updatedAgent.slug,
         });
-        return updatedAgent;
+        return projectPublicAgent(updatedAgent);
       });
     } catch (error) {
       this.handleServiceError(error, 'update agent');
@@ -292,7 +326,21 @@ export class AgentService extends BaseService {
         return null;
       }
 
-      return agent as AgentDetailResponse;
+      return {
+        ...projectPublicAgent(agent),
+        files: agent.files
+          .filter((file) => file.id)
+          .map((file) => ({
+            ...projectPublicFile(file as FileItem),
+            enabled: file.enabled,
+          })),
+        knowledgeBases: agent.knowledgeBases
+          .filter((knowledgeBase) => knowledgeBase.id)
+          .map((knowledgeBase) => ({
+            ...projectPublicKnowledgeBase(knowledgeBase as KnowledgeBaseItem),
+            enabled: knowledgeBase.enabled,
+          })),
+      };
     } catch (error) {
       this.handleServiceError(error, 'get agent details');
     }

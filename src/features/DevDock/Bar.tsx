@@ -3,13 +3,15 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, Wrench } from 'lucide-react';
-import { Component, memo, type PropsWithChildren, Suspense } from 'react';
+import { Fragment, memo } from 'react';
 
 import { BAR_HEIGHT, DOCK_Z_INDEX } from './const';
+import OverflowMenu from './OverflowMenu';
+import { PinnedAction, PinnedSelect, PinnedToggle, WidgetSlot } from './pinnedItems';
 import {
+  type DevDockItem,
   type DevDockPanelItem,
-  type DevDockWidgetItem,
-  getItemComponent,
+  selectBarLayout,
   useDevDockItems,
 } from './registry';
 import { useDevDockStore } from './store';
@@ -20,13 +22,23 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     height: ${BAR_HEIGHT}px;
+    margin-block-start: -8px;
     padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 11px;
     color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgLayout};
+  `,
+  center: css`
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+  `,
+  divider: css`
+    flex-shrink: 0;
+    width: 1px;
+    height: 12px;
+    background: ${cssVar.colorBorderSecondary};
   `,
   iconButton: css`
     cursor: pointer;
@@ -90,6 +102,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 11px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
 
     background: transparent;
 
@@ -104,31 +117,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-class WidgetBoundary extends Component<PropsWithChildren, { failed?: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  render() {
-    return this.state.failed ? null : this.props.children;
-  }
-}
-
-const WidgetSlot = memo<{ item: DevDockWidgetItem }>(({ item }) => {
-  const Widget = getItemComponent(item);
-  return (
-    <WidgetBoundary>
-      <Suspense fallback={null}>
-        <Widget />
-      </Suspense>
-    </WidgetBoundary>
-  );
-});
-
-WidgetSlot.displayName = 'DevDockWidgetSlot';
-
 const PanelTab = memo<{ item: DevDockPanelItem }>(({ item }) => {
   const active = useDevDockStore((s) => s.activePanelId === item.id);
   const togglePanel = useDevDockStore((s) => s.togglePanel);
@@ -141,7 +129,7 @@ const PanelTab = memo<{ item: DevDockPanelItem }>(({ item }) => {
       onClick={() => togglePanel(item.id)}
     >
       <Icon size={12} />
-      <span>{item.title}</span>
+      <span>{item.label}</span>
       {Badge && <Badge />}
     </button>
   );
@@ -149,9 +137,30 @@ const PanelTab = memo<{ item: DevDockPanelItem }>(({ item }) => {
 
 PanelTab.displayName = 'DevDockPanelTab';
 
+const PinnedItem = memo<{ item: Exclude<DevDockItem, DevDockPanelItem> }>(({ item }) => {
+  switch (item.type) {
+    case 'action': {
+      return <PinnedAction item={item} />;
+    }
+    case 'readout': {
+      return <WidgetSlot item={item} />;
+    }
+    case 'select': {
+      return <PinnedSelect item={item} />;
+    }
+    case 'toggle': {
+      return <PinnedToggle item={item} />;
+    }
+  }
+});
+
+PinnedItem.displayName = 'DevDockPinnedItem';
+
 const Bar = memo(() => {
   const expanded = useDevDockStore((s) => s.expanded);
   const setExpanded = useDevDockStore((s) => s.setExpanded);
+  const activePanelId = useDevDockStore((s) => s.activePanelId);
+  const pinOverrides = useDevDockStore((s) => s.pinOverrides);
   const items = useDevDockItems();
 
   if (!expanded)
@@ -167,10 +176,7 @@ const Bar = memo(() => {
       </button>
     );
 
-  const panels = items.filter((item): item is DevDockPanelItem => item.type === 'panel');
-  const widgets = items.filter((item): item is DevDockWidgetItem => item.type === 'widget');
-  const leftWidgets = widgets.filter((item) => item.placement === 'left');
-  const rightWidgets = widgets.filter((item) => item.placement === 'right');
+  const { center, right, tabs } = selectBarLayout(items, pinOverrides, activePanelId);
 
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} gap={8}>
@@ -182,18 +188,30 @@ const Bar = memo(() => {
       >
         <ChevronDown size={12} />
       </button>
-      {leftWidgets.map((item) => (
-        <WidgetSlot item={item} key={item.id} />
-      ))}
       <Flexbox horizontal align={'center'} gap={2}>
-        {panels.map((item) => (
+        {tabs.map((item) => (
           <PanelTab item={item} key={item.id} />
         ))}
       </Flexbox>
-      <span style={{ flex: 1 }} />
-      {rightWidgets.map((item) => (
-        <WidgetSlot item={item} key={item.id} />
-      ))}
+      {center ? (
+        <div className={styles.center}>
+          <WidgetSlot item={center} />
+        </div>
+      ) : (
+        <span style={{ flex: 1 }} />
+      )}
+      {right.map((item, index) => {
+        const previous = right[index - 1];
+        const needsDivider = index > 0 && item.type === 'readout' && previous?.type === 'readout';
+        return (
+          <Fragment key={item.id}>
+            {needsDivider && <span className={styles.divider} />}
+            <PinnedItem item={item} />
+          </Fragment>
+        );
+      })}
+      {right.length > 0 && <span className={styles.divider} />}
+      <OverflowMenu />
     </Flexbox>
   );
 });

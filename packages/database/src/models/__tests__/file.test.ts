@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FilesTabs, SortType } from '@lobechat/types';
+import { FileSource, FilesTabs, SortType } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -288,6 +288,84 @@ describe('FileModel', () => {
         where: inArray(asyncTasks.id, [chunkTask!.id, embeddingTask!.id]),
       });
       expect(remainingTasks).toHaveLength(0);
+    });
+  });
+
+  describe('deleteUnreferenced', () => {
+    it('deletes an owned file that has no message or session references', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'audio/webm',
+        hashId: 'voice-unreferenced',
+        size: 100,
+        url: 'voice/unreferenced.webm',
+      });
+      const { id } = await fileModel.create({
+        fileHash: 'voice-unreferenced',
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/unreferenced.webm',
+      });
+
+      const deleted = await fileModel.deleteUnreferenced(id);
+
+      expect(deleted).toMatchObject({ id, url: 'voice/unreferenced.webm' });
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('preserves a file attached to a persisted message', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/message.webm',
+      });
+      await serverDB.insert(messages).values({ id: 'voice-message', role: 'user', userId });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: id, messageId: 'voice-message', userId });
+
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('preserves a file attached to a session', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/session.webm',
+      });
+      await serverDB.insert(sessions).values({ id: 'voice-session', userId });
+      await serverDB
+        .insert(filesToSessions)
+        .values({ fileId: id, sessionId: 'voice-session', userId });
+
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+    });
+
+    it("does not delete another user's unreferenced file", async () => {
+      await serverDB.insert(files).values({
+        fileType: 'audio/webm',
+        id: 'other-user-voice',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/other.webm',
+        userId: 'user2',
+      });
+
+      await expect(fileModel.deleteUnreferenced('other-user-voice')).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, 'other-user-voice') }),
+      ).resolves.toBeDefined();
     });
   });
 
@@ -701,6 +779,51 @@ describe('FileModel', () => {
       it('should include all files when showFilesInKnowledgeBase is true', async () => {
         const result = await fileModel.query({ showFilesInKnowledgeBase: true });
         expect(result).toHaveLength(2);
+      });
+    });
+
+    describe('Hidden sources', () => {
+      beforeEach(async () => {
+        await serverDB.insert(files).values([
+          {
+            id: 'plain-file',
+            name: 'notes.txt',
+            userId,
+            fileType: 'text/plain',
+            size: 100,
+            url: 'plain-url',
+          },
+          {
+            id: 'acceptance-file',
+            name: 'payload-execution.txt',
+            userId,
+            fileType: 'text/plain',
+            size: 100,
+            source: FileSource.Acceptance,
+            url: 'acceptance-url',
+          },
+          {
+            id: 'generation-file',
+            name: 'generated.png',
+            userId,
+            fileType: 'image/png',
+            size: 100,
+            source: FileSource.ImageGeneration,
+            url: 'generation-url',
+          },
+        ]);
+      });
+
+      it('should exclude acceptance evidence and keep every other source', async () => {
+        const result = await fileModel.query();
+
+        expect(result.map((f) => f.id).sort()).toEqual(['generation-file', 'plain-file']);
+      });
+
+      it('should still find acceptance evidence by id', async () => {
+        const result = await fileModel.findById('acceptance-file');
+
+        expect(result?.name).toBe('payload-execution.txt');
       });
     });
   });
@@ -1288,12 +1411,9 @@ describe('FileModel', () => {
       expect(result[0].id).toBe('page-file');
     });
 
-    it('should handle Pages category (should use text/html like Websites)', async () => {
-      // FilesTabs.Pages is not explicitly handled in switch, falls to default
-      // which returns empty string, so it won't filter by file type
+    it('should handle Pages category (derived pages never live in the files table)', async () => {
       const result = await fileModel.query({ category: FilesTabs.Pages });
-      // Should return all files since default case returns empty string
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toHaveLength(0);
     });
 
     it('should handle unknown file category', async () => {

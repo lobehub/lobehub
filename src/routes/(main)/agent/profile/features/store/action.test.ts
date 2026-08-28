@@ -105,6 +105,29 @@ describe('agent profile store actions', () => {
     });
   });
 
+  it('preserves the exact Markdown source while saving the parsed editor document', async () => {
+    const profileStore = createStore({ editor });
+    const sourceEditor = {
+      getDocument: vi.fn((format: 'json' | 'markdown') =>
+        format === 'json' ? { root: { children: ['parsed source'] } } : 'normalized markdown',
+      ),
+    } as unknown as IEditor;
+    const updateConfigById = vi.fn().mockResolvedValue(undefined);
+    const markdownSource = '<details>\n\n  raw spacing\n\n</details>';
+
+    profileStore
+      .getState()
+      .handleContentChange('agent-a', updateConfigById, sourceEditor, markdownSource);
+
+    await vi.advanceTimersByTimeAsync(EDITOR_DEBOUNCE_TIME);
+    await profileStore.getState().flushSave();
+
+    expect(updateConfigById).toHaveBeenCalledWith('agent-a', {
+      editorData: { root: { children: ['parsed source'] } },
+      systemRole: markdownSource,
+    });
+  });
+
   it('keeps a failed Prompt save visible and retries the same draft', async () => {
     const profileStore = createStore({ editor });
     const updateConfigById = vi

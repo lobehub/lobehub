@@ -1,5 +1,4 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
-import React, { memo } from 'react';
 
 import Members from './Members';
 import Topic from './Topic';
@@ -9,7 +8,7 @@ export enum ChatSidebarKey {
   Topic = 'topic',
 }
 
-const Body = memo(() => {
+const Body = () => {
   return (
     <Flexbox paddingInline={4}>
       <Accordion defaultExpandedKeys={[ChatSidebarKey.Members, ChatSidebarKey.Topic]} gap={8}>
@@ -18,6 +17,6 @@ const Body = memo(() => {
       </Accordion>
     </Flexbox>
   );
-});
+};
 
 export default Body;

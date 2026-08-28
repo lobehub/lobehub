@@ -1,14 +1,17 @@
 'use client';
 
-import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Button, Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { ListRestartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
-import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOverride/action';
+import {
+  type FeatureFlagKey,
+  isFeatureFlagOverridable,
+} from '@/store/serverConfig/slices/featureFlagOverride/action';
 
 import FlagRow from './FlagRow';
 
@@ -68,7 +71,9 @@ const Panel = memo(() => {
 
   const flagKeys = useMemo<FeatureFlagKey[]>(() => {
     if (!originalFlags) return [];
-    return (Object.keys(originalFlags) as FeatureFlagKey[]).sort();
+    return (Object.keys(originalFlags) as (keyof typeof originalFlags)[])
+      .filter(isFeatureFlagOverridable)
+      .sort();
   }, [originalFlags]);
 
   const visibleKeys = useMemo(() => {

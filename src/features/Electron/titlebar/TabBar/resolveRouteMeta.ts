@@ -23,7 +23,11 @@ export const matchRouteMeta = (routes: RouteObject[], url: string): MatchedRoute
   for (let i = matches.length - 1; i >= 0; i -= 1) {
     const meta = getRouteMetaFromHandle(matches[i].route.handle);
     if (meta) {
-      return { meta, params, static: { icon: meta.icon, titleKey: meta.titleKey } };
+      return {
+        meta,
+        params,
+        static: { icon: meta.icon, tabTitleKey: meta.tabTitleKey, titleKey: meta.titleKey },
+      };
     }
   }
 

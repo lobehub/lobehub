@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 
-import TopicListContent from '@/routes/(main)/agent/_layout/Sidebar/Topic/TopicListContent';
-import TopicSearchBar from '@/routes/(main)/agent/_layout/Sidebar/Topic/TopicSearchBar';
+import TopicListContent from '@/features/AgentSidebar/Topic/TopicListContent';
+import TopicSearchBar from '@/features/AgentSidebar/Topic/TopicSearchBar';
 
 import TopicModal from './features/TopicModal';
 

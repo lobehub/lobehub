@@ -1,6 +1,6 @@
 'use client';
 
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,13 +13,7 @@ import MappingStep, { autoInferMapping, type FieldMappingValue } from './Mapping
 import UploadStep from './UploadStep';
 
 type MappingTarget =
-  | 'choices'
-  | 'category'
-  | 'expected'
-  | 'ignore'
-  | 'input'
-  | 'metadata'
-  | 'sortOrder';
+  'choices' | 'category' | 'expected' | 'ignore' | 'input' | 'metadata' | 'sortOrder';
 
 export interface DatasetImportContentProps {
   close: () => void;
@@ -41,7 +35,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
   setPrev,
 }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
 
   const [step, setStep] = useState<0 | 1>(0);
   const [uploading, setUploading] = useState(false);
@@ -101,14 +94,14 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
         setStep(1);
       } catch {
         setTimeout(() => {
-          message.error(t('dataset.import.parseError'));
+          toast.error(t('dataset.import.parseError'));
         }, 0);
       } finally {
         setUploading(false);
         setUploadProgress(undefined);
       }
     },
-    [message, preset, t],
+    [preset, t],
   );
 
   const buildFieldMapping = useCallback((): FieldMappingValue | null => {
@@ -158,16 +151,16 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
         pathname,
       });
       setTimeout(() => {
-        message.success(t('dataset.import.success', { count: result.count }));
+        toast.success(t('dataset.import.success', { count: result.count }));
       }, 0);
       close();
       onSuccess?.(datasetId);
     } catch {
       setTimeout(() => {
-        message.error(t('dataset.import.error'));
+        toast.error(t('dataset.import.error'));
       }, 0);
     }
-  }, [buildFieldMapping, close, datasetId, filename, format, message, onSuccess, pathname, t]);
+  }, [buildFieldMapping, close, datasetId, filename, format, onSuccess, pathname, t]);
 
   useEffect(() => {
     onImportReady({

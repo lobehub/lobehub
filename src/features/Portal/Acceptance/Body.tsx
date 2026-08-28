@@ -1,7 +1,8 @@
 import { memo } from 'react';
 
+import { AcceptanceViewer, OriginConversationProvider } from '@/features/Acceptance';
+import TopicPanel from '@/features/Acceptance/Viewer/TopicPanel';
 import { draftToMainComposer } from '@/features/Conversation/composerDraftBus';
-import { AcceptanceViewer } from '@/features/Verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -13,7 +14,11 @@ const Body = memo(() => {
   // throws ("no zustand provider as an ancestor") and blanks the page. Drafts
   // go through the global composerDraftBus; ComposerDraftReceiver applies them
   // inside the provider (setDocument + inputMessage sync + focus).
-  return <AcceptanceViewer acceptanceId={acceptanceId} onDraftToComposer={draftToMainComposer} />;
+  return (
+    <OriginConversationProvider TopicPanel={TopicPanel}>
+      <AcceptanceViewer acceptanceId={acceptanceId} onDraftToComposer={draftToMainComposer} />
+    </OriginConversationProvider>
+  );
 });
 
 export default Body;

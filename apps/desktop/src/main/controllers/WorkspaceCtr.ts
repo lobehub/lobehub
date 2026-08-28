@@ -1,10 +1,5 @@
 import type { WorkspaceScanDeps } from '@lobechat/device-control';
 import {
-  initWorkspace as runInitWorkspace,
-  listProjectSkills as runListProjectSkills,
-  statPath as runStatPath,
-} from '@lobechat/device-control/workspace';
-import {
   type InitWorkspaceParams,
   type InitWorkspaceResult,
   type ListProjectSkillsParams,
@@ -35,11 +30,14 @@ export default class WorkspaceCtr extends ControllerModule {
 
   @IpcMethod()
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
+    const { listProjectSkills: runListProjectSkills } =
+      await import('@lobechat/device-control/workspace');
     return runListProjectSkills(params, this.scanDeps);
   }
 
   @IpcMethod()
   async initWorkspace(params: InitWorkspaceParams): Promise<InitWorkspaceResult> {
+    const { initWorkspace: runInitWorkspace } = await import('@lobechat/device-control/workspace');
     return runInitWorkspace(params, this.scanDeps);
   }
 
@@ -47,6 +45,7 @@ export default class WorkspaceCtr extends ControllerModule {
   async statPath(params: {
     path: string;
   }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' }> {
+    const { statPath: runStatPath } = await import('@lobechat/device-control/workspace');
     return runStatPath(params);
   }
 

@@ -1,6 +1,7 @@
-import { longcat as longchatCahtModels, ModelProvider } from 'model-bank';
+import { longcat as longcatChatModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { resolveParameters } from '../../core/parameterResolver';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
@@ -12,7 +13,19 @@ export const LobeLongCatAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.longcat.chat/openai/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { frequency_penalty, max_tokens, presence_penalty, ...rest } = payload;
+      const {
+        frequency_penalty: _frequency_penalty,
+        max_tokens,
+        presence_penalty: _presence_penalty,
+        temperature,
+        thinking,
+        ...rest
+      } = payload;
+
+      const { temperature: normalizedTemperature } = resolveParameters(
+        { temperature },
+        { normalizeTemperature: true, temperatureRange: { min: 0, max: 1 } },
+      );
 
       return {
         ...rest,
@@ -20,9 +33,15 @@ export const LobeLongCatAI = createOpenAICompatibleRuntime({
         max_tokens:
           max_tokens !== undefined
             ? max_tokens
-            : getModelMaxOutputs(payload.model, longchatCahtModels),
+            : getModelMaxOutputs(payload.model, longcatChatModels),
         presence_penalty: undefined,
         stream: true,
+        temperature: normalizedTemperature,
+        ...(thinking && {
+          thinking: {
+            type: thinking.type === 'enabled' ? 'enabled' : 'disabled',
+          },
+        }),
       } as any;
     },
   },

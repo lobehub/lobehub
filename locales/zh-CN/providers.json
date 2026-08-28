@@ -13,6 +13,7 @@
   "bedrock.description": "Amazon Bedrock 为企业提供先进的语言与视觉模型，包括 Anthropic Claude 和 Meta Llama 3.1，涵盖轻量级到高性能选项，支持文本、对话与图像任务。",
   "bfl.description": "一家前沿 AI 研究实验室，致力于构建未来的视觉基础设施。",
   "cerebras.description": "Cerebras 是基于其 CS-3 系统构建的推理平台，专注于超低延迟和高吞吐量的大模型服务，适用于代码生成和智能体等实时任务。",
+  "chatgpt.description": "通过 Codex 使用包含在您的 ChatGPT 订阅中的模型，无需 OpenAI 平台 API 密钥。",
   "cloudflare.description": "在 Cloudflare 全球网络上运行无服务器、GPU 加速的机器学习模型。",
   "cohere.description": "Cohere 提供前沿的多语言模型、先进的检索能力和 AI 工作空间，为现代企业提供一体化、安全的平台。",
   "cometapi.description": "CometAPI 提供对 OpenAI、Anthropic、Google 等前沿模型的访问，用户可根据不同需求选择最优模型与价格。",

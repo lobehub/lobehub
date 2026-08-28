@@ -1,33 +1,28 @@
+import type { HeteroQuotaWindow } from '@lobechat/heterogeneous-agents/quota';
+
 import type { HeterogeneousCliAgentType } from './binary';
 
-export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
-
-export const AMP_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://ampcode.com/install.sh | bash',
-  'brew install ampcode/tap/ampcode',
-] as const;
-
-export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
-  'https://docs.anthropic.com/en/docs/claude-code/setup';
-
-export const CLAUDE_CODE_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://claude.ai/install.sh | bash',
-  'brew install --cask claude-code',
-] as const;
-
-export const CODEX_CLI_INSTALL_DOCS_URL =
-  'https://github.com/openai/codex#installing-and-running-codex-cli';
-
-export const CODEX_CLI_INSTALL_COMMANDS = [
-  'npm install -g @openai/codex',
-  'brew install --cask codex',
-] as const;
-
-export const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
-
-export const OPENCODE_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://opencode.ai/install | bash',
-] as const;
+export {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEBUDDY_CLI_INSTALL_COMMANDS,
+  CODEBUDDY_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  CURSOR_CLI_INSTALL_COMMANDS,
+  CURSOR_CLI_INSTALL_DOCS_URL,
+  GROK_BUILD_CLI_INSTALL_COMMANDS,
+  GROK_BUILD_CLI_INSTALL_DOCS_URL,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
+} from '@lobechat/heterogeneous-agents';
 
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
@@ -36,6 +31,7 @@ export const HeterogeneousAgentSessionErrorCode = {
   RateLimit: 'rate_limit',
   ResumeCwdMismatch: 'resume_cwd_mismatch',
   ResumeThreadNotFound: 'resume_thread_not_found',
+  WorkingDirectoryNotFound: 'working_directory_not_found',
 } as const;
 
 export type HeterogeneousAgentSessionErrorCode =
@@ -50,11 +46,17 @@ export interface HeterogeneousAgentRateLimitInfo {
   status?: string;
 }
 
-export interface HeteroQuotaWindow {
-  resetsAt: number | null;
-  usedPercent: number;
-  windowMinutes: number;
-}
+// The Claude quota snapshot shapes are shared with the device RPC path
+// (`lh connect` samples the same snapshot), so they live in the
+// heterogeneous-agents quota entry; re-export them for existing IPC callers.
+export type {
+  ClaudeCodeAccountIdentity,
+  ClaudeCodeQuotaReading,
+  ClaudeCodeQuotaSnapshot,
+  ClaudeCodeQuotaUnavailableReason,
+  ClaudeCodeScopedWeekly,
+  HeteroQuotaWindow,
+} from '@lobechat/heterogeneous-agents/quota';
 
 export type CodexQuotaWindow = HeteroQuotaWindow;
 
@@ -106,57 +108,6 @@ export interface CodexRateLimitResetResult {
   quota: CodexQuotaSnapshot;
 }
 
-/**
- * Why the quota can't be shown. `external-auth` means the agent is configured
- * with an API key / custom base url, so subscription quota does not apply;
- * the credential reasons mean no fresh OAuth login was found on this machine.
- */
-export type ClaudeCodeQuotaUnavailableReason =
-  'credentials-expired' | 'credentials-not-found' | 'external-auth';
-
-export interface ClaudeCodeScopedWeekly {
-  /** Display name of the model the window is scoped to, e.g. "Fable". */
-  modelName: string;
-  window: HeteroQuotaWindow;
-}
-
-/** Account identity resolved from the local CLI config, for DB persistence. */
-export interface ClaudeCodeAccountIdentity {
-  displayName?: string;
-  email?: string;
-  externalAccountId?: string;
-  organizationId?: string;
-  planTier?: string;
-  rateLimitTier?: string;
-}
-
-/** One raw limit reading, for fossilizing into the quota data layer. */
-export interface ClaudeCodeQuotaReading {
-  capturedAt: number;
-  isActive?: boolean;
-  limitType: string;
-  resetsAt: number | null;
-  scopeKey: string;
-  severity?: string;
-  utilization: number;
-}
-
-export interface ClaudeCodeQuotaSnapshot {
-  error: string | null;
-  /** Present when `status === 'ok'` and the local config carries an account. */
-  identity?: ClaudeCodeAccountIdentity | null;
-  provider: 'claude-code';
-  /** Flat limit readings for DB persistence (mirrors `session`/`weekly`/scoped). */
-  readings?: ClaudeCodeQuotaReading[];
-  reason?: ClaudeCodeQuotaUnavailableReason;
-  /** Model-scoped weekly window (e.g. Fable/Opus), when the plan reports one. */
-  scopedWeekly: ClaudeCodeScopedWeekly | null;
-  session: HeteroQuotaWindow | null;
-  status: 'error' | 'ok' | 'unavailable';
-  updatedAt: number;
-  weekly: HeteroQuotaWindow | null;
-}
-
 export interface HeterogeneousAgentSessionError {
   agentType?: HeterogeneousCliAgentType;
   code?: HeterogeneousAgentSessionErrorCode | string;
@@ -192,5 +143,6 @@ export interface HeterogeneousAgentRuntimeStatus {
   sessionId: string;
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
-  transport: 'claude-sdk' | 'cli-spawn';
+  transport:
+    'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'cursor-acp' | 'trae-acp';
 }

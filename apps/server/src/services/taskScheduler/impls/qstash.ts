@@ -17,7 +17,7 @@ export interface QStashTaskSchedulerConfig {
  * QStash-backed task scheduler.
  *
  * Each `scheduleNextTopic` call publishes a one-shot delayed message; QStash will
- * POST `{ taskId, userId }` to `/api/workflows/task/heartbeat-tick` after `delay`
+ * POST `{ taskId, userId, tickToken }` to `/api/workflows/task/heartbeat-tick` after `delay`
  * seconds. The handler is responsible for re-checking task state (DB is the
  * authority — a tick may arrive after the user paused or canceled the task).
  */
@@ -31,13 +31,13 @@ export class QStashTaskScheduler implements TaskSchedulerImpl {
   }
 
   async scheduleNextTopic(params: ScheduleNextTopicParams): Promise<string> {
-    const { taskId, userId, delay = 0 } = params;
+    const { taskId, userId, delay = 0, tickToken } = params;
     const url = `${this.baseUrl}${HEARTBEAT_TICK_PATH}`;
 
     log('Publishing tick: task=%s delay=%ds url=%s', taskId, delay, url);
 
     const response = await this.qstashClient.publishJSON({
-      body: { taskId, userId },
+      body: { taskId, tickToken, userId },
       delay,
       url,
     });

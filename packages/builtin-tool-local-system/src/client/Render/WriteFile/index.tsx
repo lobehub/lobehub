@@ -32,12 +32,18 @@ const buildNewFilePatch = (filePath: string, content: string) => {
     : `${header}${body}\n\\ No newline at end of file\n`;
 };
 
-const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
+type WriteFileArgs = WriteLocalFileParams & {
+  file_path?: string;
+  filePath?: string;
+};
+
+const WriteFile = memo<BuiltinRenderProps<WriteFileArgs>>(({ args }) => {
   if (!args) return <Skeleton active />;
 
-  const { base, dir } = path.parse(args.path);
-  const ext = path.extname(args.path).slice(1).toLowerCase();
-  const isHtml = isHtmlFile({ path: args.path });
+  const filePath = args.path || args.filePath || args.file_path || '';
+  const { base, dir } = path.parse(filePath);
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const isHtml = isHtmlFile({ path: filePath });
   const isMarkdown = ext === 'md' || ext === 'mdx';
 
   // Code-type files render as a "new file" unified diff so the visual is
@@ -48,7 +54,7 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
       <PatchDiff
         fileName={base}
         language={ext || undefined}
-        patch={buildNewFilePatch(args.path, args.content)}
+        patch={buildNewFilePatch(filePath, args.content)}
         showHeader={false}
         variant={'borderless'}
         viewMode={'unified'}
@@ -61,7 +67,7 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
       <Flexbox horizontal align={'center'}>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />
-        <LocalFile name={base} path={args.path} />
+        <LocalFile name={base} path={filePath} />
       </Flexbox>
 
       {args.content && (

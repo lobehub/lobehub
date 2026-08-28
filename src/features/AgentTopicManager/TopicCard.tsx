@@ -2,7 +2,8 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
-import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Checkbox, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
@@ -159,7 +160,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       )}
 
       {projectLabel && (
-        <Tag bordered={false} icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
+        <Tag icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
           {projectLabel}
         </Tag>
       )}

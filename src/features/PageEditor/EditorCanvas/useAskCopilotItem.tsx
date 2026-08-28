@@ -5,11 +5,14 @@ import { nanoid } from '@lobechat/utils';
 import { type IEditor } from '@lobehub/editor';
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Avatar, Block } from '@lobehub/ui';
+import { Block } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useConversationStore } from '@/features/Conversation/store';
+import type { ComposerTarget } from '@/features/Conversation/types';
 import { useFileStore } from '@/store/file';
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
@@ -26,15 +29,20 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActionsProps['items'] => {
+export const useAskCopilotItem = (
+  editor: IEditor | undefined,
+  explicitComposerTarget?: ComposerTarget,
+): ChatInputActionsProps['items'] => {
   const { t } = useTranslation('common');
+  const providerComposerTarget = useConversationStore((s) => s.composerTarget);
+  const composerTarget = explicitComposerTarget ?? providerComposerTarget;
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
   const pageId = usePageEditorStore((s) => s.documentId);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
   const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
   return useMemo(() => {
-    if (!editor) return [];
+    if (!editor || !composerTarget.writable) return [];
 
     const label = t('cmdk.askLobeAI');
 
@@ -66,13 +74,16 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
 
               // Store action handles deduplication
               addSelectionContext({
-                content,
-                format,
-                id: `selection-${nanoid(6)}`,
-                pageId,
-                preview,
-                title: 'Selection',
-                type: 'text',
+                contextKey: composerTarget.contextKey,
+                selection: {
+                  content,
+                  format,
+                  id: `selection-${nanoid(6)}`,
+                  pageId,
+                  preview,
+                  title: 'Selection',
+                  type: 'text',
+                },
               });
 
               // Open right panel if not opened
@@ -103,5 +114,13 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
         onClick: () => {},
       },
     ];
-  }, [addSelectionContext, editor, pageId, setRightPanelMode, t, togglePageAgentPanel]);
+  }, [
+    addSelectionContext,
+    composerTarget,
+    editor,
+    pageId,
+    setRightPanelMode,
+    t,
+    togglePageAgentPanel,
+  ]);
 };

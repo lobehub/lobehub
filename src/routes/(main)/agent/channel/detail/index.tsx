@@ -1,8 +1,8 @@
 'use client';
 
-import { Alert, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -82,7 +82,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
   ({ platformDef, agentId, currentConfig, disabled }) => {
     const { t } = useTranslation('agent');
     const navigate = useWorkspaceAwareNavigate();
-    const { message: msg } = App.useApp();
+
     const [form] = Form.useForm<ChannelFormValues>();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const activeWorkspaceId = useActiveWorkspaceId();
@@ -371,7 +371,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
           setSaveResult({ type: 'success' });
           setIsDirty(false);
-          msg.success(t('channel.saved'));
+          toast.success(t('channel.saved'));
 
           // Auto-connect
           await connectCurrentBot(applicationId);
@@ -390,7 +390,6 @@ const PlatformDetail = memo<PlatformDetailProps>(
         updateBotProvider,
         connectCurrentBot,
         writeDisabled,
-        msg,
         t,
       ],
     );
@@ -405,20 +404,20 @@ const PlatformDetail = memo<PlatformDetailProps>(
         onOk: async () => {
           try {
             await deleteBotProvider(currentConfig.id, agentId);
-            msg.success(t('channel.removed'));
+            toast.success(t('channel.removed'));
             form.resetFields();
           } catch {
-            msg.error(t('channel.removeFailed'));
+            toast.error(t('channel.removeFailed'));
           }
         },
         title: t('channel.deleteConfirm'),
       });
-    }, [readOnly, currentConfig, agentId, deleteBotProvider, msg, t, form]);
+    }, [readOnly, currentConfig, agentId, deleteBotProvider, t, form]);
 
     const handleTestConnection = useCallback(async () => {
       if (writeDisabled) return;
       if (!currentConfig) {
-        msg.warning(t('channel.saveFirstWarning'));
+        toast.warning(t('channel.saveFirstWarning'));
         return;
       }
 
@@ -438,7 +437,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       } finally {
         setTesting(false);
       }
-    }, [writeDisabled, currentConfig, platformDef.id, testConnection, msg, t]);
+    }, [writeDisabled, currentConfig, platformDef.id, testConnection, t]);
 
     const handleDiscard = useCallback(() => {
       form.resetFields();
@@ -508,7 +507,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
               testResult={testResult}
               testing={testing}
               writeDisabled={writeDisabled}
-              onCopied={() => msg.success(t('channel.copied'))}
+              onCopied={() => toast.success(t('channel.copied'))}
               onDelete={handleDelete}
               onDiscard={handleDiscard}
               onSave={handleSave}

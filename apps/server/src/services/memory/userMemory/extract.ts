@@ -77,6 +77,7 @@ import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtract
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import {
   AsyncTaskError,
   type AsyncTaskErrorBody,
@@ -2376,7 +2377,11 @@ export class MemoryExtractionExecutor {
     const db = await this.db;
     const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig, workspaceId);
 
-    return aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
+    return getUserScopedAiProviderRuntimeState(
+      userId,
+      () => aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      { throwOnUnresolvedAccess: true },
+    );
   }
 
   private async resolveRuntimeKeyVaults(

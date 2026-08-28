@@ -14,6 +14,7 @@
   - **Word**: `.docx` 文件。
   - **Excel**: `.xlsx`, `.xls` 文件，每个工作表作为一个 `Page`。
   - **PowerPoint**: `.pptx` 文件，每个幻灯片作为一个 `Page`。
+  - **Jupyter Notebook**: `.ipynb` 文件，转换为 markdown（每个单元格一页）；高 token 输出会被替换为简短占位符。
 - **标准化输出**: 始终返回 `Promise<Document>`。 `Document` 对象代表一个加载的文件，其内部包含一个 `Page` 数组，代表文件的各个逻辑单元（页、幻灯片、工作表、文本块等）。
 - **层级结构**: 采用 `Document` 包含 `Page[]` 的结构，更好地反映文件原始组织方式。
 - **丰富的元数据**: 在 `Document` 和 `Page` 层面提供详细的元数据，包括文件信息、内容统计和结构信息。

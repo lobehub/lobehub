@@ -1,3 +1,5 @@
+import { resolveHeterogeneousProviderTopicModel } from '@lobechat/types';
+
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -15,8 +17,24 @@ export const snapshotAgentModel = (
   if (!agentId) return {};
 
   const agentState = getAgentStoreState();
-  const model = agentByIdSelectors.getAgentModelById(agentId)(agentState);
-  if (!model) return {};
 
-  return { model, provider: agentByIdSelectors.getAgentModelProviderById(agentId)(agentState) };
+  // Heterogeneous topics snapshot the selector value that will be passed to the
+  // CLI (including `default`) or the bound API model. This keeps a topic stable
+  // when the Agent default changes later.
+  const heterogeneousProvider =
+    agentByIdSelectors.getAgencyConfigById(agentId)(agentState)?.heterogeneousProvider;
+  if (heterogeneousProvider) {
+    return (
+      resolveHeterogeneousProviderTopicModel(heterogeneousProvider) ??
+      (heterogeneousProvider.type ? { provider: heterogeneousProvider.type } : {})
+    );
+  }
+
+  // Non-hetero: the effective model IS the agent default when nothing is pinned,
+  // so snapshotting the defaulted value is intended — it keeps the topic on the
+  // model it started with even after the agent default later changes.
+  return {
+    model: agentByIdSelectors.getAgentModelById(agentId)(agentState),
+    provider: agentByIdSelectors.getAgentModelProviderById(agentId)(agentState),
+  };
 };

@@ -1,7 +1,7 @@
 'use client';
 
-import { Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { buildDiscordOpenBotUrl } from '../constants';
 import { createMessengerLinkModal } from '../LinkModal';
+import { MessengerPushSection } from './MessengerPush';
 import {
   ConnectionRow,
   DetailLayout,
@@ -85,6 +86,7 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
 
   return (
     <DetailLayout
+      extraSections={link ? <MessengerPushSection name={name} platform="discord" /> : undefined}
       hasConnections={hasInstallations || hasLinks}
       headerAction={headerAction}
       name={name}

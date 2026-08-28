@@ -1,12 +1,24 @@
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import {
+  REVIEW_PREDICTION_ACTIONS,
+  VERIFY_EVIDENCE_MODALITIES,
+  VERIFY_EVIDENCE_SCOPES,
+  VERIFY_EVIDENCE_TYPES,
+  VERIFY_ON_FAIL_ACTIONS,
+  VERIFY_VERDICTS,
+  VERIFY_VERIFIER_TYPES,
+} from '@lobechat/prompts';
 import { z } from 'zod';
 
 // ============================================
 // Plan generation — AI proposes additional check criteria for a run
 // ============================================
 
-const verifierTypeEnum = ['program', 'agent', 'llm'] as const;
-const onFailEnum = ['manual', 'auto_repair'] as const;
+const requiredEvidenceSchema = z.object({
+  hint: z.string().optional(),
+  modality: z.enum(VERIFY_EVIDENCE_MODALITIES).optional(),
+  scope: z.enum(VERIFY_EVIDENCE_SCOPES).optional(),
+  type: z.enum(VERIFY_EVIDENCE_TYPES),
+});
 
 /** Lenient parse of the AI plan-gen output; the service filters/normalizes. */
 export const RawGeneratedCriteriaSchema = z.object({
@@ -14,51 +26,20 @@ export const RawGeneratedCriteriaSchema = z.object({
     z.object({
       description: z.string().optional(),
       instruction: z.string().optional(),
-      onFail: z.enum(onFailEnum).optional(),
+      onFail: z.enum(VERIFY_ON_FAIL_ACTIONS).optional(),
+      requiredEvidence: z.array(requiredEvidenceSchema).optional(),
       required: z.boolean().optional(),
       title: z.string(),
-      verifierType: z.enum(verifierTypeEnum),
+      verifierType: z.enum(VERIFY_VERIFIER_TYPES),
     }),
   ),
 });
 
 export type RawGeneratedCriteria = z.infer<typeof RawGeneratedCriteriaSchema>;
 
-/** JSON schema form bound to the LLM structured-output call. */
-export const GENERATED_CRITERIA_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'verify_plan_criteria',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      criteria: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            description: { maxLength: 280, type: 'string' },
-            instruction: { type: 'string' },
-            onFail: { enum: [...onFailEnum], type: 'string' },
-            required: { type: 'boolean' },
-            title: { maxLength: 80, minLength: 1, type: 'string' },
-            verifierType: { enum: [...verifierTypeEnum], type: 'string' },
-          },
-          required: ['title', 'description', 'instruction', 'verifierType', 'required', 'onFail'],
-          type: 'object',
-        },
-        maxItems: 6,
-        type: 'array',
-      },
-    },
-    required: ['criteria'],
-    type: 'object',
-  },
-  strict: true,
-};
-
 // ============================================
 // LLM Judge — Toulmin verdict for one or many check items
 // ============================================
-
-const verdictEnum = ['passed', 'failed', 'uncertain'] as const;
 
 const toulminVerdictFields = {
   confidence: z.number().min(0).max(1),
@@ -70,7 +51,7 @@ const toulminVerdictFields = {
   limitation: z.string().nullish(),
   reasoning: z.string().nullish(),
   suggestion: z.string().nullish(),
-  verdict: z.enum(verdictEnum),
+  verdict: z.enum(VERIFY_VERDICTS),
 };
 
 /** Per-criterion judge output (1:1 — one generateObject per check item). */
@@ -82,50 +63,6 @@ export const BatchVerdictSchema = z.object({
   verdicts: z.array(z.object({ ...toulminVerdictFields, checkItemId: z.string() })),
 });
 export type BatchVerdict = z.infer<typeof BatchVerdictSchema>;
-
-const toulminJsonProps = {
-  confidence: { maximum: 1, minimum: 0, type: 'number' },
-  counterEvidence: { type: 'string' },
-  evidence: { type: 'string' },
-  limitation: { type: 'string' },
-  reasoning: { type: 'string' },
-  suggestion: { type: 'string' },
-  verdict: { enum: [...verdictEnum], type: 'string' },
-} as const;
-
-const toulminRequired = ['verdict', 'confidence', 'evidence', 'reasoning'];
-
-export const SINGLE_VERDICT_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'verify_verdict',
-  schema: {
-    additionalProperties: false,
-    properties: { ...toulminJsonProps },
-    required: toulminRequired,
-    type: 'object',
-  },
-  strict: false,
-};
-
-export const BATCH_VERDICT_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'verify_verdicts',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      verdicts: {
-        items: {
-          additionalProperties: false,
-          properties: { checkItemId: { type: 'string' }, ...toulminJsonProps },
-          required: ['checkItemId', ...toulminRequired],
-          type: 'object',
-        },
-        type: 'array',
-      },
-    },
-    required: ['verdicts'],
-    type: 'object',
-  },
-  strict: false,
-};
 
 // ============================================
 // Report — LLM narrative over a run's check results + evidence
@@ -142,16 +79,31 @@ export const ReportNarrativeSchema = z.object({
 });
 export type ReportNarrative = z.infer<typeof ReportNarrativeSchema>;
 
-export const REPORT_NARRATIVE_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'verify_report',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      content: { type: 'string' },
-      summary: { maxLength: 600, type: 'string' },
-    },
-    required: ['summary', 'content'],
-    type: 'object',
-  },
-  strict: true,
-};
+// ============================================
+// Review prediction — a second opinion on one already-judged check
+// ============================================
+
+/**
+ * Lenient on purpose: `strict: true` forces every property into `required`, so
+ * the provider returns explicit `null` for the ones it had nothing to say about
+ * — hence `.nullish()` rather than `.optional()` throughout.
+ */
+export const ReviewPredictionSchema = z.object({
+  action: z.enum(REVIEW_PREDICTION_ACTIONS),
+  comment: z.string().nullish(),
+  confidence: z.number().nullish(),
+  rationale: z.string().nullish(),
+  regions: z
+    .array(
+      z.object({
+        comment: z.string().nullish(),
+        height: z.number(),
+        imageIndex: z.number(),
+        width: z.number(),
+        x: z.number(),
+        y: z.number(),
+      }),
+    )
+    .nullish(),
+});
+export type RawReviewPrediction = z.infer<typeof ReviewPredictionSchema>;

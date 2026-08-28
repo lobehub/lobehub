@@ -1,7 +1,8 @@
 import { Flexbox, InputNumber } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
+
+import DiscreteSlider from '@/components/DiscreteSlider';
 
 const Kibi = 1024;
 const MAX_VALUE = 32 * Kibi; // 32768
@@ -37,15 +38,10 @@ const ReasoningTokenSlider32k = memo<ReasoningTokenSlider32kProps>(
       value: typeof value === 'undefined' ? 0 : tokenToIndex(value),
     });
 
-    const marks = useMemo(() => {
-      return MARK_TOKENS.reduce(
-        (acc, token, index) => {
-          acc[index] = `${token}k`;
-          return acc;
-        },
-        {} as Record<number, string>,
-      );
-    }, []);
+    const options = useMemo(
+      () => MARK_TOKENS.map((token, index) => ({ label: `${token}k`, value: index })),
+      [],
+    );
 
     const step = useMemo(() => {
       const current = token ?? 0;
@@ -60,12 +56,8 @@ const ReasoningTokenSlider32k = memo<ReasoningTokenSlider32kProps>(
     return (
       <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
         <Flexbox flex={1} style={{ minWidth: 200, maxWidth: 320 }}>
-          <Slider
-            marks={marks}
-            max={MARK_TOKENS.length - 1}
-            min={0}
-            step={null}
-            tooltip={{ open: false }}
+          <DiscreteSlider
+            options={options}
             value={sliderIndex}
             onChange={(v) => {
               setSliderIndex(v);

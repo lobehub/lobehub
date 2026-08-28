@@ -10,6 +10,10 @@ import type {
   ToolStateChunkData,
   UsageData,
 } from '../types';
+import {
+  CODEX_COMMAND_OUTPUT_MAX_LENGTH,
+  truncateCodexCommandOutput,
+} from '../utils/codexCommandOutput';
 import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -20,7 +24,6 @@ const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
 const CODEX_WEB_SEARCH_API = 'web_search';
 const CODEX_USAGE_SETTINGS_URL = 'https://chatgpt.com/codex/settings/usage';
-const CODEX_COMMAND_OUTPUT_MAX_LENGTH = 25_000;
 
 const CODEX_USER_RATE_LIMIT_PATTERNS = [
   /you'?ve hit your usage limit/i,
@@ -51,6 +54,12 @@ interface CodexTodoListEntry {
 interface TodoListPluginItem {
   status: 'completed' | 'processing' | 'todo';
   text: string;
+}
+
+interface StreamedCommandOutput {
+  prefix: string;
+  totalLength: number;
+  truncated: boolean;
 }
 
 interface CodexTodoListItem extends CodexBaseItem {
@@ -463,31 +472,6 @@ const isSuccessfulToolCompletion = (item: CodexToolItem): boolean => {
   return item.status !== 'cancelled' && item.status !== 'error' && item.status !== 'failed';
 };
 
-const truncateCodexCommandOutput = (content: string) => {
-  if (!content || content.length <= CODEX_COMMAND_OUTPUT_MAX_LENGTH) {
-    return {
-      output: content,
-      truncated: false,
-    };
-  }
-
-  let cutoff = CODEX_COMMAND_OUTPUT_MAX_LENGTH;
-  const lastCharCode = content.charCodeAt(cutoff - 1);
-  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
-    cutoff -= 1;
-  }
-
-  const omittedCharacters = content.length - cutoff;
-  const notice = `\n\n[Output truncated: ${omittedCharacters} characters omitted. Original length: ${content.length} characters]`;
-
-  return {
-    omittedCharacters,
-    originalLength: content.length,
-    output: content.slice(0, cutoff) + notice,
-    truncated: true,
-  };
-};
-
 const getToolResultData = (item: CodexToolItem): ToolResultData => {
   const isSuccess = isSuccessfulToolCompletion(item);
   const output = getToolContent(item, isSuccess);
@@ -799,6 +783,8 @@ export class CodexAdapter implements AgentEventAdapter {
 
   private hasTextInCurrentStep = false;
   private hasToolActivitySinceAgentMessage = false;
+  private streamedAgentMessageText = new Map<string, string>();
+  private streamedCommandOutput = new Map<string, StreamedCommandOutput>();
   private deferredTodoCompletions = new Map<string, CodexTodoListItem>();
   private pendingTodoToolCalls = new Set<string>();
   private pendingToolCalls = new Set<string>();
@@ -845,6 +831,12 @@ export class CodexAdapter implements AgentEventAdapter {
       case 'item.updated': {
         return this.handleItemUpdated(raw.item);
       }
+      case 'item.agent_message.delta': {
+        return this.handleAgentMessageDelta(raw);
+      }
+      case 'item.command_execution.output_delta': {
+        return this.handleCommandOutputDelta(raw);
+      }
       case 'item.completed': {
         return this.handleItemCompleted(raw.item);
       }
@@ -870,7 +862,8 @@ export class CodexAdapter implements AgentEventAdapter {
     const cumulativeUsage = toCodexUsageData(raw.usage);
     const usage = toTurnUsageFromCumulative(cumulativeUsage, this.lastCumulativeUsage);
     if (cumulativeUsage) this.lastCumulativeUsage = cumulativeUsage;
-    const events = this.drainPendingToolEndEvents('success');
+    const interrupted = raw.reason === 'interrupted';
+    const events = this.drainPendingToolEndEvents(interrupted ? 'interrupted' : 'success');
 
     if (!hadPendingEmptyTurn && (usage || model)) {
       const data: StepCompleteData = {
@@ -889,7 +882,7 @@ export class CodexAdapter implements AgentEventAdapter {
     } else if (this.started) {
       events.push(this.makeEvent('visible_output_end', {}));
     }
-    events.push(this.makeEvent('agent_runtime_end', {}));
+    events.push(this.makeEvent('agent_runtime_end', interrupted ? { reason: 'interrupted' } : {}));
 
     return events;
   }
@@ -946,6 +939,8 @@ export class CodexAdapter implements AgentEventAdapter {
     this.currentAgentMessageItemId = undefined;
     this.hasTextInCurrentStep = false;
     this.hasToolActivitySinceAgentMessage = false;
+    this.streamedAgentMessageText.clear();
+    this.streamedCommandOutput.clear();
     this.resetStepToolCalls();
 
     if (!this.started) {
@@ -970,16 +965,102 @@ export class CodexAdapter implements AgentEventAdapter {
     const events = [...this.consumePendingTurnStart(), ...this.emitToolChunk(tool)];
     if (isTodoListItem(item)) {
       this.pendingTodoToolCalls.add(tool.id);
-      events.push(this.createToolStateEvent(item));
+      events.push(this.createToolStateEvent(item.id, synthesizeTodoListPluginState(item)));
     }
 
     return events;
   }
 
   private handleItemUpdated(item: any): HeterogeneousAgentEvent[] {
-    if (!item?.id || !isTodoListItem(item) || !this.pendingToolCalls.has(item.id)) return [];
+    if (!item?.id || !this.pendingToolCalls.has(item.id)) return [];
 
-    return [this.createToolStateEvent(item)];
+    if (isTodoListItem(item)) {
+      return [this.createToolStateEvent(item.id, synthesizeTodoListPluginState(item))];
+    }
+    if (isFileChangeItem(item)) {
+      const pluginState = synthesizeFileChangePluginState(item);
+      return pluginState ? [this.createToolStateEvent(item.id, pluginState)] : [];
+    }
+
+    return [];
+  }
+
+  private handleAgentMessageDelta(raw: any): HeterogeneousAgentEvent[] {
+    const itemId = getStringValue(raw?.item_id) || getStringValue(raw?.itemId);
+    const delta = typeof raw?.delta === 'string' ? raw.delta : undefined;
+    if (!itemId || !delta) return [];
+
+    this.streamedAgentMessageText.set(
+      itemId,
+      `${this.streamedAgentMessageText.get(itemId) ?? ''}${delta}`,
+    );
+    return this.handleAgentMessageContent(itemId, delta);
+  }
+
+  private handleAgentMessageContent(itemId: string | undefined, content: string) {
+    const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
+    const shouldStartNewStep =
+      this.hasToolActivitySinceAgentMessage &&
+      !!itemId &&
+      itemId !== this.currentAgentMessageItemId;
+
+    if (shouldStartNewStep) {
+      this.stepIndex += 1;
+      this.resetStepToolCalls();
+      this.hasTextInCurrentStep = false;
+      events.push(this.makeEvent('stream_end', {}));
+      events.push(this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })));
+    }
+
+    const chunk =
+      this.hasTextInCurrentStep && itemId !== this.currentAgentMessageItemId
+        ? `\n\n${content}`
+        : content;
+
+    this.currentAgentMessageItemId = itemId;
+    this.hasTextInCurrentStep = true;
+    this.hasToolActivitySinceAgentMessage = false;
+    events.push(
+      this.makeEvent('stream_chunk', {
+        chunkType: 'text',
+        content: chunk,
+      }),
+    );
+
+    return events;
+  }
+
+  private handleCommandOutputDelta(raw: any): HeterogeneousAgentEvent[] {
+    const itemId = getStringValue(raw?.item_id) || getStringValue(raw?.itemId);
+    const delta = typeof raw?.delta === 'string' ? raw.delta : undefined;
+    if (!itemId || !delta || !this.pendingToolCalls.has(itemId)) return [];
+
+    const previous = this.streamedCommandOutput.get(itemId) ?? {
+      prefix: '',
+      totalLength: 0,
+      truncated: false,
+    };
+    const remaining = Math.max(0, CODEX_COMMAND_OUTPUT_MAX_LENGTH - previous.prefix.length);
+    let appended = delta.slice(0, remaining);
+    const lastCharCode = appended.charCodeAt(appended.length - 1);
+    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) appended = appended.slice(0, -1);
+
+    const prefix = previous.prefix + appended;
+    const totalLength = previous.totalLength + delta.length;
+    const truncated = totalLength > prefix.length;
+    this.streamedCommandOutput.set(itemId, { prefix, totalLength, truncated });
+    if (previous.truncated) return [];
+
+    const snapshot = truncated
+      ? `${prefix}\n\n[Output truncated: ${totalLength - prefix.length} characters omitted. Original length: ${totalLength} characters]`
+      : prefix;
+    return [
+      this.createToolStateEvent(itemId, {
+        isBackground: false,
+        output: snapshot,
+        stdout: snapshot,
+      }),
+    ];
   }
 
   private handleItemCompleted(item: any): HeterogeneousAgentEvent[] {
@@ -988,39 +1069,20 @@ export class CodexAdapter implements AgentEventAdapter {
     if (item.type === 'agent_message') {
       if (!item.text) return [];
 
-      const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
-      const shouldStartNewStep =
-        this.hasToolActivitySinceAgentMessage &&
-        !!item.id &&
-        item.id !== this.currentAgentMessageItemId;
-
-      if (shouldStartNewStep) {
-        this.stepIndex += 1;
-        this.resetStepToolCalls();
-        this.hasTextInCurrentStep = false;
-        events.push(this.makeEvent('stream_end', {}));
-        events.push(this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })));
+      const streamedText = item.id ? this.streamedAgentMessageText.get(item.id) : undefined;
+      if (item.id) this.streamedAgentMessageText.delete(item.id);
+      if (streamedText !== undefined) {
+        const remainingText = item.text.startsWith(streamedText)
+          ? item.text.slice(streamedText.length)
+          : '';
+        return remainingText ? this.handleAgentMessageContent(item.id, remainingText) : [];
       }
 
-      const content =
-        this.hasTextInCurrentStep && item.id !== this.currentAgentMessageItemId
-          ? `\n\n${item.text}`
-          : item.text;
-
-      this.currentAgentMessageItemId = item.id;
-      this.hasTextInCurrentStep = true;
-      this.hasToolActivitySinceAgentMessage = false;
-      events.push(
-        this.makeEvent('stream_chunk', {
-          chunkType: 'text',
-          content,
-        }),
-      );
-
-      return events;
+      return this.handleAgentMessageContent(item.id, item.text);
     }
 
     if (!item.id) return [];
+    this.streamedCommandOutput.delete(item.id);
 
     // Codex emits the same status-less todo completion before both a successful
     // turn completion and an interrupted process exit. Keep it pending until
@@ -1113,21 +1175,23 @@ export class CodexAdapter implements AgentEventAdapter {
     this.pendingToolCalls.clear();
     this.pendingToolCallStepIndex.clear();
     this.deferredTodoCompletions.clear();
+    this.streamedCommandOutput.clear();
     return events;
   }
 
-  private createToolStateEvent(item: CodexTodoListItem): HeterogeneousAgentEvent {
-    const pluginState = synthesizeTodoListPluginState(item);
-
-    const snapshotSeq = (this.toolStateSnapshotSeqByCallId.get(item.id) ?? 0) + 1;
-    this.toolStateSnapshotSeqByCallId.set(item.id, snapshotSeq);
+  private createToolStateEvent(
+    toolCallId: string,
+    pluginState: Record<string, unknown>,
+  ): HeterogeneousAgentEvent {
+    const snapshotSeq = (this.toolStateSnapshotSeqByCallId.get(toolCallId) ?? 0) + 1;
+    this.toolStateSnapshotSeqByCallId.set(toolCallId, snapshotSeq);
 
     return this.makeEvent('stream_chunk', {
       chunkType: 'tool_state',
       pluginState,
       snapshotMode: 'replace',
       snapshotSeq,
-      toolCallId: item.id,
+      toolCallId,
     } satisfies ToolStateChunkData);
   }
 

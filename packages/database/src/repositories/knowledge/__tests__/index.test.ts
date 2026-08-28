@@ -270,16 +270,87 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.fileType.startsWith('audio'))).toBe(true);
     });
 
-    it('should filter by category - Documents', async () => {
+    it('should filter by category - Documents includes uploaded text/pdf files only', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
+      const fileTypes = result.map((item) => item.fileType);
+      // uploaded text/* and office/pdf files are document files
+      expect(fileTypes).toContain('text/plain');
+      expect(fileTypes).toContain('application/pdf');
+      // derived notes/pages belong to the Pages category, media stays out too
+      expect(result.every((item) => item.sourceType === 'file')).toBe(true);
       expect(
         result.every(
           (item) =>
-            item.fileType.startsWith('application') ||
-            (item.fileType.startsWith('custom') && item.fileType !== 'custom/document'),
+            !/^(?:audio|image|video|custom)/.test(item.fileType) &&
+            item.fileType !== 'custom/folder',
         ),
       ).toBe(true);
+    });
+
+    it('should filter by category - Pages returns derived notes only', async () => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.Pages });
+
+      const fileTypes = result.map((item) => item.fileType);
+      // derived notes/pages surface here
+      expect(fileTypes).toContain('custom/note');
+      // uploaded files (text, pdf, media, raw data) never do
+      expect(result.every((item) => item.sourceType === 'document')).toBe(true);
+      expect(fileTypes).not.toContain('text/plain');
+      expect(fileTypes).not.toContain('application/pdf');
+      expect(fileTypes).not.toContain('custom/folder');
+    });
+
+    it('should filter by category - Files returns raw data files only', async () => {
+      // Document-table rows (agent instructions, derived docs) must never leak
+      // into the Files category even when their fileType matches no other bucket.
+      await serverDB.insert(documents).values([
+        {
+          id: 'doc-verify-instruction',
+          userId,
+          title: 'Verification checklist',
+          fileType: 'verify/instruction',
+          sourceType: 'agent',
+          source: 'internal://verify/doc-verify-instruction',
+          totalCharCount: 100,
+          totalLineCount: 5,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file-raw-json',
+          userId,
+          name: 'data.json',
+          fileType: 'application/json',
+          size: 100,
+          url: 'https://example.com/data.json',
+        },
+        {
+          id: 'file-raw-zip',
+          userId,
+          name: 'bundle.zip',
+          fileType: 'application/zip',
+          size: 100,
+          url: 'https://example.com/bundle.zip',
+        },
+      ]);
+
+      const result = await knowledgeRepo.query({ category: FilesTabs.Files });
+
+      const ids = result.map((item) => item.id);
+      expect(ids).toContain('file-raw-json');
+      expect(ids).toContain('file-raw-zip');
+      // documents / media / notes are excluded from the Files category
+      expect(
+        result.every(
+          (item) =>
+            !/^(?:audio|image|video|text|custom)/.test(item.fileType) &&
+            item.fileType !== 'application/pdf',
+        ),
+      ).toBe(true);
+      // no documents-table rows at all, whatever their fileType
+      expect(ids).not.toContain('doc-verify-instruction');
+      expect(result.every((item) => item.sourceType === 'file')).toBe(true);
     });
 
     it('should search by query', async () => {
@@ -1039,20 +1110,17 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.fileType.startsWith('image'))).toBe(true);
     });
 
-    it('should filter KB files by category (Documents) and exclude custom/document', async () => {
+    it('should filter KB files by category (Documents) including text files and notes', async () => {
       const result = await knowledgeRepo.query({
         knowledgeBaseId: 'kb-filter',
         category: FilesTabs.Documents,
       });
 
-      // Should include application/* files and custom/* docs
-      expect(
-        result.every(
-          (item) =>
-            item.fileType.startsWith('application') ||
-            (item.fileType.startsWith('custom') && item.fileType !== 'custom/document'),
-        ),
-      ).toBe(true);
+      const ids = result.map((item) => item.id);
+      expect(ids).toContain('kb-f-pdf');
+      expect(ids).toContain('kb-f-searchable');
+      // media stays out of Documents
+      expect(result.every((item) => !/^(?:audio|image|video)/.test(item.fileType))).toBe(true);
     });
 
     it('should return KB standalone documents (no fileId) with search', async () => {
@@ -1140,13 +1208,43 @@ describe('KnowledgeRepo', () => {
           url: 'https://example.com/readme.txt',
         },
       ]);
+
+      // a web clipping saved as an article document plus a plain note that
+      // must stay out of the Websites category
+      await serverDB.insert(documents).values([
+        {
+          id: 'article-doc',
+          userId,
+          title: 'Clipped Article',
+          fileType: 'article',
+          sourceType: 'web',
+          source: 'https://example.com/some-article',
+          content: 'clipped content',
+          totalCharCount: 15,
+          totalLineCount: 1,
+        },
+        {
+          id: 'plain-note',
+          userId,
+          title: 'Plain Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/plain-note',
+          totalCharCount: 10,
+          totalLineCount: 1,
+        },
+      ]);
     });
 
-    it('should filter by category - Websites', async () => {
+    it('should filter by category - Websites includes html files and article clippings', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Websites });
 
       expect(result.some((item) => item.id === 'website-file')).toBe(true);
-      expect(result.every((item) => item.fileType === 'text/html')).toBe(true);
+      expect(result.some((item) => item.id === 'article-doc')).toBe(true);
+      expect(result.every((item) => item.id !== 'plain-note')).toBe(true);
+      expect(
+        result.every((item) => item.fileType === 'text/html' || item.fileType === 'article'),
+      ).toBe(true);
     });
   });
 

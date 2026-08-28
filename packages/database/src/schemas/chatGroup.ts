@@ -101,7 +101,7 @@ export const chatGroupsAgents = pgTable(
     order: integer('order').default(0),
 
     /**
-     * Role of the agent in the group (e.g., 'moderator', 'participant')
+     * Role of the agent in the group (e.g., 'supervisor', 'participant')
      */
     role: text('role').default('participant'),
 

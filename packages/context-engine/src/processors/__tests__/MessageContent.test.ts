@@ -662,6 +662,46 @@ describe('MessageContentProcessor', () => {
         },
       ]);
     });
+
+    it('should serialize an explicit empty thinking string for signature-only reasoning', async () => {
+      const processor = new MessageContentProcessor({
+        model: 'claude-sonnet-5',
+        provider: 'anthropic',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'assistant',
+          content: 'The answer is 42.',
+          // Claude 5 `thinking.display: 'omitted'` returns a signature without
+          // any thinking text — the replayed part must still carry the
+          // `thinking` key, otherwise JSON serialization drops it and strict
+          // Anthropic-compatible endpoints (e.g. DeepSeek) reject the request
+          // with 400 `missing field 'thinking'`.
+          reasoning: {
+            signature: 'signature-only',
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[0]).toEqual({
+        signature: 'signature-only',
+        thinking: '',
+        type: 'thinking',
+      });
+      // Intentional JSON round-trip (not a deep clone): asserts the `thinking`
+      // key survives serialization the way the HTTP client would send it.
+      // eslint-disable-next-line unicorn/prefer-structured-clone
+      expect(JSON.parse(JSON.stringify(content[0]))).toHaveProperty('thinking', '');
+    });
   });
 
   describe('Message processing metadata', () => {
@@ -930,8 +970,8 @@ describe('MessageContentProcessor', () => {
           role: 'user',
           content: 'Listen',
           audioList: [
-            { url: 'http://example.com/a.mp3', alt: 'a1', id: 'a1' },
-            { url: 'http://example.com/b.mp3', alt: 'a2', id: 'a2' },
+            { url: 'http://example.com/a.mp3', alt: 'a1', durationMs: 2500, id: 'a1' },
+            { url: 'http://example.com/b.mp3', alt: 'a2', durationMs: -1, id: 'a2' },
           ] as ChatAudioItem[],
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -946,8 +986,54 @@ describe('MessageContentProcessor', () => {
       expect(content[0].text).toBe('Listen');
       expect(content[1].type).toBe('audio_url');
       expect(content[1].audio_url.url).toBe('http://example.com/a.mp3');
+      expect(content[1].audio_url.durationMs).toBe(2500);
       expect(content[2].type).toBe('audio_url');
       expect(content[2].audio_url.url).toBe('http://example.com/b.mp3');
+      expect(content[2].audio_url).not.toHaveProperty('durationMs');
+    });
+
+    it('should preserve audio metadata when converting audios to audio_url parts', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-audio',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Listen',
+          audioList: [
+            {
+              alt: 'voice message',
+              codec: 'pcm_s16le',
+              durationMs: 3210,
+              id: 'voice-1',
+              mimeType: 'audio/wav',
+              url: 'http://example.com/voice.wav',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[1]).toEqual({
+        audio_url: {
+          codec: 'pcm_s16le',
+          durationMs: 3210,
+          mimeType: 'audio/wav',
+          url: 'http://example.com/voice.wav',
+        },
+        type: 'audio_url',
+      });
     });
 
     it('should include audios in file context when enabled even if audio not supported', async () => {

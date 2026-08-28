@@ -1,8 +1,8 @@
 import {
   AGENT_SIGNAL_REVIEW_IDENTIFIER,
   AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-  AgentSignalToolExecutionRuntime,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AgentSignalToolExecutionRuntime } from '@lobechat/builtin-tool-agent-signal/executionRuntime';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { BriefModel } from '@/database/models/brief';

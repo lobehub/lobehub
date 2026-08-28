@@ -1,9 +1,15 @@
 'use client';
 
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
+  high: css`
+    color: ${cssVar.colorError};
+  `,
+  mid: css`
+    color: ${cssVar.colorWarning};
+  `,
   text: css`
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
@@ -39,11 +45,17 @@ const MemoryWidget = memo(() => {
   if (!heap) return null;
 
   const usedMB = Math.round(heap.used / 1_048_576);
-  const percent = ((heap.used / heap.limit) * 100).toFixed(1);
+  const percent = (heap.used / heap.limit) * 100;
 
   return (
-    <span className={styles.text} title={'JS heap used / limit'}>
-      {usedMB} MB · {percent}%
+    <span
+      title={'JS heap used / limit'}
+      className={cx(
+        styles.text,
+        percent >= 90 ? styles.high : percent >= 70 ? styles.mid : undefined,
+      )}
+    >
+      {usedMB} MB · {percent.toFixed(1)}%
     </span>
   );
 });

@@ -11,7 +11,11 @@ import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
 interface ReadFileArgs {
   endLine?: number;
+  file_path?: string;
+  filePath?: string;
+  limit?: number;
   loc?: [number, number];
+  offset?: number;
   path?: string;
   startLine?: number;
 }
@@ -21,15 +25,28 @@ export const createReadLocalFileInspector = (translationKey: string) => {
     ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
       const { t } = useTranslation('plugin');
 
-      const filePath = args?.path || partialArgs?.path || '';
+      const filePath =
+        args?.path ||
+        args?.filePath ||
+        args?.file_path ||
+        partialArgs?.path ||
+        partialArgs?.filePath ||
+        partialArgs?.file_path ||
+        '';
 
       const lineRange = useMemo(() => {
-        const start = args?.startLine ?? args?.loc?.[0];
-        const end = args?.endLine ?? args?.loc?.[1];
+        const source = args || partialArgs;
+        const start = source?.startLine ?? source?.loc?.[0] ?? source?.offset;
+        const end =
+          source?.endLine ??
+          source?.loc?.[1] ??
+          (start !== undefined && source?.limit !== undefined
+            ? start + Math.max(source.limit - 1, 0)
+            : undefined);
         if (start !== undefined && end !== undefined) return `L${start}-L${end}`;
         if (start !== undefined) return `L${start}`;
         return undefined;
-      }, [args]);
+      }, [args, partialArgs]);
 
       if (isArgumentsStreaming) {
         if (!filePath)

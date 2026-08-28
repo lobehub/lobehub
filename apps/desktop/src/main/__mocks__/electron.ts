@@ -18,6 +18,7 @@ export const app = {
   getLocale: vi.fn(() => 'en-US'),
   getName: vi.fn(() => 'LobeHub'),
   getPath: vi.fn((name: string) => `/mock/${name}`),
+  getPreferredSystemLanguages: vi.fn(() => ['en-US']),
   getVersion: vi.fn(() => '0.0.0-test'),
   isPackaged: false,
   on: vi.fn(),

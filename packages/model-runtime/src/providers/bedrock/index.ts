@@ -14,6 +14,7 @@ import {
 } from '../../core/anthropicCompatibleFactory/generateObject';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../../core/parameterResolver';
@@ -37,8 +38,9 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
+import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../anthropic/modelId';
+import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -178,7 +180,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     ) as GenerateObjectPayload['messages'];
     const { requestParams, schemaToolName } = await buildAnthropicGenerateObjectRequest(
       { ...payload, messages: [...systemMessages, ...normalizedMessages] },
-      { maxTokens: resolvedMaxTokens },
+      // requestModel keys the prefill guard on the Bedrock id actually sent
+      // below, so channel modelIdMapping aliases still get the strip.
+      { maxTokens: resolvedMaxTokens, requestModel: this.resolveModelId(payload.model) },
     );
     const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
       model?: Anthropic.MessageCreateParams['model'];
@@ -305,14 +309,13 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       enabledContextCaching,
     });
 
-    const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
-
-    if (
-      shouldDropUnsupportedClaudeAssistantPrefill(model) &&
-      postMessages.at(-1)?.role === 'assistant'
-    ) {
-      postMessages.pop();
-    }
+    // Key the prefill guard on the resolved Bedrock model id: a custom logical
+    // id can map to a Claude 4.6+/5 Bedrock id via the channel modelIdMapping,
+    // which would otherwise skip the strip and 400 on a trailing assistant turn.
+    const postMessages = stripUnsupportedClaudeAssistantPrefill(
+      this.resolveModelId(model),
+      await buildAnthropicMessages(user_messages, { enabledContextCaching }),
+    );
 
     const anthropicBase = {
       anthropic_version: 'bedrock-2023-05-31',
@@ -324,18 +327,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     let anthropicPayload;
 
-    if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
-      const resolvedThinking =
-        thinking.type === 'enabled'
-          ? {
-              budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
-              type: 'enabled' as const,
-            }
-          : { type: 'adaptive' as const };
+    const resolvedThinking = resolveClaudeThinkingConfig({
+      maxTokens: resolvedMaxTokens,
+      model,
+      thinking,
+    });
 
+    if (resolvedThinking && resolvedThinking.type !== 'disabled') {
       anthropicPayload = {
         ...anthropicBase,
-        ...(thinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
         thinking: resolvedThinking,
       };
     } else {
@@ -347,8 +348,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         { normalizeTemperature: true, preferTemperature: true },
       );
 
+      // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+      // effort level stays valid, so only that pairing is dropped.
+      const forwardsEffort =
+        !!effort &&
+        !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
       anthropicPayload = {
         ...anthropicBase,
+        ...(forwardsEffort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking ? { thinking: resolvedThinking } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,
       };

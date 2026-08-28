@@ -6,6 +6,7 @@ const triggerMock = vi.fn();
 vi.mock('@/envs/app', () => ({
   appEnv: {
     APP_URL: 'http://localhost:3011',
+    enableQueueAgentRuntime: true,
     INTERNAL_APP_URL: 'http://localhost:3011',
   },
 }));

@@ -1,8 +1,8 @@
 'use client';
 
 import { Input, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { cssVar } from 'antd-style';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,7 @@ export interface CreateBenchmarkContentProps {
 const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoadingChange }) => {
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const [form] = Form.useForm();
   const [identifierTouched, setIdentifierTouched] = useState(false);
@@ -48,13 +48,13 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
         name: values.name.trim(),
         tags: values.tags?.length > 0 ? values.tags : undefined,
       });
-      message.success(t('benchmark.create.success'));
+      toast.success(t('benchmark.create.success'));
       close();
       if (result?.id) {
         navigate(`/eval/bench/${result.id}`);
       }
     } catch {
-      message.error(t('benchmark.create.error'));
+      toast.error(t('benchmark.create.error'));
     } finally {
       onLoadingChange?.(false);
     }

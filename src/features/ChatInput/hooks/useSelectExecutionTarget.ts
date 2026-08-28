@@ -11,6 +11,30 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
+export interface SelectExecutionTargetOptions {
+  /**
+   * Confine this agent's shell commands to the device sandbox. Only meaningful
+   * alongside `target: 'local'`; the picker passes `false` for the plain local
+   * row so switching back off is an explicit write rather than a leftover.
+   *
+   * Omitted entirely for the other targets, which leaves any stored value
+   * dormant — flipping to Cloud Sandbox and back must not silently forget that
+   * the user had fenced their machine.
+   */
+  localSandbox?: boolean;
+  /**
+   * Let sandboxed commands reach the package-registry allowlist. Same
+   * omitted-means-untouched rule as {@link localSandbox}.
+   */
+  localSandboxNetwork?: boolean;
+  /**
+   * The call is an automatic default (agent has no target yet), not a user's
+   * pick. Persistence failures stay silent — a generic "your change was not
+   * applied" toast would be about a change the user never made.
+   */
+  silent?: boolean;
+}
+
 /**
  * Persist an execution-target selection for an agent. Shared by the device
  * switcher and the sandbox notice so the `local` device-id resolution (which
@@ -19,7 +43,7 @@ import { useUserStore } from '@/store/user';
  * `executionTarget` is the single source of truth — the server tool gate +
  * client `getRuntimeModeById` derive `runtimeMode` from it.
  *
- * Storage split (LOBE-11689):
+ * Storage split:
  * - **Personal agent** — writes go straight into the shared
  *   `agents.agencyConfig` (there's only ever one owner, so there's nothing to
  *   isolate).
@@ -65,7 +89,11 @@ export const useSelectExecutionTarget = (agentId: string) => {
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
   return useCallback(
-    async (target: DeviceExecutionTarget, deviceId?: string) => {
+    async (
+      target: DeviceExecutionTarget,
+      deviceId?: string,
+      options?: SelectExecutionTargetOptions,
+    ) => {
       if (isAccessLoading) return;
 
       // Fixed workspace agents are author-controlled. Keep any existing member
@@ -104,25 +132,48 @@ export const useSelectExecutionTarget = (agentId: string) => {
       //    `resolveExecutionTarget` already coerces a stored `local` +
       //    `boundDeviceId` to `device` when a gateway is available, so the
       //    server-side dispatch path Just Works — no need to pre-coerce here.
+      // `undefined` leaves the stored value untouched; `false` actively clears
+      // it. Only the two local rows have an opinion, so a Cloud Sandbox pick
+      // never rewrites the fence the user set on their own machine.
+      const localSandboxPatch = {
+        ...(options?.localSandbox === undefined ? {} : { localSandbox: options.localSandbox }),
+        ...(options?.localSandboxNetwork === undefined
+          ? {}
+          : { localSandboxNetwork: options.localSandboxNetwork }),
+      };
+
       if (usesWorkspaceMemberSelection) {
         const nextOverrides = {
           ...workspaceUserPreference.agentDeviceOverrides,
           [agentId]: {
+            ...workspaceUserPreference.agentDeviceOverrides?.[agentId],
             executionTarget: target,
             ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
+            ...localSandboxPatch,
           },
         };
         await updateWorkspaceUserPreference({ agentDeviceOverrides: nextOverrides });
         return;
       }
 
-      await updateAgentConfigById(agentId, {
+      const nextConfig = {
         agencyConfig: {
           ...agencyConfig,
           executionTarget: target,
           ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
+          ...localSandboxPatch,
         },
-      });
+      };
+
+      // A silent caller is defaulting the target on mount, not answering a
+      // pick — telling the user "your change was not applied" would be
+      // reporting a change they never made (automatic corrections must not trigger phantom save-error toasts).
+      if (options?.silent) {
+        await updateAgentConfigById(agentId, nextConfig, { showErrorMessage: false });
+        return;
+      }
+
+      await updateAgentConfigById(agentId, nextConfig);
     },
     [
       agentId,

@@ -22,7 +22,8 @@ const importProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   });
 });
 
-const workspaceImportProcedure = importProcedure.use(withRbacPermission('workspace:update:all'));
+// Whole-workspace migration is reserved for the unique Owner.
+const workspaceImportProcedure = importProcedure.use(withRbacPermission('workspace:delete:all'));
 
 export const importerRouter = router({
   importByFile: workspaceImportProcedure

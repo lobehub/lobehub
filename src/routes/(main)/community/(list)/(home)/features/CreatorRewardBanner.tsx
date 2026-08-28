@@ -57,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 50%;
     border-radius: 0 12px 12px 0;
 
-    background: url('/images/banner_creator.png') right center / auto 100% no-repeat;
+    background: url('/app-images/banner_creator.png') right center / auto 100% no-repeat;
 
     ${responsive.sm} {
       display: none;

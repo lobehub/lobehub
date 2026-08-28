@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
-import { Block, Flexbox, Markdown, Tag } from '@lobehub/ui';
+import { Block, Flexbox, Markdown } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 

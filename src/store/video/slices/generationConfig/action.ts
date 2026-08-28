@@ -56,7 +56,14 @@ function preserveVideoInputParams(
     'endImageUrl',
   ]);
 
-  return normalizeImageInputOnSchemaSwitch(previousParameters, nextSchema, result);
+  const normalized = normalizeImageInputOnSchemaSwitch(previousParameters, nextSchema, result);
+  const maxImageCount = nextSchema.imageUrls?.maxCount;
+
+  if (Array.isArray(normalized.imageUrls) && typeof maxImageCount === 'number') {
+    normalized.imageUrls = normalized.imageUrls.slice(0, maxImageCount);
+  }
+
+  return normalized;
 }
 
 type Setter = StoreSetter<VideoStore>;

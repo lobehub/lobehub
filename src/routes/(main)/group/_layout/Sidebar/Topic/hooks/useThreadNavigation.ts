@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
-import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
-import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
@@ -12,8 +12,8 @@ import { useGlobalStore } from '@/store/global';
  * If in agent sub-route (e.g., /agent/:aid/profile), navigate back to chat first
  */
 export const useThreadNavigation = () => {
-  const pathname = usePathname();
-  const params = useParams();
+  const { pathname } = useActiveLocation();
+  const params = useActiveRouteParams();
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
   const switchThread = useChatStore((s) => s.switchThread);

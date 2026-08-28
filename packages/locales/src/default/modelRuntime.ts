@@ -26,6 +26,8 @@ export default {
     'A database operation failed while saving or loading this conversation. Please try again; if it persists, contact support.',
   ExceededContextWindow:
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  HarnessJsonParseError:
+    'An internal payload could not be read back, so this operation stopped. Retrying the same request will hit the same failure — please start a new message; if it persists, contact support.',
   InsufficientQuota:
     "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
   InvalidBedrockCredentials:
@@ -47,6 +49,8 @@ export default {
     'The model provider returned an empty response. Even without visible content, this request may still incur charges. You can retry or switch models and try again.',
   ModelEmptyCompletionWithCost:
     'The model provider returned an empty response. This request cost {{credits}} credits. Retrying may incur a similar cost, or you can switch models.',
+  ModelRefusal:
+    'The model declined to answer this request. Try rephrasing it or choose another model.',
   ModelNotFound:
     'Sorry, the requested model could not be found. It may not exist or you may not have the necessary access permissions. Please try again after changing the API Key or adjusting your access permissions.',
   NoAvailableChannel:
@@ -61,6 +65,8 @@ export default {
     'Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.',
   ProviderBizError:
     'Error requesting {{provider}} service, please troubleshoot or retry based on the following information',
+  ProviderContentPolicyViolation:
+    'The provider blocked this request or its output due to content policy. Please revise your prompt and try again.',
   ProviderNetworkError:
     'Connection to the provider timed out or was dropped. Please check your network and try again.',
   ProviderServiceUnavailable:

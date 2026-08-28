@@ -207,7 +207,10 @@ const TabStrip = memo(() => {
         label: t('workingPanel.localFile.closeOther'),
         onClick: () => closeOtherLocalFileTabs(id),
       },
-      ...(isDesktop
+      // Sandbox-backed tabs point at paths inside the cloud sandbox — a local
+      // "show in system" would open an unrelated folder or fail.
+      ...(isDesktop &&
+      !openLocalFiles.find((file) => getLocalFileTabId(file) === id)?.sandboxTopicId
         ? [
             {
               key: 'showInSystem',

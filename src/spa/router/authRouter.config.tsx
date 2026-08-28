@@ -31,7 +31,7 @@ const AuthErrorBoundary = () => {
   const { resolvedTheme } = useTheme();
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
-    notifyChunkError();
+    notifyChunkError(error);
   }
 
   // index.auth.html paints the body black in dark mode before React mounts

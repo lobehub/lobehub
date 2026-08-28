@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { type StreamEvent } from '@/services/agentRuntime';
 import { agentRuntimeService } from '@/services/agentRuntime';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
   notifyDesktopAgentCompleted,
@@ -124,7 +125,13 @@ export class AgentActionImpl {
         // has no later step_start to carry a fresh snapshot, so without
         // this branch the streamed assistantGroup would only be reconciled
         // with DB once a refetch fires — losing the SoT guarantee.
-        if (Array.isArray(uiMessages)) {
+        if (
+          Array.isArray(uiMessages) &&
+          !operationSelectors.hasNewerConversationOperation(
+            operationId,
+            operation.context,
+          )(this.#get())
+        ) {
           log(`Replacing messages from agent_runtime_end uiMessages (${uiMessages.length} msgs)`);
           this.#get().replaceMessages(uiMessages, { context: operation.context });
         }

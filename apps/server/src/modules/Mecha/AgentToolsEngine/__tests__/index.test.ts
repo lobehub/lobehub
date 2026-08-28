@@ -184,6 +184,37 @@ describe('createServerToolsEngine', () => {
     // Non-device plugins survive.
     expect(availablePlugins).toContain('test-plugin');
   });
+
+  it('drops manifests without an api array instead of crashing the tools build', () => {
+    // A DB plugin row whose manifest jsonb lacks `api` used to crash
+    // ToolsEngine.convertManifestsToTools (`manifest.api.map`) and with it
+    // every execAgent call of the affected user.
+    const brokenPlugin: InstalledPlugin = {
+      identifier: 'broken-plugin',
+      type: 'plugin',
+      runtimeType: 'mcp',
+      manifest: { identifier: 'broken-plugin', meta: { title: 'Broken' } } as any,
+    };
+    const brokenAdditional = { identifier: 'broken-additional', meta: { title: 'Broken' } } as any;
+
+    const context = createMockContext({
+      installedPlugins: [...mockInstalledPlugins, brokenPlugin],
+    });
+    const engine = createServerToolsEngine(context, {
+      additionalManifests: [brokenAdditional],
+    });
+
+    const result = engine.generateTools({
+      toolIds: ['broken-plugin', 'broken-additional', 'test-plugin'],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    // Valid plugin still produces its tool; broken sources are dropped.
+    expect(result).toHaveLength(1);
+    expect(engine.getAvailablePlugins()).not.toContain('broken-plugin');
+    expect(engine.getAvailablePlugins()).not.toContain('broken-additional');
+  });
 });
 
 describe('createServerAgentToolsEngine', () => {
@@ -256,7 +287,28 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
   });
 
-  it('should enable ImageGeneration in chat mode when model lacks native image output', () => {
+  it('should follow the resolved search route instead of re-deriving it from search mode', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        plugins: [WebBrowsingManifest.identifier],
+        chatConfig: { searchMode: 'on' },
+      },
+      model: 'grok-4.3',
+      provider: 'supergrok',
+      useApplicationBuiltinSearchTool: false,
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [WebBrowsingManifest.identifier],
+      model: 'grok-4.3',
+      provider: 'supergrok',
+    });
+
+    expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
+  });
+
+  it('should not auto-enable ImageGeneration in chat mode', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
@@ -274,6 +326,27 @@ describe('createServerAgentToolsEngine', () => {
       toolIds: [],
     });
 
+    expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should enable ImageGeneration in chat mode when the tool is pinned', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [ImageGenerationManifest.identifier],
+      },
+      model: 'claude-sonnet',
+      modelAbilities: { functionCall: true, imageOutput: false },
+      provider: 'anthropic',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      toolIds: [ImageGenerationManifest.identifier],
+    });
+
     expect(result.enabledToolIds).toContain(ImageGenerationManifest.identifier);
   });
 
@@ -282,7 +355,7 @@ describe('createServerAgentToolsEngine', () => {
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
         chatConfig: { enableAgentMode: false },
-        plugins: [],
+        plugins: [ImageGenerationManifest.identifier],
       },
       model: 'gpt-image-chat',
       modelAbilities: { functionCall: true, imageOutput: true },
@@ -292,7 +365,7 @@ describe('createServerAgentToolsEngine', () => {
     const result = engine.generateToolsDetailed({
       model: 'gpt-image-chat',
       provider: 'openai',
-      toolIds: [],
+      toolIds: [ImageGenerationManifest.identifier],
     });
 
     expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
@@ -305,7 +378,7 @@ describe('createServerAgentToolsEngine', () => {
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
         chatConfig: { enableAgentMode: false },
-        plugins: [],
+        plugins: [ImageGenerationManifest.identifier],
       },
       model: 'plain-text-model',
       modelAbilities: { functionCall: false, imageOutput: false },
@@ -315,7 +388,7 @@ describe('createServerAgentToolsEngine', () => {
     const result = engine.generateToolsDetailed({
       model: 'plain-text-model',
       provider: 'test',
-      toolIds: [],
+      toolIds: [ImageGenerationManifest.identifier],
     });
 
     expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
@@ -359,7 +432,7 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).toContain(ImageGenerationManifest.identifier);
   });
 
-  it('should enable VisualUnderstanding when injected into runtime plugins', () => {
+  it('should enable MultimodalUnderstanding when injected into runtime plugins', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: { plugins: [LobeAgentManifest.identifier] },

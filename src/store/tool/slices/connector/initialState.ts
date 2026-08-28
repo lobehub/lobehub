@@ -3,7 +3,7 @@ import type { AgentBoundConnector, ConnectorWithTools } from './types';
 export interface ConnectorState {
   /**
    * All agent-owned connectors across every agent in the current scope, for the
-   * unified connector-settings page (LOBE-11682). Distinct from `agentConnectors`
+   * unified connector-settings page. Distinct from `agentConnectors`
    * (keyed per-agent, includes mounted rows) — this is the flat aggregate.
    */
   agentBoundConnectors: AgentBoundConnector[];

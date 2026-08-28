@@ -896,6 +896,174 @@
       "when": 1784716592911,
       "tag": "0127_add_topic_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1784898202325,
+      "tag": "0128_notifications_add_workspace_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1784941780510,
+      "tag": "0129_workspace_members_unique_active_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1785044468256,
+      "tag": "0130_notifications_add_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1785648308270,
+      "tag": "0131_agents_add_name_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1785715746144,
+      "tag": "0132_add_agent_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1786032217905,
+      "tag": "0133_common_veda",
+      "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1786064297919,
+      "tag": "0134_add_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1786117168564,
+      "tag": "0135_api_keys_add_scopes",
+      "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1786138599832,
+      "tag": "0136_projects_add_identifier",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1786151567302,
+      "tag": "0137_agent_history_jobs_payload",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1786166809665,
+      "tag": "0138_agent_history_job_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1786316226126,
+      "tag": "0139_projects_add_coordinator_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1786545606298,
+      "tag": "0140_productive_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1786766455568,
+      "tag": "0141_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786791246437,
+      "tag": "0142_expertise_domain_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786847279485,
+      "tag": "0143_resource_transfer_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786968214710,
+      "tag": "0144_notifications_add_metadata_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1787141104502,
+      "tag": "0145_agents_add_identity_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1787188183549,
+      "tag": "0146_acceptance_project_association",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1787239313202,
+      "tag": "0147_resource_permissions_per_member_subject",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1787376421190,
+      "tag": "0148_goal_graph",
+      "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1787542746291,
+      "tag": "0149_goals_recovery_and_document_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1787736410876,
+      "tag": "0150_agent_interventions_and_live_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1787815769048,
+      "tag": "0151_document_comments",
+      "breakpoints": true
     }
   ],
   "version": "6"

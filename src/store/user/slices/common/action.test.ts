@@ -303,8 +303,7 @@ describe('createCommonSlice', () => {
       const mockUserState: UserInitializationState = {
         userId: 'user-id',
         isOnboard: false,
-        // No onboarding.finishedAt and no agentOnboarding.finishedAt:
-        // user is still in the shared-prefix flow.
+        // No onboarding.finishedAt: user is still in the onboarding flow.
         preference: {} as any,
         settings: { general: { fontSize: 14 } },
       };

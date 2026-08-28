@@ -1,5 +1,7 @@
 import type { VerifierType, VerifyOnFailStrategy, VerifyRubricConfig } from '@lobechat/types';
 
+import type { AcceptanceBundle, AcceptanceBySubject } from '@/services/verify';
+
 /** The criterion fields the portal can edit. */
 export interface VerifyCriterionEdit {
   description?: string;
@@ -10,6 +12,8 @@ export interface VerifyCriterionEdit {
 }
 
 export interface State {
+  acceptanceBundleMap: Record<string, AcceptanceBundle>;
+  acceptanceBySubjectMap: Record<string, AcceptanceBySubject>;
   /**
    * Per-criterion edit overlay, keyed by `verify_criteria.id`. Holds the
    * user's in-flight edits so the UI reflects them immediately while they are
@@ -34,6 +38,8 @@ export interface State {
 }
 
 export const initialState: State = {
+  acceptanceBundleMap: {},
+  acceptanceBySubjectMap: {},
   criterionEdits: {},
   instructionEdits: {},
   rubricConfigEdits: {},

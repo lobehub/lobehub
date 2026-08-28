@@ -1,5 +1,5 @@
 import type { AcceptanceStatus, AcceptanceSubjectType } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
@@ -7,12 +7,13 @@ import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
-/** Statuses a user's decision produced — sticky until a new round re-opens the loop. */
-const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'rejected']);
+/** Statuses a user's decision produced — sticky until explicitly re-opened. */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
 
 /**
  * Owns the business-level acceptance aggregate (`acceptances`): one row per
- * subject (task / topic / document) carrying the user-facing lifecycle state.
+ * subject (task / topic / document / standalone delivery) carrying the
+ * user-facing lifecycle state.
  * The verify rounds chain onto it through `verify_runs.acceptance_id` +
  * `round_index`; this model deliberately holds no round pointers — root /
  * current / latest-report are all derived from that chain at read time.
@@ -74,6 +75,63 @@ export class AcceptanceModel {
   };
 
   /**
+   * Resolve an execution policy for a subject. Unlike report-facing reads,
+   * workspace policy lookup is shared by every workspace member: a private
+   * Acceptance controls the shared Task even when another member executes it.
+   * Personal scope remains owner-isolated.
+   */
+  findPolicyBySubject = async (subjectType: AcceptanceSubjectType, subjectId: string) => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+
+    return this.db.query.acceptances.findFirst({
+      where: and(
+        eq(acceptances.subjectType, subjectType),
+        eq(acceptances.subjectId, subjectId),
+        policyScope,
+      ),
+    });
+  };
+
+  /** Internal execution-policy lookup by id, independent of report visibility. */
+  findPolicyById = async (id: string) => {
+    if (!isUuid(id)) return undefined;
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.query.acceptances.findFirst({
+      where: and(eq(acceptances.id, id), policyScope),
+    });
+  };
+
+  /**
+   * The status of many subjects' acceptances in one read — for list surfaces
+   * that must know each row's state without a request per row. Exact where the
+   * recency-capped `query()` is not: it answers about the subjects asked for,
+   * however old they are, and one acceptance per subject is a scope invariant.
+   */
+  listStatusesBySubjects = async (
+    subjectType: AcceptanceSubjectType,
+    subjectIds: string[],
+  ): Promise<Array<{ status: string; subjectId: string }>> => {
+    if (subjectIds.length === 0) return [];
+
+    return this.db
+      .select({ status: acceptances.status, subjectId: acceptances.subjectId })
+      .from(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          this.ownership(),
+        ),
+      );
+  };
+
+  /**
    * Get (or lazily create) the acceptance aggregate for a subject. Upserts on
    * the per-scope subject unique index so concurrent callers converge on one
    * row; `defaults` only apply on first creation and never overwrite an
@@ -82,7 +140,7 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
+    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -90,12 +148,28 @@ export class AcceptanceModel {
       // WITHOUT one (a first ingest that omitted it) accepts the first
       // non-empty statement a later round supplies, instead of staying blank
       // forever ("尚未记录该对象的验收目标").
-      if (!existing.requirement && defaults?.requirement) {
+      const nextRequirement = !existing.requirement ? defaults?.requirement : undefined;
+      const nextProjectId = !existing.projectId ? defaults?.projectId : undefined;
+      const nextTitle =
+        !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
+          ? defaults.metadata.title
+          : undefined;
+      if (nextProjectId || nextRequirement || nextTitle) {
+        const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
         await this.db
           .update(acceptances)
-          .set({ requirement: defaults.requirement })
+          .set({
+            metadata,
+            projectId: nextProjectId ?? existing.projectId,
+            requirement: nextRequirement ?? existing.requirement,
+          })
           .where(eq(acceptances.id, existing.id));
-        return { ...existing, requirement: defaults.requirement };
+        return {
+          ...existing,
+          metadata,
+          projectId: nextProjectId ?? existing.projectId,
+          requirement: nextRequirement ?? existing.requirement,
+        };
       }
       return existing;
     }
@@ -127,7 +201,10 @@ export class AcceptanceModel {
   update = async (
     id: string,
     value: Partial<
-      Pick<NewAcceptance, 'config' | 'metadata' | 'requirement' | 'visibility' | 'visualRender'>
+      Pick<
+        NewAcceptance,
+        'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility' | 'visualRender'
+      >
     >,
   ): Promise<AcceptanceItem | undefined> => {
     const [row] = await this.db
@@ -138,9 +215,41 @@ export class AcceptanceModel {
     return row;
   };
 
+  /** Internal policy write counterpart to `findPolicyBySubject`. */
+  updatePolicy = async (
+    id: string,
+    value: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    const [row] = await this.db
+      .update(acceptances)
+      .set(value)
+      .where(and(eq(acceptances.id, id), policyScope))
+      .returning();
+    return row;
+  };
+
+  /** Internal lifecycle transition counterpart to `updateStatus`. */
+  updatePolicyStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    await this.db
+      .update(acceptances)
+      .set({
+        completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(status) ? new Date() : null,
+        status,
+      })
+      .where(and(eq(acceptances.id, id), policyScope));
+  };
+
   /**
    * Move the user-facing lifecycle state. `completedAt` is stamped when the
-   * user's decision closes the loop (accepted / rejected) and cleared when a
+   * user's decision closes the loop (accepted / closed / rejected) and cleared when a
    * new round re-opens it.
    */
   updateStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {

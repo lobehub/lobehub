@@ -2,6 +2,8 @@ import { useCallback, useEffect } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { workKeys } from '@/libs/swr/keys';
 import type { WorkSummaryPage } from '@/services/work';
 import { workService } from '@/services/work';
@@ -18,25 +20,45 @@ const WORK_GALLERY_PAGE_SIZE = 30;
  */
 export const useWorkspaceWorksInfinite = (galleryKey: WorkGalleryKey) => {
   const workspaceId = useActiveWorkspaceId();
+  const listVisibility = useResourceManagerStore((s) => s.listVisibility);
   const filter = workFilterFromKey(galleryKey);
+  // Personal Works have no workspace mode switch, so keep the historical
+  // unfiltered query there. Inside a workspace, mirror every other Resources
+  // surface: Private means caller-owned private rows; Workspace means public
+  // rows shared with the team.
+  const visibility = workspaceId
+    ? getResourceQueryVisibility(undefined, listVisibility)
+    : undefined;
 
   const getKey = useCallback(
     (_index: number, previous: WorkSummaryPage | null) => {
       // Stop paging once the previous page reported no further cursor.
       if (previous && previous.nextCursor === null) return null;
-      return workKeys.workspace(workspaceId, galleryKey, previous?.nextCursor ?? undefined);
+      return workKeys.workspace(
+        workspaceId,
+        galleryKey,
+        previous?.nextCursor ?? undefined,
+        visibility,
+      );
     },
-    [galleryKey, workspaceId],
+    [galleryKey, visibility, workspaceId],
   );
 
   const { data, error, isLoading, isValidating, mutate, setSize, size } = useSWRInfinite(
     getKey,
-    ([, , , cursor]: readonly [string, string | null, string, string | null]) =>
+    ([, , , cursor, keyVisibility]: readonly [
+      string,
+      string | null,
+      string,
+      string | null,
+      'private' | 'public' | null,
+    ]) =>
       workService.listByWorkspace({
         cursor: cursor || undefined,
         limit: WORK_GALLERY_PAGE_SIZE,
         provider: filter.provider,
         type: filter.type ?? null,
+        visibility: keyVisibility ?? undefined,
       }),
     { revalidateFirstPage: false },
   );
@@ -45,7 +67,7 @@ export const useWorkspaceWorksInfinite = (galleryKey: WorkGalleryKey) => {
   // don't cascade-fetch as many pages as the previous filter had loaded.
   useEffect(() => {
     setSize(1);
-  }, [galleryKey, setSize]);
+  }, [galleryKey, setSize, visibility]);
 
   const loadMore = useCallback(() => {
     void setSize((s) => s + 1);

@@ -1,6 +1,10 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { LOADING_FLAT } from '@lobechat/const';
-import { chainSummaryTitle } from '@lobechat/prompts';
+import { LOADING_FLAT, TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import {
   type CreateMessageParams,
   type IThreadType,
@@ -12,7 +16,7 @@ import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { threadKeys } from '@/libs/swr/keys';
-import { chatService } from '@/services/chat';
+import { aiChatService } from '@/services/aiChat';
 import { threadService } from '@/services/thread';
 import { threadSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -20,7 +24,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { PortalViewType } from '../portal/initialState';
@@ -203,36 +206,43 @@ export class ChatThreadActionImpl {
 
     internal_updateThreadTitleInSummary(threadId, LOADING_FLAT);
 
-    let output = '';
-    const threadConfig = systemAgentSelectors.thread(useUserStore.getState());
+    const { model, provider } = systemAgentSelectors.thread(useUserStore.getState());
 
-    await chatService.fetchPresetTaskResult({
-      onError: () => {
-        internal_updateThreadTitleInSummary(threadId, portalThread.title);
-      },
-      onFinish: async (text) => {
-        await this.#get().internal_updateThread(threadId, { title: text });
-      },
-      onLoadingChange: (loading) => {
-        internal_updateThreadLoading(threadId, loading);
-      },
-      onMessageHandle: (chunk) => {
-        switch (chunk.type) {
-          case 'text': {
-            output += chunk.text;
-          }
-        }
+    const restorePreviousTitle = () => {
+      internal_updateThreadTitleInSummary(threadId, portalThread.title);
+    };
 
-        internal_updateThreadTitleInSummary(threadId, output);
-      },
-      params: merge(
-        threadConfig,
-        chainSummaryTitle(
-          messages,
-          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
-        ),
-      ),
-    });
+    // Structured generation, same as `summaryTopicTitle` — see the note there.
+    internal_updateThreadLoading(threadId, true);
+    try {
+      const { data } = await aiChatService.generateJSON(
+        {
+          ...chainSummaryTitle(
+            messages,
+            userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
+          ),
+          model,
+          provider,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+          },
+        },
+        new AbortController(),
+      );
+
+      const title = (data as { title?: string } | undefined)?.title?.trim();
+      if (!title) return restorePreviousTitle();
+
+      await this.#get().internal_updateThread(threadId, { title });
+    } catch (error) {
+      console.error('[summaryThreadTitle] failed to generate a title:', error);
+      restorePreviousTitle();
+    } finally {
+      internal_updateThreadLoading(threadId, false);
+    }
   };
 
   internal_updateThreadTitleInSummary = (id: string, title: string): void => {

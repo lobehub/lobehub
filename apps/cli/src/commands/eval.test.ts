@@ -163,6 +163,99 @@ describe('eval command', () => {
     });
   });
 
+  describe('testcase', () => {
+    it('should create a test case with messages from a JSON file', async () => {
+      const tmpFile = path.join(os.tmpdir(), `eval-messages-${process.pid}.json`);
+      await writeFile(tmpFile, JSON.stringify([{ content: 'Earlier turn', role: 'user' }]));
+      mockTrpcClient.agentEval.createTestCase.mutate.mockResolvedValue({ id: 'case-1' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'eval',
+          'testcase',
+          'create',
+          '--dataset-id',
+          'dataset-1',
+          '--input',
+          'Continue',
+          '--messages-file',
+          tmpFile,
+        ]);
+
+        expect(mockTrpcClient.agentEval.createTestCase.mutate).toHaveBeenCalledWith({
+          content: {
+            input: 'Continue',
+            messages: [{ content: 'Earlier turn', role: 'user' }],
+          },
+          datasetId: 'dataset-1',
+        });
+      } finally {
+        await rm(tmpFile, { force: true });
+      }
+    });
+
+    it('should omit an empty messages file when creating a test case', async () => {
+      const tmpFile = path.join(os.tmpdir(), `eval-empty-messages-${process.pid}.json`);
+      await writeFile(tmpFile, '[]');
+      mockTrpcClient.agentEval.createTestCase.mutate.mockResolvedValue({ id: 'case-1' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'eval',
+          'testcase',
+          'create',
+          '--dataset-id',
+          'dataset-1',
+          '--input',
+          'Fresh conversation',
+          '--messages-file',
+          tmpFile,
+        ]);
+
+        expect(mockTrpcClient.agentEval.createTestCase.mutate).toHaveBeenCalledWith({
+          content: { input: 'Fresh conversation' },
+          datasetId: 'dataset-1',
+        });
+      } finally {
+        await rm(tmpFile, { force: true });
+      }
+    });
+
+    it('should pass an empty messages file when updating a test case', async () => {
+      const tmpFile = path.join(os.tmpdir(), `eval-empty-messages-${process.pid}.json`);
+      await writeFile(tmpFile, '[]');
+      mockTrpcClient.agentEval.updateTestCase.mutate.mockResolvedValue({ id: 'case-1' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'eval',
+          'testcase',
+          'update',
+          '--id',
+          'case-1',
+          '--messages-file',
+          tmpFile,
+        ]);
+
+        expect(mockTrpcClient.agentEval.updateTestCase.mutate).toHaveBeenCalledWith({
+          content: { messages: [] },
+          id: 'case-1',
+        });
+      } finally {
+        await rm(tmpFile, { force: true });
+      }
+    });
+  });
+
   // ============================================
   // Dataset tests
   // ============================================
@@ -399,6 +492,65 @@ describe('eval command', () => {
       );
     });
 
+    it('should create a test case with an environment', async () => {
+      mockTrpcClient.agentEval.createTestCase.mutate.mockResolvedValue({ id: 'tc1' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'eval',
+        'testcase',
+        'create',
+        '--dataset-id',
+        'd1',
+        '--input',
+        'Q?',
+        '--environment',
+        '{"toolForwarding":{"memory":{"endpoint":"https://mock.test/tool-calls"}}}',
+      ]);
+
+      expect(mockTrpcClient.agentEval.createTestCase.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expect.objectContaining({
+            environment: {
+              toolForwarding: {
+                memory: { endpoint: 'https://mock.test/tool-calls' },
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should update a test case environment', async () => {
+      mockTrpcClient.agentEval.updateTestCase.mutate.mockResolvedValue({ id: 'tc1' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'eval',
+        'testcase',
+        'update',
+        '--id',
+        'tc1',
+        '--environment',
+        '{"toolForwarding":{"memory":{"endpoint":"https://mock.test/tool-calls"}}}',
+      ]);
+
+      expect(mockTrpcClient.agentEval.updateTestCase.mutate).toHaveBeenCalledWith({
+        content: {
+          environment: {
+            toolForwarding: {
+              memory: { endpoint: 'https://mock.test/tool-calls' },
+            },
+          },
+        },
+        id: 'tc1',
+      });
+    });
+
     it('should delete a test case', async () => {
       mockTrpcClient.agentEval.deleteTestCase.mutate.mockResolvedValue({ success: true });
 
@@ -557,7 +709,7 @@ describe('eval command', () => {
       expect(mockTrpcClient.agentEval.deleteRun.mutate).toHaveBeenCalledWith({ id: 'r1' });
     });
 
-    it('should set run status via external API', async () => {
+    it('should set terminal run status via the external API', async () => {
       mockTrpcClient.agentEvalExternal.runSetStatus.mutate.mockResolvedValue({
         runId: 'run-1',
         status: 'completed',
@@ -584,10 +736,10 @@ describe('eval command', () => {
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('status updated to'));
     });
 
-    it('should set run status to failed via external API', async () => {
+    it('should set run status to running', async () => {
       mockTrpcClient.agentEvalExternal.runSetStatus.mutate.mockResolvedValue({
         runId: 'run-1',
-        status: 'failed',
+        status: 'running',
         success: true,
       });
 
@@ -601,12 +753,12 @@ describe('eval command', () => {
         '--id',
         'run-1',
         '--status',
-        'failed',
+        'running',
       ]);
 
       expect(mockTrpcClient.agentEvalExternal.runSetStatus.mutate).toHaveBeenCalledWith({
         runId: 'run-1',
-        status: 'failed',
+        status: 'running',
       });
     });
 

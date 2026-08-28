@@ -1,7 +1,13 @@
 'use client';
 
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Input, TextArea } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

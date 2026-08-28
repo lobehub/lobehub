@@ -130,6 +130,9 @@ export class TaskConfigSliceActionImpl {
     } catch (error) {
       console.error('[TaskStore] Failed to update verify config:', error);
       await this.#get().internal_refreshTaskDetail(id);
+      // Rethrow so multi-step callers (e.g. acceptance removal) can abort
+      // instead of proceeding as if the config write landed.
+      throw error;
     }
   };
 
@@ -179,6 +182,13 @@ export class TaskConfigSliceActionImpl {
     const detail = this.#get().taskDetailMap[id];
 
     const update: Parameters<typeof taskService.update>[1] = { automationMode: mode };
+    // Automation and a human assignee are mutually exclusive (the server
+    // rejects the pair). Enabling automation on a member-assigned task clears
+    // the assignee in the same request — the schedule popover announces this
+    // up front, so the switch must not silently bounce back instead.
+    if (mode && detail?.userId) {
+      update.assigneeUserId = null;
+    }
     if (mode === 'heartbeat' && !detail?.heartbeat?.interval) {
       update.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL_SECONDS;
     }
@@ -210,6 +220,7 @@ export class TaskConfigSliceActionImpl {
       const target = draft.taskDetailMap[id];
       if (!target) return;
       target.automationMode = mode;
+      if (update.assigneeUserId === null) target.userId = null;
       if (update.heartbeatInterval !== undefined) {
         target.heartbeat ??= {};
         target.heartbeat.interval = update.heartbeatInterval;

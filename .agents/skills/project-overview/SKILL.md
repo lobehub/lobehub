@@ -56,8 +56,10 @@ git submodules.
 ├── apps/
 │   ├── cli/                  # LobeHub CLI
 │   ├── desktop/              # Electron desktop app
-│   ├── device-gateway/       # Device gateway service
-│   └── server/               # Next.js-backed server: featureFlags, globalConfig, modules, routers, services, utils, workflows (`@/server/*` alias)
+│   └── server/               # Next.js-backed server (`@/server/*` alias)
+│       └── src/
+│           ├── router-hono/  # Hono endpoint routers and standalone runtime
+│           └── ...           # featureFlags, globalConfig, modules, routers, services, utils, workflows
 ├── docs/                     # changelog, development, self-hosting, usage
 ├── locales/                  # en-US, zh-CN, ...
 ├── packages/                 # ~80 @lobechat/* workspace packages — `ls` for the full set. Key ones:
@@ -89,7 +91,6 @@ git submodules.
     ├── business/             # Open-source stubs (client/server) — cloud repo provides real impls
     ├── features/             # Domain business components
     ├── store/                # ~30 zustand stores — `ls` for the full set
-    ├── server/               # standalone-Hono server pieces only: agent-hono, workflows-hono (main backend lives in `apps/server`)
     └── ...                   # components, hooks, layout, libs, services, types, utils
 ```
 

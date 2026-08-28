@@ -1,4 +1,4 @@
-import { ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { describe, expect, it } from 'vitest';
 
 import { classifyLLMError } from '../llmErrorClassification';
@@ -65,6 +65,8 @@ describe('classifyLLMError', () => {
     // straight from the spec table.
     it.each([
       ['ContentModeration', 'Content Exists Risk'],
+      // Google promptFeedback / blocked finishReason map to this type so callLlm does not retry.
+      ['ProviderContentPolicyViolation', 'The content may contain prohibited content'],
       ['InvalidRequestFormat', 'Range of input length should be 1 to 8192'],
       ['UserConfigError', 'Invalid URL (POST /v1/v1beta'],
       ['NoAvailableChannel', 'No available keys in pool'],
@@ -73,6 +75,7 @@ describe('classifyLLMError', () => {
       ['LocationNotSupportError', 'service unavailable in this region'],
       ['ExceededToolLimit', 'tools array exceeds limit'],
       ['ModelEmptyCompletion', 'model returned an empty completion'],
+      ['ModelRefusal', 'model declined to answer'],
     ])('classifies %s as stop (no HTTP status)', (errorType, message) => {
       expect(classifyLLMError({ errorType, message }).kind).toBe('stop');
     });
@@ -89,6 +92,10 @@ describe('classifyLLMError', () => {
 
     it('classifies a thrown ModelEmptyError instance as stop', () => {
       expect(classifyLLMError(new ModelEmptyError()).kind).toBe('stop');
+    });
+
+    it('classifies a thrown ModelRefusalError instance as stop', () => {
+      expect(classifyLLMError(new ModelRefusalError()).kind).toBe('stop');
     });
   });
 

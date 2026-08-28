@@ -4,10 +4,12 @@ import './testUtils';
 import type { ChatModelCard } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { params } from '../index';
+import { fetchDeepSeekModels } from '../modelFetch';
 
 describe('DeepSeek models', () => {
-  const fetchModels = params.models as (params: { client: unknown }) => Promise<ChatModelCard[]>;
+  const fetchModels = fetchDeepSeekModels as (params: {
+    client: unknown;
+  }) => Promise<ChatModelCard[]>;
   const mockClient = {
     models: {
       list: vi.fn(),

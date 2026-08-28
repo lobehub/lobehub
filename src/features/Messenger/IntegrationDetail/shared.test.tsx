@@ -50,6 +50,7 @@ vi.mock('@lobehub/ui', () => ({
 const mockConfirmModal = vi.fn();
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Avatar: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} />,
   Button: ({
     children,
     disabled,
@@ -77,6 +78,26 @@ vi.mock('@lobehub/ui/base-ui', () => ({
         </div>
       ))}
     </div>
+  ),
+  Tag: ({ children }: { children?: ReactNode }) => (
+    <span data-testid="personal-tag">{children}</span>
+  ),
+  Text: ({
+    children,
+    ellipsis,
+  }: {
+    children?: ReactNode;
+    ellipsis?: boolean | { tooltip?: boolean | string };
+  }) => (
+    <span
+      title={
+        typeof ellipsis === 'object' && typeof ellipsis.tooltip === 'string'
+          ? ellipsis.tooltip
+          : undefined
+      }
+    >
+      {children}
+    </span>
   ),
   confirmModal: (...args: unknown[]) => mockConfirmModal(...args),
 }));

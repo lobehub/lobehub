@@ -8,9 +8,12 @@ import {
   writePersistedOverrides,
 } from './storage';
 
-const isDevEnv = () => process.env.NODE_ENV === 'development';
+const DEV_DOCK_ACCESS_FLAG = 'enableDevDock';
 
-export type FeatureFlagKey = keyof IFeatureFlagsState;
+export type FeatureFlagKey = Exclude<keyof IFeatureFlagsState, typeof DEV_DOCK_ACCESS_FLAG>;
+
+export const isFeatureFlagOverridable = (key: keyof IFeatureFlagsState): key is FeatureFlagKey =>
+  key !== DEV_DOCK_ACCESS_FLAG;
 
 type Setter = StoreSetter<ServerConfigStore>;
 
@@ -40,12 +43,14 @@ class FeatureFlagOverrideActionImpl implements FeatureFlagOverrideAction {
   }
 
   syncDevFlagOverrides = () => {
-    if (!isDevEnv()) return;
-
     const { featureFlags } = this.#get();
     const original = { ...featureFlags } as IFeatureFlagsState;
 
-    const knownKeys = new Set<string>(Object.keys(original));
+    const knownKeys = new Set<string>(
+      Object.keys(original).filter((key) =>
+        isFeatureFlagOverridable(key as keyof IFeatureFlagsState),
+      ),
+    );
     const persisted = readPersistedOverrides(knownKeys) as Partial<IFeatureFlagsState>;
 
     const merged = { ...original, ...persisted } as IFeatureFlagsState;
@@ -62,8 +67,6 @@ class FeatureFlagOverrideActionImpl implements FeatureFlagOverrideAction {
   };
 
   setFlagOverride = (key: FeatureFlagKey, value: boolean | undefined) => {
-    if (!isDevEnv()) return;
-
     const state = this.#get();
     const original = state._originalFeatureFlags;
     if (!original) return;
@@ -89,8 +92,6 @@ class FeatureFlagOverrideActionImpl implements FeatureFlagOverrideAction {
   };
 
   resetFlagOverrides = () => {
-    if (!isDevEnv()) return;
-
     const original = this.#get()._originalFeatureFlags;
     if (!original) return;
 

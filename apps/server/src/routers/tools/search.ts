@@ -1,9 +1,33 @@
+import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { trpc } from '@/libs/trpc/lambda/init';
 import { searchService } from '@/server/services/search';
 
-const searchProcedure = authedProcedure;
+// This surface executes external search/crawl providers and spends server-side
+// search quota — unlike the lambda `search` namespace (app content search),
+// which shares the same `search.*` paths, so the generic path-based guard
+// cannot tell them apart. Gate it here: restricted keys need `model:invoke`.
+const requireModelInvokeForRestrictedKeys = trpc.middleware(async ({ ctx, next }) => {
+  const scopes = (ctx as { apiKeyScopes?: string[] | null }).apiKeyScopes;
+
+  if (
+    scopes !== undefined &&
+    !isFullAccessApiKey(scopes) &&
+    !hasApiKeyScope(scopes, 'model:invoke')
+  ) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: "This API key cannot use external search: missing required scope 'model:invoke'.",
+    });
+  }
+
+  return next();
+});
+
+const searchProcedure = authedProcedure.use(requireModelInvokeForRestrictedKeys);
 
 export const searchRouter = router({
   crawlPages: searchProcedure

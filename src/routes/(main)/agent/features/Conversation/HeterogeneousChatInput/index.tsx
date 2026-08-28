@@ -1,16 +1,12 @@
 'use client';
 
-import {
-  HETEROGENEOUS_TYPE_LABELS,
-  isRemoteHeterogeneousType,
-} from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Alert, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
-import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
@@ -18,16 +14,21 @@ import { type ActionKeys } from '@/features/ChatInput';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
+import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
+import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
+import ApiModeModelBar from './ApiModeModelBar';
 import HeteroControlBar from './HeteroControlBar';
 import HeteroPlus from './HeteroPlus';
 import ScheduledSendChip from './ScheduledSendChip';
@@ -89,40 +90,69 @@ const HeterogeneousChatInput = memo(() => {
   // the global (hijack-prone) active agent.
   const agentId = useConversationStore(contextSelectors.agentId);
   const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
-  const params = useParams<{ aid: string }>();
   const navigate = useWorkspaceAwareNavigate();
 
   // Effective config = shared row + this member's per-agent device override
-  // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
+  // — the raw shared `agencyConfig` may carry another member's
   // device pick, which would drive the guard/model-selector gates off the
   // wrong machine.
   // While the preference is loading, the merged config may still reflect only
   // the shared row — hold the input closed (below) instead of gating device
   // runs off a value that can flip once the override arrives.
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
-  const providerType = agencyConfig?.heterogeneousProvider?.type;
+  const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+  const providerType = heterogeneousProvider?.type;
+  const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
+  const isApiAuth = heterogeneousProvider?.authMode === 'api';
+  const serverDefaultApiConfig =
+    isApiAuth && heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const providerApiConfig =
+    isApiAuth &&
+    heterogeneousProvider.apiConfig &&
+    heterogeneousProvider.apiConfig.source !== 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const apiConfigMissing = isApiAuth && !heterogeneousProvider.apiConfig;
+  // The Labs flag gates every API-mode path, server-default included: with the
+  // flag off, an api-auth agent behaves exactly as before the feature existed.
+  const isApiModeActive =
+    enableAgentProviderBinding &&
+    (!!serverDefaultApiConfig || apiConfigMissing || !!providerApiConfig);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
     workspaceScoped,
   });
-  const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
+  const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
+    useProviderBindingValidation(providerType, providerApiConfig);
   const deviceSelectionRequired =
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // OpenCode can discover models on an explicit bound device; Claude Code and
-  // Codex retain their existing local/sandbox-only selector behavior.
-  const isSelectableHeteroProvider =
-    providerType === 'claude-code' || providerType === 'codex' || providerType === 'opencode';
   const showHeteroModel =
-    isSelectableHeteroProvider &&
+    !isApiAuth &&
+    isHeteroSelectorAvailable(providerType) &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget,
       isDesktopClient: isDesktop,
       providerType,
+    });
+  const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
+  const apiModeLabDisabled = isApiAuth && !enableAgentProviderBinding;
+  const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
+  const validateProviderBinding =
+    enableAgentProviderBinding &&
+    (apiConfigMissing || !!providerApiConfig) &&
+    executionTarget === 'local';
+  const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
+    resolveProviderBindingGuard({
+      active: validateProviderBinding,
+      error: apiBindingValidationError,
+      isReady: isApiBindingStateReady,
     });
   // The armed-schedule chip sits immediately after the `+` that armed it, so the
   // state and the control that produced it read as one unit.
@@ -138,22 +168,25 @@ const HeterogeneousChatInput = memo(() => {
   // (left-aligned) action bar, so it sits right next to Send — it qualifies the
   // run the send button is about to commit.
   const sendAreaPrefix = useMemo(
-    () => (showHeteroModel ? <HeteroModel /> : undefined),
-    [showHeteroModel],
+    () =>
+      showApiModeModel ? (
+        <ApiModeModelBar agentId={agentId} />
+      ) : showHeteroModel ? (
+        <HeteroModel />
+      ) : undefined,
+    [agentId, showApiModeModel, showHeteroModel],
   );
 
-  // A run goes to an `lh connect` device when the provider is a remote-only type
-  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) resolves to a
-  // bound device (including desktop "local" opened from web). Either way the
+  // A run goes to an `lh connect` device when its execution target resolves to a
+  // bound device (including desktop "local" opened from web). The
   // bound device must be online before we let the user send — guard it here
   // instead of failing at dispatch time.
-  const isDeviceExecution =
-    isRemoteAgent || (executionTarget === 'device' && !!agencyConfig?.boundDeviceId);
+  const isDeviceExecution = executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
 
   const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
 
   const goToAgentProfile = () => {
-    if (params.aid) navigate(urlJoin('/agent', params.aid, 'profile'));
+    if (agentId) navigate(`/agent/${agentId}/profile`);
   };
 
   const deviceBlocked =
@@ -201,7 +234,14 @@ const HeterogeneousChatInput = memo(() => {
   const renderCloudConfigGuard = () => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
-    if (isPreferenceLoading || deviceSelectionRequired || isDeviceExecution || isConfigured) {
+    if (
+      apiModeLabDisabled ||
+      apiModeTargetUnsupported ||
+      isPreferenceLoading ||
+      deviceSelectionRequired ||
+      isDeviceExecution ||
+      isConfigured
+    ) {
       return null;
     }
 
@@ -212,6 +252,60 @@ const HeterogeneousChatInput = memo(() => {
         action={
           <Button size={'small'} type={'primary'} onClick={goToConfig}>
             {t('heteroAgent.cloudNotConfigured.action')}
+          </Button>
+        }
+      />
+    );
+  };
+
+  const renderApiModeLabGuard = () => {
+    if (!apiModeLabDisabled) return null;
+
+    return (
+      <GuardBanner
+        hint={t('heteroAgent.apiMode.labDisabled.desc')}
+        title={t('heteroAgent.apiMode.labDisabled.title')}
+        action={
+          <Button size={'small'} type={'primary'} onClick={() => navigate('/settings/labs')}>
+            {t('heteroAgent.apiMode.labDisabled.action')}
+          </Button>
+        }
+      />
+    );
+  };
+
+  const renderApiModeTargetGuard = () => {
+    if (!apiModeTargetUnsupported) return null;
+
+    return (
+      <GuardBanner
+        hint={t('heteroAgent.apiMode.localOnly.desc')}
+        title={t('heteroAgent.apiMode.localOnly.title')}
+        action={
+          <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>
+            {t('platformAgent.deviceGuard.configure')}
+          </Button>
+        }
+      />
+    );
+  };
+
+  const renderApiModeBindingGuard = () => {
+    if (!apiModeBindingError) return null;
+
+    const title =
+      apiModeBindingError.code === 'configMissing'
+        ? t('heteroAgent.apiMode.configMissing')
+        : apiModeBindingError.code === 'agentUnsupported'
+          ? t('heteroAgent.apiMode.agentUnsupported', { name: providerType })
+          : t(`heteroAgent.apiMode.${apiModeBindingError.code}`, apiModeBindingError);
+
+    return (
+      <GuardBanner
+        title={title}
+        action={
+          <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>
+            {t('platformAgent.deviceGuard.configure')}
           </Button>
         }
       />
@@ -236,15 +330,26 @@ const HeterogeneousChatInput = memo(() => {
   // workspace preference loads, keep send disabled: the effective target isn't
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
+    apiModeLabDisabled ||
+    apiModeTargetUnsupported ||
+    apiModeBindingBlocked ||
     isPreferenceLoading ||
     deviceSelectionRequired ||
     (!isConfigured && !isDeviceExecution) ||
     deviceBlocked;
   const hasGuard =
-    deviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
+    apiModeLabDisabled ||
+    apiModeTargetUnsupported ||
+    !!apiModeBindingError ||
+    deviceSelectionRequired ||
+    deviceBlocked ||
+    (!isConfigured && !isDeviceExecution);
 
   return (
     <Flexbox>
+      {renderApiModeLabGuard()}
+      {renderApiModeTargetGuard()}
+      {renderApiModeBindingGuard()}
       {renderDeviceSelectionGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}

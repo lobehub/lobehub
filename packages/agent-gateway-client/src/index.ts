@@ -1,5 +1,11 @@
 export { AgentStreamClient } from './client';
+export { sanitizeAgentInterventionRequestForReview } from './intervention';
 export type {
+  AgentInterventionInteractionKind,
+  AgentInterventionProvider,
+  AgentInterventionRenderArguments,
+  AgentInterventionRenderOption,
+  AgentInterventionRenderQuestion,
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamClientEvents,

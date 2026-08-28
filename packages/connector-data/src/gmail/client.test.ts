@@ -68,19 +68,29 @@ describe('createGmailConnectorClient', () => {
     },
   );
 
-  it('sanitizes resolved and rejected Composio search failures', async () => {
+  /** @example expect(error.message).toContain('token=secret'); */
+  it('retains resolved failures and rethrows rejected Composio errors', async () => {
+    const rejectedError = new Error('account-1 token=secret');
+    const resolvedFailure = { error: 'token=secret', successful: false };
     const execute = vi
       .fn()
-      .mockResolvedValueOnce({ error: 'token=secret', successful: false })
-      .mockRejectedValueOnce(new Error('account-1 token=secret'));
+      .mockResolvedValueOnce(resolvedFailure)
+      .mockRejectedValueOnce(rejectedError);
     const client = createClient(execute);
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const error = await client.searchMessages({ query: 'receipt' }).catch((reason) => reason);
-      expect(error).toBeInstanceOf(ConnectorDataError);
-      expect(error.message).toBe('gmail searchMessages failed');
-      expect(error.message).not.toMatch(/secret|account-1/);
-    }
+    const resolvedError = await client
+      .searchMessages({ query: 'receipt' })
+      .catch((reason) => reason);
+    /** @example expect(resolvedError).toBeInstanceOf(ConnectorDataError); */
+    expect(resolvedError).toBeInstanceOf(ConnectorDataError);
+    /** @example expect(resolvedError.message).toContain('token=secret'); */
+    expect(resolvedError.message).toContain('token=secret');
+    /** @example expect(resolvedError.cause).toBe(resolvedFailure); */
+    expect(resolvedError.cause).toBe(resolvedFailure);
+
+    const thrownError = await client.searchMessages({ query: 'receipt' }).catch((reason) => reason);
+    /** @example expect(thrownError).toBe(rejectedError); */
+    expect(thrownError).toBe(rejectedError);
   });
 
   it.each([

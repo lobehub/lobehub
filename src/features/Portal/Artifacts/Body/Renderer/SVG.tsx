@@ -1,9 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard, sanitizeSVGContent } from '@lobechat/utils/client';
 import { Center, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { snapdom } from '@zumer/snapdom';
-import { App } from 'antd';
 import { css, cx } from 'antd-style';
 import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { useMemo } from 'react';
@@ -35,7 +34,6 @@ interface SVGRendererProps {
 
 const SVGRenderer = ({ content }: SVGRendererProps) => {
   const { t } = useTranslation('portal');
-  const { message } = App.useApp();
 
   // Sanitize SVG content to prevent XSS attacks
   const sanitizedContent = useMemo(() => sanitizeSVGContent(content), [content]);
@@ -121,9 +119,9 @@ const SVGRenderer = ({ content }: SVGRendererProps) => {
               const dataUrl = await generatePng();
               try {
                 await copyImageToClipboard(dataUrl);
-                message.success(t('artifacts.svg.copySuccess'));
+                toast.success(t('artifacts.svg.copySuccess'));
               } catch (e) {
-                message.error(t('artifacts.svg.copyFail', { error: e }));
+                toast.error(t('artifacts.svg.copyFail', { error: e }));
               }
             }}
           />

@@ -210,7 +210,7 @@ export class PlatformApi {
 Implement `PlatformClient` and extend `ClientFactory`:
 
 ```ts
-import { createPlatformAdapter } from '@chat-adapter/<platform>';
+import { createPlatformAdapter } from '@chat-adapter/<platform';
 import debug from 'debug';
 
 import {
@@ -226,7 +226,7 @@ import { PlatformApi } from './api';
 const log = debug('bot-platform:<platform>:bot');
 
 class MyPlatformClient implements PlatformClient {
-  readonly id = '<platform>';
+  readonly id = 'platform';
   readonly applicationId: string;
 
   private config: BotProviderConfig;
@@ -255,7 +255,7 @@ class MyPlatformClient implements PlatformClient {
   createAdapter(): Record<string, any> {
     // Return a Chat SDK adapter instance for inbound message handling
     return {
-      '<platform>': createPlatformAdapter({
+      'platform': createPlatformAdapter({
         botToken: this.config.credentials.botToken,
         // ... adapter-specific config
       }),
@@ -335,13 +335,13 @@ import { MyPlatformClientFactory } from './client';
 import { schema } from './schema';
 
 export const myPlatform: PlatformDefinition = {
-  id: '<platform>',
+  id: 'platform',
   name: 'Platform Name',
   connectionMode: 'webhook', // 'webhook' | 'websocket' | 'polling'
   description: 'Connect a Platform bot',
   documentation: {
     portalUrl: 'https://developers.example.com',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/<platform>',
+    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/<platform',
   },
   schema,
   showWebhookUrl: true, // Set to true if users need to manually copy the webhook URL

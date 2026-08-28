@@ -43,7 +43,7 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 2. **Tests must pass type check** - Run `bun run type-check` after writing tests
 3. **After 1-2 failed fix attempts, stop and ask for help**
 4. **Test behavior, not implementation details**
-5. **Regression tests for bug fixes** - After fixing a bug, add a regression test that fails before the fix and passes after, to prevent recurrence
+5. **Regression tests for bug fixes** - After fixing a bug, add a regression test that fails before the fix and passes after, to prevent recurrence. **Skip** pure style/CSS fixes (selector, hover, mask, spacing, color) when the only practical assertion would be source-string matching on the stylesheet — that is not a regression test worth shipping.
 6. **No new component tests** - Only update existing React component tests. Complex logic should be extracted into hooks and tested there instead
 7. **All source changes before any test changes** - Complete all source file edits first, then update tests in a separate pass. Interleaving disrupts reasoning about the source changes, especially across many files
 
@@ -82,6 +82,32 @@ vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
 // ❌ Avoid mocking entire modules globally
 vi.mock('@/services/chat'); // Too broad
 ```
+
+## UI Library Mocks (@lobehub/ui/base-ui)
+
+**Default: do NOT mock `@lobehub/ui/base-ui` — render the real components.**
+`vitest.config.mts` redirects the library's internal MotionProvider to a static
+stub (`tests/mocks/lobehubUiMotionProvider.tsx`), so base-ui components render in
+tests without the app-level ConfigProvider. `Please wrap your app with <ConfigProvider> (or <MotionProvider>)` in a test means that redirect is not in
+effect (e.g. a package-local vitest config) — do not fix it by hand-mocking every
+component.
+
+When a test genuinely wants simplified DOM, compose the canonical stubs over the
+real module instead of writing a closed factory (closed factories break whenever
+the library migrates a component's import path):
+
+```typescript
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+```
+
+`~base-ui-stubs` (`tests/mocks/baseUiStubs.tsx`) covers ActionIcon / Button /
+Text / Tag / Avatar / Alert / toast / confirmModal / createModal with standard
+aria semantics. A per-file factory is still fine when assertions need bespoke
+testid conventions — but keep it composed over `importOriginal` so unknown
+exports never go missing.
 
 ## Detailed Guides
 

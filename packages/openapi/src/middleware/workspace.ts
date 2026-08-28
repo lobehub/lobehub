@@ -1,4 +1,3 @@
-import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import debug from 'debug';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { Context, Next } from 'hono';
@@ -6,7 +5,6 @@ import { HTTPException } from 'hono/http-exception';
 
 import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
-import { RbacModel } from '@/database/models/rbac';
 import { workspaceMembers, workspaces } from '@/database/schemas';
 
 const log = debug('lobe-hono:workspace-middleware');
@@ -38,6 +36,35 @@ const resolveWorkspaceId = (c: Context): string | undefined => {
 
   return apiKeyWorkspaceId;
 };
+
+/**
+ * Built-in workspace roles, lowest to highest. `workspace_members.role` is the
+ * single source of truth, so ordering here is the whole role model.
+ */
+const WORKSPACE_ROLE_ORDER = ['viewer', 'member', 'admin', 'owner'];
+
+const hasMinWorkspaceRole = (role: string | undefined, minRole: string) =>
+  !!role && WORKSPACE_ROLE_ORDER.indexOf(role) >= WORKSPACE_ROLE_ORDER.indexOf(minRole);
+
+/**
+ * Require at least `minRole` for workspace-scoped requests; personal requests
+ * pass through untouched.
+ *
+ * `workspaceAuthMiddleware` only enforces the admin role for `apikey` auth, so
+ * without this an OIDC/session-authenticated member could reach routes whose
+ * models use a workspace-wide (not row-owner) predicate. Mirrors the tRPC
+ * `requireWorkspaceRoleWhenScoped` guard so both transports gate identically.
+ */
+export const requireWorkspaceRoleWhenScoped =
+  (minRole: 'admin' | 'owner') => async (c: Context, next: Next) => {
+    if (!c.get('workspaceId')) return next();
+
+    if (!hasMinWorkspaceRole(c.get('workspaceRole'), minRole)) {
+      throw new HTTPException(403, { message: `Requires ${minRole} role or higher` });
+    }
+
+    return next();
+  };
 
 export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
   const workspaceId = resolveWorkspaceId(c);
@@ -83,28 +110,10 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
     });
   }
 
-  if (c.get('authType') === 'apikey') {
-    const rbacModel = new RbacModel(serverDB, userId);
-    const userRoles = await rbacModel.getUserRoles({ workspaceId });
-    // Workspaces created before RBAC seeding landed have no `rbac_user_roles`
-    // rows, so fall back to the membership role — role transitions keep both
-    // tables in sync, and the membership row was already loaded above.
-    const isWorkspaceOwner =
-      userRoles.some(
-        (role) => role.name === WORKSPACE_SYSTEM_ROLES.OWNER && role.workspaceId === workspaceId,
-      ) || membership.role === 'owner';
-
-    if (!isWorkspaceOwner) {
-      throw new HTTPException(403, {
-        message: 'Workspace API Key requires an owner account',
-      });
-    }
-
-    if (!(await canUseWorkspaceApiKeys(workspaceId))) {
-      throw new HTTPException(403, {
-        message: 'Workspace API Key access is not available',
-      });
-    }
+  if (c.get('authType') === 'apikey' && !(await canUseWorkspaceApiKeys(workspaceId))) {
+    throw new HTTPException(403, {
+      message: 'Workspace API Key access is not available',
+    });
   }
 
   c.set('workspaceId', workspaceId);

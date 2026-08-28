@@ -9,7 +9,7 @@ export interface WorkspaceUserSettingsState {
   /**
    * Empty on first load / while SWR is fetching / when the caller is in
    * personal mode. Consumers should treat empty as "no override — use the
-   * shared defaults", identical to the pre-LOBE-11689 behaviour.
+   * shared defaults", identical to the pre behaviour.
    */
   workspaceUserPreference: WorkspaceUserPreference;
   /**

@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import type * as ReactModule from 'react';
+import { lazy } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DynamicRouteMeta, DynamicRouteMetaProps } from '@/spa/router/routeMeta';
@@ -228,6 +229,33 @@ describe('RouteMetaBridge', () => {
         },
         '/group/group-a?topic=t1',
       );
+    });
+  });
+
+  it('resolves route metadata from a lazy dynamic component', async () => {
+    const LazyDynamicMeta = lazy(async () => ({
+      default: createDynamicMeta(() => ({ title: 'Lazy chat' })),
+    }));
+
+    mocks.setMatches([
+      {
+        data: undefined,
+        handle: {
+          meta: {
+            DynamicMeta: LazyDynamicMeta,
+            titleKey: 'navigation.chat',
+          },
+        },
+        id: 'routes/lazy-agent',
+        params: { aid: 'agent-lazy' },
+        pathname: '/agent/agent-lazy',
+      },
+    ]);
+
+    render(<RouteMetaBridge />);
+
+    await waitFor(() => {
+      expect(document.title).toBe(`Lazy chat · ${BRANDING_NAME}`);
     });
   });
 

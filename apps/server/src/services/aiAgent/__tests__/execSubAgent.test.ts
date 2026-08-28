@@ -53,6 +53,8 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
     findById: vi.fn().mockResolvedValue(null),
   })),
@@ -217,6 +219,8 @@ describe('AiAgentService.execSubAgent', () => {
         agentId: 'agent-1',
         appContext: {
           groupId: 'group-1',
+          // Guest on the parent's topic — must not claim its running mark.
+          isolationThread: true,
           isSubAgent: false,
           threadId: 'thread-123',
           topicId: 'topic-1',
@@ -260,6 +264,7 @@ describe('AiAgentService.execSubAgent', () => {
       expect(execAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           appContext: expect.objectContaining({
+            isolationThread: true,
             isSubAgent: true,
             threadId: 'thread-123',
             topicId: 'topic-1',

@@ -6,6 +6,7 @@ import {
   type NewChatGroup,
   type NewChatGroupAgent,
 } from '@/database/schemas';
+import type { GroupMemberRole } from '@/database/utils/groupMembership';
 import { lambdaClient } from '@/libs/trpc/client';
 
 export interface GroupMemberConfig {
@@ -125,7 +126,7 @@ class ChatGroupService {
   updateAgentInGroup = (
     groupId: string,
     agentId: string,
-    updates: Partial<Pick<NewChatGroupAgent, 'order' | 'role'>>,
+    updates: { order?: number | null; role?: GroupMemberRole | null },
   ): Promise<NewChatGroupAgent> => {
     return lambdaClient.group.updateAgentInGroup.mutate({
       agentId,
@@ -152,18 +153,60 @@ class ChatGroupService {
     return lambdaClient.group.duplicateGroup.mutate({ groupId, newTitle });
   };
 
-  transferGroup = (
+  /**
+   * Members these groups only reference (`External` in the roster). A transfer
+   * leaves them where they are and clones them into the target scope.
+   */
+  listReferencedMembers = (
+    groupIds: string[],
+  ): Promise<
+    {
+      agentId: string;
+      avatar: string | null;
+      backgroundColor: string | null;
+      groupId: string;
+      title: string | null;
+    }[]
+  > => {
+    return lambdaClient.group.listReferencedMembers.query({ groupIds });
+  };
+
+  transferGroup = async (
     groupId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-    targetAccessLevel?: 'edit' | 'use',
-  ): Promise<{ groupId: string } | null> => {
-    return lambdaClient.group.transferGroup.mutate({
+  ): Promise<{ groupId: string; transferJobId?: string | null } | null> => {
+    const result = await lambdaClient.group.transferGroup.mutate({
       groupId,
-      targetAccessLevel,
       targetVisibility,
       targetWorkspaceId,
     });
+    // Without `targetMemberId` the endpoint always takes the scope-move path.
+    return result as { groupId: string; transferJobId?: string | null } | null;
+  };
+
+  /**
+   * Hand ownership to another member of the current workspace. Creates a
+   * pending transfer request the recipient must accept — nothing moves yet.
+   */
+  requestGroupTransferToMember = async (params: {
+    groupId: string;
+    targetMemberId: string;
+  }): Promise<{ requestId: string; status: 'pending' }> => {
+    const result = await lambdaClient.group.transferGroup.mutate({
+      groupId: params.groupId,
+      targetMemberId: params.targetMemberId,
+      targetWorkspaceId: null,
+    });
+    return result as { requestId: string; status: 'pending' };
+  };
+
+  /**
+   * Async history-backfill progress for a transferred/copied group.
+   * `topicIds` caps the reported pending set to what the client can show.
+   */
+  getTransferJobStatus = async (groupId: string, topicIds: string[]) => {
+    return lambdaClient.group.getTransferJobStatus.query({ groupId, topicIds });
   };
 }
 

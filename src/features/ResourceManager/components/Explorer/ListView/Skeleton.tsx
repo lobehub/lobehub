@@ -1,4 +1,5 @@
-import { Center, Checkbox, Flexbox, Skeleton } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 
 import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH, getListViewMinWidth } from './ListItem/constants';

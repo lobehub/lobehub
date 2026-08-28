@@ -1,10 +1,9 @@
-import {
-  CredsExecutionRuntime,
-  CredsIdentifier,
-  type ICredsService,
-} from '@lobechat/builtin-tool-creds';
+import { CredsIdentifier, type ICredsService } from '@lobechat/builtin-tool-creds';
+import { CredsExecutionRuntime } from '@lobechat/builtin-tool-creds/executionRuntime';
 import debug from 'debug';
 
+import { UserModel } from '@/database/models/user';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -26,7 +25,7 @@ class ServerCredsService implements ICredsService {
 
   /**
    * Inside a workspace, reads/writes must hit the workspace's shared organization
-   * credentials, never the operator's personal creds (LOBE-10978). Falls back to
+   * credentials, never the operator's personal creds. Falls back to
    * the personal `market.creds` namespace outside a workspace.
    */
   private credsAccessor() {
@@ -111,10 +110,8 @@ class ServerCredsService implements ICredsService {
   }> {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
-    // NOTE: stays on the personal `market.creds.inject` even inside a workspace.
-    // The Market SDK's org-scoped creds service has no `inject`/`injectForSkill`
-    // equivalent yet (see LOBE-10978) — sandbox injection cannot be routed to the
-    // workspace's organization credentials until Market adds that endpoint.
+    // Market's generic inject endpoint resolves organization credentials from
+    // the workspaceId signed into this service's trusted-client token.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -161,9 +158,23 @@ class ServerCredsService implements ICredsService {
  * Per-request runtime (needs userId, topicId)
  */
 export const credsRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.userId) {
       throw new Error('userId is required for Creds execution');
+    }
+
+    if (context.workspaceId) {
+      if (!context.serverDB) {
+        throw new Error('serverDB is required for workspace Creds execution');
+      }
+
+      const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
+        context.workspaceId,
+        context.userId,
+      );
+      if (!membership) {
+        throw new Error('Workspace membership is required for workspace Creds execution');
+      }
     }
 
     log(
@@ -173,7 +184,22 @@ export const credsRuntime: ServerRuntimeRegistration = {
       context.workspaceId,
     );
 
-    const marketService = new MarketService({ userInfo: { userId: context.userId } });
+    // Read market accessToken from DB so server-side creds runtime can authenticate.
+    let accessToken: string | undefined;
+    if (context.serverDB) {
+      try {
+        const userModel = new UserModel(context.serverDB, context.userId);
+        const settings = await userModel.getUserSettings();
+        accessToken = (settings?.market as any)?.accessToken;
+      } catch {
+        // non-fatal — MarketService will fall back to trustedClientToken
+      }
+    }
+
+    const marketService = new MarketService({
+      accessToken,
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    });
     const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {

@@ -1,6 +1,7 @@
 'use client';
 
-import { Icon, Tag } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
 

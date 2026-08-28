@@ -1,3 +1,4 @@
+import { MESSENGER_PUSH_CONTENT_MAX_LENGTH } from '@lobechat/builtin-tool-message';
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
@@ -18,6 +19,7 @@ import {
   type MessengerPlatform,
 } from '@/config/messenger';
 import { AgentModel } from '@/database/models/agent';
+import { FileModel } from '@/database/models/file';
 import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import {
   MessengerAccountLinkConflictError,
@@ -36,11 +38,13 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
+import type { BotMessageAttachment } from '@/server/services/bot/platforms/types';
 import {
   wechatLegacyTokenKey,
   wechatPendingPushKey,
   wechatWindowKey,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { FileService } from '@/server/services/file';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import {
@@ -816,11 +820,17 @@ export const messengerRouter = router({
    * Read-only; used by the messenger settings UI.
    */
   getMessengerPushWindow: messengerProcedure
-    .input(z.object({ platform: z.enum(MESSENGER_PUSH_PLATFORMS) }))
+    .input(
+      z.object({
+        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+        tenantId: z.string().optional(),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       return getMessengerPushWindow({
         platform: input.platform,
         serverDB: ctx.serverDB,
+        tenantId: input.tenantId,
         userId: ctx.userId,
       });
     }),
@@ -835,16 +845,84 @@ export const messengerRouter = router({
    */
   sendMessengerPush: messengerProcedure
     .input(
-      z.object({
-        content: z.string().trim().min(1).max(2000),
-        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
-      }),
+      z
+        .object({
+          // Attachments are referenced by `fileId` only — deliberately NOT the
+          // `attachmentsInputSchema` shape from botMessage.ts, which also
+          // accepts `data` / `fetchUrl`. The platform senders materialize
+          // `fetchUrl` with a server-side `fetch`, so accepting one here would
+          // let any authenticated caller aim that fetch at an internal address
+          // and have the response uploaded into their own DM. Every field the
+          // senders need is read from the owned file row below instead.
+          attachments: z
+            .array(
+              z.object({
+                fileId: z.string().min(1),
+                type: z.enum(['image', 'file', 'video', 'audio']),
+              }),
+            )
+            .max(10)
+            .optional(),
+          content: z.string().trim().max(MESSENGER_PUSH_CONTENT_MAX_LENGTH).optional(),
+          // What to do with an image the platform will not take at full size.
+          // Absent means `compress` — the behavior before the choice existed.
+          oversizeImageStrategy: z.enum(['compress', 'link']).optional(),
+          platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+          tenantId: z.string().optional(),
+        })
+        .refine((value) => !!value.content || !!value.attachments?.length, {
+          message: 'Either content or attachments is required',
+        }),
     )
     .mutation(async ({ input, ctx }) => {
+      let attachments: BotMessageAttachment[] | undefined;
+
+      // Resolve each `fileId` server-side. Two reasons the URL is not taken
+      // from the client: a client-held storage URL is a presigned snapshot
+      // that expires (typically 2h), so by the time the platform sender
+      // fetches it the download can 403 and the attachment silently degrades
+      // to a text-only message; and an arbitrary caller-supplied URL would
+      // turn the sender's `fetch` into an SSRF primitive. `getFileAccessUrl`
+      // returns the stable anonymous file-proxy URL in production (storage URL
+      // in dev), and the ownership-scoped lookup keeps callers from attaching
+      // other users' files. Name and MIME type come from the same owned row.
+      if (input.attachments?.length) {
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+        const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
+
+        attachments = await Promise.all(
+          input.attachments.map(async (attachment) => {
+            const file = await fileModel.findById(attachment.fileId);
+            if (!file) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+            }
+
+            return {
+              fetchUrl: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+              // Built here from a row this caller was checked to own, so the
+              // outbound guard may accept our own configured origins for it —
+              // which self-hosted storage and dev (localhost storage URL) need.
+              trustedUrl: true,
+              mimeType: file.fileType,
+              name: file.name,
+              // Byte size from the owned row — the send path uses it to apply
+              // per-platform budgets (compress / degrade-to-link) without
+              // having to download URL-sourced attachments first.
+              size: file.size,
+              type: attachment.type,
+            };
+          }),
+        );
+      }
+
       return sendMessengerPush({
+        attachments,
         content: input.content,
+        oversizeImageStrategy: input.oversizeImageStrategy,
         platform: input.platform,
         serverDB: ctx.serverDB,
+        tenantId: input.tenantId,
         userId: ctx.userId,
       });
     }),
@@ -962,6 +1040,15 @@ export const messengerRouter = router({
         })),
     );
 
+    // Telegram is deliberately absent here even though the account link makes it
+    // reachable. This list doubles as send-target discovery for the client tool
+    // adapter, which resolves a per-agent `botId` from `platform` and ignores
+    // `messengerInstallationId` — the client adapter cannot route sends through a System Bot installation. Surfacing the synthetic
+    // singleton would turn a clean "I can't reach Telegram" into a confusing
+    // `No enabled bot found for platform "telegram"` for anyone who linked the
+    // System Bot but has no per-agent Telegram provider. Reaching the user
+    // themselves does not need this list at all — that is `sendMessengerPush`,
+    // which routes through the account link directly.
     return [...installationViews, ...wechatViews];
   }),
 

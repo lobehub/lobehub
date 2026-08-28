@@ -11,7 +11,16 @@ const agentMeta: RouteMeta = { icon: MessageSquare, titleKey: 'navigation.chat' 
 
 const fixtureRoutes: RouteObject[] = [
   {
-    children: [{ handle: { meta: agentMeta }, path: 'agent/:aid' }, { path: 'group/:gid' }],
+    children: [
+      {
+        handle: {
+          meta: { tabTitleKey: 'navigation.home', titleKey: 'navigation.home' },
+        },
+        index: true,
+      },
+      { handle: { meta: agentMeta }, path: 'agent/:aid' },
+      { path: 'group/:gid' },
+    ],
     path: '/',
   },
 ];
@@ -89,6 +98,11 @@ describe('resolveTab', () => {
   it('falls back to the static titleKey when no snapshot exists', () => {
     const resolved = resolveTab(fixtureRoutes, tab('/agent/abc'), false, t);
     expect(resolved.meta.title).toBe('navigation.chat');
+  });
+
+  it('uses Home as the Electron tab title for the Home route', () => {
+    const resolved = resolveTab(fixtureRoutes, tab('/'), false, t);
+    expect(resolved.meta.title).toBe('navigation.home');
   });
 
   it('uses the generic fallback when neither snapshot nor static meta exists', () => {

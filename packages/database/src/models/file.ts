@@ -1,5 +1,5 @@
 import type { QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, SortType } from '@lobechat/types';
+import { FilesTabs, LIBRARY_HIDDEN_FILE_SOURCES, SortType } from '@lobechat/types';
 import {
   and,
   asc,
@@ -12,7 +12,9 @@ import {
   like,
   ne,
   notExists,
+  notInArray,
   or,
+  sql,
   sum,
 } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
@@ -35,6 +37,7 @@ import {
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -222,6 +225,39 @@ export class FileModel {
     return await (trx ? executeInTransaction(trx) : this.db.transaction(executeInTransaction));
   };
 
+  /**
+   * Delete a transient upload only while no persisted message or session references it.
+   * Locking the file row serializes this cleanup with foreign-key inserts, so a late send either
+   * wins ownership and preserves the file or observes the deletion and fails atomically.
+   */
+  deleteUnreferenced = async (id: string, removeGlobalFile: boolean = true) => {
+    return this.db.transaction(async (trx) => {
+      const [file] = await trx
+        .select({ id: files.id })
+        .from(files)
+        .where(and(eq(files.id, id), this.ownership()))
+        .limit(1)
+        .for('update');
+      if (!file) return;
+
+      const [messageReference] = await trx
+        .select({ id: messagesFiles.fileId })
+        .from(messagesFiles)
+        .where(eq(messagesFiles.fileId, id))
+        .limit(1);
+      if (messageReference) return;
+
+      const [sessionReference] = await trx
+        .select({ id: filesToSessions.fileId })
+        .from(filesToSessions)
+        .where(eq(filesToSessions.fileId, id))
+        .limit(1);
+      if (sessionReference) return;
+
+      return this.delete(id, removeGlobalFile, trx);
+    });
+  };
+
   deleteGlobalFile = async (hashId: string) => {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
   };
@@ -330,9 +366,16 @@ export class FileModel {
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     callerAgentVisibility,
+    excludeKnowledgeBaseIds,
     visibility,
   }: QueryFileListParams & {
     callerAgentVisibility?: 'private' | 'public' | null;
+    /**
+     * Server-derived list of restricted knowledge bases the caller may not
+     * browse. Files linked to these KBs are dropped from cross-KB listings;
+     * never populated from client input.
+     */
+    excludeKnowledgeBaseIds?: string[];
     visibility?: 'private' | 'public';
   } = {}) => {
     // 1. Build where clause
@@ -340,17 +383,17 @@ export class FileModel {
       q ? ilike(files.name, `%${q}%`) : undefined,
       this.ownership(callerAgentVisibility),
       visibility ? eq(files.visibility, visibility) : undefined,
+      // Artifacts owned by another surface (acceptance evidence) stay reachable
+      // by id, but never appear in a listing. Applied here rather than in
+      // `ownership()` so single-row reads and deletes still resolve them.
+      or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-      const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-      if (Array.isArray(fileTypePrefix)) {
-        // For multiple file types (e.g., Documents includes 'application' and 'custom')
-        whereClause = and(
-          whereClause,
-          or(...fileTypePrefix.map((prefix) => ilike(files.fileType, `${prefix}%`))),
-        );
-      } else {
-        whereClause = and(whereClause, ilike(files.fileType, `${fileTypePrefix}%`));
+      const categoryFilter = buildFileCategoryFilter(files.fileType, category as FilesTabs);
+      if (categoryFilter === 'none') {
+        whereClause = and(whereClause, sql`false`);
+      } else if (categoryFilter !== 'all') {
+        whereClause = and(whereClause, categoryFilter);
       }
     }
 
@@ -414,6 +457,25 @@ export class FileModel {
         whereClause,
         notExists(
           this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, files.id)),
+        ),
+      );
+    }
+    // Cross-KB listing: drop files linked to restricted knowledge bases. A file
+    // that also belongs to an open KB is still dropped — over-hiding beats
+    // leaking a restricted KB's content through a shared membership.
+    else if (excludeKnowledgeBaseIds?.length) {
+      whereClause = and(
+        whereClause,
+        notExists(
+          this.db
+            .select()
+            .from(knowledgeBaseFiles)
+            .where(
+              and(
+                eq(knowledgeBaseFiles.fileId, files.id),
+                inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKnowledgeBaseIds),
+              ),
+            ),
         ),
       );
     }
@@ -612,32 +674,6 @@ export class FileModel {
           eq(files.visibility, fromVisibility),
         ),
       );
-  };
-
-  /**
-   * get the corresponding file type prefix according to FilesTabs
-   */
-  private getFileTypePrefix = (category: FilesTabs): string | string[] => {
-    switch (category) {
-      case FilesTabs.Audios: {
-        return 'audio';
-      }
-      case FilesTabs.Documents: {
-        return ['application', 'custom'];
-      }
-      case FilesTabs.Images: {
-        return 'image';
-      }
-      case FilesTabs.Videos: {
-        return 'video';
-      }
-      case FilesTabs.Websites: {
-        return 'text/html';
-      }
-      default: {
-        return '';
-      }
-    }
   };
 
   findByNames = async (fileNames: string[]) =>

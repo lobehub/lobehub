@@ -1,5 +1,17 @@
 import type { HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
-import { Amp, ClaudeCode, Codex, OpenCode } from '@lobehub/icons';
+import {
+  Amp,
+  ClaudeCode,
+  CodeBuddy,
+  Codex,
+  Cursor,
+  Grok,
+  Kimi,
+  OpenCode,
+  Pi,
+  Qoder,
+  Trae,
+} from '@lobehub/icons';
 import { createElement } from 'react';
 
 import type { RecommendedAction } from './types';
@@ -7,8 +19,15 @@ import type { RecommendedAction } from './types';
 const avatarIcons = {
   'amp': Amp.Avatar,
   'claude-code': ClaudeCode.Avatar,
+  'codebuddy': CodeBuddy.Avatar,
   'codex': Codex.Avatar,
+  'cursor': Cursor.Avatar,
+  'grok-build': Grok.Avatar,
+  'kimi-code': Kimi.Avatar,
   'opencode': OpenCode.Avatar,
+  'pi': Pi.Avatar,
+  'qoder': Qoder.Avatar,
+  'trae': Trae.Avatar,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
 
 /**
@@ -26,11 +45,6 @@ export const buildHeteroAgentAction = (
     descriptionKey: 'recommendations.heteroAgent.description',
     execute: (ctx) => ctx.createHeteroAgent(config),
     i18nValues: { name: config.title },
-    icon: createElement(Avatar, {
-      shape: 'square',
-      size: 28,
-      style: { borderRadius: 8 },
-    }),
     id: `hetero-agent:${config.type}`,
     isEligible: (ctx) => {
       if (!ctx.isDesktop) return false;
@@ -38,6 +52,12 @@ export const buildHeteroAgentAction = (
       return !ctx.agents.some((a) => a.heterogeneousType === config.type);
     },
     priority: 10,
+    renderIcon: (size) =>
+      createElement(Avatar, {
+        shape: 'square',
+        size,
+        style: { borderRadius: 8 },
+      }),
     tagKey: 'recommendations.heteroAgent.tag',
     titleKey: 'recommendations.heteroAgent.title',
   };

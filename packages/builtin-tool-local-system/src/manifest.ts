@@ -86,7 +86,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           scope: {
             description:
-              'Working directory scope. Limits the search to this directory. If you are searching the current project or are unsure, use "." for the current working directory. Use a specific path when the user names one explicitly.',
+              "Working directory scope. Limits the search to this directory. Omit to default to the user's workspace directory. Use a specific path when the user names one explicitly.",
             type: 'string',
           },
           limit: {
@@ -190,7 +190,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 30_000,
       description:
-        'Perform exact string replacements in files. Must read the file first before editing.',
+        'Perform exact string replacements in files. Must read the file first before editing. old_string must match exactly once unless replace_all is set.',
       humanIntervention: {
         dynamic: {
           default: 'never',
@@ -210,7 +210,8 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             type: 'string',
           },
           old_string: {
-            description: 'The exact text to replace',
+            description:
+              'The exact text to replace. Must be unique in the file — include surrounding lines to disambiguate — unless replace_all is true',
             type: 'string',
           },
           replace_all: {
@@ -390,7 +391,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           scope: {
             description:
-              'Working directory scope. When `pattern` is relative, it is joined with this scope. If you are searching the current project or are unsure, use "." for the current working directory. Use a specific path when the user names one explicitly.',
+              "Working directory scope. When `pattern` is relative, it is joined with this scope. Omit to default to the user's workspace directory. Use a specific path when the user names one explicitly.",
             type: 'string',
           },
         },

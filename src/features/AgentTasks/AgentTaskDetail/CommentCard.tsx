@@ -1,21 +1,11 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import { LexicalRenderer } from '@lobehub/editor/renderer';
-import {
-  ActionIcon,
-  Avatar,
-  Block,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
@@ -67,13 +57,17 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
     [activity.content, activity.editorData],
   );
 
-  const handleEdit = useCallback(() => {
-    // Seed URL→fileId map so attachments serialize back to fileIds on save.
+  useEffect(() => {
     if (activity.files && activity.files.length > 0) {
-      seedAttachments(activity.files.map((f) => ({ id: f.id, url: f.url })));
+      seedAttachments(
+        activity.files.map((f) => ({ downloadUrl: f.downloadUrl, id: f.id, url: f.url })),
+      );
     }
-    setIsEditing(true);
   }, [activity.files]);
+
+  const handleEdit = useCallback(() => {
+    setIsEditing(true);
+  }, []);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);

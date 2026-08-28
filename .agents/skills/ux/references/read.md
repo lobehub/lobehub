@@ -283,6 +283,16 @@ resolved-empty. Once the user manually picks a tab, that choice wins and sticks 
 them off it. Pairs with §1.1: the empty state is the fallback _within_ a view; this rule
 is about not landing on that empty view when a better one exists.
 
+A data-aware shortcut must not erase the stable **hub** behind it. Auto-opening the only
+record can save one click, but if every visit to the collection URL redirects into that record,
+the user loses collection-level actions (create the second item, compare, search, manage) and a
+breadcrumb back becomes a loop. Keep the hub reachable, or preserve every collection-level
+action in the detail surface.
+
+> ❌ **Self-evolving expertise** redirects `/self-learning` to the sole expertise on every
+> visit, while Create exists only on the empty hub. After the first expertise is created, the
+> user cannot return to the hub or create a second one (`SelfLearning/index.tsx`).
+
 > ✅ Opening a document page by clicking a **skill** lands the right panel on the **Skills** tab; a plain document lands on **Documents**.
 > ✅ An agent with only skills (no documents) opens the panel on **Skills** instead of an empty **Documents** tab.
 
@@ -292,6 +302,7 @@ is about not landing on that empty view when a better one exists.
 - [ ] Falls back to a populated view when the default would be empty. _(Certainty)_
 - [ ] Default decided from resolved state, not mid-load. _(Certainty)_
 - [ ] A manual pick is tracked separately and sticks. _(Natural)_
+- [ ] A data-aware shortcut never makes the collection hub or its collection-level actions unreachable. _(Meaningful・Growth)_
 
 ## 1.7 Live / polling streams・Certainty・Natural
 
@@ -446,7 +457,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 > inside `Accordion` groups via one shared `GroupedAccordion` engine (by-project / by-status /
 > by-time), `Block variant='filled'` for the active row, and spacing as `Flexbox` / `Block`
 > props — every row aligns to its highlight and matches every other panel in the app.
-> ❌ **Verify report sidebar** (`features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
+> ❌ **Verify report sidebar** (the since-removed `features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
 > entire panel: a raw grid `<div className={styles.item}>` row with `data-active` +
 > `colorFillSecondary` (instead of `NavItem` / `Block variant`), a bordered `<label>` + `<input>`
 > search box, a raw `<input>` inline-rename, an `opacity`-toggled action reveal re-implemented in
@@ -460,6 +471,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 - [ ] Grouping at scale reuses `Accordion` / `GroupedAccordion` (by-project / status / time), not a flat ungrouped dump once the list grows past a screen. _(Natural)_
 - [ ] Search box, inline-rename, and row actions reuse the shared input / editing / action-reveal patterns, not raw `<input>` / `<label>` + hand CSS. _(Certainty)_
 - [ ] Spacing/padding expressed as `Flexbox` / `Block` `gap` / `padding` props (inherits the sidebar rhythm), not hand-picked px constants. _(Natural)_
+
 ## 1.11 A persistent composer above a list must not bury the records・Meaningful・Natural
 
 A list surface with an **always-visible create / compose affordance above the records** (an
@@ -519,3 +531,34 @@ label** (ranked where it belongs), or relabel the shared group so it's true for 
 
 - [ ] A status group/label is true for **every** member — no folding a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts a different one (running/in-progress). _(Certainty)_
 - [ ] The distinct state gets its own group/label (ranked appropriately), or the shared label is neutral enough to be true for both. _(Meaningful)_
+
+## 1.13 Quoted documents fold to a titled row, not a height-cropped preview・Natural・Meaningful
+
+When a surface embeds **someone else's document** as material (an evidence write-up, a log,
+an attached report, a quoted spec), two things go wrong if it renders inline like the page's
+own prose. First, **disclosure**: a "show the first N px + expand" fold assumes the opening
+lines are a summary — true for chat prose, false for structured documents, which open with
+headings and environment metadata. The cropped preview then spends a card of vertical space
+on the document's _least_ informative part, cut mid-sentence behind a fade — pure noise. The
+reader's real choice is binary: read this artifact now, or skip it. Serve that choice with a
+**one-line titled row (first meaningful line, markdown-stripped, as the label) that expands
+to the full text** — never a partial bleed. Second, **subordination**: quoted material must
+not share the host page's typographic scale. Un-contained, the document's own `##` headings
+render larger than the host's section titles and masquerade as page structure. Give it a
+quiet container and a capped heading scale (`headerMultiple` near 0) so it reads as quoted
+material, not as the page.
+
+> ✅ Each prose evidence folds to one quiet row labeled by its first line (" 声明 — 验收页的音
+> 频证据应复用对话播放器 "); expanding shows the full text in a contained block whose headings
+> stay body-sized. Two artifacts = two rows; need it → expand, don't → one line each.
+> ❌ Acceptance check evidence rendered bare `Markdown` folded at 180px behind a `MaskShadow`
+> (`MarkdownEvidence.tsx`, pre-fix): the preview showed only the document's opening headings
+> ("环境: worktree…") cut by a fade whose `size={32}` was actually **32%** (the prop is a
+> percentage, not px), masking a third of the window to blank; the evidence's `#` headings
+> rendered bigger than the check's own title, so quoted content read as page structure.
+
+**Checklist**
+
+- [ ] An embedded document folds to a **titled row** (first meaningful line as label) that expands to full text — no first-N-px cropped preview with a fade. _(Natural)_
+- [ ] Quoted/embedded content is visually subordinated: a quiet container + capped heading scale, never sharing the host page's typographic hierarchy. _(Meaningful)_
+- [ ] A mask/fade helper's `size` unit is verified against its implementation (px vs %) before shipping — a wrong unit blanks real content. _(Certainty)_

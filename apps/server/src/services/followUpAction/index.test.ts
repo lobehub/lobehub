@@ -94,7 +94,9 @@ describe('FollowUpActionService.extract', () => {
       }),
       expect.objectContaining({
         tracing: expect.objectContaining({
+          promptVersion: 'v1.0',
           scenario: 'follow_up',
+          schemaName: 'follow_up_suggestions',
           topicId: TEST_TOPIC,
         }),
       }),

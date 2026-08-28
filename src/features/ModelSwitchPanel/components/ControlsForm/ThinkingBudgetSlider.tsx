@@ -1,7 +1,8 @@
 import { Flexbox, InputNumber } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
+
+import DiscreteSlider from '@/components/DiscreteSlider';
 
 // Define special value mappings
 const SPECIAL_VALUES = {
@@ -89,31 +90,19 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
 
     const inputStep = useMemo(() => getStepForValue(budget), [budget]);
 
-    const marks = useMemo(() => {
-      return {
-        0: 'Auto',
-        1: 'OFF',
-        2: '128',
-        3: '512',
-        4: '1K',
-        5: '2K',
-        6: '4K',
-        7: '8K',
-        8: '16K',
-        9: '24K',
-        10: '32K',
-      };
-    }, []);
+    const options = useMemo(
+      () =>
+        ['Auto', 'OFF', '128', '512', '1K', '2K', '4K', '8K', '16K', '24K', '32K'].map(
+          (label, value) => ({ label, value }),
+        ),
+      [],
+    );
 
     return (
       <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
         <Flexbox flex={1}>
-          <Slider
-            marks={marks}
-            max={10}
-            min={0}
-            step={null}
-            tooltip={{ open: false }}
+          <DiscreteSlider
+            options={options}
             value={sliderPosition}
             onChange={updateWithSliderPosition}
           />

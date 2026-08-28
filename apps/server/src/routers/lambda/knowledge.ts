@@ -11,6 +11,11 @@ import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { type FileListItem } from '@/types/files';
 import { QueryFileListSchema } from '@/types/files';
 
+import {
+  assertKnowledgeBaseBrowsable,
+  getRestrictedKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
+
 const knowledgeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -29,7 +34,12 @@ const knowledgeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
 
 export const knowledgeRouter = router({
   getKnowledgeItems: knowledgeProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
-    const knowledgeItems = await ctx.knowledgeRepo.query(input);
+    const excludeKnowledgeBaseIds = input.knowledgeBaseId
+      ? undefined
+      : await getRestrictedKnowledgeBaseIds(ctx);
+    if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+
+    const knowledgeItems = await ctx.knowledgeRepo.query({ ...input, excludeKnowledgeBaseIds });
 
     // Process files (add chunk info and async task status)
     const fileItems = knowledgeItems.filter((item) => item.sourceType === 'file');

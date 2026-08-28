@@ -16,7 +16,7 @@ const useVideoSidebarProps = (): GenerationLayoutCommonProps => {
     breadcrumb: [{ href: '/video', title: t('tab.video') }],
     generationTopicsSelector: generationTopicSelectors.generationTopics,
     namespace: 'video',
-    navKey: 'image',
+    navKey: 'video',
     useStore: useVideoStore,
     viewModeStatusKey: 'videoTopicViewMode',
   };

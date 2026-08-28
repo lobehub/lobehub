@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { claudeCodeExecutor, codexExecutor, openCodeExecutor } from '../heteroCli';
+import {
+  claudeCodeExecutor,
+  codexExecutor,
+  grokBuildExecutor,
+  kimiCodeExecutor,
+  openCodeExecutor,
+  piExecutor,
+  qoderExecutor,
+  traeExecutor,
+} from '../heteroCli';
 
 const detectMocks = vi.hoisted(() => ({
   recordGitCommandEffects: vi.fn(),
@@ -29,10 +38,17 @@ describe('heteroCli executors', () => {
   it('registers the CLI adapter identifiers and exposes no invokable APIs', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
+    expect(grokBuildExecutor.identifier).toBe('grok-build');
+    expect(kimiCodeExecutor.identifier).toBe('kimi-code');
     expect(openCodeExecutor.identifier).toBe('opencode');
+    expect(piExecutor.identifier).toBe('pi');
+    expect(qoderExecutor.identifier).toBe('qoder');
+    expect(traeExecutor.identifier).toBe('trae');
     // Empty apiEnum → never treated as an invokable client tool.
     expect(claudeCodeExecutor.hasApi('Bash')).toBe(false);
     expect(claudeCodeExecutor.getApiNames()).toEqual([]);
+    expect(grokBuildExecutor.hasApi('execute')).toBe(false);
+    expect(grokBuildExecutor.getApiNames()).toEqual([]);
   });
 
   it('records the worktree for a successful shell call, keyed by the run topic', async () => {
@@ -59,6 +75,22 @@ describe('heteroCli executors', () => {
     });
   });
 
+  it('observes Grok Build execute calls for worktree side effects', async () => {
+    await grokBuildExecutor.onAfterCall!(
+      call({
+        apiName: 'execute',
+        identifier: 'grok-build',
+        params: { command: 'git worktree add /tmp/grok-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/grok-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
   it('observes OpenCode bash calls for worktree side effects', async () => {
     await openCodeExecutor.onAfterCall!(
       call({
@@ -70,6 +102,53 @@ describe('heteroCli executors', () => {
 
     expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: 'git worktree add /tmp/opencode-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Kimi Code Shell calls for worktree side effects', async () => {
+    await kimiCodeExecutor.onAfterCall!(
+      call({
+        apiName: 'Shell',
+        identifier: 'kimi-code',
+        params: { command: 'git worktree add /tmp/kimi-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/kimi-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Pi bash calls for worktree side effects', async () => {
+    await piExecutor.onAfterCall!(
+      call({
+        apiName: 'bash',
+        identifier: 'pi',
+        params: { command: 'git worktree add /tmp/pi-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/pi-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Qoder Bash calls for worktree side effects', async () => {
+    await qoderExecutor.onAfterCall!(
+      call({
+        identifier: 'qoder',
+        params: { command: 'git worktree add /tmp/qoder-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/qoder-wt',
       resultContent: '',
       topicId: 't1',
     });

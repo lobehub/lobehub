@@ -147,7 +147,12 @@ describe('executeDeviceRpc', () => {
       status: 'success' as const,
       updatedAt: 1,
     }));
-    const params = { command: '/custom/opencode', cwd: root, type: 'opencode' as const };
+    const params = {
+      args: ['--feature=test'],
+      command: '/custom/traecli',
+      cwd: root,
+      type: 'trae' as const,
+    };
 
     const result = await executeDeviceRpc('listHeterogeneousAgentModels', params, deps);
 

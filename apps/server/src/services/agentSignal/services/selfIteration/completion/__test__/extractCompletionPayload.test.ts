@@ -22,7 +22,7 @@ const buildState = (metadata: Record<string, unknown>, extra: Record<string, unk
 
 const reviewMetadata = {
   agentId: 'agent_user_1',
-  agentSignal: { kind: 'nightly-review', sourceId: 'src_1' },
+  agentSignal: { agentId: 'agent_user_1', kind: 'nightly-review', sourceId: 'src_1' },
   userId: 'user_1',
 };
 
@@ -52,6 +52,7 @@ describe('extractSelfIterationCompletionPayload', () => {
     );
 
     expect(result?.marker.kind).toBe('nightly-review');
+    expect(result?.marker.agentId).toBe('agent_user_1');
     expect(result?.userId).toBe('user_1');
     expect(result?.mutations).toHaveLength(1);
     expect(result?.mutations[0].apiName).toBe('createSelfReviewProposal');

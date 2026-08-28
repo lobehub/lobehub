@@ -1,7 +1,9 @@
-import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatInputNotice } from './useChatInputNotice';
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 
 interface TestModel {
   abilities?: {
@@ -15,6 +17,12 @@ interface TestProviderWithModels {
   id: string;
 }
 
+interface TestBuiltinModel {
+  id: string;
+  providerId: string;
+  type: 'chat';
+}
+
 const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as
@@ -25,16 +33,27 @@ const testState = vi.hoisted(() => ({
   },
   /** Effective (override-resolved) selection, as `useAgentModelSelection` returns it. */
   agentModelSelection: {
+    canSelectModel: true,
     isPreferenceLoading: false,
     model: undefined as string | undefined,
     provider: undefined as string | undefined,
+    selectModel: vi.fn(async () => {}),
     selectionPolicy: 'fixed' as 'fixed' | 'member',
   },
   aiInfra: {
+    builtinAiModelList: [] as TestBuiltinModel[],
     enabledChatModelList: [] as TestProviderWithModels[],
+    enabledAiProviders: [] as { id: string }[],
     isInitAiProviderRuntimeState: false,
+    modelRedirects: {} as Record<string, string>,
+    toggleProviderEnabled: vi.fn(async () => {}),
+    toggleProviderModelEnabled: vi.fn(async () => {}),
   },
   isDesktop: false,
+  permission: {
+    canManageAiInfra: true,
+    reason: undefined as string | undefined,
+  },
   resourceAccess: {
     canConfigureResource: true,
     isAccessLoading: false,
@@ -53,17 +72,21 @@ vi.mock('@lobechat/const', () => ({
   },
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: toastError } }));
+
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
   useAgentId: () => 'agent-id',
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
   useAgentModelSelection: () => ({
+    canSelectModel: testState.agentModelSelection.canSelectModel,
     isPreferenceLoading: testState.agentModelSelection.isPreferenceLoading,
     // Default to the shared agent config, matching `resolveAgentModelConfig`
     // when there is no member override.
     model: testState.agentModelSelection.model ?? testState.agent.model,
     provider: testState.agentModelSelection.provider ?? testState.agent.provider,
+    selectModel: testState.agentModelSelection.selectModel,
     selectionPolicy: testState.agentModelSelection.selectionPolicy,
   }),
 }));
@@ -74,6 +97,13 @@ vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
 
 vi.mock('@/hooks/useEnabledChatModels', () => ({
   useEnabledChatModels: () => testState.aiInfra.enabledChatModelList,
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({
+    allowed: testState.permission.canManageAiInfra,
+    reason: testState.permission.reason,
+  }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -98,20 +128,34 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 
 describe('useChatInputNotice', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
     testState.agent.isConfigLoading = false;
     testState.agentModelSelection = {
+      canSelectModel: true,
       isPreferenceLoading: false,
       model: undefined,
       provider: undefined,
+      selectModel: vi.fn(async () => {}),
       selectionPolicy: 'fixed',
     };
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
+    testState.aiInfra.builtinAiModelList = [];
     testState.aiInfra.enabledChatModelList = [];
+    testState.aiInfra.enabledAiProviders = [];
     testState.aiInfra.isInitAiProviderRuntimeState = false;
+    testState.aiInfra.modelRedirects = {};
+    testState.aiInfra.toggleProviderEnabled.mockReset();
+    testState.aiInfra.toggleProviderModelEnabled.mockReset();
+    toastError.mockReset();
     testState.isDesktop = false;
+    testState.permission.canManageAiInfra = true;
+    testState.permission.reason = undefined;
     testState.resourceAccess = {
       canConfigureResource: true,
       isAccessLoading: false,
@@ -154,7 +198,9 @@ describe('useChatInputNotice', () => {
     expect(result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
   });
 
-  it('returns the agent use-only notice when a gated member can use but not edit', () => {
+  it('stays silent for a gated member who can use but not edit the agent', () => {
+    // The use-only permission is explained on the controls it actually locks
+    // (model trigger / device chip), not as a standing banner.
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
@@ -170,10 +216,10 @@ describe('useChatInputNotice', () => {
 
     const { result } = renderHook(() => useChatInputNotice());
 
-    expect(result.current).toEqual({ key: 'input.useOnlyAgent', type: 'info' });
+    expect(result.current).toBeUndefined();
   });
 
-  it('returns the group use-only notice in group context', () => {
+  it('stays silent for a gated member in group context', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
@@ -189,10 +235,10 @@ describe('useChatInputNotice', () => {
 
     const { result } = renderHook(() => useChatInputNotice());
 
-    expect(result.current).toEqual({ key: 'input.useOnlyGroup', type: 'info' });
+    expect(result.current).toBeUndefined();
   });
 
-  it('lets the model warning outrank the use-only note', () => {
+  it('still warns about an unavailable model for a use-only member', () => {
     testState.resourceAccess = {
       canConfigureResource: false,
       isAccessLoading: false,
@@ -209,67 +255,6 @@ describe('useChatInputNotice', () => {
     expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
   });
 
-  it('does not flash the use-only note while the access request is in flight', () => {
-    testState.resourceAccess = {
-      canConfigureResource: false,
-      isAccessLoading: true,
-      isAccessResolved: true,
-      canUseResource: true,
-      isGroupContext: false,
-      isResourceGated: true,
-    };
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useChatInputNotice());
-
-    expect(result.current).toBeUndefined();
-  });
-
-  it('does not show the use-only note when the access request errored (unresolved)', () => {
-    // getGeneralAccess failed: not loading, no data — canUseResource stays
-    // permissive, but positive use-only messaging must not fire for an editor.
-    testState.resourceAccess = {
-      canConfigureResource: false,
-      isAccessLoading: false,
-      isAccessResolved: false,
-      canUseResource: true,
-      isGroupContext: false,
-      isResourceGated: true,
-    };
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useChatInputNotice());
-
-    expect(result.current).toBeUndefined();
-  });
-
-  it('does not show the use-only note on ungated (private/home) inputs', () => {
-    // e.g. a member without edit_own_content on their own private agent —
-    // General access does not gate it, so no workspace note applies.
-    testState.resourceAccess = {
-      canConfigureResource: false,
-      isAccessLoading: false,
-      isAccessResolved: true,
-      canUseResource: true,
-      isGroupContext: false,
-      isResourceGated: false,
-    };
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useChatInputNotice());
-
-    expect(result.current).toBeUndefined();
-  });
-
   it('does not return a notice before the model runtime config is ready', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
@@ -282,6 +267,132 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
+  });
+
+  it('offers to enable a model that still exists but is disabled', async () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+    testState.aiInfra.enabledChatModelList = [{ children: [{ id: 'gpt-4.1' }], id: 'openai' }];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toMatchObject({
+      action: 'enableModel',
+      actionLoading: false,
+      key: 'input.modelDisabled',
+      type: 'warning',
+    });
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderEnabled).not.toHaveBeenCalled();
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+  });
+
+  it('disables Enable with the permission reason when the member cannot manage AI infrastructure', () => {
+    testState.permission.canManageAiInfra = false;
+    testState.permission.reason = 'Requires admin permission';
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+    testState.aiInfra.enabledChatModelList = [{ children: [{ id: 'gpt-4.1' }], id: 'openai' }];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({
+      action: 'enableModel',
+      actionDisabled: true,
+      actionDisabledReason: 'Requires admin permission',
+      actionLoading: false,
+      key: 'input.modelDisabled',
+      onAction: undefined,
+      type: 'warning',
+    });
+  });
+
+  it('enables the owning provider before enabling its disabled model', async () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderEnabled).toHaveBeenCalledWith('openai', true);
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+  });
+
+  it('treats a disabled model as unavailable when a locked selection would require a provider fallback', () => {
+    testState.agent.provider = 'removed-provider';
+    testState.agentModelSelection.canSelectModel = false;
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
+  });
+
+  it('enables and selects a fallback provider when the selection is editable', async () => {
+    testState.agent.provider = 'removed-provider';
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderEnabled).toHaveBeenCalledWith('openai', true);
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+    expect(testState.agentModelSelection.selectModel).toHaveBeenCalledWith({
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+  });
+
+  it('reports a provider selection failure separately after enabling the fallback model', async () => {
+    const selectionError = new Error('selection failed');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    testState.agent.provider = 'removed-provider';
+    testState.agentModelSelection.selectModel = vi.fn(async () => {
+      throw selectionError;
+    });
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringMatching(/selectionFailed|switching providers failed/),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to select the enabled chat model provider:',
+      selectionError,
+    );
   });
 
   it('does not return unavailable model copy while the agent config is still loading', () => {

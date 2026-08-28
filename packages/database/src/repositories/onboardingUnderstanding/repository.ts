@@ -1,8 +1,10 @@
 import type {
   CollectionError,
   ConfirmOnboardingUnderstandingInput,
+  OnboardingSessionSnapshot,
   OnboardingUnderstandingMessageMetadata,
   OnboardingUnderstandingSession,
+  UnderstandingPersonaProposal,
   UnderstandingProviderState,
 } from '@lobechat/types';
 import {
@@ -71,6 +73,7 @@ export class UnderstandingPreconditionError extends Error {
       | 'result_not_confirmable'
       | 'session_confirmed'
       | 'source_not_retryable'
+      | 'detailed_writing_not_active'
       | 'writing_not_active',
   ) {
     super(`Onboarding Understanding precondition failed: ${reason}`);
@@ -105,11 +108,16 @@ interface PrepareWritingInput {
 }
 
 interface ExtendSessionInput {
-  expectedFeedbackRevision: number;
+  expectedFeedbackRevision?: number;
   feedback?: string;
   providerIds: string[];
   sessionId: string;
   topicId: string;
+}
+
+interface ExtendSessionResult {
+  attempts: Array<{ id: string; revision: number }>;
+  session: OnboardingUnderstandingSession;
 }
 
 interface CommitWritingInput {
@@ -132,7 +140,26 @@ interface FailWritingInput {
   topicId: string;
 }
 
+interface CommitDetailedWritingInput {
+  detailedPersona: UnderstandingPersonaProposal;
+  feedbackRevision: number;
+  generationRevision: number;
+  sessionId: string;
+  sourceFingerprint: string;
+  topicId: string;
+}
+
+interface FailDetailedWritingInput {
+  error: CollectionError;
+  feedbackRevision: number;
+  generationRevision: number;
+  sessionId: string;
+  sourceFingerprint: string;
+  topicId: string;
+}
+
 interface SessionMutation<Result> {
+  clearTaskRecommendations?: boolean;
   nextSession: OnboardingUnderstandingSession | undefined;
   result: Result;
   write: boolean;
@@ -235,6 +262,7 @@ const mutateTopicSession = async <Result>(
   topicId: string,
   mutate: (
     session: OnboardingUnderstandingSession | undefined,
+    onboardingSession: OnboardingSessionSnapshot,
   ) => Promise<SessionMutation<Result>> | SessionMutation<Result>,
 ): Promise<Result> => {
   const [topic] = await tx
@@ -247,7 +275,7 @@ const mutateTopicSession = async <Result>(
   if (!onboardingSession) throw new UnderstandingSessionNotFoundError(topicId);
   const persisted = onboardingSession.understanding;
   const session = persisted ? parseSession(persisted) : undefined;
-  const mutation = await mutate(session);
+  const mutation = await mutate(session, onboardingSession);
 
   if (mutation.write) {
     await tx
@@ -257,6 +285,7 @@ const mutateTopicSession = async <Result>(
           ...topic.metadata,
           onboardingSession: {
             ...onboardingSession,
+            ...(mutation.clearTaskRecommendations ? { taskRecommendations: undefined } : {}),
             understanding: mutation.nextSession
               ? parseSession(mutation.nextSession)
               : mutation.nextSession,
@@ -307,7 +336,7 @@ export class OnboardingUnderstandingRepository {
     providerIds,
     sessionId,
     topicId,
-  }: ExtendSessionInput): Promise<OnboardingUnderstandingSession> => {
+  }: ExtendSessionInput): Promise<ExtendSessionResult> => {
     providerIds.forEach(assertProviderId);
     return this.db.transaction((tx) =>
       mutateTopicSession(tx, this.userId, topicId, (persisted) => {
@@ -316,16 +345,44 @@ export class OnboardingUnderstandingRepository {
 
         const trimmedFeedback = feedback?.trim();
         const currentFeedback = session.feedback ?? { revision: 0, turns: [] };
-        if (currentFeedback.revision !== expectedFeedbackRevision) {
-          throw new StaleUnderstandingRevisionError('feedback', expectedFeedbackRevision);
+        if (trimmedFeedback && currentFeedback.revision !== expectedFeedbackRevision) {
+          throw new StaleUnderstandingRevisionError(
+            'feedback',
+            expectedFeedbackRevision ?? 'missing',
+          );
         }
         if (trimmedFeedback && currentFeedback.turns.length >= MAX_UNDERSTANDING_FEEDBACK_TURNS) {
           throw new UnderstandingPreconditionError('feedback_limit_reached');
         }
 
         const sources = { ...session.sources };
-        for (const providerId of new Set(providerIds)) {
-          sources[providerId] ??= initialProviderState();
+        const attempts: ExtendSessionResult['attempts'] = [];
+        for (const providerId of [...new Set(providerIds)].sort()) {
+          const current = sources[providerId];
+          if (!current) {
+            sources[providerId] = {
+              ...initialProviderState(),
+              revision: 1,
+              status: 'running',
+            };
+            attempts.push({ id: providerId, revision: 1 });
+            continue;
+          }
+          if (current.status !== 'failed' || !current.errors.some(({ retryable }) => retryable)) {
+            continue;
+          }
+
+          const revision = current.revision + 1;
+          sources[providerId] = {
+            ...current,
+            completedAt: undefined,
+            errors: [],
+            failedCount: 0,
+            revision,
+            status: 'running',
+            succeededCount: 0,
+          };
+          attempts.push({ id: providerId, revision });
         }
         const nextFeedback = trimmedFeedback
           ? {
@@ -340,12 +397,18 @@ export class OnboardingUnderstandingRepository {
               ],
             }
           : currentFeedback;
-        const changed =
-          trimmedFeedback || Object.keys(sources).length !== Object.keys(session.sources).length;
-        if (!changed) return { nextSession: session, result: session, write: false };
+        const changed = Boolean(trimmedFeedback) || attempts.length > 0;
+        if (!changed) {
+          return { nextSession: session, result: { attempts, session }, write: false };
+        }
 
         const nextSession = parseSession({ ...session, feedback: nextFeedback, sources });
-        return { nextSession, result: nextSession, write: true };
+        return {
+          clearTaskRecommendations: attempts.length > 0,
+          nextSession,
+          result: { attempts, session: nextSession },
+          write: true,
+        };
       }),
     );
   };
@@ -623,6 +686,7 @@ export class OnboardingUnderstandingRepository {
         const nextSession = parseSession({
           ...session,
           writing: {
+            detailed: { status: 'running', updatedAt: new Date().toISOString() },
             feedbackRevision,
             generationRevision,
             resultMessageId: assistantMessageId,
@@ -651,12 +715,13 @@ export class OnboardingUnderstandingRepository {
     this.db.transaction((tx) =>
       mutateTopicSession(tx, this.userId, topicId, (persisted) => {
         const session = requireSession(topicId, sessionId, persisted);
+        const writing = session.writing;
         if (
           getUnderstandingSourceFingerprint(session) !== sourceFingerprint ||
-          session.writing?.feedbackRevision !== feedbackRevision ||
-          session.writing?.generationRevision !== generationRevision ||
-          (session.writing?.sourceFingerprint === sourceFingerprint &&
-            session.writing.status !== 'running')
+          (writing &&
+            (writing.feedbackRevision !== feedbackRevision ||
+              writing.generationRevision !== generationRevision ||
+              (writing.sourceFingerprint === sourceFingerprint && writing.status !== 'running')))
         ) {
           return { nextSession: session, result: session, write: false };
         }
@@ -666,10 +731,120 @@ export class OnboardingUnderstandingRepository {
             error,
             feedbackRevision,
             generationRevision,
-            resultMessageId: session.writing?.resultMessageId,
+            resultMessageId: writing?.resultMessageId,
             sourceFingerprint,
             status: 'failed',
             updatedAt: new Date().toISOString(),
+          },
+        });
+        return { nextSession, result: nextSession, write: true };
+      }),
+    );
+
+  commitDetailedWriting = async ({
+    detailedPersona,
+    feedbackRevision,
+    generationRevision,
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: CommitDetailedWritingInput): Promise<{ published: boolean }> =>
+    this.db.transaction((tx) =>
+      mutateTopicSession(tx, this.userId, topicId, async (persisted) => {
+        const session = requireSession(topicId, sessionId, persisted);
+        const writing = session.writing;
+        if (
+          session.confirmedAt ||
+          getUnderstandingSourceFingerprint(session) !== sourceFingerprint ||
+          writing?.status !== 'completed' ||
+          writing.sourceFingerprint !== sourceFingerprint ||
+          writing.feedbackRevision !== feedbackRevision ||
+          writing.generationRevision !== generationRevision
+        ) {
+          return {
+            nextSession: session,
+            result: { published: false as boolean },
+            write: false,
+          };
+        }
+        if (writing.detailed?.status === 'completed') {
+          return {
+            nextSession: session,
+            result: { published: true as boolean },
+            write: false,
+          };
+        }
+        if (writing.detailed?.status !== 'running') {
+          throw new UnderstandingPreconditionError('detailed_writing_not_active');
+        }
+
+        const [message] = await tx
+          .select()
+          .from(messages)
+          .where(and(eq(messages.id, writing.resultMessageId), messageOwnership(this.userId)))
+          .for('update');
+        const proposal = getStoredProposal(message?.metadata);
+        if (
+          !message ||
+          !proposal ||
+          proposal.resultId !== writing.resultMessageId ||
+          proposal.sourceFingerprint !== sourceFingerprint ||
+          proposal.feedbackRevision !== feedbackRevision ||
+          proposal.generationRevision !== generationRevision
+        ) {
+          throw new UnderstandingResourceNotFoundError('result');
+        }
+        const enriched = OnboardingUnderstandingMessageMetadataSchema.parse({
+          ...proposal,
+          detailedPersona,
+        });
+        const messageMetadata = isPlainRecord(message.metadata) ? message.metadata : {};
+        await tx
+          .update(messages)
+          .set({
+            metadata: { ...messageMetadata, onboardingUnderstanding: enriched },
+            updatedAt: new Date(),
+          })
+          .where(and(eq(messages.id, writing.resultMessageId), messageOwnership(this.userId)));
+
+        const nextSession = parseSession({
+          ...session,
+          writing: {
+            ...writing,
+            detailed: { status: 'completed', updatedAt: new Date().toISOString() },
+          },
+        });
+        return { nextSession, result: { published: true as boolean }, write: true };
+      }),
+    );
+
+  failDetailedWriting = async ({
+    error,
+    feedbackRevision,
+    generationRevision,
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: FailDetailedWritingInput): Promise<OnboardingUnderstandingSession> =>
+    this.db.transaction((tx) =>
+      mutateTopicSession(tx, this.userId, topicId, (persisted) => {
+        const session = requireSession(topicId, sessionId, persisted);
+        const writing = session.writing;
+        if (
+          getUnderstandingSourceFingerprint(session) !== sourceFingerprint ||
+          writing?.status !== 'completed' ||
+          writing.sourceFingerprint !== sourceFingerprint ||
+          writing.feedbackRevision !== feedbackRevision ||
+          writing.generationRevision !== generationRevision ||
+          writing.detailed?.status !== 'running'
+        ) {
+          return { nextSession: session, result: session, write: false };
+        }
+        const nextSession = parseSession({
+          ...session,
+          writing: {
+            ...writing,
+            detailed: { error, status: 'failed', updatedAt: new Date().toISOString() },
           },
         });
         return { nextSession, result: nextSession, write: true };
@@ -689,6 +864,7 @@ export class OnboardingUnderstandingRepository {
           Object.values(session.sources).some(
             (source) => source.status === 'pending' || source.status === 'running',
           ) ||
+          session.writing.detailed?.status === 'running' ||
           getUnderstandingSourceFingerprint(session) !== session.writing.sourceFingerprint ||
           (session.writing.feedbackRevision ?? 0) !== (session.feedback?.revision ?? 0) ||
           (session.writing.generationRevision ?? 0) !== (session.generationRevision ?? 0)
@@ -735,10 +911,26 @@ export class OnboardingUnderstandingRepository {
       }),
     );
 
+  /**
+   * Removes transient Understanding and task recommendation state for an onboarding restart.
+   *
+   * Use when:
+   * - The owning user explicitly restarts onboarding
+   * - A newer onboarding version invalidates generated session data
+   *
+   * Expects:
+   * - An active personal topic owned by the repository user
+   *
+   * Returns:
+   * - The removed Understanding session when one existed, for external source cleanup
+   */
   removeForReset = async (topicId: string): Promise<OnboardingUnderstandingSession | undefined> =>
     this.db.transaction((tx) =>
-      mutateTopicSession(tx, this.userId, topicId, async (session) => {
-        if (!session) return { nextSession: undefined, result: undefined, write: false };
+      mutateTopicSession(tx, this.userId, topicId, async (session, onboardingSession) => {
+        const hasTaskRecommendations = !!onboardingSession.taskRecommendations;
+        if (!session && !hasTaskRecommendations) {
+          return { nextSession: undefined, result: undefined, write: false };
+        }
         const writingThreadIds = (
           await tx
             .select({ id: threads.id, metadata: threads.metadata })
@@ -753,7 +945,12 @@ export class OnboardingUnderstandingRepository {
             .delete(threads)
             .where(and(inArray(threads.id, writingThreadIds), threadOwnership(this.userId)));
         }
-        return { nextSession: undefined, result: session, write: true };
+        return {
+          clearTaskRecommendations: true,
+          nextSession: undefined,
+          result: session,
+          write: true,
+        };
       }),
     );
 
@@ -825,9 +1022,9 @@ export class OnboardingUnderstandingRepository {
           sourceFingerprint,
         },
       },
-      persona: analysis.personaProposal.content,
-      reasoning: analysis.personaProposal.reasoning,
-      tagline: analysis.personaProposal.tagline,
+      persona: proposal.detailedPersona?.content ?? analysis.personaProposal.content,
+      reasoning: proposal.detailedPersona?.reasoning ?? analysis.personaProposal.reasoning,
+      tagline: proposal.detailedPersona?.tagline ?? analysis.personaProposal.tagline,
     });
     return result.document.version;
   };

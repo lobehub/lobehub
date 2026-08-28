@@ -36,8 +36,8 @@ const ProviderDetailPage = memo<ProviderDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileProviderPage = memo<{ mobile?: boolean }>(() => {
+export const MobileProviderPage = (_props: { mobile?: boolean }) => {
   return <ProviderDetailPage mobile={true} />;
-});
+};
 
 export default ProviderDetailPage;

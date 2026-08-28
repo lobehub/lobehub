@@ -25,6 +25,13 @@ LobeHub provides a complete authentication service capability when deployed. The
 - Default: `-`
 - Example: `Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
 
+#### `AUTH_COOKIE_PREFIX`
+
+- Type: Optional
+- Description: Prefix applied to every Better Auth cookie name. Configure a unique value when multiple deployments can write cookies on the same parent domain. Changing this value invalidates existing sessions for this deployment unless they are migrated separately.
+- Default: `better-auth`
+- Example: `my-lobehub`
+
 #### `AUTH_EMAIL_VERIFICATION`
 
 - Type: Optional

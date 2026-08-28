@@ -1,12 +1,12 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Hotkey, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import type { ItemType } from 'antd/es/menu/interface';
 import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 
 import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
@@ -80,7 +80,11 @@ export const useMenu = () => {
           {
             icon: <Icon icon={BrainCircuit} />,
             key: 'memory',
-            label: <Link to="/memory">{t('tab.memory')}</Link>,
+            label: (
+              <WorkspaceLink escape to="/memory">
+                {t('tab.memory')}
+              </WorkspaceLink>
+            ),
           },
         ]
       : []),
@@ -107,7 +111,7 @@ export const useMenu = () => {
       icon: <Icon icon={Download} />,
       key: 'get-app',
       label: (
-        <WorkspaceLink escape to="/downloads">
+        <WorkspaceLink escape to="/apps">
           {t('getApp')}
         </WorkspaceLink>
       ),
@@ -134,7 +138,7 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
-    ...(!isDesktop ? getApp : []),
+    ...getApp,
   ]
     .filter(Boolean)
     // Remove consecutive dividers to prevent double divider lines

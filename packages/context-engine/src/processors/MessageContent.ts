@@ -1,5 +1,6 @@
 import { filesPrompts } from '@lobechat/prompts';
-import type { MessageContentPart } from '@lobechat/types';
+import type { ChatAudioItem, MessageContentPart } from '@lobechat/types';
+import { normalizeAudioDurationMs } from '@lobechat/utils/audio';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
@@ -70,6 +71,9 @@ export interface MessageContentConfig {
 
 export interface UserMessageContentPart {
   audio_url?: {
+    codec?: string;
+    durationMs?: number;
+    mimeType?: string;
     url: string;
   };
   googleThoughtSignature?: string;
@@ -337,7 +341,12 @@ export class MessageContentProcessor extends BaseProcessor {
       const contentParts: UserMessageContentPart[] = [
         {
           signature: message.reasoning!.signature,
-          thinking: message.reasoning!.content,
+          // Signature-only reasoning (e.g. Claude 5 `thinking.display: 'omitted'`)
+          // has no thinking text. Emit an explicit empty string instead of
+          // `undefined`, which JSON serialization drops entirely — strict
+          // Anthropic-compatible endpoints (e.g. DeepSeek) reject thinking parts
+          // missing the `thinking` field with 400 `missing field 'thinking'`.
+          thinking: message.reasoning!.content ?? '',
           type: 'thinking',
         },
         {
@@ -602,14 +611,21 @@ export class MessageContentProcessor extends BaseProcessor {
   /**
    * Process audio list
    */
-  private async processAudioList(audioList: any[]): Promise<UserMessageContentPart[]> {
+  private async processAudioList(audioList: ChatAudioItem[]): Promise<UserMessageContentPart[]> {
     if (!audioList || audioList.length === 0) {
       return [];
     }
 
     return audioList.map((audio) => {
+      const durationMs = normalizeAudioDurationMs(audio.durationMs);
+
       return {
-        audio_url: { url: audio.url },
+        audio_url: {
+          ...(audio.codec ? { codec: audio.codec } : {}),
+          ...(durationMs === undefined ? {} : { durationMs }),
+          ...(audio.mimeType ? { mimeType: audio.mimeType } : {}),
+          url: audio.url,
+        },
         type: 'audio_url',
       } as UserMessageContentPart;
     });
@@ -635,7 +651,12 @@ export class MessageContentProcessor extends BaseProcessor {
         return !!(part.video_url && part.video_url.url);
       }
       case 'audio_url': {
-        return !!(part.audio_url && part.audio_url.url);
+        return !!(
+          part.audio_url &&
+          part.audio_url.url &&
+          (part.audio_url.durationMs === undefined ||
+            normalizeAudioDurationMs(part.audio_url.durationMs) === part.audio_url.durationMs)
+        );
       }
       default: {
         return false;

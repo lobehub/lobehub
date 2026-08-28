@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Metadaten wurden nicht gespeichert. Versuchen Sie es erneut oder bearbeiten Sie weiter.",
   "skillFrontmatter.title": "Skill-Metadaten",
   "slash.compact": "Kontext komprimieren",
+  "slash.goal": "Ziel festlegen",
+  "slash.goal.desc": "Planen und starten Sie ein Ziel mit bearbeitbaren Akzeptanzkriterien",
   "slash.h1": "Überschrift 1",
   "slash.h2": "Überschrift 2",
   "slash.h3": "Überschrift 3",

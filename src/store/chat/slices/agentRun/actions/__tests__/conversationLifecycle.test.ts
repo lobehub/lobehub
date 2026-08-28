@@ -4,16 +4,26 @@ import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
+import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type {
+  VoiceMessageSend,
+  VoiceMessageSendOptions,
+} from '@/store/chat/slices/voiceMessage/action';
+import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { useDeviceStore } from '@/store/device';
+import { fileChatSelectors, useFileStore } from '@/store/file';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { useUserStore } from '@/store/user';
 
 import { useChatStore } from '../../../../store';
@@ -67,6 +77,7 @@ beforeEach(() => {
   vi.spyOn(sessionStore, 'triggerSessionUpdate').mockResolvedValue(undefined);
   vi.spyOn(agentService, 'getAgentConfigById').mockResolvedValue(createMockAgentConfig() as any);
   useUserStore.setState({ workspaceUserPreference: {} });
+  useFileStore.setState({ chatContextSelectionsByContext: {} });
 
   act(() => {
     useChatStore.setState({
@@ -82,6 +93,11 @@ afterEach(() => {
   executeHeterogeneousAgentMock.mockReset();
   mockConstEnv.isDesktop = false;
   setPendingTopicRepos(TEST_IDS.SESSION_ID, []);
+  // Zustand state and the window-backed agent context survive `restoreAllMocks`,
+  // so a cwd test that seeds a device (or a desktop path) would otherwise leak
+  // a working directory into every later send in this file.
+  useDeviceStore.setState({ devices: [] });
+  delete window.__LOBE_GLOBAL_AGENT_CONTEXT__;
   vi.restoreAllMocks();
 });
 
@@ -137,6 +153,67 @@ describe('ConversationLifecycle actions', () => {
     });
 
     describe('message creation', () => {
+      it('continues from the active conversational tail after a recovered task callback', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicId = TEST_IDS.TOPIC_ID;
+        const activeAssistant = createMockMessage({
+          id: 'active-assistant',
+          role: 'assistant',
+          topicId,
+        });
+        const recoveredCallback = createMockMessage({
+          id: 'recovered-task-callback',
+          parentId: 'tool-use-shell',
+          role: 'taskCallback',
+          topicId,
+        });
+        const key = messageMapKey({ agentId, topicId });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            messagesMap: { [key]: [activeAssistant, recoveredCallback] },
+          });
+        });
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                parentId: activeAssistant.id,
+                role: 'user',
+                topicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: TEST_IDS.USER_MESSAGE_ID,
+                role: 'assistant',
+                topicId,
+              }),
+            ],
+            topicId,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId },
+            message: TEST_CONTENT.USER_MESSAGE,
+            messages: [activeAssistant, recoveredCallback],
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newUserMessage: expect.objectContaining({ parentId: activeAssistant.id }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
       it('should render pending compressedGroup immediately for /compact', async () => {
         const { result } = renderHook(() => useChatStore());
         const topicId = TEST_IDS.TOPIC_ID;
@@ -237,6 +314,8 @@ describe('ConversationLifecycle actions', () => {
 
       it('should not process AI when onlyAddUserMessage is true', async () => {
         const { result } = renderHook(() => useChatStore());
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           messages: [],
@@ -248,15 +327,20 @@ describe('ConversationLifecycle actions', () => {
           await result.current.sendMessage({
             message: TEST_CONTENT.USER_MESSAGE,
             onlyAddUserMessage: true,
+            onMessageAccepted,
+            onMessagePersisted,
             context: createTestContext(),
           });
         });
 
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).toHaveBeenCalledOnce();
       });
 
       it('should restore the pre-send editor snapshot when server send fails', async () => {
         const { result } = renderHook(() => useChatStore());
+        const onMessagePersisted = vi.fn();
         const inputEditorState = {
           root: {
             children: [
@@ -295,6 +379,7 @@ describe('ConversationLifecycle actions', () => {
             context: createTestContext(),
             editorData: inputEditorState as any,
             message: 'Restored rich text',
+            onMessagePersisted,
           });
         });
 
@@ -305,6 +390,722 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputEditorTempState).toEqual(inputEditorState);
         expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
         expect(setDocument).not.toHaveBeenCalled();
+        expect(onMessagePersisted).not.toHaveBeenCalled();
+      });
+
+      it('should not restore an editor snapshot when a separate voice send fails', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const getJSONState = vi.fn().mockReturnValue({ stale: 'draft' });
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockRejectedValue(
+          new TRPCClientError('voice persistence failed'),
+        );
+
+        act(() => {
+          useChatStore.setState({
+            mainInputEditor: {
+              getJSONState,
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            files: [{ id: 'voice-file' } as any],
+            message: '',
+            preserveComposer: true,
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        expect(sendMessageOperation?.metadata.inputEditorTempState).toBeUndefined();
+        expect(getJSONState).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+        expect(setDocument).not.toHaveBeenCalled();
+      });
+
+      it('should restore the pre-send editor snapshot when a gateway send fails', async () => {
+        // Regression: the composer is cleared the instant Enter is pressed, and
+        // only the client-runtime branch put the text back. The gateway branch
+        // just logged, failed the op and deleted the optimistic pair — so a
+        // server-side start refusal (e.g. `Topic <id> remained busy while
+        // starting operation ...`, thrown by the reservation gate before the
+        // user message is ever persisted) made the message vanish with no trace
+        // and no way to recover what was typed.
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Swallowed by gateway', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi
+          .fn()
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            isGatewayModeEnabled: () => true,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Swallowed by gateway',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the gateway branch actually ran and failed — otherwise a silent
+        // early bail would satisfy the restore assertions below by accident.
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
+      });
+
+      it('should not restore the composer when gateway setup fails after message acceptance', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(async (params) => {
+          params.onMessageAccepted();
+          throw new Error('gateway client initialization failed');
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: 'Already persisted',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalledOnce();
+        expect(setDocument).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
+      });
+
+      it('should restore the pre-send editor snapshot when a hetero send fails', async () => {
+        // Same silent-discard shape as the gateway branch above: persistence
+        // throws, the temp rows are cleaned up, and the typed text is gone.
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Swallowed by hetero', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Swallowed by hetero',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the hetero persistence branch actually ran and failed.
+        expect(sendMessageInServerSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
+      });
+
+      it('should move and adopt a first-turn voice row without sending local-only history', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: undefined,
+          });
+        });
+
+        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:voice-preview');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue({
+          id: 'uploaded-audio',
+          url: 'https://example.com/voice.webm',
+        });
+
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+
+        let optimisticUserMessageId!: string;
+        act(() => {
+          optimisticUserMessageId = result.current.sendVoiceMessage({
+            canSend: () => true,
+            context,
+            recording: {
+              codec: 'opus',
+              durationMs: 1200,
+              file: new File(['voice'], 'voice.webm', { type: 'audio/webm' }),
+              mimeType: 'audio/webm',
+              waveform: [0.2, 0.8, 0.3],
+            },
+            send: (file, options) =>
+              new Promise<void>((resolve, reject) => {
+                let accepted = false;
+                void result.current
+                  .sendMessage({
+                    context: options.context,
+                    files: [file],
+                    message: '',
+                    onMessageAccepted: () => {
+                      accepted = true;
+                      resolve();
+                    },
+                    optimisticUserMessageId: options.messageId,
+                    preserveComposer: true,
+                    signal: options.signal,
+                  })
+                  .then(() => {
+                    if (!accepted) reject(new Error('Voice message was not accepted'));
+                  }, reject);
+              }),
+          })!;
+        });
+
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        const midState = useChatStore.getState();
+        const mintedTopicId = midState.activeTopicId!;
+        const mintedContextKey = messageMapKey({ ...context, topicId: mintedTopicId });
+        const pendingMessages = midState.dbMessagesMap[mintedContextKey];
+        expect(mintedTopicId).toMatch(/^tpc_/);
+        expect(optimisticUserMessageId).toMatch(/^msg_/);
+        expect(midState.dbMessagesMap[contextKey] ?? []).toEqual([]);
+        expect(pendingMessages.filter((message) => message.role === 'user')).toHaveLength(1);
+        expect(
+          pendingMessages.filter((message) => message.id === optimisticUserMessageId),
+        ).toHaveLength(1);
+        expect(pendingMessages.find((message) => message.id === optimisticUserMessageId)).toEqual(
+          expect.objectContaining({
+            audioList: [
+              expect.objectContaining({
+                id: 'uploaded-audio',
+                url: 'https://example.com/voice.webm',
+              }),
+            ],
+            files: ['uploaded-audio'],
+            metadata: expect.objectContaining({ scope: LOCAL_MESSAGE_SCOPE }),
+          }),
+        );
+        expect(sendMessageInServer.mock.calls[0][0].newTopic?.id).toBe(mintedTopicId);
+        expect(sendMessageInServer.mock.calls[0][0].newTopic?.topicMessageIds).toEqual([]);
+
+        const request = sendMessageInServer.mock.calls[0][0];
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: request.newAssistantMessage.id,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: request.newUserMessage.id,
+                role: 'user',
+                topicId: mintedTopicId,
+              }),
+              createMockMessage({
+                id: request.newAssistantMessage.id,
+                role: 'assistant',
+                topicId: mintedTopicId,
+              }),
+            ],
+            topicId: mintedTopicId,
+            topics: { items: [{ id: mintedTopicId, title: 'Voice topic' }], total: 1 },
+            userMessageId: request.newUserMessage.id,
+          });
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().voiceMessageUploadMap[optimisticUserMessageId]).toBe(
+            undefined,
+          ),
+        );
+      });
+
+      it('should preserve a caller-owned optimistic user row when persistence fails before acceptance', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const contextKey = messageMapKey(context);
+        const optimisticUserMessageId = 'tmp-voice-message';
+        const localVoiceMessage = createMockMessage({
+          audioList: [
+            {
+              alt: 'voice.webm',
+              durationMs: 1200,
+              id: 'tmp-audio',
+              mimeType: 'audio/webm',
+              url: 'blob:voice-preview',
+            },
+          ],
+          content: '',
+          id: optimisticUserMessageId,
+          metadata: { scope: LOCAL_MESSAGE_SCOPE },
+          topicId: TEST_IDS.TOPIC_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            dbMessagesMap: { [contextKey]: [localVoiceMessage] },
+            messagesMap: { [contextKey]: [localVoiceMessage] },
+          });
+        });
+
+        const onMessageAccepted = vi.fn();
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockRejectedValue(
+          new Error('persistence failed'),
+        );
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            files: [
+              {
+                audioMetadata: { durationMs: 1200, mimeType: 'audio/webm' },
+                file: { name: 'voice.webm', type: 'audio/webm' },
+                fileUrl: 'https://example.com/voice.webm',
+                id: 'uploaded-audio',
+                status: 'success',
+              } as any,
+            ],
+            message: '',
+            onMessageAccepted,
+            optimisticUserMessageId,
+            preserveComposer: true,
+          });
+        });
+
+        const remainingMessages = useChatStore.getState().dbMessagesMap[contextKey];
+        expect(onMessageAccepted).not.toHaveBeenCalled();
+        expect(remainingMessages).toHaveLength(1);
+        expect(remainingMessages[0]).toEqual(
+          expect.objectContaining({
+            id: optimisticUserMessageId,
+            metadata: expect.objectContaining({ scope: LOCAL_MESSAGE_SCOPE }),
+            role: 'user',
+          }),
+        );
+        expect(remainingMessages.some((message) => message.role === 'assistant')).toBe(false);
+      });
+
+      it('should move a failed first-turn voice back to _new before retrying', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const newContextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: undefined,
+          });
+        });
+
+        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:voice-retry');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue({
+          id: 'uploaded-retry-audio',
+          url: 'https://example.com/retry.webm',
+        });
+
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockRejectedValueOnce(new Error('persistence failed'))
+          .mockImplementationOnce(async (params: any) => {
+            const topicId = params.newTopic?.id;
+            return {
+              assistantMessageId: params.newAssistantMessage.id,
+              isCreateNewTopic: true,
+              messages: [
+                createMockMessage({ id: params.newUserMessage.id, role: 'user', topicId }),
+                createMockMessage({
+                  id: params.newAssistantMessage.id,
+                  role: 'assistant',
+                  topicId,
+                }),
+              ],
+              topicId,
+              topics: { items: [{ id: topicId, title: 'Retried voice topic' }], total: 1 },
+              userMessageId: params.newUserMessage.id,
+            } as any;
+          });
+
+        const sendThroughLifecycle: VoiceMessageSend = (file, options: VoiceMessageSendOptions) =>
+          new Promise<void>((resolve, reject) => {
+            let accepted = false;
+            void result.current
+              .sendMessage({
+                context: options.context,
+                files: [file],
+                message: '',
+                onMessageAccepted: () => {
+                  accepted = true;
+                  resolve();
+                },
+                optimisticUserMessageId: options.messageId,
+                preserveComposer: true,
+                signal: options.signal,
+              })
+              .then(() => {
+                if (!accepted) reject(new Error('Voice message was not accepted'));
+              }, reject);
+          });
+
+        let messageId!: string;
+        act(() => {
+          messageId = result.current.sendVoiceMessage({
+            canSend: () => true,
+            context,
+            recording: {
+              codec: 'opus',
+              durationMs: 1200,
+              file: new File(['voice'], 'voice.webm', { type: 'audio/webm' }),
+              mimeType: 'audio/webm',
+              waveform: [0.2, 0.8, 0.3],
+            },
+            send: sendThroughLifecycle,
+          })!;
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().voiceMessageUploadMap[messageId]?.status).toBe('failed'),
+        );
+
+        const failedTopicId = sendMessageInServer.mock.calls[0][0].newTopic?.id;
+        const failedTopicKey = messageMapKey({ ...context, topicId: failedTopicId });
+        const failedState = useChatStore.getState();
+        const uploadOperation = Object.values(failedState.operations).find(
+          (operation) =>
+            operation.type === 'uploadVoiceMessage' && operation.context.messageId === messageId,
+        );
+        expect(failedTopicId).toMatch(/^tpc_/);
+        expect(failedState.activeTopicId).toBeFalsy();
+        expect(failedState.dbMessagesMap[newContextKey]?.map((message) => message.id)).toContain(
+          messageId,
+        );
+        expect(failedState.dbMessagesMap[failedTopicKey] ?? []).toEqual([]);
+        expect(uploadOperation?.context.topicId).toBeNull();
+
+        act(() => result.current.retryVoiceMessage(messageId));
+
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledTimes(2));
+        await waitFor(() =>
+          expect(useChatStore.getState().voiceMessageUploadMap[messageId]).toBeUndefined(),
+        );
+
+        const retryRequest = sendMessageInServer.mock.calls[1][0];
+        expect(retryRequest.newTopic?.id).toMatch(/^tpc_/);
+        expect(retryRequest.newTopic?.id).not.toBe(failedTopicId);
+        expect(retryRequest.newUserMessage.id).toBe(messageId);
+      });
+
+      it('should acknowledge persistence before client generation completes', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
+        let resolveExecution!: () => void;
+        let sendCompleted = false;
+        const executionPromise = new Promise<void>((resolve) => {
+          resolveExecution = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeClientAgent: vi.fn().mockReturnValue(executionPromise),
+          });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current
+            .sendMessage({
+              context: createTestContext(),
+              message: TEST_CONTENT.USER_MESSAGE,
+              onMessageAccepted,
+              onMessagePersisted,
+            })
+            .then((value) => {
+              sendCompleted = true;
+              return value;
+            });
+        });
+
+        await waitFor(() => expect(onMessagePersisted).toHaveBeenCalledOnce());
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(sendCompleted).toBe(false);
+
+        await act(async () => {
+          resolveExecution();
+          await sendPromise;
+        });
+      });
+
+      it('reconciles a persisted client message but skips generation when cancellation wins the request race', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+            onMessageAccepted,
+            onMessagePersisted,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          await sendPromise;
+        });
+
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).toHaveBeenCalledOnce();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(result.current.messagesMap[messageMapKey(context)]).toHaveLength(2);
+      });
+
+      it('stops the operations-driven topic spinner when cancellation wins persistence', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
+        expect(optimisticTopicId).toMatch(/^tpc_/);
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
+        ).toBe(true);
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: optimisticTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: optimisticTopicId,
+              }),
+            ],
+            topicId: optimisticTopicId,
+            topics: { items: [{ id: optimisticTopicId, title: 'Server Topic' }], total: 1 },
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          await sendPromise;
+        });
+
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toBe(
+          optimisticTopicId,
+        );
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
+        ).toBe(false);
+      });
+
+      it('detaches the caller cancellation signal after an unaccepted persistence failure', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockRejectedValue(
+          new TRPCClientError('persistence failed'),
+        );
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+            signal: controller.signal,
+          });
+        });
+        const sendOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        expect(sendOperation?.status).toBe('failed');
+
+        act(() => controller.abort(new DOMException('late cancel', 'AbortError')));
+
+        expect(result.current.operations[sendOperation!.id]?.status).toBe('failed');
       });
 
       it('should create user message and trigger AI processing', async () => {
@@ -472,6 +1273,138 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
+      it('should adopt the minted topic id and move context added during preflight', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const newBucketKey = messageMapKey({ agentId, topicId: null });
+        let resolveSkillPreload!: (value: []) => void;
+        const skillPreloadPromise = new Promise<[]>((resolve) => {
+          resolveSkillPreload = resolve;
+        });
+        const skillPreloadSpy = vi
+          .spyOn(skillPreload, 'resolveSelectedSkillsWithContent')
+          .mockReturnValue(skillPreloadPromise);
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+        let resolveExecute!: () => void;
+        const executePromise = new Promise<void>((resolve) => {
+          resolveExecute = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockReturnValue(executePromise),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+          });
+        });
+
+        let sentNewTopicId: string | undefined;
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockImplementation((params: any) => {
+            sentNewTopicId = params.newTopic?.id;
+            return serverSendPromise;
+          });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'first message',
+          });
+        });
+
+        await waitFor(() => expect(skillPreloadSpy).toHaveBeenCalled());
+
+        const pendingSelection = {
+          content: 'context added while preparing the first send',
+          id: 'pending-selection',
+          type: 'text' as const,
+        };
+        act(() => {
+          useFileStore.getState().addChatContextSelection({
+            contextKey: newBucketKey,
+            selection: pendingSelection,
+          });
+          resolveSkillPreload([]);
+        });
+
+        await waitFor(() => expect(sendMessageInServerSpy).toHaveBeenCalled());
+
+        // The conversation adopted the minted id BEFORE the server answered:
+        // activeTopicId already points at it, the optimistic pair lives in the
+        // minted bucket (NOT `_new`), and the id is marked as creating.
+        const midState = useChatStore.getState();
+        const mintedTopicId = midState.activeTopicId!;
+        expect(mintedTopicId).toMatch(/^tpc_/);
+        expect(sentNewTopicId).toBe(mintedTopicId);
+        expect(midState.creatingTopicIds).toContain(mintedTopicId);
+
+        const mintedBucketKey = messageMapKey({ agentId, topicId: mintedTopicId });
+        expect(midState.dbMessagesMap[mintedBucketKey]?.length).toBe(2);
+        expect(midState.dbMessagesMap[newBucketKey] ?? []).toEqual([]);
+        expect(
+          fileChatSelectors.chatContextSelections(mintedBucketKey)(useFileStore.getState()),
+        ).toEqual([pendingSelection]);
+        expect(
+          fileChatSelectors.chatContextSelections(newBucketKey)(useFileStore.getState()),
+        ).toEqual([]);
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: mintedTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: mintedTopicId,
+              }),
+            ],
+            topicId: mintedTopicId,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          resolveExecute();
+          await sendPromise;
+        });
+
+        const endState = useChatStore.getState();
+        // Same id end to end — nothing re-keyed, nothing remounted.
+        expect(endState.activeTopicId).toBe(mintedTopicId);
+        // Server confirmed: the id must leave the creating set so fetching and
+        // refetch reconciliation return to normal.
+        expect(endState.creatingTopicIds).not.toContain(mintedTopicId);
+      });
+
+      it('should return composer context ownership when preflight fails', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const preflightError = new Error('skill preload failed');
+        const onPreflightFailure = vi.fn();
+        vi.spyOn(skillPreload, 'resolveSelectedSkillsWithContent').mockRejectedValue(
+          preflightError,
+        );
+
+        await expect(
+          result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+            onPreflightFailure,
+          }),
+        ).rejects.toBe(preflightError);
+
+        expect(onPreflightFailure).toHaveBeenCalledOnce();
+        expect(result.current.operations).toEqual({});
+      });
+
       it('should show an optimistic topic while the first message is still creating the server topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -527,8 +1460,13 @@ describe('ConversationLifecycle actions', () => {
             title: '666',
           }),
         );
-        expect(optimisticTopic?.id).toMatch(/^tmp_topic_/);
-        expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopic!.id);
+        expect(optimisticTopic?.id).toMatch(/^tpc_/);
+        // The running sendMessage operation (context carries the minted topic
+        // id) drives the sidebar spinner while the server round-trip is in
+        // flight.
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopic!.id)(useChatStore.getState()),
+        ).toBe(true);
 
         await act(async () => {
           resolveServerSend({
@@ -558,15 +1496,20 @@ describe('ConversationLifecycle actions', () => {
         const finalTopics = useChatStore.getState().topicDataMap[topicKey]?.items ?? [];
         expect(finalTopics).toEqual([expect.objectContaining({ id: newTopicId })]);
         expect(finalTopics.some((topic) => topic.id === optimisticTopic?.id)).toBe(false);
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopic!.id);
-        expect(useChatStore.getState().topicLoadingIds).toContain(newTopicId);
 
         await act(async () => {
           resolveExecute();
           await sendPromise;
         });
 
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+        // Send settled: no operation left running for either id, so the
+        // sidebar spinner is off.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopic!.id)(useChatStore.getState()),
+        ).toBe(false);
       });
 
       it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
@@ -623,7 +1566,7 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
-      it('should release the migrated topicLoadingIds owner after a gateway send creates the topic', async () => {
+      it('should stop the sidebar spinner after a gateway send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
         const topicKey = topicMapKey({ agentId });
@@ -634,8 +1577,7 @@ describe('ConversationLifecycle actions', () => {
             new Promise<any>((resolve) => {
               resolveGateway = () => {
                 // Mimic executeGatewayAgent's contract: execAgentTask resolves
-                // the optimistic topic via internal_replaceTopicId, migrating
-                // its topicLoadingIds owner onto the real topic id, and the
+                // the optimistic topic via internal_replaceTopicId, and the
                 // parent sendMessage op is completed once phase-1 init is done
                 // (without this the leaked running op pollutes later tests —
                 // resetTestEnvironment does not clear `operations`).
@@ -686,8 +1628,11 @@ describe('ConversationLifecycle actions', () => {
         await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
 
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
-        expect(optimisticTopicId).toMatch(/^tmp_topic_/);
-        expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopicId);
+        expect(optimisticTopicId).toMatch(/^tpc_/);
+        // The running sendMessage op keeps the spinner on during phase-1 init.
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
+        ).toBe(true);
 
         await act(async () => {
           resolveGateway();
@@ -699,13 +1644,80 @@ describe('ConversationLifecycle actions', () => {
         });
 
         // From here the run spinner is owned by the persisted
-        // `status === 'running'`; the migrated creation owner must be released
-        // or the sidebar spinner sticks forever (the #16745 regression).
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopicId);
+        // `status === 'running'` — no client-side operation may keep spinning
+        // for either id, or the sidebar spinner sticks after the run.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
+        ).toBe(false);
       });
 
-      it('should hold the migrated topicLoadingIds owner through a hetero new-topic run and release it at the end', async () => {
+      it('keeps persisted gateway messages when caller cancellation wins after acceptance', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        let gatewayParams: any;
+        let resolveGateway!: () => void;
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(
+          (params: any) =>
+            new Promise<any>((resolve) => {
+              gatewayParams = params;
+              resolveGateway = () =>
+                resolve({
+                  assistantMessageId: gatewayParams.clientIds.assistantMessageId,
+                  operationId: 'gateway-op-cancelled-after-persistence',
+                  topicId: TEST_IDS.TOPIC_ID,
+                  userMessageId: gatewayParams.clientIds.userMessageId,
+                });
+            }),
+        );
+        const internalDispatchMessageSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalledOnce());
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          gatewayParams.onMessageAccepted();
+          resolveGateway();
+          await sendPromise;
+        });
+
+        expect(internalDispatchMessageSpy).not.toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'deleteMessages' }),
+          expect.anything(),
+        );
+        expect(
+          (result.current.messagesMap[messageMapKey(context)] ?? []).map((message) => message.id),
+        ).toEqual(
+          expect.arrayContaining([
+            gatewayParams.clientIds.userMessageId,
+            gatewayParams.clientIds.assistantMessageId,
+          ]),
+        );
+      });
+
+      it('should keep the sidebar spinner on through a hetero new-topic run and stop it at the end', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
           agentConfig: {
@@ -760,10 +1772,17 @@ describe('ConversationLifecycle actions', () => {
         } as any);
 
         let resolveExecutor!: () => void;
-        executeHeterogeneousAgentMock.mockReturnValue(
-          new Promise<void>((resolve) => {
-            resolveExecutor = resolve;
-          }),
+        executeHeterogeneousAgentMock.mockImplementation(
+          (_getStore: unknown, opts: { operationId: string }) =>
+            new Promise<void>((resolve) => {
+              resolveExecutor = () => {
+                // The real executor settles its execHeterogeneousAgent op at
+                // the terminal; without this the leaked running op would keep
+                // the spinner on (and pollute later tests).
+                useChatStore.getState().completeOperation(opts.operationId);
+                resolve();
+              };
+            }),
         );
 
         let sendPromise!: ReturnType<typeof result.current.sendMessage>;
@@ -777,10 +1796,12 @@ describe('ConversationLifecycle actions', () => {
         await waitFor(() => expect(executeHeterogeneousAgentMock).toHaveBeenCalled());
 
         // The executor only writes the persisted `status === 'running'` (the
-        // run spinner's other driver) after startSession resolves — the
-        // migrated creation owner must stay held while the executor starts up,
-        // or the sidebar spinner blanks during a slow CLI startup.
-        expect(useChatStore.getState().topicLoadingIds).toContain(newTopicId);
+        // run spinner's other driver) after startSession resolves — the running
+        // execHeterogeneousAgent operation must keep the spinner on while the
+        // executor starts up, or it blanks during a slow CLI startup.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          true,
+        );
 
         await act(async () => {
           resolveExecutor();
@@ -791,7 +1812,9 @@ describe('ConversationLifecycle actions', () => {
           await Promise.resolve();
         });
 
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
       });
 
       it('should keep a gateway optimistic topic in its pending repo project group', async () => {
@@ -877,6 +1900,381 @@ describe('ConversationLifecycle actions', () => {
         });
       });
 
+      // A native (non-hetero) agent bound to a device resolves its cwd for the
+      // run (tools, {{workingDirectory}}) but used to leave the new topic
+      // unbound — By Project filed every such conversation under "No directory",
+      // and later turns re-resolved the agent-level default, so changing the
+      // agent's directory silently moved old topics to another project.
+      it('should bind a new gateway topic to a native agent device working directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        const sourcePath = '/repo/lobehub';
+        const worktreePath = '/repo/lobehub/.worktrees/feat';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: {
+                [deviceId]: {
+                  git: { activeWorktree: worktreePath },
+                  path: sourcePath,
+                  repoType: 'github',
+                },
+              },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        let resolveGateway!: () => void;
+        const gatewayPromise = new Promise<any>((resolve) => {
+          resolveGateway = () =>
+            resolve({
+              assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              operationId: 'gateway-op-cwd',
+              topicId: TEST_IDS.NEW_TOPIC_ID,
+              userMessageId: TEST_IDS.USER_MESSAGE_ID,
+            });
+        });
+        const executeGatewayAgentSpy = vi.fn().mockReturnValue(gatewayPromise);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Bind me to the project',
+          });
+        });
+
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
+
+        // `workingDirectory` is the EFFECTIVE path (the checked-out worktree the
+        // run executes in); the config keeps the SOURCE repo, which is what
+        // By-Project groups on.
+        const expectedMetadata = {
+          workingDirectory: worktreePath,
+          workingDirectoryConfig: {
+            git: { activeWorktree: worktreePath },
+            path: sourcePath,
+            repoType: 'github',
+          },
+        };
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
+          expect.objectContaining({ metadata: expectedMetadata }),
+        );
+        // Rides along to the server, which owns the real topic row.
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({ metadata: expectedMetadata }),
+          }),
+        );
+
+        await act(async () => {
+          resolveGateway();
+          await sendPromise;
+        });
+      });
+
+      it('should fall back to the bound device default cwd when the agent has no pick', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: { boundDeviceId: deviceId, executionTarget: 'device' },
+          },
+        });
+        act(() => {
+          useDeviceStore.setState({
+            devices: [{ defaultCwd: '/repo/default', deviceId, name: 'Mac' }] as any,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-default-cwd',
+          topicId: TEST_IDS.NEW_TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Use the device default',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({
+              metadata: {
+                workingDirectory: '/repo/default',
+                workingDirectoryConfig: { path: '/repo/default' },
+              },
+            }),
+          }),
+        );
+      });
+
+      // Client mode creates the topic itself (`sendMessageInServer`), so nothing
+      // downstream would ever write the cwd back — the metadata has to ride on
+      // the create call.
+      it('should bind a client-runtime new topic to the resolved working directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: { [deviceId]: { path: '/repo/lobehub' } },
+            },
+          },
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        const { result } = renderHook(() => useChatStore());
+        act(() => {
+          useChatStore.setState({ isGatewayModeEnabled: () => false });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: null },
+            message: 'Bind me too',
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({
+              metadata: {
+                workingDirectory: '/repo/lobehub',
+                workingDirectoryConfig: { path: '/repo/lobehub' },
+              },
+            }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('should leave a plain-chat agent topic unbound', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: { [deviceId]: { path: '/repo/lobehub' } },
+            },
+            // No execution environment at all — a directory would be noise, and
+            // By Project would file plain chats under a project they never used.
+            chatConfig: { ...createMockAgentConfig().chatConfig, enableAgentMode: false },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-chat',
+          topicId: TEST_IDS.NEW_TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Just chatting',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.not.objectContaining({ metadata: expect.anything() }),
+          }),
+        );
+      });
+
+      // The device `defaultCwd` level was added to the SEND path by the same
+      // change that started binding native topics, and it sits BETWEEN the
+      // legacy per-agent slot and the desktop/home fallback. A local
+      // heterogeneous CLI keys its sessions off the cwd
+      // (`~/.claude/projects/<encoded-cwd>/`), so reordering these levels moves
+      // an agent's whole session bucket and silently drops `--resume` — pin the
+      // order for the hetero path, which the native-agent cases above don't
+      // exercise (they never reach the desktop/home fallback at all).
+      describe('heterogeneous cwd precedence', () => {
+        const HETERO_DEVICE_ID = 'device-1';
+        const DESKTOP_PATH = '/Users/me/Desktop';
+
+        const setupHeteroRun = (agencyConfig: Record<string, any> = {}) => {
+          mockConstEnv.isDesktop = true;
+          setupMockSelectors({
+            agentConfig: {
+              agencyConfig: {
+                boundDeviceId: HETERO_DEVICE_ID,
+                executionTarget: 'local',
+                heterogeneousProvider: { command: 'codex', type: 'codex' },
+                ...agencyConfig,
+              },
+            },
+          });
+          executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+          return vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+        };
+
+        const sendHeteroMessage = async () => {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              context: createTestContext(),
+              message: TEST_CONTENT.USER_MESSAGE,
+            });
+          });
+        };
+
+        beforeEach(() => {
+          // The desktop/home fallback is always available for a hetero CLI, so
+          // every case below has something to lose to.
+          window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
+        });
+
+        it('prefers the bound device defaultCwd over the desktop fallback', async () => {
+          const sendMessageInServerSpy = setupHeteroRun();
+          act(() => {
+            useDeviceStore.setState({
+              devices: [
+                { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
+              ] as any,
+            });
+          });
+
+          await sendHeteroMessage();
+
+          // The CLI actually spawns here — a regression sends it to ~/Desktop
+          // and the `--resume` session bucket moves with it.
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+              workingDirectory: '/repo/device-default',
+              workingDirectoryConfig: { path: '/repo/device-default' },
+            }),
+          );
+          // …and the topic is born pinned to the same directory.
+          expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+              newTopic: expect.objectContaining({
+                metadata: {
+                  workingDirectory: '/repo/device-default',
+                  workingDirectoryConfig: { path: '/repo/device-default' },
+                },
+              }),
+            }),
+            expect.any(AbortController),
+          );
+        });
+
+        it('keeps the agent per-device pick above the device defaultCwd', async () => {
+          setupHeteroRun({
+            workingDirByDevice: { [HETERO_DEVICE_ID]: { path: '/repo/agent-pick' } },
+          });
+          act(() => {
+            useDeviceStore.setState({
+              devices: [
+                { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
+              ] as any,
+            });
+          });
+
+          await sendHeteroMessage();
+
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ workingDirectory: '/repo/agent-pick' }),
+          );
+        });
+
+        it('still falls back to the desktop path when neither the agent nor the device has one', async () => {
+          setupHeteroRun();
+
+          await sendHeteroMessage();
+
+          // Inserting the defaultCwd level must not swallow the last resort: a
+          // hetero CLI always spawns somewhere, so an unconfigured agent still
+          // needs a directory (unlike a native one, which stays unbound).
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ workingDirectory: DESKTOP_PATH }),
+          );
+        });
+      });
+
       it('should rollback an optimistic topic if the create response resolves without a topic id', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -920,8 +2318,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
-        expect(useChatStore.getState().topicLoadingIds).toEqual([]);
-        expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
+        expect(operationSelectors.visiblyRunningTopicIds(useChatStore.getState()).size).toBe(0);
       });
 
       it('should show a group optimistic topic in the group topic bucket', async () => {
@@ -982,9 +2379,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(
-            /^tmp_topic_/,
-          ),
+          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(/^tpc_/),
         );
 
         const optimisticTopic = useChatStore.getState().topicDataMap[groupKey]?.items[0];
@@ -1064,9 +2459,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(
-            /^tmp_topic_/,
-          ),
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
         );
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
 
@@ -1089,6 +2482,89 @@ describe('ConversationLifecycle actions', () => {
 
         expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
         expect(useChatStore.getState().activeTopicId).not.toBe(optimisticTopicId);
+      });
+
+      it('should restore optimistic topic selections after switching away before rollback', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const newContextKey = messageMapKey({ agentId, topicId: null });
+        const otherTopicId = 'other-topic';
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockReturnValue(serverSendPromise);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
+        );
+        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
+        const optimisticContextKey = messageMapKey({ agentId, topicId: optimisticTopicId });
+        const pendingSelection = {
+          content: 'context added before the failed send',
+          id: 'rollback-selection',
+          type: 'text' as const,
+        };
+
+        act(() => {
+          useFileStore.getState().addChatContextSelection({
+            contextKey: optimisticContextKey,
+            selection: pendingSelection,
+          });
+          useChatStore.setState({ activeTopicId: otherTopicId });
+        });
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: undefined,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+          await sendPromise;
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe(otherTopicId);
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(
+          fileChatSelectors.chatContextSelections(newContextKey)(useFileStore.getState()),
+        ).toEqual([pendingSelection]);
+        expect(
+          fileChatSelectors.chatContextSelections(optimisticContextKey)(useFileStore.getState()),
+        ).toEqual([]);
       });
 
       it('should persist selected tool tags into user message content before runtime execution', async () => {
@@ -1205,10 +2681,90 @@ describe('ConversationLifecycle actions', () => {
         ).toBe(false);
       });
 
+      it('should exclude another active local-only voice row from client runtime after a partial merge', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicId = TEST_IDS.TOPIC_ID;
+        const context = { agentId, threadId: null, topicId };
+        const key = messageMapKey(context);
+        const localVoiceMessage = createMockMessage({
+          audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
+          content: '',
+          id: 'tmp-other-voice-message',
+          metadata: { scope: LOCAL_MESSAGE_SCOPE },
+          role: 'user',
+          topicId,
+        });
+        const existingMessages = [
+          createMockMessage({ id: 'existing-user', role: 'user', topicId }),
+          createMockMessage({ id: 'existing-assistant', role: 'assistant', topicId }),
+          localVoiceMessage,
+        ];
+        const persistedUserMessage = createMockMessage({
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+          topicId,
+        });
+        const persistedAssistantMessage = createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          parentId: TEST_IDS.USER_MESSAGE_ID,
+          role: 'assistant',
+          topicId,
+        });
+        const executeClientAgent = vi.fn().mockResolvedValue(undefined);
+
+        act(() => {
+          useChatStore.setState({
+            dbMessagesMap: { [key]: existingMessages },
+            executeClientAgent,
+            messagesMap: { [key]: existingMessages },
+            voiceMessageUploadMap: {
+              [localVoiceMessage.id]: { progress: 50, status: 'uploading' },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          __isPartialMessages: true,
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: false,
+          messages: [persistedUserMessage, persistedAssistantMessage],
+          topicId,
+          topics: undefined,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(result.current.messagesMap[key].map((message) => message.id)).toContain(
+          localVoiceMessage.id,
+        );
+        expect(executeClientAgent).toHaveBeenCalledOnce();
+        const runtimeMessages = executeClientAgent.mock.calls[0][0].messages;
+        expect(runtimeMessages.map((message: any) => message.id)).not.toContain(
+          localVoiceMessage.id,
+        );
+        expect(runtimeMessages.map((message: any) => message.id)).toEqual(
+          expect.arrayContaining([
+            'existing-user',
+            'existing-assistant',
+            TEST_IDS.USER_MESSAGE_ID,
+            TEST_IDS.ASSISTANT_MESSAGE_ID,
+          ]),
+        );
+      });
+
       it('should preserve editorData when enqueueing a queued message', async () => {
         const { result } = renderHook(() => useChatStore());
         const context = createTestContext();
         const contextKey = messageMapKey(context);
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
         const editorData = {
           root: {
             children: [
@@ -1254,6 +2810,8 @@ describe('ConversationLifecycle actions', () => {
             context,
             editorData: editorData as any,
             message: 'queued message',
+            onMessageAccepted,
+            onMessagePersisted,
           });
         });
 
@@ -1264,6 +2822,47 @@ describe('ConversationLifecycle actions', () => {
             editorData,
           }),
           'op-running',
+        );
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).not.toHaveBeenCalled();
+      });
+
+      it('should enqueue a later text turn behind an optimistic voice upload', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-voice-upload': {
+                childOperationIds: [],
+                context: { ...context, messageId: 'tmp_voice' },
+                id: 'op-voice-upload',
+                metadata: { startTime: Date.now() },
+                status: 'running',
+                type: 'uploadVoiceMessage',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-voice-upload'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'text after voice',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({ content: 'text after voice' }),
+          'op-voice-upload',
         );
       });
 
@@ -1309,6 +2908,178 @@ describe('ConversationLifecycle actions', () => {
             interruptMode: 'soft',
           }),
           'op-cc-running',
+        );
+      });
+
+      it('should NOT enqueue once the run finished its visible output', async () => {
+        // Regression: the enqueue check only asked `status === 'running'`, while the
+        // composer flips back to Send on `visibleLoadingDone`. The answer is complete
+        // on screen and the button says Send, so the next message must start a fresh
+        // turn — not park in a tray the user has no reason to expect, and one that
+        // never empties at all when `agent_runtime_end` is lost over a still-open WS
+        // (neither the run lifecycle nor onSessionComplete's fallback fires, and the
+        // queue drains on success only).
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-visible-done': {
+                childOperationIds: [],
+                context,
+                id: 'op-visible-done',
+                metadata: { visibleLoadingDone: true },
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-visible-done'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'follow-up after the run visibly ended',
+          });
+        });
+
+        expect(enqueueMessageSpy).not.toHaveBeenCalled();
+      });
+
+      it('should NOT enqueue behind an aborting op (Stop already pressed)', async () => {
+        // Stop flips the composer back to Send immediately via `isAborting`. The
+        // queue drains on success only, so queueing behind an aborting run would
+        // strand the message with no run left to send it.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-aborting': {
+                childOperationIds: [],
+                context,
+                id: 'op-aborting',
+                metadata: { isAborting: true },
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-aborting'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'send after stop' });
+        });
+
+        expect(enqueueMessageSpy).not.toHaveBeenCalled();
+      });
+
+      it('should restart the existing queue in FIFO order when Stop already cancelled its owner', async () => {
+        vi.useFakeTimers();
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-cancelled': {
+                childOperationIds: [],
+                context,
+                id: 'op-cancelled',
+                metadata: { isAborting: true },
+                status: 'cancelled',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: { [contextKey]: ['op-cancelled'] },
+            queuedMessages: {
+              [contextKey]: [
+                {
+                  content: 'queued A',
+                  createdAt: Date.now(),
+                  id: 'queued-1',
+                  interruptMode: 'soft',
+                },
+              ],
+            },
+          });
+        });
+
+        const sendMessageSpy = vi.spyOn(result.current, 'sendMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'new B' });
+          await vi.runAllTimersAsync();
+        });
+
+        expect(sendMessageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ message: expect.stringMatching(/queued A[\s\S]*new B/) }),
+        );
+        expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([]);
+        vi.useRealTimers();
+      });
+
+      it('should still enqueue past visible end when follow-ups are already queued', async () => {
+        // Order beats latency: those queued items belong to the terminal drain, so a
+        // newer send must join the queue instead of jumping it — otherwise the drain
+        // fires a second, older turn right behind this one.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-finishing': {
+                childOperationIds: [],
+                context,
+                id: 'op-finishing',
+                metadata: { visibleLoadingDone: true },
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-finishing'],
+            },
+            queuedMessages: {
+              [contextKey]: [
+                {
+                  content: 'queued before the visible end',
+                  createdAt: Date.now(),
+                  id: 'queued-1',
+                  interruptMode: 'soft',
+                },
+              ],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'follow-up mid-terminal' });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({ content: 'follow-up mid-terminal' }),
+          'op-finishing',
         );
       });
 
@@ -1421,16 +3192,13 @@ describe('ConversationLifecycle actions', () => {
       it('should move queued follow-ups from the new-topic key to the created topic key', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        const createdTopicId = 'created-topic-id';
         const newTopicKey = messageMapKey({ agentId, topicId: null });
-        const createdTopicKey = messageMapKey({ agentId, topicId: createdTopicId });
         const queuedMessage = {
           content: 'queued while topic is being created',
           createdAt: Date.now(),
           id: 'queued-before-topic-created',
           interruptMode: 'soft' as const,
         };
-
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
@@ -1441,24 +3209,28 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          isCreateNewTopic: true,
-          messages: [
-            createMockMessage({
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              topicId: createdTopicId,
-            }),
-            createMockMessage({
-              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
-              role: 'assistant',
-              topicId: createdTopicId,
-            }),
-          ],
-          topicId: createdTopicId,
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        let createdTopicId: string | undefined;
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockImplementation(async (params: any) => {
+          createdTopicId = params.newTopic?.id;
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: createdTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: createdTopicId,
+              }),
+            ],
+            topicId: createdTopicId,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any;
+        });
 
         await act(async () => {
           await result.current.sendMessage({
@@ -1467,12 +3239,41 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
+        expect(createdTopicId).toMatch(/^tpc_/);
+        const createdTopicKey = messageMapKey({ agentId, topicId: createdTopicId });
         expect(useChatStore.getState().queuedMessages[newTopicKey] ?? []).toEqual([]);
         expect(useChatStore.getState().queuedMessages[createdTopicKey]).toEqual([queuedMessage]);
       });
     });
 
     describe('page scope documentId injection', () => {
+      it('enables the task tool for a /goal gateway turn', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'op-goal',
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: '/goal ship the homepage',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ selectedToolIds: ['lobe-goal'] }),
+        );
+      });
+
       it('injects the active page documentId into the gateway context when scope is page', async () => {
         const { result } = renderHook(() => useChatStore());
 
@@ -1753,12 +3554,168 @@ describe('ConversationLifecycle actions', () => {
 
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
+            // Exact object on purpose: `model` must still be absent. `id` is the
+            // client-minted message id the server is asked to honour.
             newAssistantMessage: {
+              id: expect.stringMatching(/^msg_/),
               provider: 'codex',
             },
           }),
           expect.any(AbortController),
         );
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({ model: 'default', provider: 'codex' }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('overrides the heterogeneous runtime with the active topic model', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: {
+                args: ['--model', 'global-model', '--mode', 'plan'],
+                model: 'global-model',
+                type: 'cursor',
+              },
+            },
+          },
+        });
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const topicKey = topicMapKey({ agentId: TEST_IDS.SESSION_ID });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                items: [
+                  {
+                    createdAt: Date.now(),
+                    id: TEST_IDS.TOPIC_ID,
+                    model: 'topic-model',
+                    provider: 'cursor',
+                    title: 'Topic A',
+                    updatedAt: Date.now(),
+                  },
+                ],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            heterogeneousProvider: {
+              args: ['--mode', 'plan'],
+              model: 'topic-model',
+              type: 'cursor',
+            },
+          }),
+        );
+      });
+
+      it('routes a legacy bare Qoder model to the desktop heterogeneous runtime without gateway mode', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({ agentConfig: { agencyConfig: undefined, model: 'qoder' } });
+
+        const executeGatewayAgent = vi.fn();
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => false,
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({ heterogeneousProvider: { type: 'qoder' } }),
+        );
+        expect(executeGatewayAgent).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
+      it('keeps a legacy bare Qoder model on the gateway when gateway mode is available', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({ agentConfig: { agencyConfig: undefined, model: 'qoder' } });
+
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-operation',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
       });
 
       it('runs a workspace Codex local-device override in the desktop heterogeneous runtime', async () => {
@@ -1990,6 +3947,72 @@ describe('ConversationLifecycle actions', () => {
         expect(useChatStore.getState().messagesMap[leakedNewTopicKey] ?? []).toHaveLength(0);
       });
 
+      it('reconciles a persisted heterogeneous message but skips CLI execution after cancellation', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+            onMessageAccepted,
+            onMessagePersisted,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          await sendPromise;
+        });
+
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).toHaveBeenCalledOnce();
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.messagesMap[messageMapKey(context)]).toHaveLength(2);
+      });
+
       it('should preserve the isNew marker for heterogeneous new-thread contexts', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
@@ -2035,6 +4058,81 @@ describe('ConversationLifecycle actions', () => {
             topicId: TEST_IDS.TOPIC_ID,
           }),
         );
+      });
+
+      it('should clear isNew on the runtime operation after a new thread is persisted', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const topicId = 'topic-existing';
+        const createdThreadId = 'thread-created';
+        const draftContext = {
+          agentId: TEST_IDS.SESSION_ID,
+          isNew: true,
+          scope: 'thread' as const,
+          sourceMessageId: 'source-message',
+          threadId: null,
+          threadType: 'continuation' as const,
+          topicId,
+        };
+        const userMessage = createMockMessage({
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+        });
+        const assistantMessage = createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          role: 'assistant',
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          createdThreadId,
+          messages: [userMessage, assistantMessage],
+          topicId,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        useChatStore.setState({
+          executeClientAgent: vi.fn(async ({ context, parentMessageId, parentOperationId }) => {
+            useChatStore.getState().startOperation({
+              context: { ...context, messageId: parentMessageId },
+              parentOperationId,
+              type: 'execAgentRuntime',
+            });
+          }),
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: draftContext,
+            message: 'create thread and keep streaming',
+          });
+        });
+
+        const runtimeOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'execAgentRuntime',
+        );
+        expect(runtimeOperation?.context).toEqual(
+          expect.objectContaining({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'thread',
+            threadId: createdThreadId,
+            topicId,
+          }),
+        );
+
+        act(() => {
+          const cancelled = result.current.cancelOperations({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'thread',
+            status: 'running',
+            threadId: createdThreadId,
+            topicId,
+            type: 'execAgentRuntime',
+          });
+          expect(cancelled).toEqual([runtimeOperation!.id]);
+        });
+        expect(result.current.operations[runtimeOperation!.id].status).toBe('cancelled');
       });
 
       it('should recover heterogeneous context selections from the persisted user message metadata', async () => {
@@ -2375,9 +4473,9 @@ describe('ConversationLifecycle actions', () => {
       it('should directly call a single leading @agent in non-group chat', async () => {
         const { result } = renderHook(() => useChatStore());
         const targetAgentId = 'agent-direct-target';
-        const toolMessageId = 'tool-call-agent-result';
+        const toolMessageId = 'unused-tool-call-agent-result';
         const message = '@Agent B hello';
-        const createdThreadId = 'thread-created-by-send';
+        const createdThreadId = 'thread-direct-mention';
 
         const userMessage = createMockMessage({
           id: TEST_IDS.USER_MESSAGE_ID,
@@ -2392,11 +4490,25 @@ describe('ConversationLifecycle actions', () => {
         });
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          createdThreadId,
           messages: [userMessage, assistantMessage],
-          topics: [],
+          topicId: TEST_IDS.TOPIC_ID,
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        vi.spyOn(aiAgentService, 'createClientTaskThread').mockResolvedValue({
+          messages: [userMessage, assistantMessage],
+          startedAt: new Date().toISOString(),
+          success: true,
+          threadId: createdThreadId,
+          threadMessages: [
+            createMockMessage({ id: 'thread-user', role: 'user', threadId: createdThreadId }),
+          ],
+          userMessageId: 'thread-user',
+        } as any);
+        vi.spyOn(aiAgentService, 'updateClientTaskThreadStatus').mockResolvedValue({
+          status: 'completed',
+          success: true,
+          threadId: createdThreadId,
         } as any);
 
         (messageService.updateMessage as any).mockImplementation(
@@ -2439,71 +4551,161 @@ describe('ConversationLifecycle actions', () => {
                 type: 'root',
               },
             } as any,
-            context: createTestContext(),
+            context: { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID },
           });
         });
 
-        expect(agentService.getAgentConfigById).toHaveBeenCalledWith(targetAgentId);
-        expect(messageService.updateMessage).toHaveBeenCalledWith(
-          TEST_IDS.ASSISTANT_MESSAGE_ID,
-          expect.objectContaining({
-            content: '',
-            tools: [
-              expect.objectContaining({
-                apiName: 'callAgent',
-                identifier: 'lobe-agent-management',
-              }),
-            ],
-          }),
-          expect.objectContaining({ agentId: TEST_IDS.SESSION_ID }),
-        );
-        expect(messageService.createMessage).toHaveBeenCalledWith(
+        expect(messageService.createMessage).not.toHaveBeenCalled();
+        expect(aiChatService.sendMessageInServer).toHaveBeenCalledWith(
           expect.objectContaining({
             agentId: TEST_IDS.SESSION_ID,
-            content: `Called agent "${targetAgentId}" to respond.`,
-            parentId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            plugin: expect.objectContaining({
-              apiName: 'callAgent',
-              identifier: 'lobe-agent-management',
-            }),
-            pluginState: {
-              agentId: targetAgentId,
-              instruction: message,
-              mode: 'speak',
-            },
-            role: 'tool',
+            newAssistantMessage: expect.objectContaining({ agentId: targetAgentId }),
           }),
+          expect.any(AbortController),
         );
 
         const execCall = (result.current.executeClientAgent as any).mock.calls[0]?.[0];
         expect(execCall).toEqual(
           expect.objectContaining({
             context: expect.objectContaining({
-              agentId: TEST_IDS.SESSION_ID,
+              agentId: targetAgentId,
               scope: 'sub_agent',
               subAgentId: targetAgentId,
+              threadId: createdThreadId,
             }),
             inPortalThread: true,
-            parentMessageId: toolMessageId,
-            parentMessageType: 'tool',
+            isSubAgent: true,
+            parentMessageId: 'thread-user',
+            parentMessageType: 'user',
           }),
         );
         expect(execCall.initialContext).toBeUndefined();
-        expect(execCall.messages).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: toolMessageId, role: 'tool' }),
-            expect.objectContaining({
-              content: expect.stringContaining(message),
-              role: 'user',
+        expect(execCall.messages).toEqual(expect.any(Array));
+      });
+
+      it('should isolate a direct mention executed by a local heterogeneous agent', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const targetAgentId = 'agent-direct-codex';
+        const threadId = 'thread-direct-codex';
+        const threadAssistantId = 'thread-assistant-codex';
+        const message = '@Codex inspect this';
+        const userMessage = createMockMessage({
+          content: message,
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+        });
+        const sourceAssistant = createMockMessage({
+          agentId: targetAgentId,
+          content: '',
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          role: 'assistant',
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [userMessage, sourceAssistant],
+          topicId: TEST_IDS.TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        const createTaskSpy = vi.spyOn(aiAgentService, 'createClientTaskThread').mockResolvedValue({
+          assistantMessageId: threadAssistantId,
+          messages: [userMessage, sourceAssistant],
+          startedAt: new Date().toISOString(),
+          success: true,
+          threadId,
+          threadMessages: [
+            createMockMessage({ id: 'thread-user-codex', role: 'user', threadId }),
+            createMockMessage({ id: threadAssistantId, role: 'assistant', threadId }),
+          ],
+          userMessageId: 'thread-user-codex',
+        } as any);
+        const updateTaskSpy = vi
+          .spyOn(aiAgentService, 'updateClientTaskThreadStatus')
+          .mockResolvedValue({
+            status: 'completed',
+            success: true,
+            threadId,
+          } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        const { result } = renderHook(() => useChatStore());
+        const dispatchSpy = vi.spyOn(useChatStore.getState(), 'internal_dispatchMessage');
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID },
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'Codex',
+                        metadata: { id: targetAgentId, type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' inspect this', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message,
+          });
+        });
+
+        expect(createTaskSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentId: targetAgentId,
+            assistantMessage: { provider: 'codex' },
+            parentMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+          }),
+        );
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            assistantMessageId: threadAssistantId,
+            context: expect.objectContaining({
+              agentId: targetAgentId,
+              scope: 'sub_agent',
+              subAgentId: targetAgentId,
+              threadId,
             }),
-          ]),
+          }),
+        );
+        expect(updateTaskSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ completionReason: 'done', threadId }),
+        );
+        expect(dispatchSpy).toHaveBeenCalledWith(
+          {
+            id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            type: 'updateMessage',
+            value: { content: TEST_CONTENT.USER_MESSAGE },
+          },
+          {
+            context: expect.objectContaining({
+              agentId: TEST_IDS.SESSION_ID,
+              isNew: false,
+              topicId: TEST_IDS.TOPIC_ID,
+            }),
+          },
         );
       });
 
       it('should route a single leading @agent through the gateway when gateway mode is enabled', async () => {
         const { result } = renderHook(() => useChatStore());
         const targetAgentId = 'agent-direct-target';
-        const toolMessageId = 'tool-call-agent-result';
+        const toolMessageId = 'unused-tool-call-agent-result';
         const message = '@Agent B hello';
 
         const userMessage = createMockMessage({
@@ -2518,17 +4720,26 @@ describe('ConversationLifecycle actions', () => {
           tools: [],
         });
 
-        // sendMessageInServer must still run: directMention deliberately uses the
-        // client message-persistence path even under gateway mode (the supervisor
-        // is a pure router and never executes an LLM turn on the gateway).
+        // A direct mention runs the target on the gateway, which owns persistence.
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
           .mockResolvedValue({
             messages: [userMessage, assistantMessage],
-            topics: [],
+            topicId: TEST_IDS.TOPIC_ID,
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
+        vi.spyOn(aiAgentService, 'execSubAgentTask').mockResolvedValue({
+          assistantMessageId: 'thread-assistant',
+          operationId: 'op-gw-sub',
+          success: true,
+          threadId: 'thread-gateway',
+        });
+        vi.spyOn(aiAgentService, 'getSubAgentTaskStatus').mockResolvedValue({
+          result: 'Gateway result',
+          status: 'completed',
+          taskDetail: undefined,
+        } as any);
 
         (messageService.updateMessage as any).mockImplementation(
           async (_id: string, value: any) => {
@@ -2575,36 +4786,20 @@ describe('ConversationLifecycle actions', () => {
                 type: 'root',
               },
             } as any,
-            context: createTestContext(),
+            context: { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID },
           });
         });
 
-        // Messages were persisted client-side (we did NOT take the supervisor
-        // gateway early-return, which skips sendMessageInServer entirely).
         expect(sendMessageInServerSpy).toHaveBeenCalled();
-        // The callAgent tool call was still emitted on the supervisor message.
-        expect(messageService.updateMessage).toHaveBeenCalledWith(
-          TEST_IDS.ASSISTANT_MESSAGE_ID,
-          expect.objectContaining({
-            tools: [
-              expect.objectContaining({
-                apiName: 'callAgent',
-                identifier: 'lobe-agent-management',
-              }),
-            ],
-          }),
-          expect.objectContaining({ agentId: TEST_IDS.SESSION_ID }),
-        );
+        expect(messageService.createMessage).not.toHaveBeenCalled();
         // The TARGET agent runs on the gateway, not the client.
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
-        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+        expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
           expect.objectContaining({
-            context: expect.objectContaining({
-              agentId: targetAgentId,
-              scope: 'sub_agent',
-              subAgentId: targetAgentId,
-            }),
-            message,
+            agentId: targetAgentId,
+            parentMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            topicId: TEST_IDS.TOPIC_ID,
           }),
         );
       });
@@ -2727,8 +4922,8 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        // Multi-mention keeps the supervisor on the gateway (unlike single-mention,
-        // which falls through to the client path). The mentioned agents are
+        // Multi-mention keeps the supervisor on the gateway; single-mention runs
+        // the target directly. The mentioned agents are
         // forwarded so the server enables callAgent + injects the delegation context.
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
@@ -2806,20 +5001,24 @@ describe('ConversationLifecycle actions', () => {
       it('should abort pending flat tool messages when user sends a new message', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        const key = messageMapKey({ agentId, topicId: null });
+        // Pending interventions only ever live in a real topic bucket now: a
+        // new-topic send adopts its minted id up front, so the `_new` bucket
+        // never holds messages.
+        const topicId = 'topic-pending';
+        const key = messageMapKey({ agentId, topicId });
 
         const pendingToolMsg = createMockMessage({
           id: 'tool-pending-1',
           role: 'tool',
           content: '',
           pluginIntervention: { status: 'pending' },
-          topicId: undefined,
+          topicId,
         });
 
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
-            activeTopicId: undefined,
+            activeTopicId: topicId,
             messagesMap: { [key]: [pendingToolMsg] },
             dbMessagesMap: { [key]: [pendingToolMsg] },
           });
@@ -2844,7 +5043,7 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           await result.current.sendMessage({
             message: 'override pending interaction',
-            context: { agentId, topicId: null, threadId: null },
+            context: { agentId, topicId, threadId: null },
           });
         });
 
@@ -2877,12 +5076,15 @@ describe('ConversationLifecycle actions', () => {
       it('should abort pending interventions in group message children', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        const key = messageMapKey({ agentId, topicId: null });
+        // Same shift as the flat-tool case: messages only live in real topic
+        // buckets now, never in `_new`.
+        const topicId = 'topic-pending';
+        const key = messageMapKey({ agentId, topicId });
 
         const groupMsg = createMockMessage({
           id: 'group-1',
           role: 'assistant',
-          topicId: undefined,
+          topicId,
           children: [
             {
               id: 'child-1',
@@ -2904,7 +5106,7 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
-            activeTopicId: undefined,
+            activeTopicId: topicId,
             messagesMap: { [key]: [groupMsg] },
             dbMessagesMap: { [key]: [groupMsg] },
           });
@@ -2929,7 +5131,7 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           await result.current.sendMessage({
             message: 'override group interaction',
-            context: { agentId, topicId: null, threadId: null },
+            context: { agentId, topicId, threadId: null },
           });
         });
 

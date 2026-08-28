@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Afficher ou masquer le panneau de gauche",
   "toggleLeftPanel.title": "Afficher/Masquer le panneau gauche",
   "toggleRightPanel.desc": "Afficher ou masquer le panneau de droite",
-  "toggleRightPanel.title": "Afficher/Masquer le panneau droit"
+  "toggleRightPanel.title": "Afficher/Masquer le panneau droit",
+  "toggleTerminalPanel.desc": "Afficher ou masquer le panneau terminal inférieur",
+  "toggleTerminalPanel.title": "Basculer le panneau terminal"
 }

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, devices, users, workspaces } from '../../schemas';
+import { agents, devices, type NewAgent, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 
@@ -275,6 +275,116 @@ describe('AgentModel workspace device binding', () => {
 
       const stored = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
       expect(stored?.visibility).toBe('private');
+    });
+  });
+
+  describe('duplicate', () => {
+    it('drops stale personal-device bindings when duplicating a workspace agent', async () => {
+      // Legacy row predating the workspace-device guard: a public workspace
+      // agent whose config still references a personal device (updateConfig
+      // grandfathers it on the source, but the copy is a fresh caller-owned
+      // row with nothing to grandfather).
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          workspaceId: wsId,
+          title: 'Legacy WS agent',
+          visibility: 'public',
+          agencyConfig: {
+            boundDeviceId: personalDeviceId,
+            executionTargetSelectionPolicy: 'fixed',
+            executionTarget: 'device',
+            workingDirByDevice: {
+              [personalDeviceId]: '/tmp/legacy',
+              [workspaceDeviceId]: '/tmp/ws',
+            },
+          },
+        } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      const result = await wsModel.duplicate(sourceAgent.id);
+
+      const copy = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+      expect(copy?.agencyConfig?.boundDeviceId).toBeUndefined();
+      expect(copy?.agencyConfig?.workingDirByDevice).toEqual({
+        [workspaceDeviceId]: '/tmp/ws',
+      });
+      // The fixed device contract can't be preserved without a valid device:
+      // relaxed to the workspace default so the copy resolves the caller's
+      // device instead of a stale foreign one.
+      expect(copy?.agencyConfig?.executionTargetSelectionPolicy).toBe('member');
+    });
+
+    it('preserves a valid fixed workspace-device contract when duplicating', async () => {
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          workspaceId: wsId,
+          title: 'Fixed WS agent',
+          visibility: 'public',
+          agencyConfig: {
+            boundDeviceId: workspaceDeviceId,
+            executionTargetSelectionPolicy: 'fixed',
+            executionTarget: 'device',
+            workingDirByDevice: { [workspaceDeviceId]: '/tmp/ws' },
+          },
+        } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      const result = await wsModel.duplicate(sourceAgent.id);
+
+      const copy = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+      expect(copy?.agencyConfig).toEqual({
+        boundDeviceId: workspaceDeviceId,
+        executionTargetSelectionPolicy: 'fixed',
+        executionTarget: 'device',
+        workingDirByDevice: { [workspaceDeviceId]: '/tmp/ws' },
+      });
+    });
+
+    it('relaxes a fixed contract bound to a private workspace device when duplicating', async () => {
+      const privateDeviceId = 'workspace-private-device';
+      await serverDB.insert(devices).values({
+        userId,
+        workspaceId: wsId,
+        deviceId: privateDeviceId,
+        identitySource: 'machine-id',
+        visibility: 'private',
+      });
+
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          workspaceId: wsId,
+          title: 'Legacy private-device agent',
+          visibility: 'public',
+          agencyConfig: {
+            boundDeviceId: privateDeviceId,
+            executionTargetSelectionPolicy: 'fixed',
+            executionTarget: 'device',
+          },
+        } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      const result = await wsModel.duplicate(sourceAgent.id);
+
+      const copy = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+      // Enrolled device stays, but the fixed contract can't be shared with a
+      // private device: relaxed to the workspace member default.
+      expect(copy?.agencyConfig?.executionTargetSelectionPolicy).toBe('member');
+      expect(copy?.agencyConfig?.boundDeviceId).toBe(privateDeviceId);
     });
   });
 

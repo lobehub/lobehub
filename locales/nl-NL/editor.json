@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "Metadata is niet opgeslagen. Probeer opnieuw of blijf bewerken.",
   "skillFrontmatter.title": "Skill-metadata",
   "slash.compact": "Context comprimeren",
+  "slash.goal": "Doel instellen",
+  "slash.goal.desc": "Plan en start een doel met bewerkbare acceptatiecriteria",
   "slash.h1": "Kop 1",
   "slash.h2": "Kop 2",
   "slash.h3": "Kop 3",

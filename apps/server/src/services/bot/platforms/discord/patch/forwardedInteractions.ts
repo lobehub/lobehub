@@ -18,14 +18,31 @@ interface ForwardedInteraction {
   type: number;
 }
 
+/**
+ * `WebhookOptions` as far as this patch cares: the only field we touch is
+ * `waitUntil`, which the Chat SDK uses to hand background work back to the
+ * host runtime.
+ */
+interface DispatchOptions {
+  waitUntil?: (task: Promise<unknown>) => void;
+}
+
 interface ForwardedInteractionAdapter {
   discordInteractionFetch: (
     path: string,
     method: string,
     body: Record<string, unknown>,
   ) => Promise<Response>;
+  /**
+   * Present since `@chat-adapter/discord@4.32.0`, where the slash-command
+   * handler stopped taking the raw interaction. Its absence is what selects
+   * the legacy call shape below.
+   */
+  getApplicationCommandContext?: (interaction: ForwardedInteraction) => unknown;
+  getInteractionFlags?: (context: unknown) => number | undefined;
   handleApplicationCommandInteraction: (
-    interaction: ForwardedInteraction,
+    contextOrInteraction: unknown,
+    initialResponseFlagsOrOptions?: unknown,
     options?: unknown,
   ) => void;
   handleComponentInteraction: (interaction: ForwardedInteraction, options?: unknown) => void;
@@ -94,19 +111,75 @@ export const patchDiscordForwardedInteractions = (chatBot: Chat<any>) => {
       return originalHandleForwardedGatewayEvent(event, options);
     }
 
+    const isApplicationCommand = interaction.type === APPLICATION_COMMAND_INTERACTION;
+
+    // Slash commands: mirror the adapter's own HTTP interaction path, which
+    // derives a context object before dispatching and folds the resolved
+    // ephemeral flags into the deferred response.
+    //
+    // `getApplicationCommandContext` only exists on `@chat-adapter/discord`
+    // >= 4.32.0, where `handleApplicationCommandInteraction` switched from
+    // `(interaction, options)` to `(context, initialResponseFlags, options)`.
+    // Probing for the method — rather than the package version — keeps this
+    // patch working against both call shapes.
+    const usesCommandContext =
+      isApplicationCommand && typeof adapter.getApplicationCommandContext === 'function';
+    const commandContext = usesCommandContext
+      ? adapter.getApplicationCommandContext!(interaction as ForwardedInteraction)
+      : undefined;
+    const initialResponseFlags =
+      usesCommandContext && typeof adapter.getInteractionFlags === 'function'
+        ? adapter.getInteractionFlags(commandContext)
+        : undefined;
+
+    // The Chat SDK hands slash-command work back through `options.waitUntil`.
+    // Collect those tasks and await them before responding: this handler runs
+    // in a serverless function that may be frozen the moment it returns, and
+    // the deferred interaction stays a spinner until a handler PATCHes
+    // `/messages/@original`. Any host-provided `waitUntil` still gets the task
+    // too, so platforms that keep work alive on their own are unaffected.
+    const pendingTasks: Promise<unknown>[] = [];
+    const hostWaitUntil = (options as DispatchOptions | undefined)?.waitUntil;
+    const dispatchOptions: DispatchOptions = {
+      ...(options as DispatchOptions | undefined),
+      waitUntil: (task) => {
+        pendingTasks.push(task);
+        hostWaitUntil?.(task);
+      },
+    };
+
     // Gateway-forwarded interactions bypass Discord's HTTP webhook response path,
     // so we must send the deferred callback manually before dispatching handlers.
     await adapter.discordInteractionFetch(
       `/interactions/${interaction.id}/${interaction.token}/callback`,
       'POST',
-      { type: responseType },
+      {
+        ...(initialResponseFlags === undefined ? {} : { data: { flags: initialResponseFlags } }),
+        type: responseType,
+      },
     );
 
-    if (interaction.type === APPLICATION_COMMAND_INTERACTION) {
-      adapter.handleApplicationCommandInteraction(interaction as ForwardedInteraction, options);
+    if (isApplicationCommand) {
+      if (usesCommandContext) {
+        adapter.handleApplicationCommandInteraction(
+          commandContext,
+          initialResponseFlags,
+          dispatchOptions,
+        );
+      } else {
+        adapter.handleApplicationCommandInteraction(
+          interaction as ForwardedInteraction,
+          dispatchOptions,
+        );
+      }
     } else {
-      adapter.handleComponentInteraction(interaction as ForwardedInteraction, options);
+      adapter.handleComponentInteraction(interaction as ForwardedInteraction, dispatchOptions);
     }
+
+    // `catch` (not `allSettled` + rethrow): a failing handler already logged
+    // inside the SDK, and surfacing it here would turn the webhook into a 500
+    // that Discord retries.
+    if (pendingTasks.length > 0) await Promise.all(pendingTasks).catch(() => {});
 
     return okResponse();
   };

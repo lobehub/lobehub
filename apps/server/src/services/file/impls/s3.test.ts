@@ -41,6 +41,9 @@ vi.mock('@/libs/redis', () => ({
 // 模拟 S3 类
 vi.mock('@/server/modules/S3', () => ({
   FileS3: vi.fn().mockImplementation(() => ({
+    createPreSignedUrlForDownload: vi
+      .fn()
+      .mockResolvedValue('https://presigned.example.com/download'),
     createPreSignedUrlForPreview: vi
       .fn()
       .mockResolvedValue('https://presigned.example.com/test.jpg'),
@@ -81,6 +84,23 @@ describe('S3StaticFileImpl', () => {
     redisMocks.redis.get.mockResolvedValue(null);
     redisMocks.redis.set.mockResolvedValue('OK');
     fileService = new S3StaticFileImpl(mockDb);
+  });
+
+  describe('createDownloadUrl', () => {
+    it('should normalize the storage key and request attachment delivery', async () => {
+      const createPreSignedUrlForDownload = fileService['s3'].createPreSignedUrlForDownload;
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue('path/to/video.mp4');
+
+      await expect(
+        fileService.createDownloadUrl('https://cdn.example.com/video.mp4', 'Collageanimation.mp4'),
+      ).resolves.toBe('https://presigned.example.com/download');
+
+      expect(createPreSignedUrlForDownload).toHaveBeenCalledWith(
+        'path/to/video.mp4',
+        'Collageanimation.mp4',
+        undefined,
+      );
+    });
   });
 
   describe('getFullFileUrl', () => {

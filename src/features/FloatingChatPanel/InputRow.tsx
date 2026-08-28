@@ -72,9 +72,10 @@ const EXPANDED_RIGHT_ACTIONS: 'contextWindow'[] = ['contextWindow'];
 export interface InputRowProps {
   isCollapsed: boolean;
   onExpand: () => void;
+  showExpandBar?: boolean;
 }
 
-const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
+const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = true }) => {
   const s = styles;
   const [renderedCollapsed, setRenderedCollapsed] = useState(isCollapsed);
   const [focused, setFocused] = useState(false);
@@ -115,11 +116,13 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
-        <HoverExpandBar
-          bottomOffset={overlayHeight}
-          visible={isCollapsed && focused}
-          onExpand={onExpand}
-        />
+        {showExpandBar && (
+          <HoverExpandBar
+            bottomOffset={overlayHeight}
+            visible={isCollapsed && focused}
+            onExpand={onExpand}
+          />
+        )}
         <div className={s.surface}>
           <ChatInput
             allowExpand={false}

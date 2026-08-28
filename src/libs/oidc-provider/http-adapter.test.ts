@@ -32,6 +32,21 @@ const readStream = async (stream: Readable) => {
 };
 
 describe('OIDC HTTP adapter', () => {
+  describe('createNodeResponse', () => {
+    it('captures statusCode assignments made by Koa', async () => {
+      const resolvePromise = vi.fn();
+      const { createNodeResponse } = await import('./http-adapter');
+      const responseCollector = createNodeResponse(resolvePromise);
+
+      responseCollector.nodeResponse.statusCode = 500;
+      responseCollector.nodeResponse.end('Internal Server Error');
+
+      expect(responseCollector.responseStatus).toBe(500);
+      expect(responseCollector.responseBody).toBe('Internal Server Error');
+      expect(resolvePromise).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('createNodeRequest', () => {
     it('passes POST bodies through as a readable Node stream without pre-parsing', async () => {
       const body = 'grant_type=authorization_code&code=test-code';

@@ -139,7 +139,7 @@ describe('AgentEvalRunModel', () => {
         .returning();
 
       // Insert runs
-      const [run1, run2, run3, run4] = await serverDB
+      await serverDB
         .insert(agentEvalRuns)
         .values([
           {
@@ -480,6 +480,27 @@ describe('AgentEvalRunModel', () => {
         where: eq(agentEvalRuns.id, run.id),
       });
       expect(stillExists).toBeDefined();
+    });
+  });
+
+  describe('queue', () => {
+    it('atomically transitions an idle run only once', async () => {
+      const [run] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId, status: 'idle' })
+        .returning();
+
+      expect((await runModel.queue(run.id))?.status).toBe('pending');
+      expect(await runModel.queue(run.id)).toBeUndefined();
+    });
+
+    it('does not queue another user’s run', async () => {
+      const [run] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId: userId2, status: 'idle' })
+        .returning();
+
+      expect(await runModel.queue(run.id)).toBeUndefined();
     });
   });
 

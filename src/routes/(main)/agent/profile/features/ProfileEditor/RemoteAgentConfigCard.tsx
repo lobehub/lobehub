@@ -5,15 +5,17 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button as BaseButton,
   Button,
   createModal,
   Select,
+  Tag,
+  Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
@@ -111,7 +113,7 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
 
     // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
     // has no workspace dimension, so the list went stale across workspace
-    // switches (LOBE-11904).
+    // switches.
     const { data: devices, isLoading: loadingDevices } = useDeviceList();
 
     const onlineDevices = (devices ?? []).filter(

@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Vui lòng thử lại hoặc chọn phương thức đăng nhập khác",
   "authResult.failed.title": "Xác thực thất bại",
-  "authResult.success.desc": "Vui lòng nhấn nút Bắt đầu bên dưới để tiếp tục sử dụng LobeHub Desktop",
-  "authResult.success.title": "Xác thực thành công",
   "back": "Quay lại",
   "navigation.next": "Tiếp tục",
   "next": "Tiếp",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "Hủy",
   "screen5.actions.connectToServer": "Kết nối với máy chủ",
   "screen5.actions.connecting": "Đang kết nối...",
+  "screen5.actions.done": "Hoàn tất",
   "screen5.actions.signInCloud": "Đăng nhập vào LobeHub Cloud",
   "screen5.actions.signOut": "Đăng xuất",
   "screen5.actions.signingIn": "Đang đăng nhập...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Phiên bản tự lưu trữ",
   "screen5.navigation.next": "Bắt đầu",
   "screen5.selfhost.endpointPlaceholder": "Nhập URL máy chủ của bạn (ví dụ: https://your-server.com)",
+  "screen5.status.cloud.title": "Đã kết nối với LobeHub Cloud",
+  "screen5.status.description": "Các Tác nhân, Nhóm, cài đặt và Ngữ cảnh đang được đồng bộ hóa trên tất cả các thiết bị của bạn.",
+  "screen5.status.selfhost.description": "Đang đồng bộ hóa Tác nhân, Nhóm, cài đặt và Ngữ cảnh với {{url}}.",
+  "screen5.status.selfhost.title": "Đã kết nối với máy chủ của bạn",
   "screen5.title": "Đăng nhập để đồng bộ trên các thiết bị",
   "screen5.title2": "Giữ dữ liệu của bạn được đồng bộ ở mọi nơi",
   "screen5.title3": "Dữ liệu của bạn luôn nằm trong tầm kiểm soát của bạn"

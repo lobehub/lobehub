@@ -8,7 +8,11 @@ import type { PipelineContext, ProcessorOptions } from '../types';
 const log = debug('context-engine:provider:BotPlatformContextInjector');
 
 export interface BotPlatformContext {
+  /** Whether the platform can read chat history at runtime (`readMessages`). */
+  canReadHistory?: boolean;
   platformName: string;
+  /** Pre-injected recent same-channel history for platforms without history-read. */
+  recentChannelHistory?: BotPlatformInfo['recentChannelHistory'];
   supportsMarkdown: boolean;
   warnings?: string[];
 }

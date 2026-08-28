@@ -18,6 +18,8 @@ export const agentDocumentSWRKeys = {
   documentsNonWebList: (agentId: string) => ['agent:documentsList', agentId, 'non-web'] as const,
   documentChatTopic: (agentId: string, documentId: string) =>
     ['agent:documentChatTopic', agentId, documentId] as const,
+  readerDocument: (agentId: string, documentId: string) =>
+    ['agent:documentReader', agentId, documentId] as const,
   readDocument: (agentId: string, id: string) => ['agent:documentEditor', agentId, id] as const,
 };
 

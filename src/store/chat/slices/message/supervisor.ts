@@ -27,11 +27,7 @@ export interface SupervisorDecisionResult {
 }
 
 export type SupervisorToolName =
-  | 'create_todo'
-  | 'finish_todo'
-  | 'wait_for_user_input'
-  | 'trigger_agent'
-  | 'trigger_agent_dm';
+  'create_todo' | 'finish_todo' | 'wait_for_user_input' | 'trigger_agent' | 'trigger_agent_dm';
 
 export interface SupervisorToolCall {
   parameter?: unknown;
@@ -94,7 +90,7 @@ export class GroupChatSupervisor {
       allowDM: context.allowDM,
       availableAgents: context.availableAgents
         .filter((agent) => agent.id)
-        .map((agent) => ({ id: agent.id, title: agent.title })),
+        .map((agent) => ({ id: agent.id, name: agent.name, title: agent.title })),
       messages: context.messages,
       scene: context.scene,
       todoList: context.todoList,

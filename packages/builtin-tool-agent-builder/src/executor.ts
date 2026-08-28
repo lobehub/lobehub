@@ -13,6 +13,7 @@ import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { getAgentStoreState } from '@/store/agent';
 
+import { normalizeUpdateConfigParams } from './normalizeUpdateConfigParams';
 import type {
   GetAvailableModelsParams,
   InstallPluginParams,
@@ -67,7 +68,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.updateAgentConfig(agentId, params);
+    return runtime.updateAgentConfig(agentId, normalizeUpdateConfigParams(params));
   };
 
   updatePrompt = async (

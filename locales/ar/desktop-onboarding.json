@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "يرجى المحاولة مرة أخرى أو التبديل إلى طريقة تسجيل دخول مختلفة",
   "authResult.failed.title": "فشل التفويض",
-  "authResult.success.desc": "يرجى النقر على زر البدء أدناه لمتابعة استخدام LobeHub Desktop",
-  "authResult.success.title": "تم التفويض بنجاح",
   "back": "رجوع",
   "navigation.next": "متابعة",
   "next": "التالي",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "إلغاء",
   "screen5.actions.connectToServer": "الاتصال بالخادم",
   "screen5.actions.connecting": "جارٍ الاتصال...",
+  "screen5.actions.done": "تم",
   "screen5.actions.signInCloud": "تسجيل الدخول إلى LobeHub Cloud",
   "screen5.actions.signOut": "تسجيل الخروج",
   "screen5.actions.signingIn": "جارٍ تسجيل الدخول...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "نسخة مستضافة ذاتيًا",
   "screen5.navigation.next": "ابدأ الآن",
   "screen5.selfhost.endpointPlaceholder": "أدخل عنوان خادمك (مثال: https://your-server.com)",
+  "screen5.status.cloud.title": "متصل بـ LobeHub Cloud",
+  "screen5.status.description": "يتم مزامنة الوكلاء والمجموعات والإعدادات والسياق عبر جميع أجهزتك.",
+  "screen5.status.selfhost.description": "يتم مزامنة الوكلاء والمجموعات والإعدادات والسياق مع {{url}}.",
+  "screen5.status.selfhost.title": "متصل بخادمك الخاص",
   "screen5.title": "سجّل الدخول للمزامنة عبر الأجهزة",
   "screen5.title2": "احتفظ ببياناتك متزامنة في كل مكان",
   "screen5.title3": "بياناتك تحت سيطرتك دائمًا"

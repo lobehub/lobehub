@@ -4,10 +4,7 @@ import { ConnectorDataError } from './errors';
 import { withConnectorRetry } from './retry';
 
 const retryOptions = {
-  code: 'github_request_failed',
   delay: async () => {},
-  operation: 'listRepositories',
-  provider: 'github',
 } as const;
 
 describe('withConnectorRetry', () => {
@@ -23,27 +20,21 @@ describe('withConnectorRetry', () => {
   });
 
   it.each([401, 403, 404])('does not retry status %i', async (status) => {
-    const operation = vi.fn<() => Promise<never>>().mockRejectedValue({
+    const upstreamError = {
       message: 'unsafe upstream response body with token=secret',
       status,
-    });
+    };
+    const operation = vi.fn<() => Promise<never>>().mockRejectedValue(upstreamError);
 
-    await expect(withConnectorRetry(operation, retryOptions)).rejects.toMatchObject({
-      code: 'github_request_failed',
-      message: 'github listRepositories failed',
-      operation: 'listRepositories',
-      provider: 'github',
-      retryable: false,
-    });
+    await expect(withConnectorRetry(operation, retryOptions)).rejects.toBe(upstreamError);
     expect(operation).toHaveBeenCalledTimes(1);
   });
 
   it.each([501, 505])('does not retry non-transient server status %i', async (status) => {
-    const operation = vi.fn<() => Promise<never>>().mockRejectedValue({ status });
+    const upstreamError = { status };
+    const operation = vi.fn<() => Promise<never>>().mockRejectedValue(upstreamError);
 
-    await expect(withConnectorRetry(operation, retryOptions)).rejects.toBeInstanceOf(
-      ConnectorDataError,
-    );
+    await expect(withConnectorRetry(operation, retryOptions)).rejects.toBe(upstreamError);
     expect(operation).toHaveBeenCalledTimes(1);
   });
 
@@ -58,14 +49,11 @@ describe('withConnectorRetry', () => {
   });
 
   it.each([{ code: 'ETIMEDOUT' }, { status: 503 }])(
-    'marks an exhausted transient error as retryable',
+    'rethrows the original exhausted transient error',
     async (upstreamError) => {
       const operation = vi.fn<() => Promise<never>>().mockRejectedValue(upstreamError);
 
-      await expect(withConnectorRetry(operation, retryOptions)).rejects.toMatchObject({
-        message: 'github listRepositories failed',
-        retryable: true,
-      });
+      await expect(withConnectorRetry(operation, retryOptions)).rejects.toBe(upstreamError);
       expect(operation).toHaveBeenCalledTimes(3);
     },
   );
@@ -85,30 +73,16 @@ describe('withConnectorRetry', () => {
     ).rejects.toBe(upstreamError);
   });
 
-  it('sanitizes an unknown terminal error', async () => {
-    const unsafeMessage = 'upstream response token=secret';
+  /** @example expect(error.message).toBe('upstream response status=401'); */
+  it('retains an unknown terminal error message', async () => {
+    const upstreamMessage = 'upstream response status=401';
+    const upstreamError = new Error(upstreamMessage);
 
+    /** @example expect(withConnectorRetry(...)).rejects.toBe(upstreamError); */
     await expect(
       withConnectorRetry(async () => {
-        throw new Error(unsafeMessage);
+        throw upstreamError;
       }, retryOptions),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        code: 'github_request_failed',
-        message: 'github listRepositories failed',
-        operation: 'listRepositories',
-        provider: 'github',
-        retryable: false,
-      }),
-    );
-
-    try {
-      await withConnectorRetry(async () => {
-        throw new Error(unsafeMessage);
-      }, retryOptions);
-    } catch (error) {
-      expect(error).toBeInstanceOf(ConnectorDataError);
-      expect((error as Error).message).not.toContain(unsafeMessage);
-    }
+    ).rejects.toBe(upstreamError);
   });
 });

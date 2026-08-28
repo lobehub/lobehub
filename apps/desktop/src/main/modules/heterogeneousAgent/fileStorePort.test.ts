@@ -38,6 +38,36 @@ describe('createLambdaFileStorePort', () => {
     ).toBeUndefined();
   });
 
+  it('keeps a sibling rejection handled when an auth callback throws synchronously', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    try {
+      // Shape of the real failure: `getServerUrl` is async (rejects) while
+      // `getAccessToken` is a plain arrow that throws. Building the `Promise.all`
+      // argument list must not leave the first rejection without a subscriber —
+      // in Electron main an unhandled rejection kills the process.
+      await expect(
+        createLambdaFileStorePort({
+          getAccessToken: () => {
+            throw new TypeError("Cannot read properties of undefined (reading 'getAccessToken')");
+          },
+          getServerUrl: async () => {
+            throw new TypeError("Cannot read properties of undefined (reading 'getServerUrl')");
+          },
+        }),
+      ).rejects.toThrow(TypeError);
+
+      // Node reports unhandled rejections once the microtask queue drains.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+  });
+
   it('POSTs a superjson-serialized input to the lambda procedure and deserializes the result', async () => {
     vi.mocked(fetch).mockResolvedValue(trpcOk({ isExist: true, url: 'files/a/b.png' }) as any);
 

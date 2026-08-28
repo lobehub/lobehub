@@ -5,6 +5,7 @@ import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
 
 const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
   AgentRuntimeErrorType.ExceededContextWindow,
+  AgentRuntimeErrorType.InvalidRequestFormat,
   AgentRuntimeErrorType.ProviderContentPolicyViolation,
   AgentRuntimeErrorType.ProviderNoImageGenerated,
 ]);
@@ -16,6 +17,7 @@ const RETRYABLE_ERROR_CODES = new Set([
   'invalidapikey',
   'invalidproviderapikey',
   'insufficient_quota',
+  AgentRuntimeErrorType.InsufficientQuota.toLowerCase(),
   'model_not_found',
   'quota_exceeded',
   'rate_limit_exceeded',

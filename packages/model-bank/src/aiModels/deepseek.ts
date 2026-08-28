@@ -19,16 +19,15 @@ const deepseekChatModels: AIChatModelCard[] = [
     maxOutput: 393_216,
     pricing: {
       currency: 'CNY',
-      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-04-24',
+    releasedAt: '2026-07-31',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      extendParams: ['deepseekV4GAReasoningEffort'],
     },
     type: 'chat',
   },
@@ -49,17 +48,15 @@ const deepseekChatModels: AIChatModelCard[] = [
     maxOutput: 393_216,
     pricing: {
       currency: 'CNY',
-      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
-      // DeepSeek V4 Pro limited-time 75% off discount is valid until 2026-05-05 23:59 Beijing time.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 13.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-04-24',
+    releasedAt: '2026-08-13',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      extendParams: ['deepseekV4GAReasoningEffort'],
     },
     type: 'chat',
   },

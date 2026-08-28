@@ -7,7 +7,11 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import type { UserConnectorToolItem } from '@/database/schemas';
-import { getComposioClient, isComposioClientAvailable } from '@/libs/composio';
+import {
+  getComposioClient,
+  isComposioClientAvailable,
+  isComposioConnectedAccountNotFoundError,
+} from '@/libs/composio';
 import { type ToolExecutionResult } from '@/server/services/toolExecution/types';
 
 const log = debug('lobe-server:composio-service');
@@ -32,7 +36,7 @@ export interface ComposioServiceOptions {
   /**
    * Workspace scope. When set, connector/plugin rows resolve within the team
    * workspace instead of the caller's personal scope (fixes workspace-installed
-   * Composio connectors being invisible at runtime — LOBE-10891).
+   * Composio connectors being invisible at runtime).
    */
   workspaceId?: string;
 }
@@ -76,6 +80,8 @@ export class ComposioService {
 
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
     const { identifier, toolSlug, args, agentId } = params;
+    let resolvedConnectedAccountId: string | undefined;
+    let resolvedConnectorId: string | undefined;
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
@@ -112,6 +118,8 @@ export class ComposioService {
       }
 
       const { connectedAccountId, ownerUserId } = account;
+      resolvedConnectedAccountId = connectedAccountId;
+      resolvedConnectorId = account.connectorId;
 
       log(
         'executeComposioTool: calling Composio API with connectedAccountId=%s, ownerUserId=%s',
@@ -158,6 +166,22 @@ export class ComposioService {
       return { content: resultContent, success: true };
     } catch (error) {
       const err = error as Error;
+      if (
+        resolvedConnectedAccountId &&
+        resolvedConnectorId &&
+        this.connectorModel &&
+        isComposioConnectedAccountNotFoundError(error)
+      ) {
+        try {
+          await this.connectorModel.markComposioConnectionUnavailable(
+            resolvedConnectorId,
+            resolvedConnectedAccountId,
+          );
+        } catch (healthError) {
+          // Persisting connector health must not replace the original remote tool error.
+          log('executeComposioTool: failed to persist connector health: %O', healthError);
+        }
+      }
       console.error(
         'ComposioService.executeComposioTool error %s/%s: %O',
         identifier,
@@ -191,13 +215,16 @@ export class ComposioService {
   private async resolveComposioAccount(
     identifier: string,
     agentId?: string,
-  ): Promise<{ connectedAccountId: string; ownerUserId: string } | undefined> {
+  ): Promise<
+    { connectedAccountId: string; connectorId?: string; ownerUserId: string } | undefined
+  > {
     if (this.connectorModel) {
       const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], agentId);
       const composio = connector?.metadata?.composio;
       if (composio?.connectedAccountId) {
         return {
           connectedAccountId: composio.connectedAccountId,
+          connectorId: connector.id,
           ownerUserId: composio.linkedByUserId ?? connector.userId ?? this.userId!,
         };
       }

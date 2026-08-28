@@ -1,3 +1,4 @@
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
@@ -10,7 +11,9 @@ import type {
 } from '../types';
 
 const OPENCODE_IDENTIFIER = 'opencode';
-const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
+const OPENCODE_TODO_WRITE_API = 'todowrite';
+const OPENCODE_CLI_INSTALL_DOCS_URL =
+  getHeterogeneousAgentConfigOrThrow(OPENCODE_IDENTIFIER).auth.docsUrl;
 const AUTH_REQUIRED_PATTERNS = [
   /authentication/i,
   /not authenticated/i,
@@ -52,6 +55,31 @@ const isAuthError = (error: any, message: string): boolean =>
   error?.name === 'ProviderAuthError' ||
   error?.data?.statusCode === 401 ||
   AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message));
+
+const synthesizeTodoWritePluginState = (value: unknown) => {
+  if (!Array.isArray(value)) return;
+
+  const items = value.flatMap((todo) => {
+    if (!todo || typeof todo !== 'object') return [];
+
+    const record = todo as Record<string, unknown>;
+    const text = typeof record.content === 'string' ? record.content.trim() : '';
+    if (!text) return [];
+
+    // OpenCode's run renderer treats cancelled and unknown statuses as
+    // unchecked items; the shared Todo UI uses the same three-state alphabet.
+    const status =
+      record.status === 'completed'
+        ? 'completed'
+        : record.status === 'in_progress'
+          ? 'processing'
+          : 'todo';
+
+    return [{ status, text }];
+  });
+
+  return { todos: { items, updatedAt: new Date().toISOString() } };
+};
 
 /** Maps OpenCode's completed-part JSONL protocol into shared stream events. */
 export class OpenCodeAdapter implements AgentEventAdapter {
@@ -111,7 +139,11 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       this.started = true;
     }
     this.streamOpen = true;
-    const data: StreamStartData = { provider: OPENCODE_IDENTIFIER, sessionId: this.sessionId };
+    const data: StreamStartData & { newStep?: boolean } = {
+      provider: OPENCODE_IDENTIFIER,
+      sessionId: this.sessionId,
+      ...(this.stepIndex > 0 ? { newStep: true } : {}),
+    };
     events.push(this.makeEvent('stream_start', data));
     return events;
   }
@@ -167,9 +199,14 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       type: 'default',
     };
     const isError = state.status === 'error';
+    const pluginState =
+      !isError && part.tool === OPENCODE_TODO_WRITE_API
+        ? synthesizeTodoWritePluginState(state.metadata?.todos ?? state.input?.todos)
+        : undefined;
     const result: ToolResultData = {
       content: isError ? String(state.error ?? '') : String(state.output ?? ''),
       isError,
+      ...(pluginState ? { pluginState } : {}),
       toolCallId: callId,
     };
 

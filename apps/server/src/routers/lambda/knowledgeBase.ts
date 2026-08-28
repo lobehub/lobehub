@@ -6,11 +6,16 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { serverDBEnv } from '@/config/db';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
-import { insertKnowledgeBasesSchema } from '@/database/schemas';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  getWorkspaceScopedPermissionMatches,
+  hasWorkspaceScopedPermission,
+} from '@/server/services/workspacePermission';
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -18,6 +23,27 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertKnowledgeBaseBrowsable,
+  filterRestrictedKnowledgeBases,
+  getUseLevelKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
+
+/**
+ * Presentation metadata only. Deliberately NOT `insertKnowledgeBasesSchema.partial()`:
+ * that carries `id`, `userId`, `workspaceId` and `visibility`, and a shared
+ * knowledge base is now editable by any member holding `edit` access rather than
+ * only by its creator. Without this narrowing such a member could reassign the
+ * row, move it to another workspace, or take it private — bypassing the
+ * creator-only transfer and publish/make-private procedures and putting the
+ * library out of its own creator's reach. Mirrors the OpenAPI
+ * `UpdateKnowledgeBaseSchema` surface.
+ */
+const updatableKnowledgeBaseFields = z.object({
+  avatar: z.string().nullish(),
+  description: z.string().nullish(),
+  name: z.string().optional(),
+});
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -97,6 +123,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
@@ -132,7 +159,18 @@ export const knowledgeBaseRouter = router({
   getKnowledgeBaseById: knowledgeBaseProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }): Promise<KnowledgeBaseItem | undefined> => {
-      return ctx.knowledgeBaseModel.findById(input.id);
+      const kb = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!kb) return kb;
+
+      // Restricted KBs (resource-permission `use` level) stay mountable but
+      // their detail/content view is manager-only.
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+
+      return kb;
     }),
 
   getKnowledgeBases: knowledgeBaseProcedure
@@ -143,9 +181,40 @@ export const knowledgeBaseRouter = router({
         })
         .optional(),
     )
-    .query(async ({ ctx, input }): Promise<KnowledgeBaseItem[]> => {
-      return ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
-    }),
+    .query(
+      async ({
+        ctx,
+        input,
+      }): Promise<
+        (KnowledgeBaseItem & { memberRestricted?: boolean; permissionManageable?: boolean })[]
+      > => {
+        const list = await ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+
+        // Restricted KBs are fully hidden from non-privileged members here; the
+        // agent knowledge picker lists them through `agent.getKnowledgeBasesAndFiles`.
+        const visible = await filterRestrictedKnowledgeBases(ctx, list);
+
+        // Managers keep seeing restricted KBs — flag them (and who may manage
+        // permissions) so the client renders the lock badge and the
+        // permission-page entry without a per-row permission request.
+        if (!ctx.workspaceId) return visible;
+        const [useLevelIds, { hasAllScope }] = await Promise.all([
+          getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId),
+          getWorkspaceScopedPermissionMatches({
+            action: 'KNOWLEDGE_BASE_UPDATE',
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        ]);
+        const useLevelSet = new Set(useLevelIds);
+        return visible.map((kb) => ({
+          ...kb,
+          memberRestricted: useLevelSet.has(kb.id),
+          permissionManageable: hasAllScope || kb.userId === ctx.userId,
+        }));
+      },
+    ),
 
   publishKnowledgeBaseToWorkspace: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))
@@ -167,8 +236,6 @@ export const knowledgeBaseRouter = router({
           message: 'Only the creator can publish a private knowledge base to the workspace',
         });
       }
-
-      if (kb.visibility === 'public') return { success: true };
 
       await ctx.knowledgeBaseModel.publishToWorkspace(input.id);
       return { success: true };
@@ -203,8 +270,6 @@ export const knowledgeBaseRouter = router({
           message: 'Only the creator can change a knowledge base’s visibility',
         });
       }
-
-      if (kb.visibility === input.visibility) return { success: true };
 
       await ctx.knowledgeBaseModel.setVisibility(input.id, input.visibility);
       return { success: true };
@@ -330,12 +395,30 @@ export const knowledgeBaseRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      return ctx.knowledgeBaseModel.transferTo(
+      const result = await ctx.knowledgeBaseModel.transferTo(
         input.id,
         input.targetWorkspaceId,
         ctx.userId,
         input.targetVisibility,
       );
+      // Mirror the agent/document transfer paths: the source workspace's
+      // permission row must not survive the move, and a public arrival gets
+      // the default level in the destination.
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'knowledgeBase',
+          input.id,
+        );
+      }
+      if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
+          'knowledgeBase',
+          input.id,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.knowledgeBase,
+          ctx.userId,
+        );
+      }
+      return result;
     }),
 
   updateKnowledgeBase: knowledgeBaseProcedure
@@ -343,13 +426,29 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         id: z.string(),
-        value: insertKnowledgeBasesSchema.partial(),
+        value: updatableKnowledgeBaseFields,
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
+            .workspacePermissionCodes,
+          meta: {
+            userId: existing.userId,
+            visibility: existing.visibility ?? null,
+            workspaceId: existing.workspaceId ?? null,
+          },
+          resourceId: input.id,
+          resourceType: 'knowledgeBase',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
 
       return ctx.knowledgeBaseModel.update(input.id, input.value);
     }),

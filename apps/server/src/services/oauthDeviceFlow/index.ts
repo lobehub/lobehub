@@ -15,6 +15,7 @@ export interface DeviceCodeResponse {
 
 export interface TokenResponse {
   accessToken: string;
+  accountId?: string;
   expiresIn?: number;
   refreshToken?: string;
   scope?: string;

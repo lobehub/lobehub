@@ -1,8 +1,9 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { AgentGroupController } from '../controllers/agent-group.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
@@ -22,8 +23,12 @@ const AgentGroupRoutes = new Hono();
  */
 AgentGroupRoutes.get(
   '/',
+  describeRoute({ summary: 'Get agent group list', tags: ['agent-groups'] }),
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AGENT_READ'), 'You do not have permission to view agent group list'),
+  requireAnyPermission(
+    getAllScopePermissions('AGENT_READ'),
+    'You do not have permission to view agent group list',
+  ),
   async (c) => {
     const controller = new AgentGroupController();
     return await controller.getAgentGroups(c);
@@ -38,7 +43,10 @@ AgentGroupRoutes.get(
 AgentGroupRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AGENT_CREATE'), 'You do not have permission to create an agent group'),
+  requireAnyPermission(
+    getAllScopePermissions('AGENT_CREATE'),
+    'You do not have permission to create an agent group',
+  ),
   zValidator('json', CreateAgentGroupRequestSchema),
   async (c) => {
     const controller = new AgentGroupController();
@@ -54,7 +62,10 @@ AgentGroupRoutes.post(
 AgentGroupRoutes.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AGENT_READ'), 'You do not have permission to view agent group details'),
+  requireAnyPermission(
+    getAllScopePermissions('AGENT_READ'),
+    'You do not have permission to view agent group details',
+  ),
   zValidator('param', AgentGroupIdParamSchema),
   async (c) => {
     const controller = new AgentGroupController();
@@ -70,7 +81,10 @@ AgentGroupRoutes.get(
 AgentGroupRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AGENT_UPDATE'), 'You do not have permission to update an agent group'),
+  requireAnyPermission(
+    getAllScopePermissions('AGENT_UPDATE'),
+    'You do not have permission to update an agent group',
+  ),
   zValidator('param', AgentGroupIdParamSchema),
   zValidator('json', UpdateAgentGroupRequestSchema),
   async (c) => {
@@ -91,7 +105,10 @@ AgentGroupRoutes.patch(
 AgentGroupRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AGENT_DELETE'), 'You do not have permission to delete an agent group'),
+  requireAnyPermission(
+    getAllScopePermissions('AGENT_DELETE'),
+    'You do not have permission to delete an agent group',
+  ),
   zValidator('param', AgentGroupIdParamSchema),
   async (c) => {
     const controller = new AgentGroupController();

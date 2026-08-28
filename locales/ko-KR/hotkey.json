@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "왼쪽 패널 표시 또는 숨기기",
   "toggleLeftPanel.title": "왼쪽 패널 표시/숨기기",
   "toggleRightPanel.desc": "오른쪽 패널 표시 또는 숨기기",
-  "toggleRightPanel.title": "오른쪽 패널 표시/숨기기"
+  "toggleRightPanel.title": "오른쪽 패널 표시/숨기기",
+  "toggleTerminalPanel.desc": "하단 터미널 패널 표시 또는 숨기기",
+  "toggleTerminalPanel.title": "터미널 패널 전환"
 }

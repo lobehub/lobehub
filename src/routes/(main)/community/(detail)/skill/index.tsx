@@ -66,8 +66,8 @@ const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileSkillPage = memo<{ mobile?: boolean }>(() => {
+export const MobileSkillPage = (_props: { mobile?: boolean }) => {
   return <SkillDetailPage mobile={true} />;
-});
+};
 
 export default SkillDetailPage;

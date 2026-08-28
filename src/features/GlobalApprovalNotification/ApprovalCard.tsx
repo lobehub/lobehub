@@ -1,8 +1,8 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
-import { ActionIcon, Avatar } from '@lobehub/ui';
+import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,7 @@ import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { type ConversationContext } from '@/features/Conversation/types';
+import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -46,8 +46,8 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const handleMessagesChange = useCallback(
-    (next: UIChatMessage[], ctx: ConversationContext) => {
-      replaceMessages(next, { context: ctx });
+    (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
+      replaceMessages(next, { context: ctx, source: meta?.source });
     },
     [replaceMessages],
   );
@@ -56,14 +56,15 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const meta = useAgentStore(agentSelectors.getAgentMetaById(context.agentId));
 
   // Topic title tells the user *which* conversation this approval belongs to.
-  // Read agent-scoped (not active-scoped) so a non-active conversation resolves.
-  const topicTitle = useChatStore((s) =>
-    context.topicId
-      ? topicSelectors
-          .getTopicsByAgentId(context.agentId)(s)
-          ?.find((tp) => tp.id === context.topicId)?.title
-      : undefined,
-  );
+  // A parked approval can belong to an older topic outside the agent's loaded
+  // sidebar page, so resolve across every topic cache and fetch the detail by
+  // id when it is still missing. Falling back to the agent name here makes two
+  // approvals from the same agent indistinguishable.
+  const [topicTitle, useFetchTopicDetail] = useChatStore((s) => [
+    context.topicId ? topicSelectors.getTopicById(context.topicId)(s)?.title : undefined,
+    s.useFetchTopicDetail,
+  ]);
+  useFetchTopicDetail(context.topicId && !topicTitle ? context.topicId : undefined);
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -142,20 +143,17 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
       operationState={operationState}
       onMessagesChange={handleMessagesChange}
     >
-      <div className={styles.card}>
+      <div data-pending-hotkey-scope className={styles.card}>
         <div className={styles.header}>
           <Avatar
             avatar={meta.avatar}
             background={meta.backgroundColor}
             size={28}
-            title={meta.title}
+            title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
-            <div className={styles.headerTitle}>
-              {topicTitle || meta.title || t('globalApproval.title')}
-            </div>
             <div className={styles.headerSubtitle}>
-              {meta.title ? `${meta.title} · ` : ''}
+              {agentDisplayName(meta) && <span>{agentDisplayName(meta)}</span>}
               {t('globalApproval.subtitle')}
             </div>
           </div>
@@ -169,14 +167,14 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
           )}
         </div>
 
-        {userRequest && (
-          <div className={styles.userRequest}>
-            <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
+        <div className={styles.requestContext}>
+          <div className={styles.headerTitle}>{topicTitle || t('globalApproval.title')}</div>
+          {userRequest && (
             <div className={styles.userRequestBody}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {interventions.length > 1 && (
           <InterventionTabBar

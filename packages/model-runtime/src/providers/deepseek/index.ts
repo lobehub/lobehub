@@ -18,12 +18,21 @@ import { fetchDeepSeekModels } from './modelFetch';
 const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_DEEPSEEK_ANTHROPIC_BASE_URL = 'https://api.deepseek.com/anthropic';
 const DEEPSEEK_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const DEEPSEEK_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 type DeepSeekSDKType = 'anthropic' | 'openai';
 
 const normalizeDeepSeekAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeDeepSeekOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (!baseURL) return DEFAULT_DEEPSEEK_BASE_URL;
+
+  return baseURL
+    .replace(DEEPSEEK_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
 
 /**
  * `sdkType` explicitly selects the DeepSeek SDK wrapper for router-runtime channels.
@@ -75,6 +84,17 @@ export const openAIParams = {
 
 export const LobeDeepSeekOpenAI = createOpenAICompatibleRuntime(openAIParams);
 
+type DeepSeekOpenAIRuntimeOptions = ConstructorParameters<typeof LobeDeepSeekOpenAI>[0];
+
+const fetchDeepSeekModelsWithOpenAI = ({ options }: { options?: DeepSeekOpenAIRuntimeOptions }) => {
+  const runtime = new LobeDeepSeekOpenAI({
+    ...options,
+    baseURL: normalizeDeepSeekOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
+
 const createOpenAIRouter = (baseURLPattern?: RegExp) => ({
   apiType: 'deepseek' as const,
   ...(baseURLPattern ? { baseURLPattern } : {}),
@@ -102,7 +122,7 @@ const createAnthropicRouter = ({
 
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.DeepSeek,
-  models: fetchDeepSeekModels,
+  models: fetchDeepSeekModelsWithOpenAI,
   routers: (options) => {
     const sdkType = resolveDeepSeekSDKType(options.sdkType);
 

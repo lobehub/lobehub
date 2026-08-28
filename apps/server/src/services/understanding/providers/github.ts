@@ -1,4 +1,4 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
+import { getConnectorErrorMessage, isConnectorErrorRetryable } from '@lobechat/connector-data';
 import type { GitHubUserContext } from '@lobechat/connector-data/github';
 import { toGitHubUserContextMarkdown } from '@lobechat/connector-data/github';
 
@@ -12,16 +12,35 @@ interface SupplementalOperation {
 }
 
 export const githubUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'github',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGitHubClient();
     const profilePromise = client.getUserProfile();
     const operations: SupplementalOperation[] = [
       {
+        code: 'GITHUB_CONTRIBUTED_REPOSITORIES_FAILED',
+        key: 'contributedRepositories',
+        message: 'GitHub contributed repository enrichment failed',
+        run: () => client.listContributedRepositories(),
+      },
+      {
+        code: 'GITHUB_INFLUENTIAL_REPOSITORIES_FAILED',
+        key: 'influentialRepositories',
+        message: 'GitHub influential repository enrichment failed',
+        run: () => client.listInfluentialRepositories(),
+      },
+      {
         code: 'GITHUB_PINNED_REPOSITORIES_FAILED',
         key: 'pinnedRepositories',
         message: 'GitHub pinned repository enrichment failed',
         run: () => client.listPinnedRepositories(),
+      },
+      {
+        code: 'GITHUB_PINNED_CONTRIBUTIONS_FAILED',
+        key: 'pinnedContributedRepositories',
+        message: 'GitHub pinned contribution enrichment failed',
+        run: () => client.listPinnedContributedRepositories(),
       },
       {
         code: 'GITHUB_RECENT_CONTRIBUTIONS_FAILED',
@@ -67,31 +86,43 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
       return [
         {
           code: operations[index].code,
-          message: operations[index].message,
+          message: getConnectorErrorMessage(result.reason) ?? operations[index].message,
           operation: operations[index].key,
           provider: 'github',
-          retryable: result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+          retryable: isConnectorErrorRetryable(result.reason),
         },
       ];
     });
     const {
       organizations = [],
+      contributedRepositories = [],
+      influentialRepositories = [],
       pinnedRepositories = [],
+      pinnedContributedRepositories = [],
       profileReadme,
       recentContributions = [],
       recentPullRequests = [],
       recentRepositories = [],
     } = context;
-    const hasPrimaryProfileEvidence = Boolean(
-      profileReadme || pinnedRepositories.length > 0 || recentContributions.length > 0,
-    );
+    const hasStructuredContributionEvidence =
+      contributedRepositories.length > 0 || recentContributions.length > 0;
+    const repositoryEvidenceCount = new Set(
+      [
+        ...contributedRepositories,
+        ...influentialRepositories,
+        ...pinnedRepositories,
+        ...pinnedContributedRepositories,
+      ].map(({ nameWithOwner }) => nameWithOwner),
+    ).size;
     const sourceCount =
       1 +
       organizations.length +
+      repositoryEvidenceCount +
       (profileReadme ? 1 : 0) +
-      pinnedRepositories.length +
       recentContributions.length +
-      (hasPrimaryProfileEvidence ? 0 : recentRepositories.length + recentPullRequests.length);
+      (hasStructuredContributionEvidence
+        ? 0
+        : recentRepositories.length + recentPullRequests.length);
 
     return {
       context: ['Provider: github', '# Source Brief', toGitHubUserContextMarkdown(context)].join(

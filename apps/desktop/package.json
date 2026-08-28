@@ -14,7 +14,9 @@
     "build:cli": "cd ../cli && cross-env MINIFY=1 bun run build",
     "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 npm run build:main:raw",
     "build:main:raw": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.renderer.config.ts",
+    "build:renderer": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build --config vite.renderer.config.ts",
     "build:run-unpack": "electron .",
+    "db:generate:local": "drizzle-kit generate --config drizzle.local.config.ts",
     "dev": "node scripts/dev.mjs",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
     "fix:electron": "node scripts/fix-electron-runtime.mjs",
@@ -35,6 +37,7 @@
     "package:mac": "npm run build:main && electron-builder --mac --config electron-builder.mjs  --publish never",
     "package:mac:local": "npm run build:main && cross-env UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never --c.mac.notarize=false -c.mac.identity=null",
     "package:win": "npm run build:main && electron-builder --win --config electron-builder.mjs  --publish never",
+    "react-devtools": "bunx react-devtools@7",
     "start": "npm run build:main && electron .",
     "start:reuse": "electron .",
     "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
@@ -46,13 +49,13 @@
   "dependencies": {
     "@lobehub/fluent-emoji": "^4.1.0",
     "@lydell/node-pty": "1.2.0-beta.12",
-    "@napi-rs/canvas": "^0.1.100",
     "electron-log": "^5.4.4",
     "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
     "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.66",
     "@base-ui/react": "^1.6.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
@@ -64,12 +67,16 @@
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
+    "@lobechat/electron-mac-notifications": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/napi-loader": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "@lobehub/i18n-cli": "^1.27.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@t3-oss/env-core": "^0.13.11",
@@ -83,10 +90,10 @@
     "cookie": "^1.1.1",
     "cross-env": "^10.1.0",
     "diff": "^8.0.4",
-    "electron": "41.3.0",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "electron": "43.2.0",
     "electron-builder": "26.14.0",
-    "electron-devtools-installer": "4.0.0",
-    "electron-is": "^3.0.0",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9",
     "electron-window-state": "^5.0.3",
@@ -96,7 +103,6 @@
     "fast-glob": "^3.3.3",
     "fetch-socks": "^1.3.3",
     "fflate": "^0.8.3",
-    "fix-path": "^5.0.0",
     "get-port-please": "^3.2.0",
     "happy-dom": "^20.10.6",
     "http-proxy-agent": "^7.0.2",
@@ -117,14 +123,14 @@
     "uuid": "^14.0.1",
     "vite": "8.0.14",
     "vitest": "3.2.6",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zod-compiler": "^1.28.0"
   },
   "optionalDependencies": {
     "node-mac-permissions": "^2.5.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@napi-rs/canvas",
       "electron",
       "electron-builder",
       "node-mac-permissions"

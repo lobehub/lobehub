@@ -6,6 +6,7 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/database": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/trpc": "workspace:*",

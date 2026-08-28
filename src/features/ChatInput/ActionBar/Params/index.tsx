@@ -1,5 +1,5 @@
 import { Settings2Icon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
@@ -14,7 +14,6 @@ const Params = memo(() => {
   const [isLoading] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
   ]);
-  const [updating, setUpdating] = useState(false);
   const { t } = useTranslation('setting');
 
   if (isLoading) return <ChatInputAction disabled icon={Settings2Icon} />;
@@ -25,7 +24,7 @@ const Params = memo(() => {
       showTooltip={false}
       title={t('settingModel.params.title')}
       popover={{
-        content: <Controls setUpdating={setUpdating} updating={updating} />,
+        content: <Controls />,
         maxWidth: 384,
         minWidth: 384,
         styles: {

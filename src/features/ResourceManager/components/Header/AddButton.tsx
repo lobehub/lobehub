@@ -8,18 +8,17 @@ import {
 import { Notion } from '@lobehub/icons';
 import { type DropdownItem } from '@lobehub/ui';
 import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
 import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { usePermission } from '@/hooks/usePermission';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 
@@ -35,7 +34,7 @@ const getAcceptedFileTypes = (category: FilesTabs): string | undefined => {
       return 'audio/*';
     }
     case FilesTabs.Documents: {
-      return '.pdf,.doc,.docx,.md,.markdown,.xls,.xlsx';
+      return '.pdf,.doc,.docx,.md,.markdown,.txt,.rtf,.csv,.xls,.xlsx,.ppt,.pptx,.epub';
     }
     case FilesTabs.Images: {
       return 'image/*';
@@ -70,8 +69,9 @@ const AddButton = () => {
     ]);
 
   const handleOpenPageEditor = useCallback(async () => {
-    // Navigate to "All" category first if not already there
-    if (category !== FilesTabs.All) {
+    // Navigate to "All" category first if not already there. The home
+    // dashboard and the Pages category both surface the new page, so stay put.
+    if (category !== FilesTabs.All && category !== FilesTabs.Home && category !== FilesTabs.Pages) {
       setCategory(FilesTabs.All);
     }
 
@@ -102,7 +102,7 @@ const AddButton = () => {
 
   const handleCreateFolder = useCallback(async () => {
     // Navigate to "All" category first if not already there
-    if (category !== FilesTabs.All) {
+    if (category !== FilesTabs.All && category !== FilesTabs.Home) {
       setCategory(FilesTabs.All);
     }
 
@@ -143,7 +143,7 @@ const AddButton = () => {
       // Trigger auto-rename with the real ID (after sync completes)
       setPendingRenameItemId(realId);
     } catch (error) {
-      message.error(t('header.actions.createFolderError'));
+      toast.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
   }, [

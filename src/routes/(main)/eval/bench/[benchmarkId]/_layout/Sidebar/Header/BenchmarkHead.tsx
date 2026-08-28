@@ -1,15 +1,8 @@
 'use client';
 
 import { type DropdownItem } from '@lobehub/ui';
-import {
-  ActionIcon,
-  Block,
-  Center,
-  DropdownMenu,
-  Skeleton,
-  stopPropagation,
-  Text,
-} from '@lobehub/ui';
+import { Block, Center, DropdownMenu, Skeleton, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Activity,

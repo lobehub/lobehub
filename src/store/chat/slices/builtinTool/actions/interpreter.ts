@@ -12,7 +12,6 @@ import { type SWRResponse } from 'swr';
 import { useClientDataSWR } from '@/libs/swr';
 import { chatToolKeys } from '@/libs/swr/keys';
 import { fileService } from '@/services/file';
-import { pythonService } from '@/services/python';
 import { dbMessageSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import { useFileStore } from '@/store/file';
@@ -92,12 +91,16 @@ export class ChatCodeInterpreterActionImpl {
         }
       }
 
+      // Imported here rather than at module scope: this slice is assembled into the
+      // chat store, so a static import puts Pyodide and Comlink in the bundle every
+      // chat page loads, for a tool most sessions never invoke.
+      const { pythonService } = await import('@/services/python');
       const result = await pythonService.runPython(params.code, params.packages, files);
 
       // Complete interpreter operation
       this.#get().completeOperation(interpreterOpId);
 
-      if (result?.files) {
+      if (result.files) {
         await this.#get().optimisticUpdateMessageContent(
           id,
           JSON.stringify(result),

@@ -32,8 +32,8 @@ export const UNKNOWN_PROMPT_VERSION = 'v0';
 
 export interface ResolveScenarioInput {
   /**
-   * Prompt version supplied by the caller. Conventionally a `v<major>.<minor>`
-   * constant declared next to the prompt definition. Missing values resolve to
+   * Prompt version supplied by the caller. Use `v<major>` or `v<major>.<minor>`
+   * and declare the constant next to the prompt definition. Missing values resolve to
    * `UNKNOWN_PROMPT_VERSION` so tracing still records the row.
    */
   promptVersion?: string;

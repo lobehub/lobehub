@@ -2,13 +2,12 @@
 
 Use this surface for **desktop-only behavior** — native windows, IPC / main-process
 code, tray/menu, auto-update, OS integration, or a packaged-only path. That code
-doesn't exist in a plain web page, so [web.md](./web.md) can't prove it. You drive
-the running app's renderer over CDP with `agent-browser`
+doesn't exist in a plain web page. Drive the running app's renderer over CDP with `agent-browser`
 ([../references/agent-browser.md](../references/agent-browser.md)).
 
-For a change that behaves identically in a browser, prefer [web.md](./web.md) —
-it's lighter and cloud-portable. Use Electron only when the criterion calls out
-the desktop shell.
+For a change that behaves identically in a browser, return to the router and use
+the lighter, cloud-portable Web surface. Use Electron only when the criterion
+calls out the desktop shell.
 
 ## Setup
 
@@ -24,8 +23,8 @@ agent-browser --cdp 9222 screenshot ./proof/desktop-state.png
 ```
 
 3. Auth: a desktop app usually keeps its own persistent login state in its
-   user-data dir — log in once in the app and it survives restarts; no injection
-   needed (see [../references/auth.md](../references/auth.md#desktop)).
+   user-data dir — log in once in the app and it survives restarts. Verify the
+   signed-in state through the attached renderer before capturing evidence.
 
 ## Reading app state
 
@@ -83,12 +82,15 @@ agent-browser --cdp 9222 eval "JSON.stringify(window.__ERRORS__)" # → text evi
 ## Time-based behavior & OS-level steps
 
 - **Behavior over time** needs a clip — record CDP frames into MP4/GIF:
-  [../references/recording.md](../references/recording.md).
+  [../references/recording-cdp.md](../references/recording-cdp.md).
 - **Native chrome around the app** (file pickers, system dialogs, menu-bar/dock,
   permission prompts) lives outside the renderer — drive it with Computer Use:
   [../references/computer-use.md](../references/computer-use.md).
 
 ## Boundaries — headless / cloud
+
+Tag renderer artifacts captured by `agent-browser` as `--by agent-browser`; use
+`--by cdp` only for a direct CDP client capture.
 
 Electron runs on Linux but has no true headless mode — it needs a display server.
 In a headless/cloud environment, wrap the launch with `xvfb-run` (virtual
@@ -96,4 +98,4 @@ framebuffer). Everything CDP-based keeps working under Xvfb (connection, snapsho
 eval, `agent-browser screenshot` — captured from the renderer, not the OS screen).
 What does NOT work: OS-window capture (`screencapture`), osascript, and native
 screen recording — all macOS-only. Keep evidence CDP-based to stay cloud-portable
-(see [../references/evidence.md](../references/evidence.md#headless--cloud-portability)).
+whenever the renderer owns the criterion.

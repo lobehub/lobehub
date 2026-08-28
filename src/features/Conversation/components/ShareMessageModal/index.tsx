@@ -1,15 +1,16 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { createModal, Tabs } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import ShareDataProvider from '@/features/ShareModal/ShareDataProvider';
 import SharePdf from '@/features/ShareModal/SharePdf';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-import { useConversationStore } from '../../store';
+import type { createStore } from '../../store';
+import { Provider, useConversationStore } from '../../store';
 import ShareImage from './ShareImage';
 import ShareText from './ShareText';
 
@@ -19,13 +20,11 @@ enum Tab {
   Text = 'text',
 }
 
-export interface ShareModalProps {
+interface ShareMessageModalContentProps {
   message: UIChatMessage;
-  onCancel: () => void;
-  open: boolean;
 }
 
-const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
+const ShareMessageModalContent = memo<ShareMessageModalContentProps>(({ message }) => {
   const [tab, setTab] = useState<Tab>(Tab.Screenshot);
   const { t } = useTranslation('chat');
   const uniqueId = useId();
@@ -59,29 +58,34 @@ const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
   }, [context, isMobile, message, uniqueId, t]);
 
   return (
-    <ImperativeModal
-      allowFullscreen
-      centered={false}
-      destroyOnHidden={true}
-      footer={null}
-      open={open}
-      title={t('share', { ns: 'common' })}
-      width={1440}
-      onCancel={onCancel}
-    >
-      <Flexbox gap={isMobile ? 8 : 24}>
-        <Tabs
-          activeKey={tab}
-          items={tabItems}
-          styles={{
-            list: { display: 'flex', width: '100%' },
-            tab: { flex: 1 },
-          }}
-          onChange={(key) => setTab(key as Tab)}
-        />
-      </Flexbox>
-    </ImperativeModal>
+    <Flexbox gap={isMobile ? 8 : 24}>
+      <Tabs
+        activeKey={tab}
+        items={tabItems}
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => setTab(key as Tab)}
+      />
+    </Flexbox>
   );
 });
 
-export default ShareModal;
+ShareMessageModalContent.displayName = 'ShareMessageModalContent';
+
+export const openShareMessageModal = (
+  message: UIChatMessage,
+  createConversationStore: () => ReturnType<typeof createStore>,
+) =>
+  createModal({
+    content: (
+      <Provider createStore={createConversationStore}>
+        <ShareMessageModalContent message={message} />
+      </Provider>
+    ),
+    footer: null,
+    maskClosable: true,
+    title: t('share', { ns: 'common' }),
+    width: 'min(95vw, 1440px)',
+  });

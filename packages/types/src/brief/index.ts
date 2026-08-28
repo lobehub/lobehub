@@ -37,6 +37,13 @@ export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
 export type BriefType = 'decision' | 'error' | 'insight' | 'result';
 
 /**
+ * Brief types with nothing to decide — the home "news" digest. Shared between
+ * the server day-feed query and the client feed split so the two can never
+ * disagree on what counts as news.
+ */
+export const NEWS_BRIEF_TYPES: BriefType[] = ['insight', 'result'];
+
+/**
  * A single artifact (currently only documents) referenced from a brief.
  * Programmatically collected during topic completion, not produced by the LLM.
  */

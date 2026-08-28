@@ -1,14 +1,11 @@
 /**
  * Lobe Page Agent Executor
  *
- * Creates and exports the PageAgentExecutor instance for registration.
- * Also exports the runtime for editor instance injection.
+ * Creates and exports the PageAgentExecutor instance for lazy registration.
  */
-import { PageAgentExecutor } from '@lobechat/builtin-tool-page-agent/client';
-import { EditorRuntime } from '@lobechat/editor-runtime';
+import { PageAgentExecutor } from '@lobechat/builtin-tool-page-agent/client/executor';
 
-// Create singleton instance of the runtime
-export const pageAgentRuntime = new EditorRuntime();
+import { pageAgentRuntime } from './pageAgentRuntime';
 
 // Create executor instance with the runtime
 export const pageAgentExecutor = new PageAgentExecutor(pageAgentRuntime);

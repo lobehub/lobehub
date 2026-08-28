@@ -3,8 +3,7 @@ import { type TopicExportMode } from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
 import { type FormItemProps } from '@lobehub/ui';
 import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
-import { Button, Switch, Tabs } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +26,6 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const ShareJSON = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
 
   const exportModeOptions = useMemo(
     () => [
@@ -99,7 +97,7 @@ const ShareJSON = memo(() => {
         type={'primary'}
         onClick={async () => {
           await copyToClipboard(content);
-          message.success(t('copySuccess', { ns: 'common' }));
+          toast.success(t('copySuccess', { ns: 'common' }));
         }}
       >
         {t('copy', { ns: 'common' })}

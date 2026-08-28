@@ -66,7 +66,7 @@ export const WithContextSchema = z.object({
     .min(0)
     .max(1)
     .describe('Numeric score (0-1 (0% to 100%)) describing urgency'),
-  title: z.string().describe('Optional synthesized context headline'),
+  title: z.string().describe('Required synthesized context headline'),
   type: z
     .string()
     .describe("High level context archetype (e.g., 'project', 'relationship', 'goal')"),
@@ -76,7 +76,7 @@ export const WithContextSchema = z.object({
  * Single context memory item
  */
 export const ContextMemoryItemSchema = z.object({
-  details: z.string().describe('Optional detailed information'),
+  details: z.string().describe('Detailed information; use an empty string when none is needed'),
   memoryCategory: z.string().describe('Memory category'),
   memoryType: MemoryTypeSchema.describe('Memory type'),
   sourceIds: z

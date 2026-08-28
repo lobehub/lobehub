@@ -274,7 +274,7 @@ const buildAssistantMessageSeed = (
  */
 export const callLlm =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { operation, transports } = host;
     const contextBuilder = requireContextBuilder(host);
     const llm = requireLLMCallTransport(host);
@@ -305,19 +305,47 @@ export const callLlm =
     }
 
     const existingAssistantMessageId = llmPayload.assistantMessageId;
+    // Pre-created placeholders (e.g. sendMessage creates the assistant row
+    // before the operation exists) miss the creation-time provenance stamp —
+    // merge it here so reused messages carry metadata.operationId too.
+    // Best-effort: the stamp is only a tracing aid and must never turn a
+    // normal send/resume into an LLM error before streaming starts.
+    if (existingAssistantMessageId) {
+      try {
+        await transports.messages.update(existingAssistantMessageId, {
+          metadata: { operationId: operation.operationId },
+        });
+      } catch (error) {
+        console.warn('[call_llm] Failed to stamp operation id provenance:', error);
+      }
+    }
     const assistantMessage = existingAssistantMessageId
       ? { id: existingAssistantMessageId }
-      : await transports.messages.createAssistantMessage({
-          agentId: state.metadata!.agentId!,
-          content: '',
-          groupId: state.metadata?.groupId ?? undefined,
-          model,
-          parentId,
-          provider,
-          role: 'assistant',
-          threadId: state.metadata?.threadId,
-          topicId: state.metadata?.topicId,
-        });
+      : await transports.messages.createAssistantMessage(
+          {
+            agentId: state.metadata!.agentId!,
+            content: '',
+            groupId: state.metadata?.groupId ?? undefined,
+            // Creation provenance (metadata.operationId): ties the row to the
+            // operation that produced it so the id survives client reloads.
+            metadata: { operationId: operation.operationId },
+            model,
+            parentId,
+            provider,
+            role: 'assistant',
+            threadId: state.metadata?.threadId,
+            topicId: state.metadata?.topicId,
+          },
+          {
+            /**
+             * Step retries must reuse the same assistant message, while multiple LLM
+             * instructions in one step must keep independent messages.
+             */
+            idempotencyKey:
+              `agent-runtime:${operation.operationId}:step:${operation.stepIndex}:` +
+              `instruction:${runtimeContext?.instructionIndex ?? 0}:assistant`,
+          },
+        );
 
     const assistantMessageSeed = existingAssistantMessageId
       ? ((await transports.messages.findById(existingAssistantMessageId)) ?? assistantMessage)

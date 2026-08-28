@@ -36,11 +36,19 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@/features/Conversation', () => ({
-  ChatList: () => <div data-testid="floating-chat-list">chat list</div>,
+  ChatList: ({ welcome }: { welcome?: ReactNode }) => (
+    <div data-testid="floating-chat-list">
+      chat list
+      {welcome}
+    </div>
+  ),
+}));
+vi.mock('@/features/AgentHome', () => ({
+  default: () => <div data-testid="agent-welcome">agent welcome</div>,
 }));
 
 describe('FloatingChatPanel ChatBody', () => {
-  it('renders only the ChatList — the input row is owned by InputRow now', () => {
+  it('renders ChatList with the agent welcome while InputRow owns the input', () => {
     render(<ChatBody />);
 
     const body = screen.getByTestId('floating-chat-panel-body');
@@ -49,6 +57,7 @@ describe('FloatingChatPanel ChatBody', () => {
     expect(body).toHaveAttribute('data-flex', '1');
     expect(body).toHaveAttribute('data-height', '100%');
     expect(body).toContainElement(list);
+    expect(list).toContainElement(screen.getByTestId('agent-welcome'));
     expect(body).toHaveStyle({ overflow: 'hidden' });
     expect(screen.queryByTestId('floating-chat-input')).toBeNull();
   });

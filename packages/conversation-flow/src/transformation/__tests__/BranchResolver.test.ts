@@ -149,6 +149,66 @@ describe('BranchResolver', () => {
       expect(resolver.getActiveBranchIdFromMetadata(message, childIds, childrenMap)).toBe('msg-3');
     });
 
+    it('should ignore newer user descendants from threads when selecting the active branch', () => {
+      const messages: Message[] = [
+        {
+          content: 'test',
+          createdAt: 0,
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'old branch',
+          createdAt: 1,
+          id: 'msg-2',
+          parentId: 'msg-1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          content: 'current branch',
+          createdAt: 2,
+          id: 'msg-3',
+          parentId: 'msg-1',
+          role: 'assistant',
+          updatedAt: 2,
+        },
+        {
+          content: 'continued main flow',
+          createdAt: 3,
+          id: 'msg-4',
+          parentId: 'msg-3',
+          role: 'user',
+          updatedAt: 3,
+        },
+        {
+          content: 'newer threaded reply',
+          createdAt: 4,
+          id: 'msg-5',
+          parentId: 'msg-2',
+          role: 'user',
+          threadId: 'thread-1',
+          updatedAt: 4,
+        },
+      ];
+      const resolverWithMessages = new BranchResolver(
+        new Map(messages.map((item) => [item.id, item])),
+      );
+      const childrenMap = new Map<string | null, string[]>([
+        ['msg-2', ['msg-5']],
+        ['msg-3', ['msg-4']],
+      ]);
+
+      expect(
+        resolverWithMessages.getActiveBranchIdFromMetadata(
+          messages[0],
+          ['msg-2', 'msg-3'],
+          childrenMap,
+        ),
+      ).toBe('msg-3');
+    });
+
     it('should default to first child when no hints available', () => {
       const message: Message = {
         content: 'test',

@@ -1,3 +1,5 @@
+import { resolveSearchDecision, type SearchDecision } from 'model-bank';
+
 import { getAgentStoreState } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
@@ -6,18 +8,7 @@ import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors
 /**
  * Search configuration result
  */
-export interface SearchConfig {
-  /** Whether search is enabled in chat config */
-  enabledSearch: boolean;
-  /** Whether model has builtin search capability */
-  isModelHasBuiltinSearch: boolean;
-  /** Whether provider has builtin search capability */
-  isProviderHasBuiltinSearch: boolean;
-  /** Whether to use application's builtin search tool */
-  useApplicationBuiltinSearchTool: boolean;
-  /** Whether to use model's builtin search */
-  useModelSearch: boolean;
-}
+export type SearchConfig = SearchDecision;
 
 /**
  * Get search configuration for given model and provider
@@ -36,30 +27,17 @@ export const getSearchConfig = (
   const chatConfig = chatConfigByIdSelectors.getChatConfigById(targetAgentId)(agentStoreState);
   const aiInfraStoreState = getAiInfraStoreState();
 
-  const enabledSearch = chatConfig.searchMode !== 'off';
-  const isProviderHasBuiltinSearch =
-    aiProviderSelectors.isProviderHasBuiltinSearch(provider)(aiInfraStoreState);
-  const isModelHasBuiltinSearch = aiModelSelectors.isModelHasBuiltinSearch(
+  const providerSearchMode =
+    aiProviderSelectors.providerConfigById(provider)(aiInfraStoreState)?.settings.searchMode;
+  const modelSearchImpl = aiModelSelectors.modelBuiltinSearchImpl(
     model,
     provider,
   )(aiInfraStoreState);
-  const isModelBuiltinSearchInternal = aiModelSelectors.isModelBuiltinSearchInternal(
-    model,
-    provider!,
-  )(aiInfraStoreState);
 
-  const useModelSearch =
-    ((isProviderHasBuiltinSearch || isModelHasBuiltinSearch) && chatConfig.useModelBuiltinSearch) ||
-    isModelBuiltinSearchInternal ||
-    false;
-
-  const useApplicationBuiltinSearchTool = enabledSearch && !useModelSearch;
-
-  return {
-    enabledSearch,
-    isModelHasBuiltinSearch,
-    isProviderHasBuiltinSearch,
-    useApplicationBuiltinSearchTool,
-    useModelSearch,
-  };
+  return resolveSearchDecision({
+    modelSearchImpl,
+    providerSearchMode,
+    searchMode: chatConfig.searchMode,
+    useModelBuiltinSearch: chatConfig.useModelBuiltinSearch,
+  });
 };

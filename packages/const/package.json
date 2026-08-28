@@ -4,14 +4,16 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./apiKeyScope": "./src/apiKeyScope.ts",
     "./currency": "./src/currency.ts",
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
+    "./goal": "./src/goal.ts",
     "./hotkeys": "./src/hotkeys.ts",
+    "./mediaRef": "./src/mediaRef.ts",
     "./plugin": "./src/plugin.ts",
     "./rbac": "./src/rbac.ts",
     "./url": "./src/url.ts",
-    "./verify": "./src/verify.ts",
-    "./visualRef": "./src/visualRef.ts"
+    "./verify": "./src/verify.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

@@ -4,8 +4,6 @@ import {
   type PersistedDevFlagOverrides,
 } from './constants';
 
-const isDevEnv = () => process.env.NODE_ENV === 'development';
-
 const isBrowser = () => typeof window !== 'undefined';
 
 const sanitizeOverrides = (
@@ -30,7 +28,7 @@ const sanitizeOverrides = (
 };
 
 export const readPersistedOverrides = (knownKeys: ReadonlySet<string>): Record<string, boolean> => {
-  if (!isDevEnv() || !isBrowser()) return {};
+  if (!isBrowser()) return {};
 
   try {
     const raw = window.localStorage.getItem(DEV_FLAG_OVERRIDE_STORAGE_KEY);
@@ -51,7 +49,7 @@ export const readPersistedOverrides = (knownKeys: ReadonlySet<string>): Record<s
 };
 
 export const writePersistedOverrides = (overrides: Record<string, boolean>) => {
-  if (!isDevEnv() || !isBrowser()) return;
+  if (!isBrowser()) return;
 
   try {
     if (Object.keys(overrides).length === 0) {
@@ -70,7 +68,7 @@ export const writePersistedOverrides = (overrides: Record<string, boolean>) => {
 };
 
 export const clearPersistedOverrides = () => {
-  if (!isDevEnv() || !isBrowser()) return;
+  if (!isBrowser()) return;
 
   try {
     window.localStorage.removeItem(DEV_FLAG_OVERRIDE_STORAGE_KEY);

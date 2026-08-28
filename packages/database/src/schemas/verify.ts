@@ -2,6 +2,10 @@ import {
   acceptanceStatuses,
   acceptanceSubjectTypes,
   acceptanceVisibilities,
+  reviewAdjudications,
+  reviewPredictionActions,
+  reviewPredictionStatuses,
+  reviewProposalEdits,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -16,10 +20,12 @@ import {
 import type {
   AcceptanceConfig,
   AcceptanceMetadata,
+  AcceptanceReviewAnnotation,
   AcceptanceVisualRender,
   ToulminVerdict,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
+  VerifyCheckResultMetadata,
   VerifyRubricConfig,
   VerifyRunContext,
   VerifyRunDecisionDetail,
@@ -46,6 +52,7 @@ import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agentOperations } from './agentOperations';
 import { documents, files } from './file';
 import { llmGenerationTracing } from './llmGenerationTracing';
+import { projects } from './project';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -242,7 +249,7 @@ export const verifyCheckResults = pgTable(
     toulmin: jsonb('toulmin').$type<ToulminVerdict>(),
 
     /** Generic result extension bag. Shape is intentionally unknown until verifier payloads stabilize. */
-    metadata: jsonb('metadata').$type<unknown>(),
+    metadata: jsonb('metadata').$type<VerifyCheckResultMetadata>(),
 
     /** Forward-looking remediation hint, seeded into auto_repair. */
     suggestion: text('suggestion'),
@@ -312,9 +319,12 @@ export const verifyEvidence = pgTable(
     /** Medium of the artifact (screenshot / gif / video / text / dom_snapshot / transcript). */
     type: text('type', { enum: verifyEvidenceTypes }).notNull(),
 
-    // ---- Payload: exactly one of `content` (inline text) or `fileId` (stored artifact) ----
+    // ---- Payload: exactly one of inline content, document, or stored file ----
     /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
     content: text('content'),
+
+    /** LobeHub document used as evidence. Agent-document binding ids are never stored here. */
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
 
     /**
      * Stored artifact (screenshot / gif / video, or large text persisted to storage).
@@ -343,6 +353,7 @@ export const verifyEvidence = pgTable(
   },
   (t) => [
     index('verify_evidence_check_result_id_idx').on(t.checkResultId),
+    index('verify_evidence_document_id_idx').on(t.documentId),
     index('verify_evidence_file_id_idx').on(t.fileId),
     index('verify_evidence_user_id_idx').on(t.userId),
     index('verify_evidence_workspace_id_idx').on(t.workspaceId),
@@ -365,9 +376,13 @@ export const acceptances = pgTable(
     /** Workspace this acceptance belongs to — scopes listing and cascades on workspace delete. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /** Project grouping captured from the accepted task/topic; deleted projects become ungrouped. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+
     /**
      * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
-     * topic, document, or future subject types without reshaping this aggregate.
+     * topic, document, standalone delivery, or future subject types without
+     * reshaping this aggregate.
      * Subject existence/ownership is validated in the service that creates it.
      */
     subjectType: text('subject_type', { enum: acceptanceSubjectTypes }).notNull(),
@@ -413,6 +428,7 @@ export const acceptances = pgTable(
   (t) => [
     index('acceptances_user_id_idx').on(t.userId),
     index('acceptances_workspace_id_idx').on(t.workspaceId),
+    index('acceptances_project_id_idx').on(t.projectId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
     index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
@@ -638,3 +654,131 @@ export const verifyRuns = pgTable(
 
 export type NewVerifyRun = typeof verifyRuns.$inferInsert;
 export type VerifyRunItem = typeof verifyRuns.$inferSelect;
+
+// ============================================
+// 9. verify_review_predictions — an automated reviewer's opinion on a check
+// ============================================
+// A *shadow* lane, deliberately not folded into `verify_check_results`. Two
+// reasons it is its own table rather than another jsonb bag on that row:
+//
+//  1. Cardinality: one check result accumulates many opinions — one per model ×
+//     prompt version — and they must stay individually queryable to compare
+//     versions. A bag would force read-modify-write on the hot result row and
+//     lose the ability to filter by model.
+//  2. Provenance: the human's decision on `verify_check_results.user_decision`
+//     is the single ground truth. Keeping the model's opinion physically
+//     elsewhere makes it structurally impossible for a prediction to be mistaken
+//     for a human label — including by a future aggregation query nobody has
+//     written yet.
+export const verifyReviewPredictions = pgTable(
+  'verify_review_predictions',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** The check result being reviewed; an opinion dies with the result it judges. */
+    checkResultId: uuid('check_result_id')
+      .references(() => verifyCheckResults.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this prediction belongs to (mirrors the result) — scopes listing + cascade. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /**
+     * The producer, split the same way every other model reference in the repo
+     * is (`{ provider, model }`) rather than one glued string — an opinion has
+     * to be filterable by provider on its own when comparing versions.
+     */
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    /** Bumped whenever the judging prompt changes, so old opinions stay attributable. */
+    promptVersion: text('prompt_version').notNull(),
+
+    /**
+     * How the attempt ended. Mirrors the `status` / `verdict` split on
+     * `verify_check_results`: a row records that a review was ATTEMPTED, and
+     * only `judged` carries an opinion.
+     *
+     * Without it, four situations collapse into "no row" — the model passed the
+     * check, there was no frame to look at, the call failed, or nobody asked.
+     * Only the first is the model's opinion, so miss rate would have no
+     * denominator, and a provider outage would be indistinguishable from the
+     * model approving everything.
+     */
+    status: text('status', { enum: reviewPredictionStatuses }).notNull(),
+
+    /**
+     * The verdict — NULL unless `status` is `judged`. Never `ignore`, which is a
+     * statement about the reviewer's priorities rather than about the delivery.
+     */
+    action: text('action', { enum: reviewPredictionActions }),
+
+    /** Why a `skipped` / `errored` attempt produced no verdict. */
+    statusReason: text('status_reason'),
+
+    /**
+     * Model self-reported 0–1. Stored, but NOT yet trusted as a gate: in the
+     * offline baseline the Gemini models emitted 0.95–1.0 on essentially every
+     * row, so a threshold over this column would pass everything. Calibrate per
+     * model before wiring it to any automatic behaviour.
+     */
+    confidence: numeric('confidence', { mode: 'number', precision: 3, scale: 2 }),
+
+    /** One-line justification — this is what the reviewer actually reads. */
+    comment: text('comment'),
+    /** Full reasoning. Kept for training data, not surfaced in the collapsed card. */
+    rationale: text('rationale'),
+
+    /** Circled regions, same shape as the human's `AcceptanceReviewAnnotation`. */
+    annotations: jsonb('annotations').$type<AcceptanceReviewAnnotation[]>(),
+
+    // ---- The reviewer's answer ----
+    // Lives on the proposal, not on the check's decision detail, because two of
+    // the three answers leave the check UNJUDGED: dismissing a proposal says
+    // nothing about whether the delivery passes, so there is no decision row to
+    // hang it off. Keeping all three here also means one query returns the
+    // full agreement picture per model version.
+    adjudication: text('adjudication', { enum: reviewAdjudications }),
+    /** For a confirmed proposal: how much the reviewer changed before submitting. */
+    adjudicationEdit: text('adjudication_edit', { enum: reviewProposalEdits }),
+    adjudicatedAt: timestamptz('adjudicated_at'),
+
+    // ---- Operational telemetry, for cost/latency tracking per model version ----
+    latencyMs: integer('latency_ms'),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('verify_review_predictions_check_result_id_idx').on(t.checkResultId),
+    index('verify_review_predictions_user_id_idx').on(t.userId),
+    index('verify_review_predictions_workspace_id_idx').on(t.workspaceId),
+    index('verify_review_predictions_model_idx').on(t.provider, t.model),
+    // One opinion per (result, provider+model, prompt version): a retry or a concurrent
+    // worker must update in place rather than stack a second row, or the
+    // agreement stats would double-count whichever check happened to be retried.
+    uniqueIndex('verify_review_predictions_result_model_prompt_unique').on(
+      t.checkResultId,
+      t.provider,
+      t.model,
+      t.promptVersion,
+    ),
+    // `status` and `action` only mean anything together: a `judged` row without a
+    // verdict, or a `skipped` row that still carries one, would both be counted
+    // by the agreement stats as an opinion nobody formed. The column enums are
+    // type-level only in drizzle — they emit no constraint — so this is the one
+    // place the pairing is actually enforced.
+    check(
+      'verify_review_predictions_action_matches_status',
+      sql`(${t.status} = 'judged') = (${t.action} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export type NewVerifyReviewPrediction = typeof verifyReviewPredictions.$inferInsert;
+export type VerifyReviewPredictionItem = typeof verifyReviewPredictions.$inferSelect;

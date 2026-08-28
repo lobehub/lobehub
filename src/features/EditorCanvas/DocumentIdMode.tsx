@@ -19,11 +19,11 @@ import UnsavedChangesGuard from './UnsavedChangesGuard';
 /**
  * Loading skeleton for the editor
  */
-const EditorSkeleton = memo(() => (
+const EditorSkeleton = () => (
   <div style={{ paddingBlock: 24 }}>
     <Skeleton active paragraph={{ rows: 8 }} />
   </div>
-));
+);
 
 export interface DocumentIdModeProps extends EditorCanvasProps {
   documentId: string;

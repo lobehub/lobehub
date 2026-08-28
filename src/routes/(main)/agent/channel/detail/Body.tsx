@@ -1,8 +1,8 @@
 'use client';
 
-import { Block, Flexbox, Form, FormGroup, FormItem, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Form, FormGroup, FormItem, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
-import { Button, Select, Switch } from '@lobehub/ui/base-ui';
+import { Button, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
 import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
@@ -122,6 +122,15 @@ function buildRules(field: FieldSchema, t: (key: string) => string) {
 
   if (field.required) {
     rules.push({ message: t(field.label), required: true });
+  }
+
+  // Format constraint declared by the platform schema. antd's validator skips
+  // `pattern` on empty values, so an untouched optional field stays valid.
+  if (field.pattern) {
+    rules.push({
+      message: field.patternMessage ? t(field.patternMessage) : t(field.label),
+      pattern: new RegExp(field.pattern),
+    });
   }
 
   if (field.type === 'number' || field.type === 'integer') {
@@ -456,7 +465,7 @@ const ApplicationIdField = memo<{ disabled?: boolean; divider?: boolean; field: 
         label={renderFieldLabel(field, t)}
         minWidth={'max(50%, 400px)'}
         name="applicationId"
-        rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
+        rules={buildRules(field, t)}
         variant="outlined"
       >
         <FormInput

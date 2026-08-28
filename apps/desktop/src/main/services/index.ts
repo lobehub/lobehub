@@ -6,4 +6,8 @@ export class ServiceModule {
   }
 }
 
-export type IServiceModule = typeof ServiceModule;
+export interface ServiceLifecycle {
+  destroy?: () => void;
+}
+
+export type IServiceModule = new (app: App) => ServiceModule & ServiceLifecycle;

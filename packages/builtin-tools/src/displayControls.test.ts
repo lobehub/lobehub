@@ -28,6 +28,14 @@ describe('getBuiltinRenderDisplayControl', () => {
     ).toBe('expand');
   });
 
+  it('uses the Claude Code dynamic resolver for Qoder', () => {
+    expect(
+      getBuiltinRenderDisplayControl('qoder', 'Read', {
+        images: [{ mediaType: 'image/png', url: 'https://cdn/a.png' }],
+      }),
+    ).toBe('expand');
+  });
+
   it('leaves a non-image Read undecided, so the caller falls back to collapsed', () => {
     expect(getBuiltinRenderDisplayControl('claude-code', 'Read')).toBeUndefined();
     expect(getBuiltinRenderDisplayControl('claude-code', 'Read', {})).toBeUndefined();

@@ -10,11 +10,21 @@ import type {
 } from '@lobechat/const/verify';
 import {
   acceptanceSubjectTypes,
+  isProgrammaticTestCheck,
   normalizeVerifySurface,
+  PROGRAMMATIC_TEST_CHECK_HINT,
   verifyEvidenceTypes,
   verifyRunScenarios,
   verifySurfaces,
 } from '@lobechat/const/verify';
+import type {
+  VerifyCheckResultMetadata,
+  VerifyVisualizationDataset,
+  VerifyVisualizationField,
+  VerifyVisualizationManifest,
+  VerifyVisualizationValue,
+  VerifyVisualizationView,
+} from '@lobechat/types';
 import pc from 'picocolors';
 
 import { printTable, truncate } from '../utils/format';
@@ -53,7 +63,7 @@ export function assertEnum<T extends string>(
 
 export type Verdict = 'failed' | 'passed' | 'uncertain';
 export type EvidenceType =
-  'dom_snapshot' | 'gif' | 'markdown' | 'screenshot' | 'text' | 'transcript' | 'video';
+  'audio' | 'dom_snapshot' | 'gif' | 'markdown' | 'screenshot' | 'text' | 'transcript' | 'video';
 
 export const INLINE_TEXT_EVIDENCE_LIMIT = 5000;
 export const INLINE_TEXT_EVIDENCE_TYPES = new Set<EvidenceType>([
@@ -77,7 +87,12 @@ export function toVerdict(raw: unknown): Verdict {
  * render as a permanent "?" in every list surface.
  */
 export function deriveReportVerdict(cases: unknown[]): Verdict | undefined {
-  const verdicts = cases.map((c) => toVerdict((c as any)?.result ?? (c as any)?.verdict));
+  // Same field fallback as the per-case ingest (`result ?? status ?? verdict`) —
+  // the documented case field is `status`, so dropping it here derived
+  // `uncertain` for an all-pass report whenever this fallback actually ran.
+  const verdicts = cases.map((c) =>
+    toVerdict((c as any)?.result ?? (c as any)?.status ?? (c as any)?.verdict),
+  );
   if (verdicts.length === 0) return undefined;
   if (verdicts.includes('failed')) return 'failed';
   if (verdicts.includes('uncertain')) return 'uncertain';
@@ -90,6 +105,12 @@ export function evidenceTypeForFile(file: string): EvidenceType {
   if (ext === 'gif') return 'gif';
   if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'bmp'].includes(ext)) return 'screenshot';
   if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) return 'video';
+  // Audio before the text fallback: an unrecognized binary used to land on
+  // `text`, publishing a TTS clip as an unreadable, unplayable blob.
+  if (
+    ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'oga', 'opus', 'aiff', 'aif', 'wma'].includes(ext)
+  )
+    return 'audio';
   if (['html', 'htm'].includes(ext)) return 'dom_snapshot';
   if (['md', 'markdown'].includes(ext)) return 'markdown';
   return 'text';
@@ -124,6 +145,246 @@ export interface ReportEvidenceInput {
   path: string;
 }
 
+const VISUALIZATION_FIELD_TYPES = new Set(['boolean', 'category', 'number', 'string', 'temporal']);
+const VISUALIZATION_TYPES = new Set([
+  'bar-chart',
+  'heatmap',
+  'line-chart',
+  'metric-comparison',
+  'scatter-plot',
+  'table',
+]);
+const MAX_INLINE_VISUALIZATION_ROWS = 10_000;
+
+const visualizationValue = (value: unknown): value is VerifyVisualizationValue =>
+  value === null || ['boolean', 'number', 'string'].includes(typeof value);
+
+const visualizationField = (
+  encoding: Record<string, unknown>,
+  key: string,
+  fieldKeys: Set<string>,
+  path: string,
+) => {
+  const field = firstString(encoding[key]);
+  if (!field || !fieldKeys.has(field)) {
+    throw new Error(`${path}.${key} must reference a declared dataset field`);
+  }
+  return field;
+};
+
+const optionalVisualizationField = (
+  encoding: Record<string, unknown>,
+  key: string,
+  fieldKeys: Set<string>,
+  path: string,
+) => {
+  if (encoding[key] === undefined) return;
+  visualizationField(encoding, key, fieldKeys, path);
+};
+
+const optionalVisualizationString = (value: Record<string, unknown>, key: string, path: string) => {
+  if (value[key] !== undefined && !firstString(value[key])) {
+    throw new Error(`${path}.${key} must be a non-empty string`);
+  }
+};
+
+const visualizationSeries = (
+  encoding: Record<string, unknown>,
+  fieldKeys: Set<string>,
+  path: string,
+  options?: { styles?: boolean },
+) => {
+  if (!Array.isArray(encoding.series) || encoding.series.length === 0) {
+    throw new Error(`${path}.series must be a non-empty array`);
+  }
+  encoding.series.forEach((rawSeries, seriesIndex) => {
+    const series = objectValue(rawSeries);
+    const seriesPath = `${path}.series[${seriesIndex}]`;
+    if (!series) throw new Error(`${seriesPath} must be an object`);
+    visualizationField(series, 'field', fieldKeys, seriesPath);
+    if (series.label !== undefined && !firstString(series.label)) {
+      throw new Error(`${seriesPath}.label must be a non-empty string`);
+    }
+    if (
+      options?.styles &&
+      series.style !== undefined &&
+      !['accent', 'muted', 'primary'].includes(String(series.style))
+    ) {
+      throw new Error(`${seriesPath}.style is invalid`);
+    }
+  });
+};
+
+const validateVisualizationEncoding = (
+  view: Record<string, unknown>,
+  fieldKeys: Set<string>,
+  index: number,
+) => {
+  const path = `visualizations[${index}].encoding`;
+  if (view.type === 'table' && view.encoding === undefined) return;
+  const encoding = objectValue(view.encoding);
+  if (!encoding) throw new Error(`${path} is required for ${String(view.type)}`);
+
+  switch (view.type) {
+    case 'bar-chart': {
+      visualizationField(encoding, 'category', fieldKeys, path);
+      visualizationSeries(encoding, fieldKeys, path);
+      optionalVisualizationString(encoding, 'valueLabel', path);
+      break;
+    }
+    case 'heatmap': {
+      visualizationField(encoding, 'x', fieldKeys, path);
+      visualizationField(encoding, 'y', fieldKeys, path);
+      visualizationField(encoding, 'value', fieldKeys, path);
+      break;
+    }
+    case 'line-chart': {
+      visualizationField(encoding, 'x', fieldKeys, path);
+      visualizationSeries(encoding, fieldKeys, path, { styles: true });
+      optionalVisualizationString(encoding, 'xLabel', path);
+      optionalVisualizationString(encoding, 'yLabel', path);
+      break;
+    }
+    case 'metric-comparison': {
+      visualizationField(encoding, 'label', fieldKeys, path);
+      visualizationField(encoding, 'before', fieldKeys, path);
+      visualizationField(encoding, 'after', fieldKeys, path);
+      for (const key of [
+        'afterSamples',
+        'beforeSamples',
+        'direction',
+        'statistic',
+        'target',
+        'unit',
+      ]) {
+        optionalVisualizationField(encoding, key, fieldKeys, path);
+      }
+      break;
+    }
+    case 'scatter-plot': {
+      visualizationField(encoding, 'x', fieldKeys, path);
+      visualizationField(encoding, 'y', fieldKeys, path);
+      optionalVisualizationField(encoding, 'color', fieldKeys, path);
+      optionalVisualizationField(encoding, 'label', fieldKeys, path);
+      optionalVisualizationString(encoding, 'xLabel', path);
+      optionalVisualizationString(encoding, 'yLabel', path);
+      break;
+    }
+    case 'table': {
+      if (encoding.columns !== undefined) {
+        if (!Array.isArray(encoding.columns) || encoding.columns.length === 0) {
+          throw new Error(`${path}.columns must be a non-empty array`);
+        }
+        encoding.columns.forEach((field, fieldIndex) =>
+          visualizationField({ field }, 'field', fieldKeys, `${path}.columns[${fieldIndex}]`),
+        );
+      }
+      if (encoding.highlights !== undefined) {
+        if (!Array.isArray(encoding.highlights)) {
+          throw new Error(`${path}.highlights must be an array`);
+        }
+        encoding.highlights.forEach((rawHighlight, highlightIndex) => {
+          const highlight = objectValue(rawHighlight);
+          const highlightPath = `${path}.highlights[${highlightIndex}]`;
+          if (!highlight) throw new Error(`${highlightPath} must be an object`);
+          visualizationField(highlight, 'field', fieldKeys, highlightPath);
+          if (highlight.mode !== 'max' && highlight.mode !== 'min') {
+            throw new Error(`${highlightPath}.mode must be max or min`);
+          }
+        });
+      }
+      break;
+    }
+  }
+};
+
+/** Parse the case's datasets + views into versioned check-result metadata. */
+export function visualizationMetadata(value: unknown): VerifyCheckResultMetadata | undefined {
+  const input = objectValue(value);
+  if (!input || (input.datasets === undefined && input.visualizations === undefined))
+    return undefined;
+  if (!Array.isArray(input.datasets) || !Array.isArray(input.visualizations)) {
+    throw new Error('datasets and visualizations must both be arrays');
+  }
+
+  let rowCount = 0;
+  const datasets = input.datasets.map((rawDataset, datasetIndex) => {
+    const dataset = objectValue(rawDataset);
+    const id = firstString(dataset?.id);
+    if (!id || !Array.isArray(dataset?.fields) || !Array.isArray(dataset.rows)) {
+      throw new Error(`datasets[${datasetIndex}] needs id, fields, and rows`);
+    }
+
+    const fields = dataset.fields.map((rawField, fieldIndex) => {
+      const field = objectValue(rawField);
+      const key = firstString(field?.key);
+      const type = field?.type;
+      if (!key || typeof type !== 'string' || !VISUALIZATION_FIELD_TYPES.has(type)) {
+        throw new Error(`datasets[${datasetIndex}].fields[${fieldIndex}] is invalid`);
+      }
+      return {
+        key,
+        label: firstString(field.label),
+        type,
+        unit: firstString(field.unit),
+      } as VerifyVisualizationField;
+    });
+    const fieldKeys = new Set(fields.map((field) => field.key));
+    if (fieldKeys.size !== fields.length) {
+      throw new Error(`datasets[${datasetIndex}] field keys must be unique`);
+    }
+
+    const rows = dataset.rows.map((rawRow, rowIndex) => {
+      const row = objectValue(rawRow);
+      if (
+        !row ||
+        Object.entries(row).some(([key, cell]) => !fieldKeys.has(key) || !visualizationValue(cell))
+      ) {
+        throw new Error(`datasets[${datasetIndex}].rows[${rowIndex}] does not match its fields`);
+      }
+      return row as Record<string, VerifyVisualizationValue>;
+    });
+    rowCount += rows.length;
+    return { fields, id, rows } satisfies VerifyVisualizationDataset;
+  });
+
+  if (rowCount > MAX_INLINE_VISUALIZATION_ROWS) {
+    throw new Error(`visualization metadata exceeds ${MAX_INLINE_VISUALIZATION_ROWS} inline rows`);
+  }
+  const datasetIds = new Set(datasets.map((dataset) => dataset.id));
+  if (datasetIds.size !== datasets.length) throw new Error('dataset ids must be unique');
+  const fieldKeysByDataset = new Map(
+    datasets.map((dataset) => [dataset.id, new Set(dataset.fields.map((field) => field.key))]),
+  );
+
+  const views = input.visualizations.map((rawView, index) => {
+    const view = objectValue(rawView);
+    const id = firstString(view?.id);
+    const type = view?.type;
+    const dataset = firstString(view?.dataset);
+    if (
+      !id ||
+      typeof type !== 'string' ||
+      !VISUALIZATION_TYPES.has(type) ||
+      !dataset ||
+      !datasetIds.has(dataset) ||
+      view.version !== 1
+    ) {
+      throw new Error(`visualizations[${index}] has an invalid id, type, version, or dataset`);
+    }
+    optionalVisualizationString(view, 'context', `visualizations[${index}]`);
+    optionalVisualizationString(view, 'title', `visualizations[${index}]`);
+    validateVisualizationEncoding(view, fieldKeysByDataset.get(dataset)!, index);
+    return view as unknown as VerifyVisualizationView;
+  });
+  if (new Set(views.map((view) => view.id)).size !== views.length) {
+    throw new Error('visualization ids must be unique');
+  }
+
+  const visualization: VerifyVisualizationManifest = { datasets, schemaVersion: 1, views };
+  return { visualization };
+}
+
 export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
   if (!evidence) return [];
   const arr = Array.isArray(evidence) ? evidence : [evidence];
@@ -139,9 +400,17 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       // The report viewer pairs on `id` and drops any comparison lacking one, so
       // an id-less half could never render side by side. Warn rather than upload
       // a comparison that is silently downgraded to an ordinary image.
-      if (comparison && !(id && (role === 'before' || role === 'after'))) {
+      //
+      // Test the raw field, not the parsed object: a comparison written flat
+      // (`comparison: "row", role: "before"`) is not an object at all, so keying
+      // the warning off `objectValue()` skipped the one shape that most needs
+      // it — the author saw a clean ingest and unpaired images on the page.
+      // Absent means null/undefined only; `""` / `0` / `false` are malformed
+      // values that were written on purpose, so they warn like any other.
+      const hasComparison = value.comparison !== undefined && value.comparison !== null;
+      if (hasComparison && !(comparison && id && (role === 'before' || role === 'after'))) {
         log.warn(
-          `evidence ${evidencePath}: comparison needs both a string "id" and role "before"/"after" — ignoring it`,
+          `evidence ${evidencePath}: comparison must be an object with a string "id" and role "before"/"after" — ignoring it`,
         );
       }
       const layout = comparison?.layout === 'vertical' ? 'vertical' : undefined;
@@ -312,6 +581,81 @@ export function genericContextFromResult(
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
+/** The id a plan entry / case will be ingested under, mirroring the readers below. */
+const planItemId = (item: Record<string, unknown>, index: number) =>
+  String(item.id ?? `case-${index + 1}`);
+const caseItemId = (item: Record<string, unknown>, index: number) =>
+  String(item.id ?? item.checkItemId ?? `case-${index + 1}`);
+
+/** The outcome of {@link screenProgrammaticTestChecks}. */
+export interface ProgrammaticTestScreen {
+  /** Check ids to omit from both the frozen plan and the ingested cases. */
+  droppedIds: Set<string>;
+  /** What was dropped, `id — title`, for one warning the author can act on. */
+  droppedLabels: string[];
+}
+
+/**
+ * Which checks in this report are the repo's own programmatic test / static-
+ * analysis gates rather than delivery outcomes a person accepts.
+ *
+ * Screened once, over the plan AND the cases, so a dropped plan item can never
+ * leave its case behind as an orphan "unplanned" row (or the reverse). Both
+ * sides are matched on their own text, then unioned by id.
+ *
+ * Dropping one item rather than failing the ingest is deliberate: the round's
+ * real checks are still worth publishing, and a hard error would cost the author
+ * the whole publish over an item they only meant as a footnote. (The caller does
+ * refuse to publish when the screen empties the round — then there is nothing
+ * left for a person to accept.)
+ */
+export function screenProgrammaticTestChecks(
+  result: Record<string, unknown>,
+): ProgrammaticTestScreen {
+  const droppedIds = new Set<string>();
+  const droppedLabels: string[] = [];
+
+  const screen = (entry: unknown, id: string) => {
+    const item = objectValue(entry);
+    if (!item) return;
+    const title = firstString(item.title, item.name, item.case);
+    if (
+      !isProgrammaticTestCheck(
+        title,
+        firstString(item.category, item.group),
+        firstString(item.method, item.how),
+      )
+    ) {
+      return;
+    }
+    if (!droppedIds.has(id)) {
+      droppedIds.add(id);
+      droppedLabels.push(title ? `${id} — ${title}` : id);
+    }
+  };
+
+  if (Array.isArray(result.plan)) {
+    result.plan.forEach((entry, index) =>
+      screen(entry, planItemId(objectValue(entry) ?? {}, index)),
+    );
+  }
+  if (Array.isArray(result.cases)) {
+    result.cases.forEach((entry, index) =>
+      screen(entry, caseItemId(objectValue(entry) ?? {}, index)),
+    );
+  }
+
+  if (droppedLabels.length > 0) {
+    log.warn(
+      `dropping ${droppedLabels.length} programmatic-test check(s) from this acceptance round:`,
+    );
+    for (const label of droppedLabels) log.warn(`  - ${label}`);
+    log.warn(`  ${PROGRAMMATIC_TEST_CHECK_HINT}`);
+  }
+
+  return { droppedIds, droppedLabels };
+}
+
 /** Reject an out-of-vocabulary plan value rather than storing a word nothing reads. */
 export function assertPlanEnum<T extends string>(
   value: string,
@@ -348,8 +692,11 @@ export function assertPlanEnum<T extends string>(
  * Returns `undefined` when the report declares no `plan` field. A `plan` that is
  * present but empty returns `[]`, recording an explicitly empty plan in this
  * immutable snapshot.
+ *
+ * `droppedIds` (from {@link screenProgrammaticTestChecks}) omits the repo's own
+ * test/lint gates, which are shipping preconditions rather than acceptance items.
  */
-export function planFromResult(result: Record<string, unknown>) {
+export function planFromResult(result: Record<string, unknown>, droppedIds?: Set<string>) {
   if (!Array.isArray(result.plan)) return undefined;
 
   const items = result.plan.flatMap((entry: unknown, index: number) => {
@@ -358,7 +705,8 @@ export function planFromResult(result: Record<string, unknown>) {
     // An item with no title names no check — it can't be rendered or paired.
     if (!item || !title) return [];
 
-    const id = String(item.id ?? `case-${index + 1}`);
+    const id = planItemId(item, index);
+    if (droppedIds?.has(id)) return [];
     const method = firstString(item.method, item.how);
     const expected = firstString(item.expected, item.expectation);
 
@@ -541,4 +889,47 @@ export function statusColor(status: string): string {
   if (status === 'failed') return pc.red(status);
   if (status === 'running') return pc.yellow(status);
   return pc.dim(status);
+}
+
+/** A region a reviewer circled on one evidence image. */
+export interface ReviewAnnotationRegion {
+  comment?: string;
+  evidenceId?: string;
+  rect?: { height?: number; width?: number; x?: number; y?: number };
+}
+
+const asPercent = (value?: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value * 100)}%` : undefined;
+
+/**
+ * Where a review annotation points, rendered for a terminal.
+ *
+ * The comment alone is not enough to act on: a screenshot usually has several
+ * plausible targets, and without the image and the rect the reader has to guess
+ * which one was circled. `rect` is normalized to the image box (0–1), so it is
+ * printed as percentages.
+ *
+ * Returns `undefined` when the annotation carries no location at all — an older
+ * review, or one made before regions existed.
+ */
+export function formatAnnotationRegion(
+  annotation: ReviewAnnotationRegion,
+  evidenceLabels?: Map<string, string>,
+): string | undefined {
+  const label = annotation.evidenceId
+    ? (evidenceLabels?.get(annotation.evidenceId) ?? annotation.evidenceId)
+    : undefined;
+
+  const { rect } = annotation;
+  const x = asPercent(rect?.x);
+  const y = asPercent(rect?.y);
+  const width = asPercent(rect?.width);
+  const height = asPercent(rect?.height);
+  const at = x && y ? `${x},${y}` : undefined;
+  const size = width && height ? `${width}×${height}` : undefined;
+  const position = [at, size].filter(Boolean).join(' · ');
+
+  if (!label && !position) return undefined;
+  if (!position) return label;
+  return label ? `${label} @ ${position}` : position;
 }

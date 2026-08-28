@@ -18,6 +18,11 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  type SignatureScopeKind,
+} from '../../utils/signatureScope';
 import { assertToolLimits } from '../../utils/validateToolLimits';
 import { isResponsesAPIModel } from '../openai/modelId';
 
@@ -138,6 +143,7 @@ export interface LobeGithubCopilotAIParams {
 
 export class LobeGithubCopilotAI implements LobeRuntimeAI {
   baseURL = COPILOT_BASE_URL;
+  private accountChannelId?: Promise<string>;
   private cachedBearerToken?: string;
   private githubToken: string;
 
@@ -164,6 +170,28 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         message: 'GitHub Personal Access Token or OAuth token is required',
       });
     }
+  }
+
+  private async getSignatureScope(
+    model: string,
+    kind: SignatureScopeKind,
+    protocol: 'chat_completions' | 'responses',
+  ) {
+    const accountToken = this.githubToken || this.cachedBearerToken;
+    if (!accountToken) return undefined;
+
+    this.accountChannelId ??= createSignatureChannelId('github-copilot-account', accountToken);
+
+    return createSignatureScope({
+      kind,
+      model,
+      protocol,
+      source: {
+        apiType: 'openai',
+        channelId: await this.accountChannelId,
+        provider: ModelProvider.GithubCopilot,
+      },
+    });
   }
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
@@ -281,8 +309,14 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           ...responseRest
         } = rest as any;
 
+        const reasoningSignatureScope = await this.getSignatureScope(
+          model,
+          'reasoning',
+          'responses',
+        );
         const input = await convertOpenAIResponseInputs(messages as any, {
           forceImageBase64: true,
+          reasoningSignatureScope,
           strictToolPairing: true,
         });
 
@@ -328,7 +362,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           return StreamingResponse(
             OpenAIResponsesStream(prod, {
               callbacks: options?.callback,
-              payload: { model, provider: ModelProvider.GithubCopilot },
+              payload: {
+                model,
+                provider: ModelProvider.GithubCopilot,
+                reasoningSignatureScope,
+              },
             }),
             { headers: options?.headers },
           );
@@ -344,15 +382,25 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           OpenAIResponsesStream(responseStream, {
             callbacks: options?.callback,
             enableStreaming: false,
-            payload: { model, provider: ModelProvider.GithubCopilot },
+            payload: {
+              model,
+              provider: ModelProvider.GithubCopilot,
+              reasoningSignatureScope,
+            },
           }),
           { headers: options?.headers },
         );
       }
 
       const { apiMode: _, preserveThinking: _pt, ...cleanedRest } = rest as any;
+      const thoughtSignatureScope = await this.getSignatureScope(
+        model,
+        'thought_signature',
+        'chat_completions',
+      );
       const messages = await convertOpenAIMessages(cleanedRest.messages as any, {
         forceImageBase64: true,
+        thoughtSignatureScope,
       });
 
       const chatCompletionPayload = {
@@ -386,7 +434,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       return StreamingResponse(
         OpenAIStream(response, {
           callbacks: options?.callback,
-          payload: { model, provider: ModelProvider.GithubCopilot },
+          payload: { model, provider: ModelProvider.GithubCopilot, thoughtSignatureScope },
         }),
         { headers: options?.headers },
       );

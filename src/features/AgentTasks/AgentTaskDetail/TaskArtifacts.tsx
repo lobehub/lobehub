@@ -1,22 +1,13 @@
 import type { TaskDetailWorkspaceNode } from '@lobechat/types';
-import {
-  ActionIcon,
-  Block,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-} from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileLock2Icon, FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Time from '@/routes/(main)/home/features/components/Time';
-import { useDocumentStore } from '@/store/document';
+import { openDocumentModal } from '@/features/DocumentModal/loader';
+import Time from '@/features/Home/components/Time';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -30,7 +21,6 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
-  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const unpinDocument = useTaskStore((s) => s.unpinDocument);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   // Tombstone: the viewer lost access to the pinned document (switched back
@@ -77,7 +67,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       paddingBlock={8}
       paddingInline={12}
       variant="outlined"
-      onClick={() => openDocumentPreview(node.documentId)}
+      onClick={() => void openDocumentModal(node.documentId)}
     >
       <Icon
         color={cssVar.colorTextSecondary}

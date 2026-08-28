@@ -590,6 +590,89 @@ describe('DocumentModel', () => {
       expect(found?.id).toBe(firstId);
     });
 
+    it('should return the oldest document when rows are inserted out of order', async () => {
+      const { id: fileId } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'test.txt',
+        size: 100,
+        url: 'https://example.com/test.txt',
+      });
+
+      const file = await fileModel.findById(fileId);
+      if (!file) throw new Error('File not found after creation');
+
+      // Insert the newer row first, so physical row order disagrees with
+      // creation order and an unordered lookup would return the wrong one.
+      await documentModel.create({
+        content: 'Newer document',
+        createdAt: new Date('2026-02-02T00:00:00.000Z'),
+        fileId: file.id,
+        fileType: 'text/plain',
+        source: file.url,
+        sourceType: 'file',
+        totalCharCount: 14,
+        totalLineCount: 1,
+      });
+
+      const { id: olderId } = await documentModel.create({
+        content: 'Older document',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        fileId: file.id,
+        fileType: 'text/plain',
+        source: file.url,
+        sourceType: 'file',
+        totalCharCount: 14,
+        totalLineCount: 1,
+      });
+
+      const found = await documentModel.findByFileId(file.id);
+      expect(found?.id).toBe(olderId);
+      expect(found?.content).toBe('Older document');
+    });
+
+    it('should break created-at ties on id so the lookup stays stable', async () => {
+      const { id: fileId } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'test.txt',
+        size: 100,
+        url: 'https://example.com/test.txt',
+      });
+
+      const file = await fileModel.findById(fileId);
+      if (!file) throw new Error('File not found after creation');
+
+      const sameInstant = new Date('2026-03-03T00:00:00.000Z');
+
+      // Identical timestamps, inserted highest id first: without a tiebreaker
+      // the row that comes back is whichever one the scan reaches first.
+      await documentModel.create({
+        content: 'Tie b',
+        createdAt: sameInstant,
+        fileId: file.id,
+        fileType: 'text/plain',
+        id: 'document-tie-b',
+        source: file.url,
+        sourceType: 'file',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+
+      await documentModel.create({
+        content: 'Tie a',
+        createdAt: sameInstant,
+        fileId: file.id,
+        fileType: 'text/plain',
+        id: 'document-tie-a',
+        source: file.url,
+        sourceType: 'file',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+
+      const found = await documentModel.findByFileId(file.id);
+      expect(found?.id).toBe('document-tie-a');
+    });
+
     it('should handle different file types', async () => {
       const { id: pdfFileId } = await fileModel.create({
         fileType: 'application/pdf',

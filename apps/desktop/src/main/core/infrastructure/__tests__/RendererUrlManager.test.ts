@@ -16,8 +16,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('fs-extra', () => ({
-  pathExistsSync: (...args: any[]) => mockPathExistsSync(...args),
+vi.mock('node:fs', () => ({
+  existsSync: (...args: any[]) => mockPathExistsSync(...args),
 }));
 
 vi.mock('@/const/dir', () => ({

@@ -1,4 +1,7 @@
-import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import {
+  type HeterogeneousAgentScanMap,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/heterogeneous-agents';
 import type {
   DeviceChannel,
   DeviceListItem,
@@ -37,6 +40,9 @@ const remotePlatformEnum = z.enum(
 
 const CAPABILITY_TIMEOUT_MS = 5_000;
 const PROFILE_TIMEOUT_MS = 5_000;
+// Batch scan probes every agent type (which + --version per binary, with
+// login-shell PATH fallback), so it gets a longer budget than a single probe.
+const SCAN_TIMEOUT_MS = 10_000;
 
 /**
  * A workspace device's user-editable fields (rename, working dirs, remove) may
@@ -137,11 +143,16 @@ export const deviceRouter = router({
       z.object({
         deviceId: z.string(),
         platform: remotePlatformEnum,
+        scope: z.enum(['personal', 'workspace']).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.executeToolCall(
-        { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        {
+          deviceId: input.deviceId,
+          userId: ctx.userId,
+          workspaceId: input.scope === 'personal' ? undefined : ctx.workspaceId,
+        },
         {
           apiName: 'checkPlatformCapability',
           arguments: JSON.stringify({ platform: input.platform }),
@@ -164,6 +175,41 @@ export const deviceRouter = router({
         return { available: false, reason: 'Invalid response from device' };
       }
     }),
+
+  /**
+   * Scan the given device for every known heterogeneous agent type in one
+   * pass. Dispatches a `scanHeterogeneousAgents` tool call to the device via
+   * the gateway; the device probes each binary and returns an availability
+   * map. On gateway failure (offline device, older client without the tool)
+   * returns an empty map plus the error so the client can distinguish
+   * "nothing installed" from "scan failed".
+   */
+  scanAgents: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(
+      async ({ ctx, input }): Promise<{ agents: HeterogeneousAgentScanMap; error?: string }> => {
+        const result = await deviceGateway.executeToolCall(
+          { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
+          {
+            apiName: 'scanHeterogeneousAgents',
+            arguments: JSON.stringify({}),
+            identifier: 'local',
+          },
+          SCAN_TIMEOUT_MS,
+        );
+
+        if (!result.success) {
+          return { agents: {}, error: result.error ?? 'Device tool call failed' };
+        }
+
+        try {
+          const parsed = JSON.parse(result.content) as { agents?: HeterogeneousAgentScanMap };
+          return { agents: parsed.agents ?? {} };
+        } catch {
+          return { agents: {}, error: 'Invalid response from device' };
+        }
+      },
+    ),
 
   /**
    * Granular git reads for a directory on a remote device, each via its own
@@ -228,19 +274,45 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
-  /** Query OpenCode's model catalog on the device that will execute the agent. */
+  /**
+   * Claude Code subscription quota sampled by the device with its own local
+   * credentials, so web clients can show live quota for a bound-device run.
+   * `null` when the device is offline or its client predates this RPC.
+   */
+  getClaudeCodeQuota: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.claudeCodeQuota({
+        deviceId: input.deviceId,
+        env: input.env,
+        force: input.force,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /** Query a heterogeneous CLI's model catalog on the device that will execute the agent. */
   listHeterogeneousAgentModels: deviceProcedure
     .input(
       z.object({
+        args: z.array(z.string()).optional(),
         command: z.string().optional(),
         cwd: z.string().optional(),
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
-        type: z.literal('opencode'),
+        type: z.enum(['codebuddy', 'cursor', 'grok-build', 'opencode', 'pi', 'qoder', 'trae']),
       }),
     )
     .query(async ({ ctx, input }) =>
       deviceGateway.listHeterogeneousAgentModels({
+        args: input.args,
         command: input.command,
         cwd: input.cwd,
         deviceId: input.deviceId,
@@ -1144,7 +1216,7 @@ export const deviceRouter = router({
    * Publish a private workspace device to the shared pool, or pull a public one
    * back to private. Mirrors the agent/file `setVisibility` contract:
    *   - the enrolling member may toggle their own device both ways;
-   *   - nobody else may touch visibility (LOBE-11760): owners demoting another
+   * - nobody else may touch visibility: owners demoting another
    *     member's public device would appropriate it into that member's private
    *     list, and other members' private devices are invisible to everyone
    *     else by design (the lookup below already fails closed with NOT_FOUND),

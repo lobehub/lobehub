@@ -34,15 +34,6 @@ const cloudflareChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 80_000,
-    displayName: 'gemma 3 12b',
-    family: 'gemma',
-    generation: 'gemma-3',
-    id: '@cf/google/gemma-3-12b-it',
-    knowledgeCutoff: '2024-08',
-    type: 'chat',
-  },
-  {
     abilities: {
       functionCall: true,
     },
@@ -75,21 +66,6 @@ const cloudflareChatModels: AIChatModelCard[] = [
     family: 'mistral',
     id: '@cf/mistralai/mistral-small-3.1-24b-instruct',
     knowledgeCutoff: '2023-10',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    displayName: 'openchat-3.5-0106',
-    id: '@cf/openchat/openchat-3.5-0106',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 7500,
-    displayName: 'qwen1.5-14b-chat-awq',
-    enabled: true,
-    family: 'qwen',
-    generation: 'qwen1.5',
-    id: '@cf/qwen/qwen1.5-14b-chat-awq',
     type: 'chat',
   },
   {

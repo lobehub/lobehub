@@ -1,3 +1,5 @@
+import type { AppProcessMetrics, GpuStatus } from '@lobechat/electron-client-ipc';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class DevtoolsService {
@@ -5,8 +7,12 @@ class DevtoolsService {
     return ensureElectronIpc().devtools.openDevtools();
   }
 
-  async getAppCpuUsage(): Promise<{ percent: number }> {
-    return ensureElectronIpc().devtools.getAppCpuUsage();
+  async getAppProcessMetrics(): Promise<AppProcessMetrics> {
+    return ensureElectronIpc().devtools.getAppProcessMetrics();
+  }
+
+  async getGpuStatus(): Promise<GpuStatus> {
+    return ensureElectronIpc().devtools.getGpuStatus();
   }
 }
 

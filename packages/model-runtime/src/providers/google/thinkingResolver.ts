@@ -1,4 +1,4 @@
-import { isGemini3OrAbove, parseGoogleModelId } from './modelId';
+import { isGemini3OrAbove, normalizeGoogleModelId, parseGoogleModelId } from './modelId';
 
 /**
  * Google Gemini Thinking Resolver
@@ -59,6 +59,12 @@ const THINKING_BUDGET_CONSTRAINTS = {
   FLASH_LITE_MAX: 24_576,
 } as const;
 
+const GEMINI_THINKING_LEVEL_ALIASES = new Set([
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-pro-latest',
+]);
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -109,6 +115,9 @@ export const getGoogleThinkingModelCategory = (model?: string): GoogleThinkingMo
  */
 export const isGemini3Model = (model?: string): boolean => {
   if (!model) return false;
+
+  const normalizedModelId = normalizeGoogleModelId(model);
+  if (normalizedModelId && GEMINI_THINKING_LEVEL_ALIASES.has(normalizedModelId)) return true;
 
   const parsed = parseGoogleModelId(model);
 

@@ -5,6 +5,7 @@ import {
   AgentProviderAccountModel,
   AgentQuotaWindowModel,
 } from '@/database/models/agentQuota';
+import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentQuotaService } from '@/server/services/agentQuota';
@@ -53,15 +54,35 @@ export const agentQuotaRouter = router({
         readings: z.array(readingSchema),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      ctx.quotaService.ingestSnapshot({
+    .mutation(async ({ ctx, input }) => {
+      // Clients know a device by its gateway id (the string `devices.device_id`
+      // stored in `agencyConfig.boundDeviceId`), but snapshots reference the
+      // `devices.id` uuid. Resolve it here rather than trusting the client: a
+      // raw gateway id fails the uuid/foreign-key check and would take the
+      // whole ingest down with it, silently stranding the reading. An
+      // unresolvable device only costs attribution, so keep the reading.
+      //
+      // A workspace device's identity is `(workspaceId, deviceId)` — `userId`
+      // only records the first enroller — so the personal `(userId, deviceId)`
+      // lookup misses a machine any other member enrolled. Try the
+      // workspace-scoped lookup first when the request carries a workspace
+      // (it also applies the device's visibility rules), then fall back to the
+      // caller's own devices.
+      const deviceModel = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+      const deviceRow = input.deviceId
+        ? ((ctx.workspaceId
+            ? await deviceModel.findWorkspaceDeviceById(input.deviceId)
+            : undefined) ?? (await deviceModel.findByDeviceId(input.deviceId)))
+        : undefined;
+
+      return ctx.quotaService.ingestSnapshot({
         credentialRef: { origin: 'keychain' },
-        deviceId: input.deviceId,
+        deviceId: deviceRow?.id,
         identity: input.identity,
         provider: input.provider,
         readings: input.readings,
-      }),
-    ),
+      });
+    }),
 
   /**
    * One assistant turn's consumption (desktop client-mode runs report from the
@@ -149,6 +170,42 @@ export const agentQuotaRouter = router({
   getWindows: quotaProcedure
     .input(z.object({ accountId: z.string(), limit: z.number().optional() }))
     .query(async ({ ctx, input }) => ctx.windowModel.listByAccount(input.accountId, input.limit)),
+
+  /**
+   * Display read model: the newest reading per limit bucket. Prefer this over
+   * `getWindows` for anything user-facing — windows are keyed by `resets_at`,
+   * so limits the provider reports without one never make it into that table.
+   */
+  getLatestReadings: quotaProcedure
+    .input(z.object({ accountId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.quotaService.listLatestReadings(input.accountId)),
+
+  /**
+   * Full reading time series (oldest first) for the usage calendar's daily
+   * burn heat and per-window burn-down curve.
+   */
+  listSnapshots: quotaProcedure
+    .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
+    .query(async ({ ctx, input }) =>
+      ctx.quotaService.listSnapshotSeries(
+        input.accountId,
+        new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
+      ),
+    ),
+
+  /**
+   * Per-turn token + cost spend (oldest first) for the usage calendar. Kept
+   * separate from `listSnapshots`: utilization is the provider's authority on
+   * "how much quota is left", the ledger is ours on "what it was spent on".
+   */
+  listUsageTurns: quotaProcedure
+    .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
+    .query(async ({ ctx, input }) =>
+      ctx.quotaService.listUsageTurns(
+        input.accountId,
+        new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
+      ),
+    ),
 
   // ── load balancing ───────────────────────────────────────────────────────
   resolveAccountLoads: quotaProcedure

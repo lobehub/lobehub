@@ -1,9 +1,8 @@
-import type { LobeAgentChatConfig } from '@lobechat/types';
-import { ReasoningGraphSchema } from '@lobechat/types';
+import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { z } from 'zod';
 
-import type { AgentItem } from '@/database/schemas';
-
+import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 
 // ==================== Agent CRUD Types ====================
@@ -12,6 +11,7 @@ import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
  * Create Agent request parameters
  */
 export interface CreateAgentRequest {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'enableGraphMode' | 'graph'>;
   avatar?: string;
   chatConfig?: LobeAgentChatConfig;
   description?: string;
@@ -25,18 +25,22 @@ export interface CreateAgentRequest {
 export type GetAgentsRequest = IPaginationQuery;
 
 export const CreateAgentRequestSchema = z.object({
+  agencyConfig: z
+    .object({
+      enableGraphMode: z.boolean().nullish(),
+      graph: AgentGraphSchema.nullish(),
+    })
+    .nullish(),
   avatar: z.string().nullish(),
   chatConfig: z
     .object({
       disableContextCaching: z.boolean().nullish(),
       displayMode: z.enum(['chat', 'docs']).nullish(),
       enableCompressHistory: z.boolean().nullish(),
-      enableGraphMode: z.boolean().nullish(),
       enableHistoryCount: z.boolean().nullish(),
       enableMaxTokens: z.boolean().nullish(),
       enableReasoning: z.boolean().nullish(),
       enableReasoningEffort: z.boolean().nullish(),
-      graph: ReasoningGraphSchema.nullish(),
       historyCount: z.number().nullish(),
       reasoningBudgetToken: z.number().nullish(),
       reasoningEffort: z.enum(['low', 'medium', 'high']).nullish(),
@@ -160,37 +164,15 @@ export interface AgentSessionRelation {
  * Agent list response type
  */
 export type AgentListResponse = PaginationQueryResponse<{
-  agents: AgentItem[];
+  agents: PublicAgent[];
 }>;
 
 /**
  * Agent detail response type, includes complete configuration information
  */
-export interface AgentDetailResponse extends AgentItem {
-  agentsFiles?: Array<{
-    file: {
-      fileType: string;
-      id: string;
-      name: string;
-      size: number;
-    };
-  }>;
-  agentsKnowledgeBases?: Array<{
-    knowledgeBase: {
-      description: string | null;
-      id: string;
-      name: string;
-    };
-  }>;
-  agentsToSessions?: Array<{
-    session: {
-      avatar: string | null;
-      description: string | null;
-      id: string;
-      title: string | null;
-      updatedAt: Date;
-    };
-  }>;
+export interface AgentDetailResponse extends PublicAgent {
+  files?: Array<PublicFile & { enabled?: boolean | null }>;
+  knowledgeBases?: Array<PublicKnowledgeBase & { enabled?: boolean | null }>;
 }
 
 // ==================== Common Schemas ====================

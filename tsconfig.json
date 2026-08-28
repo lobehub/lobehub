@@ -28,6 +28,7 @@
       "@/business/server/*": ["./packages/business-server/src/*", "./src/business/server/*"],
       "@/server/*": ["./apps/server/src/*"],
       "@/*": ["./src/*"],
+      "~base-ui-stubs": ["./tests/mocks/baseUiStubs.tsx"],
       "~test-utils": ["./tests/utils.tsx"]
     },
     "plugins": [
@@ -40,6 +41,9 @@
     "node_modules",
     "apps/desktop/**",
     "apps/mobile/**",
+    "apps/share/**",
+    "apps/workbench/**",
+    "scripts/**",
     "tmp",
     "temp",
     ".temp",
@@ -56,9 +60,6 @@
     "tests/**/*.d.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
-    "scripts/**/*.ts",
-    "scripts/**/*.mts",
-    "scripts/**/*.cts",
     "apps/server/**/*.ts",
     "apps/server/**/*.tsx",
     "*.ts",

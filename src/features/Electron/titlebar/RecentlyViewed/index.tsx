@@ -3,8 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useElectronStore } from '@/store/electron';
 
 import { useResolvedPages } from './hooks/useResolvedPages';
@@ -17,7 +17,7 @@ interface RecentlyViewedProps {
 
 const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
   const { t } = useTranslation('electron');
-  const location = useLocation();
+  const location = useActiveLocation();
   const styles = useStyles;
 
   const loadPinnedPages = useElectronStore((s) => s.loadPinnedPages);

@@ -11,6 +11,7 @@ import {
   formatShortenNumber,
   formatSize,
   formatSpeed,
+  formatSpendTime,
   formatTime,
   formatTokenNumber,
   formatUsageValue,
@@ -214,6 +215,11 @@ describe('format', () => {
       expect(formatPriceByCurrency(1234.56, 'USD')).toBe('1,234.56');
     });
 
+    it('should preserve meaningful precision for sub-dollar unit prices', () => {
+      expect(formatPriceByCurrency(0.075, 'USD')).toBe('0.075');
+      expect(formatPriceByCurrency(0.25, 'USD')).toBe('0.25');
+    });
+
     it('should use the correct CNY_TO_USD conversion rate', () => {
       const price = 1000;
       const expectedCNY = formatPrice(price / USD_TO_CNY);
@@ -308,6 +314,30 @@ describe('format', () => {
       const date = new Date('2023-05-15T12:00:00Z');
       const expectedFormat = dayjs(date).format('YYYY-MM-DD');
       expect(formatDate(date)).toBe(expectedFormat);
+    });
+  });
+
+  describe('formatSpendTime', () => {
+    it('should drop the year for entries from the current year', () => {
+      const date = dayjs().month(6).date(12).hour(12).minute(12).second(32);
+      expect(formatSpendTime(date.toDate())).toBe(date.format('MMM D HH:mm:ss'));
+    });
+
+    it('should keep the year for entries from another year', () => {
+      const date = dayjs().subtract(1, 'year').month(6).date(12);
+      expect(formatSpendTime(date.toDate())).toBe(date.format('MMM D, YYYY HH:mm:ss'));
+    });
+
+    it('should accept an ISO string', () => {
+      const iso = dayjs().subtract(2, 'year').startOf('year').toISOString();
+      expect(formatSpendTime(iso)).toBe(dayjs(iso).format('MMM D, YYYY HH:mm:ss'));
+    });
+
+    it('should fall back for empty and unparseable input', () => {
+      expect(formatSpendTime()).toBe('--');
+      expect(formatSpendTime(null)).toBe('--');
+      expect(formatSpendTime('')).toBe('--');
+      expect(formatSpendTime('not a date')).toBe('--');
     });
   });
 });

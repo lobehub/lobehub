@@ -4,6 +4,9 @@ import { PushChannel } from '../PushChannel';
 import type { PushDeliveryContext, PushTicketRecord } from '../types';
 
 const mockListByUserId = vi.fn();
+const { mockLog } = vi.hoisted(() => ({ mockLog: vi.fn() }));
+
+vi.mock('debug', () => ({ default: () => mockLog }));
 
 vi.mock('@/database/models/pushToken', () => ({
   PushTokenModel: vi.fn(() => ({
@@ -97,6 +100,106 @@ describe('PushChannel', () => {
     });
   });
 
+  it('excludes only devices already delivered through another system surface', async () => {
+    mockListByUserId.mockResolvedValueOnce([
+      { deviceId: 'activitykit-success', expoToken: 'ExponentPushToken[A]' },
+      { deviceId: 'activitykit-failed', expoToken: 'ExponentPushToken[B]' },
+      { deviceId: 'android-fallback', expoToken: 'ExponentPushToken[C]' },
+    ]);
+
+    const expo = makeExpoMock();
+    expo.sendPushNotificationsAsync.mockResolvedValueOnce([
+      { id: 'ticket-2', status: 'ok' },
+      { id: 'ticket-3', status: 'ok' },
+    ]);
+
+    const channel = new PushChannel(expo as any);
+    const result = await channel.deliver({
+      ...ctx,
+      pushPresentation: { excludeDeviceIds: ['activitykit-success'] },
+    });
+
+    expect(result.status).toBe('sent');
+    expect(
+      expo.sendPushNotificationsAsync.mock.calls[0][0].map((message: any) => message.to),
+    ).toEqual(['ExponentPushToken[B]', 'ExponentPushToken[C]']);
+  });
+
+  it('does not call Expo when every registered device was explicitly excluded', async () => {
+    mockListByUserId.mockResolvedValueOnce([
+      { deviceId: 'iphone', expoToken: 'ExponentPushToken[A]' },
+    ]);
+
+    const expo = makeExpoMock();
+    const channel = new PushChannel(expo as any);
+    const result = await channel.deliver({
+      ...ctx,
+      pushPresentation: { excludeDeviceIds: ['iphone'] },
+    });
+
+    expect(result).toEqual({ status: 'delivered' });
+    expect(expo.sendPushNotificationsAsync).not.toHaveBeenCalled();
+  });
+
+  it('adds mutable content, image, and custom data for a rich agent notification', async () => {
+    mockListByUserId.mockResolvedValueOnce([
+      { deviceId: 'iphone', expoToken: 'ExponentPushToken[A]' },
+    ]);
+
+    const expo = makeExpoMock();
+    expo.sendPushNotificationsAsync.mockResolvedValueOnce([{ id: 'ticket-1', status: 'ok' }]);
+
+    const channel = new PushChannel(expo as any);
+    await channel.deliver({
+      ...ctx,
+      pushPresentation: {
+        data: {
+          agentAvatar: '🤖',
+          agentAvatarBackgroundColor: '#ff0000',
+          agentId: 'agt_1',
+          lobePushStyle: 'agent_message',
+          notificationId: 'spoofed-notification',
+          type: 'spoofed_type',
+          url: '/malicious-target',
+        },
+        image: 'https://example.com/avatar.png',
+        mutableContent: true,
+      },
+      type: 'agent_run_completed',
+    });
+
+    expect(expo.sendPushNotificationsAsync.mock.calls[0][0][0]).toMatchObject({
+      data: {
+        agentAvatar: '🤖',
+        agentAvatarBackgroundColor: '#ff0000',
+        agentId: 'agt_1',
+        lobePushStyle: 'agent_message',
+        notificationId: 'notif-1',
+        type: 'agent_run_completed',
+        url: '/image?topic=t1',
+      },
+      mutableContent: true,
+      richContent: { image: 'https://example.com/avatar.png' },
+    });
+  });
+
+  it('preserves an absolute review URL without logging its credential', async () => {
+    const reviewToken = 'A'.repeat(43);
+    const reviewUrl = `https://app.lobehub.com/agent-approval?reviewToken=${reviewToken}`;
+    mockListByUserId.mockResolvedValueOnce([
+      { deviceId: 'iphone', expoToken: 'ExponentPushToken[A]' },
+    ]);
+
+    const expo = makeExpoMock();
+    expo.sendPushNotificationsAsync.mockResolvedValueOnce([{ id: 'ticket-1', status: 'ok' }]);
+
+    const channel = new PushChannel(expo as any);
+    await channel.deliver({ ...ctx, actionUrl: reviewUrl });
+
+    expect(expo.sendPushNotificationsAsync.mock.calls[0][0][0].data.url).toBe(reviewUrl);
+    expect(JSON.stringify(mockLog.mock.calls)).not.toContain(reviewToken);
+  });
+
   it('drops send-time errors but still returns sent if at least one ticket succeeded', async () => {
     mockListByUserId.mockResolvedValueOnce([
       { deviceId: 'a', expoToken: 'ExponentPushToken[A]' },
@@ -108,7 +211,8 @@ describe('PushChannel', () => {
       { id: 'ticket-1', status: 'ok' },
       {
         details: { error: 'DeviceNotRegistered' },
-        message: 'token-b dead',
+        // Provider-owned messages are untrusted and may echo the credential.
+        message: 'ExponentPushToken[B]',
         status: 'error',
       },
     ]);
@@ -119,6 +223,12 @@ describe('PushChannel', () => {
     expect(result.status).toBe('sent');
     const records = JSON.parse(result.providerMessageId!) as PushTicketRecord[];
     expect(records).toEqual([{ expoToken: 'ExponentPushToken[A]', ticketId: 'ticket-1' }]);
+    expect(mockLog).toHaveBeenCalledWith(
+      'Send-time error for deviceId=%s category=%s',
+      'b',
+      'DeviceNotRegistered',
+    );
+    expect(JSON.stringify(mockLog.mock.calls)).not.toContain('ExponentPushToken[B]');
   });
 
   it('returns all_send_failed when every ticket fails at send time', async () => {

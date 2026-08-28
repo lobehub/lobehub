@@ -2,6 +2,7 @@ import { and, eq, type SQL, sql } from 'drizzle-orm';
 
 import { topics } from '../schemas';
 import type { Transaction } from '../type';
+import { NOT_COPIED_TRANSCRIPT_SQL } from '../utils/copiedTranscript';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 interface ToolUsageEntry {
@@ -262,6 +263,7 @@ export const recomputeTopicUsage = async (
       AND ${rowOwnership}
       AND role = 'assistant'
       AND (usage IS NOT NULL OR metadata ? 'usage')
+      AND ${sql.raw(NOT_COPIED_TRANSCRIPT_SQL)}
     GROUP BY provider, model
   `);
 

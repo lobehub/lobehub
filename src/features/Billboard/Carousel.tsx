@@ -1,8 +1,8 @@
 'use client';
 
 import { useAnalytics } from '@lobehub/analytics/react';
-import { ActionIcon, Flexbox, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
+import { resolveBillboardAction, runBillboardAction } from './actions';
 import { resolveBillboardItem } from './locale';
 
 type BillboardItem = GlobalBillboardItem;
@@ -133,94 +134,117 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ItemContent = memo<{ billboardSlug: string; item: BillboardItem; position: number }>(
-  ({ item, billboardSlug, position }) => {
-    const { t, i18n } = useTranslation('notification');
-    const { analytics } = useAnalytics();
-    const resolved = useMemo(
-      () => resolveBillboardItem(item, i18n.language),
-      [item, i18n.language],
-    );
+const ItemContent = memo<{
+  billboardSlug: string;
+  item: BillboardItem;
+  onClose: () => void;
+  position: number;
+}>(({ item, billboardSlug, position, onClose }) => {
+  const { t, i18n } = useTranslation('notification');
+  const { analytics } = useAnalytics();
+  const resolved = useMemo(() => resolveBillboardItem(item, i18n.language), [item, i18n.language]);
 
-    const handleCtaClick = useCallback(() => {
+  const action = resolveBillboardAction(item.action);
+
+  const trackCtaClick = useCallback(
+    (extra: Record<string, unknown>) => {
       analytics?.track({
         name: 'billboard_cta_clicked',
         properties: {
           billboard_slug: billboardSlug,
           item_id: item.id,
-          link_url: item.linkUrl,
           position,
           spm: 'billboard.cta.clicked',
+          ...extra,
         },
       });
-    }, [analytics, billboardSlug, item.id, item.linkUrl, position]);
+    },
+    [analytics, billboardSlug, item.id, position],
+  );
 
-    const titleRef = useRef<HTMLDivElement>(null);
-    const descRef = useRef<HTMLDivElement>(null);
-    const [titleOverflow, setTitleOverflow] = useState(false);
-    const [descOverflow, setDescOverflow] = useState(false);
+  const handleActionClick = useCallback(async () => {
+    if (!action) return;
+    trackCtaClick({ action });
+    onClose();
+    await Promise.resolve(runBillboardAction(action)).catch(() => {});
+  }, [action, trackCtaClick, onClose]);
 
-    useLayoutEffect(() => {
-      const el = titleRef.current;
-      if (!el) return;
-      setTitleOverflow(el.scrollHeight > el.clientHeight + 1);
-    }, [resolved.title]);
+  const handleLinkClick = useCallback(() => {
+    trackCtaClick({ link_url: item.linkUrl });
+    onClose();
+  }, [trackCtaClick, item.linkUrl, onClose]);
 
-    useLayoutEffect(() => {
-      const el = descRef.current;
-      if (!el) return;
-      setDescOverflow(el.scrollHeight > el.clientHeight + 1);
-    }, [resolved.description]);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const descRef = useRef<HTMLDivElement>(null);
+  const [titleOverflow, setTitleOverflow] = useState(false);
+  const [descOverflow, setDescOverflow] = useState(false);
 
-    const titleNode = (
-      <div className={styles.title} ref={titleRef}>
-        {resolved.title}
-      </div>
-    );
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    setTitleOverflow(el.scrollHeight > el.clientHeight + 1);
+  }, [resolved.title]);
 
-    const descNode = resolved.description && (
-      <div className={styles.description} ref={descRef}>
-        {resolved.description}
-      </div>
-    );
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setDescOverflow(el.scrollHeight > el.clientHeight + 1);
+  }, [resolved.description]);
 
-    return (
-      <Flexbox gap={0}>
-        {item.cover && <img alt="" className={styles.image} src={item.cover} />}
-        <Flexbox className={styles.itemBody} gap={4}>
-          {titleOverflow ? (
-            <Tooltip placement="top" title={resolved.title}>
-              {titleNode}
+  const titleNode = (
+    <div className={styles.title} ref={titleRef}>
+      {resolved.title}
+    </div>
+  );
+
+  const descNode = resolved.description && (
+    <div className={styles.description} ref={descRef}>
+      {resolved.description}
+    </div>
+  );
+
+  return (
+    <Flexbox gap={0}>
+      {item.cover && <img alt="" className={styles.image} src={item.cover} />}
+      <Flexbox className={styles.itemBody} gap={4}>
+        {titleOverflow ? (
+          <Tooltip placement="top" title={resolved.title}>
+            {titleNode}
+          </Tooltip>
+        ) : (
+          titleNode
+        )}
+        {descNode &&
+          (descOverflow ? (
+            <Tooltip placement="top" title={resolved.description}>
+              {descNode}
             </Tooltip>
           ) : (
-            titleNode
-          )}
-          {descNode &&
-            (descOverflow ? (
-              <Tooltip placement="top" title={resolved.description}>
-                {descNode}
-              </Tooltip>
-            ) : (
-              descNode
-            ))}
-          {item.linkUrl && (
+            descNode
+          ))}
+        {action ? (
+          <Button block className={styles.action} type="primary" onClick={handleActionClick}>
+            {resolved.linkLabel ?? t('billboard.learnMore')}
+          </Button>
+        ) : (
+          item.linkUrl && (
             <a
               className={styles.action}
               href={item.linkUrl}
               rel="noopener noreferrer"
               target="_blank"
-              onClick={handleCtaClick}
+              onClick={handleLinkClick}
             >
-              <Button block size="small" type="primary">
+              <Button block type="primary">
                 {resolved.linkLabel ?? t('billboard.learnMore')}
               </Button>
             </a>
-          )}
-        </Flexbox>
+          )
+        )}
       </Flexbox>
-    );
-  },
-);
+    </Flexbox>
+  );
+});
 
 ItemContent.displayName = 'BillboardItemContent';
 
@@ -277,7 +301,12 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
       >
         <ActionIcon className={styles.closeButton} icon={X} size={14} onClick={onClose} />
         {single ? (
-          <ItemContent billboardSlug={set.slug} item={set.items[0]} position={0} />
+          <ItemContent
+            billboardSlug={set.slug}
+            item={set.items[0]}
+            position={0}
+            onClose={onClose}
+          />
         ) : (
           <>
             <AntCarousel
@@ -290,7 +319,12 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
             >
               {set.items.map((item, idx) => (
                 <div key={item.id}>
-                  <ItemContent billboardSlug={set.slug} item={item} position={idx} />
+                  <ItemContent
+                    billboardSlug={set.slug}
+                    item={item}
+                    position={idx}
+                    onClose={onClose}
+                  />
                 </div>
               ))}
             </AntCarousel>

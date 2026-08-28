@@ -8,7 +8,7 @@ import {
 } from '@/features/Conversation/store/slices/data/pendingInterventions';
 import { type ConversationContext } from '@/features/Conversation/types';
 import { useChatStore } from '@/store/chat';
-import { displayMessageSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, displayMessageSelectors } from '@/store/chat/selectors';
 import { type Operation } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -63,6 +63,7 @@ export const collectGlobalApprovals = (
   dbMessagesMap: Record<string, UIChatMessage[]>,
   operations: Record<string, Operation>,
   activeKey: string | null,
+  portalKey?: string,
 ): GlobalApprovalGroup[] => {
   // Build the authoritative bucketKey → context map from in-flight runs.
   const contextByKey = new Map<string, ConversationContext>();
@@ -75,8 +76,10 @@ export const collectGlobalApprovals = (
 
   const groups: GlobalApprovalGroup[] = [];
   for (const [key, messages] of Object.entries(dbMessagesMap)) {
-    // Skip the conversation already on screen — InterventionBar owns it.
-    if (key === activeKey) continue;
+    // Skip conversations already on screen — their in-place InterventionBars own
+    // approvals. This includes both the primary chat and a topic opened in the
+    // side-by-side portal.
+    if (key === activeKey || key === portalKey) continue;
     if (!messages?.length) continue;
 
     const interventions = getPendingInterventions(messages);
@@ -99,19 +102,28 @@ export const collectGlobalApprovals = (
  * `InterventionBar` already handles that one).
  */
 export const useGlobalPendingApprovals = (): GlobalApprovalGroup[] => {
-  const { dbMessagesMap, operations } = useChatStore(
+  const { activeAgentId, dbMessagesMap, operations, portalTopicId } = useChatStore(
     useShallow((s) => ({
+      activeAgentId: s.activeAgentId,
       dbMessagesMap: s.dbMessagesMap,
       operations: s.operations,
+      portalTopicId: chatPortalSelectors.portalTopicId(s),
     })),
   );
   // Active conversation's bucket key — built from the full scoped context
   // (agent / topic / thread / group) so a pending approval in the on-screen
   // group/thread conversation is excluded, not duplicated.
   const activeKey = useChatStore(displayMessageSelectors.currentDisplayChatKey);
+  const portalKey = useMemo(
+    () =>
+      activeAgentId && portalTopicId
+        ? messageMapKey({ agentId: activeAgentId, scope: 'main', topicId: portalTopicId })
+        : undefined,
+    [activeAgentId, portalTopicId],
+  );
 
   return useMemo(
-    () => collectGlobalApprovals(dbMessagesMap, operations, activeKey),
-    [dbMessagesMap, operations, activeKey],
+    () => collectGlobalApprovals(dbMessagesMap, operations, activeKey, portalKey),
+    [dbMessagesMap, operations, activeKey, portalKey],
   );
 };

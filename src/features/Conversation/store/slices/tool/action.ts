@@ -1,7 +1,10 @@
+import type { AgentInterventionSourceAction } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 
 import { type Store as ConversationStore } from '../../action';
+import { getInterventionBatch } from '../data/pendingInterventions';
+import { dataSelectors } from '../data/selectors';
 
 /**
  * Tool Interaction Actions
@@ -22,7 +25,11 @@ export class ToolActionImpl {
     this.#get = get;
   }
 
-  approveToolCall = async (toolMessageId: string, assistantGroupId: string): Promise<void> => {
+  approveToolCall = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    options?: { editedArguments?: Record<string, unknown>; rememberToolKey?: string },
+  ): Promise<void> => {
     const { hooks, context, waitForPendingArgsUpdate } = this.#get();
 
     // Wait for any pending args update to complete before approval
@@ -36,7 +43,21 @@ export class ToolActionImpl {
 
     // Delegate to global ChatStore with context for correct conversation scope
     const chatStore = useChatStore.getState();
-    await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    const toolCallId = dataSelectors.getDbMessageById(toolMessageId)(this.#get())?.tool_call_id;
+    const editedArguments = options?.editedArguments;
+    const chatOptions =
+      editedArguments && toolCallId
+        ? {
+            ...options,
+            onLegacyEditFallback: () =>
+              this.#get().updatePluginArguments(toolCallId, editedArguments, true),
+          }
+        : options;
+    if (chatOptions) {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context, chatOptions);
+    } else {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    }
 
     // ===== Hook: onToolCallComplete =====
     if (hooks.onToolCallComplete) {
@@ -44,10 +65,79 @@ export class ToolActionImpl {
     }
   };
 
-  cancelToolInteraction = async (toolMessageId: string): Promise<void> => {
+  /**
+   * Approve every pending tool of a parallel batch in one action.
+   *
+   * Args edits are flushed for all cards first: the intervention UI debounces
+   * `updatePluginArguments`, so approving without waiting would ship the
+   * pre-edit arguments for any card the user had just typed in.
+   */
+  /**
+   * Stop a run parked on tool approval — nothing in the batch executes and the
+   * model is not continued.
+   *
+   * No `waitForPendingArgsUpdate` here, unlike approval: the arguments are
+   * about to be discarded, so flushing a debounced edit into a call that will
+   * never run is pure latency.
+   */
+  stopPendingApproval = async (toolMessageIds: string[]): Promise<void> => {
+    const { context } = this.#get();
+    await useChatStore.getState().stopPendingApproval(toolMessageIds, context);
+  };
+
+  /**
+   * Stop from a single card: resolve that card's own parallel batch and stop
+   * the whole thing.
+   *
+   * Scoped the same way approve-all is — the pending list spans the entire
+   * conversation, so stopping the raw list would also discard an unrelated
+   * turn's approval.
+   */
+  stopPendingApprovalForCard = async (toolMessageId: string): Promise<void> => {
+    const state = this.#get();
+    const pending = dataSelectors.pendingInterventions(state);
+    const active = pending.find((item) => item.toolMessageId === toolMessageId);
+    const batch = getInterventionBatch(pending, active);
+    const ids = batch.length > 0 ? batch.map((item) => item.toolMessageId) : [toolMessageId];
+
+    await useChatStore.getState().stopPendingApproval(ids, state.context);
+  };
+
+  approveAllToolCalls = async (toolMessageIds: string[]): Promise<void> => {
+    const { hooks, context, waitForPendingArgsUpdate } = this.#get();
+
+    await Promise.all(toolMessageIds.map((id) => waitForPendingArgsUpdate(id)));
+
+    // ===== Hook: onToolApproved =====
+    // Per tool, so a host that vetoes one card drops only that card from the
+    // batch rather than cancelling the whole approval.
+    const approved: string[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      if (hooks.onToolApproved) {
+        const shouldProceed = await hooks.onToolApproved(toolMessageId);
+        if (shouldProceed === false) continue;
+      }
+      approved.push(toolMessageId);
+    }
+
+    if (approved.length === 0) return;
+
+    const chatStore = useChatStore.getState();
+    await chatStore.approveAllToolCalls(approved, context);
+
+    // ===== Hook: onToolCallComplete =====
+    if (hooks.onToolCallComplete) {
+      for (const toolMessageId of approved) hooks.onToolCallComplete(toolMessageId, undefined);
+    }
+  };
+
+  cancelToolInteraction = async (
+    toolMessageId: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.cancelToolInteraction(toolMessageId, context);
+    await chatStore.cancelToolInteraction(toolMessageId, context, options);
   };
 
   rejectAndContinueToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
@@ -100,17 +190,31 @@ export class ToolActionImpl {
     await chatStore.rejectToolCalling(toolMessageId, reason, context);
   };
 
-  skipToolInteraction = async (toolMessageId: string, reason?: string): Promise<void> => {
+  skipToolInteraction = async (
+    toolMessageId: string,
+    reason?: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.skipToolInteraction(toolMessageId, reason, context);
+    await chatStore.skipToolInteraction(toolMessageId, reason, context, options);
   };
 
   submitToolInteraction = async (
     toolMessageId: string,
     response: Record<string, unknown>,
     options?: {
+      agentInterventionAction?: Extract<
+        AgentInterventionSourceAction,
+        { type: 'submit_answers' | 'submit_custom' }
+      >;
       createUserMessage?: boolean;
+      prepareLegacyFallback?: () => Promise<{
+        createUserMessage?: boolean;
+        pluginState?: Record<string, unknown>;
+        response: Record<string, unknown>;
+        toolResultContent?: string;
+      }>;
       pluginState?: Record<string, unknown>;
       toolResultContent?: string;
     },

@@ -97,6 +97,17 @@ export class FileService {
   }
 
   /**
+   * Create a storage URL whose response is delivered as a browser download.
+   */
+  public async createDownloadUrl(
+    url: string,
+    fileName: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    return this.impl.createDownloadUrl(url, fileName, expiresIn);
+  }
+
+  /**
    * Create cached pre-signed preview URL
    */
   public async createCachedPreSignedUrlForPreview(

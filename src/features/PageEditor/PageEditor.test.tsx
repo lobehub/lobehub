@@ -2,6 +2,18 @@ import { renderHook } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTitleTextAreaInteractionProps } from './TitleSection';
+
+describe('PageEditor title interaction', () => {
+  it('keeps a non-editable title visually enabled but read-only', () => {
+    const props = getTitleTextAreaInteractionProps(false);
+
+    expect(props).toEqual({ readOnly: true });
+    expect(props).not.toHaveProperty('disabled');
+    expect(getTitleTextAreaInteractionProps(true)).toEqual({ readOnly: false });
+  });
+});
+
 describe('PageEditor beforeunload handler', () => {
   let addEventListenerSpy: ReturnType<typeof vi.spyOn>;
   let removeEventListenerSpy: ReturnType<typeof vi.spyOn>;
