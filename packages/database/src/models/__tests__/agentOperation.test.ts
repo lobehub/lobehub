@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { matchesAgentInterventionContinuationProvenance } from '@/business/server/agent-run/agentInterventionIdentity';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentOperations, users } from '../../schemas';
+import { agentOperations, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 
@@ -561,6 +561,81 @@ describe('AgentOperationModel', () => {
 
       const tree = await model.listOperationTree('lonely');
       expect(tree.map((op) => op.id)).toEqual(['lonely']);
+    });
+  });
+
+  describe('listByTopic', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values([
+        { id: 'tpc-a', userId },
+        { id: 'tpc-b', userId },
+        { id: 'tpc-foreign', userId: otherUserId },
+      ]);
+    });
+
+    it('returns the topic operations newest first, owner-scoped', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      await serverDB.insert(agentOperations).values([
+        {
+          createdAt: new Date('2026-01-01'),
+          id: 'op-old',
+          status: 'done',
+          topicId: 'tpc-a',
+          userId,
+        },
+        {
+          createdAt: new Date('2026-01-03'),
+          id: 'op-new',
+          status: 'done',
+          topicId: 'tpc-a',
+          userId,
+        },
+        // Another topic's op must not leak in.
+        { id: 'op-other-topic', status: 'done', topicId: 'tpc-b', userId },
+        // Another user's op on the same topic must not leak in.
+        { id: 'op-foreign', status: 'done', topicId: 'tpc-a', userId: otherUserId },
+      ]);
+
+      const rows = await model.listByTopic('tpc-a');
+      expect(rows.map((row) => row.id)).toEqual(['op-new', 'op-old']);
+    });
+
+    it('reports whether a trace was recorded so callers can tell it apart from a failed fetch', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      await serverDB.insert(agentOperations).values([
+        {
+          id: 'op-with-trace',
+          status: 'done',
+          topicId: 'tpc-a',
+          traceS3Key: 'agent-traces/agt_x/tpc-a/op-with-trace.json.zst',
+          userId,
+        },
+        { id: 'op-without-trace', status: 'done', topicId: 'tpc-a', userId },
+      ]);
+
+      const byId = Object.fromEntries(
+        (await model.listByTopic('tpc-a')).map((row) => [row.id, row.traceS3Key]),
+      );
+      expect(byId['op-with-trace']).toBe('agent-traces/agt_x/tpc-a/op-with-trace.json.zst');
+      expect(byId['op-without-trace']).toBeNull();
+    });
+
+    it('honours the limit', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      await serverDB.insert(agentOperations).values(
+        Array.from({ length: 5 }, (_, index) => ({
+          createdAt: new Date(2026, 0, index + 1),
+          id: `op-${index}`,
+          status: 'done' as const,
+          topicId: 'tpc-a',
+          userId,
+        })),
+      );
+
+      expect((await model.listByTopic('tpc-a', 2)).map((row) => row.id)).toEqual(['op-4', 'op-3']);
     });
   });
 });

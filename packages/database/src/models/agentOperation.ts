@@ -406,6 +406,35 @@ export class AgentOperationModel {
   }
 
   /**
+   * Operations recorded for one topic, newest first — the lookup that turns a
+   * topic id (what a user actually has on hand) into the operation ids their
+   * traces are keyed by. `traceS3Key` rides along so callers can tell "no
+   * snapshot was recorded" apart from "snapshot exists but the fetch failed".
+   */
+  async listByTopic(topicId: string, limit = 20) {
+    return this.db
+      .select({
+        agentId: agentOperations.agentId,
+        createdAt: agentOperations.createdAt,
+        id: agentOperations.id,
+        model: agentOperations.model,
+        parentOperationId: agentOperations.parentOperationId,
+        provider: agentOperations.provider,
+        startedAt: agentOperations.startedAt,
+        status: agentOperations.status,
+        stepCount: agentOperations.stepCount,
+        totalCost: agentOperations.totalCost,
+        totalTokens: agentOperations.totalTokens,
+        traceS3Key: agentOperations.traceS3Key,
+        trigger: agentOperations.trigger,
+      })
+      .from(agentOperations)
+      .where(and(eq(agentOperations.topicId, topicId), this.ownership()))
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(limit);
+  }
+
+  /**
    * Total USD cost of every operation bound to a task — the goal outer loop's
    * budget meter. Only root (task-bound) operations carry `taskId`, and each
    * root's `totalCost` scalar already includes its direct children's rollup

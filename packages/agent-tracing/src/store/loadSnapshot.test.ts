@@ -87,4 +87,62 @@ describe('loadSnapshot', () => {
     const root = await makeRoot();
     expect(await loadSnapshot('nope', { rootDir: root })).toBeUndefined();
   });
+
+  describe('resolveDownloadUrl', () => {
+    it('downloads from the resolved URL instead of TRACING_BASE_URL', async () => {
+      const root = await makeRoot();
+      vi.stubEnv('TRACING_BASE_URL', 'https://public.example.com/agent-traces');
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(Buffer.from(JSON.stringify(snapshot('trace-signed'))), { status: 200 }),
+        );
+
+      const result = await loadSnapshot(OP_ID, {
+        allowDownload: true,
+        resolveDownloadUrl: async () => 'https://signed.example.com/obj?sig=abc',
+        rootDir: root,
+      });
+
+      expect(result?.traceId).toBe('trace-signed');
+      expect(fetchSpy).toHaveBeenCalledWith('https://signed.example.com/obj?sig=abc');
+
+      fetchSpy.mockRestore();
+    });
+
+    it('is not consulted when the snapshot is already cached locally', async () => {
+      const root = await makeRoot();
+      await writeRemoteCache(root, OP_ID);
+      const resolveDownloadUrl = vi.fn();
+
+      expect(
+        (await loadSnapshot(OP_ID, { allowDownload: true, resolveDownloadUrl, rootDir: root }))
+          ?.traceId,
+      ).toBe('trace-remote');
+      expect(resolveDownloadUrl).not.toHaveBeenCalled();
+    });
+
+    it('falls back to TRACING_BASE_URL when the resolver has nothing to offer', async () => {
+      const root = await makeRoot();
+      vi.stubEnv('TRACING_BASE_URL', 'https://public.example.com/agent-traces');
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(Buffer.from(JSON.stringify(snapshot('trace-public'))), { status: 200 }),
+        );
+
+      const result = await loadSnapshot(OP_ID, {
+        allowDownload: true,
+        resolveDownloadUrl: async () => null,
+        rootDir: root,
+      });
+
+      expect(result?.traceId).toBe('trace-public');
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://public.example.com/agent-traces/agt_aaa/tpc_bbb/op_1_agt_aaa_tpc_bbb_ccc.json.zst',
+      );
+
+      fetchSpy.mockRestore();
+    });
+  });
 });
