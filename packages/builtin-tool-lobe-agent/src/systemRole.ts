@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 import { isDesktop } from './const';
 
 const runInClientSection = `
@@ -228,7 +230,7 @@ const askUserQuestionSection = `
 // Sections independent of sub-agent dispatch (multimodal fallback + ask-user + plan/todo).
 // Kept as a base so contexts where callSubAgent is unavailable can drop the sub-agent
 // guidance without leaving dangling references to a tool the model can't call.
-const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
+const baseSystemPrompt = `Use ${BRANDING_NAME} Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
 ${multimodalAnalysisSection}
 ${askUserQuestionSection}
 ${planTodoSection}`;

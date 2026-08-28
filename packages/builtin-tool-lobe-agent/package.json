@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/shared-tool-ui": "workspace:*",

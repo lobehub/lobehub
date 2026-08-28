@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { isDesktop } from './const';
@@ -265,10 +266,9 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   identifier: LobeAgentIdentifier,
   meta: {
     avatar: '🤖',
-    description:
-      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and multimodal media analysis.',
-    readme: 'Lobe Agent provides built-in assistant capabilities that can be expanded over time.',
-    title: 'Lobe Agent',
+    description: `Run built-in ${BRANDING_NAME} Agent capabilities: plan + todo management, sub-agent dispatch, and multimodal media analysis.`,
+    readme: `${BRANDING_NAME} Agent provides built-in assistant capabilities that can be expanded over time.`,
+    title: `${BRANDING_NAME} Agent`,
   },
   systemRole: systemPrompt,
   type: 'builtin',
