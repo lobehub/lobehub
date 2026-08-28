@@ -11,10 +11,6 @@ vi.mock('../settings', () => ({
   resolveServerUrl: mockResolveServerUrl,
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: { error: vi.fn() },
-}));
-
 describe('api/http auth helpers', () => {
   const originalJwt = process.env.LOBEHUB_JWT;
   const originalWorkspaceId = process.env.LOBEHUB_WORKSPACE_ID;

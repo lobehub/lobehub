@@ -46,10 +46,6 @@ vi.mock('@/modules/updater/configs', () => ({
   UPDATE_SERVER_URL: 'https://updates.test/stable',
   coerceStoredUpdateChannel: (channel?: string) => (channel === 'canary' ? 'canary' : 'stable'),
 }));
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 const makeApp = () => ({
   browserManager: { broadcastToAllWindows: vi.fn(), browsers: new Map() },
   rendererUrlManager: { setActiveRendererDir: vi.fn() },

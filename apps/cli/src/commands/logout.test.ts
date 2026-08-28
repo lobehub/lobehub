@@ -14,15 +14,6 @@ vi.mock('../daemon/manager', () => ({
   stopDaemon: vi.fn(),
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 describe('logout command', () => {
   beforeEach(() => {
     vi.clearAllMocks();

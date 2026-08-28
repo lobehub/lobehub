@@ -74,15 +74,6 @@ vi.mock('@/const/env', () => ({
   },
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('@/utils/permissions', () => ({
   getScreenCaptureStatus: mockGetScreenCaptureStatus,
   requestScreenCaptureAccess: mockRequestScreenCaptureAccess,

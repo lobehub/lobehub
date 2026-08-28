@@ -20,15 +20,6 @@ vi.mock('electron', () => ({
 
 vi.mock('execa', () => ({ execa: vi.fn() }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('@/utils/net-fetch', () => ({ netFetch: vi.fn() }));
 
 vi.mock('@/utils/file-system', () => ({ makeSureDirExist: vi.fn() }));

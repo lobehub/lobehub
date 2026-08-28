@@ -51,16 +51,6 @@ vi.mock('fs-extra', () => ({
   pathExistsSync: (...args: any[]) => mockPathExistsSync(...args),
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock common/routes
 vi.mock('~common/routes', () => ({
   findMatchingRoute: vi.fn(),

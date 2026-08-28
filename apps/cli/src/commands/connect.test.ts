@@ -42,18 +42,6 @@ vi.mock('../settings', () => ({
   saveSettings: vi.fn(),
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    toolCall: vi.fn(),
-    toolResult: vi.fn(),
-    warn: vi.fn(),
-  },
-  setVerbose: vi.fn(),
-}));
-
 vi.mock('../tools/shell', () => ({
   cleanupAllProcesses: vi.fn(),
 }));

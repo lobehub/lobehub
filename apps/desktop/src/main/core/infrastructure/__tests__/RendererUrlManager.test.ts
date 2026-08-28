@@ -36,15 +36,6 @@ vi.mock('@/env', () => ({
   getDesktopEnv: vi.fn(() => ({ DESKTOP_RENDERER_STATIC: false })),
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 describe('RendererUrlManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();

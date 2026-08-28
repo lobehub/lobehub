@@ -12,10 +12,6 @@ const { mockClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
-vi.mock('../utils/logger', () => ({
-  log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-}));
-
 const createProgram = () => {
   const program = new Command();
   program.exitOverride();

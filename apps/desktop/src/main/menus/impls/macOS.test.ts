@@ -35,15 +35,6 @@ vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => true),
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock isDev
 vi.mock('@/const/env', () => ({
   isDev: false,
