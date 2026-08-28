@@ -10,9 +10,17 @@ export interface GoalCriterionInput {
   title: string;
 }
 
-/** Attempts one Work gets before the coordinator opens a decision gate. */
-export const resolveGoalAttemptBudget = (maxIterations?: number | null): number =>
-  Math.min(10, Math.max(2, maxIterations ?? 3));
+/**
+ * Attempts one Work gets before the coordinator opens a decision gate.
+ *
+ * `null` is the manifest's documented "no user-specified cap" — the cleared
+ * input field — and must stay distinct from a chosen number, or clearing the
+ * field would quietly pin the goal to three attempts. Returning `undefined`
+ * leaves `maxAttemptsPerWork` off the config so `resolveWorkAttemptBudget`
+ * applies its own default.
+ */
+export const resolveGoalAttemptBudget = (maxIterations?: number | null): number | undefined =>
+  typeof maxIterations === 'number' ? Math.min(10, Math.max(2, maxIterations)) : undefined;
 
 /**
  * The goal's acceptance requirement. The Goal Graph models "what counts as

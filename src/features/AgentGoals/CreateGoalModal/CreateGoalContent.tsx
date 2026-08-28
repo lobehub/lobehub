@@ -443,7 +443,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       costBudget: plan.maxTotalCost,
       instruction,
       requirement,
-      roundBudget: plan.maxIterations,
     });
 
     setIsCreating(true);
@@ -454,7 +453,9 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
           visibility: activeWorkspaceId ? visibility : undefined,
         },
-        maxRounds: budget.maxRounds ?? undefined,
+        // `maxIterations` is the per-Work attempt budget above; it is not the
+        // graph-wide round cap, which counts runs across every Work and would
+        // strand the fourth task of a goal whose limit is three attempts.
         maxTotalCost: budget.maxTotalCost ?? undefined,
         projectId,
         requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),

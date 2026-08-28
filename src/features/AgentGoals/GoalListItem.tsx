@@ -33,12 +33,12 @@ export const GoalListItem = memo<GoalItemProps>(({ goal: item }) => {
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
   const { goal } = item;
-  // On the project Goals page there is no `aid` in the route, so the goal's own
-  // agent is the only way to reach its detail page. Without this every card
-  // there renders as a link that does nothing.
+  // On the project Goals page there is no `aid` in the route, and a goal created
+  // there has no responsible agent either — so fall back the same way tasks do,
+  // to the bare detail route. Without this every card there is a dead link.
   const agentId = aid ?? goal.agentId;
   const handleClick = () => {
-    if (agentId) navigate(`/agent/${agentId}/goal/${goal.id}`);
+    navigate(agentId ? `/agent/${agentId}/goal/${goal.id}` : `/goal/${goal.id}`);
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;

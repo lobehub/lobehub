@@ -2,6 +2,7 @@ import type {
   GoalConfig,
   GoalEdgeKind,
   GoalGraphSnapshot,
+  GoalItem,
   GoalNodeKind,
   GoalNodeStatus,
   GoalTickResult,
@@ -184,13 +185,48 @@ export class GoalService {
     return goal;
   };
 
+  /**
+   * What the goal has spent against what it is allowed to spend.
+   *
+   * Rounds are counted across every Work Task in the graph, not per Work — the
+   * budget is the goal's, so `setBudget` has to read it exactly the way the
+   * coordinator does or raising a budget would not reliably unstick a goal.
+   */
+  private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
+    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
+    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
+    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
+    return {
+      costLimitReached: goal.maxTotalCost !== null && totalCost >= Number(goal.maxTotalCost),
+      roundLimitReached: goal.maxRounds !== null && runs.length >= goal.maxRounds,
+      runs,
+      totalCost,
+    };
+  };
+
   setBudget = async (
     goalId: string,
     budget: { maxRounds?: number | null; maxTotalCost?: number | null },
   ) => {
+    const before = await this.requireGraph(goalId);
+    const wasBinding = await this.evaluateBudget(before.goal, before);
+
     const goal = await this.goalModel.update(goalId, budget);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-    return goal;
+
+    // Raising a budget is how a user un-sticks a goal the coordinator parked on
+    // one, and `tick` refuses to move a paused goal — so without this the
+    // queued advance would return straight away and the user would have to find
+    // Resume as a second gesture. Only a goal the budget actually stopped is
+    // reopened: if the old budget was not binding, this pause was somebody's
+    // deliberate one and is left alone.
+    const stoppedByBudget = wasBinding.costLimitReached || wasBinding.roundLimitReached;
+    if (goal.status !== 'paused' || !stoppedByBudget) return goal;
+
+    const nowBinding = await this.evaluateBudget(goal, before);
+    if (nowBinding.costLimitReached || nowBinding.roundLimitReached) return goal;
+
+    return (await this.resume(goalId)) ?? goal;
   };
 
   resume = async (goalId: string) => {
@@ -529,12 +565,10 @@ export class GoalService {
       };
     }
 
-    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
-    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
-    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
-    const roundLimitReached = graph.goal.maxRounds !== null && runs.length >= graph.goal.maxRounds;
-    const costLimitReached =
-      graph.goal.maxTotalCost !== null && totalCost >= Number(graph.goal.maxTotalCost);
+    const { costLimitReached, roundLimitReached, runs, totalCost } = await this.evaluateBudget(
+      graph.goal,
+      graph,
+    );
     if (roundLimitReached || costLimitReached) {
       await this.goalModel.updateStatus(goalId, 'paused');
       return {

@@ -22,7 +22,7 @@ import {
 } from '../schemas/goalGraph';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
-import { buildWorkspaceWhere } from '../utils/workspace';
+import { buildGoalScopeWhere } from '../utils/goalVisibility';
 import { workOwnership } from './work/context';
 
 interface EventInput {
@@ -64,7 +64,7 @@ export class GoalGraphModel {
   ) {}
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
+    buildGoalScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   private ownedGoal = async (goalId: string, tx: LobeChatDatabase | Transaction = this.db) => {
     const [goal] = await tx

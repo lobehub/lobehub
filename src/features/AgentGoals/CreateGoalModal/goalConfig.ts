@@ -1,5 +1,3 @@
-import { DEFAULT_GOAL_MAX_ROUNDS, GOAL_MAX_ROUNDS_RANGE } from '@lobechat/const/verify';
-
 export interface BuildGoalCreateInputParams {
   /**
    * Total USD budget across all attempts. `null`/`undefined` = uncapped (the
@@ -10,12 +8,9 @@ export interface BuildGoalCreateInputParams {
   instruction: string;
   /** "What counts as done" — the source the acceptance criteria were generated from. */
   requirement?: string;
-  /** How many attempts one Work may take before a decision gate opens. */
-  roundBudget?: number | null;
 }
 
 export interface GoalCreateInput {
-  maxRounds: number | null;
   maxTotalCost: number | null;
   requirement: string;
 }
@@ -38,16 +33,7 @@ export const buildGoalCreateInput = ({
   costBudget,
   instruction,
   requirement,
-  roundBudget,
 }: BuildGoalCreateInputParams): GoalCreateInput => ({
-  // `null` is the user's explicit "no cap" and must survive; `undefined`
-  // means they never chose, which falls back to the documented default.
-  maxRounds:
-    roundBudget === null
-      ? null
-      : typeof roundBudget === 'number'
-        ? Math.min(GOAL_MAX_ROUNDS_RANGE.max, Math.max(GOAL_MAX_ROUNDS_RANGE.min, roundBudget))
-        : DEFAULT_GOAL_MAX_ROUNDS,
   // No cap unless the user set a positive number; the coordinator reads `null`
   // as uncapped, so an empty / non-positive input maps back to `null`.
   maxTotalCost: typeof costBudget === 'number' && costBudget > 0 ? costBudget : null,

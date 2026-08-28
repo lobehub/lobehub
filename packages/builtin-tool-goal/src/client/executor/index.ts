@@ -51,7 +51,9 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
         config: {
           recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(params.maxIterations) },
         },
-        maxRounds: params.maxIterations ?? undefined,
+        // `maxIterations` caps attempts on one Work; it is deliberately not
+        // passed as `maxRounds`, which counts runs across every Work in the
+        // graph and would strand later tasks that have not run at all.
         maxTotalCost: params.maxTotalCost ?? undefined,
         requirement: buildGoalRequirement(params.name, criteria, params.instruction),
         title: params.name,

@@ -40,7 +40,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface GoalDetailPageProps {
-  agentId: string;
+  /** Absent for a goal with no responsible agent — e.g. one created from a project. */
+  agentId?: string;
   goalId: string;
 }
 
@@ -67,12 +68,20 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       <NavHeader
         left={
           <Flexbox horizontal align={'center'} gap={4}>
-            <AgentBreadcrumb
-              agentId={agentId}
-              extraItems={[goal.title]}
-              title={t('goalList.title')}
-            />
-            <GoalDetailActions agentId={agentId} goalId={goal.id} />
+            {agentId ? (
+              <>
+                <AgentBreadcrumb
+                  agentId={agentId}
+                  extraItems={[goal.title]}
+                  title={t('goalList.title')}
+                />
+                <GoalDetailActions agentId={agentId} goalId={goal.id} />
+              </>
+            ) : (
+              <Text fontSize={14} weight={500}>
+                {goal.title}
+              </Text>
+            )}
           </Flexbox>
         }
       />

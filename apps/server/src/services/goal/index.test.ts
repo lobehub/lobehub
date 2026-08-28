@@ -17,6 +17,8 @@ import {
   goalNodes,
   goals,
   tasks,
+  taskTopics,
+  topics,
   users,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -43,6 +45,8 @@ afterEach(async () => {
   await serverDB.delete(goals);
   await serverDB.delete(acceptances);
   await serverDB.delete(agentOperations);
+  await serverDB.delete(taskTopics);
+  await serverDB.delete(topics);
   await serverDB.delete(tasks);
   await serverDB.delete(agents);
   await serverDB.delete(users);
@@ -189,6 +193,43 @@ describe('GoalService', () => {
 
     expect(result.outcome).toBe('waiting_external');
     expect((await taskModel.findById(created.taskId!))?.status).toBe('running');
+  });
+
+  it('reopens a goal its round budget stopped when the budget is raised', async () => {
+    // `tick` refuses to move a paused goal, so without this the queued advance
+    // returns straight away and the user has to find Resume as a second gesture.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      maxRounds: 1,
+      title: 'Budget stopped',
+      work: ['Costs a round'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(topics).values({ id: 'tpc_budget', userId });
+    await serverDB
+      .insert(taskTopics)
+      .values({ seq: 1, taskId: created.taskId!, topicId: 'tpc_budget', userId });
+
+    const stopped = await service.tick(graph.goal.id);
+    expect(stopped.outcome).toBe('no_progress');
+    expect(stopped.message).toContain('Round budget reached');
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+
+    const raised = await service.setBudget(graph.goal.id, { maxRounds: 5 });
+
+    expect(raised?.status).not.toBe('paused');
+  });
+
+  it('leaves a deliberately paused goal paused when its budget changes', async () => {
+    // Nothing distinguishes a user pause from a budget pause on the row, so the
+    // reopen is limited to goals whose budget was actually binding.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'User paused', work: ['Wait'] });
+    await service.pause(graph.goal.id);
+
+    const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 50 });
+
+    expect(updated?.status).toBe('paused');
   });
 
   it('keeps the overall requirement as background while making the current work authoritative', async () => {

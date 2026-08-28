@@ -1,4 +1,3 @@
-import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { describe, expect, it } from 'vitest';
 
 import { buildGoalCreateInput, deriveInitialGoalCriterionTitle } from './goalConfig';
@@ -18,28 +17,15 @@ describe('deriveInitialGoalCriterionTitle', () => {
 });
 
 describe('buildGoalCreateInput', () => {
-  it('falls back to the documented round default when the budget is untouched', () => {
-    expect(buildGoalCreateInput({ instruction: 'ship it' }).maxRounds).toBe(
-      DEFAULT_GOAL_MAX_ROUNDS,
-    );
+  it('never sets a graph-wide round cap', () => {
+    // The modal's only iteration field means "attempts on one Work". `maxRounds`
+    // counts runs across every Work in the graph, so deriving it from that field
+    // stranded the fourth task of a goal whose limit was three attempts.
+    expect(buildGoalCreateInput({ instruction: 'ship it' })).not.toHaveProperty('maxRounds');
   });
 
-  it('preserves an explicit opt-out of the round cap', () => {
-    expect(
-      buildGoalCreateInput({ instruction: 'ship it', roundBudget: null }).maxRounds,
-    ).toBeNull();
-  });
-
-  it('clamps a round budget to the supported range', () => {
-    expect(buildGoalCreateInput({ instruction: 'x', roundBudget: 1 }).maxRounds).toBe(2);
-    expect(buildGoalCreateInput({ instruction: 'x', roundBudget: 99 }).maxRounds).toBe(10);
-  });
-
-  it('writes a positive cost budget and leaves it independent of the round budget', () => {
-    const input = buildGoalCreateInput({ costBudget: 2.5, instruction: 'x', roundBudget: 5 });
-
-    expect(input.maxTotalCost).toBe(2.5);
-    expect(input.maxRounds).toBe(5);
+  it('writes a positive cost budget', () => {
+    expect(buildGoalCreateInput({ costBudget: 2.5, instruction: 'x' }).maxTotalCost).toBe(2.5);
   });
 
   it('maps a blank or non-positive cost budget to uncapped (null)', () => {

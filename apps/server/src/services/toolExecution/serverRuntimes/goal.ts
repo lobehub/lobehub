@@ -45,7 +45,9 @@ export const goalRuntime: ServerRuntimeRegistration = {
             config: {
               recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(args.maxIterations) },
             },
-            maxRounds: args.maxIterations ?? undefined,
+            // `maxIterations` caps attempts on one Work; it is deliberately not
+            // passed as `maxRounds`, which counts runs across every Work in the
+            // graph and would strand later tasks that have not run at all.
             maxTotalCost: args.maxTotalCost ?? undefined,
             requirement: buildGoalRequirement(args.name, drafts, args.instruction),
             title: args.name,
