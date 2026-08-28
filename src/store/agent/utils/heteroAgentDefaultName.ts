@@ -1,18 +1,28 @@
-import { t } from 'i18next';
-
 import { getUserStoreState } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+interface HeteroAgentDefaultNameOptions {
+  productTitle?: string | null;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
+}
+
 /**
- * Default display name for a heterogeneous (external CLI / platform) agent:
- * "{owner}'s {product}" (e.g. "Max 的 Claude Code"). Such an agent is the
- * user's external tool rather than one of our own agents, so its default label
- * says whose tool it is instead of drawing a personal name.
+ * Default display name for a shared workspace heterogeneous agent. Personal
+ * and workspace-private agents keep no separate name, so their product title
+ * remains the primary label. Shared agents include the creator to distinguish
+ * otherwise identical tools in a multilingual workspace.
  *
- * Returns undefined when the owner has no usable name (anonymous session), so
- * the product title stays the primary label.
+ * The possessive is deliberately stable English rather than creation-locale
+ * copy because the persisted name is shown to every workspace member.
  */
-export const heteroAgentDefaultName = (productTitle?: string | null): string | undefined => {
+export const heteroAgentDefaultName = ({
+  productTitle,
+  visibility,
+  workspaceId,
+}: HeteroAgentDefaultNameOptions): string | undefined => {
+  if (!workspaceId || visibility === 'private') return undefined;
+
   const userStore = getUserStoreState();
   const owner = authSelectors.isLogin(userStore)
     ? userProfileSelectors.nickName(userStore)?.trim()
@@ -21,5 +31,5 @@ export const heteroAgentDefaultName = (productTitle?: string | null): string | u
 
   if (!owner || !product) return undefined;
 
-  return t('heteroAgent.defaultName', { ns: 'chat', owner, product });
+  return `${owner}’s ${product}`;
 };

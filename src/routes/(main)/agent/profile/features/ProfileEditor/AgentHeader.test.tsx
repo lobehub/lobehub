@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
       agentMap: {} as Record<
         string,
         {
+          agencyConfig?: { heterogeneousProvider?: { type: string } };
           avatar?: string | null;
           backgroundColor?: string;
           name?: string;
@@ -265,6 +266,23 @@ describe('AgentHeader', () => {
 
     // Exactly once: on the role line, never as the headline.
     expect(view.container.textContent?.match(/Lobe AI/g)).toHaveLength(1);
+  });
+
+  it('uses the product title once as the identity of a nameless heterogeneous agent', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = {
+      'agent-a': {
+        agencyConfig: { heterogeneousProvider: { type: 'grok-build' } },
+        slug: 'why-hard-industry',
+        title: 'Grok Build',
+      },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent?.match(/Grok Build/g)).toHaveLength(1);
+    expect(view.container.textContent).toContain('@why-hard-industry');
+    expect(view.container.textContent).not.toContain('settingAgent.personalName.unnamed');
+    expect(view.container.textContent).toContain('settingAgent.identity.edit');
   });
 
   // With no name there is nothing to headline, so the slot carries the prompt

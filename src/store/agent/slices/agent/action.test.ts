@@ -3,6 +3,7 @@ import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as activeWorkspaceModule from '@/business/client/hooks/useActiveWorkspaceId';
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
@@ -211,7 +212,7 @@ describe('AgentSlice Actions', () => {
       }
     });
 
-    it('names a heterogeneous agent after its owner instead of a personal name', async () => {
+    it('leaves a personal heterogeneous agent unnamed so its product title is primary', async () => {
       vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
       const userState = useUserStore.getState();
       useUserStore.setState({
@@ -230,13 +231,59 @@ describe('AgentSlice Actions', () => {
           });
         });
 
-        // Test i18n serves the default (English) chat resources.
-        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe(
-          "Max's Claude Code",
-        );
+        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBeUndefined();
       } finally {
         useUserStore.setState({ isSignedIn: userState.isSignedIn, user: userState.user });
       }
+    });
+
+    it('uses a stable English owner-qualified name for a shared workspace agent', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      vi.spyOn(activeWorkspaceModule, 'getActiveWorkspaceId').mockReturnValue('workspace-1');
+      const userState = useUserStore.getState();
+      const status = useGlobalStore.getState().status;
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { fullName: 'Max', id: 'user-1' } as any,
+      });
+      useGlobalStore.setState({ status: { ...status, language: 'zh-CN' } });
+      const { result } = renderHook(() => useAgentStore());
+
+      try {
+        await act(async () => {
+          await result.current.createAgent({
+            config: {
+              agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+              title: 'Claude Code',
+            },
+          });
+        });
+
+        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe(
+          'Max’s Claude Code',
+        );
+      } finally {
+        useUserStore.setState({ isSignedIn: userState.isSignedIn, user: userState.user });
+        useGlobalStore.setState({ status });
+      }
+    });
+
+    it('leaves a workspace-private heterogeneous agent unnamed', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      vi.spyOn(activeWorkspaceModule, 'getActiveWorkspaceId').mockReturnValue('workspace-1');
+      const { result } = renderHook(() => useAgentStore());
+
+      await act(async () => {
+        await result.current.createAgent({
+          config: {
+            agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+            title: 'Claude Code',
+          },
+          visibility: 'private',
+        });
+      });
+
+      expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBeUndefined();
     });
 
     it('leaves a heterogeneous agent unnamed for an anonymous owner', async () => {

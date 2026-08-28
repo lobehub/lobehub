@@ -29,9 +29,14 @@ const AgentHeader = memo(() => {
   const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const { autoName, naming } = useAutoName(agentId);
+  const personalName = meta.name?.trim();
+  const role = meta.title?.trim();
+  const usesHeterogeneousRoleAsName =
+    !personalName && !!role && !!config?.agencyConfig?.heterogeneousProvider;
+  const displayName = personalName || (usesHeterogeneousRoleAsName ? role : undefined);
   // Without edit rights there is nothing to prompt for, so a nameless agent
   // falls back to the plain label rather than showing an action nobody can take.
-  const showNamePrompt = !meta.name?.trim() && canEdit;
+  const showNamePrompt = !displayName && canEdit;
 
   return (
     <Flexbox
@@ -68,10 +73,9 @@ const AgentHeader = memo(() => {
           form modal; inline inputs crowded the header and left no room for a
           per-field label or error. */}
       <Flexbox flex={1} gap={8} paddingInline={24} style={{ minWidth: 0 }}>
-        {/* The headline is the NAME slot. It does not borrow the role the way
-            list surfaces do — the role has its own line right below, and falling
-            back would print it twice (an agent titled "Lobe AI" read
-            "Lobe AI / Lobe AI · @inbox").
+        {/* The headline is normally the NAME slot. A heterogeneous agent is the
+            exception: without a custom name its product title is its identity,
+            so show that title once instead of prompting for a personal name.
 
             With no name there is nothing to headline, so the slot carries the
             one thing that can fix it instead of a placeholder pretending to be a
@@ -98,7 +102,7 @@ const AgentHeader = memo(() => {
         ) : (
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
-              {meta.name?.trim() || t('settingAgent.identity.untitled', { ns: 'setting' })}
+              {displayName || t('settingAgent.identity.untitled', { ns: 'setting' })}
             </Text>
             {canEdit ? (
               <ActionIcon
@@ -115,19 +119,22 @@ const AgentHeader = memo(() => {
               maps to the TERTIARY step — too faint for the line that carries the
               agent's role. Set the secondary colour explicitly, and leave only
               the decorative `@` and the separator at tertiary. */}
-          {/* The role always occupies its slot. An agent with no role gets a
-              stated placeholder rather than a gap — otherwise the line silently
-              collapses to a bare slug and the missing role is indistinguishable
-              from a role that was never meant to be there. */}
-          <Text
-            ellipsis
-            style={{
-              color: meta.title?.trim() ? cssVar.colorTextSecondary : cssVar.colorTextTertiary,
-            }}
-          >
-            {meta.title?.trim() || t('settingAgent.role.unset', { ns: 'setting' })}
-          </Text>
-          {slug ? <Text style={{ color: cssVar.colorTextTertiary }}>·</Text> : null}
+          {/* Ordinary agents keep a dedicated role slot. A heterogeneous
+              product title already promoted to the headline is omitted here to
+              avoid repeating "Grok Build" directly below "Grok Build". */}
+          {!usesHeterogeneousRoleAsName ? (
+            <Text
+              ellipsis
+              style={{
+                color: role ? cssVar.colorTextSecondary : cssVar.colorTextTertiary,
+              }}
+            >
+              {role || t('settingAgent.role.unset', { ns: 'setting' })}
+            </Text>
+          ) : null}
+          {slug && !usesHeterogeneousRoleAsName ? (
+            <Text style={{ color: cssVar.colorTextTertiary }}>·</Text>
+          ) : null}
           {/* The tooltip only renders when a slug exists, so it can always name
               the real url rather than a `<slug>` the reader has to substitute. */}
           {slug ? (

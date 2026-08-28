@@ -673,7 +673,6 @@
   "heteroAgent.codexQuota.tooltip": "查看 Codex 额度",
   "heteroAgent.codexQuota.totalEarned_one": "累计获得 {{count}} 次",
   "heteroAgent.codexQuota.totalEarned_other": "累计获得 {{count}} 次",
-  "heteroAgent.defaultName": "{{owner}} 的 {{product}}",
   "heteroAgent.executionTarget.auto": "自动",
   "heteroAgent.executionTarget.autoDesc": "自动使用在线设备，有多台时择一使用",
   "heteroAgent.executionTarget.downloadDesktop": "下载桌面端",
