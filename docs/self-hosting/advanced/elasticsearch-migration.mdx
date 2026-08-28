@@ -26,12 +26,16 @@ The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreS
 | `ES_INDEX_NAMESPACE`   | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
 | `ES_REINDEX_STATE_DIR` | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
 
-`ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command. Environment variables from earlier feasibility experiments are not part of this migration.
+`ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
 with `--elasticsearch-url-env=<KEY>` and `--elasticsearch-api-key-env=<KEY>`. Both flags are
 required together. `--expected-elasticsearch-host-prefix=<PREFIX>` can additionally refuse a
 mistargeted endpoint before any backfill mutation. The command prints and logs the selected
 hostname and variable names, never credential values.
+
+Remote Elasticsearch targets must use HTTPS. Plain HTTP is accepted only for loopback addresses
+such as `localhost` during local development, so an API key cannot be sent unencrypted to a remote
+host.
 
 ## Before you start
 

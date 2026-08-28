@@ -26,8 +26,10 @@ tags:
 | `ES_INDEX_NAMESPACE`   | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
 | `ES_REINDEX_STATE_DIR` | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。               |
 
-只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。早期可行性验证阶段的环境变量不属于本迁移。
+只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。
 如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
+
+远程 Elasticsearch 目标必须使用 HTTPS。只有本地开发时的 `localhost` 等回环地址可以使用明文 HTTP，避免把 API 密钥通过未加密连接发送到远程主机。
 
 ## 开始前
 

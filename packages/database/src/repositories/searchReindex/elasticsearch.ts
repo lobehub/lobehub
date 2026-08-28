@@ -74,6 +74,31 @@ export class SearchReindexRequestError extends Error {
   }
 }
 
+const parseElasticsearchUrl = (value: string) => {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Elasticsearch URL must be a valid absolute URL');
+  }
+
+  if (url.username || url.password) {
+    throw new Error('Elasticsearch URL must not contain embedded credentials');
+  }
+
+  const isLoopback =
+    url.hostname === '127.0.0.1' ||
+    url.hostname === '[::1]' ||
+    url.hostname === 'localhost' ||
+    url.hostname.endsWith('.localhost');
+  /** Local development may use HTTP, but remote API keys must only cross an encrypted transport. */
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
+    throw new Error('Elasticsearch URL must use HTTPS unless it targets loopback');
+  }
+
+  return url;
+};
+
 /** Minimal credential-safe Elasticsearch transport for the self-host reindex command. */
 export class SearchReindexHttpClient implements SearchReindexElasticsearchClient {
   private readonly apiKey: string;
@@ -83,7 +108,7 @@ export class SearchReindexHttpClient implements SearchReindexElasticsearchClient
   constructor({ apiKey, requestTimeoutMs = 30_000, url }: SearchReindexHttpClientOptions) {
     this.apiKey = apiKey;
     this.requestTimeoutMs = requestTimeoutMs;
-    this.url = new URL(url);
+    this.url = parseElasticsearchUrl(url);
   }
 
   private async request(path: string, init: RequestInit = {}) {

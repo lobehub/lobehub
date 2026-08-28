@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { SEARCH_INDEX_ANALYSIS, SEARCH_INDEX_DEFINITIONS } from '../../searchDocument';
 import { SearchReindexHttpClient } from '../elasticsearch';
+import type { SearchReindexIndexBody } from '../service';
 
 const response = (body: unknown, status = 200) =>
   new Response(body === undefined ? undefined : JSON.stringify(body), {
@@ -9,10 +11,34 @@ const response = (body: unknown, status = 200) =>
   });
 
 const reindexMeta = { reindex_run_id: '00000000-0000-4000-8000-000000000001', schema_version: 1 };
+const agentsIndexBody: SearchReindexIndexBody = {
+  mappings: { ...SEARCH_INDEX_DEFINITIONS.agents.mappings, _meta: reindexMeta },
+  settings: { analysis: SEARCH_INDEX_ANALYSIS },
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SearchReindexHttpClient', () => {
+  it('rejects remote HTTP endpoints before exposing the API key', () => {
+    expect(
+      () =>
+        new SearchReindexHttpClient({
+          apiKey: 'secret-key',
+          url: 'http://search.example.com',
+        }),
+    ).toThrow('must use HTTPS unless it targets loopback');
+  });
+
+  it('allows loopback HTTP endpoints for local development', () => {
+    expect(
+      () =>
+        new SearchReindexHttpClient({
+          apiKey: 'secret-key',
+          url: 'http://localhost:9200',
+        }),
+    ).not.toThrow();
+  });
+
   it('creates a missing index without exposing credentials in the URL', async () => {
     const fetchMock = vi
       .fn()
@@ -24,10 +50,7 @@ describe('SearchReindexHttpClient', () => {
       url: 'https://search.example.com',
     });
 
-    await client.ensureIndex('lobehub-messages-v1', {
-      mappings: { _meta: reindexMeta, dynamic: 'strict', properties: {} },
-      settings: { analysis: { analyzer: {}, filter: {}, tokenizer: {} } },
-    });
+    await client.ensureIndex('lobehub-messages-v1', agentsIndexBody);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[1][0])).toBe(
@@ -46,7 +69,10 @@ describe('SearchReindexHttpClient', () => {
             mappings: {
               _meta: reindexMeta,
               dynamic: 'strict',
-              properties: { id: { type: 'text' } },
+              properties: {
+                ...SEARCH_INDEX_DEFINITIONS.agents.mappings.properties,
+                id: { type: 'text' },
+              },
             },
           },
         }),
@@ -57,16 +83,9 @@ describe('SearchReindexHttpClient', () => {
       url: 'https://search.example.com',
     });
 
-    await expect(
-      client.ensureIndex('lobehub-messages-v1', {
-        mappings: {
-          _meta: reindexMeta,
-          dynamic: 'strict',
-          properties: { id: { type: 'keyword' } },
-        },
-        settings: { analysis: { analyzer: {}, filter: {}, tokenizer: {} } },
-      }),
-    ).rejects.toThrow('mapping is incompatible for id');
+    await expect(client.ensureIndex('lobehub-messages-v1', agentsIndexBody)).rejects.toThrow(
+      'mapping is incompatible for id',
+    );
   });
 
   it('refuses to resume an index created by a different local reindex run', async () => {
@@ -90,12 +109,9 @@ describe('SearchReindexHttpClient', () => {
       url: 'https://search.example.com',
     });
 
-    await expect(
-      client.ensureIndex('lobehub-messages-v1', {
-        mappings: { _meta: reindexMeta, dynamic: 'strict', properties: {} },
-        settings: { analysis: { analyzer: {}, filter: {}, tokenizer: {} } },
-      }),
-    ).rejects.toThrow('reindex run identity is incompatible');
+    await expect(client.ensureIndex('lobehub-messages-v1', agentsIndexBody)).rejects.toThrow(
+      'reindex run identity is incompatible',
+    );
   });
 
   it('keeps an alias that already targets the expected writable index', async () => {
