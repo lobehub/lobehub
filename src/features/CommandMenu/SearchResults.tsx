@@ -22,9 +22,10 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { CommandMenuResultClick } from '@/business/client/commandMenuAnalytics';
 import Avatar from '@/components/Avatar';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
@@ -39,11 +40,15 @@ import { CommandItem } from './components';
 import { styles } from './styles';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
+import { createVisibleResultPositionMap } from './utils/visibleResultPosition';
 
 interface SearchResultsProps {
   isLoading: boolean;
   onClose: () => void;
+  onResultClick: (input: CommandMenuResultClick) => void;
   onSetTypeFilter: (typeFilter: ValidSearchType | undefined) => void;
+  onTypeFilterChange: () => void;
+  onVisibleResultCountChange: (count: number) => void;
   results: SearchResult[];
   searchQuery: string;
   typeFilter: ValidSearchType | undefined;
@@ -60,7 +65,17 @@ interface LocalGenerationTopicResult {
  * Search results from unified search index.
  */
 const SearchResults = memo<SearchResultsProps>(
-  ({ isLoading, onClose, onSetTypeFilter, results, searchQuery, typeFilter }) => {
+  ({
+    isLoading,
+    onClose,
+    onResultClick,
+    onSetTypeFilter,
+    onTypeFilterChange,
+    onVisibleResultCountChange,
+    results,
+    searchQuery,
+    typeFilter,
+  }) => {
     const { t } = useTranslation('common');
     const { t: tImage } = useTranslation('image');
     const { t: tVideo } = useTranslation('video');
@@ -71,7 +86,8 @@ const SearchResults = memo<SearchResultsProps>(
     const videoTopics = useVideoStore(videoGenerationTopicSelectors.generationTopics);
     const activeVideoTopicId = useVideoStore((s) => s.activeGenerationTopicId);
 
-    const handleNavigate = (result: SearchResult) => {
+    const handleNavigate = (result: SearchResult, position: number) => {
+      onResultClick({ position, resultType: result.type });
       switch (result.type) {
         case 'agent': {
           navigate(`/agent/${result.id}?agent=${result.id}`);
@@ -304,6 +320,7 @@ const SearchResults = memo<SearchResultsProps>(
     };
 
     const handleSearchMore = (type: ValidSearchType) => {
+      onTypeFilterChange();
       onSetTypeFilter(type);
     };
 
@@ -366,6 +383,29 @@ const SearchResults = memo<SearchResultsProps>(
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
+    const localResultCount = localImageTopicResults.length + localVideoTopicResults.length;
+    const visibleResultPositions = createVisibleResultPositionMap<SearchResult>(
+      [
+        messageResults,
+        agentResults,
+        chatGroupResults,
+        topicResults,
+        pageResults,
+        memoryResults,
+        fileResults,
+        folderResults,
+        knowledgeBaseResults,
+        mcpResults,
+        pluginResults,
+        assistantResults,
+      ],
+      localResultCount,
+    );
+    const visibleResultCount = localResultCount + visibleResultPositions.size;
+
+    useLayoutEffect(() => {
+      onVisibleResultCountChange(visibleResultCount);
+    }, [onVisibleResultCountChange, visibleResultCount]);
 
     // Don't render anything if no results and not loading — except in the
     // unfiltered view, which always carries the permanent marketplace entries
@@ -411,7 +451,7 @@ const SearchResults = memo<SearchResultsProps>(
           title={titleWithPrefix}
           value={getItemValue(result)}
           variant="detailed"
-          onSelect={() => handleNavigate(result)}
+          onSelect={() => handleNavigate(result, visibleResultPositions.get(result) ?? 1)}
         />
       );
     };
@@ -454,7 +494,7 @@ const SearchResults = memo<SearchResultsProps>(
       <>
         {localImageTopicResults.length > 0 && (
           <Command.Group forceMount>
-            {localImageTopicResults.map((result) => {
+            {localImageTopicResults.map((result, index) => {
               const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
               return (
                 <CommandItem
@@ -480,6 +520,7 @@ const SearchResults = memo<SearchResultsProps>(
                     </>
                   }
                   onSelect={() => {
+                    onResultClick({ position: index + 1, resultType: 'imageTopic' });
                     navigate(`/image?topic=${result.id}`);
                     onClose();
                   }}
@@ -491,7 +532,7 @@ const SearchResults = memo<SearchResultsProps>(
 
         {localVideoTopicResults.length > 0 && (
           <Command.Group forceMount>
-            {localVideoTopicResults.map((result) => {
+            {localVideoTopicResults.map((result, index) => {
               const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
               return (
                 <CommandItem
@@ -517,6 +558,10 @@ const SearchResults = memo<SearchResultsProps>(
                     </>
                   }
                   onSelect={() => {
+                    onResultClick({
+                      position: localImageTopicResults.length + index + 1,
+                      resultType: 'videoTopic',
+                    });
                     navigate(`/video?topic=${result.id}`);
                     onClose();
                   }}
