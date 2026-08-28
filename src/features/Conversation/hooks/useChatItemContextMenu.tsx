@@ -11,10 +11,11 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MSG_CONTENT_CLASSNAME } from '@/features/Conversation/ChatItem/components/MessageContent';
-import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/heterogeneous';
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
@@ -81,6 +82,7 @@ export const useChatItemContextMenu = ({
   }, isEqual);
 
   const isThreadMode = useConversationStore(messageStateSelectors.isThreadMode);
+  const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const actionsBar = useChatListActionsBar({ hasThread, isRegenerating });
@@ -99,7 +101,6 @@ export const useChatItemContextMenu = ({
     resendThreadMessage,
     delAndResendThreadMessage,
     toggleMessageCollapsed,
-    deleteAssistantMessage,
   ] = useConversationStore((s) => [
     s.toggleMessageEditing,
     s.deleteMessage,
@@ -113,7 +114,6 @@ export const useChatItemContextMenu = ({
     s.resendThreadMessage,
     s.delAndResendThreadMessage,
     s.toggleMessageCollapsed,
-    s.deleteAssistantMessage,
   ]);
 
   const getMessage = useCallback(
@@ -158,7 +158,10 @@ export const useChatItemContextMenu = ({
     if (role === 'assistant') {
       if (error) {
         return withPermission(
-          [edit, copy, divider, del, divider, regenerate].filter(Boolean) as MenuItem[],
+          (isHeterogeneousAgent
+            ? [edit, copy, divider, regenerate]
+            : [edit, copy, divider, del, divider, regenerate]
+          ).filter(Boolean) as MenuItem[],
         );
       }
 
@@ -167,17 +170,8 @@ export const useChatItemContextMenu = ({
 
       if (!inThread && !isGroupSession && isDevMode) list.push(branching);
 
-      list.push(
-        divider,
-        tts,
-        translate,
-        divider,
-        share,
-        divider,
-        regenerate,
-        delAndRegenerate,
-        del,
-      );
+      list.push(divider, tts, translate, divider, share, divider, regenerate, delAndRegenerate);
+      if (!isHeterogeneousAgent) list.push(del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -185,21 +179,16 @@ export const useChatItemContextMenu = ({
     if (role === 'assistantGroup') {
       if (error) {
         return withPermission(
-          [edit, copy, divider, del, divider, regenerate].filter(Boolean) as MenuItem[],
+          (isHeterogeneousAgent
+            ? [edit, copy, divider, regenerate]
+            : [edit, copy, divider, del, divider, regenerate]
+          ).filter(Boolean) as MenuItem[],
         );
       }
 
       const collapseAction = isCollapsed ? expand : collapse;
-      const list: MenuItem[] = [
-        edit,
-        copy,
-        collapseAction,
-        divider,
-        share,
-        divider,
-        regenerate,
-        del,
-      ];
+      const list: MenuItem[] = [edit, copy, collapseAction, divider, share, divider, regenerate];
+      if (!isHeterogeneousAgent) list.push(del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -209,7 +198,8 @@ export const useChatItemContextMenu = ({
 
       if (!inThread && isDevMode) list.push(branching);
 
-      list.push(divider, tts, translate, divider, regenerate, del);
+      list.push(divider, tts, translate, divider, regenerate);
+      if (!isHeterogeneousAgent) list.push(del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -224,6 +214,7 @@ export const useChatItemContextMenu = ({
     isCollapsed,
     isDevMode,
     isGroupSession,
+    isHeterogeneousAgent,
     role,
   ]);
 
@@ -274,11 +265,7 @@ export const useChatItemContextMenu = ({
         }
         case 'del': {
           if (!canEdit) break;
-          // Mirrors the action bar's `del`: on a heterogeneous run that only
-          // failed on its tail step, drop that step instead of the whole run.
-          const erroredStepId = resolveHeteroErroredStepId(item);
-          if (erroredStepId) deleteAssistantMessage(erroredStepId);
-          else deleteMessage(id);
+          deleteMessage(id);
           break;
         }
         case 'regenerate': {
@@ -325,7 +312,6 @@ export const useChatItemContextMenu = ({
       copyMessage,
       canCreate,
       canEdit,
-      deleteAssistantMessage,
       deleteMessage,
       delAndRegenerateMessage,
       delAndResendThreadMessage,

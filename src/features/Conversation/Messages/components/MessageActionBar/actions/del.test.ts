@@ -9,108 +9,48 @@ import type { MessageActionContext } from '../types';
 import { delAction } from './del';
 
 const deleteMessage = vi.fn();
-const deleteAssistantMessage = vi.fn();
+const agentState = vi.hoisted(() => ({ isHeterogeneous: false }));
 
 vi.mock('../../../../store', () => ({
-  useConversationStore: (selector: (s: any) => any) =>
-    selector({ deleteAssistantMessage, deleteMessage }),
+  useConversationStore: (selector: (s: { deleteMessage: typeof deleteMessage }) => unknown) =>
+    selector({ deleteMessage }),
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (s: typeof agentState) => unknown) => selector(agentState),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: {
+    isCurrentAgentHeterogeneous: (s: typeof agentState) => s.isHeterogeneous,
+  },
 }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-// A group's id IS its head child's id — the assistantGroup bubble is a virtual
-// message built from the run's first assistant row. Fixtures mirror that.
 const build = (
   data: Partial<UIChatMessage>,
-  role: MessageActionContext['role'] = 'group',
-  id = 'step-1',
-) =>
-  renderHook(() => delAction.useBuild({ data: data as UIChatMessage, id, role })).result.current!;
-
-const heteroError = { body: { agentType: 'claude-code', code: 'overloaded' } };
+  role: MessageActionContext['role'] = 'assistant',
+  id = 'message-1',
+) => renderHook(() => delAction.useBuild({ data: data as UIChatMessage, id, role })).result.current;
 
 describe('delAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    agentState.isHeterogeneous = false;
   });
 
-  it('deletes only the errored tail step of a heterogeneous (CC/Codex) run', () => {
-    const data = {
-      id: 'step-1',
-      role: 'assistantGroup',
-      children: [
-        { id: 'step-1', content: 'done' },
-        { id: 'step-2', error: heteroError },
-      ],
-    } as unknown as UIChatMessage;
+  it('hides delete for heterogeneous-agent messages', () => {
+    agentState.isHeterogeneous = true;
 
-    build(data).handleClick!();
-
-    // Must target the failed step's DB id (a child block), not the group id, and
-    // go through the tool-aware delete so the step's tool rows don't orphan.
-    expect(deleteAssistantMessage).toHaveBeenCalledWith('step-2');
-    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(build({ content: 'CLI-owned turn' })).toBeNull();
   });
 
-  it('deletes the whole group when the errored step IS the group head', () => {
-    // The run died on its first step: nothing succeeded before it, and the head's
-    // id doubles as the group id — deleting it alone would strand the chain.
-    const data = {
-      id: 'step-1',
-      role: 'assistantGroup',
-      children: [{ id: 'step-1', error: heteroError }],
-    } as unknown as UIChatMessage;
+  it('keeps delete available for ordinary-agent messages', () => {
+    build({ content: 'regular turn' })!.handleClick!();
 
-    build(data).handleClick!();
-
-    expect(deleteMessage).toHaveBeenCalledWith('step-1');
-    expect(deleteAssistantMessage).not.toHaveBeenCalled();
-  });
-
-  it('deletes the whole group when the tail error is NOT a heterogeneous-agent error', () => {
-    // A normal grouped reply that merely ends in a generic tool/provider error
-    // keeps the whole-group delete.
-    const data = {
-      id: 'step-1',
-      role: 'assistantGroup',
-      children: [
-        { id: 'step-1', content: 'done' },
-        { id: 'step-2', error: { type: 'PluginError', body: { message: 'boom' } } },
-      ],
-    } as unknown as UIChatMessage;
-
-    build(data).handleClick!();
-
-    expect(deleteMessage).toHaveBeenCalledWith('step-1');
-    expect(deleteAssistantMessage).not.toHaveBeenCalled();
-  });
-
-  it('deletes the whole group when no step errored', () => {
-    const data = {
-      id: 'step-1',
-      role: 'assistantGroup',
-      children: [
-        { id: 'step-1', content: 'done' },
-        { id: 'step-2', content: 'done' },
-      ],
-    } as unknown as UIChatMessage;
-
-    build(data).handleClick!();
-
-    expect(deleteMessage).toHaveBeenCalledWith('step-1');
-    expect(deleteAssistantMessage).not.toHaveBeenCalled();
-  });
-
-  it('deletes by message id for a non-group message', () => {
-    build(
-      { id: 'msg-1', role: 'assistant', content: 'hi' } as unknown as UIChatMessage,
-      'assistant',
-      'msg-1',
-    ).handleClick!();
-
-    expect(deleteMessage).toHaveBeenCalledWith('msg-1');
-    expect(deleteAssistantMessage).not.toHaveBeenCalled();
+    expect(deleteMessage).toHaveBeenCalledWith('message-1');
   });
 });
