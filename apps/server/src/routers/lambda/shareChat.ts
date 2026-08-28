@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
 import { ChatErrorType, entityIdPattern, RequestTrigger } from '@lobechat/types';
@@ -82,7 +83,20 @@ const toVisitorPrincipal = (
  * Agent sharing is personal-only (workspace agents cannot be shared), so no
  * workspaceId is ever threaded into these models/services.
  */
-const shareChatProcedure = authedProcedure.use(serverDatabase);
+const shareChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  // Structural cloud-only gate (compile-time business-slot constant, false in
+  // OSS builds). Visitors are NOT checked against the `enableAgentShare`
+  // grayscale whitelist — that flag gates CREATORS opening shares (see
+  // `_helpers/agentShareFeatureGate.ts`); a live share row is itself the
+  // visitor's admission.
+  if (!ENABLE_BUSINESS_FEATURES) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Agent sharing is not available on this deployment',
+    });
+  }
+  return opts.next();
+});
 
 const ShareTopicScopeSchema = z.object({
   shareId: z.string(),

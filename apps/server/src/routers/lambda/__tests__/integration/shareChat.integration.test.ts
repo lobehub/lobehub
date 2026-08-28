@@ -40,6 +40,14 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
 
+// Pin the cloud-only capability open so the visitor procedures under test are
+// reachable in OSS CI, where ENABLE_BUSINESS_FEATURES is false and the
+// shareChatProcedure middleware would reject everything with FORBIDDEN.
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ENABLE_BUSINESS_FEATURES: true,
+}));
+
 // Mock FileService to avoid S3 environment variable requirements
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({

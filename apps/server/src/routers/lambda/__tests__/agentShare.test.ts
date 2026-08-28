@@ -7,6 +7,16 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => ({})),
 }));
 
+// The availability gate (cloud-only const + grayscale flag) has its own suite
+// (`_helpers/__tests__/agentShareFeatureGate.test.ts`); here it is pinned open
+// so the router logic under test is reachable in OSS CI, where
+// ENABLE_BUSINESS_FEATURES is false.
+const mockAssertAgentShareCreationEnabled = vi.fn();
+vi.mock('../_helpers/agentShareFeatureGate', () => ({
+  assertAgentShareCreationEnabled: (...args: unknown[]) =>
+    mockAssertAgentShareCreationEnabled(...args),
+}));
+
 const mockCreate = vi.fn();
 const mockDeleteByAgentId = vi.fn();
 const mockGetByAgentId = vi.fn();

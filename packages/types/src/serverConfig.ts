@@ -20,6 +20,7 @@ import type {
 export type IFeatureFlagsState = {
   enableAgentOnboarding: boolean | undefined;
   enableAgentSelfIteration: boolean | undefined;
+  enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   enableDevDock: boolean | undefined;

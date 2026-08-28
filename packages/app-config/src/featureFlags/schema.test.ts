@@ -114,6 +114,14 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag([], 'user-123')).toBe(false);
     expect(evaluateFeatureFlag([])).toBe(false);
   });
+
+  it('should match allowlist entries against the user email as well', () => {
+    const allowlist = ['someone@example.com', 'user-456'];
+    expect(evaluateFeatureFlag(allowlist, 'user-123', 'someone@example.com')).toBe(true);
+    expect(evaluateFeatureFlag(allowlist, 'user-456', 'other@example.com')).toBe(true);
+    expect(evaluateFeatureFlag(allowlist, 'user-123', 'other@example.com')).toBe(false);
+    expect(evaluateFeatureFlag(allowlist, 'user-123')).toBe(false);
+  });
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
@@ -139,6 +147,19 @@ describe('mapFeatureFlagsEnvToState', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
     expect(mappedState.enableOnboardingV2).toBe(false);
+  });
+
+  it('should keep agent share off by default and map its email allowlist', () => {
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS).enableAgentShare).toBe(false);
+
+    const config = { ...DEFAULT_FEATURE_FLAGS, agent_share: ['creator@example.com'] };
+    expect(
+      mapFeatureFlagsEnvToState(config, 'user-1', 'creator@example.com').enableAgentShare,
+    ).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-1', 'other@example.com').enableAgentShare).toBe(
+      false,
+    );
+    expect(mapFeatureFlagsEnvToState(config, 'user-1').enableAgentShare).toBe(false);
   });
 
   it('should map the onboarding v2 allowlist flag by user ID', () => {

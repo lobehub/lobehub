@@ -33,7 +33,11 @@ const styles = StyleSheet.create({
  */
 const AgentShareSettingsPage = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const enableAgentLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  // Business capability (cloud-only) AND per-user grayscale flag, mirroring
+  // the server gate in `_helpers/agentShareFeatureGate.ts`.
+  const enableAgentShareFlag = useServerConfigStore((s) => s.featureFlags.enableAgentShare);
+  const enableAgentLinkShare =
+    useServerConfigStore(serverConfigSelectors.enableBusinessFeatures) && !!enableAgentShareFlag;
 
   // Deep links on deployments without the link-share capability land on the
   // profile page instead of a broken settings surface.

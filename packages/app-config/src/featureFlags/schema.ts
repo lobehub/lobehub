@@ -37,6 +37,7 @@ export const FeatureFlagsSchema = z.object({
   dev_dock: FeatureFlagValue.optional(),
   dev_dock_workspaces: z.array(z.string()).optional(),
   // Cloud feature flag. Keep here until cloud owns a separate runtime flag domain.
+  agent_share: FeatureFlagValue.optional(),
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
   onboarding_v2: FeatureFlagValue.optional(),
@@ -53,19 +54,24 @@ export const FeatureFlagsSchema = z.object({
 export type IFeatureFlags = z.infer<typeof FeatureFlagsSchema>;
 
 /**
- * Evaluate a feature flag value against a user ID
- * @param flagValue - The feature flag value (boolean or array of user IDs)
+ * Evaluate a feature flag value against a user ID (and optionally their email)
+ * @param flagValue - The feature flag value (boolean or array of user IDs/emails)
  * @param userId - The current user ID
+ * @param userEmail - The current user's email; array entries match either
+ *   identifier, so an admin can whitelist by email without resolving user IDs
  * @returns boolean indicating if the feature is enabled for the user
  */
 export const evaluateFeatureFlag = (
   flagValue: boolean | string[] | undefined,
   userId?: string,
+  userEmail?: string,
 ): boolean | undefined => {
   if (typeof flagValue === 'boolean') return flagValue;
 
   if (Array.isArray(flagValue)) {
-    return userId ? flagValue.includes(userId) : false;
+    if (userId && flagValue.includes(userId)) return true;
+    if (userEmail && flagValue.includes(userEmail)) return true;
+    return false;
   }
 };
 
@@ -89,6 +95,11 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
+  // Cloud-only grayscale: off everywhere until an admin publishes a whitelist
+  // (array of user IDs/emails) or flips it to true. Self-hosted deployments
+  // are additionally hard-blocked by ENABLE_BUSINESS_FEATURES on the server
+  // gate, so setting this env-side does not enable the feature there.
+  agent_share: false,
   dev_dock: isDev,
   auth_captcha: true,
   cloud_promotion: false,
@@ -114,9 +125,14 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 export const mapFeatureFlagsEnvToState = (
   config: IFeatureFlags,
   userId?: string,
+  userEmail?: string,
 ): IFeatureFlagsState => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
+
+    // The only email-aware flag so far: its grayscale whitelist is maintained
+    // by admins as raw emails (see evaluateFeatureFlag).
+    enableAgentShare: evaluateFeatureFlag(config.agent_share, userId, userEmail),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

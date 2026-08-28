@@ -12,6 +12,8 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { createOwnerPrincipal } from '@/server/services/executionPrincipal';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
+
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
 
 export const agentShareConfigSchema = z
@@ -151,6 +153,7 @@ export const agentShareRouter = router({
   }),
 
   enableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
+    await assertAgentShareCreationEnabled(ctx.userId);
     await assertShareableAgent(ctx.agentModel, input.agentId);
 
     return ctx.agentShareModel.create(input.agentId);
@@ -170,6 +173,8 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertAgentShareCreationEnabled(ctx.userId);
+
       const { revocationGeneration, share } = requireShare(
         await ctx.agentShareModel.updateConfig(input.agentId, input.config),
       );
@@ -201,6 +206,13 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
+      // Publishing (`link`) grows visitor access, so it passes the feature
+      // gate; un-publishing (`private`) is a revoke and must always work, even
+      // for a creator dropped from the grayscale whitelist.
+      if (input.visibility === 'link') {
+        await assertAgentShareCreationEnabled(ctx.userId);
+      }
+
       // The authoritative heterogeneity check now lives in
       // `AgentShareModel.updateVisibility` itself, re-read from the Agent row
       // AFTER that model takes its row lock — see the JSDoc there for why a

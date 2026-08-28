@@ -67,11 +67,14 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   );
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
-  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+  const { enableAgentShare, isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const hasActiveWorkspace = useHasActiveWorkspace();
   const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(agentId));
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
-  const enableAgentLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  // Both the business capability (cloud-only) AND the per-user grayscale flag
+  // must pass — mirrors the server gate in `_helpers/agentShareFeatureGate.ts`.
+  const enableAgentLinkShare =
+    useServerConfigStore(serverConfigSelectors.enableBusinessFeatures) && !!enableAgentShare;
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
