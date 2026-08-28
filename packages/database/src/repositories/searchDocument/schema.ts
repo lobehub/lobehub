@@ -19,6 +19,18 @@ export const SEARCH_DOCUMENT_ENTITIES = [
 
 export type SearchDocumentEntity = (typeof SEARCH_DOCUMENT_ENTITIES)[number];
 
+export const MEMORY_SEARCH_DOCUMENT_ENTITIES = [
+  'memoryActivities',
+  'memoryContexts',
+  'memoryExperiences',
+  'memoryIdentities',
+  'memoryPreferences',
+  'personaDocuments',
+  'userMemories',
+] as const satisfies readonly SearchDocumentEntity[];
+
+export type MemorySearchDocumentEntity = (typeof MEMORY_SEARCH_DOCUMENT_ENTITIES)[number];
+
 const dateTime = z.string().datetime();
 const nullableDateTime = dateTime.nullable();
 const nullableString = z.string().nullable();

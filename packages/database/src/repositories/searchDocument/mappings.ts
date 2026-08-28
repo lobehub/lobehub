@@ -23,9 +23,18 @@ export interface SearchIndexDefinition<Entity extends SearchDocumentEntity> {
 }
 
 const mixedText = { analyzer: 'lobehub_icu_english', type: 'text' } as const;
-const mixedTextWithRaw = {
-  analyzer: 'lobehub_icu_english',
+const memoryText = { analyzer: 'lobehub_cjk_bigram_english', type: 'text' } as const;
+const memoryTextWithRaw = {
+  analyzer: 'lobehub_cjk_bigram_english',
   fields: { raw: { type: 'keyword' } },
+  type: 'text',
+} as const;
+const fileNameText = {
+  analyzer: 'lobehub_filename',
+  fields: {
+    raw: { type: 'keyword' },
+    words: { analyzer: 'lobehub_icu', type: 'text' },
+  },
   type: 'text',
 } as const;
 const icuText = {
@@ -55,6 +64,23 @@ const projectionMetadataProperties = {
 
 export const SEARCH_INDEX_ANALYSIS = {
   analyzer: {
+    lobehub_cjk_bigram_english: {
+      /** Normalize width and case before generating CJK bigrams so decomposed characters stay intact. */
+      filter: [
+        'english_possessive_stemmer',
+        'icu_folding',
+        'cjk_bigram',
+        'english_stop',
+        'english_stemmer',
+      ],
+      tokenizer: 'standard',
+      type: 'custom',
+    },
+    lobehub_filename: {
+      filter: ['icu_folding'],
+      tokenizer: 'lobehub_filename',
+      type: 'custom',
+    },
     lobehub_icu: {
       filter: ['icu_folding'],
       tokenizer: 'icu_tokenizer',
@@ -78,6 +104,12 @@ export const SEARCH_INDEX_ANALYSIS = {
     english_stop: {
       stopwords: '_english_',
       type: 'stop',
+    },
+  },
+  tokenizer: {
+    lobehub_filename: {
+      tokenize_on_chars: ['whitespace', '-', '_', '/', '.'],
+      type: 'char_group',
     },
   },
 } as const;
@@ -157,11 +189,12 @@ export const SEARCH_INDEX_DEFINITIONS = {
         file_type: keyword,
         id: keyword,
         knowledge_base_ids: keyword,
-        name: icuText,
+        name: fileNameText,
         size: integer,
         source: keyword,
       },
     },
+    /** Provider-neutral source field; Elasticsearch-only multi-fields are selected by its backend. */
     queryFields: ['name'],
     sourceTable: 'files',
   } satisfies SearchIndexDefinition<'files'>,
@@ -192,15 +225,15 @@ export const SEARCH_INDEX_DEFINITIONS = {
         ...timestampProperties,
         captured_at: date,
         ends_at: date,
-        feedback: mixedText,
+        feedback: memoryText,
         id: keyword,
-        narrative: mixedText,
-        notes: mixedText,
-        parent_details: mixedText,
+        narrative: memoryText,
+        notes: memoryText,
+        parent_details: memoryText,
         parent_memory_categories: keyword,
-        parent_summary: mixedText,
+        parent_summary: memoryText,
         parent_tags: keyword,
-        parent_title: mixedText,
+        parent_title: memoryText,
         starts_at: date,
         status: keyword,
         tags: keyword,
@@ -227,14 +260,14 @@ export const SEARCH_INDEX_DEFINITIONS = {
         ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
-        current_status: mixedTextWithRaw,
-        description: mixedText,
+        current_status: memoryTextWithRaw,
+        description: memoryText,
         id: keyword,
-        parent_text: mixedText,
+        parent_text: memoryText,
         parent_memory_categories: keyword,
         parent_tags: keyword,
         tags: keyword,
-        title: mixedText,
+        title: memoryText,
         type: keyword,
         user_id: keyword,
         user_memory_ids: keyword,
@@ -250,18 +283,18 @@ export const SEARCH_INDEX_DEFINITIONS = {
       properties: {
         ...projectionMetadataProperties,
         ...timestampProperties,
-        action: mixedText,
+        action: memoryText,
         captured_at: date,
         id: keyword,
-        key_learning: mixedText,
-        parent_details: mixedText,
+        key_learning: memoryText,
+        parent_details: memoryText,
         parent_memory_categories: keyword,
-        parent_summary: mixedText,
+        parent_summary: memoryText,
         parent_tags: keyword,
-        parent_title: mixedText,
-        possible_outcome: mixedText,
-        reasoning: mixedText,
-        situation: mixedText,
+        parent_title: memoryText,
+        possible_outcome: memoryText,
+        reasoning: memoryText,
+        situation: memoryText,
         tags: keyword,
         type: keyword,
         user_id: keyword,
@@ -288,16 +321,16 @@ export const SEARCH_INDEX_DEFINITIONS = {
         ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
-        description: mixedText,
+        description: memoryText,
         episodic_date: date,
         id: keyword,
-        parent_details: mixedText,
+        parent_details: memoryText,
         parent_memory_categories: keyword,
-        parent_summary: mixedText,
+        parent_summary: memoryText,
         parent_tags: keyword,
-        parent_title: mixedText,
+        parent_title: memoryText,
         relationship: keyword,
-        role: mixedText,
+        role: memoryText,
         tags: keyword,
         type: keyword,
         user_id: keyword,
@@ -315,14 +348,14 @@ export const SEARCH_INDEX_DEFINITIONS = {
         ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
-        conclusion_directives: mixedText,
+        conclusion_directives: memoryText,
         id: keyword,
-        parent_details: mixedText,
+        parent_details: memoryText,
         parent_memory_categories: keyword,
-        parent_summary: mixedText,
+        parent_summary: memoryText,
         parent_tags: keyword,
-        parent_title: mixedText,
-        suggestions: mixedText,
+        parent_title: memoryText,
+        suggestions: memoryText,
         tags: keyword,
         type: keyword,
         user_id: keyword,
@@ -371,9 +404,9 @@ export const SEARCH_INDEX_DEFINITIONS = {
         ...timestampProperties,
         captured_at: date,
         id: keyword,
-        persona: mixedText,
+        persona: memoryText,
         profile: keyword,
-        tagline: mixedText,
+        tagline: memoryText,
         user_id: keyword,
         version: integer,
       },
@@ -411,14 +444,14 @@ export const SEARCH_INDEX_DEFINITIONS = {
         ...projectionMetadataProperties,
         ...timestampProperties,
         captured_at: date,
-        details: mixedText,
+        details: memoryText,
         id: keyword,
         memory_category: keyword,
         memory_layer: keyword,
         status: keyword,
-        summary: mixedText,
+        summary: memoryText,
         tags: keyword,
-        title: mixedText,
+        title: memoryText,
         user_id: keyword,
       },
     },
@@ -429,7 +462,8 @@ export const SEARCH_INDEX_DEFINITIONS = {
   [Entity in SearchDocumentEntity]: SearchIndexDefinition<Entity>;
 };
 
-export const SEARCH_INDEX_SCHEMA_VERSION = 2;
+/** Filename and memory analyzer changes require reindexing instead of an in-place mapping update. */
+export const SEARCH_INDEX_SCHEMA_VERSION = 3;
 
 const toIndexSegment = (entity: SearchDocumentEntity) =>
   entity.replaceAll(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);

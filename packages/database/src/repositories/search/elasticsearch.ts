@@ -29,6 +29,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import type { MemorySearchDocumentEntity } from '../searchDocument';
 import { getSearchIndexAlias } from '../searchDocument';
 import type {
   AgentSearchResult,
@@ -85,7 +86,7 @@ export const isElasticsearchConversationEntity = (
   Object.hasOwn(ELASTICSEARCH_CONVERSATION_QUERY_FIELDS, entity);
 
 export const ELASTICSEARCH_RESOURCE_QUERY_FIELDS = {
-  files: ['name'],
+  files: ['name.raw^8', 'name^4', 'name.words^2'],
   knowledgeBases: ['name^4', 'description'],
 } as const;
 
@@ -133,7 +134,7 @@ export const ELASTICSEARCH_MEMORY_QUERY_FIELDS = {
   ],
   personaDocuments: ['tagline', 'persona'],
   userMemories: ['title^4', 'summary^2', 'details'],
-} as const;
+} as const satisfies Record<MemorySearchDocumentEntity, readonly string[]>;
 
 export type ElasticsearchMemoryEntity = keyof typeof ELASTICSEARCH_MEMORY_QUERY_FIELDS;
 

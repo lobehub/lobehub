@@ -948,7 +948,7 @@ describe('ElasticsearchSearchBackend', () => {
               must: [
                 {
                   multi_match: {
-                    fields: ['name'],
+                    fields: ['name.raw^8', 'name^4', 'name.words^2'],
                     operator: 'and',
                     query: 'search phrase',
                     type: 'best_fields',
