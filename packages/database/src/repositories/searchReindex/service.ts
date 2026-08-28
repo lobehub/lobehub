@@ -36,8 +36,13 @@ export interface SearchReindexIndexBody {
 
 export interface SearchReindexServiceOptions {
   batchSize: number;
+  bulkConcurrency: number;
   bulkMaxBytes: number;
-  onProgress: (event: SearchReindexProgressEvent) => void;
+  entityConcurrency: number;
+  maxBatchesPerEntity?: number;
+  maxRequestRetries: number;
+  onProgress: (event: SearchReindexProgressEvent) => Promise<void> | void;
+  retryBaseDelayMs: number;
 }
 
 export type SearchReindexStateRepository = Pick<
@@ -53,7 +58,10 @@ export type SearchReindexStateRepository = Pick<
 
 export type SearchReindexProgressEvent =
   | {
+      bulkRequests: number;
+      bytes: number;
       cursor: string;
+      durationMs: number;
       entity: SearchDocumentEntity;
       failed: number;
       indexed: number;
@@ -67,11 +75,40 @@ export type SearchReindexProgressEvent =
       expectedCursor: string | null;
       type: 'checkpoint_conflict';
     }
-  | { type: 'aliases_created' };
+  | {
+      attempt: number;
+      delayMs: number;
+      entity: SearchDocumentEntity;
+      errorType: string;
+      status?: number;
+      type: 'bulk_retry';
+    }
+  | {
+      attempts: number;
+      bytes: number;
+      durationMs: number;
+      entity: SearchDocumentEntity;
+      operations: number;
+      type: 'bulk_completed';
+    }
+  | { entity: SearchDocumentEntity; type: 'entity_started' }
+  | { type: 'aliases_created' }
+  | { type: 'run_paused' };
 
 export interface SearchReindexResult {
   runId: string;
   status: SearchReindexRunState['run']['status'];
+}
+
+export class SearchReindexEntityError extends Error {
+  constructor(
+    readonly entity: SearchDocumentEntity,
+    cause: unknown,
+  ) {
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    super(`Search reindex failed for ${entity}: ${causeMessage}`, { cause });
+    this.name = 'SearchReindexEntityError';
+  }
 }
 
 interface BulkOperation {
@@ -81,8 +118,54 @@ interface BulkOperation {
 }
 
 const DEFAULT_BATCH_SIZE = 500;
+const DEFAULT_BULK_CONCURRENCY = 1;
 const DEFAULT_BULK_MAX_BYTES = 50 * 1024 * 1024;
+const DEFAULT_ENTITY_CONCURRENCY = 1;
+const DEFAULT_MAX_REQUEST_RETRIES = 4;
+const DEFAULT_RETRY_BASE_DELAY_MS = 500;
 const textEncoder = new TextEncoder();
+
+const errorStatus = (error: unknown) =>
+  isRecord(error) && typeof error.status === 'number' ? error.status : undefined;
+
+const isRetryableRequestError = (error: unknown) => {
+  const status = errorStatus(error);
+  return status === undefined || status === 408 || status === 429 || status >= 500;
+};
+
+const errorType = (error: unknown) =>
+  error instanceof Error ? error.name.slice(0, 128) : 'UnknownError';
+
+const sleep = (durationMs: number) =>
+  durationMs > 0 ? new Promise((resolve) => setTimeout(resolve, durationMs)) : Promise.resolve();
+
+const mapWithConcurrency = async <Item, Result>(
+  items: readonly Item[],
+  concurrency: number,
+  operation: (item: Item, index: number) => Promise<Result>,
+): Promise<Result[]> => {
+  const results: ({ value: Result } | undefined)[] = Array.from({ length: items.length });
+  let nextIndex = 0;
+  let firstFailure: { error: unknown } | undefined;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (!firstFailure) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      try {
+        results[index] = { value: await operation(items[index], index) };
+      } catch (error) {
+        firstFailure ??= { error };
+      }
+    }
+  });
+  await Promise.all(workers);
+  if (firstFailure) throw firstFailure.error;
+  return results.map((result, index) => {
+    if (!result) throw new Error(`Missing concurrent operation result at index ${index}`);
+    return result.value;
+  });
+};
 
 const isPermanentElasticsearchStatus = (status: number) =>
   status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429;
@@ -122,10 +205,14 @@ export class SearchReindexService {
     options: Partial<SearchReindexServiceOptions> = {},
   ) {
     this.options = {
-      batchSize: DEFAULT_BATCH_SIZE,
-      bulkMaxBytes: DEFAULT_BULK_MAX_BYTES,
-      onProgress: () => {},
-      ...options,
+      batchSize: options.batchSize ?? DEFAULT_BATCH_SIZE,
+      bulkConcurrency: options.bulkConcurrency ?? DEFAULT_BULK_CONCURRENCY,
+      bulkMaxBytes: options.bulkMaxBytes ?? DEFAULT_BULK_MAX_BYTES,
+      entityConcurrency: options.entityConcurrency ?? DEFAULT_ENTITY_CONCURRENCY,
+      maxBatchesPerEntity: options.maxBatchesPerEntity,
+      maxRequestRetries: options.maxRequestRetries ?? DEFAULT_MAX_REQUEST_RETRIES,
+      onProgress: options.onProgress ?? (() => {}),
+      retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
     };
     if (!Number.isInteger(this.options.batchSize) || this.options.batchSize < 1) {
       throw new Error('Search reindex batch size must be a positive integer');
@@ -133,15 +220,74 @@ export class SearchReindexService {
     if (!Number.isInteger(this.options.bulkMaxBytes) || this.options.bulkMaxBytes < 1) {
       throw new Error('Search reindex bulk byte limit must be a positive integer');
     }
+    if (!Number.isInteger(this.options.bulkConcurrency) || this.options.bulkConcurrency < 1) {
+      throw new Error('Search reindex bulk concurrency must be a positive integer');
+    }
+    if (!Number.isInteger(this.options.entityConcurrency) || this.options.entityConcurrency < 1) {
+      throw new Error('Search reindex entity concurrency must be a positive integer');
+    }
+    if (
+      this.options.maxBatchesPerEntity !== undefined &&
+      (!Number.isInteger(this.options.maxBatchesPerEntity) || this.options.maxBatchesPerEntity < 1)
+    ) {
+      throw new Error('Search reindex maximum batches per entity must be a positive integer');
+    }
+    if (!Number.isInteger(this.options.maxRequestRetries) || this.options.maxRequestRetries < 0) {
+      throw new Error('Search reindex request retries must be a non-negative integer');
+    }
+    if (!Number.isInteger(this.options.retryBaseDelayMs) || this.options.retryBaseDelayMs < 0) {
+      throw new Error('Search reindex retry delay must be a non-negative integer');
+    }
   }
 
-  private async flushBulk(operations: BulkOperation[]): Promise<{
+  private async emitProgress(event: SearchReindexProgressEvent) {
+    await this.options.onProgress(event);
+  }
+
+  private async flushBulk(
+    entity: SearchDocumentEntity,
+    operations: BulkOperation[],
+  ): Promise<{
     failures: SearchReindexBatchFailure[];
     indexedDocumentIds: string[];
   }> {
     if (operations.length === 0) return { failures: [], indexedDocumentIds: [] };
 
-    const results = await this.client.bulk(operations.map(({ body }) => body).join(''));
+    const body = operations.map((operation) => operation.body).join('');
+    const bytes = operations.reduce((total, operation) => total + operation.bytes, 0);
+    const startedAt = Date.now();
+    let attempts = 0;
+    let results: SearchReindexBulkItemResult[];
+    while (true) {
+      attempts += 1;
+      try {
+        results = await this.client.bulk(body);
+        break;
+      } catch (error) {
+        if (!isRetryableRequestError(error) || attempts > this.options.maxRequestRetries) {
+          throw error;
+        }
+        const exponentialDelay = this.options.retryBaseDelayMs * 2 ** (attempts - 1);
+        const delayMs = Math.floor(Math.random() * exponentialDelay);
+        await this.emitProgress({
+          attempt: attempts,
+          delayMs,
+          entity,
+          errorType: errorType(error),
+          status: errorStatus(error),
+          type: 'bulk_retry',
+        });
+        await sleep(delayMs);
+      }
+    }
+    await this.emitProgress({
+      attempts,
+      bytes,
+      durationMs: Date.now() - startedAt,
+      entity,
+      operations: operations.length,
+      type: 'bulk_completed',
+    });
     if (results.length !== operations.length) {
       throw new Error(
         `Elasticsearch bulk returned ${results.length} items for ${operations.length} operations`,
@@ -168,20 +314,46 @@ export class SearchReindexService {
 
   private async indexDocuments(
     documents: { id: string; source: Record<string, unknown> }[],
+    entity: SearchDocumentEntity,
     physicalIndex: string,
     revision: number,
   ) {
     const failures: SearchReindexBatchFailure[] = [];
     const indexedDocumentIds: string[] = [];
+    const inFlight = new Set<Promise<void>>();
+    let bulkRequests = 0;
+    let bytes = 0;
+    let firstFailure: { error: unknown } | undefined;
     let bulk: BulkOperation[] = [];
     let bulkBytes = 0;
 
-    const flush = async () => {
-      const result = await this.flushBulk(bulk);
-      failures.push(...result.failures);
-      indexedDocumentIds.push(...result.indexedDocumentIds);
+    const waitForAvailableSlot = async () => {
+      if (inFlight.size < this.options.bulkConcurrency) return;
+      await Promise.race(inFlight);
+      if (firstFailure) {
+        await Promise.all(inFlight);
+        throw firstFailure.error;
+      }
+    };
+
+    const flushQueuedBulk = async () => {
+      if (bulk.length === 0) return;
+      const operations = bulk;
+      bulkRequests += 1;
+      bytes += bulkBytes;
       bulk = [];
       bulkBytes = 0;
+      const task = this.flushBulk(entity, operations)
+        .then((result) => {
+          failures.push(...result.failures);
+          indexedDocumentIds.push(...result.indexedDocumentIds);
+        })
+        .catch((error) => {
+          firstFailure ??= { error };
+        });
+      inFlight.add(task);
+      void task.then(() => inFlight.delete(task));
+      await waitForAvailableSlot();
     };
 
     for (const document of documents) {
@@ -196,13 +368,22 @@ export class SearchReindexService {
         });
         continue;
       }
-      if (bulk.length > 0 && bulkBytes + operation.bytes > this.options.bulkMaxBytes) await flush();
+      if (bulk.length > 0 && bulkBytes + operation.bytes > this.options.bulkMaxBytes) {
+        await flushQueuedBulk();
+      }
       bulk.push(operation);
       bulkBytes += operation.bytes;
     }
-    await flush();
+    await flushQueuedBulk();
+    await Promise.all(inFlight);
+    if (firstFailure) throw firstFailure.error;
 
-    return { failures, indexedDocumentIds };
+    return {
+      bulkRequests,
+      bytes,
+      failures,
+      indexedDocumentIds,
+    };
   }
 
   private async retryFailures(state: SearchReindexRunState, entity: SearchDocumentEntity) {
@@ -228,6 +409,7 @@ export class SearchReindexService {
     }));
     const result = await this.indexDocuments(
       retryDocuments,
+      entity,
       progress.physicalIndex,
       state.run.baseRevision,
     );
@@ -244,7 +426,7 @@ export class SearchReindexService {
       });
       if (!checkpointed) {
         const refreshed = await this.repository.getRun(state.run.id);
-        this.options.onProgress({
+        await this.emitProgress({
           actualCursor: refreshed?.progress.find((item) => item.entity === entity)?.cursor ?? null,
           entity,
           expectedCursor: progress.cursor,
@@ -257,7 +439,9 @@ export class SearchReindexService {
   private async runEntity(state: SearchReindexRunState, entity: SearchDocumentEntity) {
     let progress = state.progress.find((item) => item.entity === entity);
     if (!progress) throw new Error(`Missing reindex progress for ${entity}`);
-    if (progress.status === 'completed') return;
+    if (progress.status === 'completed') return true;
+
+    await this.emitProgress({ entity, type: 'entity_started' });
 
     await this.client.ensureIndex(progress.physicalIndex, {
       mappings: {
@@ -270,18 +454,25 @@ export class SearchReindexService {
       settings: { analysis: SEARCH_INDEX_ANALYSIS },
     });
 
+    let processedBatches = 0;
+    let sourceExhausted = false;
     while (true) {
       const documents = await this.builder.buildBatch(entity, {
         afterId: progress.cursor ?? undefined,
         limit: this.options.batchSize,
       });
-      if (documents.length === 0) break;
+      if (documents.length === 0) {
+        sourceExhausted = true;
+        break;
+      }
 
+      const batchStartedAt = Date.now();
       const result = await this.indexDocuments(
         documents.map((document) => ({
           id: document.id,
           source: document.source as Record<string, unknown>,
         })),
+        entity,
         progress.physicalIndex,
         state.run.baseRevision,
       );
@@ -295,8 +486,11 @@ export class SearchReindexService {
         runId: state.run.id,
       });
       if (checkpointed) {
-        this.options.onProgress({
+        await this.emitProgress({
+          bulkRequests: result.bulkRequests,
+          bytes: result.bytes,
           cursor: documents.at(-1)!.id,
+          durationMs: Date.now() - batchStartedAt,
           entity,
           failed: result.failures.length,
           indexed: result.indexedDocumentIds.length,
@@ -305,7 +499,7 @@ export class SearchReindexService {
         });
       } else {
         const refreshed = await this.repository.getRun(state.run.id);
-        this.options.onProgress({
+        await this.emitProgress({
           actualCursor: refreshed?.progress.find((item) => item.entity === entity)?.cursor ?? null,
           entity,
           expectedCursor: progress.cursor,
@@ -315,7 +509,21 @@ export class SearchReindexService {
       const refreshed = await this.repository.getRun(state.run.id);
       progress = refreshed?.progress.find((item) => item.entity === entity);
       if (!progress) throw new Error(`Missing refreshed reindex progress for ${entity}`);
+      processedBatches += 1;
+      if (documents.length < this.options.batchSize) {
+        /** buildBatch applies LIMIT without post-query filtering, so a short keyset page is final. */
+        sourceExhausted = true;
+        break;
+      }
+      if (
+        this.options.maxBatchesPerEntity !== undefined &&
+        processedBatches >= this.options.maxBatchesPerEntity
+      ) {
+        break;
+      }
     }
+
+    if (!sourceExhausted) return false;
 
     const refreshedState = await this.repository.getRun(state.run.id);
     if (!refreshedState) throw new Error(`Missing reindex run ${state.run.id}`);
@@ -336,7 +544,8 @@ export class SearchReindexService {
       );
     }
     await this.repository.completeEntity(state.run.id, entity);
-    this.options.onProgress({ count: indexedCount, entity, type: 'entity_completed' });
+    await this.emitProgress({ count: indexedCount, entity, type: 'entity_completed' });
+    return true;
   }
 
   async run(namespace: string, schemaVersion: number): Promise<SearchReindexResult> {
@@ -348,10 +557,23 @@ export class SearchReindexService {
       };
     }
 
-    for (const entity of SEARCH_DOCUMENT_ENTITIES) {
-      const currentState = await this.repository.getRun(initialState.run.id);
-      if (!currentState) throw new Error(`Missing reindex run ${initialState.run.id}`);
-      await this.runEntity(currentState, entity);
+    const completed = await mapWithConcurrency(
+      SEARCH_DOCUMENT_ENTITIES,
+      this.options.entityConcurrency,
+      async (entity) => {
+        const currentState = await this.repository.getRun(initialState.run.id);
+        if (!currentState) throw new Error(`Missing reindex run ${initialState.run.id}`);
+        try {
+          return await this.runEntity(currentState, entity);
+        } catch (error) {
+          throw new SearchReindexEntityError(entity, error);
+        }
+      },
+    );
+
+    if (completed.some((value) => !value)) {
+      await this.emitProgress({ type: 'run_paused' });
+      return { runId: initialState.run.id, status: 'backfilling' };
     }
 
     const completedState = await this.repository.getRun(initialState.run.id);
@@ -363,7 +585,7 @@ export class SearchReindexService {
       );
     }
     await this.repository.markReadyForIncrementalSync(initialState.run.id);
-    this.options.onProgress({ type: 'aliases_created' });
+    await this.emitProgress({ type: 'aliases_created' });
 
     return {
       runId: initialState.run.id,

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type { SearchDocumentEntity } from '@lobechat/types';
@@ -10,12 +11,19 @@ import {
   SearchDocumentBuilder,
 } from '../../packages/database/src/repositories/searchDocument';
 import {
+  SearchReindexEntityError,
+  SearchReindexFileLogger,
   SearchReindexFileRepository,
   SearchReindexHttpClient,
   SearchReindexService,
+  summarizeSearchReindexError,
 } from '../../packages/database/src/repositories/searchReindex';
 import { SearchSyncOutboxRepository } from '../../packages/database/src/repositories/searchSyncOutbox';
 import * as schema from '../../packages/database/src/schemas';
+import {
+  assertSearchReindexElasticsearchHostname,
+  resolveSearchReindexElasticsearchEnvironment,
+} from './options';
 
 const { Pool } = pg;
 
@@ -27,6 +35,16 @@ const readPositiveIntegerArgument = (name: string) => {
   return value;
 };
 
+const readNonNegativeIntegerArgument = (name: string) => {
+  const argument = process.argv.find((item) => item.startsWith(`${name}=`));
+  if (!argument) return;
+  const value = Number.parseInt(argument.slice(name.length + 1), 10);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return value;
+};
+
 const args = new Set(process.argv.slice(2));
 const apply = args.has('--apply');
 const disableCapture = args.has('--disable-capture');
@@ -35,7 +53,13 @@ const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-
 const status = args.has('--status');
 const yes = args.has('--yes');
 const batchSize = readPositiveIntegerArgument('--batch-size');
+const bulkConcurrency = readPositiveIntegerArgument('--bulk-concurrency');
 const bulkMaxBytes = readPositiveIntegerArgument('--bulk-max-bytes');
+const entityConcurrency = readPositiveIntegerArgument('--entity-concurrency');
+const maxBatchesPerEntity = readPositiveIntegerArgument('--max-batches-per-entity');
+const maxRequestRetries = readNonNegativeIntegerArgument('--max-request-retries');
+const requestTimeoutMs = readPositiveIntegerArgument('--request-timeout-ms');
+const retryBaseDelayMs = readNonNegativeIntegerArgument('--retry-base-delay-ms');
 
 const knownArguments = new Set([
   '--apply',
@@ -51,7 +75,16 @@ const unknownArgument = process.argv
       item.startsWith('--') &&
       !knownArguments.has(item) &&
       !item.startsWith('--batch-size=') &&
+      !item.startsWith('--bulk-concurrency=') &&
       !item.startsWith('--bulk-max-bytes=') &&
+      !item.startsWith('--entity-concurrency=') &&
+      !item.startsWith('--elasticsearch-api-key-env=') &&
+      !item.startsWith('--elasticsearch-url-env=') &&
+      !item.startsWith('--expected-elasticsearch-host-prefix=') &&
+      !item.startsWith('--max-batches-per-entity=') &&
+      !item.startsWith('--max-request-retries=') &&
+      !item.startsWith('--request-timeout-ms=') &&
+      !item.startsWith('--retry-base-delay-ms=') &&
       !item.startsWith('--skip-failure='),
   );
 if (unknownArgument) throw new Error(`Unknown argument: ${unknownArgument}`);
@@ -80,18 +113,24 @@ const readFailureReference = ():
 };
 
 const failureReference = readFailureReference();
+const { apiKeyEnvironmentName, expectedHostPrefix, urlEnvironmentName } =
+  resolveSearchReindexElasticsearchEnvironment(process.argv.slice(2));
 
 const databaseUrl = process.env.DATABASE_URL;
-const elasticsearchApiKey = process.env.ES_API_KEY;
-const elasticsearchUrl = process.env.ES_URL;
+const elasticsearchApiKey = process.env[apiKeyEnvironmentName];
+const elasticsearchUrl = process.env[urlEnvironmentName];
 const namespace = process.env.ES_INDEX_NAMESPACE;
 const configuredStateDirectory = process.env.ES_REINDEX_STATE_DIR;
 const stateDirectory = path.resolve(configuredStateDirectory ?? '.elasticsearch-reindex');
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 if (!namespace) throw new Error('ES_INDEX_NAMESPACE is required');
-if (apply && !elasticsearchApiKey) throw new Error('ES_API_KEY is required with --apply');
-if (apply && !elasticsearchUrl) throw new Error('ES_URL is required with --apply');
+if (apply && !elasticsearchApiKey) {
+  throw new Error(`${apiKeyEnvironmentName} is required with --apply`);
+}
+if (apply && !elasticsearchUrl) {
+  throw new Error(`${urlEnvironmentName} is required with --apply`);
+}
 if ((apply || failureReference) && !configuredStateDirectory) {
   throw new Error('ES_REINDEX_STATE_DIR is required for reindex mutations and resume attempts');
 }
@@ -105,56 +144,59 @@ const repository = new SearchReindexFileRepository({
   stateDirectory,
 });
 
-const printStatus = async () => {
+const readStatus = async () => {
   const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   const captureEnabled = await outbox.isCaptureEnabled();
   const unresolvedFailures = state ? await repository.listUnresolvedFailures(state.run.id) : [];
   const outboxStats = await outbox.stats();
-  console.log(
-    JSON.stringify(
-      {
-        namespace,
-        stateDirectory,
-        outbox: {
-          captureEnabled,
-          dead: outboxStats.dead,
-          highWaterRevision: outboxStats.highWaterRevision,
-          oldestActiveRevision: outboxStats.oldestActiveRevision,
-          pending: outboxStats.pending,
-          retrying: outboxStats.retrying,
-        },
-        run: state
-          ? {
-              baseRevision: state.run.baseRevision,
-              backfillHighWaterRevision: state.run.backfillHighWaterRevision,
-              entities: state.progress.map((progress) => ({
-                cursor: progress.cursor,
-                entity: progress.entity,
-                failedCount: progress.failedCount,
-                indexedCount: progress.indexedCount,
-                physicalIndex: progress.physicalIndex,
-                processedCount: progress.processedCount,
-                status: progress.status,
-              })),
-              id: state.run.id,
-              unresolvedFailures: unresolvedFailures.map(
-                ({ attempts, documentId, entity, retryable }) => ({
-                  attempts,
-                  documentId,
-                  entity,
-                  retryable,
-                }),
-              ),
-              schemaVersion: state.run.schemaVersion,
-              status: state.run.status,
-            }
-          : null,
-      },
-      null,
-      2,
-    ),
-  );
+  return {
+    namespace,
+    outbox: {
+      captureEnabled,
+      dead: outboxStats.dead,
+      highWaterRevision: outboxStats.highWaterRevision,
+      oldestActiveRevision: outboxStats.oldestActiveRevision,
+      pending: outboxStats.pending,
+      retrying: outboxStats.retrying,
+    },
+    run: state
+      ? {
+          baseRevision: state.run.baseRevision,
+          backfillHighWaterRevision: state.run.backfillHighWaterRevision,
+          entities: state.progress.map((progress) => ({
+            cursor: progress.cursor,
+            entity: progress.entity,
+            failedCount: progress.failedCount,
+            indexedCount: progress.indexedCount,
+            physicalIndex: progress.physicalIndex,
+            processedCount: progress.processedCount,
+            status: progress.status,
+          })),
+          id: state.run.id,
+          schemaVersion: state.run.schemaVersion,
+          status: state.run.status,
+          unresolvedFailures: unresolvedFailures.map(
+            ({ attempts, documentId, entity, retryable }) => ({
+              attempts,
+              documentId,
+              entity,
+              retryable,
+            }),
+          ),
+        }
+      : null,
+    stateDirectory,
+  };
 };
+
+const printStatus = async () => {
+  const currentStatus = await readStatus();
+  console.log(JSON.stringify(currentStatus, null, 2));
+  return currentStatus;
+};
+
+let auditLogger: SearchReindexFileLogger | undefined;
+const executionStartedAt = Date.now();
 
 const run = async () => {
   if (disableCapture) {
@@ -183,6 +225,17 @@ const run = async () => {
     return;
   }
 
+  const endpointHostname = new URL(elasticsearchUrl!).hostname;
+  assertSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
+  console.log(
+    JSON.stringify({
+      endpointEnvName: urlEnvironmentName,
+      endpointHostname,
+      expectedHostPrefix: expectedHostPrefix ?? null,
+      type: 'reindex_target',
+    }),
+  );
+
   const existing = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   if (!existing && !freshRun) {
     throw new Error(
@@ -193,11 +246,35 @@ const run = async () => {
     throw new Error(`Checkpoint ${existing.run.id} already exists; omit --fresh-run to resume it`);
   }
   const prepared = await repository.createOrResume(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  auditLogger = new SearchReindexFileLogger({
+    runId: prepared.run.id,
+    sessionId: randomUUID(),
+    stateDirectory,
+  });
+  await auditLogger.append({
+    batchSize: batchSize ?? 500,
+    bulkConcurrency: bulkConcurrency ?? 1,
+    bulkMaxBytes: bulkMaxBytes ?? 50 * 1024 * 1024,
+    credentialEnvName: apiKeyEnvironmentName,
+    endpointHostname,
+    endpointEnvName: urlEnvironmentName,
+    expectedHostPrefix: expectedHostPrefix ?? null,
+    entityConcurrency: entityConcurrency ?? 1,
+    maxBatchesPerEntity: maxBatchesPerEntity ?? null,
+    maxRequestRetries: maxRequestRetries ?? 4,
+    mode: existing ? 'resume' : 'fresh',
+    requestTimeoutMs: requestTimeoutMs ?? 30_000,
+    retryBaseDelayMs: retryBaseDelayMs ?? 500,
+    schemaVersion: prepared.run.schemaVersion,
+    type: 'session_started',
+  });
   console.log(
     JSON.stringify({
+      eventsPath: auditLogger.eventsPath,
       runId: prepared.run.id,
       schemaVersion: prepared.run.schemaVersion,
       stateDirectory,
+      summaryPath: auditLogger.summaryPath,
       type: existing ? 'reindex_resumed' : 'reindex_started',
     }),
   );
@@ -205,21 +282,58 @@ const run = async () => {
   await outbox.enableCapture();
   const client = new SearchReindexHttpClient({
     apiKey: elasticsearchApiKey!,
+    requestTimeoutMs,
     url: elasticsearchUrl!,
   });
   const service = new SearchReindexService(new SearchDocumentBuilder(db), repository, client, {
     batchSize,
+    bulkConcurrency,
     bulkMaxBytes,
-    onProgress: (event) => console.log(JSON.stringify(event)),
+    entityConcurrency,
+    maxBatchesPerEntity,
+    maxRequestRetries,
+    onProgress: async (event) => {
+      console.log(JSON.stringify(event));
+      await auditLogger!.append(event);
+    },
+    retryBaseDelayMs,
   });
   const result = await service.run(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   console.log(JSON.stringify(result));
-  await printStatus();
+  const currentStatus = await printStatus();
+  await auditLogger.append({
+    elapsedMs: Date.now() - executionStartedAt,
+    status: result.status,
+    type: 'session_completed',
+  });
+  await auditLogger.writeSummary({
+    elapsedMs: Date.now() - executionStartedAt,
+    runStatus: result.status,
+    status: currentStatus,
+  });
 };
 
 run()
-  .catch((error) => {
+  .catch(async (error) => {
     console.error(error);
+    if (auditLogger) {
+      const rootError = error instanceof SearchReindexEntityError ? error.cause : error;
+      const failure = {
+        elapsedMs: Date.now() - executionStartedAt,
+        entity: error instanceof SearchReindexEntityError ? error.entity : null,
+        errorSummary: summarizeSearchReindexError(rootError),
+        errorType: rootError instanceof Error ? rootError.name.slice(0, 128) : 'UnknownError',
+        type: 'session_failed' as const,
+      };
+      await auditLogger.append(failure).catch((logError) => console.error(logError));
+      const currentStatus = await readStatus().catch((statusError) => {
+        console.error(statusError);
+        return null;
+      });
+      await auditLogger
+        .writeSummary({ failure, status: currentStatus })
+        .catch((logError) => console.error(logError));
+    }
     process.exitCode = 1;
   })
   .finally(async () => {

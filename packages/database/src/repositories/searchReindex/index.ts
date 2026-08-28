@@ -538,6 +538,12 @@ export class SearchReindexFileRepository {
 export type { SearchReindexHttpClientOptions } from './elasticsearch';
 export { SearchReindexHttpClient, SearchReindexRequestError } from './elasticsearch';
 export type {
+  SearchReindexAuditEvent,
+  SearchReindexAuditValue,
+  SearchReindexFileLoggerOptions,
+} from './logger';
+export { SearchReindexFileLogger, summarizeSearchReindexError } from './logger';
+export type {
   SearchReindexElasticsearchClient,
   SearchReindexIndexBody,
   SearchReindexProgressEvent,
@@ -545,4 +551,4 @@ export type {
   SearchReindexServiceOptions,
   SearchReindexStateRepository,
 } from './service';
-export { SearchReindexService } from './service';
+export { SearchReindexEntityError, SearchReindexService } from './service';

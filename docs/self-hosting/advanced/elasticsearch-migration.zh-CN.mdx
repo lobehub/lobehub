@@ -27,6 +27,7 @@ tags:
 | `ES_REINDEX_STATE_DIR` | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。               |
 
 只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。早期可行性验证阶段的环境变量不属于本迁移。
+如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
 
 ## 开始前
 
@@ -64,14 +65,24 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --
 
 checkpoint 文件只包含迁移控制状态和脱敏后的失败信息，不保存数据库或 Elasticsearch 密钥。完成验收和增量追平前必须保留整个状态目录；换机器执行时需要一起复制该目录。
 
-可以按需限制批次：
+如果只想验证 14 类数据都能走通真实回填路径，而不在测试环境跑完整库，可以让每个非空数据类型只执行一个批次，并开启受控并发：
 
 ```bash
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
-  bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=52428800
+  bun run search:reindex -- --apply --yes \
+  --expected-elasticsearch-host-prefix=search-dev- \
+  --entity-concurrency=4 --bulk-concurrency=2 \
+  --batch-size=5000 --bulk-max-bytes=10485760 \
+  --max-batches-per-entity=1
 ```
 
-`--batch-size` 限制每次按主键翻页读取的 PostgreSQL 行数；`--bulk-max-bytes` 按编码后的字节数限制单次 Elasticsearch `_bulk` 请求。单个文档超过限制时会被明确记为失败，不会静默跳过。
+这条命令会创建 14 类索引，并向其中有源数据的索引写入真实数据。只要至少一类数据超过批次上限，任务就会保持在 `backfilling` 状态且不会创建别名；如果某个小型部署的 14 类数据都能在上限内读完，本次演练仍会正常完成并创建别名，因此必须使用隔离的空 Elasticsearch 目标。使用同一命令再次执行可以验证断点续跑；移除 `--max-batches-per-entity` 后会从当前断点继续，直到所有数据类型完成。
+
+`--entity-concurrency` 控制同时读取多少类 PostgreSQL 数据，`--bulk-concurrency` 控制每个数据类型的单批数据可同时发出多少个按字节拆分的 Elasticsearch 请求。应从较小数值开始，仅在 PostgreSQL 和 Elasticsearch 运行稳定时逐步增加。`--batch-size` 限制每次按主键翻页读取的 PostgreSQL 行数；`--bulk-max-bytes` 按编码后的字节数限制单次 `_bulk` 请求。单个文档超过限制时会被明确记为失败，不会静默跳过。
+
+临时请求失败会先按指数间隔自动重试，再决定是否推进本批游标。默认最多重试 4 次，基础间隔为 500 毫秒，单次请求超时为 30 秒；需要时可通过 `--max-request-retries`、`--retry-base-delay-ms` 和 `--request-timeout-ms` 调整。
+
+每次执行或续跑都会把脱敏后的详细运行事件追加到 `<状态目录>/runs/<run-id>/events.jsonl`，并原子更新 `<状态目录>/runs/<run-id>/summary.json`。日志包含各数据类型和批量请求的耗时、字节数、文档数、重试、游标、失败与最终状态，但不会记录数据库或 Elasticsearch 地址、密钥以及文档正文。迁移或归档任务时，应把这些私有日志和 checkpoint 一起保留。
 
 ## 使用 Docker 镜像运行
 
@@ -94,7 +105,7 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
 ## 续跑与验收
 
 - 进程崩溃或 Elasticsearch 临时失败后，使用同一个状态目录重新执行 `--apply --yes`，但不要再传 `--fresh-run`。已完成的数据类型会被跳过，未完成的数据类型从本地游标后继续。
-- 整个请求失败时不会推进游标；逐条写入失败会写入本地 checkpoint，并在该数据类型完成前重试。
+- 整个请求失败时不会推进游标；如果同一批中的部分并发请求成功、另一部分失败，续跑时会安全重放整个数据库批次。逐条写入失败会写入本地 checkpoint，并在该数据类型完成前重试。
 - 任何数据类型或逐条失败尚未完成时，工具都会拒绝创建别名。
 - 最终状态为 `ready_for_incremental_sync`。此时全量快照、别名和增量队列的追平边界已经就绪，但用户查询仍必须留在 PostgreSQL。
 

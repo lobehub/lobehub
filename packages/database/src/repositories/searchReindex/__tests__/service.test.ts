@@ -77,6 +77,18 @@ const createDependencies = () => {
 beforeEach(() => vi.clearAllMocks());
 
 describe('SearchReindexService', () => {
+  it('uses defaults when optional batch limits are undefined', async () => {
+    const { builder, client, repository } = createDependencies();
+    const service = new SearchReindexService(builder, repository, client, {
+      batchSize: undefined,
+      bulkMaxBytes: undefined,
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+  });
+
   it('creates aliases only after all 14 entities complete', async () => {
     const { builder, client, repository, state } = createDependencies();
     const service = new SearchReindexService(builder, repository, client);
@@ -99,19 +111,198 @@ describe('SearchReindexService', () => {
     expect(state.progress.every(({ status }) => status === 'completed')).toBe(true);
   });
 
+  it('backfills independent entities with bounded concurrency', async () => {
+    const { builder, client, repository } = createDependencies();
+    let active = 0;
+    let maxActive = 0;
+    vi.mocked(client.ensureIndex).mockImplementation(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+    });
+    const service = new SearchReindexService(builder, repository, client, {
+      entityConcurrency: 4,
+    });
+
+    await service.run('test', 1);
+
+    expect(maxActive).toBe(4);
+  });
+
+  it('writes byte-bounded bulk requests concurrently', async () => {
+    const { builder, client, repository } = createDependencies();
+    builder.buildBatch.mockImplementation(async (entity) => {
+      if (entity !== 'agents' || builder.buildBatch.mock.calls.length > 1) return [];
+      return Array.from({ length: 4 }, (_, index) => ({
+        entity: 'agents' as const,
+        id: `agent-${index}`,
+        source: { content: 'x'.repeat(100), id: `agent-${index}` },
+      }));
+    });
+    let active = 0;
+    let maxActive = 0;
+    vi.mocked(client.bulk).mockImplementation(async (body) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return Array.from({ length: body.trim().split('\n').length / 2 }, () => ({ status: 201 }));
+    });
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 4 : 0,
+    );
+    const service = new SearchReindexService(builder, repository, client, {
+      bulkConcurrency: 2,
+      bulkMaxBytes: 250,
+      entityConcurrency: 1,
+    });
+
+    await service.run('test', 1);
+
+    expect(client.bulk).toHaveBeenCalledTimes(4);
+    expect(maxActive).toBe(2);
+  });
+
+  it('starts byte-bounded requests before encoding the remainder of a large batch', async () => {
+    const { builder, client, repository } = createDependencies();
+    let firstRequestStarted = false;
+    let thirdDocumentEncodedAfterRequestStarted = false;
+    builder.buildBatch.mockImplementation(async (entity) => {
+      if (entity !== 'agents' || builder.buildBatch.mock.calls.length > 1) return [];
+      return Array.from({ length: 3 }, (_, index) => ({
+        entity: 'agents' as const,
+        id: `agent-${index}`,
+        source: {
+          get content() {
+            if (index === 2) {
+              thirdDocumentEncodedAfterRequestStarted = firstRequestStarted;
+            }
+            return 'x'.repeat(100);
+          },
+          id: `agent-${index}`,
+        },
+      }));
+    });
+    vi.mocked(client.bulk).mockImplementation(async () => {
+      firstRequestStarted = true;
+      return [{ status: 201 }];
+    });
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 3 : 0,
+    );
+    const service = new SearchReindexService(builder, repository, client, {
+      bulkConcurrency: 2,
+      bulkMaxBytes: 250,
+    });
+
+    await service.run('test', 1);
+
+    expect(thirdDocumentEncodedAfterRequestStarted).toBe(true);
+  });
+
+  it('retries a request-level timeout before checkpointing the batch', async () => {
+    const { builder, client, repository } = createDependencies();
+    const events: unknown[] = [];
+    builder.buildBatch
+      .mockResolvedValueOnce([{ entity: 'agents', id: 'agent-1', source: { id: 'agent-1' } }])
+      .mockResolvedValue([]);
+    vi.mocked(client.bulk)
+      .mockRejectedValueOnce(new DOMException('The operation timed out', 'TimeoutError'))
+      .mockResolvedValueOnce([{ status: 201 }]);
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 1 : 0,
+    );
+    const service = new SearchReindexService(builder, repository, client, {
+      maxRequestRetries: 1,
+      onProgress: (event) => events.push(event),
+      retryBaseDelayMs: 0,
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+    expect(client.bulk).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual(
+      expect.objectContaining({ attempt: 1, entity: 'agents', type: 'bulk_retry' }),
+    );
+  });
+
+  it('pauses every non-empty entity after a bounded number of batches', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const visited = new Set<SearchDocumentEntity>();
+    builder.buildBatch.mockImplementation(async (entity) => {
+      if (visited.has(entity)) return [];
+      visited.add(entity);
+      return [{ entity, id: `${entity}-1`, source: { id: `${entity}-1` } }];
+    });
+    vi.mocked(client.bulk).mockResolvedValue([{ status: 201 }]);
+    vi.mocked(client.count).mockResolvedValue(1);
+    const service = new SearchReindexService(builder, repository, client, {
+      batchSize: 1,
+      entityConcurrency: 4,
+      maxBatchesPerEntity: 1,
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({ status: 'backfilling' });
+
+    expect(client.ensureAlias).not.toHaveBeenCalled();
+    expect(state.progress.every(({ processedCount }) => processedCount === 1)).toBe(true);
+    expect(state.progress.every(({ status }) => status !== 'completed')).toBe(true);
+  });
+
   it('does not advance the cursor or create aliases after a request-level bulk failure', async () => {
     const { builder, client, repository, state } = createDependencies();
     builder.buildBatch
       .mockResolvedValueOnce([{ entity: 'agents', id: 'agent-1', source: { id: 'agent-1' } }])
       .mockResolvedValue([]);
     vi.mocked(client.bulk).mockRejectedValueOnce(new Error('gateway unavailable'));
-    const service = new SearchReindexService(builder, repository, client);
+    const service = new SearchReindexService(builder, repository, client, {
+      maxRequestRetries: 0,
+    });
 
     await expect(service.run('test', 1)).rejects.toThrow('gateway unavailable');
 
     expect(repository.checkpointBatch).not.toHaveBeenCalled();
     expect(client.ensureAlias).not.toHaveBeenCalled();
     expect(state.progress[0].cursor).toBeNull();
+  });
+
+  it('replays a partially successful concurrent batch before advancing its cursor', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const documents = Array.from({ length: 2 }, (_, index) => ({
+      entity: 'agents' as const,
+      id: `agent-${index}`,
+      source: { content: 'x'.repeat(100), id: `agent-${index}` },
+    }));
+    builder.buildBatch.mockImplementation(async (entity, { afterId }) =>
+      entity === 'agents' && !afterId ? documents : [],
+    );
+    vi.mocked(client.bulk)
+      .mockResolvedValueOnce([{ status: 201 }])
+      .mockRejectedValueOnce(new Error('gateway unavailable'));
+    const service = new SearchReindexService(builder, repository, client, {
+      bulkConcurrency: 2,
+      bulkMaxBytes: 250,
+      maxRequestRetries: 0,
+    });
+
+    await expect(service.run('test', 1)).rejects.toThrow('gateway unavailable');
+    expect(repository.checkpointBatch).not.toHaveBeenCalled();
+    expect(state.progress[0].cursor).toBeNull();
+
+    vi.mocked(client.bulk).mockResolvedValue([{ status: 409 }]);
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 2 : 0,
+    );
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+
+    expect(repository.checkpointBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: 'agent-1', indexedCount: 2, processedCount: 2 }),
+    );
+    expect(client.bulk).toHaveBeenCalledTimes(4);
   });
 
   it('persists an oversized item and blocks alias creation', async () => {

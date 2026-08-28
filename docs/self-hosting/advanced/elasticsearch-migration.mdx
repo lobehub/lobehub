@@ -27,6 +27,11 @@ The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreS
 | `ES_REINDEX_STATE_DIR` | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command. Environment variables from earlier feasibility experiments are not part of this migration.
+Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
+with `--elasticsearch-url-env=<KEY>` and `--elasticsearch-api-key-env=<KEY>`. Both flags are
+required together. `--expected-elasticsearch-host-prefix=<PREFIX>` can additionally refuse a
+mistargeted endpoint before any backfill mutation. The command prints and logs the selected
+hostname and variable names, never credential values.
 
 ## Before you start
 
@@ -69,14 +74,41 @@ The checkpoint file contains only migration control state and sanitized failure 
 stores database or Elasticsearch credentials. Keep the entire state directory until validation and
 incremental catch-up finish; moving to another machine requires copying that directory.
 
-Optional limits:
+For a bounded rehearsal that exercises every entity without completing the full database, run one
+batch per non-empty entity with bounded concurrency:
 
 ```bash
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
-  bun run search:reindex -- --apply --yes --batch-size=500 --bulk-max-bytes=52428800
+  bun run search:reindex -- --apply --yes \
+  --expected-elasticsearch-host-prefix=search-dev- \
+  --entity-concurrency=4 --bulk-concurrency=2 \
+  --batch-size=5000 --bulk-max-bytes=10485760 \
+  --max-batches-per-entity=1
 ```
 
-`--batch-size` limits PostgreSQL rows per keyset page. `--bulk-max-bytes` limits each Elasticsearch `_bulk` request by encoded bytes; an individual document larger than this limit is stored as an explicit failure.
+This command creates all 14 entity indexes and writes source rows into each non-empty one. If at
+least one entity has more than the configured batch limit, the run remains in `backfilling` without
+creating aliases. A small deployment whose 14 entities all fit within the limit can complete and
+create aliases in this rehearsal, so always use an isolated empty Elasticsearch target. Re-run the
+same command to exercise resume behavior, or remove `--max-batches-per-entity` to intentionally
+continue until every entity completes.
+
+`--entity-concurrency` controls independent PostgreSQL entity scans. `--bulk-concurrency` controls
+parallel byte-bounded Elasticsearch requests inside each entity batch. Start conservatively and
+increase them only while PostgreSQL and Elasticsearch remain healthy. `--batch-size` limits rows
+per keyset page. `--bulk-max-bytes` limits each encoded `_bulk` request; an individual document
+larger than this limit is stored as an explicit failure.
+
+Transient request failures are retried with exponential backoff before the batch cursor advances.
+The defaults are four retries, a 500 ms base delay, and a 30-second request timeout. Override them
+with `--max-request-retries`, `--retry-base-delay-ms`, and `--request-timeout-ms` when required.
+
+Every apply or resume session appends sanitized operational events to
+`<state-dir>/runs/<run-id>/events.jsonl` and atomically replaces
+`<state-dir>/runs/<run-id>/summary.json`. The log records entity and bulk timings, byte and document
+counts, retries, cursors, failures, and final state. It never records database or Elasticsearch
+URLs, credentials, or document source text. Keep these private files with the checkpoint when
+moving or archiving a run.
 
 ## Run from the Docker image
 
@@ -103,7 +135,7 @@ application server.
 ## Resume and verify
 
 - After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor.
-- Request-level failures do not advance the cursor. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
+- Request-level failures do not advance the cursor. If one concurrent bulk succeeds and another fails, the entire database batch is replayed safely on resume. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
 - The tool refuses to create aliases while any entity or item-level failure is incomplete.
 - The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
 
