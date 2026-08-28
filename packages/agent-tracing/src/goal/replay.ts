@@ -5,7 +5,6 @@ import type {
   GoalFrontierTaskState,
   GoalGraphState,
   GoalTickBranch,
-  GoalTickOutcome,
   GoalTrajectory,
 } from './types';
 
@@ -14,26 +13,32 @@ import type {
  * not change what it picks, or the trace is not a replayable record.
  */
 export interface GoalDecisionInput {
-  budget: GoalBudgetState;
+  budget?: GoalBudgetState;
   /** State of the chosen work node's responsible task, when it already has one. */
   frontierTask?: GoalFrontierTaskState;
   graph: GoalGraphState;
   now: number;
 }
 
+/**
+ * What the coordinator *chose*. Deliberately excludes the outcome: a branch
+ * like `recover_lease` reports `waiting_external` or `waiting_human` depending
+ * on whether recovery still had budget, and that is the result of running the
+ * branch rather than part of the decision. Comparing it would flag work the
+ * decider was never asked to do.
+ */
 export interface GoalDecision {
   branch: GoalTickBranch;
   /** Every eligible work node, in the order the coordinator ranked them. */
   candidates: FrontierCandidate[];
   chosenNodeId?: string;
-  outcome: GoalTickOutcome;
 }
 
 export type GoalDecider = (input: GoalDecisionInput) => GoalDecision;
 
 export interface ReplayDivergence {
   advanceSeq: number;
-  field: 'branch' | 'outcome' | 'chosenNodeId' | 'candidates';
+  field: 'branch' | 'chosenNodeId' | 'candidates';
   recorded: string;
   replayed: string;
   tickIndex: number;
@@ -93,7 +98,6 @@ export const replayTrajectory = (trajectory: GoalTrajectory, decide: GoalDecider
       };
 
       record('branch', tick.branch, replayed.branch);
-      record('outcome', tick.outcome, replayed.outcome);
       record('chosenNodeId', tick.chosenNodeId ?? '', replayed.chosenNodeId ?? '');
       record('candidates', candidateOrder(tick.candidates), candidateOrder(replayed.candidates));
 

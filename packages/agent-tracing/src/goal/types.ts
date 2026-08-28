@@ -163,7 +163,12 @@ export interface GoalTickSnapshot {
   /** When the coordinator entered this tick. Staleness branches read the clock, so replay needs it. */
   at: number;
   branch: GoalTickBranch;
-  budget: GoalBudgetState;
+  /**
+   * Absent on branches that never funded anything — a paused goal, an open
+   * gate, an empty frontier. Recording a budget the coordinator did not read
+   * would put a number in the decision input that never influenced it.
+   */
+  budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
   chosenNodeId?: string;
   frontierTask?: GoalFrontierTaskState;

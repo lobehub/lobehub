@@ -63,12 +63,7 @@ const faithful: GoalDecider = ({ graph: state }) => {
       title: item.title,
     }));
 
-  return {
-    branch: 'dispatch_task',
-    candidates,
-    chosenNodeId: candidates[0]?.nodeId,
-    outcome: 'advanced',
-  };
+  return { branch: 'dispatch_task', candidates, chosenNodeId: candidates[0]?.nodeId };
 };
 
 describe('replayTrajectory', () => {
@@ -92,6 +87,23 @@ describe('replayTrajectory', () => {
     expect(result.divergences).toEqual([
       { advanceSeq: 0, field: 'candidates', recorded: 'a,b', replayed: 'b,a', tickIndex: 0 },
     ]);
+  });
+
+  it('ignores the outcome, which the branch produces rather than decides', () => {
+    const result = replayTrajectory(
+      {
+        ...trajectory,
+        advances: [
+          {
+            ...trajectory.advances[0],
+            ticks: [tick({ outcome: 'waiting_human' })],
+          },
+        ],
+      },
+      faithful,
+    );
+
+    expect(result.divergences).toEqual([]);
   });
 
   it('flags a changed branch and a changed choice separately', () => {
