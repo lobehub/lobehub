@@ -5,6 +5,7 @@ import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import { useAgentShare } from '@/features/AgentShareSettings/useAgentShare';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -71,10 +72,7 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   const hasActiveWorkspace = useHasActiveWorkspace();
   const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(agentId));
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
-  // Both the business capability (cloud-only) AND the per-user grayscale flag
-  // must pass — mirrors the server gate in `_helpers/agentShareFeatureGate.ts`.
-  const enableAgentLinkShare =
-    useServerConfigStore(serverConfigSelectors.enableBusinessFeatures) && !!enableAgentShare;
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
@@ -88,12 +86,24 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   // recipient's very first message. `heterogeneousProviderType` is the same
   // predicate `channelsSupported` above already uses to classify these
   // agents — reused here rather than re-derived.
-  const shareSupported =
+  const shareable =
+    enableBusinessFeatures &&
     !hasActiveWorkspace &&
     !isBuiltinAgent &&
     !isInbox &&
-    enableAgentLinkShare &&
     !heterogeneousProviderType;
+  // A creator removed from the grayscale whitelist keeps the tab for an
+  // already-live share — it is their only discoverable path to the revocation
+  // surface (visitors stay admitted by the share row regardless of the
+  // creator's current flag). Peek without auto-creating: creation is
+  // server-forbidden outside the whitelist. The SWR key is shared with the
+  // settings page, so this costs no extra request once either has fetched.
+  const { shareInfo: existingShare } = useAgentShare(agentId, shareable && !enableAgentShare, {
+    autoCreate: false,
+  });
+  // Mirrors the server gate in `_helpers/agentShareFeatureGate.ts`: business
+  // capability AND (per-user grayscale flag OR an existing share row).
+  const shareSupported = shareable && (!!enableAgentShare || !!existingShare);
 
   const options = useMemo(
     () =>

@@ -89,6 +89,18 @@ describe('useAgentShare', () => {
     expect(result.current.shareInfo?.id).toBe('share-agent-create-retry');
   });
 
+  it('only reads the existing row when autoCreate is false', async () => {
+    mocks.getShareStatus.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useAgentShare('agent-peek', true, { autoCreate: false }));
+
+    await waitFor(() => expect(mocks.getShareStatus).toHaveBeenCalledWith('agent-peek'));
+    // Give any stray async work a tick to surface before asserting silence.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mocks.enableShare).not.toHaveBeenCalled();
+    expect(result.current.shareInfo).toBeNull();
+  });
+
   it('does not fetch or create anything while disabled', async () => {
     renderHook(() => useAgentShare('agent-disabled', false));
 

@@ -28,7 +28,20 @@ const configQueueByAgent = new Map<string, ConfigQueueState>();
  * the UI opens — a private row is inert (visitors are refused), so creation has
  * no exposure side effect and lets every control below assume the row exists.
  */
-export const useAgentShare = (agentId: string | undefined, enabled: boolean) => {
+export const useAgentShare = (
+  agentId: string | undefined,
+  enabled: boolean,
+  options?: {
+    /**
+     * Set false to only read the existing share row without creating one —
+     * used by surfaces that must know whether a share exists for a creator who
+     * is outside the grayscale whitelist (creation is server-forbidden there,
+     * but an already-live share still needs its revocation UI).
+     */
+    autoCreate?: boolean;
+  },
+) => {
+  const autoCreate = options?.autoCreate ?? true;
   const [createError, setCreateError] = useState<unknown>();
   const [isCreating, setIsCreating] = useState(false);
   const activeAgentRef = useRef<string | undefined>(undefined);
@@ -70,10 +83,10 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
   }, [agentId, enabled]);
 
   useEffect(() => {
-    if (enabled && !isLoading && !shareInfo && !createError && agentId) {
+    if (autoCreate && enabled && !isLoading && !shareInfo && !createError && agentId) {
       void createShare();
     }
-  }, [agentId, createError, createShare, enabled, isLoading, shareInfo]);
+  }, [agentId, autoCreate, createError, createShare, enabled, isLoading, shareInfo]);
 
   useEffect(() => {
     if (!agentId || !shareInfo?.shareConfig) return;

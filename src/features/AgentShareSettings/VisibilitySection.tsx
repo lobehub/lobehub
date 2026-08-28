@@ -1,7 +1,7 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button, Checkbox, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox, Skeleton } from '@lobehub/ui';
+import { Button, Checkbox, confirmModal, Select, Text, toast } from '@lobehub/ui/base-ui';
 import { DatabaseIcon, LinkIcon, LockIcon, PaperclipIcon, WrenchIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,13 +23,20 @@ const PRIVACY_WARNING_ITEMS = [
 
 interface VisibilitySectionProps {
   agentId: string;
+  /**
+   * False for a creator outside the grayscale whitelist who still has a live
+   * share: switching back to `private` (revocation) must always work, but
+   * re-publishing to `link` is server-forbidden (`updateVisibility` gates the
+   * publish direction only), so the option is disabled rather than failing.
+   */
+  allowPublish?: boolean;
 }
 
 /**
  * Visibility control of the share settings page: private / link switch with the
  * privacy-warning confirmation, plus the copy-link action once a link exists.
  */
-const VisibilitySection = memo<VisibilitySectionProps>(({ agentId }) => {
+const VisibilitySection = memo<VisibilitySectionProps>(({ agentId, allowPublish = true }) => {
   const { t } = useTranslation('agent');
 
   const [updating, setUpdating] = useState(false);
@@ -73,6 +80,7 @@ const VisibilitySection = memo<VisibilitySectionProps>(({ agentId }) => {
 
   const handleVisibilityChange = useCallback(
     (visibility: AgentShareVisibility) => {
+      if (visibility === 'link' && !allowPublish) return;
       // Show confirmation when changing from private to link (unless dismissed)
       if (
         currentVisibility === 'private' &&
@@ -118,7 +126,14 @@ const VisibilitySection = memo<VisibilitySectionProps>(({ agentId }) => {
         applyVisibility(visibility);
       }
     },
-    [currentVisibility, hideAgentSharePrivacyWarning, t, updateSystemStatus, applyVisibility],
+    [
+      allowPublish,
+      currentVisibility,
+      hideAgentSharePrivacyWarning,
+      t,
+      updateSystemStatus,
+      applyVisibility,
+    ],
   );
 
   const handleCopyLink = useCallback(async () => {
@@ -156,6 +171,7 @@ const VisibilitySection = memo<VisibilitySectionProps>(({ agentId }) => {
       value: 'private',
     },
     {
+      disabled: !allowPublish,
       icon: <LinkIcon size={14} />,
       label: t('share.visibility.link'),
       value: 'link',

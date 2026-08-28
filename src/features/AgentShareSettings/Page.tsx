@@ -14,6 +14,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { StyleSheet } from '@/utils/styles';
 
 import SettingsContent from './SettingsContent';
+import { useAgentShare } from './useAgentShare';
 import VisibilitySection from './VisibilitySection';
 
 const styles = StyleSheet.create({
@@ -35,13 +36,37 @@ const AgentShareSettingsPage = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   // Business capability (cloud-only) AND per-user grayscale flag, mirroring
   // the server gate in `_helpers/agentShareFeatureGate.ts`.
-  const enableAgentShareFlag = useServerConfigStore((s) => s.featureFlags.enableAgentShare);
-  const enableAgentLinkShare =
-    useServerConfigStore(serverConfigSelectors.enableBusinessFeatures) && !!enableAgentShareFlag;
+  const enableAgentShareFlag = !!useServerConfigStore((s) => s.featureFlags.enableAgentShare);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  // Flags hold their store defaults (false) until the async global-config fetch
+  // lands, so any redirect decided before init would bounce an enabled creator
+  // off their own deep link.
+  const isServerConfigInit = useServerConfigStore((s) => s.serverConfigInit);
 
-  // Deep links on deployments without the link-share capability land on the
-  // profile page instead of a broken settings surface.
-  if (!enableAgentLinkShare && activeAgentId)
+  // A creator removed from the grayscale whitelist must keep a revocation
+  // surface for an already-live share: visitors are admitted by the share row
+  // regardless of the creator's current flag, so this page cannot disappear
+  // with the flag. Peek at the share row without auto-creating one (creation
+  // is server-forbidden for non-whitelisted users anyway).
+  const shouldPeekExistingShare =
+    isServerConfigInit && enableBusinessFeatures && !enableAgentShareFlag;
+  const { isLoading: isShareStatusLoading, shareInfo } = useAgentShare(
+    activeAgentId,
+    shouldPeekExistingShare,
+    { autoCreate: false },
+  );
+
+  const enableAgentLinkShare = enableBusinessFeatures && enableAgentShareFlag;
+  const revocationOnly = shouldPeekExistingShare && !!shareInfo;
+
+  // Nothing to render/redirect on until the flags (and, for a flag-off
+  // creator, the share-row peek) have resolved.
+  if (!isServerConfigInit || (shouldPeekExistingShare && isShareStatusLoading)) return null;
+
+  // Deep links on deployments without the link-share capability (or for users
+  // outside the grayscale with no live share) land on the profile page
+  // instead of a broken settings surface.
+  if (!enableAgentLinkShare && !revocationOnly && activeAgentId)
     return <Navigate replace to={`/agent/${activeAgentId}/profile`} />;
 
   return (
@@ -64,9 +89,17 @@ const AgentShareSettingsPage = memo(() => {
           <Flexbox gap={16} paddingBlock={16}>
             {activeAgentId && (
               <>
-                <VisibilitySection agentId={activeAgentId} />
-                <AgentShareSettingsExtension agentId={activeAgentId} />
-                <SettingsContent agentId={activeAgentId} />
+                <VisibilitySection agentId={activeAgentId} allowPublish={!revocationOnly} />
+                {/* Config edits (budget slot + permission/tool/limit settings)
+                    go through `updateShareConfig`, which the server forbids for
+                    non-whitelisted creators — revocation mode keeps only the
+                    visibility control that can shut the share down. */}
+                {!revocationOnly && (
+                  <>
+                    <AgentShareSettingsExtension agentId={activeAgentId} />
+                    <SettingsContent agentId={activeAgentId} />
+                  </>
+                )}
               </>
             )}
           </Flexbox>
