@@ -222,8 +222,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       // call_llm does a parent existence preflight; return a truthy row by
       // default so existing tests don't have to stub it.
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
+      // The abort settle asks whether a row already holds the call. Null by
+      // default: these tests exercise calls that never got one.
+      findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
       query: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateMessagePlugin: vi.fn().mockResolvedValue({ success: true }),
       updateToolMessage: vi.fn().mockResolvedValue({ success: true }),
     };
 
@@ -1564,11 +1568,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(mockFinalizeCompression).toHaveBeenCalledTimes(1);
       expect(mockChat).toHaveBeenCalledTimes(1);
       expect(result.nextContext?.phase).toBe('compression_result');
-      expect((result.nextContext?.payload as any).compressedMessages[0]).toEqual({
+      expect(result.newState.messages[0]).toEqual({
         content: 'summary',
         id: 'group-123',
         role: 'compressedGroup',
       });
+      expect((result.nextContext?.payload as any).compressedMessages).toBeUndefined();
       expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
       expect(result.events).toContainEqual({
         groupId: 'group-123',
@@ -1627,8 +1632,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const result = await executors.compress_context!(instruction, state);
 
       expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
+      expect(result.newState.messages).toEqual(state.messages);
       expect(result.nextContext?.payload as any).toMatchObject({
-        compressedMessages: state.messages,
         groupId: '',
         parentMessageId: undefined,
         skipped: true,
@@ -1653,8 +1658,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
       expect(mockFinalizeCompression).not.toHaveBeenCalled();
+      expect(result.newState.messages).toEqual([{ content: 'history', role: 'user' }]);
       expect(result.nextContext?.payload as any).toMatchObject({
-        compressedMessages: [{ content: 'history', role: 'user' }],
         parentMessageId: 'assistant-existing',
         skipped: true,
       });
@@ -1720,7 +1725,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         ['msg-history', 'assistant-existing'],
         expect.any(Object),
       );
-      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      expect(result.newState.messages).toEqual([
         { content: 'summary', id: 'group-123', role: 'compressedGroup' },
         { content: 'continue with this exact instruction', role: 'user' },
       ]);
@@ -1756,7 +1761,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.compress_context!(instruction, state);
 
-      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      expect(result.newState.messages).toEqual([
         { content: 'history', id: 'msg-history', role: 'user' },
       ]);
     });
@@ -1801,7 +1806,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.compress_context!(instruction, state);
 
-      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      expect(result.newState.messages).toEqual([
         { content: 'summary', id: 'group-123', role: 'compressedGroup' },
         preservedMessage,
       ]);
@@ -3745,7 +3750,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           agentId: 'agent-123',
           content: '',
           parentId: 'assistant-msg-1',
-          pluginIntervention: { status: 'pending' },
+          pluginIntervention: expect.objectContaining({ status: 'pending' }),
           role: 'tool',
           tool_call_id: 'tool-call-1',
           topicId: 'topic-123',
@@ -3755,7 +3760,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         2,
         expect.objectContaining({
           parentId: 'assistant-msg-1',
-          pluginIntervention: { status: 'pending' },
+          pluginIntervention: expect.objectContaining({ status: 'pending' }),
           tool_call_id: 'tool-call-2',
         }),
       );
@@ -3813,6 +3818,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       await executors.request_human_approve!(
         {
+          parentMessageId: 'assistant-msg-1',
           pendingToolsCalling: makePendingTools(),
           skipCreateToolMessage: true,
           type: 'request_human_approve' as const,
@@ -3821,6 +3827,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       );
 
       expect(mockMessageModel.create).not.toHaveBeenCalled();
+      expect(mockMessageModel.updateMessagePlugin).toHaveBeenCalledTimes(2);
+      expect(mockMessageModel.updateMessagePlugin).toHaveBeenNthCalledWith(1, 'existing-tool-1', {
+        intervention: {
+          batchId: 'op-123:0:assistant-msg-1',
+          itemIndex: 0,
+          operationId: 'op-123',
+          status: 'pending',
+          stepIndex: 0,
+        },
+      });
       const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
         (call: any[]) => call[2]?.chunkType === 'tools_calling',
       );
@@ -5740,12 +5756,78 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
       });
 
+      it('should not launch the tool when Stop lands during the preflight hook', async () => {
+        // Every await between entering `run` and the actual launch reopens the
+        // cancellation window. The executor's race settles the call the moment
+        // the signal fires, so anything launched after that is side-effecting
+        // work for an operation that is already over.
+        const controller = new AbortController();
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockImplementation(async () => {
+            controller.abort();
+            return null;
+          }),
+        };
+
+        const ctxWithHooks = {
+          ...ctx,
+          abortSignal: controller.signal,
+          hookDispatcher: mockDispatcher as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState()).catch(
+          () => undefined,
+        );
+
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalled();
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+      });
+
+      it('should not dispatch afterToolCall for a tool that outlived an abort', async () => {
+        // The tool keeps running after the abort — work already handed to a
+        // process cannot be recalled. Its hook must still be suppressed: by the
+        // time it lands, `executeStep` has emitted the terminal hooks and the
+        // operation is unregistered, so a local consumer drops it silently and a
+        // webhook consumer would see `afterToolCall` after `onComplete`.
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const controller = new AbortController();
+        mockToolExecutionService.executeTool.mockImplementationOnce(async () => {
+          controller.abort();
+          return { content: 'late result', success: true };
+        });
+
+        const ctxWithHooks = {
+          ...ctx,
+          abortSignal: controller.signal,
+          hookDispatcher: mockDispatcher as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState()).catch(
+          () => undefined,
+        );
+
+        expect(mockDispatcher.dispatch).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'afterToolCall',
+          expect.anything(),
+          expect.anything(),
+        );
+      });
+
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi
-            .fn()
-            .mockResolvedValue({ content: '{"mocked":true}', isMocked: true }),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue({
+            isMocked: true,
+            result: { content: '{"mocked":true}', success: true },
+          }),
         };
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
@@ -5770,6 +5852,32 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             content: '{"mocked":true}',
             role: 'tool',
           }),
+        );
+      });
+
+      it('should preserve failed mock results without executing the real tool', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue({
+            isMocked: true,
+            result: { content: 'fixture error', error: 'fixture error', success: false },
+          }),
+        };
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+        expect(mockMessageModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ content: 'fixture error', role: 'tool' }),
+        );
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({ mocked: true, success: false }),
+          undefined,
         );
       });
 

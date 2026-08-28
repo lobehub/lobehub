@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import {
   documents,
   knowledgeBaseFiles,
@@ -64,6 +65,9 @@ export const getUseLevelKnowledgeBaseIds = async (
       and(
         eq(resourcePermissions.workspaceId, workspaceId),
         eq(resourcePermissions.resourceType, 'knowledgeBase'),
+        // Workspace-wide rows only: a per-member collaborator grant grades one
+        // member, and must never mark the knowledge base itself as restricted.
+        isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
         // A permission row staged on a still-private KB is inert until the KB
         // is published — private KBs are creator-only regardless of the row.
@@ -96,6 +100,8 @@ export const getRestrictedKnowledgeBaseIds = async (
       and(
         eq(resourcePermissions.workspaceId, ctx.workspaceId),
         eq(resourcePermissions.resourceType, 'knowledgeBase'),
+        // Workspace-wide rows only — see `getUseLevelKnowledgeBaseIds`.
+        isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
         // A `use` row staged while the KB is still private must not leak into
         // member-facing filters: the private KB is already creator-only, and
@@ -116,7 +122,16 @@ export const getRestrictedKnowledgeBaseIds = async (
   });
   if (hasAllScope) return [];
 
-  return rows.map((row) => row.id);
+  // A collaborator grant at `edit` lifts the caller back to browsable on that
+  // knowledge base — drop it from the restricted set so every listing/search
+  // filter downstream lets it through, mirroring `canPerformResourceAction`.
+  const grantedIds = await new ResourcePermissionModel(
+    ctx.serverDB,
+    ctx.workspaceId,
+  ).getCollaboratorResourceIds('knowledgeBase', ctx.userId, 'edit');
+  const grantedSet = new Set(grantedIds);
+
+  return rows.map((row) => row.id).filter((id) => !grantedSet.has(id));
 };
 
 /**

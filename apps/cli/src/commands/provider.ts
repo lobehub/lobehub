@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { CLI_PRODUCT_NAME } from '../constants/identity';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
@@ -169,7 +170,7 @@ export function registerProviderCommand(program: Command) {
         // lobehub is a platform-managed provider, users cannot configure its API key or base URL
         if (id === 'lobehub' && (options.apiKey !== undefined || options.baseUrl !== undefined)) {
           log.error(
-            `Provider "lobehub" is managed by the LobeHub platform. You cannot set --api-key or --base-url for it.`,
+            `Provider "lobehub" is managed by the ${CLI_PRODUCT_NAME} platform. You cannot set --api-key or --base-url for it.`,
           );
           process.exit(1);
         }

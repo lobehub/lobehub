@@ -7,7 +7,7 @@ import type {
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
-import { resolveAgentAgencyConfig } from '@lobechat/types';
+import { applyTopicModelToHeterogeneousProvider, resolveAgentAgencyConfig } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
@@ -30,7 +30,10 @@ import {
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
 } from '@/store/chat/slices/agentRun/actions/entries/commandBus';
-import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
+import {
+  getNativeHeteroSessionBindingKey,
+  resolveHeteroResume,
+} from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import {
@@ -114,6 +117,8 @@ const getEffectiveAgencyConfig = (agentId: string) => {
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     }),
+    /** True workspace membership — stays true for the author, unlike `workspaceScoped`. */
+    isWorkspaceAgent: !!agent?.workspaceId,
     workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   };
 };
@@ -155,12 +160,24 @@ const resolveHeteroRunContext = (
     workspaceScoped,
   });
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
+  const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+  const providerBinding = heterogeneousProvider?.authMode === 'api';
 
   // Drops the saved sessionId when its bound cwd disagrees with the current
   // one — without this CC emits "No conversation found with session ID".
-  const { cwdChanged, resumeSessionId } = resolveHeteroResume(topic?.metadata, workingDirectory);
+  const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
+    topic?.metadata,
+    workingDirectory,
+    {
+      currentBindingKey:
+        heterogeneousProvider && !providerBinding
+          ? getNativeHeteroSessionBindingKey(heterogeneousProvider.type)
+          : undefined,
+      providerBinding,
+    },
+  );
 
-  return { cwdChanged, resumeSessionId, workingDirectory };
+  return { cwdChanged, reason, resumeBindingKey, resumeSessionId, workingDirectory };
 };
 
 /**
@@ -190,12 +207,19 @@ const runHeterogeneousFromExistingMessage = async (
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
-  const { cwdChanged, resumeSessionId, workingDirectory } = resolveHeteroRunContext(
-    chatStore,
-    context,
-    agentId,
-  );
+  const { cwdChanged, reason, resumeBindingKey, resumeSessionId, workingDirectory } =
+    resolveHeteroRunContext(chatStore, context, agentId);
   if (cwdChanged) toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+  else if (reason === 'binding_changed')
+    toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
+
+  const topicModel = context.topicId
+    ? topicSelectors.getTopicModelById(context.topicId)(chatStore)
+    : undefined;
+  const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
+    heterogeneousProvider,
+    topicModel,
+  );
 
   const assistantMsg = await messageService.createMessage({
     agentId,
@@ -227,10 +251,11 @@ const runHeterogeneousFromExistingMessage = async (
   await executeHeterogeneousAgent(() => useChatStore.getState(), {
     assistantMessageId: assistantMsg.id,
     context,
-    heterogeneousProvider,
+    heterogeneousProvider: effectiveHeterogeneousProvider,
     imageList: imageList?.length ? imageList : undefined,
     message: prompt,
     operationId: heteroOpId,
+    resumeBindingKey,
     resumeSessionId,
     workingDirectory,
   });
@@ -358,14 +383,17 @@ const regenerateUserMessageFromSource = async (
     const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
     if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
+      context.agentId,
+    );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
 
     // ── Gateway mode: trigger server-side regeneration ──
@@ -744,13 +772,16 @@ export const generationSlice: StateCreator<
       if (shouldProceed === false) return false;
     }
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
+      context.agentId,
+    );
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider: agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -831,14 +862,17 @@ export const generationSlice: StateCreator<
     // tool/provider error on a grouped reply is not resumable this way.
     if (!isHeterogeneousAgentStatusGuideError(erroredStep.error?.body)) return;
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
+      context.agentId,
+    );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
     const agentId = context.agentId;
 

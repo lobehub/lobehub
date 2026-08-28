@@ -1,6 +1,6 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
@@ -19,6 +19,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
@@ -106,8 +107,12 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
       ) : null}
       <AssigneeAgentSelector
         currentAgentId={task.assignee?.id ?? null}
+        currentUserId={task.assigneeUserId ?? null}
         disabled={isRunning}
+        hideMembers={Boolean(task.automationMode)}
+        taskCreatorId={task.createdByUserId}
         taskIdentifier={task.identifier}
+        taskVisibility={task.visibility}
       >
         <span
           style={{
@@ -117,7 +122,11 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
             flex: 'none',
           }}
         >
-          <AssigneeAvatar agentId={task.assignee?.id} size={18} />
+          {!task.assignee?.id && task.assigneeUserId ? (
+            <AssigneeUserAvatar size={18} userId={task.assigneeUserId} />
+          ) : (
+            <AssigneeAvatar agentId={task.assignee?.id} size={18} />
+          )}
         </span>
       </AssigneeAgentSelector>
     </Flexbox>
@@ -138,6 +147,10 @@ const TaskSubtasks = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask, reason } = usePermission('create_content');
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  // Subtask composers inherit the parent's visibility as their default — a
+  // child under a private parent must not default to workspace-visible (the
+  // server rejects a subtask more public than its parent).
+  const parentVisibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const runReadySubtasks = useTaskStore((s) => s.runReadySubtasks);
@@ -182,6 +195,7 @@ const TaskSubtasks = memo(() => {
       showContextMenu(
         buildItems({
           assigneeAgentId: subtask.assignee?.id,
+          assigneeUserId: subtask.assigneeUserId,
           identifier: subtask.identifier,
           priority: subtask.priority,
           status: subtask.status,
@@ -189,6 +203,7 @@ const TaskSubtasks = memo(() => {
       );
       installKeyboardHandlers({
         assigneeAgentId: subtask.assignee?.id,
+        assigneeUserId: subtask.assigneeUserId,
         identifier: subtask.identifier,
         priority: subtask.priority,
         status: subtask.status,
@@ -315,6 +330,7 @@ const TaskSubtasks = memo(() => {
                 <CreateTaskInlineEntry
                   autoFocus
                   agentId={agentId ?? undefined}
+                  defaultVisibility={parentVisibility}
                   parentTaskId={taskId}
                   placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
                   onCollapse={() => setIsCreating(false)}
@@ -363,6 +379,7 @@ const TaskSubtasks = memo(() => {
             <CreateTaskInlineEntry
               autoFocus
               agentId={agentId ?? undefined}
+              defaultVisibility={parentVisibility}
               parentTaskId={taskId}
               placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
               onCollapse={() => setIsCreating(false)}

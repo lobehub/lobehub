@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (Saniyede Token): Saniye başına üretilen token sayısı",
+  "duration.TPS": "tok/s (Saniyede Token): Saniye başına üretilen token sayısı",
   "duration.TTFT": "TTFT (İlk Token Süresi): İlk token gecikmesi",
   "duration.completion": "Çıktı tamamlama süresi",
   "duration.latency": "Süre",

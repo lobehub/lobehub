@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type StreamEvent } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
@@ -499,6 +500,56 @@ describe('runAgent actions', () => {
         expect(replaceMessages).toHaveBeenCalledWith(uiMessages, {
           context: { agentId: 'agent-1', topicId: 'topic-1' },
         });
+      });
+
+      it('does not let a superseded run replace messages from a newer run', async () => {
+        const replaceMessages = vi.fn();
+        const operationContext = { agentId: 'agent-1', topicId: 'topic-1' };
+        const contextKey = messageMapKey(operationContext);
+        act(() => {
+          useChatStore.setState({
+            operationsByContext: {
+              [contextKey]: [TEST_IDS.OPERATION_ID, 'new-send-operation'],
+            },
+            replaceMessages,
+            operations: {
+              [TEST_IDS.OPERATION_ID]: {
+                abortController: new AbortController(),
+                context: operationContext,
+                id: TEST_IDS.OPERATION_ID,
+                metadata: { lastEventId: '0', startTime: 2, stepCount: 0 },
+                status: 'running',
+                type: 'groupAgentStream',
+              },
+              'new-send-operation': {
+                abortController: new AbortController(),
+                context: operationContext,
+                id: 'new-send-operation',
+                metadata: { startTime: 1 },
+                status: 'running',
+                type: 'sendMessage',
+              },
+            },
+          });
+        });
+        const { result } = renderHook(() => useChatStore());
+        const uiMessages = [{ id: 'old-run-message', role: 'assistantGroup' }] as any;
+        const event: StreamEvent = {
+          data: { finalState: { status: 'done' }, reason: 'done', uiMessages },
+          operationId: TEST_IDS.OPERATION_ID,
+          timestamp: Date.now(),
+          type: 'agent_runtime_end',
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            createStreamingContext({ assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID }),
+          );
+        });
+
+        expect(replaceMessages).not.toHaveBeenCalled();
       });
     });
 

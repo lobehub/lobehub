@@ -4,12 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
-const MemorySkeleton = () => (
+const MemorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'}>
-    <NavHeader />
+    {chrome !== 'body' && <NavHeader />}
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
       <WideScreenContainer gap={32} paddingBlock={48}>
         <Flexbox align={'center'} gap={16} paddingBlock={'18vh 0'}>

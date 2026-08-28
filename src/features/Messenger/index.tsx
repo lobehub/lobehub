@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

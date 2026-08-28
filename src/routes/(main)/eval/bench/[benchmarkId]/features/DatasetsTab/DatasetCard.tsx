@@ -1,5 +1,5 @@
-import { ActionIcon, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Tag, toast } from '@lobehub/ui/base-ui';
 import { Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';

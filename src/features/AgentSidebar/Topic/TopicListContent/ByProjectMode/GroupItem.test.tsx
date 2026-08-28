@@ -18,6 +18,11 @@ vi.mock('react-router', () => ({
   useParams: () => routeParamsMock,
 }));
 
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
 vi.mock('@lobehub/ui', () => ({
   AccordionItem: ({
     action,
@@ -56,7 +61,8 @@ vi.mock('@lobehub/ui', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({
     addTopicAction: 'addTopicAction',
     statusBadge: 'statusBadge',

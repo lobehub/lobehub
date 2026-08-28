@@ -1,19 +1,14 @@
+import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
+
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
+import { goalService } from '@/services/goal';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 
-const GOAL_STATUSES = [
-  'backlog',
-  'running',
-  'scheduled',
-  'paused',
-  'completed',
-  'failed',
-  'canceled',
-];
+const GOAL_STATUSES: GoalStatus[] = [...goalStatuses];
 
 /**
  * The home roll-up only ever renders goals that are still open, so it asks for
@@ -27,7 +22,10 @@ const GOAL_STATUSES = [
  * that for real needs an acceptance join on the server; this keeps the window
  * as wide as the query allows in the meantime.
  */
-const HOME_GOAL_STATUSES = ['backlog', 'running', 'scheduled', 'completed'];
+// The home roll-up only renders goals that are still open: terminal states
+// (achieved / canceled) stay on the server, `review` is included because a
+// converged goal is still awaiting the user's sign-off.
+const HOME_GOAL_STATUSES: GoalStatus[] = ['planning', 'running', 'verifying', 'review'];
 const HOME_GOAL_FETCH_LIMIT = 100;
 
 export type GoalStore = GoalState & GoalAction;
@@ -89,20 +87,19 @@ export class GoalActionImpl {
     return useClientDataSWR(
       scopeId ? taskKeys.sidebarGroups(`${scopeId}:goals-page`) : null,
       () =>
-        taskService.groupList({
-          assigneeAgentId: agentId,
-          groups: [{ key: 'goals', limit: 100, statuses: GOAL_STATUSES }],
-          hasGoal: true,
-          parentTaskId: null,
+        goalService.list({
+          agentId,
+          limit: 100,
           projectId,
+          statuses: GOAL_STATUSES,
         }),
       {
-        onSuccess: ({ data }) => {
+        onSuccess: ({ goals }) => {
           this.#set(
             ({ goalListByAgentId, goalListInitializedAgentIds }) => ({
               goalListByAgentId: {
                 ...goalListByAgentId,
-                [scopeId!]: data[0]?.tasks ?? [],
+                [scopeId!]: goals,
               },
               goalListInitializedAgentIds: goalListInitializedAgentIds.includes(scopeId!)
                 ? goalListInitializedAgentIds
@@ -126,16 +123,15 @@ export class GoalActionImpl {
     useClientDataSWR(
       enabled ? taskKeys.homeGoals(scope) : null,
       () =>
-        taskService.groupList({
-          groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: HOME_GOAL_STATUSES }],
-          hasGoal: true,
-          parentTaskId: null,
+        goalService.list({
+          limit: HOME_GOAL_FETCH_LIMIT,
+          statuses: HOME_GOAL_STATUSES,
         }),
       {
-        onSuccess: ({ data }) => {
+        onSuccess: ({ goals }) => {
           this.#set(
             ({ homeGoalsByScope, homeGoalsInitializedScopes }) => ({
-              homeGoalsByScope: { ...homeGoalsByScope, [scope]: data[0]?.tasks ?? [] },
+              homeGoalsByScope: { ...homeGoalsByScope, [scope]: goals },
               homeGoalsInitializedScopes: homeGoalsInitializedScopes.includes(scope)
                 ? homeGoalsInitializedScopes
                 : [...homeGoalsInitializedScopes, scope],

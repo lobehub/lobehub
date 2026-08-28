@@ -8,6 +8,7 @@ import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useUserStore } from '@/store/user';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
@@ -1770,6 +1771,88 @@ describe('Generation Actions', () => {
           operationId: 'hetero-op-id',
         }),
       );
+    });
+
+    it('regenerates with the topic-pinned heterogeneous model', async () => {
+      await setupHeteroChatStore({
+        topicDataMap: {
+          test: {
+            items: [{ id: 'topic-1', model: 'opus', provider: 'claude-code' }],
+          },
+        },
+      });
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+      store.setState({
+        displayMessages: [{ content: 'Retry with the pinned model', id: 'msg-1', role: 'user' }],
+      } as any);
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          heterogeneousProvider: expect.objectContaining({ model: 'opus', type: 'claude-code' }),
+        }),
+      );
+    });
+
+    it('preserves a legacy subscription resume when the Provider Binding Lab is enabled', async () => {
+      const previousLab = useUserStore.getState().preference.lab;
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
+        },
+      }));
+      await setupHeteroChatStore({
+        topicDataMap: {
+          test: {
+            items: [
+              {
+                id: 'topic-1',
+                metadata: {
+                  heteroSessionId: 'legacy-session',
+                  workingDirectory: '/repo',
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+      store.setState({
+        displayMessages: [{ content: 'Retry me', id: 'msg-1', role: 'user' }],
+      } as any);
+
+      try {
+        await store.getState().regenerateUserMessage('msg-1');
+
+        expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            resumeBindingKey: undefined,
+            resumeSessionId: 'legacy-session',
+            workingDirectory: '/repo',
+          }),
+        );
+      } finally {
+        useUserStore.setState((state) => ({
+          preference: { ...state.preference, lab: previousLab },
+        }));
+      }
     });
 
     it('creates the child execHeterogeneousAgent op as a child of the parent regenerate op', async () => {

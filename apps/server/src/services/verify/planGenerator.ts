@@ -165,14 +165,7 @@ export class VerifyPlanGeneratorService {
       : {};
   }
 
-  /**
-   * Config-time AI generation: turn a one-sentence acceptance requirement into a
-   * set of proposed criteria for the user to review/edit before saving. Runs the
-   * same prompt and schema as the run-time plan path, but uses its own tracing
-   * scenario because drafting criteria in createGoal is a distinct product
-   * workflow from generating a frozen execution plan. Returns drafts only —
-   * nothing is persisted and no operation is required.
-   */
+  /** Draft criteria for the generic task verification configuration surface. */
   async generateCriteria(params: {
     context?: string;
     goal: string;
@@ -180,25 +173,21 @@ export class VerifyPlanGeneratorService {
     modelConfig: { model: string; provider: string };
   }): Promise<CriterionDraft[]> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
-    const chain = chainVerifyPlan({
-      context: params.context,
-      goal: params.goal,
-      maxCriteria,
-    });
-
-    const ai = new AiGenerationService(this.db, this.userId);
-    const raw = await ai.generateObject(
+    const raw = await new AiGenerationService(this.db, this.userId).generateObject(
       {
-        ...chain,
-        model: params.modelConfig.model,
-        provider: params.modelConfig.provider,
+        ...chainVerifyPlan({
+          context: params.context,
+          goal: params.goal,
+          maxCriteria,
+        }),
+        ...params.modelConfig,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       },
       {
         tracing: {
           promptVersion: VERIFY_PLAN_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.GoalCriteriaGen,
+          scenario: TRACING_SCENARIOS.VerifyPlanGen,
           schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
         } satisfies TracingOptions,
       },
@@ -209,15 +198,18 @@ export class VerifyPlanGeneratorService {
       log('config criteria-gen output did not match schema: %O', parsed.error.flatten());
       return [];
     }
-    return withoutProgrammaticTests(parsed.data.criteria.slice(0, maxCriteria)).map((c) => ({
-      description: c.description,
-      instruction: c.instruction,
-      onFail: c.onFail ?? 'manual',
-      requiredEvidence: c.requiredEvidence,
-      required: c.required ?? true,
-      title: c.title,
-      verifierType: c.verifierType,
-    }));
+
+    return withoutProgrammaticTests(parsed.data.criteria.slice(0, maxCriteria)).map(
+      (criterion) => ({
+        description: criterion.description,
+        instruction: criterion.instruction,
+        onFail: criterion.onFail ?? 'manual',
+        requiredEvidence: criterion.requiredEvidence,
+        required: criterion.required ?? true,
+        title: criterion.title,
+        verifierType: criterion.verifierType,
+      }),
+    );
   }
 
   /**

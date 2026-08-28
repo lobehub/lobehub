@@ -129,6 +129,17 @@ vi.mock('@/components/InfoTooltip', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({
+    'aria-label': ariaLabel,
+    'aria-pressed': ariaPressed,
+    onClick,
+  }: {
+    'aria-label'?: string;
+    'aria-pressed'?: boolean;
+    'onClick'?: (e: any) => void;
+  }) => (
+    <button aria-label={ariaLabel} aria-pressed={ariaPressed} type="button" onClick={onClick} />
+  ),
   toast: {
     error: (...args: unknown[]) => messageError(...args),
   },

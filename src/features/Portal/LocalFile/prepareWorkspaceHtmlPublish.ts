@@ -20,6 +20,23 @@ export interface ReadyWorkspaceHtmlPublishPlan {
   packed: PackedWorkspaceHtmlSite;
 }
 
+const base64ByteLength = (content: string): number => {
+  const compact = content.replaceAll(/\s+/g, '');
+  const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
+};
+
+export const getWorkspaceHtmlPublishSizeBytes = (plan: ReadyWorkspaceHtmlPublishPlan): number =>
+  new TextEncoder().encode(plan.packed.html).byteLength +
+  plan.packed.sidecars.reduce(
+    (total, file) =>
+      total +
+      (file.encoding === 'base64'
+        ? base64ByteLength(file.content)
+        : new TextEncoder().encode(file.content).byteLength),
+    0,
+  );
+
 export type WorkspaceHtmlPublishPlan =
   | {
       blocked: 'too-large' | 'too-many';
@@ -117,17 +134,18 @@ const workspaceHtmlPublishErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message === 'unresolved-local-assets') {
     return t('workingPanel.localFile.publish.unresolvedLocals', { ns: 'chat' });
   }
-  if (error instanceof Error && error.message) return error.message;
   return t('workingPanel.localFile.publish.failed', { ns: 'chat' });
 };
 
 export const publishPreparedWorkspaceHtml = async ({
   agentId,
+  onError,
   plan,
   publish,
   topicId,
 }: {
   agentId?: string | null;
+  onError?: (error: unknown) => boolean;
   plan: ReadyWorkspaceHtmlPublishPlan;
   publish: WorkspaceHtmlArtifactPublisher['publish'];
   topicId: string;
@@ -146,7 +164,7 @@ export const publishPreparedWorkspaceHtml = async ({
     toast.success(t('workingPanel.localFile.publish.success', { ns: 'chat' }));
     return result;
   } catch (error) {
-    toast.error(workspaceHtmlPublishErrorMessage(error));
+    if (!onError?.(error)) toast.error(workspaceHtmlPublishErrorMessage(error));
     return;
   }
 };

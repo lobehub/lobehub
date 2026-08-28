@@ -146,6 +146,8 @@
   "updater.later": "나중에",
   "updater.newVersionAvailable": "새 버전 사용 가능",
   "updater.newVersionAvailableDesc": "새 버전 {{version}}이 발견되었습니다. 지금 다운로드 하시겠습니까?",
+  "updater.refreshToApply": "지금 새로고침",
+  "updater.rendererUpdateReady": "새 버전이 준비되었습니다 — 새로고침하여 적용하세요",
   "updater.restartAndInstall": "업데이트 설치 및 재시작",
   "updater.updateError": "업데이트 오류",
   "updater.updateReady": "새 버전이 사용 가능합니다",

@@ -1,5 +1,6 @@
 import { goalStatuses, goalSubjectTypes } from '@lobechat/const/goal';
-import { index, integer, pgTable, text } from 'drizzle-orm/pg-core';
+import type { GoalConfig } from '@lobechat/types';
+import { index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { amountNumeric, createdAt, timestamptz, updatedAt } from './_helpers';
@@ -37,6 +38,9 @@ export const goals = pgTable(
     title: text('title').notNull(),
     /** "What counts as done" — the acceptance requirement source. */
     requirement: text('requirement'),
+
+    /** Runtime policy for automatic recovery and bounded Work execution. */
+    config: jsonb('config').$type<GoalConfig>(),
 
     // ── Budget (outer loop) ──
     /** Round budget; null = uncapped. */

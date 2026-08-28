@@ -340,6 +340,8 @@
   "payDiffPrice": "Pagar Diferença",
   "payDiffPriceApprox": "Aprox.",
   "payDiffPriceTip": "Valor real sujeito à página de pagamento",
+  "payment.downgradeFailed.desc": "Falha ao agendar seu downgrade. Por favor, tente novamente mais tarde ou entre em contato conosco por e-mail se o problema persistir.",
+  "payment.downgradeFailed.title": "Falha no Downgrade",
   "payment.error.actions.billing": "Gerenciar Cobrança",
   "payment.error.actions.home": "Voltar para Início",
   "payment.error.desc": "ID da assinatura: {{id}} não encontrado. Se tiver dúvidas, entre em contato conosco por e-mail",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Plano Bloqueado",
   "plans.btn.payment": "Comprar",
   "plans.btn.paymentDesc": "Aceita cartão de crédito / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Aceita cartão de crédito",
   "plans.btn.soon": "Em Breve",
   "plans.cancelDowngrade": "Cancelar Redução Agendada",
   "plans.cancelDowngradeSuccess": "Redução agendada foi cancelada",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Visão Geral do Uso",
   "usage.remaining": "Restante",
   "usage.storage.embeddings.used": "Armazenamento Vetorial",
-  "usage.storage.file.used": "Uso de Arquivos",
-  "zarinpal.infoModal.desc": "Devido a exigências legais, preencha as informações pessoais antes de realizar o pedido:",
-  "zarinpal.infoModal.phone.label": "Número de Telefone",
-  "zarinpal.infoModal.phone.placeholder": "Digite o número de telefone",
-  "zarinpal.infoModal.phone.rule": "Digite um número de telefone válido",
-  "zarinpal.infoModal.submit": "Comprar",
-  "zarinpal.infoModal.title": "Preencher Informações Obrigatórias"
+  "usage.storage.file.used": "Uso de Arquivos"
 }

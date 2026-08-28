@@ -74,6 +74,24 @@ describe('VerifyRunModel.claimVerifying', () => {
     expect(await statusOf(runId)).toBe('verifying');
   });
 
+  it('advances a builder evidence run into verifying', async () => {
+    const runId = await buildRun('op-claim-evidence');
+    const model = new VerifyRunModel(serverDB, userId);
+    await expect(model.claimEvidenceCollection(runId)).resolves.toBe(true);
+    expect(await statusOf(runId)).toBe('collecting_evidence');
+
+    await expect(model.claimVerifying(runId, staleBefore())).resolves.toBe(true);
+    expect(await statusOf(runId)).toBe('verifying');
+  });
+
+  it('reserves evidence collection exactly once', async () => {
+    const runId = await buildRun('op-evidence-once');
+    const model = new VerifyRunModel(serverDB, userId);
+
+    await expect(model.claimEvidenceCollection(runId)).resolves.toBe(true);
+    await expect(model.claimEvidenceCollection(runId)).resolves.toBe(false);
+  });
+
   it('refuses a second claim while the first is still working', async () => {
     const runId = await buildRun('op-claim-2');
     const model = new VerifyRunModel(serverDB, userId);

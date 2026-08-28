@@ -106,12 +106,23 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: 24.11.1
 
       # 设置 package.json 的版本号
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} nightly
+
+      - name: Prepare macOS provisioning profile
+        if: runner.os == 'macOS'
+        env:
+          MAC_PROVISIONING_PROFILE_BASE64: ${{ secrets.MAC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$MAC_PROVISIONING_PROFILE_BASE64" ]; then
+            printf '%s' "$MAC_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/lobehub.provisionprofile"
+            echo "MAC_PROVISIONING_PROFILE=$RUNNER_TEMP/lobehub.provisionprofile" >> "$GITHUB_ENV"
+          fi
 
       # macOS 构建处理
       # 注意：fork 的 PR 无法访问 secrets，会构建未签名版本

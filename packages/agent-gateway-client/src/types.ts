@@ -183,6 +183,43 @@ export interface SubAgentProgressData extends StepCompleteData {
 }
 
 /**
+ * A heterogeneous CLI lease renewal carried by `step_complete` while the
+ * underlying process is alive but has no user-visible output. It deliberately
+ * uses a phase instead of a new event type so the out-of-repo gateway worker
+ * can treat the stream write as activity without a coordinated protocol
+ * rollout. UI and persistence consumers ignore this advisory event.
+ */
+export interface OperationHeartbeatData extends StepCompleteData {
+  phase: 'operation_heartbeat';
+}
+
+/** Semantic interaction shape, independent of the legacy tool renderer id. */
+export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
+
+/** Producer that owns the blocked interaction. */
+export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'qoder';
+
+/** Whitelisted option surface that may be persisted for cold-start review. */
+export interface AgentInterventionRenderOption {
+  description?: string;
+  /** Required for provider-owned permission/plan choices. */
+  id?: string;
+  label: string;
+}
+
+/** Canonical AskUserQuestion surface shared by every supported provider. */
+export interface AgentInterventionRenderQuestion {
+  header: string;
+  multiSelect: boolean;
+  options: AgentInterventionRenderOption[];
+  question: string;
+}
+
+export interface AgentInterventionRenderArguments {
+  questions: AgentInterventionRenderQuestion[];
+}
+
+/**
  * Producer → consumer: structured-input request the user must answer
  * directly (no tool execution involved). The producer's tool handler stays
  * blocked until a matching `agent_intervention_response` (correlated by
@@ -197,6 +234,17 @@ export interface AgentInterventionRequestData {
   deadline: number;
   /** Tool plugin identifier (e.g. `'claude-code'`). */
   identifier: string;
+  /**
+   * Semantic interaction shape. Optional only for older wire producers; all
+   * current producers stamp it explicitly so consumers never infer behavior
+   * from `identifier`.
+   */
+  interactionKind?: AgentInterventionInteractionKind;
+  /**
+   * Agent provider that owns the blocked request. Optional for backward wire
+   * compatibility; current producers always include it.
+   */
+  provider?: AgentInterventionProvider;
   /** Correlation key. Stable for the lifetime of the intervention. */
   toolCallId: string;
 }
@@ -210,6 +258,13 @@ export interface AgentInterventionResponseData {
   cancelled?: boolean;
   /** When `cancelled`, optional reason for telemetry/logging. */
   cancelReason?: 'timeout' | 'user_cancelled' | 'session_ended';
+  /** True only on the producer's post-resolution echo (durable ACK boundary). */
+  producerAck?: boolean;
+  /**
+   * Client-minted idempotency key. Present on user-driven responses and echoed
+   * unchanged by the producer so durable storage can cross the ACK boundary.
+   */
+  resolutionRequestId?: string;
   /** User-supplied answer (JSON-serializable). Absent when cancelled. */
   result?: unknown;
   toolCallId: string;

@@ -66,15 +66,15 @@ describe('goalViewModel', () => {
   });
 
   it('hides achieved goals from the default active filter without hiding pending acceptance', () => {
-    expect(shouldShowGoal('goalList.status.achieved', 'active')).toBe(false);
-    expect(shouldShowGoal('goalList.status.review', 'active')).toBe(true);
-    expect(shouldShowGoal('goalList.status.achieved', 'all')).toBe(true);
+    expect(shouldShowGoal('achieved', 'active')).toBe(false);
+    expect(shouldShowGoal('review', 'active')).toBe(true);
+    expect(shouldShowGoal('achieved', 'all')).toBe(true);
   });
 
-  it('uses the Goal acceptance state for its status icon', () => {
-    expect(goalStatusToTaskStatus('goalList.status.review')).toBe('paused');
-    expect(goalStatusToTaskStatus('goalList.status.achieved')).toBe('completed');
-    expect(goalStatusToTaskStatus('goalList.status.verifying')).toBe('running');
+  it('uses the goal lifecycle state for its status icon', () => {
+    expect(goalStatusToTaskStatus('review')).toBe('paused');
+    expect(goalStatusToTaskStatus('achieved')).toBe('completed');
+    expect(goalStatusToTaskStatus('verifying')).toBe('running');
   });
 
   it('aggregates duration and cost from every topic run', () => {

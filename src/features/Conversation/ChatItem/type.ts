@@ -1,5 +1,5 @@
-import type { AvatarProps, DivProps, FlexboxProps } from '@lobehub/ui';
-import { type AlertProps } from '@lobehub/ui/base-ui';
+import type { DivProps, FlexboxProps } from '@lobehub/ui';
+import { type AlertProps, type AvatarProps } from '@lobehub/ui/base-ui';
 import type { EditableMessageProps, MetaData } from '@lobehub/ui/chat';
 import type { ReactNode } from 'react';
 

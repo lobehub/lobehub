@@ -1,4 +1,5 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
@@ -6,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
+import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -2590,13 +2592,10 @@ describe('topic action', () => {
       );
       const refreshTopicSpy = vi.spyOn(result.current, 'refreshTopic');
 
-      // Mock the `chatService.fetchPresetTaskResult` to simulate the AI response
-      vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation((params) => {
-        if (params) {
-          params.onFinish?.('Summarized Title', { type: 'done' });
-        }
-        return Promise.resolve(undefined);
-      });
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Summarized Title' },
+        tracingId: 'tracing-1',
+      } as any);
 
       await act(async () => {
         await result.current.summaryTopicTitle(topicId, messages);
@@ -2605,8 +2604,6 @@ describe('topic action', () => {
       // Verify that the title was updated and the topic was refreshed
       expect(updateTopicTitleInSummarySpy).toHaveBeenCalledWith(topicId, LOADING_FLAT);
       expect(refreshTopicSpy).toHaveBeenCalled();
-
-      // TODO: need to test with fetchPresetTaskResult
     });
 
     it('should keep an optimistic title visible until the summarized title is ready', async () => {
@@ -2636,18 +2633,113 @@ describe('topic action', () => {
       );
       const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
 
-      vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(async (params) => {
-        params?.onMessageHandle?.({ type: 'text', text: 'Partial Title' } as any);
-        await params?.onFinish?.('Summarized Title', { type: 'done' });
-      });
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Summarized Title' },
+        tracingId: 'tracing-1',
+      } as any);
 
       await act(async () => {
         await result.current.summaryTopicTitle(topicId, messages);
       });
 
       expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, LOADING_FLAT);
-      expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, 'Partial Title');
       expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: 'Summarized Title' });
+    });
+
+    describe('structured generation', () => {
+      const topicId = 'topic-1';
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
+
+      const seedTopic = async (title: string) => {
+        const topics = [{ id: topicId, title }] as ChatTopic[];
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          useChatStore.setState({
+            topicDataMap: {
+              [topicMapKey({ agentId: 'test' })]: {
+                items: topics,
+                total: topics.length,
+                currentPage: 0,
+                hasMore: false,
+                pageSize: 20,
+              },
+            },
+            activeAgentId: 'test',
+          });
+        });
+
+        return result;
+      };
+
+      it('generates against the topic-title schema instead of a chat completion', async () => {
+        const result = await seedTopic('');
+        const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+          data: { title: '简单问候' },
+          tracingId: 'tracing-1',
+        } as any);
+        const completionSpy = vi.spyOn(chatService, 'fetchPresetTaskResult');
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(completionSpy).not.toHaveBeenCalled();
+        expect(generateSpy.mock.calls[0][0]).toMatchObject({
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: { scenario: 'topic_title', topicId },
+        });
+      });
+
+      it('reads the title off the parsed object', async () => {
+        const result = await seedTopic('');
+        const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+
+        vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+          data: { title: '简单问候' },
+          tracingId: 'tracing-1',
+        } as any);
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: '简单问候' });
+      });
+
+      it('restores the previous title when generation returns nothing', async () => {
+        const result = await seedTopic('');
+        const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+        const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+
+        vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+          data: { title: '  ' },
+          tracingId: 'tracing-1',
+        } as any);
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(updateTopicSpy).not.toHaveBeenCalled();
+        expect(updateTitleSpy).toHaveBeenLastCalledWith(topicId, '');
+      });
+
+      it('restores the previous title when generation throws', async () => {
+        const result = await seedTopic('');
+        const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+        const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+
+        vi.spyOn(aiChatService, 'generateJSON').mockRejectedValue(new Error('provider down'));
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(updateTopicSpy).not.toHaveBeenCalled();
+        expect(updateTitleSpy).toHaveBeenLastCalledWith(topicId, '');
+      });
     });
   });
   describe('createTopic', () => {

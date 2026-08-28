@@ -11,6 +11,7 @@ const DEFER_REDIRECT_PREFIXES = ['/invite'];
 
 const RESERVED_FIRST_SEGMENTS = new Set([
   'agent',
+  'apps',
   'community',
   'desktop-onboarding',
   'devtools',

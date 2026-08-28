@@ -2,7 +2,8 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
 import { Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { unzip } from 'fflate';

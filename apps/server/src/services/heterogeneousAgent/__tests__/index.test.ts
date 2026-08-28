@@ -64,6 +64,8 @@ const createFakePersistenceHandler = () => {
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
 
+const createFakeAgentOperationModel = () => ({ touchRunning: vi.fn(async () => true) });
+
 const buildEvent = (
   type: AgentStreamEvent['type'],
   stepIndex: number,
@@ -76,14 +78,26 @@ const buildEvent = (
   type,
 });
 
-const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
+const createService = (
+  overrides: { operationId?: string; streamEventManager?: IStreamEventManager } = {},
+) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
+  const agentOperationModel = createFakeAgentOperationModel();
+  const topicModel = {
+    settleRunningOperation: vi.fn(async (_topicId: string, operationId: string): Promise<any> => ({
+      assistantMessageId: 'asst-1',
+      operationId,
+      status: 'settled',
+    })),
+  };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
+    agentOperationModel: agentOperationModel as any,
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
+    topicModel: topicModel as any,
   });
-  return { manager, persistenceHandler, published, service };
+  return { agentOperationModel, manager, persistenceHandler, published, service, topicModel };
 };
 
 describe('HeterogeneousAgentService', () => {
@@ -130,6 +144,35 @@ describe('HeterogeneousAgentService', () => {
   });
 
   describe('heteroIngest', () => {
+    it('refreshes the durable operation lease before accepting a batch', async () => {
+      const { agentOperationModel, persistenceHandler, service } = createService();
+
+      await service.heteroIngest({
+        agentType: 'codex',
+        events: [buildEvent('stream_chunk', 0)],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(agentOperationModel.touchRunning).toHaveBeenCalledWith('op-1');
+      expect(persistenceHandler.ingest).toHaveBeenCalledOnce();
+    });
+
+    it('ignores delayed batches after the operation lost its lease', async () => {
+      const { agentOperationModel, manager, persistenceHandler, service } = createService();
+      agentOperationModel.touchRunning.mockResolvedValue(false);
+
+      await service.heteroIngest({
+        agentType: 'claude-code',
+        events: [buildEvent('stream_chunk', 0)],
+        operationId: 'op-reclaimed',
+        topicId: 'topic-1',
+      });
+
+      expect(persistenceHandler.ingest).not.toHaveBeenCalled();
+      expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+    });
+
     it('republishes every event through the stream manager preserving ordering', async () => {
       const { manager, published, service } = createService();
 
@@ -189,6 +232,7 @@ describe('HeterogeneousAgentService', () => {
       };
       const persistenceHandler = createFakePersistenceHandler();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -259,6 +303,7 @@ describe('HeterogeneousAgentService', () => {
       };
       const persistenceHandler = createFakePersistenceHandler();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -315,6 +360,7 @@ describe('HeterogeneousAgentService', () => {
         markEventPublished: vi.fn(),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -340,6 +386,7 @@ describe('HeterogeneousAgentService', () => {
         }),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -366,6 +413,7 @@ describe('HeterogeneousAgentService', () => {
         }),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -406,7 +454,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('forwards classified error details when the run failed', async () => {
-      const { published, service } = createService();
+      const { published, service } = createService({ operationId: 'op-2' });
 
       await service.heteroFinish({
         agentType: 'codex',
@@ -425,7 +473,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('persists and publishes a structured auth_required error from a flattened finish', async () => {
-      const { persistenceHandler, published, service } = createService();
+      const { persistenceHandler, published, service } = createService({ operationId: 'op-auth' });
 
       await service.heteroFinish({
         agentType: 'claude-code',
@@ -516,7 +564,7 @@ describe('HeterogeneousAgentService', () => {
     };
 
     it('fires onComplete (reason=done) hooks on a successful run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-hook-success' });
       const { onComplete, onError } = registerHook('op-hook-success');
 
       await service.heteroFinish({
@@ -537,7 +585,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('fires both onComplete and onError (reason=error) hooks on a failed run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-hook-error' });
       const { onComplete, onError } = registerHook('op-hook-error');
 
       await service.heteroFinish({
@@ -564,7 +612,7 @@ describe('HeterogeneousAgentService', () => {
     // gate on success — and the gate bails unless op.model/provider are set, so the
     // synthetic state MUST carry the model/provider backfilled from the CLI stream.
     it('routes the terminal transition through CompletionLifecycle with backfilled model/provider', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-verify-align' });
 
       const finalizeSpy = vi.spyOn(HeteroTraceRecorder.prototype, 'finalize').mockResolvedValue({
         llmCalls: 3,
@@ -609,13 +657,38 @@ describe('HeterogeneousAgentService', () => {
       dispatchSpy.mockRestore();
     });
 
+    it('forwards a group member role to the completion lifecycle', async () => {
+      const { service, topicModel } = createService({ operationId: 'op-member' });
+      topicModel.settleRunningOperation.mockResolvedValue({
+        assistantMessageId: 'asst-member',
+        orchestrationRole: 'member',
+        status: 'settled',
+      });
+      const completeOperationSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue(undefined);
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-member',
+        result: 'success',
+        topicId: 'topic-member',
+      });
+
+      expect(completeOperationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-member', orchestrationRole: 'member' }),
+        'done',
+      );
+      completeOperationSpy.mockRestore();
+    });
+
     // Cross-instance race guard: recordStart's in-memory verify-plan promise lives
     // on a DIFFERENT CompletionLifecycle (execAgent), so heteroFinish can't await
     // it. A fast run could reach the gate before the plan persists. heteroFinish
     // must therefore re-run the idempotent durable instantiation and AWAIT it
     // before dispatching the gate.
     it('awaits durable verify-plan instantiation before the completion gate for a task-bound run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-race-guard' });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -652,7 +725,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('skips verify-plan instantiation for a non-task hetero run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-no-task' });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -838,7 +911,13 @@ describe('HeterogeneousAgentService', () => {
               status: 'missing' as const,
             };
           }
-          if (runningOperation.operationId !== operationId) {
+          const isRoot = runningOperation.operationId === operationId;
+          const operation = isRoot
+            ? runningOperation
+            : runningOperation.childOperations?.find(
+                (candidate: any) => candidate.operationId === operationId,
+              );
+          if (!operation) {
             return {
               activeOperationId: runningOperation.operationId,
               status: 'conflict' as const,
@@ -846,15 +925,26 @@ describe('HeterogeneousAgentService', () => {
           }
 
           const currentMessage = meta.heteroCurrentMsgId;
-          meta = { ...meta, runningOperation: null };
+          meta = {
+            ...meta,
+            runningOperation: isRoot
+              ? null
+              : {
+                  ...runningOperation,
+                  childOperations: runningOperation.childOperations.filter(
+                    (candidate: any) => candidate.operationId !== operationId,
+                  ),
+                },
+          };
           return {
             assistantMessageId:
               currentMessage?.operationId === operationId
                 ? currentMessage.msgId
-                : runningOperation.assistantMessageId,
-            hooks: runningOperation.hooks,
+                : operation.assistantMessageId,
+            hooks: operation.hooks,
+            orchestrationRole: operation.orchestrationRole,
             status: 'settled' as const,
-            threadId: runningOperation.threadId,
+            threadId: operation.threadId,
           };
         }),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {

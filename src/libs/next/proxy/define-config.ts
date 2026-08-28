@@ -13,7 +13,8 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
-import { isWorkbenchSpaRoute } from '../workbenchRoutes';
+import { isShareSpaRoute } from '../shareRoutes';
+import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -90,18 +91,11 @@ export function defineConfig() {
       locale,
     });
 
-    // These pages are responsive on their own; always serve the desktop bundle
-    // so mobile UA does not land on mobile-specific routes.
-    const desktopOnlyPaths = ['/share', '/verify', '/acceptance'];
-    const isDesktopOnlyPath = desktopOnlyPaths.some(
-      (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
-    );
-
     const safeLocale = toSafeLocale(locale);
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
-      isMobile: !isDesktopOnlyPath && device.type === 'mobile',
+      isMobile: device.type === 'mobile',
       locale: safeLocale,
     });
 
@@ -146,7 +140,23 @@ export function defineConfig() {
       return response;
     }
 
-    if (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname)) {
+    // Share pages are responsive on their own, so they get one bundle for every
+    // device rather than a mobile variant.
+    if (isShareSpaRoute(url.pathname)) {
+      const sharePath = `/spa-share/${safeLocale}${url.pathname}`;
+      logDefault('Share SPA route, rewriting to: %s', sharePath);
+      url.pathname = sharePath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    if (
+      isAlwaysWorkbenchSpaRoute(url.pathname) ||
+      (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname))
+    ) {
       const workbenchPath = `/spa-workbench/${safeLocale}${url.pathname}`;
       logDefault('Workbench SPA route, rewriting to: %s', workbenchPath);
       url.pathname = workbenchPath;

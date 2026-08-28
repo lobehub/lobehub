@@ -8,13 +8,19 @@
  *
  * This module automatically resolves the full dependency tree.
  */
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   copyModulesToSource,
   getDependenciesForModules,
   getModuleFilesConfig,
 } from './module-deps.config.mjs';
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Get the current target platform
@@ -32,12 +38,67 @@ const isDarwin = getTargetPlatform() === 'darwin';
 const dependencyOptions = isDarwin ? { skipOptionalDependenciesFor: new Set(['get-windows']) } : {};
 
 /**
+ * First-party native addon packages are discovered instead of being listed by
+ * hand: any `@lobechat/*` workspace package carrying a `binding.gyp` is one.
+ * Per-platform gating comes from the package's own
+ * `lobechat.nativeAddonPlatforms` field (absent = every platform), and its
+ * `build:native` script is what the packaging pipeline invokes — so renaming
+ * or adding an addon package never requires touching this file.
+ */
+export function discoverFirstPartyNativeAddons() {
+  const scopeDir = path.join(configDir, 'node_modules', '@lobechat');
+  let entries;
+  try {
+    entries = fs.readdirSync(scopeDir);
+  } catch {
+    return [];
+  }
+
+  const targetPlatform = getTargetPlatform();
+  const addons = [];
+  for (const entry of entries) {
+    // pnpm renames displaced real directories (e.g. earlier copyModulesToSource
+    // output) to `.ignored_*` on reinstall — they shadow the live symlink.
+    if (entry.startsWith('.')) continue;
+    const packageDir = path.join(scopeDir, entry);
+    if (!fs.existsSync(path.join(packageDir, 'binding.gyp'))) continue;
+
+    let packageJson;
+    try {
+      packageJson = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+    } catch {
+      continue;
+    }
+
+    const platforms = packageJson.lobechat?.nativeAddonPlatforms;
+    if (Array.isArray(platforms) && !platforms.includes(targetPlatform)) continue;
+
+    addons.push({
+      hasBuildScript: Boolean(packageJson.scripts?.['build:native']),
+      name: packageJson.name,
+    });
+  }
+  return addons;
+}
+
+const firstPartyNativeAddons = discoverFirstPartyNativeAddons();
+
+export function buildFirstPartyNativeAddons() {
+  for (const addon of firstPartyNativeAddons) {
+    if (!addon.hasBuildScript) continue;
+    console.info(`🔧 Building native addon ${addon.name}...`);
+    execSync(`pnpm --filter ${addon.name} build:native`, { cwd: configDir, stdio: 'inherit' });
+  }
+}
+
+/**
  * List of native modules that need special handling
  * Only add the top-level native modules here - dependencies are resolved automatically
  *
  * Platform-specific modules are only included when building for their target platform
  */
 export const nativeModules = [
+  ...firstPartyNativeAddons.map((addon) => addon.name),
   // macOS-only native modules
   ...(isDarwin ? ['node-mac-permissions'] : []),
   '@lydell/node-pty',
@@ -68,6 +129,7 @@ export function getNativeModulesFilesConfig() {
  */
 export function getAsarUnpackPatterns() {
   return [
+    ...firstPartyNativeAddons.map((addon) => `node_modules/${addon.name}/build/Release/*.node`),
     'node_modules/@lydell/node-pty-*/prebuilds/**/*.node',
     'node_modules/@lydell/node-pty-*/prebuilds/*/spawn-helper',
     'node_modules/font-list/libs/darwin/fontlist',

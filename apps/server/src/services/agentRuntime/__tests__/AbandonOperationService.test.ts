@@ -247,6 +247,36 @@ describe('AbandonOperationService', () => {
     expect(messageUpdateMock).not.toHaveBeenCalled();
   });
 
+  it('cleans up a no-state child marker and errors its own placeholder', async () => {
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const db = buildDb({
+      operationRow: {
+        id: 'op_child',
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+      },
+    });
+    topicSettleRunningOperationMock.mockResolvedValue({
+      assistantMessageId: 'msg_child',
+      orchestrationRole: 'member',
+      status: 'settled',
+    });
+
+    const result = await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: buildStore() as any,
+    }).finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+    expect(result.assistantMessageUpdated).toBe(true);
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_child');
+    expect(messageUpdateMock).toHaveBeenCalledWith(
+      'msg_child',
+      expect.objectContaining({ error: expect.anything() }),
+    );
+  });
+
   it('finalizes snapshot and marks assistant message errored when state + partial exist', async () => {
     const coord = buildCoordinator({
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),
@@ -474,6 +504,7 @@ describe('AbandonOperationService', () => {
             isSubAgent: true,
             orchestrationRole: 'member',
             threadId: 'thread_g',
+            topicId: 'tpc_x',
             userId: 'user_x',
             workspaceId: 'ws_1',
           },
@@ -495,6 +526,7 @@ describe('AbandonOperationService', () => {
     // coordinator state is cleaned up normally.
     expect(result.subAgentResume).toBeUndefined();
     expect(findOperationMock).not.toHaveBeenCalled();
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_member');
     expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_member');
   });
 

@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (Tokens por Segundo): Saída de tokens por segundo",
+  "duration.TPS": "tok/s (Tokens por Segundo): Saída de tokens por segundo",
   "duration.TTFT": "TTFT (Tempo até o Primeiro Token): Latência do primeiro token",
   "duration.completion": "Tempo de conclusão da saída",
   "duration.latency": "Duração",

@@ -249,6 +249,12 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * Uses fd when available; falls back to fast-glob to preserve globstar semantics.
    */
   async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
+    const missingScope = await this.missingScopeResult(params);
+    if (missingScope) {
+      logger.warn(`[glob: ${params.pattern}] ${missingScope.error}`);
+      return missingScope;
+    }
+
     const tool = await this.determineBestUnixTool();
     const globTool = tool === 'find' ? 'fast-glob' : tool;
     logger.info(`Using glob tool: ${globTool}`);

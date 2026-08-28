@@ -32,11 +32,15 @@ const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
 const mockInstallLater = vi.fn();
 const mockGetUpdaterState = vi.fn();
+const mockRendererSwitchChannel = vi.fn();
 const mockSwitchChannel = vi.fn();
 const mockStoreGet = vi.fn();
 const mockStoreSet = vi.fn();
 
 const mockApp = {
+  rendererUpdateManager: {
+    switchChannel: mockRendererSwitchChannel,
+  },
   storeManager: {
     get: mockStoreGet,
     set: mockStoreSet,
@@ -107,6 +111,7 @@ describe('UpdaterCtr', () => {
       await updaterCtr.setUpdateChannel('canary');
 
       expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'canary');
+      expect(mockRendererSwitchChannel).toHaveBeenCalledWith('canary');
       expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
     });
 
@@ -116,6 +121,7 @@ describe('UpdaterCtr', () => {
       );
 
       expect(mockStoreSet).not.toHaveBeenCalled();
+      expect(mockRendererSwitchChannel).not.toHaveBeenCalled();
       expect(mockSwitchChannel).not.toHaveBeenCalled();
     });
   });

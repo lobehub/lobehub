@@ -1,4 +1,4 @@
-import type { AgentArtworkKind } from '@lobechat/prompts';
+import type { AgentArtworkComposition, AgentArtworkKind } from '@lobechat/prompts';
 
 import { generationService } from '@/services/generation';
 import { generationTopicService } from '@/services/generationTopic';
@@ -66,6 +66,7 @@ export interface AttachedArtworkReferences {
 
 export interface GenerateArtworkImageOptions {
   buildPrompt: (references: AttachedArtworkReferences) => string;
+  composition?: AgentArtworkComposition;
   kind: AgentArtworkKind;
   /**
    * Fires as soon as the remote generation exists, so a caller that owns the
@@ -89,6 +90,7 @@ export interface GenerateArtworkImageOptions {
  */
 export const generateArtworkImage = async ({
   buildPrompt,
+  composition,
   kind,
   onGenerationCreated,
   referenceImageUrl,
@@ -123,14 +125,18 @@ export const generateArtworkImage = async ({
   const supportedSizes =
     model.parameters && 'size' in model.parameters ? model.parameters.size?.enum : undefined;
   const preferredSizes =
-    kind === 'avatar' ? ['1024x1024', '2048x2048'] : ['2048x1152', '1536x1024', '3840x2160'];
+    kind === 'background'
+      ? ['2048x1152', '1536x1024', '3840x2160']
+      : composition === 'fullBody'
+        ? ['1024x1536', '2048x3072', '1440x2560', '2160x3840']
+        : ['1024x1024', '2048x2048'];
   const size = preferredSizes.find((item) => supportedSizes?.includes(item));
   const generationTopicId = await generationTopicService.createTopic(
     'image',
     'private',
     topicTitle,
   );
-  const aspectRatio = kind === 'avatar' ? '1:1' : '16:9';
+  const aspectRatio = kind === 'background' ? '16:9' : composition === 'fullBody' ? '3:4' : '1:1';
   const params = {
     ...(model.parameters && 'aspectRatio' in model.parameters ? { aspectRatio } : {}),
     ...(imageUrls ? { imageUrls } : {}),

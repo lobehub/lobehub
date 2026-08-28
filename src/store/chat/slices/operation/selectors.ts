@@ -7,6 +7,7 @@ import {
   AI_RUNTIME_OPERATION_TYPES,
   INPUT_LOADING_OPERATION_TYPES,
   isQueueBlockingOperation,
+  QUEUE_BLOCKING_OPERATION_TYPES,
 } from './types';
 
 // === Basic Queries ===
@@ -225,6 +226,37 @@ const getOperationsByContext =
         const contextThreadId = context.threadId ?? null;
         return opThreadId === contextThreadId;
       });
+  };
+
+/**
+ * Whether a later conversation operation has taken ownership of this context.
+ *
+ * A run can publish `visible_output_end` before its terminal snapshot arrives,
+ * which intentionally lets the next send start. The old snapshot must not then
+ * replace the newer turn's optimistic messages. Status is deliberately ignored:
+ * the newer send may already have handed off to its runtime (or even settled),
+ * but its later registration in the context index still proves that the older
+ * snapshot is superseded. The index is local insertion order, so it remains
+ * monotonic even when restored server timestamps and the client clock differ.
+ * Child operations stay within their parent's turn and therefore cannot claim
+ * conversation ownership from that turn's terminal reconciliation.
+ */
+const hasNewerConversationOperation =
+  (operationId: string, context: Operation['context']) =>
+  (s: ChatStoreState): boolean => {
+    const operation = s.operations[operationId];
+    if (!operation || !context.agentId) return false;
+
+    const operations = getOperationsByContext({ ...context, agentId: context.agentId })(s);
+    const operationIndex = operations.findIndex((candidate) => candidate.id === operationId);
+    if (operationIndex < 0) return false;
+
+    return operations
+      .slice(operationIndex + 1)
+      .some(
+        (candidate) =>
+          !candidate.parentOperationId && QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type),
+      );
   };
 
 /**
@@ -903,6 +935,7 @@ export const operationSelectors = {
   getRunningQueueBlockingOperationIds,
   getRunningToolCallStartTime,
   hasAnyRunningOperation,
+  hasNewerConversationOperation,
   hasRunningOperationByContext,
   hasRunningOperationType,
   /** @deprecated Use isAgentRuntimeRunning instead */

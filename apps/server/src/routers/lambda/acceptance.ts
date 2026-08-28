@@ -16,7 +16,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { TaskModel } from '@/database/models/task';
+import { ProjectModel } from '@/database/models/project';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
@@ -30,6 +30,7 @@ import {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
+  isCurrentReviewPrediction,
   mapWithConcurrency,
   REVIEW_PREDICT_CONCURRENCY,
   REVIEW_PREDICT_MODEL_CONFIG,
@@ -232,14 +233,6 @@ export const acceptanceRouter = router({
         await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
           requirement: input.requirement,
         });
-        // A Task acceptance is instantiated from tasks.config.verify. Mirror
-        // edits back to that source so the next run cannot restore an older goal.
-        if (input.subjectType === 'task') {
-          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-          const task = await taskModel.resolve(input.subjectId);
-          if (!task) throw new Error('Task not found in the current workspace');
-          await taskModel.updateVerifyConfig(task.id, { requirement: input.requirement });
-        }
         return { id: aggregate.id, requirement: input.requirement };
       } catch (error) {
         throw new TRPCError({
@@ -433,6 +426,9 @@ export const acceptanceRouter = router({
       // Newest-first from the model, so the first write per check item wins and
       // later (older) rows are ignored.
       for (const prediction of predictions) {
+        // Rows from an earlier pin (another model / prompt version) stay in
+        // the table for the comparison set but are not this page's reviewer.
+        if (!isCurrentReviewPrediction(prediction, REVIEW_PREDICT_MODEL_CONFIG)) continue;
         if (!predictionByResult.has(prediction.checkResultId)) {
           predictionByResult.set(prediction.checkResultId, prediction);
         }
@@ -467,6 +463,12 @@ export const acceptanceRouter = router({
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
             prediction:
               prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
+            // The card above is gated to actionable rejects, but the FACT that
+            // the predictor finished with this check must stay visible: an
+            // `accept`, a skip and an error all render no card, and without
+            // this the predict button's poll cannot tell "still running" from
+            // "reviewed, nothing to say" — it spins to timeout on a clean bill.
+            predictionStatus: prediction?.status ?? null,
             reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
@@ -485,8 +487,44 @@ export const acceptanceRouter = router({
       };
     }),
 
-  /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
-  list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+  /**
+   * Recent acceptances (with subject headers), newest first — list panel + CLI.
+   *
+   * `limit` is capped rather than open: the read resolves each row's subject
+   * title one by one, so an unbounded window would fan out. The merge picker
+   * asks for the wide end because a target it cannot list is a target the user
+   * cannot merge into.
+   */
+  list: acceptanceProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200) }).optional())
+    .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input?.limit)),
+
+  /**
+   * Fold one acceptance into another: the source's verification rounds (and
+   * with them its checks, verdicts and evidence) re-chain onto the target, and
+   * the source entry is deleted.
+   *
+   * Both sides are creator-scoped like every other verify write — a merge
+   * rewrites BOTH aggregates, so a workspace member must not be able to fold
+   * another member's acceptance into (or out of) their own.
+   */
+  merge: acceptanceWriteProcedure
+    .input(z.object({ sourceId: z.string(), targetId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const source = await resolveAcceptance(ctx, input.sourceId);
+      assertWorkspaceRowManageable(ctx, source.userId, 'acceptance');
+      const target = await resolveAcceptance(ctx, input.targetId);
+      assertWorkspaceRowManageable(ctx, target.userId, 'acceptance');
+
+      try {
+        return await ctx.acceptanceService.merge(source.id, target.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to merge acceptance',
+        });
+      }
+    }),
 
   /**
    * Acceptance status for a known set of subjects, in one read.
@@ -715,6 +753,15 @@ export const acceptanceRouter = router({
       // check spends budget to argue with a decision that is already made.
       const pending = checks.filter((check) => check.result && !check.result.userDecision);
 
+      // Forget the previous batch's unanswered rows BEFORE responding: the
+      // client waits for every queued check to carry a recorded attempt, and
+      // with the old rows still in place that condition holds on the first
+      // poll — before a single new judgement has landed.
+      await predictor.resetPending(
+        pending.map((check) => check.result!.id),
+        modelConfig,
+      );
+
       // Dispatched AFTER the response, with a ceiling on how many model calls
       // are open at once.
       //
@@ -823,6 +870,36 @@ export const acceptanceRouter = router({
       return ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
         metadata: { ...acceptance.metadata, title: input.title },
       });
+    }),
+
+  /**
+   * File the acceptance under a project (or take it out of one) from the list.
+   * Only the grouping pointer moves: the delivery, its rounds and its subject
+   * are untouched, so this is reversible and never rewrites history.
+   *
+   * The bar is READABLE, not manageable: a delivery may be filed under any
+   * project the caller can see — the same set the list already groups by — so
+   * a workspace member is not blocked from filing under a teammate's project.
+   */
+  setProject: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      if (input.projectId) {
+        const project = await new ProjectModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.projectId);
+        if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      }
+
+      await ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+        projectId: input.projectId,
+      });
+      return { success: true };
     }),
 
   /**

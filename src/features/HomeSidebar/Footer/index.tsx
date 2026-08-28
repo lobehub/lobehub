@@ -1,10 +1,10 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { type MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import {
   Book,
@@ -168,7 +168,7 @@ const Footer = memo(() => {
         label: t('changelog'),
         onClick: handleOpenChangelogModal,
       },
-      ...(!isDesktop && footer.layout === 'compact'
+      ...(footer.layout === 'compact'
         ? [
             {
               icon: <Icon icon={Download} />,

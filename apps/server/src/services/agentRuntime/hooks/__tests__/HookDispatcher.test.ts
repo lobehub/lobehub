@@ -500,7 +500,7 @@ describe('HookDispatcher', () => {
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
-            event.mock({ content: '{"mocked":true}' });
+            event.mock({ content: '{"mocked":true}', success: true });
           },
           id: 'mock-hook',
           type: 'beforeToolCall',
@@ -515,7 +515,10 @@ describe('HookDispatcher', () => {
         stepIndex: 0,
       });
 
-      expect(result).toEqual({ content: '{"mocked":true}', isMocked: true });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"mocked":true}', success: true },
+      });
     });
 
     it('should return null when handler does not call mock()', async () => {
@@ -587,73 +590,25 @@ describe('HookDispatcher', () => {
       expect(result).toBeNull();
     });
 
-    it('should reject mock with empty string content', async () => {
+    it('should preserve failed tool results', async () => {
+      const result = { content: 'fixture error', error: { code: 'FIXTURE_ERROR' }, success: false };
       dispatcher.register(operationId, [
         {
-          handler: async (event: any) => {
-            event.mock({ content: '' });
-          },
-          id: 'empty-mock',
+          handler: async (event: any) => event.mock(result),
+          id: 'failed-mock',
           type: 'beforeToolCall',
         },
       ]);
 
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
-
-      expect(result).toBeNull();
-    });
-
-    it('should reject mock with undefined content', async () => {
-      dispatcher.register(operationId, [
-        {
-          handler: async (event: any) => {
-            event.mock({ content: undefined });
-          },
-          id: 'undefined-mock',
-          type: 'beforeToolCall',
-        },
-      ]);
-
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
-
-      expect(result).toBeNull();
-    });
-
-    it('should reject mock with non-string content (object, array, number)', async () => {
-      for (const badContent of [{}, [], 42, null]) {
-        const d = new HookDispatcher();
-        d.register(operationId, [
-          {
-            handler: async (event: any) => {
-              event.mock({ content: badContent });
-            },
-            id: 'bad-mock',
-            type: 'beforeToolCall',
-          },
-        ]);
-
-        const result = await d.dispatchBeforeToolCall(operationId, {
+      await expect(
+        dispatcher.dispatchBeforeToolCall(operationId, {
           apiName: 'search',
           args: {},
           callIndex: 1,
           identifier: 'twitter',
           stepIndex: 0,
-        });
-
-        expect(result).toBeNull();
-      }
+        }),
+      ).resolves.toEqual({ isMocked: true, result });
     });
   });
 
@@ -771,19 +726,20 @@ describe('HookDispatcher', () => {
   });
 
   describe('dispatchBeforeToolCall — edge cases', () => {
-    it('should use the last mock() call when multiple handlers call mock()', async () => {
+    it('should preserve the first mock() call when multiple handlers call mock()', async () => {
+      const secondHandler = vi.fn(async (event: any) => {
+        event.mock({ content: '{"second":true}', success: true });
+      });
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
-            event.mock({ content: '{"first":true}' });
+            event.mock({ content: '{"first":true}', success: true });
           },
           id: 'mock-1',
           type: 'beforeToolCall',
         },
         {
-          handler: async (event: any) => {
-            event.mock({ content: '{"second":true}' });
-          },
+          handler: secondHandler,
           id: 'mock-2',
           type: 'beforeToolCall',
         },
@@ -797,7 +753,38 @@ describe('HookDispatcher', () => {
         stepIndex: 0,
       });
 
-      expect(result).toEqual({ content: '{"second":true}', isMocked: true });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"first":true}', success: true },
+      });
+      expect(secondHandler).not.toHaveBeenCalled();
+    });
+
+    it('should stop after a hook mocks and then throws', async () => {
+      const secondHandler = vi.fn();
+      dispatcher.register(operationId, [
+        {
+          handler: async (event: any) => {
+            event.mock({ content: '{"first":true}', success: true });
+            throw new Error('after mock');
+          },
+          id: 'mock-then-throw',
+          type: 'beforeToolCall',
+        },
+        { handler: secondHandler, id: 'must-not-run', type: 'beforeToolCall' },
+      ]);
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
+        apiName: 'search',
+        args: {},
+        callIndex: 1,
+        identifier: 'twitter',
+        stepIndex: 0,
+      });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"first":true}', success: true },
+      });
+      expect(secondHandler).not.toHaveBeenCalled();
     });
 
     it('should return mock when only one of multiple handlers calls mock()', async () => {
@@ -806,7 +793,7 @@ describe('HookDispatcher', () => {
         { handler: observeHandler, id: 'observe', type: 'beforeToolCall' },
         {
           handler: async (event: any) => {
-            event.mock({ content: '{"mocked":true}' });
+            event.mock({ content: '{"mocked":true}', success: true });
           },
           id: 'mocker',
           type: 'beforeToolCall',
@@ -822,7 +809,10 @@ describe('HookDispatcher', () => {
       });
 
       expect(observeHandler).toHaveBeenCalled();
-      expect(result).toEqual({ content: '{"mocked":true}', isMocked: true });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"mocked":true}', success: true },
+      });
     });
 
     it('should only mock in local mode, not production mode', async () => {
@@ -831,7 +821,7 @@ describe('HookDispatcher', () => {
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
-            event.mock({ content: '{"mocked":true}' });
+            event.mock({ content: '{"mocked":true}', success: true });
           },
           id: 'mock-hook',
           type: 'beforeToolCall',
@@ -849,7 +839,10 @@ describe('HookDispatcher', () => {
 
       // In local mode this would return the mock, but hooks are still in-memory
       // so it should still work (dispatchBeforeToolCall doesn't check queue mode)
-      expect(result).toEqual({ content: '{"mocked":true}', isMocked: true });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"mocked":true}', success: true },
+      });
     });
 
     it('should not affect other hook types when beforeToolCall is registered', async () => {
@@ -859,7 +852,7 @@ describe('HookDispatcher', () => {
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
-            event.mock({ content: 'mock' });
+            event.mock({ content: 'mock', success: true });
           },
           id: 'tool-mock',
           type: 'beforeToolCall',
@@ -887,7 +880,7 @@ describe('HookDispatcher', () => {
 
     it('should call handlers even after a previous handler throws', async () => {
       const mockHandler = vi.fn().mockImplementation(async (event: any) => {
-        event.mock({ content: '{"recovered":true}' });
+        event.mock({ content: '{"recovered":true}', success: true });
       });
 
       dispatcher.register(operationId, [
@@ -910,7 +903,10 @@ describe('HookDispatcher', () => {
       });
 
       expect(mockHandler).toHaveBeenCalled();
-      expect(result).toEqual({ content: '{"recovered":true}', isMocked: true });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"recovered":true}', success: true },
+      });
     });
   });
 
@@ -998,7 +994,7 @@ describe('HookDispatcher', () => {
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
-            event.mock({ content: '{"mocked":true}' });
+            event.mock({ content: '{"mocked":true}', success: true });
           },
           id: 'mock-hook',
           type: 'beforeToolCall',
@@ -1013,7 +1009,10 @@ describe('HookDispatcher', () => {
         identifier: 'twitter',
         stepIndex: 0,
       });
-      expect(localResult).toEqual({ content: '{"mocked":true}', isMocked: true });
+      expect(localResult).toEqual({
+        isMocked: true,
+        result: { content: '{"mocked":true}', success: true },
+      });
 
       // dispatchBeforeToolCall does NOT use serializedHooks — it only reads
       // from this.hooks (in-memory). In QStash mode where a different worker

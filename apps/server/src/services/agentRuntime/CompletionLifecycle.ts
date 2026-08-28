@@ -3,6 +3,7 @@ import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
+import { notifyAgentInterventionRequired } from '@/business/server/agent-run/agentInterventionReview';
 import { notifyAgentRunCompleted } from '@/business/server/agent-run/notifyAgentRunCompleted';
 import {
   AgentOperationModel,
@@ -19,10 +20,11 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
+import { registerWorksForOperation } from '@/server/services/workRegistration';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { buildRuntimeInterventionNotification } from './agentInterventionNotification';
 import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
-import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
 
@@ -36,6 +38,18 @@ const log = debug('lobe-server:completion-lifecycle');
  */
 export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
+
+/**
+ * A parked human-approval run is not safely published until its generic Review
+ * batch is durable. Unlike ordinary notification fanout, this error must reach
+ * the queue/request boundary so the idempotent lifecycle delivery can retry.
+ */
+export class CriticalAgentInterventionPersistenceError extends Error {
+  constructor(operationId: string, cause: unknown) {
+    super(`Failed to persist intervention Review for parked operation ${operationId}`, { cause });
+    this.name = 'CriticalAgentInterventionPersistenceError';
+  }
+}
 
 type SignalEvent = { [key: string]: unknown; type: string };
 
@@ -73,6 +87,8 @@ export interface OperationCompletionInput {
   /** Executed model — the verify gate keys off `op.model`, so hetero backfills it. */
   model?: string | null;
   operationId: string;
+  /** Group orchestration role; members must not trigger user-facing completion recalls. */
+  orchestrationRole?: 'member' | 'supervisor';
   /** Executed provider — see {@link OperationCompletionInput.model}. */
   provider?: string | null;
   /** Serialized webhook hooks (queue mode); ignored in local in-memory mode. */
@@ -140,13 +156,16 @@ export class CompletionLifecycle {
 
   /**
    * Persist the initial `agent_operations` row when an operation is created.
-   * Fire-and-forget: a DB outage here must never block the runtime startup
-   * path — `dispatchHooks` will still finalize the row if one was written.
+   * Returns whether the row write succeeded so security-sensitive callers can
+   * require durable state before dispatch. Other runtime paths may preserve
+   * the historical non-blocking behavior by ignoring the result.
    */
-  async recordStart(params: RecordOperationStartParams): Promise<void> {
+  async recordStart(params: RecordOperationStartParams): Promise<boolean> {
+    let persisted = true;
     try {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
+      persisted = false;
       log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }
 
@@ -167,6 +186,66 @@ export class CompletionLifecycle {
           this.workspaceId,
         ),
       );
+    }
+
+    return persisted;
+  }
+
+  /**
+   * Publish a provider-neutral Review snapshot only after every referenced tool
+   * row can be read back as a member of this exact sealed parked batch. The
+   * business slot is idempotent by batch id; repeated lifecycle delivery is
+   * therefore safe, while a partial/mismatched write fails closed.
+   */
+  private async notifyPendingAgentIntervention(operationId: string, state: any): Promise<void> {
+    try {
+      const notification = await buildRuntimeInterventionNotification({
+        operationId,
+        state,
+        userId: state?.metadata?.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (!notification) return;
+
+      const persistedRows = await Promise.all(
+        notification.items.map(async (item, itemIndex) => {
+          if (item.sourceRef.type !== 'runtime') return;
+          const [message, plugin] = await Promise.all([
+            this.messageModel.findById(item.sourceRef.toolMessageId),
+            this.messageModel.findMessagePlugin(item.sourceRef.toolMessageId),
+          ]);
+          if (
+            !message ||
+            message.role !== 'tool' ||
+            message.parentId !== notification.context.assistantMessageId ||
+            message.topicId !== notification.context.topicId ||
+            !plugin ||
+            plugin.toolCallId !== item.sourceRef.toolCallId ||
+            plugin.intervention?.status !== 'pending' ||
+            plugin.intervention.operationId !== operationId ||
+            plugin.intervention.batchId !== notification.batch.id ||
+            plugin.intervention.stepIndex !== notification.batch.stepIndex ||
+            plugin.intervention.itemIndex !== itemIndex
+          ) {
+            return;
+          }
+          return true;
+        }),
+      );
+
+      if (persistedRows.some((persisted) => persisted !== true)) {
+        throw new Error(
+          'Cannot create intervention Review because the sealed pending batch is not durable',
+        );
+      }
+
+      // Contract boundary: Cloud resolves only after the generic batch is
+      // durable. Push/Live Activity fanout failures are handled inside the
+      // Cloud override and must not reject this call after persistence.
+      await notifyAgentInterventionRequired(notification);
+    } catch (error) {
+      if (error instanceof CriticalAgentInterventionPersistenceError) throw error;
+      throw new CriticalAgentInterventionPersistenceError(operationId, error);
     }
   }
 
@@ -202,7 +281,11 @@ export class CompletionLifecycle {
    * outage must never block hook dispatch or the executor's terminal
    * cleanup path.
    */
-  private async persistCompletion(operationId: string, state: any, reason: string): Promise<void> {
+  private async persistCompletion(
+    operationId: string,
+    state: any,
+    reason: string,
+  ): Promise<boolean> {
     const completionReason: any =
       reason === 'max_steps' ||
       reason === 'cost_limit' ||
@@ -248,7 +331,7 @@ export class CompletionLifecycle {
     };
 
     try {
-      await this.agentOperationModel.recordCompletion(operationId, {
+      const accepted = await this.agentOperationModel.recordCompletion(operationId, {
         completedAt,
         completionReason,
         cost: state?.cost ?? null,
@@ -279,6 +362,12 @@ export class CompletionLifecycle {
         // the scalar columns — the reporting surface — carry the whole tree.
         usage: state?.usage ?? null,
       });
+      if (!accepted) {
+        const operation = await this.agentOperationModel.findById(operationId);
+        // Preserve the historical best-effort behavior when no durable start
+        // row exists, but never let a conflicting terminal owner be replaced.
+        if (operation) return false;
+      }
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
     }
@@ -298,6 +387,8 @@ export class CompletionLifecycle {
         log('[%s] Failed to recompute topic usage rollup (non-fatal): %O', operationId, error);
       }
     }
+
+    return true;
   }
 
   /** Best-effort child-usage rollup — a DB hiccup must not fail the completion write. */
@@ -517,6 +608,7 @@ export class CompletionLifecycle {
         _hooks: input.serializedHooks,
         agentId: input.agentId,
         assistantMessageId: input.assistantMessageId,
+        orchestrationRole: input.orchestrationRole,
         topicId: input.topicId,
         userId: input.userId ?? this.userId,
       },
@@ -597,7 +689,7 @@ export class CompletionLifecycle {
    */
   async completeOperation(
     input: OperationCompletionInput,
-    reason: 'done' | 'error',
+    reason: 'done' | 'error' | 'interrupted',
     options?: CompleteOperationOptions,
   ): Promise<void> {
     await this.dispatchHooks(input.operationId, this.buildStateFromInput(input), reason, options);
@@ -607,7 +699,8 @@ export class CompletionLifecycle {
    * Dispatch `onComplete` (and `onError` for `reason='error'`) hooks via
    * the global `hookDispatcher`. On the error path, also writes the error
    * back onto the assistant message row so the frontend can render it.
-   * Fire-and-forget; always unregisters the operation from the dispatcher.
+   * Fire-and-forget; unregisters the operation after a settled lifecycle while
+   * preserving registrations across retryable critical delivery failures.
    */
   async dispatchHooks(
     operationId: string,
@@ -619,11 +712,13 @@ export class CompletionLifecycle {
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
     // real terminal state later, which is when consumers should be notified.
-    // (`waiting_for_human` also resumes under the same operationId, but its
-    // park DOES fire `onComplete` — hook consumers surface the approval request
-    // as the run's outcome; the final completion re-dispatches with the
-    // serialized hooks carried on `metadata._hooks`.)
+    // `waiting_for_human` is different: the parked segment fires `onComplete`
+    // so hook consumers can surface the approval request. A winning decision
+    // schedules a fresh continuation operation and then retires this parked
+    // segment; the continuation receives the serialized hooks through
+    // `metadata._hooks`.
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
+    let shouldRetainHooksForRetry = false;
 
     try {
       const { assistantMessageId, event, metadata } = this.buildLifecycleEvent(
@@ -634,7 +729,18 @@ export class CompletionLifecycle {
 
       // Finalize the agent_operations row before user hooks fire so
       // downstream consumers see the row in its terminal shape.
-      await this.persistCompletion(operationId, state, reason);
+      const completionAccepted = await this.persistCompletion(operationId, state, reason);
+      if (completionAccepted === false) {
+        log('[%s] Skipping hooks for an operation with a conflicting terminal owner', operationId);
+        return;
+      }
+
+      // At this point the parked operation state has been durably projected to
+      // agent_operations. Verify the tool rows independently before creating a
+      // durable Review so a partial batch can never reach notification UI.
+      if (reason === 'waiting_for_human') {
+        await this.notifyPendingAgentIntervention(operationId, state);
+      }
 
       if (isAsyncToolPark) return;
 
@@ -743,12 +849,11 @@ export class CompletionLifecycle {
       // reasons, not `done` alone: a run stopped by a step/cost cap still
       // produced its edits and persists as status='done'.
       //
-      // `waiting_for_human` deliberately does NOT register: the approval resume
-      // continues the SAME operationId (`processHumanIntervention` reschedules
-      // it), so pre-park edits are covered by the real terminal completion's
-      // scan. Registering at the park would persist `_fileWorksRegistered` into
-      // the park snapshot — skipping the terminal registration entirely — and
-      // freeze per-(op, file) versions at pre-approval content.
+      // `waiting_for_human` deliberately does NOT register: the park is not a
+      // successful deliverable boundary. The fresh approval continuation is
+      // built from the complete authoritative history and performs the real
+      // terminal scan. Registering here would freeze pre-approval file content
+      // as a completed Work before the user decision has run.
       if (isSuccessLikeCompletionReason(reason)) {
         await this.registerFileWorks(operationId, state);
       }
@@ -784,12 +889,22 @@ export class CompletionLifecycle {
         }
       }
     } catch (error) {
-      if (error instanceof CriticalHookDeliveryError) throw error;
+      if (
+        error instanceof CriticalHookDeliveryError ||
+        error instanceof CriticalAgentInterventionPersistenceError
+      ) {
+        // A queue retry may run in this same process (local callback / warm
+        // worker). Keep the in-memory registration until that lifecycle really
+        // settles; queue mode can additionally reconstruct from metadata._hooks.
+        shouldRetainHooksForRetry = true;
+        throw error;
+      }
       log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     } finally {
       // Keep hooks registered across an async-tool park so the eventual resume
-      // (same operationId) can still fire onComplete/onError.
-      if (!isAsyncToolPark) {
+      // (same operationId) can still fire onComplete/onError. Critical delivery
+      // failures likewise keep them until the provider redelivery settles.
+      if (!isAsyncToolPark && !shouldRetainHooksForRetry) {
         hookDispatcher.unregister(operationId);
         // The instantiation has settled (awaited above) or this op never opted in
         // — drop the entry so the map doesn't grow across the service's lifetime.

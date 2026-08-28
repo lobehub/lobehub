@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Button, Switch, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Switch, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { RotateCcw, XIcon } from 'lucide-react';
 import { memo } from 'react';

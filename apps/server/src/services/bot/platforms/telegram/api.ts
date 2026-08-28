@@ -12,6 +12,15 @@ export const TELEGRAM_API_BASE = 'https://api.telegram.org';
  */
 const TELEGRAM_FETCH_TIMEOUT_MS = 8000;
 
+/**
+ * Multipart uploads carry up to tens of MB of binary payload, which cannot
+ * fit inside the 8s JSON-call budget — a 20MB document upload alone can take
+ * longer than that on a cold serverless egress path. Uploads happen on the
+ * proactive-push path (one per request), not the per-chunk reply loop, so a
+ * generous cap does not threaten the function budget the same way.
+ */
+const TELEGRAM_UPLOAD_TIMEOUT_MS = 60_000;
+
 const isParseEntitiesError = (error: unknown): boolean => {
   const msg = (error as { message?: string } | null)?.message;
   return typeof msg === 'string' && msg.includes("can't parse entities");
@@ -491,7 +500,7 @@ export class TelegramApi {
         body: buildForm(),
         method: 'POST',
         // Let undici set the multipart boundary header automatically.
-        signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(file ? TELEGRAM_UPLOAD_TIMEOUT_MS : TELEGRAM_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -542,6 +551,8 @@ export class TelegramApi {
     params: {
       caption?: string;
       chatId: string | number;
+      /** Method-specific scalars (e.g. `supports_streaming` on sendVideo). */
+      extraFields?: Record<string, boolean | number | string | undefined>;
       source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
     },
   ): Promise<{ message_id: number }> {
@@ -557,6 +568,7 @@ export class TelegramApi {
 
       if ('url' in params.source) {
         return this.call(method, {
+          ...params.extraFields,
           caption: captionForSend,
           chat_id: params.chatId,
           parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
@@ -567,6 +579,7 @@ export class TelegramApi {
       return this.callMultipart(
         method,
         {
+          ...params.extraFields,
           caption: captionForSend,
           chat_id: params.chatId,
           parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
@@ -613,13 +626,29 @@ export class TelegramApi {
     return this.sendMedia('sendDocument', 'document', params);
   }
 
+  /**
+   * `supports_streaming` is always on: it is what makes clients render a
+   * seekable player instead of a download-then-play blob, and every MP4 we
+   * forward is already a progressive file.
+   *
+   * NOTE it does NOT stop Telegram from rendering a SOUNDLESS MP4 as an
+   * animation (the "GIF" badge). That classification happens server-side from
+   * the absence of an audio stream, and no Bot API parameter overrides it —
+   * `sendDocument` re-detects the content type just the same, and only
+   * `disable_content_type_detection` escapes it, at the cost of losing inline
+   * playback entirely. Adding a silent audio track is the only real fix and
+   * needs ffmpeg, which this path deliberately does not carry.
+   */
   async sendVideo(params: {
     caption?: string;
     chatId: string | number;
     source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
   }): Promise<{ message_id: number }> {
     log('sendVideo: chatId=%s', params.chatId);
-    return this.sendMedia('sendVideo', 'video', params);
+    return this.sendMedia('sendVideo', 'video', {
+      ...params,
+      extraFields: { supports_streaming: true },
+    });
   }
 
   async sendAudio(params: {

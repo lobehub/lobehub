@@ -1,14 +1,8 @@
 'use client';
 
 import { useSortable } from '@dnd-kit/sortable';
-import {
-  ActionIcon,
-  Avatar,
-  ContextMenuTrigger,
-  type GenericItemType,
-  Icon,
-  Tooltip,
-} from '@lobehub/ui';
+import { ContextMenuTrigger, type GenericItemType, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { useMotionValue, useSpring, useTransform } from 'motion/react';
@@ -16,6 +10,7 @@ import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { electronStylish } from '@/styles/electron';
 
 import { type ResolvedTab } from './hooks/useResolvedTabs';
@@ -211,6 +206,7 @@ const TabItem = memo<TabItemProps>(
             emojiScaleWithBackground
             avatar={meta.avatar}
             background={meta.backgroundColor}
+            name={meta.title}
             shape="square"
             size={16}
           />

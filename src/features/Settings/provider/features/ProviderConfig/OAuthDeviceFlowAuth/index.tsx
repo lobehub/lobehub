@@ -2,8 +2,8 @@
 
 import { CheckCircleFilled } from '@ant-design/icons';
 import { MAX_WIDTH } from '@lobechat/const';
-import { Avatar, CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Modal } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Button, confirmModal, Modal } from '@lobehub/ui/base-ui';
 import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';

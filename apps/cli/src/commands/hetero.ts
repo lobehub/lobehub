@@ -10,7 +10,7 @@ import {
   isLocalHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
 } from '@lobechat/heterogeneous-agents';
-import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
@@ -32,6 +32,7 @@ import type { Command } from 'commander';
 import { getTrpcClient } from '../api/client';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
+import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
@@ -459,6 +460,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
+  const operationHeartbeat =
+    serverIngester && operationId
+      ? createOperationHeartbeat({
+          operationId,
+          push: (event) => serverIngester.push(event),
+        })
+      : undefined;
+
   // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
   // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
@@ -475,36 +484,47 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (serverIngest && (agentType === 'claude-code' || agentType === 'qoder') && serverIngester) {
-    askServer = new LobeBuiltinMcpServer();
-    await askServer.start();
-    askBridge = askServer.registerOperation(operationId);
-    askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
-    await writeFile(
-      askMcpConfigPath,
-      JSON.stringify({
-        mcpServers: {
-          lobe_cc: {
-            alwaysLoad: true,
-            type: 'http',
-            url: askServer.urlForOperation(operationId),
+  if (
+    serverIngest &&
+    (agentType === 'claude-code' || agentType === 'cursor' || agentType === 'qoder') &&
+    serverIngester
+  ) {
+    if (agentType === 'cursor') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: 'claude-code',
+        provider: 'cursor',
+      });
+    } else {
+      askServer = new LobeBuiltinMcpServer();
+      await askServer.start();
+      askBridge = askServer.registerOperation(
+        operationId,
+        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+      );
+      askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await writeFile(
+        askMcpConfigPath,
+        JSON.stringify({
+          mcpServers: {
+            lobe_cc: {
+              alwaysLoad: true,
+              type: 'http',
+              url: askServer.urlForOperation(operationId),
+            },
           },
-        },
-      }),
-      'utf8',
-    );
+        }),
+        'utf8',
+      );
+    }
 
-    // (i) Forward bridge events into the same ordered ingest path as CC's. The
-    // request always goes out. For responses, only forward the ones the browser
-    // can't have published itself — producer-side timeout / session_ended — so
-    // the renderer's card un-sticks; browser-originated answers (success /
-    // user_cancelled) are already on the stream via `submitHeteroIntervention`.
+    // (i) Forward every bridge event into the same ordered durable ingest path
+    // as CC's. Browser submit already XADDed a response for producer delivery,
+    // but that is only transport acceptance. The bridge echo after resolve is
+    // the producer ACK (producerAck=true + resolutionRequestId) that transitions
+    // Cloud from `resolving` to terminal. Persistence de-dupes transitions by
+    // (operationId, toolCallId, transition).
     void (async () => {
       for await (const event of askBridge!.events()) {
-        if (event.type === 'agent_intervention_response') {
-          const reason = (event.data as { cancelReason?: string })?.cancelReason;
-          if (reason !== 'timeout' && reason !== 'session_ended') continue;
-        }
         serverIngester!.push(event as AgentStreamEvent);
       }
     })();
@@ -513,7 +533,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // actually pending, so an idle run holds no server invocation.
     void (async () => {
       const client = await getTrpcClient();
-      let lastEventId = '$';
+      // Start at the beginning of this operation stream. A response can be
+      // published after `pendingCount` flips but before the first XREAD; `$`
+      // would skip that already-present response and strand the CLI until the
+      // bridge timeout. Unknown/stale tool ids are harmless (`resolve` no-ops).
+      let lastEventId = '0-0';
       while (!askPollAbort.signal.aborted) {
         if (askBridge!.pendingCount === 0) {
           await sleep(200);
@@ -530,6 +554,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
               cancelReason?: 'session_ended' | 'timeout' | 'user_cancelled';
               cancelled?: boolean;
               result?: unknown;
+              resolutionRequestId?: string;
               toolCallId: string;
             };
             // Idempotent: resolve() no-ops on an unknown / already-settled id.
@@ -537,11 +562,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
               cancelReason: data.cancelReason,
               cancelled: data.cancelled,
               result: data.result,
+              resolutionRequestId: data.resolutionRequestId,
             });
           }
         } catch {
           // Transient (server hiccup / token refresh) — back off and retry.
-          // The bridge's 5-min timeout still bounds the overall wait.
+          // The bridge's 10-min timeout still bounds the overall wait.
           await sleep(1000);
         }
       }
@@ -732,6 +758,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
           terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        operationHeartbeat?.observe(event);
         serverIngester?.push(event);
       }
     } catch (err) {
@@ -813,6 +840,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const first = await runOneAgent(
     {
       agentType: options.type,
+      askUserBridge: askBridge,
       command: resolvedCommand.command,
       cwd: options.cwd || process.cwd(),
       env: commandEnv,
@@ -851,6 +879,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     result = await runOneAgent(
       {
         agentType: options.type,
+        askUserBridge: askBridge,
         command: resolvedCommand.command,
         cwd: options.cwd || process.cwd(),
         env: commandEnv,
@@ -872,6 +901,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const { code, signal, sessionId } = result;
 
   if (serverIngester && sink) {
+    operationHeartbeat?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {
@@ -935,7 +965,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (askServer) {
     askServer.unregisterOperation(operationId);
     await askServer.stop().catch(() => {});
-  }
+  } else askBridge?.cancelAll('session_ended');
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
   if (code !== null) {

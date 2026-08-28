@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { ActionIcon, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
+import { ActionIcon, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -494,11 +494,16 @@ const ActiveFileView = memo<ActiveFileViewProps>(
     if (preview.type === 'document') {
       return (
         <Suspense fallback={<Loading />}>
+          {/* Key by source + path: without a remount, switching between two files of
+              the same document type reuses the pane instance, whose local
+              loading/parse state isn't reset on blob change — the previous file's
+              rendered content lingers until the new one finishes. */}
           <DocumentPreview
             blob={preview.blob}
             contentType={preview.contentType}
             filePath={filePath}
             isLocalFile={!sandboxTopicId && !deviceId && isDesktop}
+            key={`${sandboxTopicId ?? deviceId ?? 'local'}:${filePath}`}
           />
         </Suspense>
       );

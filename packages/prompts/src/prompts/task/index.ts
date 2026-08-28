@@ -634,9 +634,11 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
         }
       }
     }
-    taskLines.push('  Use the `acceptance` skill to capture each artifact, then submit it with');
     taskLines.push(
-      '  `lh acceptance run result submit` (the skill resolves your run id and check item ids at runtime).',
+      '  Produce concrete evidence while you work, and include artifact paths, commands, and observed results in your final response.',
+    );
+    taskLines.push(
+      '  Do not judge the Acceptance. A dedicated post-run phase will ask you to submit the evidence you produced; an independent verifier decides whether this Task is complete.',
     );
   }
 

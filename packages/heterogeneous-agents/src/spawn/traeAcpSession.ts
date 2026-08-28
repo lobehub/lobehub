@@ -1,14 +1,16 @@
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { HeterogeneousAgentModel } from '@lobechat/types';
 
+import type { AcpAgentSessionOptions } from './acpAgentSession';
+import {
+  ACP_PROTOCOL_VERSION,
+  AcpAgentSession,
+  selectAcpPermissionOption,
+} from './acpAgentSession';
 import type { AcpRpcMessage } from './acpStdioClient';
-import { AcpServerRequestError, AcpStdioClient } from './acpStdioClient';
-import { AgentStreamPipeline } from './agentStreamPipeline';
-import type { HeterogeneousAgentRuntimeStatus } from './claudeAgentSdkSession';
+import { AcpServerRequestError } from './acpStdioClient';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { normalizeImage } from './input';
 
-const ACP_PROTOCOL_VERSION = 1;
 const NOTIFICATION_DRAIN_QUIET_MS = 250;
 const NOTIFICATION_DRAIN_TIMEOUT_MS = 2000;
 const TRANSPORT = 'trae-acp' as const;
@@ -95,11 +97,6 @@ interface TraeAcpConfigOption {
 
 interface TraeAcpSetConfigOptionResult {
   configOptions?: unknown;
-}
-
-interface TraeAcpPermissionOption {
-  kind?: unknown;
-  optionId?: unknown;
 }
 
 export interface TraeAcpModelCatalog {
@@ -189,127 +186,34 @@ export const parseTraeAcpModelCatalog = (
   };
 };
 
-export interface TraeAcpSessionOptions {
-  args: string[];
-  clientVersion: string;
-  commandPath: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
+export interface TraeAcpSessionOptions extends AcpAgentSessionOptions {
   initialModel?: string;
   inputOptions?: BuildAgentInputOptions;
-  onEvents: (events: AgentStreamEvent[]) => Promise<void> | void;
   onModel?: (model: string) => void;
-  onRawMessage: (line: string) => Promise<void> | void;
-  onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
-  onSessionId: (sessionId: string) => void;
-  onStderr: (data: string) => Promise<void> | void;
-  operationId: string;
   prompt: AgentPromptInput | TraeAcpPromptBlock[];
-  requestTimeoutMs?: number;
-  resumeSessionId?: string;
-  sessionId: string;
 }
 
-export class TraeAcpSession {
-  private readonly client: AcpStdioClient;
-  private readonly pipeline: AgentStreamPipeline;
+/** TRAE's ACP v1 lifecycle: model config-options and legacy model API on the shared base. */
+export class TraeAcpSession extends AcpAgentSession<
+  TraeAcpInitializeResult,
+  TraeAcpSessionOptions
+> {
   private acceptUpdates = false;
-  private closedByHost = false;
-  private interruptTimer?: ReturnType<typeof setTimeout>;
   private lastSessionUpdateAt = 0;
   private modelDiscovery?: TraeAcpSession;
-  private session?: string;
+  private resolvedPrompt: TraeAcpPromptBlock[] = [];
 
-  constructor(private readonly options: TraeAcpSessionOptions) {
-    this.pipeline = new AgentStreamPipeline({
-      agentType: 'trae',
-      operationId: options.operationId,
-    });
-    this.client = new AcpStdioClient({
+  constructor(options: TraeAcpSessionOptions) {
+    super(options, {
       args: buildTraeAcpArgs(options.args),
-      commandPath: options.commandPath,
-      cwd: options.cwd,
-      env: options.env,
-      onMessage: (message) => this.handleRpcMessage(message),
-      onRawMessage: options.onRawMessage,
-      onServerRequest: (message) => this.handleServerRequest(message),
-      onStderr: options.onStderr,
+      pipeline: { agentType: 'trae' },
       processLabel: 'TRAE ACP',
-      requestTimeoutMs: options.requestTimeoutMs,
+      transport: TRANSPORT,
     });
   }
 
   get nativeSessionId(): string | undefined {
-    return this.session;
-  }
-
-  get pid(): number | undefined {
-    return this.client.pid;
-  }
-
-  async run(): Promise<void> {
-    this.status('starting');
-    try {
-      const prompt = await this.resolvePrompt();
-      const initialized = await this.initialize();
-      if (
-        prompt.some((block) => block.type === 'image') &&
-        initialized?.agentCapabilities?.promptCapabilities?.image !== true
-      ) {
-        throw new Error('TRAE ACP agent does not support image prompt blocks');
-      }
-      if (this.options.resumeSessionId && initialized?.agentCapabilities?.loadSession !== true) {
-        throw new Error('TRAE ACP agent does not support loading sessions');
-      }
-
-      const sessionResult = await this.client.request<TraeAcpSessionResult>(
-        this.options.resumeSessionId ? 'session/load' : 'session/new',
-        {
-          cwd: this.options.cwd,
-          mcpServers: [],
-          ...(this.options.resumeSessionId ? { sessionId: this.options.resumeSessionId } : {}),
-        },
-      );
-      const sessionId = sessionResult?.sessionId ?? this.options.resumeSessionId;
-      if (!sessionId) throw new Error('TRAE ACP returned no session id');
-      this.session = sessionId;
-      this.options.onSessionId(sessionId);
-
-      const model = await this.applyInitialModel(sessionId, sessionResult);
-      if (model) {
-        this.pipeline.configureSession({ model });
-        this.options.onModel?.(model);
-      }
-      await this.emit({
-        model,
-        sessionId,
-        type: 'trae_session',
-      });
-      this.status('running');
-      // session/load may replay historical updates before returning. Keep setup
-      // notifications gated until the new prompt is about to start.
-      this.acceptUpdates = true;
-      const response = await this.client.request<TraeAcpPromptResult>(
-        'session/prompt',
-        { prompt, sessionId },
-        false,
-      );
-      await this.drainNotifications();
-      await this.client.drain();
-      await this.emit({ stopReason: response?.stopReason, type: 'trae_prompt_completed' });
-      await this.emitEvents(await this.pipeline.flush());
-      this.status('idle');
-    } catch (cause) {
-      if (this.closedByHost) return;
-      const error = cause instanceof Error ? cause : new Error(String(cause));
-      await this.emit({ message: error.message, type: 'trae_error' });
-      await this.emitEvents(await this.pipeline.flush());
-      throw error;
-    } finally {
-      if (this.interruptTimer) clearTimeout(this.interruptTimer);
-      this.client.close();
-      this.status('closed');
-    }
+    return this.acpSessionId;
   }
 
   /** Create a short-lived ACP session and read its agent-provided model selector. */
@@ -317,9 +221,135 @@ export class TraeAcpSession {
     return (await this.discoverModelCatalog()).models;
   }
 
+  protected async prepareRun(): Promise<void> {
+    this.resolvedPrompt = await this.resolvePrompt();
+  }
+
+  protected buildInitializeParams(): unknown {
+    return {
+      clientCapabilities: {},
+      clientInfo: {
+        name: 'lobehub',
+        title: 'LobeHub',
+        version: this.options.clientVersion,
+      },
+      protocolVersion: ACP_PROTOCOL_VERSION,
+    };
+  }
+
+  protected validateInitialized(initialized: TraeAcpInitializeResult): void {
+    if (
+      typeof initialized?.protocolVersion === 'number' &&
+      initialized.protocolVersion !== ACP_PROTOCOL_VERSION
+    ) {
+      throw new Error(
+        `TRAE ACP returned unsupported protocol version: ${initialized.protocolVersion}`,
+      );
+    }
+  }
+
+  protected async establishSession(initialized: TraeAcpInitializeResult): Promise<string> {
+    if (
+      this.resolvedPrompt.some((block) => block.type === 'image') &&
+      initialized?.agentCapabilities?.promptCapabilities?.image !== true
+    ) {
+      throw new Error('TRAE ACP agent does not support image prompt blocks');
+    }
+    if (this.options.resumeSessionId && initialized?.agentCapabilities?.loadSession !== true) {
+      throw new Error('TRAE ACP agent does not support loading sessions');
+    }
+
+    const sessionResult = await this.client.request<TraeAcpSessionResult>(
+      this.options.resumeSessionId ? 'session/load' : 'session/new',
+      {
+        cwd: this.options.cwd,
+        mcpServers: [],
+        ...(this.options.resumeSessionId ? { sessionId: this.options.resumeSessionId } : {}),
+      },
+    );
+    const sessionId = sessionResult?.sessionId ?? this.options.resumeSessionId;
+    if (!sessionId) throw new Error('TRAE ACP returned no session id');
+    this.acpSessionId = sessionId;
+    this.options.onSessionId(sessionId);
+
+    const model = await this.applyInitialModel(sessionId, sessionResult);
+    if (model) {
+      this.pipeline.configureSession({ model });
+      this.options.onModel?.(model);
+    }
+    await this.pushToPipeline({
+      model,
+      sessionId,
+      type: 'trae_session',
+    });
+    return sessionId;
+  }
+
+  protected onBeforePrompt(): void {
+    // session/load may replay historical updates before returning. Keep setup
+    // notifications gated until the new prompt is about to start.
+    this.acceptUpdates = true;
+  }
+
+  protected buildPromptParams(sessionId: string): unknown {
+    return { prompt: this.resolvedPrompt, sessionId };
+  }
+
+  protected override async settlePrompt(result: unknown): Promise<void> {
+    await this.drainNotifications();
+    await this.client.drain();
+    await this.pushToPipeline({
+      stopReason: (result as TraeAcpPromptResult | undefined)?.stopReason,
+      type: 'trae_prompt_completed',
+    });
+  }
+
+  protected async onRunFailure(error: Error): Promise<void> {
+    await this.pushToPipeline({ message: error.message, type: 'trae_error' });
+    await this.emitEvents(await this.pipeline.flush());
+  }
+
+  protected onHostClose(): void {
+    this.modelDiscovery?.close();
+  }
+
+  protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
+    if (message.method !== 'session/update') return;
+    if (!this.acceptUpdates) return;
+
+    this.lastSessionUpdateAt = Date.now();
+    const update = (message.params as { update?: unknown } | undefined)?.update;
+    if (!update || typeof update !== 'object') return;
+
+    if ((update as { sessionUpdate?: unknown }).sessionUpdate === 'config_option_update') {
+      const catalog = parseTraeAcpModelCatalog({
+        configOptions: (update as { configOptions?: unknown }).configOptions,
+      });
+      if (catalog?.currentModelId) {
+        this.pipeline.configureSession({ model: catalog.currentModelId });
+        this.options.onModel?.(catalog.currentModelId);
+      }
+    }
+    await this.pushToPipeline(update as Record<string, unknown>);
+  }
+
+  protected handleServerRequest(message: AcpRpcMessage): unknown {
+    if (message.method === 'session/request_permission') {
+      const optionId = selectAcpPermissionOption(message.params, [
+        (option) =>
+          option.optionId === 'allow_session' || option.optionId === 'approve_for_session',
+        (option) => option.kind === 'allow_once',
+        (option) => option.kind === 'reject_once',
+      ]);
+      if (optionId) return { outcome: { optionId, outcome: 'selected' } };
+      throw new AcpServerRequestError(-32_603, 'No safe permission option was offered');
+    }
+    throw new AcpServerRequestError(-32_601, `Unsupported ACP client request: ${message.method}`);
+  }
+
   private async discoverModelCatalog(): Promise<TraeAcpModelCatalog> {
     try {
-      const initialized = await this.initialize();
+      const initialized = await this.initializeConnection();
       const sessionResult = await this.client.request<TraeAcpSessionResult>('session/new', {
         cwd: this.options.cwd,
         mcpServers: [],
@@ -338,22 +368,6 @@ export class TraeAcpSession {
     }
   }
 
-  async interrupt(): Promise<void> {
-    if (!this.session) {
-      this.close();
-      return;
-    }
-    this.client.notify('session/cancel', { sessionId: this.session });
-    this.interruptTimer = setTimeout(() => this.close(), 2000);
-    this.interruptTimer.unref?.();
-  }
-
-  close(): void {
-    this.closedByHost = true;
-    this.modelDiscovery?.close();
-    this.client.close();
-  }
-
   private async resolvePrompt(): Promise<TraeAcpPromptBlock[]> {
     const prompt = this.options.prompt;
     if (
@@ -366,78 +380,6 @@ export class TraeAcpSession {
       return prompt as TraeAcpPromptBlock[];
     }
     return buildTraeAcpPrompt(prompt as AgentPromptInput, this.options.inputOptions);
-  }
-
-  private async initialize(): Promise<TraeAcpInitializeResult> {
-    await this.client.start();
-    const initialized = await this.client.request<TraeAcpInitializeResult>('initialize', {
-      clientCapabilities: {},
-      clientInfo: {
-        name: 'lobehub',
-        title: 'LobeHub',
-        version: this.options.clientVersion,
-      },
-      protocolVersion: ACP_PROTOCOL_VERSION,
-    });
-    if (
-      typeof initialized?.protocolVersion === 'number' &&
-      initialized.protocolVersion !== ACP_PROTOCOL_VERSION
-    ) {
-      throw new Error(
-        `TRAE ACP returned unsupported protocol version: ${initialized.protocolVersion}`,
-      );
-    }
-    return initialized;
-  }
-
-  private async handleRpcMessage(message: AcpRpcMessage): Promise<void> {
-    if (message.method !== 'session/update') return;
-    const suppress = !this.acceptUpdates;
-    if (suppress) return;
-
-    this.lastSessionUpdateAt = Date.now();
-    const update = (message.params as { update?: unknown } | undefined)?.update;
-    if (!update || typeof update !== 'object') return;
-
-    if ((update as { sessionUpdate?: unknown }).sessionUpdate === 'config_option_update') {
-      const catalog = parseTraeAcpModelCatalog({
-        configOptions: (update as { configOptions?: unknown }).configOptions,
-      });
-      if (catalog?.currentModelId) {
-        this.pipeline.configureSession({ model: catalog.currentModelId });
-        this.options.onModel?.(catalog.currentModelId);
-      }
-    }
-    await this.emit(update as Record<string, unknown>);
-  }
-
-  private handleServerRequest(message: AcpRpcMessage): unknown {
-    if (message.method === 'session/request_permission') {
-      const params = message.params as { options?: unknown } | undefined;
-      const options = Array.isArray(params?.options)
-        ? params.options.map((value) => value as TraeAcpPermissionOption | null)
-        : [];
-      const selected =
-        options.find(
-          (option) =>
-            option?.optionId === 'allow_session' || option?.optionId === 'approve_for_session',
-        ) ??
-        options.find((option) => option?.kind === 'allow_once') ??
-        options.find((option) => option?.kind === 'reject_once');
-      if (typeof selected?.optionId === 'string') {
-        return { outcome: { optionId: selected.optionId, outcome: 'selected' } };
-      }
-      throw new AcpServerRequestError(-32_603, 'No safe permission option was offered');
-    }
-    throw new AcpServerRequestError(-32_601, `Unsupported ACP client request: ${message.method}`);
-  }
-
-  private async emit(payload: Record<string, unknown>): Promise<void> {
-    await this.emitEvents(await this.pipeline.push(`${JSON.stringify(payload)}\n`));
-  }
-
-  private async emitEvents(events: AgentStreamEvent[]): Promise<void> {
-    if (events.length) await this.options.onEvents(events);
   }
 
   private async applyInitialModel(
@@ -511,17 +453,6 @@ export class TraeAcpSession {
       }
       if (Date.now() - quietSince >= NOTIFICATION_DRAIN_QUIET_MS) return;
     }
-  }
-
-  private status(state: HeterogeneousAgentRuntimeStatus['state']): void {
-    this.options.onRuntimeStatus({
-      activeTasks: [],
-      lastEventAt: Date.now(),
-      operationId: this.options.operationId,
-      sessionId: this.options.sessionId,
-      state,
-      transport: TRANSPORT,
-    });
   }
 }
 

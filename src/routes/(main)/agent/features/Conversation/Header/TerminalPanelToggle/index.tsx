@@ -1,7 +1,7 @@
 'use client';
 
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { SquareTerminalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

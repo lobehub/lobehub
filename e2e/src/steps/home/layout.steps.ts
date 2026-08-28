@@ -10,21 +10,58 @@ import { WAIT_TIMEOUT } from '../../support/world';
  * any step that measures after one must settle it first.
  */
 const settleBox = async (world: CustomWorld, target: Locator) => {
+  // Two consecutive quiet windows, not one: `expect.poll` runs its predicate
+  // immediately, so a single pair of equal samples taken before the motion even
+  // starts would report "settled" with the scroll still pending.
+  let quiet = 0;
+
   await expect
     .poll(
       async () => {
         const before = await target.boundingBox();
         await world.page.waitForTimeout(80);
         const after = await target.boundingBox();
-        return before?.x === after?.x && before?.y === after?.y;
+        const stable =
+          before !== null && after !== null && before.x === after.x && before.y === after.y;
+        quiet = stable ? quiet + 1 : 0;
+        return quiet;
       },
       { timeout: WAIT_TIMEOUT },
     )
-    .toBe(true);
+    .toBeGreaterThanOrEqual(2);
 };
 
 const settleRail = (world: CustomWorld) =>
   settleBox(world, world.page.locator('[data-testid="home-rail"]:visible'));
+
+/**
+ * Drive the dashboard scroller back to the top and prove it landed. Steps that
+ * measure pinned chrome against the columns only hold at scrollTop 0, and an
+ * equal-and-opposite wheel is not enough to establish that: nothing observes
+ * whether the gesture was applied, so a swallowed one leaves the next step
+ * comparing a fixed control against a column that is still scrolled away.
+ */
+const scrollToTop = async (world: CustomWorld) => {
+  // Inline arrows only inside `evaluate` — see the `__name` note below.
+  await expect
+    .poll(
+      async () =>
+        world.page.evaluate(() => {
+          const main = document.querySelector<HTMLElement>('[data-testid="home-main"]');
+          if (!main) return null;
+
+          for (let node = main.parentElement; node; node = node.parentElement)
+            if (['auto', 'scroll'].includes(getComputedStyle(node).overflowY)) {
+              node.scrollTo({ behavior: 'instant', top: 0 });
+              return node.scrollTop;
+            }
+
+          return null;
+        }),
+      { timeout: WAIT_TIMEOUT },
+    )
+    .toBe(0);
+};
 
 Given('用户在受限宽度下打开 Home 页面', async function (this: CustomWorld) {
   // Keep the desktop width while constraining the height so a fresh E2E account's
@@ -119,8 +156,7 @@ Then('Home 滚动应同时带动主列与右栏', async function (this: CustomWo
   expect(mainShift).toBeGreaterThan(0);
   expect(railBefore!.y - railAfter!.y).toBeCloseTo(mainShift, 0);
 
-  await this.page.mouse.wheel(0, -200);
-  await settleBox(this, main);
+  await scrollToTop(this);
 });
 
 Then('Home 右栏应保持卡片与页面边缘的分层间距', async function (this: CustomWorld) {
@@ -153,6 +189,11 @@ Then('Home 右栏折叠控制应固定在页面右上角', async function (this:
   const toggle = this.page.locator('[data-testid="home-rail-toggle"]:visible');
 
   await expect(toggle).toBeVisible({ timeout: WAIT_TIMEOUT });
+
+  // "Pinned to the top-right corner" is a claim about the resting page, so this
+  // step establishes its own scroll position rather than inheriting whatever the
+  // preceding wheel gesture left behind.
+  await scrollToTop(this);
 
   const [mainBox, expandedBox, viewportWidth] = await Promise.all([
     main.boundingBox(),

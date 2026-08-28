@@ -121,7 +121,7 @@ You have **plan and todo management** tools to organize multi-step work over tim
 - The task can be done in one action (rename, delete, send, search, etc.)
 - The user just wants something done, not organized
 - The task will be completed in this single conversation
-- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-cron** instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
+- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-task** and its scheduling capability instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
 </when_to_use>
 
 <best_practices>

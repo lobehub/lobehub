@@ -9,7 +9,7 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { CopyButton, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
@@ -17,6 +17,7 @@ import {
   createModal,
   type ModalInstance,
   ScrollArea,
+  Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { Typography } from 'antd';
@@ -41,6 +42,7 @@ import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
+import { heteroAgentDefaultName } from '@/store/agent/utils/heteroAgentDefaultName';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
 
@@ -498,7 +500,10 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const goConfirm = useCallback(() => {
       if (!single) return;
       const profile = isRemoteHeterogeneousType(single.type) ? profiles[single.type] : undefined;
-      setName(profile?.title ?? single.title);
+      const productTitle = profile?.title ?? single.title;
+      // Prefill with the same "{owner}'s {product}" default that createAgent
+      // seeds, so the input shows the name the agent would actually get.
+      setName(heteroAgentDefaultName(productTitle) ?? productTitle);
       setDescription(profile?.description ?? '');
       setStep(2);
     }, [profiles, single]);
@@ -539,7 +544,12 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 agentId: result.agentId,
                 locationLabel: targetLabel,
                 provider,
-                title: agentDisplayName(params.config, provider.title) ?? provider.title,
+                // Mirror the default-name seeding in createAgent so the done
+                // screen shows the same label the sidebar will.
+                title:
+                  params.config.name?.trim() ||
+                  heteroAgentDefaultName(params.config.title) ||
+                  agentDisplayName(params.config, provider.title),
                 version: scanState.agents?.[provider.type]?.version,
               } satisfies CreatedAgent;
             }),

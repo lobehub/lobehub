@@ -17,6 +17,8 @@ import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provi
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 
+import { HETERO_OPERATION_JWT_PURPOSE } from '../utils/internalJwt';
+
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
 const LOBE_CHAT_API_KEY_HEADER = 'X-API-Key';
@@ -284,9 +286,21 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         // so banned/deleted accounts cannot keep using an already-issued token.
         const tokenInfo = await validateOIDCJWT(oidcAuthToken);
 
+        const operationClaims =
+          tokenInfo.tokenData.purpose === HETERO_OPERATION_JWT_PURPOSE
+            ? {
+                capabilities: tokenInfo.payload.capabilities,
+                iss: tokenInfo.payload.iss,
+                model: tokenInfo.payload.model,
+                operation_id: tokenInfo.payload.operation_id,
+                provider_id: tokenInfo.payload.provider_id,
+                workspace_id: tokenInfo.payload.workspace_id,
+              }
+            : undefined;
         oidcAuth = {
           payload: tokenInfo.tokenData,
           ...tokenInfo.tokenData, // Spread payload into oidcAuth
+          ...operationClaims,
           sub: tokenInfo.userId, // Use tokenData as payload
         };
         userId = tokenInfo.userId;

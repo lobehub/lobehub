@@ -1,16 +1,8 @@
 'use client';
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import {
-  ActionIcon,
-  Center,
-  copyToClipboard,
-  Empty,
-  Flexbox,
-  Icon,
-  stopPropagation,
-} from '@lobehub/ui';
-import { Input, toast } from '@lobehub/ui/base-ui';
+import { Center, copyToClipboard, Empty, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Input, toast } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import { createStaticStyles } from 'antd-style';
 import { FileIcon, SearchIcon, XIcon } from 'lucide-react';

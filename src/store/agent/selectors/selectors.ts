@@ -11,6 +11,7 @@ import {
 import {
   agentDisplayName,
   type AgentMode,
+  type AgentProfile,
   type KnowledgeItem,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
@@ -105,6 +106,31 @@ const getAgentMetaById =
       title: data.title || undefined,
     };
   };
+
+/**
+ * Full-body artwork of the agent's character, or `undefined` when it has none.
+ * Kept out of {@link getAgentMetaById} because `MetaData` is shared with
+ * sessions and groups, which have no character sheet.
+ */
+/**
+ * The avatar actually stored on the agent — unlike {@link getAgentMetaById},
+ * which substitutes a default so every surface has something to render. Use
+ * this to decide whether there is anything to remove.
+ */
+const getAgentStoredAvatarById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.avatar || undefined;
+
+const getAgentProfileById =
+  (agentId: string) =>
+  (s: AgentStoreState): AgentProfile | undefined =>
+    s.agentMap[agentId]?.profile ?? undefined;
+
+const getAgentFullBodyArtworkById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.profile?.fullBodyArtwork || undefined;
 
 // ==========   Config   ============== //
 
@@ -380,7 +406,10 @@ export const agentSelectors = {
   displayableAgentPlugins,
   getAgentConfigById,
   getAgentDocumentsById,
+  getAgentFullBodyArtworkById,
   getAgentMetaById,
+  getAgentProfileById,
+  getAgentStoredAvatarById,
   getAgentSlugById,
   hasEnabledKnowledge,
   hasEnabledKnowledgeBases,

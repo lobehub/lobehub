@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Image } from '@lobehub/ui';
+import { Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowUp, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';

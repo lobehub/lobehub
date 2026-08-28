@@ -340,6 +340,8 @@
   "payDiffPrice": "差額を支払う",
   "payDiffPriceApprox": "約",
   "payDiffPriceTip": "実際の金額は支払いページでご確認ください",
+  "payment.downgradeFailed.desc": "ダウングレードのスケジュールに失敗しました。後でもう一度お試しいただくか、問題が解決しない場合はメールでお問い合わせください。",
+  "payment.downgradeFailed.title": "ダウングレード失敗",
   "payment.error.actions.billing": "請求管理",
   "payment.error.actions.home": "ホームに戻る",
   "payment.error.desc": "サブスクリプションID：{{id}} が見つかりません。ご不明な点がある場合は、メールでお問い合わせください。",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "プランロック中",
   "plans.btn.payment": "購入する",
   "plans.btn.paymentDesc": "クレジットカード / Alipay / WeChat Pay に対応",
-  "plans.btn.paymentDescForZarinpal": "クレジットカードに対応",
   "plans.btn.soon": "近日公開",
   "plans.cancelDowngrade": "予定されたダウングレードをキャンセル",
   "plans.cancelDowngradeSuccess": "予定されたダウングレードがキャンセルされました",
@@ -633,11 +634,5 @@
   "usage.overview.title": "使用状況概要",
   "usage.remaining": "残り",
   "usage.storage.embeddings.used": "ベクトルストレージ",
-  "usage.storage.file.used": "ファイル使用量",
-  "zarinpal.infoModal.desc": "ポリシー要件により、ご注文前に以下の個人情報を入力してください：",
-  "zarinpal.infoModal.phone.label": "電話番号",
-  "zarinpal.infoModal.phone.placeholder": "電話番号を入力してください",
-  "zarinpal.infoModal.phone.rule": "有効な電話番号を入力してください",
-  "zarinpal.infoModal.submit": "購入する",
-  "zarinpal.infoModal.title": "必要情報の入力"
+  "usage.storage.file.used": "ファイル使用量"
 }

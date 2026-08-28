@@ -29,7 +29,7 @@ vi.mock('@/features/Conversation/store', () => ({
   },
 }));
 
-vi.mock('@/features/Verify', () => ({
+vi.mock('@/features/Acceptance', () => ({
   AcceptanceViewer: (props: {
     initialCheckId?: string;
     onDraftToComposer?: (text: string) => boolean;
@@ -37,7 +37,10 @@ vi.mock('@/features/Verify', () => ({
     mocks.captured.onDraftToComposer = props.onDraftToComposer;
     return null;
   },
+  OriginConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
+
+vi.mock('@/features/Acceptance/Viewer/TopicPanel', () => ({ default: () => null }));
 
 describe('Portal Acceptance Body — draftToComposer via the global bus', () => {
   beforeEach(() => {

@@ -7,6 +7,7 @@ import {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatTopicMetadata,
+  ChatTopicStatus,
   ConversationContext,
   ExecAgentResult,
   MessageMetadata,
@@ -434,6 +435,12 @@ export class GatewayActionImpl {
     optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
+    /**
+     * Operation already created by the generic intervention claim+dispatch
+     * endpoint. The client adopts it here so streaming setup stays identical
+     * without issuing a second legacy resume request.
+     */
+    precreatedResult?: ExecAgentResult;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
     /**
@@ -502,6 +509,7 @@ export class GatewayActionImpl {
       optimisticTopic,
       parentMessageId,
       parentOperationId,
+      precreatedResult,
       replacesOperationId,
       resumeApproval,
       resumeApprovals,
@@ -573,67 +581,69 @@ export class GatewayActionImpl {
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
 
-    const result = await aiAgentService.execAgentTask(
-      {
-        agentId: executionContext.agentId,
-        // Fresh sends only — resume flows never pass this, and the server drops
-        // it defensively on resume-like params anyway.
-        clientIds,
-        appContext: {
-          agentDocumentId: executionContext.agentDocumentId,
-          ...(messageContext.agentId !== executionContext.agentId && {
-            conversationAgentId: messageContext.agentId,
-          }),
-          defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
-          documentId: executionContext.documentId,
-          // When AgentBuilder runs, context.agentId is the builtin builder agent.
-          // The actual editing target is chatStore.activeAgentId (kept in sync by
-          // AgentBuilderProvider). Pass it so the server can route tool calls to
-          // the correct agent rather than the builder itself.
-          ...(executionContext.scope === 'agent_builder' && {
-            editingAgentId: this.#get().activeAgentId ?? undefined,
-          }),
-          // Same shape as `editingAgentId`, for the Group Agent Builder panel on
-          // the group Profile page. The builder conversation is keyed by the
-          // builtin builder agent (no groupId in its ConversationContext, so the
-          // message map key and the group's own chat stay separate), which left
-          // the server runtime with no idea which group it was editing.
-          // The context value wins, and every surface that opens this scope sets
-          // it from its own route/group: it is fixed for the run, so a mid-run
-          // navigation cannot make the server stamp a different group than the
-          // panel is reading from. The `activeGroupId` fallback is a last resort
-          // for a caller that forgot — it is sampled here, AFTER the async
-          // preflight above, so it can already be stale by this point.
-          ...(executionContext.scope === 'group_agent_builder' && {
-            editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
-          }),
-          groupId: executionContext.groupId,
-          ...(initialTopicMetadata && { initialTopicMetadata }),
-          // Forward the group orchestration role so the server can stamp it onto
-          // the assistant message metadata. Without this the gateway-created
-          // supervisor turn loses its role on the step_start snapshot / refetch
-          // and renders as a generic assistant.
-          orchestrationRole: executionContext.orchestrationRole,
-          scope: executionContext.scope,
-          taskId,
-          threadId: executionContext.threadId,
-          topicId: executionContext.topicId,
+    const result =
+      precreatedResult ??
+      (await aiAgentService.execAgentTask(
+        {
+          agentId: executionContext.agentId,
+          // Fresh sends only — resume flows never pass this, and the server drops
+          // it defensively on resume-like params anyway.
+          clientIds,
+          appContext: {
+            agentDocumentId: executionContext.agentDocumentId,
+            ...(messageContext.agentId !== executionContext.agentId && {
+              conversationAgentId: messageContext.agentId,
+            }),
+            defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
+            documentId: executionContext.documentId,
+            // When AgentBuilder runs, context.agentId is the builtin builder agent.
+            // The actual editing target is chatStore.activeAgentId (kept in sync by
+            // AgentBuilderProvider). Pass it so the server can route tool calls to
+            // the correct agent rather than the builder itself.
+            ...(executionContext.scope === 'agent_builder' && {
+              editingAgentId: this.#get().activeAgentId ?? undefined,
+            }),
+            // Same shape as `editingAgentId`, for the Group Agent Builder panel on
+            // the group Profile page. The builder conversation is keyed by the
+            // builtin builder agent (no groupId in its ConversationContext, so the
+            // message map key and the group's own chat stay separate), which left
+            // the server runtime with no idea which group it was editing.
+            // The context value wins, and every surface that opens this scope sets
+            // it from its own route/group: it is fixed for the run, so a mid-run
+            // navigation cannot make the server stamp a different group than the
+            // panel is reading from. The `activeGroupId` fallback is a last resort
+            // for a caller that forgot — it is sampled here, AFTER the async
+            // preflight above, so it can already be stale by this point.
+            ...(executionContext.scope === 'group_agent_builder' && {
+              editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
+            }),
+            groupId: executionContext.groupId,
+            ...(initialTopicMetadata && { initialTopicMetadata }),
+            // Forward the group orchestration role so the server can stamp it onto
+            // the assistant message metadata. Without this the gateway-created
+            // supervisor turn loses its role on the step_start snapshot / refetch
+            // and renders as a generic assistant.
+            orchestrationRole: executionContext.orchestrationRole,
+            scope: executionContext.scope,
+            taskId,
+            threadId: executionContext.threadId,
+            topicId: executionContext.topicId,
+          },
+          ...desktopDeviceHints,
+          fileIds,
+          replacesOperationId,
+          mentionedAgents,
+          parentMessageId,
+          prompt: message,
+          resumeApproval,
+          resumeApprovals,
+          resumeToolResult,
+          selectedToolIds,
+          trigger: metadata?.trigger,
+          userInterventionConfig,
         },
-        ...desktopDeviceHints,
-        fileIds,
-        replacesOperationId,
-        mentionedAgents,
-        parentMessageId,
-        prompt: message,
-        resumeApproval,
-        resumeApprovals,
-        resumeToolResult,
-        selectedToolIds,
-        trigger: metadata?.trigger,
-        userInterventionConfig,
-      },
-      { signal: abortSignal },
-    );
+        { signal: abortSignal },
+      ));
 
     // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
     // before handling a late abort so callers never delete a file already attached server-side.
@@ -850,46 +860,35 @@ export class GatewayActionImpl {
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
-          // A later run already took this topic over — its start wrote the new
-          // `runningOperation`, and this close is just our own session winding
-          // down. Both writes below are unconditional stomps, so they'd retire a
-          // run that is still going: the status write kills its sidebar/home
-          // "running" state and the metadata clear drops the marker
-          // `useGatewayReconnect` needs to resume it after a reload.
-          const superseded = this.#isSupersededRunningOperation({
-            agentId: resolvedMessageContext.agentId,
-            groupId: resolvedMessageContext.groupId,
-            operationId: result.operationId,
-            topicId: result.topicId,
-          });
-
-          // A clean completion the user isn't watching is owned by
-          // `markTopicUnread` (status: 'unread'); skip the 'active' write so
-          // the two never race over the status field. Every other case (viewing,
-          // error, abort) clears the running state back to 'active' as before.
+          // The server already settled this topic: the runtime's `finish`
+          // executor settles to 'unread' before it publishes the terminal event
+          // this callback rides on, so by now the mark is legitimately gone and
+          // a settle from here would only ever return 'missing'.
+          //
+          // What the server could NOT know is whether the user is watching. The
+          // settle below performs that correction with the completed operation
+          // id: after the marker is gone, the model only accepts unread → active
+          // when `lastSettledOperationId` still matches. It also remains the
+          // backstop when `clearRunningMark` failed and left the marker in place.
           const viewing = this.#get().activeTopicId === result.topicId;
-          if (!superseded && (viewing || !succeeded)) {
-            void this.#get().updateTopicStatus?.({
-              agentId: resolvedMessageContext.agentId,
-              groupId: resolvedMessageContext.groupId,
-              status: 'active',
-              topicId: result.topicId,
-            });
-          }
-          // Clear running operation from topic metadata (best-effort from frontend;
-          // if browser was closed, reconnect logic will handle stale entries)
-          if (!superseded) {
-            topicService
-              .updateTopicMetadata(result.topicId, { runningOperation: null })
-              .catch(() => {});
-          }
-          // Also clear the local store copy — the server clear above does NOT touch
-          // the Zustand topic map that useGatewayReconnect reads. Ownership-guarded
-          // on its own, so it is safe to call either way.
+          topicService
+            .settleRunningOperation(
+              result.topicId,
+              result.operationId,
+              viewing || !succeeded ? 'active' : 'unread',
+            )
+            .catch(console.error);
+          // Also clear the local store copy — the server settle above does NOT
+          // touch the Zustand topic map that useGatewayReconnect (and the sidebar
+          // spinner) read. Mirror the same 'active' decision passed to the server
+          // call above; omit it for the unwatched-clean-completion case, which
+          // `markTopicUnread` owns. Ownership-guarded on its own (see
+          // clearLocalRunningOperation), so it is safe to call either way.
           this.clearLocalRunningOperation({
             agentId: resolvedMessageContext.agentId,
             groupId: resolvedMessageContext.groupId,
             operationId: result.operationId,
+            status: viewing || !succeeded ? 'active' : undefined,
             topicId: result.topicId,
           });
         }
@@ -1068,32 +1067,54 @@ export class GatewayActionImpl {
         if (authFailed) this.#get().completeOperation(gatewayOpId);
 
         // Same supersede guard as executeGatewayAgent's onSessionComplete: a
-        // newer run may own this topic by now, and both writes below are
-        // unconditional stomps that would retire it mid-flight.
+        // newer run may own this topic by now, and the settle below would
+        // retire it mid-flight.
         const superseded = this.#isSupersededRunningOperation({
           agentId: context.agentId,
           operationId,
           topicId,
         });
 
-        // See executeGatewayAgent's onSessionComplete: a clean background
-        // completion is left to markTopicUnread (status: 'unread').
+        // Settle through the server exactly as executeGatewayAgent's
+        // onSessionComplete does: ONE call that clears the marker and writes the
+        // terminal status inside the topic row lock, comparing the operation id
+        // so a late close from another tab cannot settle a newer run.
+        //
+        // This was hand-rolled here as two independent fire-and-forget writes: an
+        // UNCONDITIONAL `updateTopicMetadata({ runningOperation: null })` plus an
+        // `updateTopicStatus('active')` that was SKIPPED whenever the run finished
+        // cleanly while the user was on another topic. That case delegated the
+        // status write to `markTopicUnread` — a separate call, on a separate
+        // guard — and when it did not land the topic stayed `running` forever:
+        // the marker was already gone, so every later `settleRunningOperation`
+        // returned `missing` and nothing on the server could repair it. Observed
+        // on a self-hosted deployment as 7 topics stuck `running` whose
+        // `metadata.runningOperation` was present-and-JSON-null (the signature of
+        // that unconditional clear) with their operation rows already terminal.
+        //
+        // Reconnect is the path a page refresh takes, which is why the symptom
+        // was always "still spinning after a reload" — refreshing is what moved
+        // the run off the primary path and onto this one.
         const viewing = this.#get().activeTopicId === topicId;
-        if (!superseded && (viewing || !succeeded)) {
-          void this.#get().updateTopicStatus?.({
-            agentId: context.agentId,
-            status: 'active',
-            topicId,
-          });
-        }
-        // Clear the persisted marker useGatewayReconnect keys off so a dead op
-        // doesn't get reconnected on every reload / task-drawer open.
         if (!superseded) {
-          topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
+          topicService
+            .settleRunningOperation(
+              topicId,
+              operationId,
+              viewing || !succeeded ? 'active' : 'unread',
+            )
+            .catch(console.error);
         }
-        // Mirror the clear into the local store — the server clear above leaves the
-        // Zustand topic map stale, which useGatewayReconnect keys off.
-        this.clearLocalRunningOperation({ agentId: context.agentId, operationId, topicId });
+        // Mirror into the local store — the server settle does NOT touch the
+        // Zustand topic map that useGatewayReconnect (and the sidebar spinner)
+        // read. Status omitted for the unwatched-clean case, which
+        // `markTopicUnread` owns locally; same split as the primary path.
+        this.clearLocalRunningOperation({
+          agentId: context.agentId,
+          operationId,
+          status: viewing || !succeeded ? 'active' : undefined,
+          topicId,
+        });
       },
       operationId,
       resumeOnConnect: true,
@@ -1140,8 +1161,8 @@ export class GatewayActionImpl {
   /**
    * Clear the client-store copy of `topic.metadata.runningOperation`.
    *
-   * The server-side clear (`topicService.updateTopicMetadata(topicId, { runningOperation: null })`)
-   * alone leaves the Zustand store stale: `useGatewayReconnect` keys off the LOCAL
+   * The server-side clear (`topicService.settleRunningOperation`, which nulls the
+   * marker inside the topic row lock) alone leaves the Zustand store stale: `useGatewayReconnect` keys off the LOCAL
    * copy, so after an error run (e.g. insufficient credits) the stale marker keeps
    * firing `aiAgentService.refreshGatewayToken(topicId)`, which the server now answers
    * with NOT_FOUND (404 — the server-side marker is already null). Raw SWR retries the
@@ -1191,15 +1212,25 @@ export class GatewayActionImpl {
     agentId?: string;
     groupId?: string;
     operationId: string;
+    /**
+     * Mirror the topic's terminal status into the local Zustand copy alongside
+     * the metadata clear. Omit for the "clean completion, not watching" case —
+     * that one is owned by `markTopicUnread` elsewhere.
+     */
+    status?: ChatTopicStatus;
     topicId: string;
   }): void => {
-    const { topicId, operationId, agentId, groupId } = params;
+    const { topicId, operationId, agentId, groupId, status } = params;
     const state = this.#get();
     const key = topicMapKey({
       agentId: agentId ?? state.activeAgentId,
       groupId: groupId ?? state.activeGroupId,
     });
     const existingTopic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
+    // Same ownership guard the removed client-side `superseded` check used to
+    // provide: if a newer run already overwrote this topic's local marker with
+    // its own operationId, this stale session's completion must not clobber it
+    // (neither the metadata clear nor, now, the status write).
     if (existingTopic?.metadata?.runningOperation?.operationId !== operationId) return;
 
     state.internal_dispatchTopic({
@@ -1209,6 +1240,15 @@ export class GatewayActionImpl {
       type: 'updateTopic',
       value: { metadata: { ...existingTopic.metadata, runningOperation: null } },
     });
+
+    // Routed through `internal_pinTopicStatus`, not a bare dispatch: it also
+    // registers the pending-write pin so a topic-list refetch racing in
+    // behind this (e.g. within the 15s window of the 'running' pin set at
+    // run start) reconciles to this status instead of reapplying the stale
+    // 'running' one and stranding the spinner again.
+    if (status) {
+      state.internal_pinTopicStatus?.({ agentId, groupId, status, topicId });
+    }
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {

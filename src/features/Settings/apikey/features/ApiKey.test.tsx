@@ -33,8 +33,11 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => {
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
   return {
+    ...actual,
     Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button {...props}>{children}</button>
     ),

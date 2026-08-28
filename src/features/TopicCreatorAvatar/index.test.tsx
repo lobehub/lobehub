@@ -14,15 +14,31 @@ vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ avatar, shape, title }: { avatar?: string; shape?: string; title?: string }) => (
+  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+}));
+
+// The identity-preserving wrapper owns the initials/background fallback; this
+// component's contract is only what it hands over.
+vi.mock('@/components/Avatar', () => ({
+  default: ({
+    avatar,
+    name,
+    shape,
+    title,
+  }: {
+    avatar?: string;
+    name?: string;
+    shape?: string;
+    title?: string;
+  }) => (
     <span
       data-avatar={avatar ?? ''}
+      data-name={name ?? ''}
       data-shape={shape ?? ''}
       data-testid="avatar"
       data-title={title ?? ''}
     />
   ),
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 describe('TopicCreatorAvatar', () => {
@@ -36,6 +52,16 @@ describe('TopicCreatorAvatar', () => {
     expect(avatar.getAttribute('data-avatar')).toBe('https://x/y.png');
     expect(avatar.getAttribute('data-shape')).toBe('circle');
     expect(avatar.getAttribute('data-title')).toBe('Alice');
+  });
+
+  it('passes the name so an avatar-less member falls back to their initials', () => {
+    useAuthorInfoMock.mockReturnValue({ avatar: null, fullName: 'Alice' });
+
+    const { getByTestId } = render(<TopicCreatorAvatar userId="any-member" />);
+
+    const avatar = getByTestId('avatar');
+    expect(avatar.getAttribute('data-avatar')).toBe('');
+    expect(avatar.getAttribute('data-name')).toBe('Alice');
   });
 
   it('keeps the avatar primary and shrinks the row icon into the corner badge', () => {

@@ -400,6 +400,9 @@ export default {
   'payDiffPrice': 'Pay Difference',
   'payDiffPriceApprox': 'Approx.',
   'payDiffPriceTip': 'Actual amount subject to payment page',
+  'payment.downgradeFailed.desc':
+    'Failed to schedule your downgrade. Please try again later, or contact us via email if the problem persists',
+  'payment.downgradeFailed.title': 'Downgrade Failed',
   'payment.error.actions.billing': 'Billing Management',
   'payment.error.actions.home': 'Back to Home',
   'payment.error.desc':
@@ -457,6 +460,9 @@ export default {
   'plans.embeddingStorage.title': 'Vector Storage',
   'plans.embeddingStorage.tooltip':
     'One document page (1000-1500 characters) generates approximately 1 vector entry. (Estimated using OpenAI Embeddings, may vary by model)',
+  'plans.artifactHosting.deployments': 'Up to {{count}} active Artifact sites',
+  'plans.artifactHosting.siteSize': 'Up to {{size}} per published site',
+  'plans.artifactHosting.title': 'Artifact Hosting',
   'plans.features.agents': 'Curated Agent Market',
   'plans.features.ceAgents': 'Community Agent Market',
   'plans.features.cePlugins': 'Community Plugin Market',
@@ -544,8 +550,8 @@ export default {
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
   'plansModal.artifactDeploymentLimit.desc':
-    'Your public Artifact deployment limit has been reached. Upgrade your plan to publish more projects.',
-  'plansModal.artifactDeploymentLimit.title': 'Publish more Artifacts',
+    'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
+  'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
   'plansModal.creditLimit.desc':
     'Upgrade your plan to unlock more monthly credits and keep working without interruption.',
   'plansModal.creditLimit.title': 'You’re out of credits',

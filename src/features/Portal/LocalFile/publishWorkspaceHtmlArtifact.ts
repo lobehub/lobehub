@@ -41,10 +41,10 @@ export const publishWorkspaceHtmlArtifact = async (
       messageId: string;
       requestedSlug?: string;
       topicId: string;
-    }) => Promise<{ latestRevisionNumber?: number; publicUrl?: string }>;
+    }) => Promise<{ id?: string; latestRevisionNumber?: number; publicUrl?: string }>;
     publishSite?: (
       params: PublishWorkspaceHtmlSiteParams,
-    ) => Promise<{ latestRevisionNumber?: number; publicUrl?: string }>;
+    ) => Promise<{ id?: string; latestRevisionNumber?: number; publicUrl?: string }>;
   },
 ): Promise<WorkspaceHtmlArtifactPublishResult> => {
   if (!input.agentId) {
@@ -81,6 +81,7 @@ export const publishWorkspaceHtmlArtifact = async (
     });
 
     return {
+      id: deployment.id,
       publicUrl: deployment.publicUrl,
       revision: deployment.latestRevisionNumber,
     };
@@ -105,6 +106,7 @@ export const publishWorkspaceHtmlArtifact = async (
   });
 
   return {
+    id: deployment.id,
     publicUrl: deployment.publicUrl,
     revision: deployment.latestRevisionNumber,
   };

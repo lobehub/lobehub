@@ -27,6 +27,20 @@ export interface ToolRunResult {
   workRegistration?: WorkRegistrationIntent;
 }
 
+export interface ToolForwardingRequest {
+  data: Pick<ChatToolPayload, 'apiName' | 'identifier'> & { args: Record<string, unknown> };
+  metadata: {
+    caseId?: string;
+    callIndex: number;
+    operationId: string;
+    stepIndex: number;
+  };
+  type: 'toolCall';
+}
+
+export type ToolForwardingResponse =
+  { data: ToolRunResult; success: true } | { error?: unknown; success: false };
+
 /**
  * A Work version ready to persist: the executor pairs the tool's registration
  * intent with provenance and the cumulative usage/cost snapshot as of that
@@ -68,6 +82,12 @@ export interface ToolRunExecution {
  * adapter is constructed — NOT passed here — so this stays transport-neutral.
  */
 export interface ToolRunContext {
+  /**
+   * Forwarded from `RuntimeOperationContext.abortSignal`. Transports that reach
+   * the network (or a device) should thread it into their request so an
+   * interrupt actually stops the work, not just stops waiting for it.
+   */
+  abortSignal?: AbortSignal;
   activatedSkills?: unknown[];
   activeDeviceId?: string;
   agentId?: string;

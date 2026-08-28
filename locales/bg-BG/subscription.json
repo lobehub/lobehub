@@ -340,6 +340,8 @@
   "payDiffPrice": "Плати разликата",
   "payDiffPriceApprox": "Приблизително",
   "payDiffPriceTip": "Действителната сума се определя на страницата за плащане",
+  "payment.downgradeFailed.desc": "Неуспешно планиране на понижаване. Моля, опитайте отново по-късно или се свържете с нас по имейл, ако проблемът продължава.",
+  "payment.downgradeFailed.title": "Неуспешно понижаване",
   "payment.error.actions.billing": "Управление на плащания",
   "payment.error.actions.home": "Обратно към началната страница",
   "payment.error.desc": "Абонамент с ID: {{id}} не е намерен. Ако имаш въпроси, свържи се с нас по имейл",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Планът е заключен",
   "plans.btn.payment": "Закупи",
   "plans.btn.paymentDesc": "Поддържа кредитна карта / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Поддържа кредитна карта",
   "plans.btn.soon": "Очаквайте скоро",
   "plans.cancelDowngrade": "Отмяна на планираното понижение",
   "plans.cancelDowngradeSuccess": "Планираното понижение е отменено",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Обзор на използването",
   "usage.remaining": "Оставащи",
   "usage.storage.embeddings.used": "Векторно съхранение",
-  "usage.storage.file.used": "Използване на файлове",
-  "zarinpal.infoModal.desc": "Поради изисквания на политиката, моля попълнете следната лична информация преди да направите поръчка:",
-  "zarinpal.infoModal.phone.label": "Телефонен номер",
-  "zarinpal.infoModal.phone.placeholder": "Моля, въведете телефонен номер",
-  "zarinpal.infoModal.phone.rule": "Моля, въведете валиден телефонен номер",
-  "zarinpal.infoModal.submit": "Поръчай",
-  "zarinpal.infoModal.title": "Попълнете необходимата информация"
+  "usage.storage.file.used": "Използване на файлове"
 }

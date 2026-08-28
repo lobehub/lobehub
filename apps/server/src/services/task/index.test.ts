@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
+import { RbacModel } from '@/database/models/rbac';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
@@ -31,6 +33,14 @@ vi.mock('@/database/models/brief', () => ({
   BriefModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/workspaceMember', () => ({
+  WorkspaceMemberModel: vi.fn(),
+}));
+
 vi.mock('@/database/models/user', () => ({
   UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
 }));
@@ -40,9 +50,15 @@ const { goalCreate, goalFindBySubject } = vi.hoisted(() => ({
   goalFindBySubject: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { resolveTaskAcceptance } = vi.hoisted(() => ({
+  resolveTaskAcceptance: vi.fn(),
+}));
+
 vi.mock('@/database/models/goal', () => ({
   GoalModel: vi.fn(() => ({ create: goalCreate, findBySubject: goalFindBySubject })),
 }));
+
+vi.mock('@/server/services/verify/taskAcceptance', () => ({ resolveTaskAcceptance }));
 
 // AiAgentService pulls in ~14 sub-dependencies in its constructor; mock it so
 // the running-status branch in updateStatus doesn't drag them in.
@@ -111,15 +127,52 @@ describe('TaskService', () => {
     findByTaskId: vi.fn(),
   };
 
+  const mockRbacModel = {
+    hasAnyPermission: vi.fn().mockResolvedValue(true),
+  };
+
+  const mockWorkspaceMemberModel = {
+    getMember: vi.fn().mockResolvedValue({ role: 'member', userId: 'member-1' }),
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     cancelScheduled.mockResolvedValue(undefined);
     scheduleNextTopic.mockResolvedValue('tick-new');
+    resolveTaskAcceptance.mockResolvedValue(undefined);
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     (AgentModel as any).mockImplementation(() => mockAgentModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
     (BriefModel as any).mockImplementation(() => mockBriefModel);
+    (RbacModel as any).mockImplementation(() => mockRbacModel);
+    (WorkspaceMemberModel as any).mockImplementation(() => mockWorkspaceMemberModel);
+  });
+
+  describe('assertAssigneeUserAssignable', () => {
+    it('rejects a workspace member without task write permissions', async () => {
+      mockWorkspaceMemberModel.getMember.mockResolvedValueOnce({
+        role: 'viewer',
+        userId: 'viewer-1',
+      });
+      mockRbacModel.hasAnyPermission.mockResolvedValueOnce(false);
+
+      const service = new TaskService(db, userId, 'workspace-1');
+
+      await expect(service.assertAssigneeUserAssignable('viewer-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockRbacModel.hasAnyPermission).toHaveBeenCalledWith(
+        ['agent:update:all', 'agent:update:owner'],
+        { userId: 'viewer-1', workspaceId: 'workspace-1' },
+      );
+    });
+
+    it('accepts a workspace member with task write permissions', async () => {
+      const service = new TaskService(db, userId, 'workspace-1');
+
+      await expect(service.assertAssigneeUserAssignable('member-1')).resolves.toBeUndefined();
+    });
   });
 
   describe('getTaskDetail', () => {
@@ -183,6 +236,43 @@ describe('TaskService', () => {
       expect(result?.activities).toBeUndefined();
       expect(result?.workspace).toBeUndefined();
       expect(result?.parent).toBeNull();
+    });
+
+    it('surfaces the effective inherited Acceptance policy', async () => {
+      const task = {
+        createdAt: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: 'Do something',
+        lastHeartbeatAt: null,
+        parentTaskId: 'task_parent',
+        priority: 'normal',
+        status: 'todo',
+      };
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.findById.mockResolvedValue(null);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      resolveTaskAcceptance.mockResolvedValue({
+        acceptance: { id: 'acceptance-child' },
+        config: { enabled: true, maxIterations: 2 },
+        requirement: 'Inherited contract',
+      });
+
+      const result = await new TaskService(db, userId, 'workspace-1').getTaskDetail('TASK-1');
+
+      expect(result?.verify).toEqual({
+        enabled: true,
+        maxIterations: 2,
+        requirement: 'Inherited contract',
+      });
     });
 
     it('should resolve parent task info when parentTaskId is set', async () => {

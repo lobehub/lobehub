@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import { memo, useMemo } from 'react';

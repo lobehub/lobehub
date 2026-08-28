@@ -2,8 +2,8 @@
 
 import { type ComposioAppType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
-import { ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Alert, Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';

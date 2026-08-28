@@ -1,12 +1,26 @@
 import { EventEmitter } from 'node:events';
+import { statSync } from 'node:fs';
+import os from 'node:os';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnHeteroAgentRun } from './agentRun';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+// `resolveHeteroSpawnCwd` stats the candidate directories; treat every path as
+// an existing directory unless a test says otherwise.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, statSync: vi.fn() };
+});
+
+const asDirectory = { isDirectory: () => true } as ReturnType<typeof statSync>;
+const mockMissingDir = (missing: string) =>
+  vi
+    .mocked(statSync)
+    .mockImplementation((candidate) => (candidate === missing ? undefined : asDirectory) as never);
 
 const makeFakeChild = () => {
   const child = new EventEmitter() as EventEmitter & {
@@ -27,6 +41,10 @@ const baseParams = {
 };
 
 describe('spawnHeteroAgentRun', () => {
+  beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue(asDirectory);
+  });
+
   afterEach(() => {
     spawnMock.mockReset();
   });
@@ -84,14 +102,34 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects (no stuck run) when the child errors before spawning, e.g. bad cwd', async () => {
+  it('starts the wrapper from home so its inner preflight can report a missing cwd', async () => {
+    const missingCwd = '/missing';
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
+    mockMissingDir(missingCwd);
 
-    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: '/missing' });
-    child.emit('error', new Error('spawn ENOENT'));
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: missingCwd });
 
-    await expect(ackPromise).resolves.toEqual({ reason: 'spawn ENOENT', status: 'rejected' });
+    const [, args, options] = spawnMock.mock.calls[0];
+    const cwdArgIndex = args.indexOf('--cwd');
+    expect(options.cwd).toBe(os.homedir());
+    expect(args[cwdArgIndex + 1]).toBe(missingCwd);
+    child.emit('spawn');
+
+    await expect(ackPromise).resolves.toEqual({ status: 'accepted' });
+    expect(child.stdin.write).toHaveBeenCalledWith(JSON.stringify('hi'));
+  });
+
+  it('rejects when the wrapper process still fails to spawn from the fallback cwd', async () => {
+    const missingCwd = '/missing';
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+    mockMissingDir(missingCwd);
+
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: missingCwd });
+    child.emit('error', new Error('spawn EACCES'));
+
+    await expect(ackPromise).resolves.toEqual({ reason: 'spawn EACCES', status: 'rejected' });
     expect(child.stdin.write).not.toHaveBeenCalled();
   });
 

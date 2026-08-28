@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 
-import { AgentRuntimeService } from './AgentRuntimeService';
+import { AgentRuntimeService, createEvalToolForwardingHook } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
@@ -28,6 +28,9 @@ vi.mock('@lobechat/model-runtime', () => ({
   getErrorCodeSpec: () => undefined,
   refineErrorCode: () => undefined,
 }));
+
+const { ssrfSafeFetch: mockSsrfSafeFetch } = vi.hoisted(() => ({ ssrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -244,6 +247,137 @@ describe('AgentRuntimeService', () => {
   afterEach(() => {
     delete process.env.AGENT_RUNTIME_BASE_URL;
     hookDispatcher.unregister('test-operation-1');
+  });
+
+  describe('eval tool forwarding hook', () => {
+    const event = {
+      apiName: 'search_tweets',
+      args: { query: 'test' },
+      callIndex: 2,
+      identifier: 'twitter',
+      mock: vi.fn(),
+      operationId: 'op-forwarding',
+      stepIndex: 3,
+    };
+
+    beforeEach(() => {
+      event.mock.mockReset();
+      mockSsrfSafeFetch.mockReset();
+    });
+
+    it('forwards the beforeToolCall payload and preserves the returned tool result', async () => {
+      const timeoutSpy = vi.spyOn(global, 'setTimeout');
+      const result = { content: 'fixture result', state: { source: 'mock' }, success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
+        'https://mock.test/tool-calls',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toEqual({
+        data: { apiName: 'search_tweets', args: { query: 'test' }, identifier: 'twitter' },
+        metadata: { callIndex: 2, operationId: 'op-forwarding', stepIndex: 3 },
+        type: 'toolCall',
+      });
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 15_000);
+      expect(event.mock).toHaveBeenCalledWith(result);
+      timeoutSpy.mockRestore();
+    });
+
+    it('includes the dataset case id in forwarding metadata', async () => {
+      const result = { content: 'fixture result', success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook(
+        { twitter: { endpoint: 'https://mock.test/tool-calls' } },
+        'case-42',
+      );
+
+      await hook.handler(event as any);
+
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
+        metadata: { caseId: 'case-42' },
+      });
+    });
+
+    it('mocks a failed result without executing the real tool', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'fixture unavailable', success: false })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: 'fixture unavailable',
+        error: 'fixture unavailable',
+        success: false,
+      });
+    });
+
+    it('mocks a placeholder when a successful response has no tool result', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(new Response(JSON.stringify({ success: true })));
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
+    });
+
+    it('mocks a placeholder when a successful response has an invalid tool result', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: { content: 1, success: true }, success: true })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
+    });
+
+    it('mocks a failed result when the forwarding response is not JSON', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(new Response('not-json'));
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: expect.stringContaining('SyntaxError'),
+        error: expect.any(SyntaxError),
+        success: false,
+      });
+    });
+
+    it('mocks transport failures', async () => {
+      mockSsrfSafeFetch.mockRejectedValue('SSRF blocked');
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: 'SSRF blocked',
+        error: 'SSRF blocked',
+        success: false,
+      });
+    });
   });
 
   describe('constructor', () => {
@@ -554,6 +688,23 @@ describe('AgentRuntimeService', () => {
     beforeEach(() => {
       mockCoordinator.loadAgentState.mockResolvedValue(mockState);
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
+    });
+
+    it('acks a delayed delivery after the durable operation was abandoned', async () => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        id: mockParams.operationId,
+        status: 'abandoned',
+      });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result).toEqual({
+        nextStepScheduled: false,
+        state: { status: 'interrupted' },
+        stepResult: null,
+        success: true,
+      });
+      expect(mockCoordinator.tryClaimStep).not.toHaveBeenCalled();
     });
 
     it('should pass resolved contextWindowTokens into compressionConfig', async () => {
@@ -907,6 +1058,94 @@ describe('AgentRuntimeService', () => {
         'test-operation-1',
         expect.objectContaining({
           newState: expect.objectContaining({ status: 'interrupted' }),
+        }),
+      );
+    });
+
+    it('should resolve pending client tools when interruption races the parked result', async () => {
+      const completedTool = {
+        apiName: 'calculate',
+        arguments: '{}',
+        id: 'completed-server-tool-call',
+        identifier: 'server-tool',
+        type: 'default' as const,
+      };
+      const pendingTool = {
+        apiName: 'search',
+        arguments: '{}',
+        id: 'client-tool-call',
+        identifier: 'client-tool',
+        type: 'default' as const,
+      };
+      const parkedResult = {
+        events: [{ type: 'interrupted' as const }],
+        newState: {
+          ...mockState,
+          messages: [
+            {
+              content: 'Completed server result',
+              role: 'tool' as const,
+              tool_call_id: completedTool.id,
+            },
+          ],
+          pendingToolsCalling: [pendingTool],
+          status: 'waiting_for_async_tool' as const,
+          stepCount: 2,
+        },
+        nextContext: undefined,
+      };
+      const resolvedResult = {
+        events: [{ type: 'done' as const }],
+        newState: {
+          ...parkedResult.newState,
+          messages: [
+            ...parkedResult.newState.messages,
+            {
+              content: 'Tool execution was aborted by user.',
+              role: 'tool' as const,
+              tool_call_id: pendingTool.id,
+            },
+          ],
+          status: 'done' as const,
+        },
+      };
+      const mockRuntime = {
+        step: vi.fn().mockResolvedValueOnce(parkedResult).mockResolvedValueOnce(resolvedResult),
+      };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+      mockCoordinator.loadAgentState
+        .mockResolvedValueOnce(mockState)
+        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
+
+      const mixedBatchContext = {
+        ...mockParams.context!,
+        payload: {
+          ...(mockParams.context!.payload as Record<string, unknown>),
+          hasToolsCalling: true,
+          toolsCalling: [completedTool, pendingTool],
+        },
+        phase: 'llm_result' as const,
+      };
+      const result = await service.executeStep({ ...mockParams, context: mixedBatchContext });
+
+      expect(result.state).toEqual(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: 'Completed server result',
+              tool_call_id: completedTool.id,
+            }),
+            expect.objectContaining({ tool_call_id: pendingTool.id }),
+          ]),
+          status: 'interrupted',
+        }),
+      );
+      expect(mockRuntime.step).toHaveBeenCalledTimes(2);
+      expect(mockRuntime.step).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'interrupted' }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ toolsCalling: [pendingTool] }),
+          phase: 'llm_result',
         }),
       );
     });
@@ -1496,6 +1735,14 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           { status: 'done' },
           { phase: 'user_input' },
+        );
+        expect(shouldContinue).toBe(false);
+      });
+
+      it('should return false for a plain interrupt with nothing left to settle', () => {
+        const shouldContinue = (service as any).shouldContinueExecution(
+          { status: 'interrupted' },
+          { phase: 'tool_result' },
         );
         expect(shouldContinue).toBe(false);
       });

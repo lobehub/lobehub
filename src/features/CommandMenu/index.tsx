@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, stopPropagation } from '@lobehub/ui';
+import { stopPropagation } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { Command, defaultFilter } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

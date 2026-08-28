@@ -146,6 +146,8 @@
   "updater.later": "Позже",
   "updater.newVersionAvailable": "Доступна новая версия",
   "updater.newVersionAvailableDesc": "Обнаружена новая версия {{version}}. Хотите скачать её сейчас?",
+  "updater.refreshToApply": "Обновите сейчас",
+  "updater.rendererUpdateReady": "Новая версия готова — обновите для применения",
   "updater.restartAndInstall": "Установить обновление и перезапустить",
   "updater.updateError": "Ошибка обновления",
   "updater.updateReady": "Доступна новая версия",

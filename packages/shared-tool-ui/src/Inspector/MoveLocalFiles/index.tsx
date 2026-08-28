@@ -2,7 +2,8 @@
 
 import type { MoveFilesState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';

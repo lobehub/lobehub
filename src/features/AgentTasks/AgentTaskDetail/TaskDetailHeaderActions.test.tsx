@@ -46,7 +46,9 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ title }: { title?: string }) => <button type="button">{title}</button>,
   confirmModal: (opts: unknown) => mocks.confirmModal(opts),
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('antd', () => ({

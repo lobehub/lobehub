@@ -1,6 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';

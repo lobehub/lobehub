@@ -33,7 +33,8 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="menu-extra-icon" />,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   cssVar: { colorTextSecondary: '#666' },
 }));
 

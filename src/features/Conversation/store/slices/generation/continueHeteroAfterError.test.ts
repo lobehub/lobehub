@@ -22,7 +22,7 @@ vi.mock(
 // private local override runs in-process even if the shared workspace row points
 // at the gateway.
 const mockSelectRuntimeType = vi.fn((ctx: any) =>
-  ctx?.executionTarget === 'local' && !ctx?.isWorkspaceAgent ? 'hetero' : 'gateway',
+  ctx?.executionTarget === 'local' && !ctx?.workspaceScoped ? 'hetero' : 'gateway',
 );
 vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => ({
   selectRuntimeType: (ctx: any) => mockSelectRuntimeType(ctx),
@@ -33,9 +33,14 @@ let mockAgentVisibility: 'private' | 'public' = 'public';
 let mockIsWorkspaceAgent = false;
 let mockSharedExecutionTarget: 'device' | 'local' = 'local';
 let mockWorkspaceOverride: { boundDeviceId: string; executionTarget: 'local' } | undefined;
-vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
-  resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: mockResumeSessionId }),
-}));
+let mockTopic: { id: string; model?: string; provider?: string } | undefined;
+vi.mock(
+  '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: mockResumeSessionId }),
+  }),
+);
 
 vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
   mergeAgentRuntimeInitialContexts: () => undefined,
@@ -88,7 +93,11 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: {
+    getTopicById: () => () => mockTopic,
+    getTopicModelById: () => () =>
+      mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
+  },
 }));
 
 vi.mock('@/store/electron', () => ({
@@ -167,6 +176,7 @@ describe('continueHeteroAfterError', () => {
     mockResumeSessionId = 'sess-1';
     mockIsWorkspaceAgent = false;
     mockSharedExecutionTarget = 'local';
+    mockTopic = undefined;
     mockWorkspaceOverride = undefined;
   });
 
@@ -196,6 +206,23 @@ describe('continueHeteroAfterError', () => {
     });
     expect(executorParams().message).toContain('Continue the task from where it stopped');
     expect(executorParams().message).not.toBe(USER_MESSAGE.content);
+  });
+
+  it('continues with the topic-pinned heterogeneous model', async () => {
+    mockTopic = { id: 'topic-1', model: 'opus', provider: 'claude-code' };
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2', tools: [{ id: 'call-2' }] },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(executorParams().heterogeneousProvider).toMatchObject({
+      model: 'opus',
+      type: 'claude-code',
+    });
   });
 
   it('drops an error-only tail step and chains the continuation onto its parent', async () => {
@@ -269,7 +296,8 @@ describe('continueHeteroAfterError', () => {
       expect.objectContaining({
         boundDeviceId: 'personal-device',
         executionTarget: 'local',
-        isWorkspaceAgent: false,
+        isWorkspaceAgent: true,
+        workspaceScoped: false,
       }),
     );
     expect(mockUpdateMessage).not.toHaveBeenCalled();
@@ -297,6 +325,7 @@ describe('continueHeteroAfterError', () => {
         boundDeviceId: 'workspace-device',
         executionTarget: 'local',
         isWorkspaceAgent: true,
+        workspaceScoped: true,
       }),
     );
     expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
@@ -326,7 +355,8 @@ describe('continueHeteroAfterError', () => {
       expect.objectContaining({
         boundDeviceId: 'workspace-device',
         executionTarget: 'device',
-        isWorkspaceAgent: false,
+        isWorkspaceAgent: true,
+        workspaceScoped: false,
       }),
     );
   });

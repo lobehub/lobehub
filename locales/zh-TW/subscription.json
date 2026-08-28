@@ -340,6 +340,8 @@
   "payDiffPrice": "支付差額",
   "payDiffPriceApprox": "約",
   "payDiffPriceTip": "實際金額以付款頁面為準",
+  "payment.downgradeFailed.desc": "無法安排您的降級。請稍後再試，若問題持續，請透過電子郵件聯絡我們。",
+  "payment.downgradeFailed.title": "降級失敗",
   "payment.error.actions.billing": "帳單管理",
   "payment.error.actions.home": "返回首頁",
   "payment.error.desc": "找不到訂閱 ID：{{id}}。如有疑問，請透過電子郵件與我們聯繫",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "方案已鎖定",
   "plans.btn.payment": "立即購買",
   "plans.btn.paymentDesc": "支援信用卡 / 支付寶 / 微信支付",
-  "plans.btn.paymentDescForZarinpal": "支援信用卡",
   "plans.btn.soon": "即將推出",
   "plans.cancelDowngrade": "取消已排程的降級",
   "plans.cancelDowngradeSuccess": "已取消排程的降級",
@@ -633,11 +634,5 @@
   "usage.overview.title": "使用總覽",
   "usage.remaining": "剩餘",
   "usage.storage.embeddings.used": "向量儲存",
-  "usage.storage.file.used": "檔案使用量",
-  "zarinpal.infoModal.desc": "依政策要求，請在下單前填寫以下個人資訊：",
-  "zarinpal.infoModal.phone.label": "手機號碼",
-  "zarinpal.infoModal.phone.placeholder": "請輸入手機號碼",
-  "zarinpal.infoModal.phone.rule": "請輸入有效的手機號碼",
-  "zarinpal.infoModal.submit": "立即購買",
-  "zarinpal.infoModal.title": "填寫必要資訊"
+  "usage.storage.file.used": "檔案使用量"
 }

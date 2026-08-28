@@ -37,6 +37,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('react-i18next', () => ({

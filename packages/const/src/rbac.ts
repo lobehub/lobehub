@@ -629,6 +629,18 @@ export const getWorkspaceRolePermissionCodes = (role: string): readonly string[]
   return systemRole ? WORKSPACE_ROLE_PERMISSIONS[systemRole] : [];
 };
 
+export const TASK_ASSIGNEE_PERMISSION_CODES = [
+  `${action('AGENT_UPDATE')}:all`,
+  `${action('AGENT_UPDATE')}:owner`,
+] as const;
+
+/** Whether a built-in workspace role can mutate and run assigned tasks. */
+export const canWorkspaceRoleBeTaskAssignee = (role?: string | null): boolean => {
+  if (!role) return false;
+  const permissions = getWorkspaceRolePermissionCodes(role);
+  return TASK_ASSIGNEE_PERMISSION_CODES.some((code) => permissions.includes(code));
+};
+
 /**
  * Default permission codes every authenticated user holds over their OWN data
  * in personal (non-workspace) context.

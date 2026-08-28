@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (Tokens per seconde): Tokenuitvoer per seconde",
+  "duration.TPS": "tok/s (Tokens per seconde): Tokenuitvoer per seconde",
   "duration.TTFT": "TTFT (Time To First Token): Tijd tot eerste token",
   "duration.completion": "Tijd tot voltooiing van uitvoer",
   "duration.latency": "Duur",

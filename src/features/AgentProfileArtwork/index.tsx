@@ -5,8 +5,16 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { ActionIcon, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
@@ -18,6 +26,7 @@ import {
   openAgentArtworkStudio,
   styleReferencesForArtworkStyle,
 } from '@/features/AgentArtworkStudio';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -211,6 +220,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     onBackgroundChange,
   }) => {
     const { t } = useTranslation('setting');
+    const appOrigin = useAppOrigin();
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const canGenerate = useAiInfraStore(
       (state) => aiProviderSelectors.enabledImageModelList(state).length > 0,
@@ -273,7 +283,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             name,
             referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
             style,
-            styleReferenceImageUrls: styleReferencesForArtworkStyle(style),
+            styleReferenceImageUrls: styleReferencesForArtworkStyle(style, appOrigin),
             systemRole,
             title,
           });
@@ -283,6 +293,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       },
       [
         agentId,
+        appOrigin,
         avatar,
         backgroundUrl,
         canEdit,

@@ -349,6 +349,15 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     };
   }
 
+  if (ErrorClassifier.isInsufficientQuota(errorMsg)) {
+    return {
+      endpoint: desensitizedEndpoint,
+      error: errorResult,
+      errorType: AgentRuntimeErrorType.InsufficientQuota,
+      message,
+    };
+  }
+
   if (ErrorClassifier.isExceededContextWindow(errorMsg)) {
     return {
       endpoint: desensitizedEndpoint,
@@ -828,6 +837,16 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.AccountDeactivated,
+          message,
+          provider: this.id,
+        });
+      }
+
+      if (ErrorClassifier.isInsufficientQuota(errorMsg)) {
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.InsufficientQuota,
           message,
           provider: this.id,
         });

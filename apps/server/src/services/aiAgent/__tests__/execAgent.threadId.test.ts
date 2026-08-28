@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 // Use vi.hoisted to ensure mock functions are available before vi.mock runs
-const { mockMessageCreate, mockTopicUpdateMetadata } = vi.hoisted(() => ({
-  mockMessageCreate: vi.fn(),
-  mockTopicUpdateMetadata: vi.fn(),
-}));
+const { mockMessageCreate, mockTopicAppendRunningOperationChild, mockTopicUpdateMetadata } =
+  vi.hoisted(() => ({
+    mockMessageCreate: vi.fn(),
+    mockTopicAppendRunningOperationChild: vi.fn(),
+    mockTopicUpdateMetadata: vi.fn(),
+  }));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -69,6 +71,7 @@ vi.mock('@/database/models/plugin', () => ({
 // Mock TopicModel
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    appendRunningOperationChild: mockTopicAppendRunningOperationChild,
     releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
     tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
@@ -175,6 +178,7 @@ describe('AiAgentService.execAgent - threadId handling', () => {
     // Explicitly clear the shared mock to prevent state pollution between tests
     mockMessageCreate.mockClear();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockTopicAppendRunningOperationChild.mockReset().mockResolvedValue(true);
     mockTopicUpdateMetadata.mockClear();
     mockTopicUpdateMetadata.mockResolvedValue(undefined);
 
@@ -251,6 +255,16 @@ describe('AiAgentService.execAgent - threadId handling', () => {
       });
     });
 
+    it('does not trust a public member role to suppress the marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { orchestrationRole: 'member', topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(runningMarkCalls()).toHaveLength(1);
+    });
+
     it('does not claim the mark for an isolation-thread run', async () => {
       // A callAgent / callSubAgent / group-member child executes on the PARENT's
       // topic. Claiming the mark pointed every client reconnect at the child's
@@ -263,6 +277,33 @@ describe('AiAgentService.execAgent - threadId handling', () => {
         prompt: 'Test prompt',
       });
 
+      expect(runningMarkCalls()).toHaveLength(0);
+    });
+
+    it('registers an owned isolation-thread run as a child marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          isolationThread: true,
+          orchestrationRole: 'member',
+          threadId: 'thread-123',
+          topicId: 'topic-1',
+        },
+        parentOperationId: 'parent-operation',
+        prompt: 'Test prompt',
+        topicStartOwnerOperationId: 'parent-operation',
+      } as any);
+
+      expect(mockTopicAppendRunningOperationChild).toHaveBeenCalledWith(
+        'topic-1',
+        'parent-operation',
+        expect.objectContaining({
+          assistantMessageId: 'msg-1',
+          operationId: expect.stringContaining('op_'),
+          orchestrationRole: 'member',
+          threadId: 'thread-123',
+        }),
+      );
       expect(runningMarkCalls()).toHaveLength(0);
     });
   });

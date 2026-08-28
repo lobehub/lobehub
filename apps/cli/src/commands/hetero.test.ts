@@ -537,9 +537,36 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         agentType: 'cursor',
+        askUserBridge: undefined,
         command: 'agent',
         extraArgs: ['--mode', 'plan', '--model', 'sonnet-4-thinking'],
         resumeSessionId: 'cursor-session',
+      }),
+    );
+  });
+
+  it('passes an intervention bridge to server-ingest Cursor runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'cursor',
+      '--prompt',
+      'do thing',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-cursor-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        askUserBridge: expect.objectContaining({ pending: expect.any(Function) }),
       }),
     );
   });

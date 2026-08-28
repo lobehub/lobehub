@@ -340,6 +340,8 @@
   "payDiffPrice": "Paga la differenza",
   "payDiffPriceApprox": "Circa",
   "payDiffPriceTip": "Importo effettivo soggetto alla pagina di pagamento",
+  "payment.downgradeFailed.desc": "Non è stato possibile programmare il downgrade. Riprova più tardi o contattaci via email se il problema persiste",
+  "payment.downgradeFailed.title": "Downgrade non riuscito",
   "payment.error.actions.billing": "Gestione fatturazione",
   "payment.error.actions.home": "Torna alla home",
   "payment.error.desc": "ID abbonamento: {{id}} non trovato. In caso di domande, contattaci via email",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Piano bloccato",
   "plans.btn.payment": "Acquista",
   "plans.btn.paymentDesc": "Supporta carta di credito / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Supporta carta di credito",
   "plans.btn.soon": "Prossimamente",
   "plans.cancelDowngrade": "Annulla downgrade programmato",
   "plans.cancelDowngradeSuccess": "Il downgrade programmato è stato annullato",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Panoramica Utilizzo",
   "usage.remaining": "Rimanente",
   "usage.storage.embeddings.used": "Archiviazione Vettoriale",
-  "usage.storage.file.used": "Utilizzo File",
-  "zarinpal.infoModal.desc": "A causa di requisiti normativi, completa le seguenti informazioni personali prima di effettuare un ordine:",
-  "zarinpal.infoModal.phone.label": "Numero di Telefono",
-  "zarinpal.infoModal.phone.placeholder": "Inserisci il numero di telefono",
-  "zarinpal.infoModal.phone.rule": "Inserisci un numero di telefono valido",
-  "zarinpal.infoModal.submit": "Acquista",
-  "zarinpal.infoModal.title": "Compila le Informazioni Richieste"
+  "usage.storage.file.used": "Utilizzo File"
 }

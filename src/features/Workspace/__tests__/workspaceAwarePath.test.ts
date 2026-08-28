@@ -66,6 +66,7 @@ describe('buildWorkspaceAwarePath', () => {
   });
 
   it('skips prefix for personal-only top-level paths', () => {
+    expect(buildWorkspaceAwarePath('/apps', 'acme')).toBe('/apps');
     expect(buildWorkspaceAwarePath('/onboarding/agent', 'acme')).toBe('/onboarding/agent');
     expect(buildWorkspaceAwarePath('/me/profile', 'acme')).toBe('/me/profile');
     expect(buildWorkspaceAwarePath('/share/t/foo', 'acme')).toBe('/share/t/foo');

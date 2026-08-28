@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button, Segmented } from '@lobehub/ui/base-ui';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -12,14 +12,12 @@ import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { goalSelectors, useGoalStore } from '@/store/goal';
-import { useVerifyStore } from '@/store/verify';
 
 import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
-import { getGoalPresentation } from './goalPresentation';
 import { shouldShowGoal } from './goalViewModel';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -82,32 +80,17 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const setFilter = useGoalStore((s) => s.setGoalListFilter);
   const setViewMode = useGoalStore((s) => s.setGoalViewMode);
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
-  const acceptanceBySubjectMap = useVerifyStore((s) => s.acceptanceBySubjectMap);
-  const acceptanceBundleMap = useVerifyStore((s) => s.acceptanceBundleMap);
   const { error, isLoading } = useFetchGoals(agentId, projectId);
   const summary = useMemo(() => {
-    const delivered = goals.filter((goal) => goal.status === 'completed').length;
+    const delivered = goals.filter((goal) => goal.goal?.status === 'review').length;
 
     return { delivered, pursuing: goals.length - delivered, total: goals.length };
   }, [goals]);
   const filteredGoals = useMemo(() => {
     if (filter === 'all') return goals;
 
-    return goals.filter((goal) => {
-      const acceptance = acceptanceBySubjectMap[`task:${goal.id}`];
-      const bundle = acceptance ? acceptanceBundleMap[acceptance.id] : undefined;
-      const presentation = getGoalPresentation({
-        acceptanceStatus: bundle?.acceptance.status,
-        checks: bundle?.checks,
-        goalStatus: goal.goal?.status,
-        maxRounds: goal.goal?.maxRounds,
-        rounds: goal.totalTopics ?? 0,
-        taskStatus: goal.status,
-      });
-
-      return shouldShowGoal(presentation.statusKey, 'active');
-    });
-  }, [acceptanceBundleMap, acceptanceBySubjectMap, filter, goals]);
+    return goals.filter((goal) => shouldShowGoal(goal.goal?.status ?? 'planning', 'active'));
+  }, [filter, goals]);
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
   const openCreateGoal = (seed?: GoalExampleSeed) => {
@@ -144,7 +127,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
         {isLoading && !isInitialized ? (
-          <GoalSkeleton showHeader={false} />
+          <GoalSkeleton chrome={'body'} />
         ) : error ? (
           <Block padding={32} variant={'outlined'}>
             <Flexbox align={'center'} gap={12}>

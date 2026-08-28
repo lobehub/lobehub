@@ -263,20 +263,21 @@ describe('cliAgentBinaries', () => {
     });
 
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
-      callExecFile(
-        [
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
-        ].join('\r\n'),
-      );
+      const unrunnableMatches = [
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
+      ];
+      callExecFile(unrunnableMatches.join('\r\n'));
 
       const { claudeCodeBinary } = await import('../cliAgentBinaries');
       const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(false);
-      // Must not attempt to invoke the unrunnable matches.
+      // PATH recovery may issue registry queries and retry `where`, but must
+      // never attempt to invoke either unrunnable result.
       expect(execMock).not.toHaveBeenCalled();
-      expect(execFileMock).toHaveBeenCalledTimes(1); // just `where`
+      const invokedFiles = execFileMock.mock.calls.map(([file]) => file);
+      for (const match of unrunnableMatches) expect(invokedFiles).not.toContain(match);
     });
   });
 
@@ -475,8 +476,14 @@ describe('cliAgentBinaries', () => {
       const status = await detectHeterogeneousCliCommand('codex', '/custom/bin/codex');
 
       expect(status.available).toBe(false);
-      // Only the explicit path's --version attempt — no fallback probing.
-      expect(execFileMock).toHaveBeenCalledTimes(1);
+      // PATH recovery may retry the explicit launcher in a second environment,
+      // but every version probe must keep that launcher rather than switching
+      // to a built-in Codex fallback.
+      const versionProbeFiles = execFileMock.mock.calls
+        .filter(([, args]) => Array.isArray(args) && args.includes('--version'))
+        .map(([file]) => file);
+      expect(versionProbeFiles.length).toBeGreaterThan(0);
+      expect(versionProbeFiles).toEqual(versionProbeFiles.map(() => '/custom/bin/codex'));
     });
 
     it('falls back to the login shell PATH for tools installed by shell setup', async () => {

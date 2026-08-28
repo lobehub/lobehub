@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Button, Popover, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button, Popover, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
   ArrowLeftIcon,
@@ -39,6 +39,7 @@ const emptyAdjustments: Record<AdjustmentTarget, string> = {
   domainFilter: '',
   layers: '',
   outOfScope: '',
+  rationale: '',
 };
 
 const styles = createStaticStyles(({ css }) => ({
@@ -117,6 +118,67 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     height: 22px;
   `,
+  // Wraps the brief textarea so the loading state can draw the same flowing
+  // border the goal creator uses — the shell owns the ring, not the input.
+  inputShell: css`
+    position: relative;
+    border-radius: 8px;
+  `,
+  // Only while generating: a conic-gradient ring rotated by the animated
+  // --domain-border-angle, masked to a 2px edge so the textarea reads as lit.
+  // `overflow: hidden` lives here, not on the resting shell, so the outlined
+  // textarea's focus glow isn't clipped when the user is typing.
+  inputShellLoading: css`
+    overflow: hidden;
+
+    &::after {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+
+      padding: 2px;
+      border-radius: inherit;
+
+      background: conic-gradient(
+        from var(--domain-border-angle),
+        ${cssVar.colorBorderSecondary} 0deg 210deg,
+        #ff3d8d 238deg,
+        #8b5cf6 258deg,
+        #00c8ff 278deg,
+        #22e6a8 298deg,
+        #ffd43b 318deg,
+        #ff6b35 338deg,
+        ${cssVar.colorBorderSecondary} 360deg
+      );
+
+      mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+
+      animation: domain-input-flow 1.8s linear infinite;
+
+      mask-composite: exclude;
+    }
+
+    @keyframes domain-input-flow {
+      from {
+        --domain-border-angle: 0deg;
+      }
+
+      to {
+        --domain-border-angle: 360deg;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::after {
+        animation: none;
+      }
+    }
+  `,
   itemRow: css`
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr) 28px;
@@ -139,6 +201,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   rationale: css`
     margin: 0;
+    padding-inline: 0;
+
     font-size: 16px;
     line-height: 1.75;
     color: ${cssVar.colorText};
@@ -173,6 +237,16 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
   `,
 }));
+
+// A registered custom property is what lets the conic gradient's angle animate
+// at all — a plain `--domain-border-angle` is an un-typed string CSS can't tween.
+const DomainBorderFlowStyle = createGlobalStyle`
+  @property --domain-border-angle {
+    inherits: false;
+    initial-value: 0deg;
+    syntax: '<angle>';
+  }
+`;
 
 export const formatRemainingTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -277,6 +351,7 @@ const CreateDomainPage = memo(() => {
         domainFilter: draft.domainFilter.trim(),
         layers: draft.layers.filter((l) => l.title.trim()),
         outOfScope: draft.outOfScope?.trim() || null,
+        rationale: draft.rationale?.trim() || null,
         title: draft.title.trim(),
       });
       if (storageKey) localStorage.removeItem(storageKey);
@@ -390,6 +465,7 @@ const CreateDomainPage = memo(() => {
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
+      <DomainBorderFlowStyle />
       <NavHeader
         styles={{ left: { paddingInlineStart: 24 } }}
         left={
@@ -435,15 +511,19 @@ const CreateDomainPage = memo(() => {
                     <Text fontSize={12} type={'secondary'}>
                       {t('create.briefHelp')}
                     </Text>
-                    <TextArea
-                      autoFocus
-                      autoSize={{ maxRows: 10, minRows: 5 }}
-                      disabled={step === 'preparing'}
-                      placeholder={t('create.briefPlaceholder')}
-                      value={brief}
-                      variant={'outlined'}
-                      onChange={(e) => setBrief(e.target.value)}
-                    />
+                    <div
+                      className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
+                    >
+                      <TextArea
+                        autoFocus
+                        autoSize={{ maxRows: 10, minRows: 5 }}
+                        disabled={step === 'preparing'}
+                        placeholder={t('create.briefPlaceholder')}
+                        value={brief}
+                        variant={step === 'preparing' ? 'borderless' : 'outlined'}
+                        onChange={(e) => setBrief(e.target.value)}
+                      />
+                    </div>
                     {step === 'preparing' ? (
                       <Flexbox
                         horizontal
@@ -521,10 +601,24 @@ const CreateDomainPage = memo(() => {
                 </Flexbox>
                 <Divider style={{ margin: 0 }} />
                 <Flexbox className={styles.reviewSection} gap={12}>
-                  <Text fontSize={14} type={'secondary'}>
-                    {t('create.reviewHelp')}
-                  </Text>
-                  {draft.rationale && <div className={styles.rationale}>{draft.rationale}</div>}
+                  <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
+                    <Text fontSize={14} type={'secondary'}>
+                      {t('create.reviewHelp')}
+                    </Text>
+                    <Flexbox flex={'none'}>{renderAdjustmentButton('rationale')}</Flexbox>
+                  </Flexbox>
+                  <TextArea
+                    autoSize={{ maxRows: 8, minRows: 2 }}
+                    className={styles.rationale}
+                    // An in-flight adjustment answers from the draft as it was when the
+                    // request left, so edits made meanwhile would be silently overwritten
+                    // when the response merges back.
+                    disabled={refiningTarget === 'rationale'}
+                    placeholder={t('create.field.rationalePlaceholder')}
+                    value={draft.rationale ?? ''}
+                    variant={'borderless'}
+                    onChange={(e) => patch({ rationale: e.target.value })}
+                  />
                 </Flexbox>
 
                 <Flexbox className={styles.reviewSection} gap={10}>

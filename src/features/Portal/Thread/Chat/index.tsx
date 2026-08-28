@@ -99,8 +99,8 @@ const ThreadChatContent = memo<ThreadChatContentProps>(
         {composerWritable && inputMode === 'heterogeneous' && <HeterogeneousChatInput />}
         {composerWritable && inputMode === 'default' && (
           <ChatInput
-            leftActions={['typo']}
-            rightActions={['voiceDictation', 'voiceMessage', 'contextWindow']}
+            leftActions={['typo', 'voiceDictation']}
+            rightActions={['voiceMessage', 'contextWindow']}
           />
         )}
       </>

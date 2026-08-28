@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text, toast } from '@lobehub/ui/base-ui';
 import { Form, Input } from 'antd';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

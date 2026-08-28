@@ -10,7 +10,8 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import ModelDetailPanel from './ModelDetailPanel';
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({
     actionText: 'actionText',
     container: 'container',

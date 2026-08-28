@@ -6,8 +6,8 @@ import type {
   CodexRateLimitResetCredit,
 } from '@lobechat/electron-client-ipc';
 import { uuid } from '@lobechat/utils';
-import { Collapse, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Collapse, Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -22,6 +22,11 @@ const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
 const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 const MONTHLY_WINDOW_MIN_MINUTES = 28 * 24 * 60;
 const MONTHLY_WINDOW_MAX_MINUTES = 31 * 24 * 60;
+
+const isConnectionError = (quota: CodexQuotaSnapshot) =>
+  /error sending request for url|fetch failed|\b(?:ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(
+    quota.error ?? '',
+  );
 
 const styles = createStaticStyles(({ css }) => ({
   credit: css`
@@ -213,6 +218,14 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   const hasExtraData = useCallback(
     (quota: CodexQuotaSnapshot) => !!quota.rateLimitResetCredits,
     [],
+  );
+
+  const getErrorText = useCallback(
+    (quota: CodexQuotaSnapshot) =>
+      isConnectionError(quota)
+        ? t('heteroAgent.codexQuota.errorConnection')
+        : t('heteroAgent.codexQuota.errorGeneric'),
+    [t],
   );
 
   const consumeReset = useCallback(
@@ -442,6 +455,8 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
       contentWidth={360}
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
+      getErrorText={getErrorText}
+      getRefreshErrorText={getErrorText}
       getWindows={getWindows}
       hasExtraData={hasExtraData}
       renderFooter={renderFooter}

@@ -1,6 +1,6 @@
 import type { TaskAutomationMode } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Icon, InputNumber, Popover, Text } from '@lobehub/ui';
-import { Button, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, InputNumber, Popover } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Select, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
@@ -194,6 +194,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
 
   const finalTaskId = taskId ?? activeTaskId;
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
@@ -306,6 +307,15 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
         </Flexbox>
         <Switch checked={enabled} disabled={!canEditTask} onChange={handleEnableChange} />
       </Flexbox>
+
+      {!enabled && !!assigneeUserId && (
+        <Flexbox horizontal align="center" className={styles.preview} gap={10}>
+          <Icon color={cssVar.colorTextDescription} icon={TimerIcon} size={16} />
+          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+            {t('taskSchedule.memberAssigneeHint')}
+          </Text>
+        </Flexbox>
+      )}
 
       {enabled && nextRunText && (
         <Flexbox horizontal align="center" className={styles.preview} gap={10}>

@@ -4,7 +4,6 @@ import { useCallback } from 'react';
 import { type NavigateFunction, type NavigateOptions, type To, useNavigate } from 'react-router';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 
 import { buildWorkspaceAwarePath, type WorkspaceAwareNavigateOptions } from './workspaceAwarePath';
 
@@ -44,10 +43,6 @@ export const useWorkspaceAwareNavigate = (): WorkspaceAwareNavigateFunction => {
       const target = buildWorkspaceAwarePath(to, getActiveWorkspaceSlug(), options);
       const { escape: _escape, ...rest } = options ?? {};
       void _escape;
-      if (shouldHardNavigateToWorkbench(target)) {
-        window.location.assign(target);
-        return;
-      }
       // Stay a transparent drop-in for `useNavigate`: only forward a second arg
       // when real react-router options remain, so `navigate(path)` calls don't
       // turn into `navigate(path, {})`.

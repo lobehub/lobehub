@@ -41,6 +41,7 @@ export const buildSelectorSubmenu = <T extends string>({
   valueLabel: string;
 }): SelectorSubmenuItem => ({
   children: options.map((option) => ({
+    closeOnClick: false,
     desc: option.desc,
     extra: current === option.value ? checkIcon : undefined,
     key: `${label}-${option.value}`,

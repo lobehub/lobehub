@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
     disabled,
     onClick,

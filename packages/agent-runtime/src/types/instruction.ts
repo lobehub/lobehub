@@ -355,15 +355,22 @@ export interface AgentInstructionRequestHumanApprove extends AgentInstructionBas
    * creates pending tool rows should set it, so those rows land under their real
    * owner — see the parent resolution comment in `executors/humanApprove.ts`.
    *
-   * Optional for the `skipCreateToolMessage` (resume) paths, which create no
-   * rows, and for backwards compatibility with producers that omit it: the
-   * executor still falls back to scanning `state.messages`, which is accurate
-   * only within a single step.
+   * Required by `skipCreateToolMessage` (resume) paths so an unresolved subset
+   * can be rebound to its authoritative assistant owner. Optional only for
+   * backwards compatibility with fresh producers that omit it: the executor
+   * still falls back to scanning `state.messages`, which is accurate only
+   * within a single step.
    */
   parentMessageId?: string;
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;
+  /** Previous sealed batch for a partial-decision re-park. */
+  supersedes?: {
+    batchId: string;
+    operationId: string;
+    toolCallIds: string[];
+  };
   type: 'request_human_approve';
 }
 

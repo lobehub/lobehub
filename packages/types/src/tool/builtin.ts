@@ -503,6 +503,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
   actionsPortalTarget?: HTMLElement | null;
   apiName?: string;
   args: Arguments;
+  /** Keep the form visible but inert while a remote resolution awaits producer ACK. */
+  disabled?: boolean;
   identifier?: string;
   interactionMode?: 'approval' | 'custom';
   messageId: string;

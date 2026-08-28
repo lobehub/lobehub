@@ -2,8 +2,8 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover, Tag } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Icon, Popover } from '@lobehub/ui';
+import { Tag, toast } from '@lobehub/ui/base-ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';

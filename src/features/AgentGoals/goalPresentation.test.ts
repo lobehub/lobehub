@@ -3,13 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { getGoalPresentation } from './goalPresentation';
 
 describe('getGoalPresentation', () => {
-  it('uses Acceptance as the authoritative lifecycle and progress source', () => {
+  it('maps the goal lifecycle state to the goal list vocabulary', () => {
     expect(
       getGoalPresentation({
-        acceptanceStatus: 'verifying',
         checks: [{ state: 'passed' }, { state: 'failed' }, { state: 'passed' }],
+        goalStatus: 'verifying',
         rounds: 2,
-        taskStatus: 'running',
       }),
     ).toMatchObject({
       passed: 2,
@@ -19,48 +18,41 @@ describe('getGoalPresentation', () => {
     });
   });
 
-  it('shows achieved only after Acceptance is accepted', () => {
+  it('shows achieved only when the goal state machine reached it', () => {
     expect(
       getGoalPresentation({
-        acceptanceStatus: 'accepted',
         checks: [{ state: 'passed' }],
+        goalStatus: 'achieved',
         rounds: 3,
-        taskStatus: 'completed',
       }).statusKey,
     ).toBe('goalList.status.achieved');
   });
 
-  it('falls back to task execution and round state before Acceptance exists', () => {
-    expect(getGoalPresentation({ maxRounds: 5, rounds: 2, taskStatus: 'scheduled' })).toMatchObject(
-      {
-        maxRounds: 5,
-        passed: 0,
-        progress: 0,
-        rounds: 2,
-        statusKey: 'goalList.status.waiting',
-        total: 0,
-      },
-    );
+  it('reports rounds and budget without any checks yet', () => {
+    expect(getGoalPresentation({ goalStatus: 'running', maxRounds: 5, rounds: 2 })).toMatchObject({
+      maxRounds: 5,
+      passed: 0,
+      progress: 0,
+      rounds: 2,
+      statusKey: 'goalList.status.running',
+      total: 0,
+    });
   });
 
-  it('keeps an executing round shown as running while the verify plan is only planned', () => {
-    // Regression (caught by the E2E acceptance run): the verify plan is
-    // confirmed at run start, so the acceptance phase reads `planned` for the
-    // whole executing round. That phase must fall through to the goal entity
-    // status (`running`) instead of rendering 验证中.
-    expect(
-      getGoalPresentation({
-        acceptanceStatus: 'planned',
-        goalStatus: 'running',
-        rounds: 1,
-        taskStatus: 'running',
-      }).statusKey,
-    ).toBe('goalList.status.running');
-  });
+  it('maps every goal status to a goal list key', () => {
+    const cases: Array<[Parameters<typeof getGoalPresentation>[0]['goalStatus'], string]> = [
+      ['planning', 'goalList.status.planning'],
+      ['running', 'goalList.status.running'],
+      ['verifying', 'goalList.status.verifying'],
+      ['review', 'goalList.status.review'],
+      ['paused', 'goalList.status.paused'],
+      ['achieved', 'goalList.status.achieved'],
+      ['failed', 'goalList.status.error'],
+      ['canceled', 'goalList.status.canceled'],
+    ];
 
-  it('prefers the goal entity status over the task-status heuristic', () => {
-    expect(
-      getGoalPresentation({ goalStatus: 'paused', rounds: 1, taskStatus: 'running' }).statusKey,
-    ).toBe('goalList.status.paused');
+    for (const [goalStatus, statusKey] of cases) {
+      expect(getGoalPresentation({ goalStatus, rounds: 0 }).statusKey).toBe(statusKey);
+    }
   });
 });

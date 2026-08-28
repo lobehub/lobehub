@@ -340,6 +340,8 @@
   "payDiffPrice": "Payer la différence",
   "payDiffPriceApprox": "Env.",
   "payDiffPriceTip": "Montant réel selon la page de paiement",
+  "payment.downgradeFailed.desc": "Échec de la planification de votre rétrogradation. Veuillez réessayer plus tard ou contactez-nous par e-mail si le problème persiste.",
+  "payment.downgradeFailed.title": "Échec de la Rétrogradation",
   "payment.error.actions.billing": "Gestion de la facturation",
   "payment.error.actions.home": "Retour à l'accueil",
   "payment.error.desc": "ID d’abonnement : {{id}} introuvable. Si vous avez des questions, veuillez nous contacter par e-mail",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Plan verrouillé",
   "plans.btn.payment": "Acheter",
   "plans.btn.paymentDesc": "Cartes bancaires / Alipay / WeChat Pay acceptés",
-  "plans.btn.paymentDescForZarinpal": "Cartes bancaires acceptées",
   "plans.btn.soon": "Bientôt disponible",
   "plans.cancelDowngrade": "Annuler la rétrogradation planifiée",
   "plans.cancelDowngradeSuccess": "La rétrogradation planifiée a été annulée",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Aperçu de l’utilisation",
   "usage.remaining": "Restant",
   "usage.storage.embeddings.used": "Stockage vectoriel",
-  "usage.storage.file.used": "Utilisation des fichiers",
-  "zarinpal.infoModal.desc": "Conformément aux exigences réglementaires, veuillez remplir les informations suivantes avant de passer commande :",
-  "zarinpal.infoModal.phone.label": "Numéro de téléphone",
-  "zarinpal.infoModal.phone.placeholder": "Veuillez entrer votre numéro de téléphone",
-  "zarinpal.infoModal.phone.rule": "Veuillez entrer un numéro de téléphone valide",
-  "zarinpal.infoModal.submit": "Acheter",
-  "zarinpal.infoModal.title": "Informations requises"
+  "usage.storage.file.used": "Utilisation des fichiers"
 }

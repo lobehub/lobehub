@@ -340,6 +340,8 @@
   "payDiffPrice": "Differenz bezahlen",
   "payDiffPriceApprox": "Ca.",
   "payDiffPriceTip": "Der tatsächliche Betrag richtet sich nach der Zahlungsseite",
+  "payment.downgradeFailed.desc": "Das Plan-Upgrade konnte nicht geplant werden. Bitte versuchen Sie es später erneut oder kontaktieren Sie uns per E-Mail, falls das Problem weiterhin besteht.",
+  "payment.downgradeFailed.title": "Upgrade fehlgeschlagen",
   "payment.error.actions.billing": "Abrechnungsverwaltung",
   "payment.error.actions.home": "Zur Startseite",
   "payment.error.desc": "Abonnement-ID: {{id}} nicht gefunden. Bei Fragen kontaktieren Sie uns bitte per E-Mail",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Plan gesperrt",
   "plans.btn.payment": "Kaufen",
   "plans.btn.paymentDesc": "Unterstützt Kreditkarte / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Unterstützt Kreditkarte",
   "plans.btn.soon": "Demnächst verfügbar",
   "plans.cancelDowngrade": "Geplante Herabstufung abbrechen",
   "plans.cancelDowngradeSuccess": "Geplante Herabstufung wurde abgebrochen",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Nutzungsübersicht",
   "usage.remaining": "Verbleibend",
   "usage.storage.embeddings.used": "Vektorspeicher",
-  "usage.storage.file.used": "Dateinutzung",
-  "zarinpal.infoModal.desc": "Aufgrund gesetzlicher Vorgaben geben Sie bitte vor dem Kauf folgende Informationen an:",
-  "zarinpal.infoModal.phone.label": "Telefonnummer",
-  "zarinpal.infoModal.phone.placeholder": "Bitte Telefonnummer eingeben",
-  "zarinpal.infoModal.phone.rule": "Bitte gültige Telefonnummer eingeben",
-  "zarinpal.infoModal.submit": "Kaufen",
-  "zarinpal.infoModal.title": "Erforderliche Informationen ausfüllen"
+  "usage.storage.file.used": "Dateinutzung"
 }

@@ -37,8 +37,14 @@ vi.mock('@lobehub/ui/icons', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+    <button aria-label={title} onClick={onClick}>
+      {title}
+    </button>
+  ),
   confirmModal: vi.fn(),
   DropdownMenu: ({ children }: { children: ReactNode }) => children,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('antd', () => ({

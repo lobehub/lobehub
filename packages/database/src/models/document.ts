@@ -1,7 +1,15 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, works } from '../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documentCommentMentions,
+  documentComments,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  works,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -386,9 +394,11 @@ export class DocumentModel {
    * resource manager view stays consistent.
    */
   /**
-   * Whether the subtree (documents + anchored files) contains rows created by
-   * someone else. Transfers rehome every cascaded row, so non-owner members
-   * must not move a folder that carries teammates' content.
+   * Whether the subtree (documents + anchored files + comments) contains rows
+   * created by someone else. Transfers rehome every cascaded row, so non-owner
+   * members must not move a folder that carries teammates' content. Comments
+   * with a deleted author count as foreign because they do not belong to the
+   * caller and may otherwise be moved or deleted by a personal-scope transfer.
    */
   subtreeHasForeignRows = async (documentId: string): Promise<boolean> => {
     const subtree = await this.collectSubtree(documentId, this.db);
@@ -396,6 +406,18 @@ export class DocumentModel {
 
     const ids = subtree.map((doc) => doc.id);
     if (ids.length === 0) return false;
+
+    const [foreignComment] = await this.db
+      .select({ id: documentComments.id })
+      .from(documentComments)
+      .where(
+        and(
+          inArray(documentComments.documentId, ids),
+          or(ne(documentComments.authorUserId, this.userId), isNull(documentComments.authorUserId)),
+        ),
+      )
+      .limit(1);
+    if (foreignComment) return true;
 
     const [foreignFile] = await this.db
       .select({ id: files.id })
@@ -446,6 +468,34 @@ export class DocumentModel {
         .update(documents)
         .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
         .where(inArray(documents.id, ids));
+
+      if (targetWorkspaceId) {
+        await (trx as LobeChatDatabase)
+          .update(documentComments)
+          // A scope transfer is not an author edit. Preserve updatedAt to bypass
+          // the schema's Drizzle $onUpdate hook.
+          .set({ updatedAt: documentComments.updatedAt, workspaceId: targetWorkspaceId })
+          .where(inArray(documentComments.documentId, ids));
+
+        await (trx as LobeChatDatabase)
+          .update(documentCommentMentions)
+          .set({ workspaceId: targetWorkspaceId })
+          .where(
+            inArray(
+              documentCommentMentions.commentId,
+              (trx as LobeChatDatabase)
+                .select({ id: documentComments.id })
+                .from(documentComments)
+                .where(inArray(documentComments.documentId, ids)),
+            ),
+          );
+      } else {
+        // Comments are Workspace assets and cannot follow a document into personal scope.
+        // Mention rows are removed by the comment FK cascade.
+        await (trx as LobeChatDatabase)
+          .delete(documentComments)
+          .where(inArray(documentComments.documentId, ids));
+      }
 
       // Move files anchored to these documents; their visibility mirrors the
       // document subtree in workspace scope.

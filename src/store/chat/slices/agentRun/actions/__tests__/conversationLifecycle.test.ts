@@ -19,6 +19,7 @@ import type {
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { useDeviceStore } from '@/store/device';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
@@ -92,6 +93,11 @@ afterEach(() => {
   executeHeterogeneousAgentMock.mockReset();
   mockConstEnv.isDesktop = false;
   setPendingTopicRepos(TEST_IDS.SESSION_ID, []);
+  // Zustand state and the window-backed agent context survive `restoreAllMocks`,
+  // so a cwd test that seeds a device (or a desktop path) would otherwise leak
+  // a working directory into every later send in this file.
+  useDeviceStore.setState({ devices: [] });
+  delete window.__LOBE_GLOBAL_AGENT_CONTEXT__;
   vi.restoreAllMocks();
 });
 
@@ -424,6 +430,170 @@ describe('ConversationLifecycle actions', () => {
         expect(getJSONState).not.toHaveBeenCalled();
         expect(setJSONState).not.toHaveBeenCalled();
         expect(setDocument).not.toHaveBeenCalled();
+      });
+
+      it('should restore the pre-send editor snapshot when a gateway send fails', async () => {
+        // Regression: the composer is cleared the instant Enter is pressed, and
+        // only the client-runtime branch put the text back. The gateway branch
+        // just logged, failed the op and deleted the optimistic pair — so a
+        // server-side start refusal (e.g. `Topic <id> remained busy while
+        // starting operation ...`, thrown by the reservation gate before the
+        // user message is ever persisted) made the message vanish with no trace
+        // and no way to recover what was typed.
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Swallowed by gateway', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi
+          .fn()
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            isGatewayModeEnabled: () => true,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Swallowed by gateway',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the gateway branch actually ran and failed — otherwise a silent
+        // early bail would satisfy the restore assertions below by accident.
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
+      });
+
+      it('should not restore the composer when gateway setup fails after message acceptance', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(async (params) => {
+          params.onMessageAccepted();
+          throw new Error('gateway client initialization failed');
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: 'Already persisted',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalledOnce();
+        expect(setDocument).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
+      });
+
+      it('should restore the pre-send editor snapshot when a hetero send fails', async () => {
+        // Same silent-discard shape as the gateway branch above: persistence
+        // throws, the temp rows are cleaned up, and the typed text is gone.
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Swallowed by hetero', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Swallowed by hetero',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the hetero persistence branch actually ran and failed.
+        expect(sendMessageInServerSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
       });
 
       it('should move and adopt a first-turn voice row without sending local-only history', async () => {
@@ -1730,6 +1900,381 @@ describe('ConversationLifecycle actions', () => {
         });
       });
 
+      // A native (non-hetero) agent bound to a device resolves its cwd for the
+      // run (tools, {{workingDirectory}}) but used to leave the new topic
+      // unbound — By Project filed every such conversation under "No directory",
+      // and later turns re-resolved the agent-level default, so changing the
+      // agent's directory silently moved old topics to another project.
+      it('should bind a new gateway topic to a native agent device working directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        const sourcePath = '/repo/lobehub';
+        const worktreePath = '/repo/lobehub/.worktrees/feat';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: {
+                [deviceId]: {
+                  git: { activeWorktree: worktreePath },
+                  path: sourcePath,
+                  repoType: 'github',
+                },
+              },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        let resolveGateway!: () => void;
+        const gatewayPromise = new Promise<any>((resolve) => {
+          resolveGateway = () =>
+            resolve({
+              assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              operationId: 'gateway-op-cwd',
+              topicId: TEST_IDS.NEW_TOPIC_ID,
+              userMessageId: TEST_IDS.USER_MESSAGE_ID,
+            });
+        });
+        const executeGatewayAgentSpy = vi.fn().mockReturnValue(gatewayPromise);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Bind me to the project',
+          });
+        });
+
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
+
+        // `workingDirectory` is the EFFECTIVE path (the checked-out worktree the
+        // run executes in); the config keeps the SOURCE repo, which is what
+        // By-Project groups on.
+        const expectedMetadata = {
+          workingDirectory: worktreePath,
+          workingDirectoryConfig: {
+            git: { activeWorktree: worktreePath },
+            path: sourcePath,
+            repoType: 'github',
+          },
+        };
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
+          expect.objectContaining({ metadata: expectedMetadata }),
+        );
+        // Rides along to the server, which owns the real topic row.
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({ metadata: expectedMetadata }),
+          }),
+        );
+
+        await act(async () => {
+          resolveGateway();
+          await sendPromise;
+        });
+      });
+
+      it('should fall back to the bound device default cwd when the agent has no pick', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: { boundDeviceId: deviceId, executionTarget: 'device' },
+          },
+        });
+        act(() => {
+          useDeviceStore.setState({
+            devices: [{ defaultCwd: '/repo/default', deviceId, name: 'Mac' }] as any,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-default-cwd',
+          topicId: TEST_IDS.NEW_TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Use the device default',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({
+              metadata: {
+                workingDirectory: '/repo/default',
+                workingDirectoryConfig: { path: '/repo/default' },
+              },
+            }),
+          }),
+        );
+      });
+
+      // Client mode creates the topic itself (`sendMessageInServer`), so nothing
+      // downstream would ever write the cwd back — the metadata has to ride on
+      // the create call.
+      it('should bind a client-runtime new topic to the resolved working directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: { [deviceId]: { path: '/repo/lobehub' } },
+            },
+          },
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        const { result } = renderHook(() => useChatStore());
+        act(() => {
+          useChatStore.setState({ isGatewayModeEnabled: () => false });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: null },
+            message: 'Bind me too',
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({
+              metadata: {
+                workingDirectory: '/repo/lobehub',
+                workingDirectoryConfig: { path: '/repo/lobehub' },
+              },
+            }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('should leave a plain-chat agent topic unbound', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: { [deviceId]: { path: '/repo/lobehub' } },
+            },
+            // No execution environment at all — a directory would be noise, and
+            // By Project would file plain chats under a project they never used.
+            chatConfig: { ...createMockAgentConfig().chatConfig, enableAgentMode: false },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-chat',
+          topicId: TEST_IDS.NEW_TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Just chatting',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.not.objectContaining({ metadata: expect.anything() }),
+          }),
+        );
+      });
+
+      // The device `defaultCwd` level was added to the SEND path by the same
+      // change that started binding native topics, and it sits BETWEEN the
+      // legacy per-agent slot and the desktop/home fallback. A local
+      // heterogeneous CLI keys its sessions off the cwd
+      // (`~/.claude/projects/<encoded-cwd>/`), so reordering these levels moves
+      // an agent's whole session bucket and silently drops `--resume` — pin the
+      // order for the hetero path, which the native-agent cases above don't
+      // exercise (they never reach the desktop/home fallback at all).
+      describe('heterogeneous cwd precedence', () => {
+        const HETERO_DEVICE_ID = 'device-1';
+        const DESKTOP_PATH = '/Users/me/Desktop';
+
+        const setupHeteroRun = (agencyConfig: Record<string, any> = {}) => {
+          mockConstEnv.isDesktop = true;
+          setupMockSelectors({
+            agentConfig: {
+              agencyConfig: {
+                boundDeviceId: HETERO_DEVICE_ID,
+                executionTarget: 'local',
+                heterogeneousProvider: { command: 'codex', type: 'codex' },
+                ...agencyConfig,
+              },
+            },
+          });
+          executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+          return vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+        };
+
+        const sendHeteroMessage = async () => {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              context: createTestContext(),
+              message: TEST_CONTENT.USER_MESSAGE,
+            });
+          });
+        };
+
+        beforeEach(() => {
+          // The desktop/home fallback is always available for a hetero CLI, so
+          // every case below has something to lose to.
+          window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
+        });
+
+        it('prefers the bound device defaultCwd over the desktop fallback', async () => {
+          const sendMessageInServerSpy = setupHeteroRun();
+          act(() => {
+            useDeviceStore.setState({
+              devices: [
+                { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
+              ] as any,
+            });
+          });
+
+          await sendHeteroMessage();
+
+          // The CLI actually spawns here — a regression sends it to ~/Desktop
+          // and the `--resume` session bucket moves with it.
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+              workingDirectory: '/repo/device-default',
+              workingDirectoryConfig: { path: '/repo/device-default' },
+            }),
+          );
+          // …and the topic is born pinned to the same directory.
+          expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+              newTopic: expect.objectContaining({
+                metadata: {
+                  workingDirectory: '/repo/device-default',
+                  workingDirectoryConfig: { path: '/repo/device-default' },
+                },
+              }),
+            }),
+            expect.any(AbortController),
+          );
+        });
+
+        it('keeps the agent per-device pick above the device defaultCwd', async () => {
+          setupHeteroRun({
+            workingDirByDevice: { [HETERO_DEVICE_ID]: { path: '/repo/agent-pick' } },
+          });
+          act(() => {
+            useDeviceStore.setState({
+              devices: [
+                { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
+              ] as any,
+            });
+          });
+
+          await sendHeteroMessage();
+
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ workingDirectory: '/repo/agent-pick' }),
+          );
+        });
+
+        it('still falls back to the desktop path when neither the agent nor the device has one', async () => {
+          setupHeteroRun();
+
+          await sendHeteroMessage();
+
+          // Inserting the defaultCwd level must not swallow the last resort: a
+          // hetero CLI always spawns somewhere, so an unconfigured agent still
+          // needs a directory (unlike a native one, which stays unbound).
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ workingDirectory: DESKTOP_PATH }),
+          );
+        });
+      });
+
       it('should rollback an optimistic topic if the create response resolves without a topic id', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -3017,6 +3562,87 @@ describe('ConversationLifecycle actions', () => {
             },
           }),
           expect.any(AbortController),
+        );
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({ model: 'default', provider: 'codex' }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('overrides the heterogeneous runtime with the active topic model', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: {
+                args: ['--model', 'global-model', '--mode', 'plan'],
+                model: 'global-model',
+                type: 'cursor',
+              },
+            },
+          },
+        });
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const topicKey = topicMapKey({ agentId: TEST_IDS.SESSION_ID });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                items: [
+                  {
+                    createdAt: Date.now(),
+                    id: TEST_IDS.TOPIC_ID,
+                    model: 'topic-model',
+                    provider: 'cursor',
+                    title: 'Topic A',
+                    updatedAt: Date.now(),
+                  },
+                ],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            heterogeneousProvider: {
+              args: ['--mode', 'plan'],
+              model: 'topic-model',
+              type: 'cursor',
+            },
+          }),
         );
       });
 

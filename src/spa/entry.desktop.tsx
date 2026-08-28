@@ -6,6 +6,7 @@ import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import { bootTiming } from '@/libs/bootTiming';
 import { registerLocalDatabaseAdapter } from '@/libs/localDatabase';
 import { createElectronLocalDatabaseAdapter } from '@/libs/localDatabase/electronAdapter';
+import { rendererOtaService } from '@/services/electron/rendererOta';
 import { createAppRouter } from '@/utils/router';
 
 import BootShell from './BootShell';
@@ -14,6 +15,11 @@ import { startAppInitialization } from './initialize/bootstrap';
 import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
 import { desktopRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
+
+// OTA fast-fail signal: this line running proves the whole bundle graph
+// loaded and evaluated — a broken patch never reaches it, and main rolls back
+// within seconds instead of waiting for the mount-stage timeout.
+rendererOtaService.bootPing('loaded').catch(() => {});
 
 registerLocalDatabaseAdapter(createElectronLocalDatabaseAdapter());
 // Must stay synchronous and ahead of the first render: `useCacheScope` reads

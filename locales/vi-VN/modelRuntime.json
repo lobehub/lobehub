@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Không thể lắp ráp ngữ cảnh hội thoại cho yêu cầu này. Vui lòng thử lại; nếu vấn đề vẫn tiếp diễn, hãy liên hệ với bộ phận hỗ trợ.",
   "DatabasePersistError": "Một thao tác cơ sở dữ liệu đã thất bại khi lưu hoặc tải hội thoại này. Vui lòng thử lại; nếu vấn đề vẫn tiếp diễn, hãy liên hệ với bộ phận hỗ trợ.",
   "ExceededContextWindow": "Nội dung yêu cầu hiện tại vượt quá độ dài mà mô hình có thể xử lý. Vui lòng giảm bớt nội dung và thử lại.",
+  "HarnessJsonParseError": "Một tải trọng nội bộ không thể được đọc lại, vì vậy hoạt động này đã dừng. Thử lại yêu cầu tương tự sẽ gặp cùng lỗi — vui lòng bắt đầu một tin nhắn mới; nếu vấn đề vẫn tiếp diễn, hãy liên hệ với bộ phận hỗ trợ.",
   "InsufficientQuota": "Rất tiếc, hạn mức cho khóa này đã đạt đến giới hạn. Vui lòng kiểm tra số dư tài khoản của bạn hoặc thử lại sau khi tăng hạn mức của khóa.",
   "InvalidBedrockCredentials": "Xác thực Bedrock thất bại. Vui lòng kiểm tra AccessKeyId/SecretAccessKey và thử lại.",
   "InvalidComfyUIArgs": "Cấu hình ComfyUI không hợp lệ. Vui lòng kiểm tra cài đặt và thử lại.",

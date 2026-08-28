@@ -121,5 +121,44 @@ describe('LobeVolcengineAI - custom features', () => {
       expect(calledPayload.thinking).toEqual({ type: 'enabled' });
       expect(calledPayload.reasoning.effort).toBe('high');
     });
+
+    /**
+     * `adaptive` is in the runtime's own `thinking.type` union — it is Anthropic's
+     * "let the model decide" — and Ark answers it with
+     * `invalid value adaptive`, failing the whole request.
+     *
+     * It is not a synthetic input: `/api/v1/anthropic` relays an Anthropic
+     * client's body, and Claude Code sends `thinking: {type: 'adaptive'}` on
+     * every request whatever model it has been pointed at. Both model families
+     * are covered because they take different branches here — the reasoning-effort
+     * family used to fall past its `disabled` / `enabled` cases, and everything
+     * else skipped the branch entirely.
+     */
+    it.each(['doubao-seed-2-1-pro-260628', 'deepseek-v4-pro-260425'])(
+      'drops a thinking type Ark does not accept, for %s',
+      async (model) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          thinking: { type: 'adaptive' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload).not.toHaveProperty('thinking');
+      },
+    );
+
+    it('still honours reasoning_effort when the thinking type was dropped', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        reasoning_effort: 'low',
+        thinking: { type: 'adaptive' },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'enabled' });
+      expect(calledPayload.reasoning_effort).toBe('low');
+    });
   });
 });

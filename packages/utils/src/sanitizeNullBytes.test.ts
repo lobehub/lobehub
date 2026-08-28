@@ -65,4 +65,46 @@ describe('sanitizeNullBytes', () => {
     const result = sanitizeNullBytes(arr);
     expect(result).toEqual(['ab', 'cd']);
   });
+
+  // --- regression: text that SPELLS OUT a \u0000 escape must survive ---
+
+  it('should not throw on a string containing a literal \u0000 escape sequence', () => {
+    // Real tool results carry this text verbatim: regex character classes,
+    // `GROUP_KEY_SEP = "\u0000"`, smali metadata, base64 dumps. The old
+    // stringify -> strip -> parse implementation doubled the leading backslash,
+    // matched the needle one character late, ate the escape's own backslash and
+    // died with `Bad escaped character in JSON at position N` — failing the
+    // whole agent operation from the tool-result persist path.
+    const state = { content: "key = x.theme + '\\u0000' + x.category" };
+
+    expect(() => sanitizeNullBytes(state)).not.toThrow();
+    expect(sanitizeNullBytes(state).content).toBe(state.content);
+  });
+
+  it('should preserve a literal \u0000 escape followed by an invalid escape char', () => {
+    // The orphan backslash used to land in front of `U`, which is not a legal
+    // JSON escape — the exact shape reported from Windows agents.
+    const state = { path: 'C:\\u0000Users' };
+
+    expect(sanitizeNullBytes(state).path).toBe('C:\\u0000Users');
+  });
+
+  it('should preserve a literal \u0000 escape at the end of a string', () => {
+    // The orphan backslash used to swallow the closing quote instead.
+    const state = { snippet: 'SEP = "\\u0000"' };
+
+    expect(sanitizeNullBytes(state).snippet).toBe('SEP = "\\u0000"');
+  });
+
+  it('should strip real null bytes while leaving literal escape text alone', () => {
+    const state = { line: 'a\u0000b, literal: \\u0000' };
+
+    expect(sanitizeNullBytes(state).line).toBe('ab, literal: \\u0000');
+  });
+
+  it('should sanitize null bytes in object keys', () => {
+    const obj = { ['a\u0000b']: 1 };
+
+    expect(Object.keys(sanitizeNullBytes(obj))).toEqual(['ab']);
+  });
 });
