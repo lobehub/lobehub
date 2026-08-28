@@ -1,40 +1,24 @@
 import {
-  AmbiguousSnapshotIdError,
   type ExecutionSnapshot,
-  loadSnapshot,
-  MissingTracingBaseUrlError,
+  type FrozenCall,
+  judgeReplay,
+  listReplayableSteps,
+  type ModelTarget,
+  parseModelTargets,
+  type ReplayAttempt,
+  type ReplayConnection,
+  replayFrozenCall,
+  selectFrozenCall,
 } from '@lobechat/agent-tracing';
-import { match } from '@lobechat/eval-rubric';
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
-import { getAuthInfo } from '../../api/http';
-import { log } from '../../utils/logger';
-import { createJudgeContext } from './judge';
-import {
-  buildReplayRequest,
-  extractCompletionText,
-  extractToolCalls,
-  type FrozenCall,
-  listReplayableSteps,
-  type ModelTarget,
-  parseModelTargets,
-  selectFrozenCall,
-} from './payload';
+import { getAuthInfo } from '../../../api/http';
+import { log } from '../../../utils/logger';
+import { resolveSnapshotOrExit } from './snapshot';
 
 const DEFAULT_JUDGE_MODEL = 'openai/gpt-4o-mini';
-const JUDGE_THRESHOLD = 0.6;
-
-export interface ReplayAttempt {
-  content: string;
-  durationMs: number;
-  error?: string;
-  judge?: { passed: boolean; reason?: string; score: number };
-  model: string;
-  toolCalls: Array<{ arguments?: string; name: string }>;
-  usage?: { completionTokens?: number; promptTokens?: number };
-}
 
 const parseIntOption = (name: string) => (value: string) => {
   const parsed = Number.parseInt(value, 10);
@@ -48,14 +32,11 @@ const parseFloatOption = (name: string) => (value: string) => {
   return parsed;
 };
 
-export function registerReplayCommand(parent: Command) {
+export function registerOpReplayCommand(parent: Command) {
   parent
     .command('replay')
-    .description('Re-issue a frozen LLM call from an execution snapshot against one or more models')
-    .argument(
-      '[target]',
-      'Operation id, trace id, snapshot json path, URL, or "latest" (default: latest local)',
-    )
+    .description('Re-issue a frozen LLM call from a recorded operation against one or more models')
+    .argument('[target]', 'Operation id, trace id, snapshot json path, URL, or "latest"')
     .option(
       '-s, --step <n>',
       'Snapshot step index to replay (default: the last call_llm step)',
@@ -63,7 +44,7 @@ export function registerReplayCommand(parent: Command) {
     )
     .option(
       '-m, --model <list>',
-      'Comma-separated provider/model targets (default: the model the snapshot ran on)',
+      'Comma-separated provider/model targets (default: the model the operation ran on)',
     )
     .option('--judge <criteria>', 'Score every replayed output with an llm-rubric criteria')
     .option('--judge-model <model>', 'Judge model as provider/model', DEFAULT_JUDGE_MODEL)
@@ -85,7 +66,7 @@ export function registerReplayCommand(parent: Command) {
           tools: boolean;
         },
       ) => {
-        const snapshot = await resolveOrExit(target);
+        const snapshot = await resolveSnapshotOrExit(target);
         const call = selectFrozenCall(snapshot, options.step);
 
         if (!call) {
@@ -100,10 +81,12 @@ export function registerReplayCommand(parent: Command) {
         }
 
         let targets: ModelTarget[];
+        let judgeModel: ModelTarget | undefined;
         try {
           targets = options.model
             ? parseModelTargets(options.model, snapshot.provider)
             : originalTarget(snapshot);
+          judgeModel = options.judge ? parseModelTargets(options.judgeModel)[0] : undefined;
         } catch (error) {
           log.error(error instanceof Error ? error.message : String(error));
           process.exit(1);
@@ -111,31 +94,28 @@ export function registerReplayCommand(parent: Command) {
         }
 
         const { serverUrl, headers } = await getAuthInfo();
-
-        const judgeContext = options.judge
-          ? createJudgeContext({
-              headers,
-              judgeModel: parseModelTargets(options.judgeModel)[0],
-              serverUrl,
-            })
-          : undefined;
+        const connection: ReplayConnection = { headers, serverUrl };
 
         if (!options.json) printHeader(snapshot, call, targets);
 
         const attempts: ReplayAttempt[] = [];
         for (const modelTarget of targets) {
-          const attempt = await replayOnce({
+          const attempt = await replayFrozenCall({
             call,
-            headers,
+            connection,
             maxTokens: options.maxTokens,
-            serverUrl,
             target: modelTarget,
             temperature: options.temperature,
             withTools: options.tools,
           });
 
-          if (options.judge && judgeContext && !attempt.error) {
-            attempt.judge = await judgeAttempt(attempt.content, options.judge, judgeContext);
+          if (options.judge && judgeModel && !attempt.error) {
+            attempt.judge = await judgeReplay({
+              actual: attempt.content,
+              connection,
+              criteria: options.judge,
+              judgeModel,
+            });
           }
 
           attempts.push(attempt);
@@ -175,110 +155,6 @@ const originalTarget = (snapshot: ExecutionSnapshot): ModelTarget[] => {
   ];
 };
 
-const resolveOrExit = async (target?: string): Promise<ExecutionSnapshot> => {
-  try {
-    const snapshot = await loadSnapshot(target, { allowDownload: true });
-    if (snapshot) return snapshot;
-    log.error(`No snapshot found for "${target ?? 'latest'}".`);
-  } catch (error) {
-    if (error instanceof MissingTracingBaseUrlError || error instanceof AmbiguousSnapshotIdError) {
-      log.error(error.message);
-    } else {
-      log.error(error instanceof Error ? error.message : String(error));
-    }
-  }
-  process.exit(1);
-};
-
-interface ReplayOnceParams {
-  call: FrozenCall;
-  headers: Record<string, string>;
-  maxTokens?: number;
-  serverUrl: string;
-  target: ModelTarget;
-  temperature?: number;
-  withTools: boolean;
-}
-
-export const replayOnce = async ({
-  call,
-  headers,
-  maxTokens,
-  serverUrl,
-  target,
-  temperature,
-  withTools,
-}: ReplayOnceParams): Promise<ReplayAttempt> => {
-  const request = buildReplayRequest({ call, maxTokens, target, temperature, withTools });
-  const startedAt = Date.now();
-
-  try {
-    const res = await fetch(`${serverUrl}/webapi/chat/${target.provider}`, {
-      body: JSON.stringify(request),
-      headers,
-      method: 'POST',
-    });
-
-    if (!res.ok) {
-      return {
-        content: '',
-        durationMs: Date.now() - startedAt,
-        error: `${res.status} ${await res.text()}`,
-        model: target.label,
-        toolCalls: [],
-      };
-    }
-
-    const body = (await res.json()) as {
-      usage?: { completion_tokens?: number; prompt_tokens?: number };
-    };
-
-    return {
-      content: extractCompletionText(body),
-      durationMs: Date.now() - startedAt,
-      model: target.label,
-      toolCalls: extractToolCalls(body),
-      usage: {
-        completionTokens: body?.usage?.completion_tokens,
-        promptTokens: body?.usage?.prompt_tokens,
-      },
-    };
-  } catch (error) {
-    return {
-      content: '',
-      durationMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error),
-      model: target.label,
-      toolCalls: [],
-    };
-  }
-};
-
-const judgeAttempt = async (
-  actual: string,
-  criteria: string,
-  context: ReturnType<typeof createJudgeContext>,
-): Promise<ReplayAttempt['judge']> => {
-  const result = await match(
-    {
-      actual,
-      expected: undefined,
-      input: '',
-      rubric: {
-        config: { criteria },
-        id: 'replay-judge',
-        name: 'replay-judge',
-        threshold: JUDGE_THRESHOLD,
-        type: 'llm-rubric',
-        weight: 1,
-      },
-    },
-    context,
-  );
-
-  return { passed: result.passed, reason: result.reason, score: result.score };
-};
-
 const printHeader = (snapshot: ExecutionSnapshot, call: FrozenCall, targets: ModelTarget[]) => {
   console.log(pc.bold('Replaying frozen call'));
   console.log(`  operation  ${snapshot.operationId}`);
@@ -301,10 +177,10 @@ const printAttempt = (attempt: ReplayAttempt) => {
 
   const meta = [
     `${attempt.durationMs}ms`,
-    attempt.usage?.promptTokens !== undefined ? `in ${attempt.usage.promptTokens}` : undefined,
-    attempt.usage?.completionTokens !== undefined
-      ? `out ${attempt.usage.completionTokens}`
-      : undefined,
+    attempt.usage?.promptTokens === undefined ? undefined : `in ${attempt.usage.promptTokens}`,
+    attempt.usage?.completionTokens === undefined
+      ? undefined
+      : `out ${attempt.usage.completionTokens}`,
   ]
     .filter(Boolean)
     .join('  ');

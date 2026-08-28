@@ -1,7 +1,5 @@
 import { type MatchContext } from '@lobechat/eval-rubric';
 
-import { log } from '../../utils/logger';
-
 const JUDGE_SCHEMA_NAME = 'eval_judge_score';
 
 /**
@@ -74,8 +72,7 @@ export const parseJudgeResponse = (raw: string): { reason: string; score: number
     }
   }
 
-  log.debug(`Judge returned an unparseable response: ${raw.slice(0, 200)}`);
-  throw new Error('Judge did not return a parseable score');
+  throw new Error(`Judge did not return a parseable score. Raw response: ${raw.slice(0, 200)}`);
 };
 
 const extractJsonSpan = (raw: string): string | undefined => {

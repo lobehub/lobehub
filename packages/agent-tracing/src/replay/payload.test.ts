@@ -1,6 +1,6 @@
-import type { ExecutionSnapshot } from '@lobechat/agent-tracing';
 import { describe, expect, it } from 'vitest';
 
+import type { ExecutionSnapshot } from '../types';
 import {
   buildReplayRequest,
   extractCompletionText,

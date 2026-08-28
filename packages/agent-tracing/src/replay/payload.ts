@@ -1,4 +1,5 @@
-import { type ExecutionSnapshot, resolvePayloads } from '@lobechat/agent-tracing';
+import { resolvePayloads } from '../analysis/contextLint';
+import type { ExecutionSnapshot } from '../types';
 
 /** One `call_llm` step frozen out of a snapshot, ready to be re-issued. */
 export interface FrozenCall {
