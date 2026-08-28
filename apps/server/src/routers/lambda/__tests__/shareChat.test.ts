@@ -11,10 +11,18 @@ vi.mock('@/database/core/db-adaptor', () => ({
 // Pin the cloud-only capability open so the visitor procedures under test are
 // reachable in OSS CI, where ENABLE_BUSINESS_FEATURES is false and the
 // shareChatProcedure middleware would reject everything with FORBIDDEN.
-vi.mock('@lobechat/business-const', async (importOriginal) => ({
-  ...(await importOriginal()),
-  ENABLE_BUSINESS_FEATURES: true,
-}));
+vi.mock('@lobechat/business-const', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    // `packages/utils/src/apiKey.ts` probes this OPTIONAL slot via namespace
+    // access. The real namespace reads a missing export as `undefined`, but
+    // the vitest mock proxy hard-errors on keys the factory didn't define —
+    // so define it explicitly even when the resolved module omits it.
+    API_KEY_PREFIX: actual.API_KEY_PREFIX,
+    ENABLE_BUSINESS_FEATURES: true,
+  };
+});
 
 const mockAccessCheck = vi.fn();
 vi.mock('@/database/models/agentShare', () => ({
@@ -29,8 +37,10 @@ vi.mock('@/business/server/agent-share/agentShareBudgetGate', () => ({
 const mockFindById = vi.fn();
 const mockCountVisitorShareTopics = vi.fn();
 const mockQueryVisitorShareTopics = vi.fn();
+const mockTopicDelete = vi.fn();
 const TopicModelMock = vi.fn(() => ({
   countVisitorShareTopics: mockCountVisitorShareTopics,
+  delete: mockTopicDelete,
   findById: mockFindById,
   queryVisitorShareTopics: mockQueryVisitorShareTopics,
 }));
@@ -344,6 +354,30 @@ describe('shareChatRouter', () => {
         expect(error.message).not.toContain('internal-queue');
         expect(error.message).not.toContain('token=shhh');
       });
+      // Regression: the failed NEW-topic startup above already persisted the
+      // topic, but the sanitized rejection hides it from the visitor client —
+      // without cleanup each retry mints another invisible topic and burns a
+      // `maxTopicsPerVisitor` slot (the cap counts topic rows).
+      expect(mockTopicDelete).toHaveBeenCalledWith('tpc_visitor');
+    });
+
+    it('keeps an EXISTING topic when a resolved startup failure happens on it', async () => {
+      mockFindById.mockResolvedValue(visitorTopic);
+      mockMessageCountByTopic.mockResolvedValue(0);
+      mockExecAgent.mockResolvedValue({
+        error: 'startup failed',
+        status: 'error',
+        success: false,
+        topicId: visitorTopic.id,
+      });
+      const caller = await createCaller();
+
+      await expect(
+        caller.execAgent({ prompt: 'hi', shareId: 'share-1', topicId: visitorTopic.id }),
+      ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      // Only a topic minted BY this failed send is cleanup material — an
+      // existing topic keeps its history.
+      expect(mockTopicDelete).not.toHaveBeenCalled();
     });
 
     it('never sets interactiveStart, so concurrent visitor sends contend on the real runningOperation liveness instead of only the short reservation', async () => {

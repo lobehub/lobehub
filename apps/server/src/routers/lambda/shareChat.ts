@@ -368,6 +368,23 @@ export const shareChatRouter = router({
         // the failure through the same rejection path `sendMessage` already
         // handles for every other startup error on this endpoint.
         if (!result.success) {
+          // A failed NEW-topic startup has already persisted the topic (and
+          // its error rows) and returned its `topicId` — but the sanitized
+          // rejection below hides that topic from the visitor client (no
+          // selection, no topic-list refresh), so every retry would mint
+          // another invisible topic, and each one permanently consumes a
+          // `maxTopicsPerVisitor` slot (the cap counts topic rows). Delete
+          // the orphan so a brief runtime/queue outage cannot exhaust the
+          // visitor's allowance. Best-effort: if this cleanup itself fails,
+          // the visitor merely keeps one junk topic — still throw the
+          // original startup error, not the cleanup error.
+          if (!input.topicId && result.topicId) {
+            try {
+              await topicModel.delete(result.topicId);
+            } catch {
+              /* see above — never mask the startup error */
+            }
+          }
           throw toVisitorSafeStartupError('execAgent', { message: result.error });
         }
 
