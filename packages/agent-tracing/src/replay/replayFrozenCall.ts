@@ -98,6 +98,8 @@ export interface JudgeReplayParams {
   actual: string;
   connection: ReplayConnection;
   criteria: string;
+  /** Reference output, shown to the judge as `[Expected]`. */
+  expected?: string;
   judgeModel: ModelTarget;
 }
 
@@ -110,12 +112,13 @@ export const judgeReplay = async ({
   actual,
   connection,
   criteria,
+  expected,
   judgeModel,
 }: JudgeReplayParams): Promise<ReplayAttempt['judge']> => {
   const result = await match(
     {
       actual,
-      expected: undefined,
+      expected,
       input: '',
       rubric: {
         config: { criteria },

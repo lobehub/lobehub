@@ -1,4 +1,5 @@
 import {
+  type DivergencePolicy,
   type ExecutionSnapshot,
   type FrozenCall,
   judgeReplay,
@@ -8,6 +9,7 @@ import {
   type ReplayAttempt,
   type ReplayConnection,
   replayFrozenCall,
+  replayTrajectory,
   selectFrozenCall,
 } from '@lobechat/agent-tracing';
 import type { Command } from 'commander';
@@ -17,6 +19,7 @@ import pc from 'picocolors';
 import { getAuthInfo } from '../../../api/http';
 import { log } from '../../../utils/logger';
 import { resolveSnapshotOrExit } from './snapshot';
+import { printTrajectoryNode, printTrajectorySummary } from './trajectoryView';
 
 const DEFAULT_JUDGE_MODEL = 'openai/gpt-4o-mini';
 
@@ -46,6 +49,19 @@ export function registerOpReplayCommand(parent: Command) {
       '-m, --model <list>',
       'Comma-separated provider/model targets (default: the model the operation ran on)',
     )
+    .option(
+      '--chain',
+      'Replay every call as a node, feeding each output into the next, and report where it leaves the recorded trajectory',
+    )
+    .option(
+      '--all-steps',
+      'Replay every call against its own recorded payload, so one divergence cannot contaminate later nodes',
+    )
+    .option(
+      '--on-divergence <policy>',
+      'What --chain does at the first tool-call divergence: stop | continue',
+      'stop',
+    )
     .option('--judge <criteria>', 'Score every replayed output with an llm-rubric criteria')
     .option('--judge-model <model>', 'Judge model as provider/model', DEFAULT_JUDGE_MODEL)
     .option('--no-tools', 'Drop tool definitions from the replayed payload')
@@ -56,20 +72,36 @@ export function registerOpReplayCommand(parent: Command) {
       async (
         target: string | undefined,
         options: {
+          allSteps?: boolean;
+          chain?: boolean;
           json?: boolean;
           judge?: string;
           judgeModel: string;
           maxTokens?: number;
           model?: string;
+          onDivergence: DivergencePolicy;
           step?: number;
           temperature?: number;
           tools: boolean;
         },
       ) => {
         const snapshot = await resolveSnapshotOrExit(target);
-        const call = selectFrozenCall(snapshot, options.step);
+        const trajectoryMode = options.chain ? 'chain' : options.allSteps ? 'anchored' : undefined;
 
-        if (!call) {
+        if (trajectoryMode && options.step !== undefined) {
+          log.error('--step replays a single call; drop it to replay the whole trajectory.');
+          process.exit(1);
+          return;
+        }
+        if (!['continue', 'stop'].includes(options.onDivergence)) {
+          log.error('--on-divergence must be "stop" or "continue".');
+          process.exit(1);
+          return;
+        }
+
+        const call = trajectoryMode ? undefined : selectFrozenCall(snapshot, options.step);
+
+        if (!trajectoryMode && !call) {
           const steps = listReplayableSteps(snapshot);
           log.error(
             options.step === undefined
@@ -86,7 +118,10 @@ export function registerOpReplayCommand(parent: Command) {
           targets = options.model
             ? parseModelTargets(options.model, snapshot.provider)
             : originalTarget(snapshot);
-          judgeModel = options.judge ? parseModelTargets(options.judgeModel)[0] : undefined;
+          // Trajectory runs always score reproduction against the recorded output,
+          // so they need a judge even when no behavioural criteria was given.
+          judgeModel =
+            options.judge || trajectoryMode ? parseModelTargets(options.judgeModel)[0] : undefined;
         } catch (error) {
           log.error(error instanceof Error ? error.message : String(error));
           process.exit(1);
@@ -95,6 +130,40 @@ export function registerOpReplayCommand(parent: Command) {
 
         const { serverUrl, headers } = await getAuthInfo();
         const connection: ReplayConnection = { headers, serverUrl };
+
+        if (trajectoryMode) {
+          if (targets.length > 1) {
+            log.error('Trajectory replay runs one model at a time — pass a single --model.');
+            process.exit(1);
+            return;
+          }
+
+          if (!options.json) printTrajectoryHeader(snapshot, targets[0], trajectoryMode);
+
+          const result = await replayTrajectory({
+            connection,
+            maxTokens: options.maxTokens,
+            mode: trajectoryMode,
+            onDivergence: options.onDivergence,
+            onNode: options.json
+              ? undefined
+              : (node) => printTrajectoryNode(node, listReplayableSteps(snapshot).length),
+            reproductionJudge: judgeModel ? { judgeModel } : undefined,
+            snapshot,
+            target: targets[0],
+            temperature: options.temperature,
+            withTools: options.tools,
+          });
+
+          if (options.json) {
+            console.log(JSON.stringify({ ...result, operationId: snapshot.operationId }, null, 2));
+          } else {
+            printTrajectorySummary(result);
+          }
+          return;
+        }
+
+        if (!call) return;
 
         if (!options.json) printHeader(snapshot, call, targets);
 
@@ -153,6 +222,18 @@ const originalTarget = (snapshot: ExecutionSnapshot): ModelTarget[] => {
       provider: snapshot.provider,
     },
   ];
+};
+
+const printTrajectoryHeader = (
+  snapshot: ExecutionSnapshot,
+  target: ModelTarget,
+  mode: 'anchored' | 'chain',
+) => {
+  console.log(pc.bold(mode === 'chain' ? 'Chained trajectory replay' : 'Per-node replay'));
+  console.log(`  operation  ${snapshot.operationId}`);
+  console.log(`  recorded   ${snapshot.provider ?? '?'}/${snapshot.model ?? '?'}`);
+  console.log(`  target     ${target.label}`);
+  console.log('');
 };
 
 const printHeader = (snapshot: ExecutionSnapshot, call: FrozenCall, targets: ModelTarget[]) => {

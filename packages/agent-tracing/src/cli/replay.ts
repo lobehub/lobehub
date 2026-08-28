@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 
 import {
+  type DivergencePolicy,
   judgeReplay,
   listReplayableSteps,
   type ModelTarget,
@@ -8,6 +9,7 @@ import {
   type ReplayAttempt,
   type ReplayConnection,
   replayFrozenCall,
+  replayTrajectory,
   selectFrozenCall,
 } from '../replay';
 import { loadSnapshot } from '../store/loadSnapshot';
@@ -59,6 +61,13 @@ export function registerReplayCommand(program: Command) {
     .argument('[target]', 'Operation id, trace id, snapshot json path, URL, or "latest"')
     .option('-s, --step <n>', 'Snapshot step index to replay (default: the last call_llm step)')
     .option('-m, --model <list>', 'Comma-separated provider/model targets')
+    .option('--chain', 'Replay every call as a node, feeding each output into the next')
+    .option('--all-steps', 'Replay every call against its own recorded payload')
+    .option(
+      '--on-divergence <policy>',
+      'What --chain does at the first tool-call divergence: stop | continue',
+      'stop',
+    )
     .option('--judge <criteria>', 'Score every replayed output with an llm-rubric criteria')
     .option('--judge-model <model>', 'Judge model as provider/model', DEFAULT_JUDGE_MODEL)
     .option('--no-tools', 'Drop tool definitions from the replayed payload')
@@ -69,11 +78,14 @@ export function registerReplayCommand(program: Command) {
       async (
         target: string | undefined,
         opts: {
+          allSteps?: boolean;
+          chain?: boolean;
           json?: boolean;
           judge?: string;
           judgeModel: string;
           maxTokens?: string;
           model?: string;
+          onDivergence: DivergencePolicy;
           step?: string;
           temperature?: string;
           tools: boolean;
@@ -91,10 +103,11 @@ export function registerReplayCommand(program: Command) {
           process.exit(1);
         }
 
+        const trajectoryMode = opts.chain ? 'chain' : opts.allSteps ? 'anchored' : undefined;
         const stepIndex = opts.step === undefined ? undefined : Number.parseInt(opts.step, 10);
-        const call = selectFrozenCall(snapshot, stepIndex);
+        const call = trajectoryMode ? undefined : selectFrozenCall(snapshot, stepIndex);
 
-        if (!call) {
+        if (!trajectoryMode && !call) {
           console.error(
             stepIndex === undefined
               ? 'Snapshot has no call_llm step with a recorded payload — nothing to replay.'
@@ -110,12 +123,53 @@ export function registerReplayCommand(program: Command) {
           targets = opts.model
             ? parseModelTargets(opts.model, snapshot.provider)
             : originalTarget(snapshot);
-          judgeModel = opts.judge ? parseModelTargets(opts.judgeModel)[0] : undefined;
+          judgeModel =
+            opts.judge || trajectoryMode ? parseModelTargets(opts.judgeModel)[0] : undefined;
           connection = resolveConnection();
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
           process.exit(1);
         }
+
+        if (trajectoryMode) {
+          const result = await replayTrajectory({
+            connection,
+            maxTokens:
+              opts.maxTokens === undefined ? undefined : Number.parseInt(opts.maxTokens, 10),
+            mode: trajectoryMode,
+            onDivergence: opts.onDivergence,
+            onNode: opts.json
+              ? undefined
+              : (node) =>
+                  console.log(
+                    `${node.divergence ? '≠' : '✓'} node ${node.nodeIndex + 1} (step ${node.stepIndex})` +
+                      (node.divergence
+                        ? `  expected ${node.divergence.expected || '(final answer)'} / got ${node.divergence.got || '(final answer)'}`
+                        : ''),
+                  ),
+            reproductionJudge: judgeModel ? { judgeModel } : undefined,
+            snapshot,
+            target: targets[0],
+            temperature:
+              opts.temperature === undefined ? undefined : Number.parseFloat(opts.temperature),
+            withTools: opts.tools,
+          });
+
+          console.log(
+            opts.json
+              ? JSON.stringify({ ...result, operationId: snapshot.operationId }, null, 2)
+              : `\n${result.nodes.length}/${result.totalNodes} nodes replayed` +
+                  (result.divergedAtNode === undefined
+                    ? ''
+                    : `, diverged at node ${result.divergedAtNode + 1}`) +
+                  (result.reproduction
+                    ? `\nreproduction ${result.reproduction.passed ? 'PASS' : 'FAIL'} ${result.reproduction.score.toFixed(2)} ${result.reproduction.reason ?? ''}`
+                    : ''),
+          );
+          return;
+        }
+
+        if (!call) return;
 
         if (!opts.json) {
           console.error(
