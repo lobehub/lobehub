@@ -621,9 +621,26 @@ export class GoalService {
     const [runningTopic] = await this.taskTopicModel.findRunningByTaskIds([task.id]);
     const operationId = runningTopic?.operationId;
     const topicId = runningTopic?.topicId;
-    if (!operationId || !topicId) return undefined;
-
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
+
+    if (!operationId || !topicId) {
+      // A task claimed for dispatch but with no run behind it. Normally this is
+      // the sliver between the claim and `runTask` creating the topic; if the
+      // worker died in there it is permanent, and every later advance would
+      // report `waiting_external` forever because there is no operation to
+      // reclaim. Once the claim is older than the lease, hand it back.
+      if (new Date(task.updatedAt) >= staleBefore) return undefined;
+      const released = await this.taskModel.updateStatusIfCurrent(task.id, 'running', 'backlog');
+      if (!released) return undefined;
+      return {
+        goalId: graph.goal.id,
+        message: `Released the abandoned dispatch claim on task ${task.identifier}`,
+        nodeId,
+        outcome: 'advanced',
+        taskId: task.id,
+      };
+    }
+
     const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
     const reclaimed = await this.db.transaction(async (tx) => {
       const settled = await new AgentOperationModel(

@@ -58,9 +58,12 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
         work: [{ description: params.instruction, title: params.name }],
       });
 
-      // One tick dispatches the first Work: the coordinator creates the
-      // responsible task with its own acceptance contract and starts the run.
-      const tick = await goalService.tick(graph.goal.id);
+      // `goal.create` already queued an advance; running the same driver here
+      // makes the goal visibly moving before this call returns, even where the
+      // queue is unavailable. It must be `advance` rather than one tick: the
+      // driver that claims the Work has to carry it past binding the task into
+      // starting it, or nothing runs until the sweep notices.
+      const tick = await goalService.advance(graph.goal.id);
 
       return {
         content: `Goal "${graph.goal.title}" created with ${criteria.length} acceptance criteria. ${tick.message}. Execution continues in its own task; do not perform or reproduce the work in this conversation.`,

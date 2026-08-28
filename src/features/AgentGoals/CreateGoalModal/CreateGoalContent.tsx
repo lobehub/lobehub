@@ -461,9 +461,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         title,
         work: [{ description: instruction, title }],
       });
-      // The first tick dispatches the opening Work: the coordinator creates its
-      // task and acceptance contract, so the goal is moving when the modal closes.
-      await goalService.tick(graph.goal.id);
+      // `goal.create` already queued an advance; this runs the same driver so
+      // the goal is visibly moving by the time the modal closes even where the
+      // queue is unavailable. It must be `advance`, not a single tick: whichever
+      // driver claims the Work has to carry it past binding the task into
+      // actually starting it, and the loser stops at `waiting_external`.
+      await goalService.advance(graph.goal.id);
 
       close();
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });

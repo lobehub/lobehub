@@ -475,7 +475,7 @@
   "goalProcess.activity.title": "Activity",
   "goalProcess.advance.label": "Advance",
   "goalProcess.advance.running": "Advancing…",
-  "goalProcess.advance.tooltip": "Keep advancing until the goal is achieved, needs your decision, or has nothing ready. Graph goals have no server-side driver — they only move while a client advances them.",
+  "goalProcess.advance.tooltip": "The goal already advances on its own as its work settles. Press this to run the coordinator now — useful when you want to see where it stops without waiting.",
   "goalProcess.attempts.failed": "Did not pass",
   "goalProcess.attempts.nth": "Attempt {{index}}",
   "goalProcess.attempts.passed": "Passed",

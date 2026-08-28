@@ -1875,7 +1875,7 @@ export default {
   'goalProcess.summary.gateResolved': 'Decided: {{option}}',
   'goalProcess.advance.label': 'Advance',
   'goalProcess.advance.tooltip':
-    'Run one coordinator step. Graph goals have no server-side driver — they only move while a client advances them.',
+    'The goal already advances on its own as its work settles. Press this to run the coordinator now — useful when you want to see where it stops without waiting.',
   'goalProcess.pause': 'Pause',
   'goalProcess.resume': 'Resume',
   'goalProcess.paused': 'Paused — no new work will start',

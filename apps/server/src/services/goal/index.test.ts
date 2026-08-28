@@ -148,6 +148,49 @@ describe('GoalService', () => {
     expect(runSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('hands back a dispatch claim whose worker died before the run existed', async () => {
+    // The claim is taken just before `runTask` creates the topic. If the worker
+    // dies in that sliver the task is `running` with no operation to reclaim,
+    // and every later advance would report `waiting_external` forever.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockRejectedValue(new Error('worker died'));
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ title: 'Orphaned claim', work: ['Start me'] });
+    const created = await service.tick(graph.goal.id);
+
+    // The claim survives the crash: put the row back where a dead worker left it.
+    await expect(service.tick(graph.goal.id)).rejects.toThrow('worker died');
+    await taskModel.updateStatus(created.taskId!, 'running');
+    await serverDB
+      .update(tasks)
+      .set({ updatedAt: new Date(Date.now() - 60 * 60 * 1000) })
+      .where(eq(tasks.id, created.taskId!));
+
+    const released = await service.tick(graph.goal.id);
+
+    expect(released.outcome).toBe('advanced');
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('backlog');
+    runSpy.mockRestore();
+  });
+
+  it('leaves a fresh dispatch claim alone', async () => {
+    // The same shape a moment after the claim is just a run about to start.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockRejectedValue(new Error('worker died'));
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ title: 'Fresh claim', work: ['Start me'] });
+    const created = await service.tick(graph.goal.id);
+    await expect(service.tick(graph.goal.id)).rejects.toThrow('worker died');
+    await taskModel.updateStatus(created.taskId!, 'running');
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('waiting_external');
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('running');
+  });
+
   it('keeps the overall requirement as background while making the current work authoritative', async () => {
     const service = new GoalService(serverDB, userId);
     const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;

@@ -475,7 +475,7 @@
   "goalProcess.activity.title": "活动",
   "goalProcess.advance.label": "推进",
   "goalProcess.advance.running": "推进中…",
-  "goalProcess.advance.tooltip": "持续推进，直到目标达成、需要你决定，或没有可推进的了。图式目标没有服务端调度器，只有客户端推进时才会前进。",
+  "goalProcess.advance.tooltip": "目标会随着任务完成自行推进。点这里立刻跑一轮协调器——想马上看到它停在哪一步时用。",
   "goalProcess.attempts.failed": "未通过",
   "goalProcess.attempts.nth": "第 {{index}} 次",
   "goalProcess.attempts.passed": "通过",
