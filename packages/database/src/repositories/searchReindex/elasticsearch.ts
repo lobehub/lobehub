@@ -1,9 +1,12 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { z } from 'zod';
 
 import type {
   SearchReindexBulkItemResult,
   SearchReindexElasticsearchClient,
   SearchReindexIndexBody,
+  SearchReindexIndexOptions,
 } from './service';
 
 const bulkResponseSchema = z.object({
@@ -54,6 +57,15 @@ const mappingResponseSchema = z.record(
         .optional(),
       dynamic: z.union([z.boolean(), z.string()]).optional(),
       properties: z.record(z.string(), mappingPropertyResponseSchema),
+    }),
+  }),
+);
+
+const settingsResponseSchema = z.record(
+  z.string(),
+  z.object({
+    settings: z.object({
+      index: z.object({ analysis: z.record(z.string(), z.unknown()) }),
     }),
   }),
 );
@@ -180,6 +192,34 @@ export class SearchReindexHttpClient implements SearchReindexElasticsearchClient
     }
   }
 
+  private async assertIndexAnalysis(index: string, expected: SearchReindexIndexBody) {
+    const response = await this.request(
+      `/${encodeURIComponent(index)}/_settings?flat_settings=false&filter_path=*.settings.index.analysis`,
+      { method: 'GET' },
+    );
+    if (!response.ok) {
+      throw new SearchReindexRequestError(
+        `Elasticsearch analysis settings check failed for ${index} (${response.status})`,
+        response.status,
+      );
+    }
+    const parsed = settingsResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new SearchReindexRequestError(
+        `Elasticsearch analysis settings response has an invalid shape for ${index}`,
+        response.status,
+        parsed.error,
+      );
+    }
+    if (
+      !isDeepStrictEqual(parsed.data[index]?.settings.index.analysis, expected.settings.analysis)
+    ) {
+      throw new SearchReindexRequestError(
+        `Elasticsearch analysis settings are incompatible for ${index}`,
+      );
+    }
+  }
+
   async bulk(body: string): Promise<SearchReindexBulkItemResult[]> {
     const response = await this.request('/_bulk', {
       body,
@@ -271,15 +311,26 @@ export class SearchReindexHttpClient implements SearchReindexElasticsearchClient
     }
   }
 
-  async ensureIndex(index: string, body: SearchReindexIndexBody): Promise<void> {
+  async ensureIndex(
+    index: string,
+    body: SearchReindexIndexBody,
+    { createIfMissing = true }: SearchReindexIndexOptions = {},
+  ): Promise<void> {
     const existsResponse = await this.request(`/${encodeURIComponent(index)}`, { method: 'HEAD' });
     if (existsResponse.ok) {
       await this.assertIndexMapping(index, body);
+      await this.assertIndexAnalysis(index, body);
       return;
     }
     if (existsResponse.status !== 404) {
       throw new SearchReindexRequestError(
         `Elasticsearch index check failed for ${index} (${existsResponse.status})`,
+        existsResponse.status,
+      );
+    }
+    if (!createIfMissing) {
+      throw new SearchReindexRequestError(
+        `Completed Elasticsearch index ${index} is missing; use a new checkpoint and an empty target for a full backfill`,
         existsResponse.status,
       );
     }

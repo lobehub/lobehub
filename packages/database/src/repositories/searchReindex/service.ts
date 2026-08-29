@@ -23,8 +23,16 @@ export interface SearchReindexElasticsearchClient {
   bulk: (body: string) => Promise<SearchReindexBulkItemResult[]>;
   count: (index: string) => Promise<number>;
   ensureAlias: (alias: string, physicalIndex: string) => Promise<void>;
-  ensureIndex: (index: string, body: SearchReindexIndexBody) => Promise<void>;
+  ensureIndex: (
+    index: string,
+    body: SearchReindexIndexBody,
+    options?: SearchReindexIndexOptions,
+  ) => Promise<void>;
   refresh: (index: string) => Promise<void>;
+}
+
+export interface SearchReindexIndexOptions {
+  createIfMissing?: boolean;
 }
 
 export interface SearchReindexIndexBody {
@@ -206,6 +214,7 @@ const buildBulkOperation = (
 /** Resumable full backfill that leaves product reads on PostgreSQL. */
 export class SearchReindexService {
   private readonly options: SearchReindexServiceOptions;
+  private preparedRunId?: string;
 
   constructor(
     private readonly builder: Pick<SearchDocumentBuilder, 'buildBatch' | 'buildByIds'>,
@@ -251,6 +260,40 @@ export class SearchReindexService {
 
   private async emitProgress(event: SearchReindexProgressEvent) {
     await this.options.onProgress(event);
+  }
+
+  /**
+   * Create and validate every physical index before PostgreSQL capture is enabled. This makes
+   * required Elasticsearch analysis capabilities, including analysis-icu, a safe preflight.
+   */
+  async prepareIndices(state: SearchReindexRunState): Promise<void> {
+    if (this.preparedRunId === state.run.id) return;
+
+    await mapWithConcurrency(
+      state.progress,
+      this.options.entityConcurrency,
+      async ({ entity, physicalIndex, status }) => {
+        try {
+          await this.client.ensureIndex(
+            physicalIndex,
+            {
+              mappings: {
+                ...SEARCH_INDEX_DEFINITIONS[entity].mappings,
+                _meta: {
+                  reindex_run_id: state.run.id,
+                  schema_version: state.run.schemaVersion,
+                },
+              },
+              settings: { analysis: SEARCH_INDEX_ANALYSIS },
+            },
+            { createIfMissing: status !== 'completed' },
+          );
+        } catch (error) {
+          throw new SearchReindexEntityError(entity, error);
+        }
+      },
+    );
+    this.preparedRunId = state.run.id;
   }
 
   private async flushBulk(
@@ -471,17 +514,6 @@ export class SearchReindexService {
 
     await this.emitProgress({ entity, type: 'entity_started' });
 
-    await this.client.ensureIndex(progress.physicalIndex, {
-      mappings: {
-        ...SEARCH_INDEX_DEFINITIONS[entity].mappings,
-        _meta: {
-          reindex_run_id: state.run.id,
-          schema_version: state.run.schemaVersion,
-        },
-      },
-      settings: { analysis: SEARCH_INDEX_ANALYSIS },
-    });
-
     let processedBatches = 0;
     let sourceExhausted = false;
     while (true) {
@@ -598,6 +630,8 @@ export class SearchReindexService {
         status: initialState.run.status,
       };
     }
+
+    await this.prepareIndices(initialState);
 
     const completed = await mapWithConcurrency(
       SEARCH_DOCUMENT_ENTITIES,

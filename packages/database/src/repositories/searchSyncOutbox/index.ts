@@ -142,14 +142,21 @@ export class SearchSyncOutboxRepository {
     `);
   }
 
-  async isCaptureEnabled(): Promise<boolean> {
+  /** Returns an opaque version that changes whenever capture is enabled or disabled. */
+  async getCaptureState(): Promise<{ enabled: boolean; version: string | null }> {
     const result = await this.db.execute(sql`
-      SELECT COALESCE(
-        (SELECT enabled FROM search_sync_settings WHERE key = 'default'),
-        false
-      ) AS enabled
+      SELECT
+        enabled,
+        EXTRACT(EPOCH FROM updated_at)::text AS version
+      FROM search_sync_settings
+      WHERE key = 'default'
     `);
-    return Boolean(rowsOf<{ enabled: boolean }>(result)[0]?.enabled);
+    const state = rowsOf<{ enabled: boolean; version: string }>(result)[0];
+    return state ?? { enabled: false, version: null };
+  }
+
+  async isCaptureEnabled(): Promise<boolean> {
+    return (await this.getCaptureState()).enabled;
   }
 
   /** Observes the latest allocated revision without treating it as a committed snapshot boundary. */

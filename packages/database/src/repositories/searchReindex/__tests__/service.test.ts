@@ -112,6 +112,7 @@ describe('SearchReindexService', () => {
           _meta: { reindex_run_id: 'run-1', schema_version: 1 },
         }),
       }),
+      { createIfMissing: true },
     );
     expect(client.ensureAlias).toHaveBeenCalledTimes(14);
     expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
@@ -123,6 +124,45 @@ describe('SearchReindexService', () => {
         ),
       ),
     );
+  });
+
+  it('reuses index preparation when capture setup already completed it', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const service = new SearchReindexService(builder, repository, client);
+
+    await service.prepareIndices(state);
+    await service.run('test', 1);
+
+    expect(client.ensureIndex).toHaveBeenCalledTimes(14);
+  });
+
+  it('requires completed physical indexes to remain present', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const agents = state.progress.find(({ entity }) => entity === 'agents')!;
+    agents.completedAt = '2026-08-28T00:01:00.000Z';
+    agents.status = 'completed';
+    const service = new SearchReindexService(builder, repository, client);
+
+    await service.prepareIndices(state);
+
+    expect(client.ensureIndex).toHaveBeenCalledWith('test-agents-v1', expect.any(Object), {
+      createIfMissing: false,
+    });
+  });
+
+  it('attributes index preparation failures to their entity', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    vi.mocked(client.ensureIndex).mockImplementation(async (index) => {
+      if (index === 'test-agents-v1') throw new Error('analysis-icu is unavailable');
+    });
+    const service = new SearchReindexService(builder, repository, client, {
+      entityConcurrency: 1,
+    });
+
+    await expect(service.prepareIndices(state)).rejects.toMatchObject({
+      entity: 'agents',
+      message: expect.stringContaining('analysis-icu is unavailable'),
+    });
   });
 
   it('backfills independent entities with bounded concurrency', async () => {

@@ -15,7 +15,14 @@ const agentsIndexBody: SearchReindexIndexBody = {
   mappings: { ...SEARCH_INDEX_DEFINITIONS.agents.mappings, _meta: reindexMeta },
   settings: { analysis: SEARCH_INDEX_ANALYSIS },
 };
-
+const existingAgentsMapping = {
+  'lobehub-messages-v1': {
+    mappings: {
+      _meta: reindexMeta,
+      ...SEARCH_INDEX_DEFINITIONS.agents.mappings,
+    },
+  },
+};
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SearchReindexHttpClient', () => {
@@ -57,6 +64,79 @@ describe('SearchReindexHttpClient', () => {
       'https://search.example.com/lobehub-messages-v1',
     );
     expect(String(fetchMock.mock.calls[1][0])).not.toContain('secret-key');
+  });
+
+  it('refuses to recreate a missing index that the checkpoint already completed', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(undefined, 404));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new SearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.ensureIndex('lobehub-messages-v1', agentsIndexBody, { createIfMissing: false }),
+    ).rejects.toThrow('Completed Elasticsearch index lobehub-messages-v1 is missing');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('validates ICU analysis settings on an existing index', async () => {
+    const incompatibleSettings = {
+      'lobehub-messages-v1': {
+        settings: {
+          index: {
+            analysis: {
+              ...SEARCH_INDEX_ANALYSIS,
+              analyzer: {
+                ...SEARCH_INDEX_ANALYSIS.analyzer,
+                lobehub_icu: {
+                  filter: ['icu_folding'],
+                  tokenizer: 'standard',
+                  type: 'custom',
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(response(existingAgentsMapping))
+      .mockResolvedValueOnce(response(incompatibleSettings));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new SearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.ensureIndex('lobehub-messages-v1', agentsIndexBody)).rejects.toThrow(
+      'analysis settings are incompatible',
+    );
+  });
+
+  it('accepts an existing index with the expected mapping and analysis settings', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(response(existingAgentsMapping))
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            settings: { index: { analysis: SEARCH_INDEX_ANALYSIS } },
+          },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new SearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.ensureIndex('lobehub-messages-v1', agentsIndexBody),
+    ).resolves.toBeUndefined();
   });
 
   it('refuses to resume into an existing index with an incompatible mapping', async () => {

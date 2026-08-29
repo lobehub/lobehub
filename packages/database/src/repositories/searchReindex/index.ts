@@ -57,6 +57,8 @@ export interface SearchReindexRun {
    */
   backfillHighWaterRevision: number | null;
   baseRevision: number;
+  /** Opaque database capture version bound to this checkpoint after the first apply. */
+  captureVersion?: string | null;
   createdAt: string;
   id: string;
   namespace: string;
@@ -113,6 +115,7 @@ const runSchema = z.object({
   aliasesCreatedAt: z.string().datetime().nullable(),
   backfillHighWaterRevision: z.number().int().nonnegative().nullable(),
   baseRevision: z.number().int().positive(),
+  captureVersion: z.string().min(1).nullable().default(null),
   createdAt: z.string().datetime(),
   id: z.string().uuid(),
   namespace: z.string().min(1),
@@ -429,6 +432,7 @@ export class SearchReindexFileRepository {
           aliasesCreatedAt: null,
           backfillHighWaterRevision: null,
           baseRevision,
+          captureVersion: null,
           createdAt: timestamp,
           id: randomUUID(),
           namespace,
@@ -455,6 +459,13 @@ export class SearchReindexFileRepository {
     const checkpointPath = await this.findCheckpointPath(runId);
     if (!checkpointPath) return;
     return this.stateOf(checkpointPath, await this.readCheckpoint(checkpointPath));
+  }
+
+  async setCaptureVersion(runId: string, captureVersion: string): Promise<void> {
+    if (!captureVersion) throw new Error('Search reindex capture version must not be empty');
+    await this.updateCheckpoint(runId, (checkpoint) => {
+      checkpoint.run.captureVersion = captureVersion;
+    });
   }
 
   async listUnresolvedFailures(runId: string, entity?: SearchDocumentEntity) {

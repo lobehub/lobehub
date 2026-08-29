@@ -180,11 +180,15 @@ describe('SearchSyncOutboxRepository', () => {
 
   it('reports and disables capture without deleting queued work', async () => {
     await db.insert(agents).values({ id: 'capture-agent', title: 'one', userId: USER_ID });
+    const enabledState = await repository.getCaptureState();
     await expect(repository.isCaptureEnabled()).resolves.toBe(true);
+    expect(enabledState).toMatchObject({ enabled: true, version: expect.any(String) });
 
     await repository.disableCapture();
 
+    const disabledState = await repository.getCaptureState();
     await expect(repository.isCaptureEnabled()).resolves.toBe(false);
+    expect(disabledState.version).not.toBe(enabledState.version);
     await expect(db.select().from(searchSyncOutbox)).resolves.toHaveLength(1);
   });
 

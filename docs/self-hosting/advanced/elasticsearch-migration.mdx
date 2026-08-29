@@ -39,7 +39,12 @@ host.
 
 ## Before you start
 
-1. Create a new empty Elasticsearch project in the intended production region.
+1. Create a new empty Elasticsearch project in the intended production region. LobeHub's search
+   analyzers require the official
+   [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
+   plugin. Elastic Cloud Serverless includes core analysis plugins; on Elastic Cloud Hosted, enable
+   the provided plugin for the deployment; on self-managed Elasticsearch, install it on every node
+   and restart every node before the first `--apply`.
 
 2. For an existing production database, run the following statement in the database SQL editor,
    outside a transaction, before applying the release migration. A new installation can run it
@@ -84,12 +89,13 @@ Only the first invocation uses `--fresh-run`. Resume the same run with the same 
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` verifies the Memory fanout GIN index, then installs the capture triggers one table at a
-time with a three-second lock timeout. Run the first apply during a low-traffic window. If a trigger
-cannot acquire its short lock, the command stops before enabling capture and is safe to rerun with
-the same state directory. After all capture infrastructure is ready, it enables PostgreSQL Outbox
-capture before the first backfill batch. The required `--yes` acknowledges that persistent
-database-side effect; it is not an interactive prompt.
+`--apply` verifies every physical Elasticsearch index and its ICU analysis settings before touching
+capture state. It then verifies the Memory fanout GIN index and installs the capture triggers one
+table at a time with a three-second lock timeout. Run the first apply during a low-traffic window.
+If Elasticsearch analysis or a trigger check fails, the command stops before enabling capture and
+is safe to rerun with the same state directory. After all capture infrastructure is ready, it
+enables PostgreSQL Outbox capture before the first backfill batch. The required `--yes`
+acknowledges that persistent database-side effect; it is not an interactive prompt.
 
 The run ID is also stored in each physical index's mapping metadata. A different local checkpoint
 cannot silently continue writing the same physical indexes. Never run copies of one checkpoint
@@ -159,7 +165,7 @@ application server.
 
 ## Resume and verify
 
-- After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor.
+- After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor. This is safe only while capture has remained enabled after the first durable batch.
 - Request-level failures do not advance the cursor. If one concurrent bulk succeeds and another fails, the entire database batch is replayed safely on resume. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
 - The tool refuses to create aliases while any entity or item-level failure is incomplete.
 - The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
@@ -192,6 +198,10 @@ queued Outbox rows:
 ```bash
 bun run search:reindex -- --disable-capture --yes
 ```
+
+Disabling capture is terminal for any checkpoint that has already made durable progress. Changes
+made during the gap are not queued, so the tool refuses to resume that checkpoint. To restart after
+a capture gap, use a new checkpoint and an empty Elasticsearch target for a complete backfill.
 
 <Callout type="info">
   Continuous PostgreSQL-to-Elasticsearch synchronization requires a release that includes the incremental consumer. The full-reindex command deliberately does not claim that the application is ready to switch search backends by itself.

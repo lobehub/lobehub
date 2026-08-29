@@ -28,6 +28,7 @@ import {
   recordSearchReindexReconciliation,
 } from '../../packages/observability-otel/src/modules/search-reindex';
 import { DiagLogLevel, register, shutdownSafely } from '../../packages/observability-otel/src/node';
+import { prepareSearchReindexCapture } from './captureSafety';
 import {
   assertSearchReindexElasticsearchHostname,
   assertSearchReindexTelemetryExportConfigured,
@@ -220,6 +221,7 @@ const readStatus = async () => {
       ? {
           baseRevision: state.run.baseRevision,
           backfillHighWaterRevision: state.run.backfillHighWaterRevision,
+          captureVersion: state.run.captureVersion ?? null,
           entities: state.progress.map((progress) => ({
             cursor: progress.cursor,
             entity: progress.entity,
@@ -336,7 +338,6 @@ const run = async () => {
     }),
   );
 
-  await outbox.enableCapture();
   const client = new SearchReindexHttpClient({
     apiKey: elasticsearchApiKey!,
     requestTimeoutMs,
@@ -372,6 +373,14 @@ const run = async () => {
       await auditLogger!.append(event);
     },
     retryBaseDelayMs,
+  });
+  await prepareSearchReindexCapture({
+    enableCapture: () => outbox.enableCapture(),
+    existing,
+    getCaptureState: () => outbox.getCaptureState(),
+    prepareIndices: () => service.prepareIndices(prepared),
+    setCaptureVersion: (captureVersion) =>
+      repository.setCaptureVersion(prepared.run.id, captureVersion),
   });
   const result = await service.run(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   console.log(JSON.stringify(result));
