@@ -487,7 +487,10 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/provider'),
+                  () =>
+                    import('@/routes/(main)/[workspaceSlug]/settings/provider').then(
+                      (m) => m.WorkspaceProviderSettingMobile,
+                    ),
                   'Mobile > Workspace > Settings > Provider',
                 ),
                 path: 'provider',

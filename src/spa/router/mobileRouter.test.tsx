@@ -32,6 +32,9 @@ describe('mobileRouter workspace provider routes', () => {
     // Without these, workspace-aware provider links (`/:slug/settings/provider/:id`)
     // fall through to the mobile `*` route and kick the user out of the workspace.
     expect(source).toContain("import('@/routes/(main)/[workspaceSlug]/settings/provider')");
+    // The mobile route must use the mobile variant, otherwise the page renders
+    // the desktop 280px provider menu layout on phones.
+    expect(source).toContain('m.WorkspaceProviderSettingMobile');
     expect(source).toContain(
       "import('@/routes/(main)/[workspaceSlug]/settings/provider/redirect')",
     );
