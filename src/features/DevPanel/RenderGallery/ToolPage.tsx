@@ -24,9 +24,7 @@ const isGalleryView = (value: string | null): value is GalleryView =>
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
-    gap: 24px;
-    max-width: 1200px;
-    padding: 28px;
+    width: 100%;
   `,
   content: css`
     position: relative;
@@ -39,8 +37,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   controlGroup: css`
+    flex-shrink: 0;
     gap: 8px;
     align-items: center;
+    white-space: nowrap;
   `,
   empty: css`
     flex: 1;
@@ -52,7 +52,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     gap: 8px;
-    padding-block-end: 4px;
+    padding: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   modeBar: css`
     position: sticky;
@@ -62,13 +63,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 16px;
     align-items: center;
 
-    padding-block: 10px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 14px;
+    min-height: 44px;
+    padding-block: 6px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
