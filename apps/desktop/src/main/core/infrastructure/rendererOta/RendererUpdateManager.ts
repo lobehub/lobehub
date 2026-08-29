@@ -227,9 +227,9 @@ export class RendererUpdateManager {
       this.state = 'staged';
 
       logger.info(`Renderer ${manifest.version} staged (app ${manifest.appVersion})`);
-      this.app.browserManager.broadcastToAllWindows('rendererUpdateReady', {
-        appVersion: manifest.appVersion,
-        version: manifest.version,
+      this.app.browserManager.broadcastToAllWindows('updateReady', {
+        kind: 'renderer',
+        version: manifest.appVersion,
       });
       return;
     } catch (error) {

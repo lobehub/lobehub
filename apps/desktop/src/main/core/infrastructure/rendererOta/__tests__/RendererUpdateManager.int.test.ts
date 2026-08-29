@@ -199,9 +199,9 @@ describe('RendererUpdateManager V2 lifecycle', () => {
 
     const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBe('r1');
-    expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('rendererUpdateReady', {
-      appVersion: APP_VERSION,
-      version: 'r1',
+    expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
+      kind: 'renderer',
+      version: APP_VERSION,
     });
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
     expect(fetchedUrls).toEqual([

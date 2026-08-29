@@ -1,4 +1,4 @@
-import { type RendererOtaUpdateInfo, type UpdateInfo } from '@lobechat/electron-client-ipc';
+import type { UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Button as BaseButton, createModal, useModalContext } from '@lobehub/ui/base-ui';
@@ -12,6 +12,8 @@ import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+
+import { selectUpdateInfo } from './selectUpdateInfo';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   installLaterCloseButton: css`
@@ -135,22 +137,16 @@ const openUpdateDetailModal = (updateInfo: UpdateInfo) =>
 
 export const UpdateNotification: React.FC = () => {
   const { t: tElectron } = useTranslation('electron');
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [installConfirmMode, setInstallConfirmMode] = useState<
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
-  const [rendererUpdateReady, setRendererUpdateReady] = useState(false);
-  const [rendererUpdateInfo, setRendererUpdateInfo] = useState<RendererOtaUpdateInfo | null>(null);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
-  useWatchBroadcast('updateDownloaded', (info: UpdateInfo) => {
-    setUpdateInfo(info);
-    setUpdateDownloaded(true);
-    setUpdateAvailable(false);
-    setInstallConfirmMode('unconfirm');
+  useWatchBroadcast('updateReady', (info) => {
+    setUpdateInfo((current) => selectUpdateInfo(current, info));
+    if (info.kind === 'app') setInstallConfirmMode('unconfirm');
   });
 
   useWatchBroadcast('updateWillInstallLater', () => {
@@ -159,19 +155,14 @@ export const UpdateNotification: React.FC = () => {
     setTimeout(() => setInstallConfirmMode(null), 5000);
   });
 
-  useWatchBroadcast('rendererUpdateReady', (info: RendererOtaUpdateInfo) => {
-    setRendererUpdateInfo(info);
-    setRendererUpdateReady(true);
-  });
-
-  if (rendererUpdateReady && !updateDownloaded && !updateAvailable) {
+  if (updateInfo?.kind === 'renderer') {
     return (
       <div className={styles.installLaterToast}>
         <span>
           {tElectron('updater.updateReady')}
-          {isDevMode && rendererUpdateInfo?.version ? ` · ${rendererUpdateInfo.version}` : ''}
+          {isDevMode && updateInfo.version ? ` · ${updateInfo.version}` : ''}
         </span>
-        <BaseButton size={'small'} type={'text'} onClick={() => setRendererUpdateReady(false)}>
+        <BaseButton size={'small'} type={'text'} onClick={() => setUpdateInfo(null)}>
           {tElectron('updater.ignore')}
         </BaseButton>
         <BaseButton
@@ -187,7 +178,7 @@ export const UpdateNotification: React.FC = () => {
     );
   }
 
-  if (!updateDownloaded && !updateAvailable) return null;
+  if (!updateInfo) return null;
 
   if (installConfirmMode === 'installLater') {
     return (
