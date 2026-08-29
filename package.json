@@ -308,7 +308,7 @@
     "@lobehub/icons": "^5.15.0",
     "@lobehub/market-sdk": "0.39.2",
     "@lobehub/tts": "^5.1.2",
-    "@lobehub/ui": "^5.35.0",
+    "@lobehub/ui": "^5.36.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.3.0",
