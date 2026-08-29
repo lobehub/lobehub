@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { computeMainHash, createMainHash } from '../mainHash.mjs';
+import { discoverFirstPartyNativeAddons } from '../../native-deps.config.mjs';
+import { computeExternalModulesHash, computeMainHash, createMainHash } from '../mainHash.mjs';
 
 const desktopRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const repoRoot = path.dirname(path.dirname(desktopRoot));
@@ -36,6 +37,24 @@ describe('mainHash', () => {
       writeFileSync(bundledFile, originalBundledFile);
     }
   }, 30_000);
+
+  it('tracks externalized first-party native addon sources', async () => {
+    process.env.npm_config_platform = 'darwin';
+    const [addon] = discoverFirstPartyNativeAddons();
+    delete process.env.npm_config_platform;
+
+    const addonDir = realpathSync(path.join(desktopRoot, 'node_modules', addon.name));
+    const probe = path.join(addonDir, `__mainhash-probe-${randomUUID()}.js`);
+    const before = await computeExternalModulesHash('darwin');
+
+    writeFileSync(probe, 'module.exports = {};\n');
+    try {
+      expect(await computeExternalModulesHash('darwin')).not.toBe(before);
+    } finally {
+      rmSync(probe, { force: true });
+    }
+    expect(await computeExternalModulesHash('darwin')).toBe(before);
+  });
 
   it('starts a new lineage when bundle metadata changes', () => {
     const base = {
