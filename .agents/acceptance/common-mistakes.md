@@ -286,6 +286,26 @@ where the action key is actually enabled (grep each route's `leftActions` array,
 the component's imports) and capture evidence for every surface that enables it. Mark
 any surface you deliberately skip as untested.
 
+### L-E19 — Hard-wrapping the prose inside a markdown evidence document
+
+**Wrong approach:** author a `markdown` / `text` evidence artifact the way you write
+a source file, folding every paragraph at \~80 columns, and assume the page reflows
+it like any other markdown.
+
+**Why it fails:** the Acceptance evidence renderer parses evidence documents in chat
+mode, where `remark-breaks` turns every single newline inside a paragraph into a
+`<br>`. The author's fold is frozen into the page: paragraphs break mid-sentence at a
+column count unrelated to the reader's viewport, next to a report body that reflows
+normally, so the same round shows two different text behaviours. Reviewers read the
+ragged block as a rendering defect and spend the round on the wrapping instead of the
+finding.
+
+**Correct approach:** keep each paragraph of evidence prose on ONE physical line and
+separate blocks with a blank line. Spend a newline only where it carries meaning —
+list items, table rows, fenced code, and literal transcript output, which are exactly
+the places the break is the content. Never run a proseWrap formatter over files under
+`assets/`.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
