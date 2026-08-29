@@ -259,8 +259,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     type === 'mcp-connector' ||
     type === 'lobehub-connector';
 
-  const { title: builtinSkillTitle, description: builtinSkillDescription } =
-    getLocalizedBuiltinSkillDetail(builtinSkill, identifier, ts);
+  const {
+    content: builtinSkillContent,
+    title: builtinSkillTitle,
+    description: builtinSkillDescription,
+  } = getLocalizedBuiltinSkillDetail(builtinSkill, identifier, ts);
   const noPermissionsTitle = getNoPermissionsTitle(identifier, type, ts);
 
   const renderLobehubConnectorAction = (onDisconnected?: () => void) => {
@@ -467,9 +470,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
             )}
           </div>
         </div>
-        {builtinSkill?.content && (
+        {builtinSkillContent && (
           <div style={{ padding: '16px 24px' }}>
-            <Markdown variant="chat">{builtinSkill.content}</Markdown>
+            <Markdown variant="chat">{builtinSkillContent}</Markdown>
           </div>
         )}
       </div>
