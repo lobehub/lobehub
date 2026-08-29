@@ -188,7 +188,7 @@ export default {
   'dataset.detail.addRun': 'New Run',
   'dataset.detail.relatedRuns': 'Related Runs ({{count}})',
   'dataset.detail.runsNeedBenchmark':
-    'Evaluation runs are still scoped to a benchmark, so this dataset cannot be run yet.',
+    'An evaluation run belongs to a benchmark. Attach this dataset to one to run it.',
   'dataset.detail.testCases': 'Test Cases',
   'dataset.detail.viewDetail': 'View Details',
   'dataset.switchDataset': 'Switch Dataset',
@@ -267,6 +267,7 @@ export default {
   'overview.createExperiment': 'Create Experiment',
   'overview.importDataset': 'Import Dataset',
   'overview.sections.benchmarks.subtitle': 'Shared evaluation assets and benchmark baselines.',
+  'overview.sections.unlinkedDatasets.title': 'Datasets without a benchmark',
   'overview.sections.benchmarks.title': 'Benchmarks',
   'overview.sections.count': '{{count}} total',
   'overview.sections.experiments.subtitle':

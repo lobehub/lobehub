@@ -338,11 +338,9 @@ const DatasetDetail = memo(() => {
               </div>
             </Flexbox>
 
-            {/* Related Runs. Every run URL is still scoped to a benchmark
-                (/eval/bench/:benchmarkId/runs/:runId), so a dataset without one
-                cannot yet address its runs. Gated explicitly rather than
-                rendering links with a null benchmark in the path; making runs
-                benchmark-free is the follow-up. */}
+            {/* Related Runs. A run belongs to a benchmark by design — that is
+                what defines the shared rubrics it is scored against — so a
+                dataset that belongs to none has nothing to run against yet. */}
             {benchmarkId ? (
               <Flexbox gap={12}>
                 <Flexbox horizontal align="center" justify="space-between">

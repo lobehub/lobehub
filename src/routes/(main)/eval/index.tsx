@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 
 import BenchmarkCard from './features/BenchmarkCard';
@@ -60,7 +61,9 @@ const EvalOverview = memo(() => {
   const { t } = useTranslation('eval');
   const benchmarkList = useEvalStore((s) => s.benchmarkList);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
+  const useFetchUnlinkedDatasets = useEvalStore((s) => s.useFetchUnlinkedDatasets);
   const { data, isLoading, error, mutate } = useFetchBenchmarks();
+  const { data: unlinkedDatasets } = useFetchUnlinkedDatasets();
 
   const experimentList = useEvalStore((s) => s.experimentList);
   const useFetchExperiments = useEvalStore((s) => s.useFetchExperiments);
@@ -151,6 +154,23 @@ const EvalOverview = memo(() => {
           </div>
         </AsyncBoundary>
       </Flexbox>
+
+      {/* Datasets that belong to no benchmark. Without this section they are
+          unreachable: every other dataset listing is scoped to a benchmark. */}
+      {!!unlinkedDatasets?.length && (
+        <Flexbox gap={16}>
+          <Text as={'h2'} style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
+            {t('overview.sections.unlinkedDatasets.title')}
+          </Text>
+          <Flexbox gap={8}>
+            {unlinkedDatasets.map((dataset: { id: string; name: string }) => (
+              <WorkspaceLink key={dataset.id} to={`/eval/datasets/${dataset.id}`}>
+                <Text>{dataset.name}</Text>
+              </WorkspaceLink>
+            ))}
+          </Flexbox>
+        </Flexbox>
+      )}
 
       {/* Benchmarks */}
       <Flexbox gap={16}>
