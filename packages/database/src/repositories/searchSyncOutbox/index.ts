@@ -96,14 +96,38 @@ export class SearchSyncOutboxRepository {
    */
   async installCaptureInfrastructure(): Promise<void> {
     const indexResult = await this.db.execute(sql`
-      SELECT indisvalid AS is_valid
-      FROM pg_index
-      WHERE indexrelid = to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})
+      SELECT (
+        search_index.indisvalid
+        AND search_index.indisready
+        AND search_index.indislive
+        AND access_method.amname = 'gin'
+        AND table_namespace.nspname = 'public'
+        AND source_table.relname = 'user_memories_contexts'
+        AND search_index.indnkeyatts = 1
+        AND search_index.indnatts = 1
+        AND search_index.indexprs IS NULL
+        AND search_index.indpred IS NULL
+        AND indexed_attribute.attname = 'user_memory_ids'
+        AND indexed_attribute.atttypid = 'jsonb'::regtype
+        AND operator_class.opcintype = 'jsonb'::regtype
+        AND operator_class.opcname IN ('jsonb_ops', 'jsonb_path_ops')
+      ) AS is_valid
+      FROM pg_index search_index
+      INNER JOIN pg_class index_class ON index_class.oid = search_index.indexrelid
+      INNER JOIN pg_am access_method ON access_method.oid = index_class.relam
+      INNER JOIN pg_class source_table ON source_table.oid = search_index.indrelid
+      INNER JOIN pg_namespace table_namespace ON table_namespace.oid = source_table.relnamespace
+      INNER JOIN pg_attribute indexed_attribute
+        ON indexed_attribute.attrelid = source_table.oid
+        AND indexed_attribute.attnum = search_index.indkey[0]
+      INNER JOIN pg_opclass operator_class ON operator_class.oid = search_index.indclass[0]
+      WHERE search_index.indexrelid =
+        to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})
     `);
     const [index] = rowsOf<{ is_valid: boolean }>(indexResult);
     if (!index?.is_valid) {
       throw new Error(
-        `A valid ${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX} index is required before enabling search sync capture; drop any invalid copy with DROP INDEX CONCURRENTLY, then recreate it with CREATE INDEX CONCURRENTLY`,
+        `A valid, non-partial GIN ${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX} index on user_memories_contexts.user_memory_ids is required before enabling search sync capture; drop any mismatched copy with DROP INDEX CONCURRENTLY, then recreate it with CREATE INDEX CONCURRENTLY`,
       );
     }
 

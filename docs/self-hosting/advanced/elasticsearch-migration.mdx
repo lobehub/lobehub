@@ -56,9 +56,10 @@ host.
    ON "user_memories_contexts" USING gin ("user_memory_ids");
    ```
 
-   If an interrupted concurrent build left this index invalid, run `DROP INDEX CONCURRENTLY
-   "user_memories_contexts_user_memory_ids_gin_idx"` outside a transaction, then retry the create
-   statement.
+   `IF NOT EXISTS` does not verify an existing index definition. If an interrupted build left this
+   index invalid, or `--apply` reports that its table, column, GIN operator class, or predicate is
+   wrong, run `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"` outside a
+   transaction, then retry the create statement.
 
 3. Apply the database migrations for the same LobeHub release.
 

@@ -44,7 +44,7 @@ tags:
    ON "user_memories_contexts" USING gin ("user_memory_ids");
    ```
 
-   如果并发创建中断并留下无效索引，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，再重新执行上面的创建语句。
+   `IF NOT EXISTS` 不会校验同名索引的定义。如果并发创建留下无效索引，或 `--apply` 提示索引的表、列、GIN 操作符类或条件不正确，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，再重新执行上面的创建语句。
 
 3. 执行同一 LobeHub 版本自带的数据库迁移。
 

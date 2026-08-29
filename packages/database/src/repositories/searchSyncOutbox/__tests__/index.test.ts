@@ -145,7 +145,7 @@ describe('SearchSyncOutboxRepository', () => {
       });
 
       await expect(isolatedRepository.enableCapture()).rejects.toThrow(
-        'A valid user_memories_contexts_user_memory_ids_gin_idx index is required',
+        'A valid, non-partial GIN user_memories_contexts_user_memory_ids_gin_idx index',
       );
       expect(execute).toHaveBeenCalledTimes(1);
     },
@@ -170,7 +170,7 @@ describe('SearchSyncOutboxRepository', () => {
     const execute = vi.fn(async (query: SQL) => {
       const statement = dialect.sqlToQuery(query).sql;
       statements.push(statement);
-      if (statement.includes('SELECT indisvalid')) return [{ is_valid: true }];
+      if (statement.includes('FROM pg_index')) return [{ is_valid: true }];
       if (statement.includes('SELECT count(*)::integer AS count')) {
         return [{ count: SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length }];
       }
@@ -181,6 +181,13 @@ describe('SearchSyncOutboxRepository', () => {
     });
 
     await isolatedRepository.enableCapture();
+
+    expect(statements[0]).toContain("access_method.amname = 'gin'");
+    expect(statements[0]).toContain("source_table.relname = 'user_memories_contexts'");
+    expect(statements[0]).toContain("indexed_attribute.attname = 'user_memory_ids'");
+    expect(statements[0]).toContain('search_index.indpred IS NULL');
+    expect(statements[0]).toContain("indexed_attribute.atttypid = 'jsonb'::regtype");
+    expect(statements[0]).toContain("operator_class.opcname IN ('jsonb_ops', 'jsonb_path_ops')");
 
     const activation = statements.find((statement) =>
       statement.includes('INSERT INTO search_sync_settings'),
