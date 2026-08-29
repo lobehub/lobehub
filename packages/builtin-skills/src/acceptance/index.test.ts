@@ -48,6 +48,14 @@ describe('AcceptanceSkill', () => {
     expect(Object.keys(AcceptanceSkill.resources ?? {}).sort()).toEqual(onDisk);
   });
 
+  it('carries a version parsed from its own SKILL.md frontmatter', () => {
+    // The version must reach the bundle, not just sit in the markdown: an
+    // installer compares `bundle.version` against the copy already on disk, and
+    // a version only a human can read makes that impossible.
+    expect(skillContent).toMatch(/^version: \d+\.\d+\.\d+$/m);
+    expect(AcceptanceSkill.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
   it('routes to the project layer before touching an environment', () => {
     expect(skillContent).toContain('.agents/acceptance/');
     expect(skillContent).toContain('PROCESS.md');

@@ -118,14 +118,18 @@ async function installAction(options: InstallOptions): Promise<void> {
     removed,
     skill: bundle.identifier,
     skipped,
+    // Recorded so a caller can tell which version now sits on disk; the
+    // installed SKILL.md carries the same value in its frontmatter.
+    version: bundle.version,
     written,
   };
   if (options.json !== undefined) {
     outputJson(result, typeof options.json === 'string' ? options.json : undefined);
     return;
   }
+  const versionLabel = bundle.version ? pc.dim(` v${bundle.version}`) : '';
   console.log(
-    `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
+    `${pc.green('✓')} ${pc.bold(bundle.name)}${versionLabel} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
   );
   console.log(
     `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}${removed.length ? `, ${removed.length} stale removed` : ''}`,

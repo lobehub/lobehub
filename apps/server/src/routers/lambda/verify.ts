@@ -642,6 +642,9 @@ export const verifyRouter = router({
       ),
       identifier: skill.identifier,
       name: skill.name,
+      // The skill's own declared version, so an installer can compare a copy
+      // already on disk against the latest bundle.
+      version: skill.version,
     };
   }),
 

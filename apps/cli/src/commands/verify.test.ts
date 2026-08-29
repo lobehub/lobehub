@@ -1298,6 +1298,29 @@ describe('lh acceptance — canonical run tree', () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
+  it('reports the installed version and leaves it in the SKILL.md on disk', async () => {
+    // The version is what a later install compares against, so it has to survive
+    // in two places: the JSON result, and the frontmatter of the materialized
+    // file (the copy a builder actually reads).
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-version-'));
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
+      content: '---\nname: acceptance\nversion: 1.0.0\n---\n\n# Acceptance SKILL',
+      files: {},
+      identifier: 'acceptance',
+      name: 'acceptance',
+      version: '1.0.0',
+    });
+
+    await run(['install', '--dir', dir, '--json']);
+
+    const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0] as string);
+    expect(printed.version).toBe('1.0.0');
+    expect(
+      readFileSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'), 'utf8'),
+    ).toContain('version: 1.0.0');
+    rmSync(dir, { force: true, recursive: true });
+  });
+
   it('removes stale materialized resources on `acceptance update`', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-update-'));
     mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValueOnce({

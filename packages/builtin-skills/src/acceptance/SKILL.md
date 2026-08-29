@@ -1,5 +1,6 @@
 ---
 name: acceptance
+version: 1.0.0
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without LOBE_OPERATION_ID or a preconfigured verify plan. Discover an

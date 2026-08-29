@@ -1,6 +1,6 @@
 import type { BuiltinSkill } from '@lobechat/types';
 
-import { toResourceMeta } from '../lobehub/helpers';
+import { readSkillVersion, toResourceMeta } from '../lobehub/helpers';
 import agentBrowser from './references/agent-browser.md';
 import authWeb from './references/auth-web.md';
 import commonMistakes from './references/common-mistakes.md';
@@ -46,6 +46,12 @@ export const AcceptanceIdentifier = 'acceptance';
  * Resource keys keep the `.md` extension so a disk pull
  * (`.agents/skills/acceptance/references/*.md`) maps 1:1 to real files and the
  * in-SKILL relative links resolve.
+ *
+ * `version` is read from SKILL.md's own frontmatter rather than declared here,
+ * so there is one place to bump and an installed copy on disk always states the
+ * version it carries. Bump it whenever a change alters what a builder must DO —
+ * a new required step, a changed contract or vocabulary, a moved reference —
+ * not for a typo or a reworded sentence.
  */
 export const AcceptanceSkill: BuiltinSkill = {
   avatar: '✅',
@@ -75,4 +81,5 @@ export const AcceptanceSkill: BuiltinSkill = {
     'surfaces/web.md': web,
   }),
   source: 'builtin',
+  version: readSkillVersion(content),
 };
