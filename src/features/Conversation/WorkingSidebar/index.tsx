@@ -119,7 +119,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
     padding-block: 6px;
     padding-inline: 12px 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   overviewPanel: css`
     overflow: hidden;
@@ -882,7 +881,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         <span className={styles.overviewTitle}>{t('workingPanel.overview.title')}</span>
         <ActionIcon
           aria-label={t('workingPanel.tabs.closePanel')}
-          icon={PanelRightCloseIcon}
+          icon={XIcon}
           size={DESKTOP_HEADER_ICON_SMALL_SIZE}
           title={t('workingPanel.tabs.closePanel')}
           onClick={() => updateSystemStatus({ showWorkingOverview: false })}
