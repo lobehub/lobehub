@@ -10,8 +10,8 @@ import { getTrpcClient } from '../api/client';
 import { resolveServerUrl } from '../settings';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
-import type { IgnoreResult, LinkResult } from '../utils/skillWiring';
-import { ensureSkillIgnored, linkHarnessSkills } from '../utils/skillWiring';
+import type { LinkResult } from '../utils/skillWiring';
+import { linkHarnessSkills } from '../utils/skillWiring';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import {
   type Decision,
@@ -49,7 +49,6 @@ import {
 interface InstallOptions {
   dir?: string;
   force?: boolean;
-  gitignore?: boolean;
   json?: boolean | string;
   skill: string;
 }
@@ -70,7 +69,9 @@ async function installAction(options: InstallOptions): Promise<void> {
 
   // The acceptance skeleton lands under `.agents/skills/<id>` — the harness dir
   // the project's own `.agents/acceptance/` adapter sits beside. Invariant: this
-  // is a materialized artifact, re-installed to update, never hand-edited.
+  // is a materialized artifact, re-installed to update, never hand-edited. It is
+  // meant to be COMMITTED: the consuming repo reviews skill changes like any
+  // other file, so install never writes an ignore entry for it.
   const baseDir = options.dir ? path.resolve(options.dir) : process.cwd();
   const skillDir = path.join(baseDir, '.agents', 'skills', bundle.identifier);
 
@@ -109,14 +110,9 @@ async function installAction(options: InstallOptions): Promise<void> {
   }
 
   const link = linkHarnessSkills(baseDir, bundle.identifier);
-  const ignored =
-    options.gitignore === false
-      ? []
-      : ensureSkillIgnored(baseDir, bundle.identifier, link.kind === 'linked');
 
   const result = {
     dir: skillDir,
-    ignored,
     link,
     removed,
     skill: bundle.identifier,
@@ -134,10 +130,10 @@ async function installAction(options: InstallOptions): Promise<void> {
     `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}${removed.length ? `, ${removed.length} stale removed` : ''}`,
   );
   if (skipped.length > 0) console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
-  printWiring(link, ignored);
+  printWiring(link);
 }
 
-function printWiring(link: LinkResult, ignored: IgnoreResult[]): void {
+function printWiring(link: LinkResult): void {
   const arrow = pc.dim('  ↳');
   switch (link.kind) {
     case 'linked':
@@ -156,13 +152,6 @@ function printWiring(link: LinkResult, ignored: IgnoreResult[]): void {
     default: {
       break;
     }
-  }
-
-  for (const entry of ignored) {
-    if (entry.kind !== 'added') continue;
-    console.log(
-      `${arrow} ignored ${entry.entry} in ${pc.dim(path.relative(process.cwd(), entry.file))}`,
-    );
   }
 }
 
@@ -890,7 +879,6 @@ function withInstallOptions(cmd: Command): Command {
     .option('--dir <path>', 'Target working directory (default: current dir)')
     .option('--skill <id>', 'Skill identifier to pull', 'acceptance')
     .option('--force', 'Overwrite existing skill files')
-    .option('--no-gitignore', 'Do not record the installed skill in .gitignore')
     .option('--json [fields]', 'Output JSON');
 }
 
