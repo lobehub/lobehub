@@ -1,13 +1,13 @@
-import { ModelIcon } from '@lobehub/icons';
-import { Center, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Tooltip } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
+import SelectorTrigger from '../../components/SelectorTrigger';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
 import { useModelLockTooltip } from '../../hooks/useModelLockTooltip';
@@ -15,43 +15,9 @@ import { useReasoningEffortControl } from '../../hooks/useReasoningEffortControl
 import { useActionBarContext } from '../context';
 import SelectorMenu from './SelectorMenu';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  icon: css`
-    transition: scale 400ms cubic-bezier(0.215, 0.61, 0.355, 1);
-  `,
-  model: css`
-    cursor: pointer;
-    border-radius: 24px;
-
-    :hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    :active {
-      div {
-        scale: 0.8;
-      }
-    }
-  `,
-  modelReadonly: css`
-    cursor: default;
-
-    :hover {
-      background: transparent;
-    }
-
-    :active {
-      div {
-        scale: 1;
-      }
-    }
-  `,
-}));
-
 const ModelSwitch = memo(() => {
-  const { actionSize, dropdownPlacement } = useActionBarContext();
-  const blockSize = actionSize?.blockSize ?? 32;
-  const iconSize = actionSize?.size ?? 20;
+  const { t } = useTranslation('chat');
+  const { dropdownPlacement } = useActionBarContext();
   const agentId = useAgentId();
   const {
     canDisplayModel,
@@ -90,18 +56,20 @@ const ModelSwitch = memo(() => {
     [activeTopicId, canSelectModel, selectModel, updateTopicModel],
   );
 
+  // Both current values in one label, the way the heterogeneous selector reads:
+  // "GPT-5.6 Sol 中". The effort half is dropped for models without one.
+  const effortLabel = effort.effortValue
+    ? t(`reasoningEffort.levels.${effort.effortValue}`)
+    : undefined;
+  const triggerText = effortLabel ? `${displayName} ${effortLabel}` : displayName;
+
   const trigger = (
-    <Center
+    <SelectorTrigger
       aria-disabled={!interactive}
-      aria-label={displayName}
-      className={cx(styles.model, !interactive && styles.modelReadonly)}
-      height={blockSize}
-      width={blockSize}
-    >
-      <div className={styles.icon}>
-        <ModelIcon model={model} size={iconSize} />
-      </div>
-    </Center>
+      ariaLabel={triggerText}
+      text={triggerText}
+      {...(interactive ? {} : { style: { cursor: 'default' } })}
+    />
   );
 
   if (!canDisplayModel) return null;
@@ -115,7 +83,7 @@ const ModelSwitch = memo(() => {
         displayName={displayName}
         effort={effort}
         model={model}
-        placement={dropdownPlacement}
+        placement={dropdownPlacement ?? 'topRight'}
         provider={provider}
         onModelChange={handleModelChange}
       >
@@ -124,13 +92,14 @@ const ModelSwitch = memo(() => {
     );
 
   // Locked: say which model is pinned AND why it can't be changed here — the
-  // bare model name used to leave the inert button unexplained.
+  // bare model name used to leave the inert chip unexplained.
   if (!canSelectModel) return <Tooltip title={lockTooltip ?? displayName}>{trigger}</Tooltip>;
 
   return (
     <ModelSwitchPanel
       model={model}
-      placement={dropdownPlacement}
+      openOnHover={false}
+      placement={dropdownPlacement ?? 'topRight'}
       provider={provider}
       onModelChange={handleModelChange}
     >

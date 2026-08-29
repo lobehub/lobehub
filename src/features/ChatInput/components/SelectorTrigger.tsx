@@ -37,6 +37,10 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 /**
+ * The text chip both composer model selectors open from — the heterogeneous
+ * one and the standard model + reasoning-effort one. Text only by design: the
+ * label already names the model, so an icon would only add noise next to Send.
+ *
  * `DropdownMenuTrigger` clones its child to inject the open handler, ref and
  * `aria-haspopup`/`aria-expanded`. Swallowing the rest props here leaves a
  * chip that renders correctly and never opens, so they must reach the element.
@@ -47,7 +51,7 @@ interface TriggerProps extends ComponentPropsWithRef<'div'> {
   text: string;
 }
 
-const Trigger = memo<TriggerProps>(({ ariaLabel, className, fast, text, ...rest }) => (
+const SelectorTrigger = memo<TriggerProps>(({ ariaLabel, className, fast, text, ...rest }) => (
   <div {...rest} aria-label={ariaLabel} className={cx(styles.trigger, className)}>
     {fast && <Icon icon={ZapIcon} size={12} />}
     <span className={styles.label}>{text}</span>
@@ -55,6 +59,6 @@ const Trigger = memo<TriggerProps>(({ ariaLabel, className, fast, text, ...rest 
   </div>
 ));
 
-Trigger.displayName = 'HeteroModelTrigger';
+SelectorTrigger.displayName = 'SelectorTrigger';
 
-export default Trigger;
+export default SelectorTrigger;

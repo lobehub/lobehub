@@ -64,9 +64,8 @@ describe('filterChatOnlyActions', () => {
     ).toEqual(['agentMode', 'model', 'fileUpload', 'voiceDictation', '---', ['typo', 'clear']]);
   });
 
-  it('keeps the icon model trigger for chat-only members instead of degrading to the text label', () => {
+  it('keeps the model chip for chat-only members', () => {
     expect(filterChatOnlyActions(['model', 'plus'])).toEqual(['model', 'plus']);
-    expect(filterChatOnlyActions(['modelLabel', 'plus'])).toEqual(['modelLabel', 'plus']);
   });
 });
 

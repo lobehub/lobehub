@@ -410,7 +410,7 @@ export class ChatTopicActionImpl {
    * Pin a model to a topic by writing the top-level `topics.model`/`provider`
    * columns (the config source of truth), NOT metadata. Called when the user
    * switches model while a topic is active so each topic keeps its own model
-   * (see the Model/ModelLabel controls); generation + ChatInput display read it
+   * (see the ChatInput Model control); generation + ChatInput display read it
    * back via `topicSelectors.getTopicModelById`.
    */
   updateTopicModel = async (

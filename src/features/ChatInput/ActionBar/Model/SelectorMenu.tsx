@@ -95,7 +95,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
     effort,
     model,
     onModelChange,
-    openOnHover = true,
+    openOnHover = false,
     placement = 'topLeft',
     provider,
   }) => {

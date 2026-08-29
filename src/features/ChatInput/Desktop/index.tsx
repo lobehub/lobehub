@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
+import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
@@ -207,6 +208,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
             extraActionItems={extraActionItems}
           />
         )}
+        <ComposerExpandButton />
       </Flexbox>
     );
     const leftSlot = noticeNode ? (
