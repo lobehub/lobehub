@@ -325,16 +325,24 @@ export class EditorActionImpl {
       // Preserve diff nodes (pending review) through the save path.
       // Normalization only happens when the user explicitly clicks Accept/Reject
       // in DiffAllToolbar, which mutates editor state before calling performSave.
-      const result = await documentService.updateDocument({
-        content: currentContent,
-        editorData: JSON.stringify(currentEditorData),
-        id,
-        lockOwnerId: doc.lockOwnerId,
-        metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
-        restoreFromHistoryId: options?.restoreFromHistoryId,
-        saveSource: options?.saveSource,
-        title: metadata?.title,
-      });
+      const requestSave = () =>
+        documentService.updateDocument({
+          content: currentContent,
+          editorData: JSON.stringify(currentEditorData),
+          id,
+          lockOwnerId: doc.lockOwnerId,
+          metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
+          restoreFromHistoryId: options?.restoreFromHistoryId,
+          saveSource: options?.saveSource,
+          title: metadata?.title,
+        });
+
+      let result: Awaited<ReturnType<typeof requestSave>>;
+      try {
+        result = await requestSave();
+      } catch (error) {
+        result = await this.retrySaveAfterLockReclaim(id, doc.lockOwnerId, error, requestSave);
+      }
 
       // Mark as clean and update save status
       internal_dispatchDocument({
@@ -371,6 +379,37 @@ export class EditorActionImpl {
         value: { saveBlockedByLock: lockBlocked || undefined, saveStatus: 'idle' },
       });
     }
+  };
+
+  /**
+   * A CONFLICT save is usually a *self* conflict rather than another member
+   * editing: the debounced autosave racing the lazy first lock acquire, a ghost
+   * lease left behind when a refresh aborted the release request, or another
+   * window of the same user having reclaimed the lease under its own ownerId.
+   * Re-acquiring with our ownerId resolves all of those — the server claims a
+   * missing lease and legitimately reclaims a same-user one — so the save can
+   * be retried once. A lease genuinely held by ANOTHER member comes back as
+   * `lockedByOther`, and the original CONFLICT is rethrown so the existing
+   * `saveBlockedByLock` read-only flow stays intact.
+   */
+  private retrySaveAfterLockReclaim = async <T>(
+    id: string,
+    lockOwnerId: string | undefined,
+    error: unknown,
+    requestSave: () => Promise<T>,
+  ): Promise<T> => {
+    const errorCode = (error as { data?: { code?: string } })?.data?.code;
+    if (errorCode !== 'CONFLICT' || !lockOwnerId) throw error;
+
+    let lockedByOther: boolean;
+    try {
+      ({ lockedByOther } = await documentService.acquireDocumentLock(id, lockOwnerId));
+    } catch {
+      throw error;
+    }
+    if (lockedByOther) throw error;
+
+    return requestSave();
   };
 
   setEditorState = (editorState: LobehubEditorState | undefined): void => {

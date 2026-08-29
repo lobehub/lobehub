@@ -208,6 +208,7 @@ export default {
   'pageEditor.menu.importDocument': 'Import Page',
   'pageEditor.menu.move': 'Move to…',
   'pageEditor.menu.pin': 'Pin Page',
+  'pageEditor.saveFailed': 'Failed to save the page, please try again later',
   'pageEditor.saving': 'Saving...',
   'pageEditor.titlePlaceholder': 'Untitled',
   'pageEditor.wordCount': '{{wordCount}} words',

@@ -87,7 +87,7 @@ describe('UnsavedChangesGuard', () => {
     await waitFor(() => {
       expect(onAutoSave).toHaveBeenCalledTimes(1);
       expect(messageErrorMock).toHaveBeenCalledWith(
-        expect.objectContaining({ description: 'networkError' }),
+        expect.objectContaining({ description: 'pageEditor.saveFailed' }),
       );
       expect(blocker.reset).toHaveBeenCalledTimes(1);
       expect(blocker.proceed).not.toHaveBeenCalled();
