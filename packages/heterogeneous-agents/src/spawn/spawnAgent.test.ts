@@ -589,7 +589,7 @@ describe('spawnAgent', () => {
         expect.objectContaining({ PATH: process.env.PATH }),
       );
       expect(spawnCalls[0]).toMatchObject({
-        args: ['acp', 'serve', '--yolo', '--feature=test'],
+        args: ['--feature=test', 'acp', 'serve', '--yolo'],
         command: 'traecli',
       });
       expect(fake.requests.map((request) => request.method)).toEqual([

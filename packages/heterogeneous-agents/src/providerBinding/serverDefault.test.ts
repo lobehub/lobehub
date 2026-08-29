@@ -15,6 +15,7 @@ describe('server-default heterogeneous agent matrix', () => {
       'grok-build',
       'kimi-code',
       'pi',
+      'trae',
     ]);
     expect(SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG).toEqual({
       'claude-code': {
@@ -38,6 +39,11 @@ describe('server-default heterogeneous agent matrix', () => {
         tokenHeader: 'x-api-key',
       },
       'pi': {
+        ingress: 'openai-responses',
+        modelPolicy: 'tool-capable',
+        tokenHeader: 'bearer',
+      },
+      'trae': {
         ingress: 'openai-responses',
         modelPolicy: 'tool-capable',
         tokenHeader: 'bearer',

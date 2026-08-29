@@ -135,12 +135,12 @@ afterEach(() => {
 });
 
 describe('TRAE ACP helpers', () => {
-  it('builds the fixed ACP server argv before user arguments', () => {
+  it('builds global arguments before the fixed ACP server argv', () => {
     expect(buildTraeAcpArgs(['--feature=test'])).toEqual([
+      '--feature=test',
       'acp',
       'serve',
       '--yolo',
-      '--feature=test',
     ]);
   });
 
@@ -219,7 +219,7 @@ describe('TraeAcpSession', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'traecli',
-      ['acp', 'serve', '--yolo', '--feature=test'],
+      ['--feature=test', 'acp', 'serve', '--yolo'],
       expect.objectContaining({ cwd: '/workspace', stdio: ['pipe', 'pipe', 'pipe'] }),
     );
     expect(requests[0]).toEqual({

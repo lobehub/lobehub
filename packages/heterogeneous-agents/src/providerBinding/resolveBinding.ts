@@ -14,6 +14,7 @@ export const HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES = [
   'grok-build',
   'kimi-code',
   'pi',
+  'trae',
 ] as const;
 
 const CAPABILITIES: Partial<
@@ -43,6 +44,10 @@ const CAPABILITIES: Partial<
       'anthropic-messages',
       'google-generative-ai',
     ],
+  },
+  'trae': {
+    agentType: 'trae',
+    protocols: ['openai-responses'],
   },
 };
 

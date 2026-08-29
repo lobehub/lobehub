@@ -30,11 +30,11 @@ export interface TraeAcpImagePromptBlock {
 
 export type TraeAcpPromptBlock = TraeAcpImagePromptBlock | TraeAcpTextPromptBlock;
 
-export const buildTraeAcpArgs = (extraArgs: string[] = []): string[] => [
+export const buildTraeAcpArgs = (globalArgs: string[] = []): string[] => [
+  ...globalArgs,
   'acp',
   'serve',
   '--yolo',
-  ...extraArgs,
 ];
 
 export const buildTraeAcpPrompt = async (

@@ -2114,6 +2114,48 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
+    it('should leave TRAE model selection to the managed profile in API mode', async () => {
+      const previousLab = useUserStore.getState().preference.lab;
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
+        },
+      }));
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      try {
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: {
+            apiConfig: { model: 'api-model', providerId: 'openai' },
+            args: ['--feature=test'],
+            authMode: 'api',
+            command: 'traecli',
+            model: 'stale-subscription-model',
+            type: 'trae' as const,
+          },
+        });
+      } finally {
+        useUserStore.setState((state) => ({
+          preference: { ...state.preference, lab: previousLab },
+        }));
+      }
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'trae',
+          initialModel: undefined,
+          providerBinding: {
+            apiConfig: { model: 'api-model', providerId: 'openai' },
+            kind: 'provider',
+            resumeBindingKey: undefined,
+          },
+        }),
+      );
+    });
+
     it('should execute a persisted legacy provider config without type', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

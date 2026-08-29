@@ -13,6 +13,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
     'grok-build',
     'kimi-code',
     'pi',
+    'trae',
   ],
 }));
 
@@ -25,6 +26,7 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
       'grok-build': [{ model: 'kimi-k2.6' }],
       'kimi-code': [{ model: 'kimi-k2.6' }],
       'pi': [{ model: 'kimi-k2.6' }],
+      'trae': [{ model: 'kimi-k2.6' }],
     });
   });
 
@@ -35,7 +37,7 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
 
   it('reports the shared deployment model alias when the server catalog has a model', async () => {
     await expect(resolveServerDefaultHeterogeneousCapability()).resolves.toEqual({
-      agents: ['claude-code', 'codex', 'grok-build', 'kimi-code', 'pi'],
+      agents: ['claude-code', 'codex', 'grok-build', 'kimi-code', 'pi', 'trae'],
       enabled: true,
       model: 'lobehub-default',
       models: {
@@ -44,6 +46,7 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
         'grok-build': [{ model: 'kimi-k2.6' }],
         'kimi-code': [{ model: 'kimi-k2.6' }],
         'pi': [{ model: 'kimi-k2.6' }],
+        'trae': [{ model: 'kimi-k2.6' }],
       },
     });
 
@@ -57,6 +60,7 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
       'grok-build': [],
       'kimi-code': [],
       'pi': [],
+      'trae': [],
     });
 
     await expect(resolveServerDefaultHeterogeneousCapability()).resolves.toMatchObject({

@@ -1953,6 +1953,7 @@ export const executeHeterogeneousAgent = async (
       env: sessionEnv,
       initialModel:
         adapterType === 'trae' &&
+        !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
           ? heterogeneousProvider.model

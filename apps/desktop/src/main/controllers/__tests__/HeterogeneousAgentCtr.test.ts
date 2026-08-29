@@ -3378,6 +3378,149 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
+    it('launches a provider-bound TRAE session with a managed secret-free profile', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        args: ['--model', 'stale-model', '--profile', 'personal', '--permission-mode', 'auto'],
+        command: 'traecli',
+        env: {
+          LOBEHUB_TRAE_API_KEY: 'stale-host-key',
+          OPENAI_API_KEY: 'stale-openai-key',
+          TRAE_HOME: '/user/trae',
+        },
+        initialModel: 'stale-native-model',
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-trae-provider', prompt: 'hello', sessionId });
+
+      const options = traeAcpSessionConstructMock.mock.calls.at(-1)?.[0];
+      expect(options.args).toEqual(['--permission-mode', 'auto', '--profile', 'lobehub']);
+      expect(options.initialModel).toBeUndefined();
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          LOBEHUB_TRAE_API_KEY: 'provider-secret',
+          TRAE_HOME: expect.stringContaining('/heteroAgent/bindings/trae/'),
+        }),
+      );
+      expect(options.env).not.toHaveProperty('OPENAI_API_KEY');
+
+      const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'trae');
+      const [bindingDir] = await readdir(bindingsDir);
+      const profile = await readFile(
+        path.join(bindingsDir, bindingDir, 'lobehub.traecli.toml'),
+        'utf8',
+      );
+      expect(profile).toContain('model = "gpt-test"');
+      expect(profile).toContain('model_provider = "lobehub"');
+      expect(profile).toContain('base_url = "https://api.openai.com/v1"');
+      expect(profile).toContain('env_key = "LOBEHUB_TRAE_API_KEY"');
+      expect(profile).toContain('wire_api = "responses"');
+      expect(profile).not.toContain('provider-secret');
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('provider-secret');
+      expect(await readdir(path.join(appStoragePath, 'heteroAgent', 'runs'))).toEqual([]);
+    });
+
+    it('injects a server-default operation token into the TRAE Responses profile', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+        providerBinding: {
+          apiConfig: { model: 'gpt-5.4', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-trae-server-default',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: undefined,
+        agentType: 'trae',
+        model: 'gpt-5.4',
+        operationId: 'op-trae-server-default',
+        topicId: 'topic-1',
+      });
+      const options = traeAcpSessionConstructMock.mock.calls.at(-1)?.[0];
+      expect(options.args).toEqual(['--profile', 'lobehub']);
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          LOBEHUB_TRAE_API_KEY: 'operation-token',
+          TRAE_HOME: expect.stringContaining('/heteroAgent/bindings/trae/'),
+        }),
+      );
+
+      const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'trae');
+      const [bindingDir] = await readdir(bindingsDir);
+      const profile = await readFile(
+        path.join(bindingsDir, bindingDir, 'lobehub.traecli.toml'),
+        'utf8',
+      );
+      expect(profile).toContain('model = "lobehub/gpt-5.4"');
+      expect(profile).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
+      expect(profile).not.toContain('operation-token');
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-trae-server-default',
+        result: 'done',
+      });
+    });
+
+    it('requires TRAE CLI 0.201.2 for provider binding but not subscription mode', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: true, version: '0.201.1' });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: { detect },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const providerSession = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          operationId: 'op-trae-old-provider',
+          prompt: 'provider prompt',
+          sessionId: providerSession.sessionId,
+        }),
+      ).rejects.toThrow(
+        'TRAE CLI 0.201.2 or newer is required to use a LobeHub provider. Installed version: 0.201.1.',
+      );
+      expect(traeAcpSessionConstructMock).not.toHaveBeenCalled();
+
+      const subscriptionSession = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-trae-old-subscription',
+        prompt: 'subscription prompt',
+        sessionId: subscriptionSession.sessionId,
+      });
+
+      expect(traeAcpSessionConstructMock).toHaveBeenCalledOnce();
+    });
+
     it('classifies authentication diagnostics emitted only on ACP stderr', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([

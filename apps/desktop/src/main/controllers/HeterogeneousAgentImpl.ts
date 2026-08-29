@@ -756,6 +756,20 @@ export default class HeterogeneousAgentCtr {
           workingDirectory,
         };
       }
+      if (
+        session.agentType === 'trae' &&
+        session.hostedProviderBinding &&
+        status?.version &&
+        semver.lt(status.version, '0.201.2')
+      ) {
+        return {
+          agentType: session.agentType,
+          code: 'cli_version_unsupported',
+          command,
+          message: `TRAE CLI 0.201.2 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
+          workingDirectory,
+        };
+      }
 
       // Spawn through the detector-resolved absolute path when the configured
       // command is bare — detection may have located the CLI somewhere plain
@@ -1307,7 +1321,7 @@ export default class HeterogeneousAgentCtr {
         params.providerBinding?.kind === 'server-default'
           ? params.providerBinding.apiConfig
           : undefined,
-      model: params.initialModel,
+      model: agentType === 'trae' && hostedProviderBinding ? undefined : params.initialModel,
       sessionId,
       resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,
@@ -2233,6 +2247,7 @@ export default class HeterogeneousAgentCtr {
         cause: error,
       });
     } finally {
+      await session.hostedProviderBinding?.cleanup();
       if (session.traeAcpSession === traeAcpSession) session.traeAcpSession = undefined;
     }
   }
