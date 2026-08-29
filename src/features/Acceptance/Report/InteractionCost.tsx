@@ -244,116 +244,124 @@ export interface InteractionCostPanelProps {
    */
   checkLabels?: Record<string, string>;
   cost: VerifyInteractionCost;
+  /** Which round this measurement came from, when the host shows several. */
+  roundLabel?: string;
 }
 
-const InteractionCostPanel = memo<InteractionCostPanelProps>(({ checkLabels, cost }) => {
-  const { t } = useTranslation('verify');
-  const phases = cost.phases ?? [];
-  const maxPhaseSeconds = Math.max(...phases.map(phaseSeconds), 0);
-  const metrics = [
-    {
-      label: t('report.interaction.total'),
-      value: formatSeconds(cost.totalSeconds),
-    },
-    {
-      label: t('report.interaction.active'),
-      value: formatSeconds(cost.activeSeconds),
-    },
-    {
-      label: t('report.interaction.wait'),
-      value: formatSeconds(cost.waitSeconds),
-    },
-  ];
+const InteractionCostPanel = memo<InteractionCostPanelProps>(
+  ({ checkLabels, cost, roundLabel }) => {
+    const { t } = useTranslation('verify');
+    const phases = cost.phases ?? [];
+    const maxPhaseSeconds = Math.max(...phases.map(phaseSeconds), 0);
+    const metrics = [
+      {
+        label: t('report.interaction.total'),
+        value: formatSeconds(cost.totalSeconds),
+      },
+      {
+        label: t('report.interaction.active'),
+        value: formatSeconds(cost.activeSeconds),
+      },
+      {
+        label: t('report.interaction.wait'),
+        value: formatSeconds(cost.waitSeconds),
+      },
+    ];
 
-  return (
-    <section className={styles.interactionCost}>
-      <div className={styles.interactionCostHeader}>
-        <span className={styles.interactionCostModel}>{cost.model}</span>
-      </div>
+    return (
+      <section className={styles.interactionCost}>
+        <div className={styles.interactionCostHeader}>
+          {roundLabel && <span className={styles.interactionCostModel}>{roundLabel}</span>}
+          <span className={styles.interactionCostModel}>{cost.model}</span>
+        </div>
 
-      <div className={styles.interactionMetrics}>
-        {metrics.map((metric) => (
-          <div className={styles.interactionMetric} key={metric.label}>
-            <span className={styles.interactionMetricLabel}>{metric.label}</span>
-            <span className={styles.interactionMetricValue}>{metric.value}</span>
-          </div>
-        ))}
-      </div>
+        <div className={styles.interactionMetrics}>
+          {metrics.map((metric) => (
+            <div className={styles.interactionMetric} key={metric.label}>
+              <span className={styles.interactionMetricLabel}>{metric.label}</span>
+              <span className={styles.interactionMetricValue}>{metric.value}</span>
+            </div>
+          ))}
+        </div>
 
-      <div className={styles.operatorList}>
-        {OPERATOR_KEYS.map((key) => {
-          const value = cost.operators[key];
-          if (value === undefined) return null;
-
-          return (
-            <span className={styles.operatorChip} data-operator={key} key={key}>
-              <span>{t(`report.interaction.operator.${key}`)}</span>
-              <b>{operatorValue(key, value)}</b>
-            </span>
-          );
-        })}
-      </div>
-
-      {phases.length > 0 && (
-        <div className={styles.phaseList}>
-          {phases.map((phase) => {
-            const seconds = phaseSeconds(phase);
-            const activeSeconds = phase.activeSeconds ?? 0;
-            const waitSeconds = phase.waitSeconds ?? 0;
-            const activeWidth = maxPhaseSeconds > 0 ? (activeSeconds / maxPhaseSeconds) * 100 : 0;
-            const waitWidth = maxPhaseSeconds > 0 ? (waitSeconds / maxPhaseSeconds) * 100 : 0;
-            const segments = phaseOperatorSegments(phase, cost.timingSeconds);
-            const name = phase.label ?? phase.id;
-            const checkLabel = phase.checkItemId
-              ? (checkLabels?.[phase.checkItemId] ?? phase.checkItemId)
-              : undefined;
+        <div className={styles.operatorList}>
+          {OPERATOR_KEYS.map((key) => {
+            const value = cost.operators[key];
+            if (value === undefined) return null;
 
             return (
-              <div className={styles.phaseRow} key={phase.id}>
-                <span
-                  className={styles.phaseName}
-                  title={checkLabel ? `${name} · ${checkLabel}` : name}
-                >
-                  <span className={styles.phaseSlug}>{name}</span>
-                  {checkLabel && <span className={styles.phaseCheck}>{checkLabel}</span>}
-                </span>
-                <span className={styles.phaseTrack}>
-                  {segments.length > 0 ? (
-                    segments.map((segment) => (
-                      <span
-                        className={styles.phaseSegment}
-                        data-operator={segment.key}
-                        key={segment.key}
-                        style={{
-                          width: `${
-                            maxPhaseSeconds > 0 ? (segment.seconds / maxPhaseSeconds) * 100 : 0
-                          }%`,
-                        }}
-                        title={`${t(`report.interaction.operator.${segment.key}`)} ${formatSeconds(
-                          segment.seconds,
-                        )}`}
-                      />
-                    ))
-                  ) : (
-                    <>
-                      <span className={styles.phaseSegment} style={{ width: `${activeWidth}%` }} />
-                      <span
-                        className={styles.phaseSegment}
-                        data-operator={'R_ms'}
-                        style={{ width: `${waitWidth}%` }}
-                      />
-                    </>
-                  )}
-                </span>
-                <span className={styles.phaseValue}>{formatSeconds(seconds)}</span>
-              </div>
+              <span className={styles.operatorChip} data-operator={key} key={key}>
+                <span>{t(`report.interaction.operator.${key}`)}</span>
+                <b>{operatorValue(key, value)}</b>
+              </span>
             );
           })}
         </div>
-      )}
-    </section>
-  );
-});
+
+        {phases.length > 0 && (
+          <div className={styles.phaseList}>
+            {phases.map((phase) => {
+              const seconds = phaseSeconds(phase);
+              const activeSeconds = phase.activeSeconds ?? 0;
+              const waitSeconds = phase.waitSeconds ?? 0;
+              const activeWidth = maxPhaseSeconds > 0 ? (activeSeconds / maxPhaseSeconds) * 100 : 0;
+              const waitWidth = maxPhaseSeconds > 0 ? (waitSeconds / maxPhaseSeconds) * 100 : 0;
+              const segments = phaseOperatorSegments(phase, cost.timingSeconds);
+              const name = phase.label ?? phase.id;
+              const checkLabel = phase.checkItemId
+                ? (checkLabels?.[phase.checkItemId] ?? phase.checkItemId)
+                : undefined;
+
+              return (
+                <div className={styles.phaseRow} key={phase.id}>
+                  <span
+                    className={styles.phaseName}
+                    title={checkLabel ? `${name} · ${checkLabel}` : name}
+                  >
+                    <span className={styles.phaseSlug}>{name}</span>
+                    {checkLabel && <span className={styles.phaseCheck}>{checkLabel}</span>}
+                  </span>
+                  <span className={styles.phaseTrack}>
+                    {segments.length > 0 ? (
+                      segments.map((segment) => (
+                        <span
+                          className={styles.phaseSegment}
+                          data-operator={segment.key}
+                          key={segment.key}
+                          style={{
+                            width: `${
+                              maxPhaseSeconds > 0 ? (segment.seconds / maxPhaseSeconds) * 100 : 0
+                            }%`,
+                          }}
+                          title={`${t(`report.interaction.operator.${segment.key}`)} ${formatSeconds(
+                            segment.seconds,
+                          )}`}
+                        />
+                      ))
+                    ) : (
+                      <>
+                        <span
+                          className={styles.phaseSegment}
+                          style={{ width: `${activeWidth}%` }}
+                        />
+                        <span
+                          className={styles.phaseSegment}
+                          data-operator={'R_ms'}
+                          style={{ width: `${waitWidth}%` }}
+                        />
+                      </>
+                    )}
+                  </span>
+                  <span className={styles.phaseValue}>{formatSeconds(seconds)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
+  },
+);
 
 InteractionCostPanel.displayName = 'InteractionCostPanel';
 

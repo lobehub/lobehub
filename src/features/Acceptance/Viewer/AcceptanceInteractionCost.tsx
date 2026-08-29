@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -21,60 +22,28 @@ import { buildCheckLabels, selectPricedRound } from './interactionCost';
  * in the shared bundle (only `origin` is stripped for visitors), so surfacing it
  * here needs no extra read and no extra permission.
  *
- * Collapsed by default: it informs a decision, it is not the decision.
+ * Deliberately a plain disclosure, not a card: the checks are what a reviewer
+ * acts on, and a bordered block here would compete with them for the same
+ * attention. Collapsed it is one muted line carrying the only number worth
+ * seeing at a glance; the breakdown is one click away.
  */
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
-    padding-block: 0 12px;
-    padding-inline: 12px;
+    padding-block-end: 4px;
+    padding-inline-start: 24px;
   `,
   chevron: css`
-    color: ${cssVar.colorTextQuaternary};
     transition: transform 0.15s ease;
 
     &[data-open='true'] {
       transform: rotate(90deg);
     }
   `,
-  metric: css`
-    font-size: 12px;
+  total: css`
+    margin-inline-start: 6px;
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
-
-    b {
-      font-weight: 600;
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  root: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  round: css`
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 99px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  summary: css`
-    cursor: pointer;
-    padding-block: 10px;
-    padding-inline: 12px;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
   `,
 }));
 
@@ -92,35 +61,27 @@ const AcceptanceInteractionCost = memo<AcceptanceInteractionCostProps>(({ data }
   if (!priced) return null;
 
   return (
-    <div className={styles.root}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.summary}
-        gap={8}
-        role={'button'}
+    <>
+      <Button
+        icon={<Icon className={styles.chevron} data-open={open} icon={ChevronRight} />}
+        size={'small'}
+        style={{ alignSelf: 'flex-start' }}
+        type={'text'}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <Icon className={styles.chevron} data-open={open} icon={ChevronRight} size={13} />
-        <span className={styles.title}>{t('report.interaction.title')}</span>
-        <span className={styles.round}>{t('acceptance.round', { round: priced.roundIndex })}</span>
-        <Flexbox flex={1} />
-        <span className={styles.metric}>
-          <b>{formatSeconds(priced.cost.totalSeconds)}</b>
-        </span>
-        <span className={styles.metric}>
-          {t('report.interaction.active')} {formatSeconds(priced.cost.activeSeconds)}
-        </span>
-        <span className={styles.metric}>
-          {t('report.interaction.wait')} {formatSeconds(priced.cost.waitSeconds)}
-        </span>
-      </Flexbox>
+        {t('report.interaction.title')}
+        <span className={styles.total}>{formatSeconds(priced.cost.totalSeconds)}</span>
+      </Button>
       {open && (
         <div className={styles.body}>
-          <InteractionCostPanel checkLabels={checkLabels} cost={priced.cost} />
+          <InteractionCostPanel
+            checkLabels={checkLabels}
+            cost={priced.cost}
+            roundLabel={t('acceptance.round', { round: priced.roundIndex })}
+          />
         </div>
       )}
-    </div>
+    </>
   );
 });
 
