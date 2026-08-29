@@ -72,6 +72,15 @@ describe('SearchSyncOutboxRepository', () => {
     for (const statement of migration.sql) await db.execute(sql.raw(statement));
   });
 
+  it('indexes durable dead-letter checks', async () => {
+    const result = await db.execute(sql`
+      SELECT to_regclass('search_sync_outbox_dead_idx')::text AS index_name
+    `);
+    const rows = Array.isArray(result) ? result : result.rows;
+
+    expect(rows).toEqual([{ index_name: 'search_sync_outbox_dead_idx' }]);
+  });
+
   it('keeps existing-table DDL out of the automatic deployment migration', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),
@@ -265,6 +274,7 @@ describe('SearchSyncOutboxRepository', () => {
     await expect(
       repository.markFailures([{ ...first, error: new Error('invalid mapping'), permanent: true }]),
     ).resolves.toBe(1);
+    await expect(repository.hasDeadLetters()).resolves.toBe(true);
     const [dead] = await db
       .select()
       .from(searchSyncOutbox)

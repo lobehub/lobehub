@@ -53,6 +53,9 @@ export const searchSyncOutbox = pgTable(
     index('search_sync_outbox_claim_idx')
       .on(table.priority, table.availableAt, table.revision)
       .where(sql`${table.deadAt} IS NULL`),
+    index('search_sync_outbox_dead_idx')
+      .on(table.deadAt)
+      .where(sql`${table.deadAt} IS NOT NULL`),
     index('search_sync_outbox_lease_idx')
       .on(table.lockedUntil)
       .where(sql`${table.deadAt} IS NULL AND ${table.lockedUntil} IS NOT NULL`),

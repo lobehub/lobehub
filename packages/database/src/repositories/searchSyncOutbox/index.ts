@@ -268,6 +268,19 @@ export class SearchSyncOutboxRepository {
     return Boolean(rowsOf<{ actionable: boolean }>(result)[0]?.actionable);
   }
 
+  async hasDeadLetters(): Promise<boolean> {
+    const result = await this.db.execute(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM search_sync_outbox
+        WHERE dead_at IS NOT NULL
+        LIMIT 1
+      ) AS has_dead_letters
+    `);
+
+    return Boolean(rowsOf<{ has_dead_letters: boolean }>(result)[0]?.has_dead_letters);
+  }
+
   async markFailures(failures: SearchSyncFailure[]): Promise<number> {
     if (failures.length === 0) return 0;
 
