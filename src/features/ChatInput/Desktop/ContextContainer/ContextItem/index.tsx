@@ -9,6 +9,7 @@ import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
 import { UPLOAD_STATUS_SET } from '@/types/files/upload';
 
+import { useChatInputStore } from '../../../store';
 import Content from './Content';
 import { openFilePreviewModal } from './FilePreviewModal.loader';
 import { getFileBasename } from './utils';
@@ -80,6 +81,7 @@ type FileItemProps = UploadFileItem;
 const ContextItem = memo<FileItemProps>((props) => {
   const { file, id, status, uploadState } = props;
   const [removeChatUploadFile] = useFileStore((s) => [s.removeChatUploadFile]);
+  const contextKey = useChatInputStore((s) => s.contextSelectionKey);
 
   const basename = getFileBasename(file.name);
   const isUploading = UPLOAD_STATUS_SET.has(status);
@@ -90,7 +92,7 @@ const ContextItem = memo<FileItemProps>((props) => {
   });
 
   const handleClose = useEventCallback(() => {
-    removeChatUploadFile(id);
+    removeChatUploadFile({ contextKey, id });
   });
   return (
     <Tag closable size={'large'} onClick={handleClick} onClose={handleClose}>

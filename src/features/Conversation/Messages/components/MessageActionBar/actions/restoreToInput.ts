@@ -8,6 +8,7 @@ import { unescapeMarkdown } from '@/store/chat/utils/unescapeMarkdown';
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
 
+import { useConversationContextKey } from '../../../../hooks/useConversationContextKey';
 import { useConversationStore } from '../../../../store';
 import { defineAction } from '../defineAction';
 
@@ -26,6 +27,9 @@ export const restoreToInputAction = defineAction({
 
     const editor = useConversationStore((s) => s.editor);
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+    // Restoring targets THIS conversation's composer — the same bucket its file
+    // list renders from, not whichever composer happens to be mounted too.
+    const contextKey = useConversationContextKey();
 
     return useMemo(() => {
       // Only user messages carry restorable user input.
@@ -93,9 +97,12 @@ export const restoreToInputAction = defineAction({
           ];
 
           const fileStore = useFileStore.getState();
-          fileStore.clearChatUploadFileList();
+          fileStore.clearChatUploadFileList(contextKey);
           if (restored.length > 0) {
-            fileStore.dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+            fileStore.dispatchChatUploadFileList({
+              contextKey,
+              payload: { files: restored, type: 'addFiles' },
+            });
           }
 
           editor.focus();
@@ -105,6 +112,6 @@ export const restoreToInputAction = defineAction({
         key: 'restoreToInput',
         label: t('restoreToInput'),
       };
-    }, [t, ctx.role, ctx.data, editor, updateInputMessage]);
+    }, [t, ctx.role, ctx.data, contextKey, editor, updateInputMessage]);
   },
 });

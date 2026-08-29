@@ -15,6 +15,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ConversationArea from './ConversationArea';
 
@@ -26,7 +27,8 @@ const wrapperStyle: React.CSSProperties = {
 };
 
 const ChatConversation = memo(() => {
-  const { agentId, topicId } = useAgentContext();
+  const context = useAgentContext();
+  const { agentId, topicId } = context;
   const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
@@ -45,7 +47,10 @@ const ChatConversation = memo(() => {
     agentId && agentId !== inboxAgentId && agentVisibility !== 'private' ? agentId : undefined;
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  // The SAME context `ConversationArea` hands the provider — a drop must land in
+  // the bucket this conversation's composer reads, not a neighbouring one.
+  const contextKey = messageMapKey(context);
+  const { handleUploadFiles } = useUploadFiles({ agentId, contextKey, model, provider });
   const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
 
   const enableLocalPathReference =

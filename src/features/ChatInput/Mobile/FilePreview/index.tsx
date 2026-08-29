@@ -17,7 +17,8 @@ const styles = createStaticStyles(({ css }) => ({
 
 const FilePreview = memo(() => {
   const expand = useChatInputStore((s) => s.expand);
-  const list = useFileStore(filesSelectors.chatUploadFileList, isEqual);
+  const contextKey = useChatInputStore((s) => s.contextSelectionKey);
+  const list = useFileStore(filesSelectors.chatUploadFileList(contextKey), isEqual);
   if (!list || list?.length === 0) return null;
 
   return (

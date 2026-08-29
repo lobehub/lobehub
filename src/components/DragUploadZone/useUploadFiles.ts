@@ -7,6 +7,12 @@ import { useFileStore } from '@/store/file';
 interface UseUploadFilesOptions {
   /** The conversation's agent id. Decides whether the chat-only file-type whitelist applies. */
   agentId: string;
+  /**
+   * Composer the dropped files belong to. Must be the key that composer READS
+   * (`useConversationContextKey()` inside a conversation), otherwise the drop
+   * lands in a bucket its file list never renders.
+   */
+  contextKey?: string;
   model?: string;
   provider?: string;
 }
@@ -19,7 +25,7 @@ interface UseUploadFilesOptions {
  * @returns handleUploadFiles - Callback to handle file uploads
  */
 export const useUploadFiles = (options: UseUploadFilesOptions) => {
-  const { agentId, model = '', provider = '' } = options;
+  const { agentId, contextKey, model = '', provider = '' } = options;
 
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
@@ -42,10 +48,10 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
       });
 
       if (filteredFiles.length > 0) {
-        uploadFiles(filteredFiles, agentId);
+        uploadFiles({ agentId, contextKey, files: filteredFiles });
       }
     },
-    [agentId, canUpload, canUploadImage, canUploadVideo, canUploadAudio, uploadFiles],
+    [agentId, contextKey, canUpload, canUploadImage, canUploadVideo, canUploadAudio, uploadFiles],
   );
 
   return { canUploadImage, canUploadVideo, canUploadAudio, handleUploadFiles };

@@ -1056,10 +1056,11 @@ export class ConversationLifecycleActionImpl {
         },
         'sendMessage/optimisticCreateTopic',
       );
-      getFileStoreState().moveChatContextSelections(
-        messageMapKey({ ...operationContext, topicId: null }),
-        currentContextKey,
-      );
+      const preMintContextKey = messageMapKey({ ...operationContext, topicId: null });
+      getFileStoreState().moveChatContextSelections(preMintContextKey, currentContextKey);
+      // Attachments still uploading were filed under the pre-mint key — carry
+      // them with the selections or the composer loses sight of its own upload.
+      getFileStoreState().moveChatUploadFileList(preMintContextKey, currentContextKey);
       await this.#get().switchTopic(mintedTopicId, { skipRefreshMessage: true });
     }
 
@@ -1263,10 +1264,9 @@ export class ConversationLifecycleActionImpl {
     const rollbackOptimisticTopic = (action: string) => {
       if (!optimisticTopic || !optimisticTopicActive) return;
 
-      getFileStoreState().moveChatContextSelections(
-        currentContextKey,
-        messageMapKey({ ...operationContext, topicId: null }),
-      );
+      const preMintContextKey = messageMapKey({ ...operationContext, topicId: null });
+      getFileStoreState().moveChatContextSelections(currentContextKey, preMintContextKey);
+      getFileStoreState().moveChatUploadFileList(currentContextKey, preMintContextKey);
       if (this.#get().activeTopicId === optimisticTopic.id) {
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
       }
@@ -1414,6 +1414,7 @@ export class ConversationLifecycleActionImpl {
       const heteroMessageKey = messageMapKey(heteroContext);
       this.#get().moveQueuedMessages(currentContextKey, heteroMessageKey);
       getFileStoreState().moveChatContextSelections(currentContextKey, heteroMessageKey);
+      getFileStoreState().moveChatUploadFileList(currentContextKey, heteroMessageKey);
       // Legacy queue location: follow-ups enqueued behind an op still
       // registered under the pre-mint `_new` key.
       if (willCreateNewTopic)

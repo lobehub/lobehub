@@ -1,7 +1,9 @@
 import { type ChatContextContent } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { toast } from '@lobehub/ui/base-ui';
 import { Buffer } from 'buffer.js';
+import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
@@ -20,6 +22,7 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type FileStore } from '../../store';
+import { chatUploadContextKey } from './selectors';
 import { filterSupportedChatUploadFiles } from './uploadGuard';
 
 const n = setNamespace('chat');
@@ -69,6 +72,10 @@ export class FileActionImpl {
     this.#get = get;
   }
 
+  /** This composer's pending uploads. */
+  #uploadFileList = (contextKey?: string): UploadFileItem[] =>
+    this.#get().chatUploadFileListByContext[chatUploadContextKey(contextKey)] ?? [];
+
   addChatContextSelection = ({
     contextKey,
     selection,
@@ -95,15 +102,88 @@ export class FileActionImpl {
     this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
-  clearChatUploadFileList = (): void => {
-    this.#set({ chatUploadFileList: [] }, false, n('clearChatUploadFileList'));
+  clearChatUploadFileList = (contextKey?: string): void => {
+    const key = chatUploadContextKey(contextKey);
+    const currentMap = this.#get().chatUploadFileListByContext;
+    if (!(key in currentMap)) return;
+
+    const { [key]: _removed, ...nextMap } = currentMap;
+    this.#set({ chatUploadFileListByContext: nextMap }, false, n('clearChatUploadFileList'));
   };
 
-  dispatchChatUploadFileList = (payload: UploadFileListDispatch): void => {
-    const nextValue = uploadFileListReducer(this.#get().chatUploadFileList, payload);
-    if (nextValue === this.#get().chatUploadFileList) return;
+  dispatchChatUploadFileList = ({
+    contextKey,
+    payload,
+    uploadSessionId,
+  }: {
+    contextKey?: string;
+    payload: UploadFileListDispatch;
+    /**
+     * Set by an in-flight `uploadChatFiles`. The bucket it writes into is read
+     * back at DISPATCH time, so a topic mint that moves the bucket mid-upload
+     * takes the remaining add / progress / success writes with it.
+     */
+    uploadSessionId?: string;
+  }): void => {
+    const sessionKey = uploadSessionId
+      ? this.#get().chatUploadSessionContext[uploadSessionId]
+      : undefined;
+    const key = sessionKey ?? chatUploadContextKey(contextKey);
+    const currentMap = this.#get().chatUploadFileListByContext;
+    const current = currentMap[key] ?? [];
+    const nextValue = uploadFileListReducer(current, payload);
+    if (nextValue === current) return;
 
-    this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
+    this.#set(
+      { chatUploadFileListByContext: { ...currentMap, [key]: nextValue } },
+      false,
+      `dispatchChatFileList/${payload.type}`,
+    );
+  };
+
+  /**
+   * Carry pending uploads from one context to another — the composer's own move,
+   * matching {@link moveChatContextSelections}. A first message is composed under
+   * a `topicId: null` key and the run mints the real topic id mid-send, so
+   * without this the attachments the user is watching upload would be stranded
+   * in a bucket nothing renders anymore.
+   */
+  moveChatUploadFileList = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    // Retarget uploads still in flight FIRST, and unconditionally: the racy case
+    // is precisely the one with nothing to move yet, where the file is still
+    // being read/compressed and its `addFiles` is about to land.
+    const sessions = this.#get().chatUploadSessionContext;
+    const movedSessions = Object.fromEntries(
+      Object.entries(sessions).map(([id, key]) => [
+        id,
+        key === fromContextKey ? toContextKey : key,
+      ]),
+    );
+
+    const currentMap = this.#get().chatUploadFileListByContext;
+    const source = currentMap[fromContextKey];
+    if (!source || source.length === 0) {
+      if (!isEqual(sessions, movedSessions)) {
+        this.#set({ chatUploadSessionContext: movedSessions }, false, n('moveChatUploadFileList'));
+      }
+      return;
+    }
+
+    const sourceIds = new Set(source.map((item) => item.id));
+    const target = currentMap[toContextKey] ?? [];
+    const nextTarget = [...source, ...target.filter((item) => !sourceIds.has(item.id))];
+    const { [fromContextKey]: _removed, ...nextMap } = currentMap;
+
+    this.#set(
+      {
+        chatUploadFileListByContext: { ...nextMap, [toContextKey]: nextTarget },
+        chatUploadSessionContext: movedSessions,
+      },
+      false,
+      n('moveChatUploadFileList'),
+    );
   };
 
   moveChatContextSelections = (fromContextKey: string, toContextKey: string): void => {
@@ -163,27 +243,40 @@ export class FileActionImpl {
     );
   };
 
-  removeChatUploadFile = async (id: string): Promise<void> => {
-    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
+  removeChatUploadFile = async ({
+    contextKey,
+    id,
+  }: {
+    contextKey?: string;
+    id: string;
+  }): Promise<void> => {
+    const { dispatchChatUploadFileList } = this.#get();
+    const list = this.#uploadFileList(contextKey);
 
     // Restored entries reference an already-persisted file that still backs the
     // original message — only drop the draft item, never delete the file itself.
-    const skipRemoveFile = chatUploadFileList.find((item) => item.id === id)?.skipRemoveFile;
+    const skipRemoveFile = list.find((item) => item.id === id)?.skipRemoveFile;
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
+    dispatchChatUploadFileList({ contextKey, payload: { id, type: 'removeFile' } });
 
     if (skipRemoveFile) return;
 
     await fileService.removeFile(id);
   };
 
-  retryChatUploadFile = async (id: string): Promise<void> => {
-    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
-    const item = chatUploadFileList.find((file) => file.id === id);
+  retryChatUploadFile = async ({
+    contextKey,
+    id,
+  }: {
+    contextKey?: string;
+    id: string;
+  }): Promise<void> => {
+    const { dispatchChatUploadFileList } = this.#get();
+    const item = this.#uploadFileList(contextKey).find((file) => file.id === id);
     if (!item?.agentId) return;
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
-    await this.uploadChatFiles([item.file], item.agentId);
+    dispatchChatUploadFileList({ contextKey, payload: { id, type: 'removeFile' } });
+    await this.uploadChatFiles({ agentId: item.agentId, contextKey, files: [item.file] });
   };
 
   startAsyncTask = async (
@@ -224,8 +317,54 @@ export class FileActionImpl {
     }
   };
 
-  uploadChatFiles = async (rawFiles: File[], agentId: string): Promise<void> => {
-    const { dispatchChatUploadFileList } = this.#get();
+  uploadChatFiles = async ({
+    agentId,
+    contextKey,
+    files: rawFiles,
+  }: {
+    agentId: string;
+    /** Composer the files belong to — see {@link ImageFileState.chatUploadFileListByContext}. */
+    contextKey?: string;
+    files: File[];
+  }): Promise<void> => {
+    // Registered before the first `await` so a move during compression can find
+    // it; unregistered in the `finally` below once nothing else will dispatch.
+    const uploadSessionId = nanoid();
+    this.#set(
+      {
+        chatUploadSessionContext: {
+          ...this.#get().chatUploadSessionContext,
+          [uploadSessionId]: chatUploadContextKey(contextKey),
+        },
+      },
+      false,
+      n('registerChatUpload'),
+    );
+    const dispatch = (payload: UploadFileListDispatch) =>
+      this.#get().dispatchChatUploadFileList({ contextKey, payload, uploadSessionId });
+
+    try {
+      await this.#runChatUpload({ agentId, dispatch, rawFiles });
+    } finally {
+      this.#unregisterChatUpload(uploadSessionId);
+    }
+  };
+
+  /** Deregister a finished upload — nothing dispatches under it any more. */
+  #unregisterChatUpload = (uploadSessionId: string): void => {
+    const { [uploadSessionId]: _done, ...rest } = this.#get().chatUploadSessionContext;
+    this.#set({ chatUploadSessionContext: rest }, false, n('unregisterChatUpload'));
+  };
+
+  #runChatUpload = async ({
+    agentId,
+    dispatch,
+    rawFiles,
+  }: {
+    agentId: string;
+    dispatch: (payload: UploadFileListDispatch) => void;
+    rawFiles: File[];
+  }): Promise<void> => {
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
@@ -288,7 +427,7 @@ export class FileActionImpl {
       }),
     );
 
-    dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
+    dispatch({ files: uploadFiles, type: 'addFiles' });
 
     // upload files and process it
     const pools = files.map(async (file) => {
@@ -297,13 +436,13 @@ export class FileActionImpl {
       try {
         fileResult = await this.#get().uploadWithProgress({
           file,
-          onStatusUpdate: dispatchChatUploadFileList,
+          onStatusUpdate: dispatch,
         });
       } catch (error) {
         if (getErrorMessage(error) === 'UNAUTHORIZED') {
-          dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+          dispatch({ id: file.name, type: 'removeFile' });
         } else {
-          dispatchChatUploadFileList({
+          dispatch({
             id: file.name,
             type: 'updateFile',
             value: {

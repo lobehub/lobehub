@@ -176,7 +176,7 @@ const QueueTray = memo(() => {
       editor?.focus();
       if (msg.filesPreview?.length) {
         const restored = reconstructUploadFilesFromQueue(msg.filesPreview);
-        dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+        dispatchChatUploadFileList({ contextKey, payload: { files: restored, type: 'addFiles' } });
       }
     },
     [contextKey, dispatchChatUploadFileList, editor, removeQueuedMessage],

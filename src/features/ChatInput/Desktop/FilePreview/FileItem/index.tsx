@@ -10,6 +10,7 @@ import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
 
 import UploadDetail from '../../../components/UploadDetail';
+import { useChatInputStore } from '../../../store';
 import Content from './Content';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -49,6 +50,7 @@ const FileItem = memo<FileItemProps>((props) => {
     s.removeChatUploadFile,
     s.retryChatUploadFile,
   ]);
+  const contextKey = useChatInputStore((s) => s.contextSelectionKey);
 
   return (
     <Block horizontal align={'center'} className={styles.container} variant={'outlined'}>
@@ -81,7 +83,7 @@ const FileItem = memo<FileItemProps>((props) => {
             size={'small'}
             title={t('retry', { ns: 'common' })}
             onClick={() => {
-              void retryChatUploadFile(id);
+              void retryChatUploadFile({ contextKey, id });
             }}
           />
         ) : null}
@@ -91,7 +93,7 @@ const FileItem = memo<FileItemProps>((props) => {
           size={'small'}
           title={t('delete', { ns: 'common' })}
           onClick={() => {
-            void removeChatUploadFile(id);
+            void removeChatUploadFile({ contextKey, id });
           }}
         />
       </Flexbox>

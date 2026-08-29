@@ -17,8 +17,14 @@ const updateInputMessage = vi.fn();
 const clearChatUploadFileList = vi.fn();
 const dispatchChatUploadFileList = vi.fn();
 
+const CONTEXT = { agentId: 'agt_1', topicId: 'tpc_1' };
+// `main_agt_1_tpc_1` — what `messageMapKey(CONTEXT)` produces, i.e. the bucket
+// THIS conversation's composer renders from.
+const CONTEXT_KEY = 'main_agt_1_tpc_1';
+
 vi.mock('../../../../store', () => ({
-  useConversationStore: (selector: (s: any) => any) => selector({ editor, updateInputMessage }),
+  useConversationStore: (selector: (s: any) => any) =>
+    selector({ context: CONTEXT, editor, updateInputMessage }),
 }));
 
 vi.mock('@/store/file', () => ({
@@ -78,26 +84,35 @@ describe('restoreToInputAction', () => {
       imageList: [{ alt: 'pic', id: 'i1', url: 'u-i1' }],
     })!.handleClick!();
 
-    expect(clearChatUploadFileList).toHaveBeenCalled();
+    // Restoring must target THIS conversation's composer, not whichever other
+    // composer is mounted alongside it.
+    expect(clearChatUploadFileList).toHaveBeenCalledWith(CONTEXT_KEY);
     expect(dispatchChatUploadFileList).toHaveBeenCalledWith({
-      files: [
-        expect.objectContaining({
-          fileUrl: 'u-i1',
-          id: 'i1',
-          previewUrl: 'u-i1',
-          status: 'success',
-        }),
-        expect.objectContaining({
-          fileUrl: 'u-f1',
-          id: 'f1',
-          previewUrl: 'u-f1',
-          status: 'success',
-        }),
-      ],
-      type: 'addFiles',
+      contextKey: CONTEXT_KEY,
+      payload: {
+        files: [
+          expect.objectContaining({
+            fileUrl: 'u-i1',
+            id: 'i1',
+            previewUrl: 'u-i1',
+            status: 'success',
+          }),
+          expect.objectContaining({
+            fileUrl: 'u-f1',
+            id: 'f1',
+            previewUrl: 'u-f1',
+            status: 'success',
+          }),
+        ],
+        type: 'addFiles',
+      },
     });
 
-    const [{ files }] = dispatchChatUploadFileList.mock.calls[0];
+    const [
+      {
+        payload: { files },
+      },
+    ] = dispatchChatUploadFileList.mock.calls[0];
     expect(files[0].file.type).toBe('image/*');
     expect(files[1].file).toMatchObject({ name: 'a.pdf', size: 100, type: 'application/pdf' });
   });
@@ -105,7 +120,7 @@ describe('restoreToInputAction', () => {
   it('clears the upload list but skips dispatch when there are no attachments', () => {
     build({ content: 'no files' })!.handleClick!();
 
-    expect(clearChatUploadFileList).toHaveBeenCalled();
+    expect(clearChatUploadFileList).toHaveBeenCalledWith(CONTEXT_KEY);
     expect(dispatchChatUploadFileList).not.toHaveBeenCalled();
   });
 });

@@ -259,9 +259,9 @@ const ChatInput = memo<ChatInputProps>(
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
     // File store - for UI state only (disabled button, etc.)
-    const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
+    const fileList = useFileStore(fileChatSelectors.chatUploadFileList(contextKey));
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
-    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
+    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles(contextKey));
 
     // Queue state
     const hasQueuedMessages = useChatStore(
@@ -310,7 +310,7 @@ const ChatInput = memo<ChatInputProps>(
       if (customDisabled !== undefined) return customDisabled;
 
       const fileStore = useFileStore.getState();
-      if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+      if (fileChatSelectors.isUploadingFiles(contextKey)(fileStore)) return true;
 
       const { context: liveContext, editor } = storeApi.getState();
       if (
@@ -320,11 +320,11 @@ const ChatInput = memo<ChatInputProps>(
         return true;
 
       const hasText = String(editor?.getMarkdownContent?.() || '').trim().length > 0;
-      const hasFiles = fileChatSelectors.chatUploadFileList(fileStore).length > 0;
+      const hasFiles = fileChatSelectors.chatUploadFileList(contextKey)(fileStore).length > 0;
       const hasContextSelections =
         fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
-    }, [customDisabled, disableQueue, disableSend, storeApi]);
+    }, [contextKey, customDisabled, disableQueue, disableSend, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -338,8 +338,8 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
-        const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
-        const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
+        const currentFileList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
+        const currentIsUploading = fileChatSelectors.isUploadingFiles(contextKey)(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
@@ -358,7 +358,7 @@ const ChatInput = memo<ChatInputProps>(
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList();
+          fileStore.clearChatUploadFileList(contextKey);
           fileStore.clearChatContextSelections(contextKey);
         };
 

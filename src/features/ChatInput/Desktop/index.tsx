@@ -140,7 +140,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const hasContextSelections = useFileStore(
       fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
     );
-    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
+    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem(contextSelectionKey));
     const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
       s.slashMenuRef,
       s.expand,
