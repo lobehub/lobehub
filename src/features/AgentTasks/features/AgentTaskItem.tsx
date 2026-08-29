@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import { taskDetailPath } from '../shared/taskDetailPath';
@@ -48,6 +49,8 @@ const toTaskStatus = (status: string): TaskStatus =>
 const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant = 'default' }) => {
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
+  const fetchTaskDetail = useTaskStore((s) => s.fetchTaskDetail);
+  const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
   const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } = useTaskItemContextMenu(
     task,
     routeScope,
@@ -71,6 +74,20 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
       ),
     );
   }, [navigate, routeScope, task.assigneeAgentId, task.identifier]);
+
+  const handleRequestSubtasks = useCallback(async () => {
+    if (taskDetail?.subtasks?.length) return true;
+
+    const detail = await fetchTaskDetail(task.identifier);
+    return Boolean(detail.subtasks?.length);
+  }, [fetchTaskDetail, task.identifier, taskDetail?.subtasks]);
+
+  const handleSubtaskClick = useCallback(
+    (identifier: string, assigneeAgentId?: string) => {
+      navigate(taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined));
+    },
+    [navigate, routeScope],
+  );
 
   const scheduledBadge =
     status === 'scheduled' ? (
@@ -116,7 +133,13 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
         </Text>
       )}
       {scheduledBadge}
-      <TaskSubtaskProgressTag currentIdentifier={task.identifier} progress={task.subtaskProgress} />
+      <TaskSubtaskProgressTag
+        currentIdentifier={task.identifier}
+        progress={task.subtaskProgress}
+        subtasks={taskDetail?.subtasks}
+        onRequestSubtasks={handleRequestSubtasks}
+        onSubtaskClick={handleSubtaskClick}
+      />
     </Flexbox>
   );
 
@@ -189,6 +212,9 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
             <TaskSubtaskProgressTag
               currentIdentifier={task.identifier}
               progress={task.subtaskProgress}
+              subtasks={taskDetail?.subtasks}
+              onRequestSubtasks={handleRequestSubtasks}
+              onSubtaskClick={handleSubtaskClick}
             />
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>

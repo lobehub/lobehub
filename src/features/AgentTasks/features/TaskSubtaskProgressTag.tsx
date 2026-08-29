@@ -1,10 +1,11 @@
 import type { TaskDetailSubtask, TaskSubtaskProgress } from '@lobechat/types';
-import { type DropdownMenuProps } from '@lobehub/ui';
-import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import type { DropdownMenuProps } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
-import { memo, useMemo } from 'react';
+import type { MouseEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import TaskStatusIcon from './TaskStatusIcon';
 
@@ -76,13 +77,16 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
 
 interface TaskSubtaskProgressTagProps {
   currentIdentifier?: string;
+  onRequestSubtasks?: () => Promise<boolean>;
   onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
   progress?: TaskSubtaskProgress;
   subtasks?: TaskDetailSubtask[];
 }
 
 const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
-  ({ subtasks, currentIdentifier, onSubtaskClick, progress }) => {
+  ({ subtasks, currentIdentifier, onRequestSubtasks, onSubtaskClick, progress }) => {
+    const [open, setOpen] = useState(false);
+    const [requesting, setRequesting] = useState(false);
     const flattenedSubtasks = useMemo(() => {
       if (!subtasks || subtasks.length === 0) return [];
       return flattenSubtasks(subtasks);
@@ -102,8 +106,6 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
         percent: (completed / total) * 100,
       };
     }, [flattenedSubtasks, progress]);
-
-    if (!data) return null;
 
     const navigationItems = flattenedSubtasks.map((subtask) => {
       const isActive = subtask.task.identifier === currentIdentifier;
@@ -127,6 +129,26 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
 
     const hasDropdown = Boolean(onSubtaskClick) && navigationItems.length > 0;
 
+    const handleTagClick = useCallback(
+      async (event: MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+
+        if (hasDropdown || !onRequestSubtasks || requesting) return;
+
+        setRequesting(true);
+        try {
+          if (await onRequestSubtasks()) setOpen(true);
+        } catch (error) {
+          console.error('Failed to load task subtasks:', error);
+        } finally {
+          setRequesting(false);
+        }
+      },
+      [hasDropdown, onRequestSubtasks, requesting],
+    );
+
+    if (!data) return null;
+
     const tag = (
       <Block
         horizontal
@@ -134,9 +156,12 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
         gap={4}
         height={24}
         paddingInline={'4px 8px'}
-        style={{ borderRadius: 24, cursor: hasDropdown ? 'pointer' : undefined }}
         variant={'outlined'}
-        onClick={hasDropdown ? (e) => e.stopPropagation() : undefined}
+        style={{
+          borderRadius: 24,
+          cursor: hasDropdown || onRequestSubtasks ? 'pointer' : undefined,
+        }}
+        onClick={hasDropdown || onRequestSubtasks ? handleTagClick : undefined}
       >
         <Progress
           percent={data.percent}
@@ -154,7 +179,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
     if (!hasDropdown) return tag;
 
     return (
-      <DropdownMenu items={navigationItems} trigger={'both'}>
+      <DropdownMenu items={navigationItems} open={open} trigger={'both'} onOpenChange={setOpen}>
         {tag}
       </DropdownMenu>
     );

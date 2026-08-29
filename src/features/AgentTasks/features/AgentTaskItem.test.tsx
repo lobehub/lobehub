@@ -1,15 +1,15 @@
 /**
  * @vitest-environment happy-dom
  */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AgentTaskItem from './AgentTaskItem';
 
 const mocks = vi.hoisted(() => ({
+  fetchTaskDetail: vi.fn(),
   navigate: vi.fn(),
-  useFetchTaskDetail: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -26,7 +26,8 @@ vi.mock('react-router', () => ({
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) =>
     selector({
-      useFetchTaskDetail: mocks.useFetchTaskDetail,
+      fetchTaskDetail: mocks.fetchTaskDetail,
+      taskDetailMap: {},
     }),
 }));
 
@@ -63,9 +64,17 @@ vi.mock('./TaskStatusTag', () => ({
 }));
 
 vi.mock('./TaskSubtaskProgressTag', () => ({
-  default: ({ progress }: { progress?: { completed: number; total: number } }) =>
+  default: ({
+    onRequestSubtasks,
+    progress,
+  }: {
+    onRequestSubtasks?: () => Promise<boolean>;
+    progress?: { completed: number; total: number };
+  }) =>
     progress ? (
-      <span data-testid="subtask-progress">{`${progress.completed}/${progress.total}`}</span>
+      <button data-testid="subtask-progress" type="button" onClick={onRequestSubtasks}>
+        {`${progress.completed}/${progress.total}`}
+      </button>
     ) : null,
 }));
 
@@ -92,8 +101,8 @@ const createTask = (assigneeAgentId?: string | null) =>
 
 describe('AgentTaskItem', () => {
   beforeEach(() => {
+    mocks.fetchTaskDetail.mockReset();
     mocks.navigate.mockClear();
-    mocks.useFetchTaskDetail.mockClear();
   });
 
   afterEach(() => {
@@ -147,8 +156,29 @@ describe('AgentTaskItem', () => {
       />,
     );
 
-    expect(mocks.useFetchTaskDetail).not.toHaveBeenCalled();
+    expect(mocks.fetchTaskDetail).not.toHaveBeenCalled();
     expect(screen.getByTestId('subtask-progress')).toHaveTextContent('3/8');
     expect(screen.getByTestId('trigger')).toHaveTextContent('1800');
+  });
+
+  it('fetches subtask navigation only after the progress badge is clicked', async () => {
+    mocks.fetchTaskDetail.mockResolvedValue({
+      subtasks: [{ identifier: 'T-23', status: 'backlog' }],
+    });
+
+    render(
+      <AgentTaskItem
+        task={{
+          ...createTask('agt_parent'),
+          subtaskProgress: { completed: 0, total: 1 },
+        }}
+      />,
+    );
+
+    expect(mocks.fetchTaskDetail).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('subtask-progress'));
+
+    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('T-22'));
   });
 });
