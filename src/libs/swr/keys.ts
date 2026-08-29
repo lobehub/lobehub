@@ -1064,6 +1064,10 @@ export const verifyKeys = {
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
+/** Match every parameterized Acceptance list key (filter / limit / search variants). */
+export const isAcceptanceListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === verifyKeys.acceptances.root;
+
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
   navigationCounts: def('inbox:navigationCounts', (workspaceId: string | null) => [

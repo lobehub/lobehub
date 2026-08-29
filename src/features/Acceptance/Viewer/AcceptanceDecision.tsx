@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
@@ -134,7 +134,7 @@ const AcceptanceDecision = () => {
     try {
       await action();
       await mutate();
-      void globalMutate(verifyKeys.acceptances());
+      void globalMutate(isAcceptanceListKey);
       return true;
     } finally {
       setPending(false);

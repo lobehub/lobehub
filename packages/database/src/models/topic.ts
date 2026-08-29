@@ -645,6 +645,13 @@ export class TopicModel {
     });
   };
 
+  findByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db.query.topics.findMany({
+      where: and(inArray(topics.id, ids), this.ownership()),
+    });
+  };
+
   /**
    * Minimal creator projection for router-level workspace row checks on
    * batch-by-ids operations (batch delete / move).

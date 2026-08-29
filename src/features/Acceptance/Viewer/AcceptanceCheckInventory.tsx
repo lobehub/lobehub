@@ -11,7 +11,7 @@ import { useSearchParams } from 'react-router';
 
 import { useSingleton } from '@/hooks/useSingleton';
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
@@ -252,7 +252,7 @@ const AcceptanceCheckInventory = ({
                   predictionId: input.predictionId,
                 });
                 await mutate();
-                void globalMutate(verifyKeys.acceptances());
+                void globalMutate(isAcceptanceListKey);
               }
             : undefined
         }
@@ -265,14 +265,14 @@ const AcceptanceCheckInventory = ({
             id: data.acceptance.id,
           });
           await mutate();
-          void globalMutate(verifyKeys.acceptances());
+          void globalMutate(isAcceptanceListKey);
           return true;
         }}
         onReview={async (input) => {
           if (!canReview) return false;
           await verifyService.reviewChecks({ id: data.acceptance.id, ...input });
           await mutate();
-          void globalMutate(verifyKeys.acceptances());
+          void globalMutate(isAcceptanceListKey);
           return true;
         }}
         onToggleGroup={(key) =>

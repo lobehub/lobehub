@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import AcceptanceFocusReview from './AcceptanceFocusReview';
@@ -45,7 +45,7 @@ const AcceptanceFocusWorkspace = () => {
   const saveStanding = async (checklist: typeof standing) => {
     await verifyService.saveAcceptanceChecklist(data.subject.type, data.subject.id, checklist);
     await mutate();
-    void globalMutate(verifyKeys.acceptances());
+    void globalMutate(isAcceptanceListKey);
     toast.success(t('acceptance.checkCreate.saved'));
   };
 
@@ -103,7 +103,7 @@ const AcceptanceFocusWorkspace = () => {
       onReview={async (input) => {
         await verifyService.reviewChecks({ id: data.acceptance.id, ...input });
         await mutate();
-        void globalMutate(verifyKeys.acceptances());
+        void globalMutate(isAcceptanceListKey);
         return true;
       }}
     />

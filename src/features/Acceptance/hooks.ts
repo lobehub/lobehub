@@ -85,10 +85,9 @@ export const useAcceptanceBySubject = (
  * panel. `limit` widens the recency window for surfaces that must reach further
  * back than the panel does (the merge target picker).
  *
- * A widened window is its own SWR key, and the list's invalidations
- * (`mutate(verifyKeys.acceptances())`) target the panel's key — so a surface
- * that opens on demand asks for `revalidateOnMount` rather than deciding from a
- * cache nothing refreshes.
+ * A widened window is its own SWR key. Mutations invalidate the whole
+ * `verify:acceptances` key family so every filter / limit / search variant
+ * revalidates together.
  */
 export const useAcceptanceList = (
   enabled: boolean,
