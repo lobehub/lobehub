@@ -121,7 +121,7 @@ describe('workspace utils', () => {
   });
 
   describe('recycle-bin filter', () => {
-    it('adds `is_deleted = false` when the cols carry the trash-aware flag', () => {
+    it('adds `is_deleted IS NOT TRUE` when the cols carry the trash-aware flag', () => {
       // Every ownership-scoped read of a trash-aware table (agents, topics,
       // files, …) must hide rows sitting in the recycle bin — without the
       // ~250 call sites opting in one by one.
@@ -129,16 +129,24 @@ describe('workspace utils', () => {
       const built = new PgDialect().sqlToQuery(condition);
 
       expect(built.sql).toBe(
-        '(("agents"."user_id" = $1 and "agents"."workspace_id" is null) and "agents"."is_deleted" = $2)',
+        '(("agents"."user_id" = $1 and "agents"."workspace_id" is null) and "agents"."is_deleted" IS NOT TRUE)',
       );
-      expect(built.params).toStrictEqual(['user-1', false]);
+      expect(built.params).toStrictEqual(['user-1']);
+    });
+
+    it('is `IS NOT TRUE`, not `= false`, because a live row leaves the flag NULL', () => {
+      // `is_deleted = false` is NULL for an unstamped row — not true — so an
+      // equality filter would hide the entire table instead of its trashed rows.
+      const built = new PgDialect().sqlToQuery(buildWorkspaceWhere({ userId: 'user-1' }, agents));
+
+      expect(built.sql).not.toContain('"is_deleted" = ');
     });
 
     it('applies the stamp filter in workspace mode too', () => {
       const condition = buildWorkspaceWhere({ userId: 'user-1', workspaceId: 'ws-1' }, agents);
       const built = new PgDialect().sqlToQuery(condition);
 
-      expect(built.sql).toContain('"agents"."is_deleted" = $5');
+      expect(built.sql).toContain('"agents"."is_deleted" IS NOT TRUE');
       expect(built.sql.startsWith('(("agents"."workspace_id" = $1')).toBe(true);
     });
 
