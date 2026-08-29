@@ -703,6 +703,203 @@ describe('ElasticsearchSearchBackend', () => {
     );
   });
 
+  it('continues topic candidates after parent authorization empties the first page', async () => {
+    await db.insert(agents).values([
+      {
+        id: 'paging-agent-private',
+        title: 'Private paging agent',
+        userId: otherUserId,
+        visibility: 'private',
+        workspaceId,
+      },
+      {
+        id: 'paging-agent-public',
+        title: 'Public paging agent',
+        userId: otherUserId,
+        visibility: 'public',
+        workspaceId,
+      },
+    ]);
+    const privateTopics = Array.from({ length: 7 }, (_, index) => ({
+      agentId: 'paging-agent-private',
+      id: `paging-private-${index}`,
+      title: `Private match ${index}`,
+      userId: otherUserId,
+      workspaceId,
+    }));
+    await db.insert(topics).values([
+      ...privateTopics,
+      {
+        agentId: 'paging-agent-public',
+        id: 'paging-visible-old',
+        title: 'Visible older match',
+        updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+        userId,
+        workspaceId,
+      },
+      {
+        agentId: 'paging-agent-public',
+        id: 'paging-visible-recent',
+        title: 'Visible recent match',
+        updatedAt: new Date('2026-08-25T00:00:00.000Z'),
+        userId,
+        workspaceId,
+      },
+    ]);
+    const firstPage = [
+      ...privateTopics.map(({ id }, index) => ({
+        _id: id,
+        _score: 20 - index,
+        sort: [20 - index, id],
+      })),
+      { _id: 'paging-visible-old', _score: 10, sort: [10, 'paging-visible-old'] },
+    ];
+    const client: ElasticsearchSearchClient = {
+      search: vi
+        .fn()
+        .mockResolvedValueOnce({ hits: { hits: firstPage } })
+        .mockResolvedValueOnce({
+          hits: {
+            hits: [{ _id: 'paging-visible-recent', _score: 9 }],
+          },
+        }),
+    };
+    const backend = new ElasticsearchSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(request('topics', { limit: 2 }));
+
+    expect(response.items.map(({ id }) => id)).toEqual([
+      'paging-visible-recent',
+      'paging-visible-old',
+    ]);
+    expect(client.search).toHaveBeenCalledTimes(2);
+    expect(client.search).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        body: expect.objectContaining({ search_after: firstPage.at(-1)?.sort }),
+        pagination: 'bounded',
+      }),
+    );
+  });
+
+  it('continues message candidates after parent authorization empties the first page', async () => {
+    await db.insert(agents).values([
+      {
+        id: 'message-paging-agent-private',
+        title: 'Private message paging agent',
+        userId: otherUserId,
+        visibility: 'private',
+        workspaceId,
+      },
+      {
+        id: 'message-paging-agent-public',
+        title: 'Public message paging agent',
+        userId: otherUserId,
+        visibility: 'public',
+        workspaceId,
+      },
+    ]);
+    const privateMessages = Array.from({ length: 8 }, (_, index) => ({
+      agentId: 'message-paging-agent-private',
+      content: `Private message match ${index}`,
+      id: `message-paging-private-${index}`,
+      role: 'assistant' as const,
+      userId: otherUserId,
+      workspaceId,
+    }));
+    await db.insert(messages).values([
+      ...privateMessages,
+      {
+        agentId: 'message-paging-agent-public',
+        content: 'Visible older message',
+        createdAt: new Date('2026-08-20T00:00:00.000Z'),
+        id: 'message-paging-visible-old',
+        role: 'assistant',
+        userId,
+        workspaceId,
+      },
+      {
+        agentId: 'message-paging-agent-public',
+        content: 'Visible recent message',
+        createdAt: new Date('2026-08-25T00:00:00.000Z'),
+        id: 'message-paging-visible-recent',
+        role: 'assistant',
+        userId,
+        workspaceId,
+      },
+    ]);
+    const firstPage = privateMessages.map(({ id }, index) => ({
+      _id: id,
+      _score: 20 - index,
+      sort: [20 - index, id],
+    }));
+    const client: ElasticsearchSearchClient = {
+      search: vi
+        .fn()
+        .mockResolvedValueOnce({ hits: { hits: firstPage } })
+        .mockResolvedValueOnce({
+          hits: {
+            hits: [
+              { _id: 'message-paging-visible-old', _score: 10 },
+              { _id: 'message-paging-visible-recent', _score: 9 },
+            ],
+          },
+        }),
+    };
+    const backend = new ElasticsearchSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(request('messages', { limit: 2 }));
+
+    expect(response.items.map(({ id }) => id)).toEqual([
+      'message-paging-visible-recent',
+      'message-paging-visible-old',
+    ]);
+    expect(client.search).toHaveBeenCalledTimes(2);
+    expect(client.search).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        body: expect.objectContaining({ search_after: firstPage.at(-1)?.sort }),
+        pagination: 'bounded',
+      }),
+    );
+  });
+
+  it('returns partial conversation results instead of exceeding the candidate budget', async () => {
+    await db.insert(topics).values({
+      id: 'budget-visible-topic',
+      title: 'Visible within budget',
+      userId,
+      workspaceId,
+    });
+    let requestCount = 0;
+    const client: ElasticsearchSearchClient = {
+      search: vi.fn().mockImplementation(({ body }) => {
+        requestCount += 1;
+        if (requestCount > 5) throw new Error('conversation paging exceeded its candidate budget');
+        const searchAfter = body.search_after as [number, string] | undefined;
+        const page = searchAfter?.[0] ?? 0;
+        return Promise.resolve({
+          hits: {
+            hits: Array.from({ length: 8 }, (_, index) => {
+              const id =
+                page === 0 && index === 0
+                  ? 'budget-visible-topic'
+                  : `hidden-candidate-${page}-${index}`;
+              return { _id: id, _score: 20 - page, sort: [page + 1, id] };
+            }),
+          },
+        });
+      }),
+    };
+    const backend = new ElasticsearchSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(request('topics', { limit: 2 }));
+
+    expect(response.items.map(({ id }) => id)).toEqual(['budget-visible-topic']);
+    expect(response.candidates).toHaveLength(40);
+    expect(client.search).toHaveBeenCalledTimes(5);
+  });
+
   it('searches message summaries but excludes tool, foreign, deleted, and private-parent hits in PG', async () => {
     await db.insert(agents).values([
       {

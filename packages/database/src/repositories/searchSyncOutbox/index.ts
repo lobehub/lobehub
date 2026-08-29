@@ -9,6 +9,16 @@ import {
   SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX,
 } from './captureInfrastructure';
 
+const SEARCH_SYNC_CAPTURE_SOURCE_TABLES = [
+  ...new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table)),
+];
+const SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
+  SEARCH_SYNC_CAPTURE_SOURCE_TABLES.map(
+    (table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`,
+  ),
+  sql`, `,
+);
+
 export interface SearchSyncWork {
   documentId: string;
   entity: SearchDocumentEntity;
@@ -121,16 +131,30 @@ export class SearchSyncOutboxRepository {
     }
   }
 
-  /** Installs capture infrastructure, then enables it for deployments with an outbox consumer. */
+  /**
+   * Installs capture infrastructure, then enables it for deployments with an outbox consumer.
+   * The activation fence fails fast while a writer that observed capture as disabled is active;
+   * after every lock is held, new writers wait and observe capture as enabled after it commits.
+   */
   async enableCapture(): Promise<void> {
     await this.installCaptureInfrastructure();
     await this.db.execute(sql`
-      INSERT INTO search_sync_settings (key, enabled)
-      VALUES ('default', true)
-      ON CONFLICT (key) DO UPDATE SET
-        enabled = EXCLUDED.enabled,
-        updated_at = now()
-      WHERE search_sync_settings.enabled IS DISTINCT FROM EXCLUDED.enabled
+      DO $search_sync_activation$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM search_sync_settings WHERE key = 'default' AND enabled
+        ) THEN
+          LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS}
+            IN SHARE MODE NOWAIT;
+          INSERT INTO search_sync_settings (key, enabled)
+          VALUES ('default', true)
+          ON CONFLICT (key) DO UPDATE SET
+            enabled = EXCLUDED.enabled,
+            updated_at = now()
+          WHERE search_sync_settings.enabled IS DISTINCT FROM EXCLUDED.enabled;
+        END IF;
+      END;
+      $search_sync_activation$ LANGUAGE plpgsql
     `);
   }
 

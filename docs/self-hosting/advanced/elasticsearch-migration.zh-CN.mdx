@@ -75,7 +75,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，再校验 Memory 扇出所需的 GIN 索引，并逐表安装增量采集触发器；每次获取表锁最多等待 3 秒。首次执行应安排在低流量时段。如果 Elasticsearch 分析能力或某张表的短锁检查失败，命令会在开启采集前停止，使用同一个状态目录重新执行即可。全部采集设施就绪后，命令才会在首批回填前开启 PostgreSQL 增量队列采集。必须显式传入 `--yes`，用于确认这个持久化数据库变更；命令不会弹出交互确认。
+`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，再校验 Memory 扇出所需的 GIN 索引，并逐表安装增量采集触发器；每次获取表锁最多等待 3 秒。首次执行应安排在低流量时段。全部采集设施就绪后，启用操作会获取所有采集表的共享锁，并在同一事务中开启 PostgreSQL 增量队列采集，随后才开始首批回填。如果仍有启用前的写事务，保护锁会立即失败，避免迁移阻塞生产写入。如果 Elasticsearch 分析能力、某张表的触发器检查或启用保护锁失败，命令会保持采集关闭，使用同一个状态目录重新执行即可。必须显式传入 `--yes`，用于确认这个持久化数据库变更；命令不会弹出交互确认。
 
 工具还会把 run ID 写入每个物理索引的 mapping 元数据，使用另一份本地 checkpoint 时无法静默继续写入同一组物理索引。禁止在多台机器上并发运行同一份 checkpoint。
 

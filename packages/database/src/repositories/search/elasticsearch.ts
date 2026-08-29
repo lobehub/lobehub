@@ -57,6 +57,9 @@ import type {
  */
 const CANDIDATE_MULTIPLIER = 4;
 
+/** Prevent parent authorization misses from turning one product search into an unbounded scan. */
+const MAX_PRODUCT_CANDIDATE_PAGES = 5;
+
 /**
  * Rolling reindexes leave legacy documents without newly denormalized fields. Keep those documents
  * eligible as candidates because PostgreSQL reapplies the exact filters during hydration.
@@ -202,8 +205,15 @@ interface CandidateHit extends SearchBackendCandidate {
 }
 
 interface CandidateSearchResult {
+  exhausted: boolean;
   hits: CandidateHit[];
+  nextSearchAfter?: unknown[];
   total: number;
+}
+
+interface CandidateSearchOptions {
+  searchAfter?: unknown[];
+  singlePage?: boolean;
 }
 
 interface HydratedScore {
@@ -310,6 +320,13 @@ export class ElasticsearchSearchBackend implements SearchBackend {
       return { candidates: [], items: [] };
     }
 
+    if (
+      request.mode !== 'candidates' &&
+      (target.entity === 'topics' || target.entity === 'messages')
+    ) {
+      return this.searchConversationProduct(request, target.entity, query);
+    }
+
     const candidateResult = await this.observe(entity, 'candidate_query', () =>
       this.searchCandidates(request, target, query),
     );
@@ -349,23 +366,6 @@ export class ElasticsearchSearchBackend implements SearchBackend {
         candidates,
         items: await this.observe(entity, 'pg_hydration', () =>
           this.hydrateChatGroups(hits, request.scope, limit),
-        ),
-      };
-    }
-    if (entity === 'topics') {
-      return {
-        candidates,
-        items: await this.observe(entity, 'pg_hydration', () =>
-          this.hydrateTopics(hits, request.scope, limit, request.filters.agentId),
-        ),
-      };
-    }
-
-    if (entity === 'messages') {
-      return {
-        candidates,
-        items: await this.observe(entity, 'pg_hydration', () =>
-          this.hydrateMessages(hits, request.scope, limit, request.filters.agentId),
         ),
       };
     }
@@ -427,6 +427,86 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     throw new Error(`Unsupported Elasticsearch document kind: ${String(target.documentKind)}`);
   }
 
+  /**
+   * Conversation parent permissions are intentionally authoritative in PostgreSQL and cannot be
+   * represented by the child search document. Continue after an authorization-heavy first page,
+   * but stop after a 20x candidate budget: partial results are safer than unbounded user latency.
+   */
+  private async searchConversationProduct(
+    request: SearchBackendRequest,
+    entity: 'messages' | 'topics',
+    query: string,
+  ): Promise<SearchBackendResponse<ElasticsearchSearchResult>> {
+    const limit = request.pagination.limit;
+    if (!limit) throw new Error('Elasticsearch product search requires a positive limit');
+
+    const hits: CandidateHit[] = [];
+    const seen = new Set<string>();
+    const visibleItems = new Map<string, MessageSearchResult | TopicSearchResult>();
+    let pageCount = 0;
+    let searchAfter: unknown[] | undefined;
+
+    while (pageCount < MAX_PRODUCT_CANDIDATE_PAGES) {
+      const page = await this.observe(entity, 'candidate_query', () =>
+        this.searchCandidates(request, { entity }, query, { searchAfter, singlePage: true }),
+      );
+      pageCount += 1;
+      const pageHits: CandidateHit[] = [];
+      for (const hit of page.hits) {
+        if (seen.has(hit.id)) continue;
+        seen.add(hit.id);
+        const candidate = { ...hit, rank: hits.length };
+        hits.push(candidate);
+        pageHits.push(candidate);
+      }
+
+      const pageItems =
+        entity === 'topics'
+          ? await this.observe(entity, 'pg_hydration', () =>
+              this.hydrateTopics(pageHits, request.scope, pageHits.length, request.filters.agentId),
+            )
+          : await this.observe(entity, 'pg_hydration', () =>
+              this.hydrateMessages(
+                pageHits,
+                request.scope,
+                pageHits.length,
+                request.filters.agentId,
+              ),
+            );
+      for (const item of pageItems) visibleItems.set(item.id, item);
+      if (
+        visibleItems.size >= limit ||
+        page.exhausted ||
+        pageCount >= MAX_PRODUCT_CANDIDATE_PAGES
+      ) {
+        break;
+      }
+      if (!page.nextSearchAfter) {
+        throw new Error('Elasticsearch bounded candidate search requires hit sort values');
+      }
+      searchAfter = page.nextSearchAfter;
+    }
+
+    const hitById = new Map(hits.map((hit) => [hit.id, hit]));
+    const maxScore = Math.max(0, ...[...visibleItems].map(([id]) => hitById.get(id)?.score ?? 0));
+    const items = [...visibleItems.values()]
+      .map((item) => {
+        const score = hitById.get(item.id)?.score ?? 0;
+        return { ...item, relevance: maxScore > 0 ? 1 + 2 * (1 - score / maxScore) : 3 };
+      })
+      .sort((left, right) =>
+        entity === 'topics'
+          ? right.updatedAt.getTime() - left.updatedAt.getTime()
+          : right.createdAt.getTime() - left.createdAt.getTime(),
+      )
+      .slice(0, limit);
+
+    return {
+      candidates: hits.map(({ id, score }) => ({ id, score })),
+      items,
+    };
+  }
+
   private buildScopeClauses(
     entity: ElasticsearchSearchEntity,
     scope: SearchBackendScope,
@@ -481,6 +561,7 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     request: SearchBackendRequest,
     target: ElasticsearchCandidateTarget,
     query: string,
+    options: CandidateSearchOptions = {},
   ): Promise<CandidateSearchResult> {
     const { entity } = target;
     const { filter, mustNot } = this.buildScopeClauses(entity, request.scope);
@@ -546,7 +627,9 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     const trackTotalHits = request.mode === 'candidates';
     const seen = new Set<string>();
     const hits: CandidateHit[] = [];
-    let searchAfter: unknown[] | undefined;
+    let exhausted = false;
+    let nextSearchAfter: unknown[] | undefined;
+    let searchAfter = options.searchAfter;
     let shouldContinue = true;
     let total = 0;
 
@@ -595,17 +678,19 @@ export class ElasticsearchSearchBackend implements SearchBackend {
         hits.push({ id: hit._id, rank: hits.length, score: hit._score });
       }
 
-      if (requestedLimit || response.hits.hits.length < size) {
+      exhausted = response.hits.hits.length < size;
+      nextSearchAfter = exhausted ? undefined : response.hits.hits.at(-1)?.sort;
+      if (options.singlePage || requestedLimit || exhausted) {
         shouldContinue = false;
       } else {
-        searchAfter = response.hits.hits.at(-1)?.sort;
-        if (!searchAfter) {
+        if (!nextSearchAfter) {
           throw new Error('Elasticsearch unbounded candidate search requires hit sort values');
         }
+        searchAfter = nextSearchAfter;
       }
     }
 
-    return { hits, total: Math.max(total, hits.length) };
+    return { exhausted, hits, nextSearchAfter, total: Math.max(total, hits.length) };
   }
 
   private appendMemoryFilters(

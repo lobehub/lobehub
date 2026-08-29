@@ -92,10 +92,12 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --
 `--apply` verifies every physical Elasticsearch index and its ICU analysis settings before touching
 capture state. It then verifies the Memory fanout GIN index and installs the capture triggers one
 table at a time with a three-second lock timeout. Run the first apply during a low-traffic window.
-If Elasticsearch analysis or a trigger check fails, the command stops before enabling capture and
-is safe to rerun with the same state directory. After all capture infrastructure is ready, it
-enables PostgreSQL Outbox capture before the first backfill batch. The required `--yes`
-acknowledges that persistent database-side effect; it is not an interactive prompt.
+After all capture infrastructure is ready, activation acquires a share lock on every captured table
+and enables PostgreSQL Outbox capture in the same transaction before the first backfill batch. It
+fails immediately if a pre-activation writer is still active, preventing the migration from
+blocking production writes. If Elasticsearch analysis, a trigger check, or the activation fence
+fails, capture remains disabled and the command is safe to rerun with the same state directory. The
+required `--yes` acknowledges that persistent database-side effect; it is not an interactive prompt.
 
 The run ID is also stored in each physical index's mapping metadata. A different local checkpoint
 cannot silently continue writing the same physical indexes. Never run copies of one checkpoint

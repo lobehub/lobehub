@@ -1,8 +1,9 @@
 // @vitest-environment node
 import path from 'node:path';
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, type SQL, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -10,6 +11,7 @@ import { agents, searchSyncOutbox, searchSyncSettings, users } from '../../../sc
 import type { LobeChatDatabase } from '../../../type';
 import { SearchDocumentBuilder } from '../../searchDocument';
 import { SearchSyncOutboxRepository } from '..';
+import { SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS } from '../captureInfrastructure';
 
 const USER_ID = 'search-sync-integration-user';
 const isServerDB = process.env.TEST_SERVER_DB === '1';
@@ -160,6 +162,37 @@ describe('SearchSyncOutboxRepository', () => {
 
     await expect(isolatedRepository.enableCapture()).rejects.toThrow('lock timeout');
     expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('fences every captured table in the same statement that enables capture', async () => {
+    const dialect = new PgDialect();
+    const statements: string[] = [];
+    const execute = vi.fn(async (query: SQL) => {
+      const statement = dialect.sqlToQuery(query).sql;
+      statements.push(statement);
+      if (statement.includes('SELECT indisvalid')) return [{ is_valid: true }];
+      if (statement.includes('SELECT count(*)::integer AS count')) {
+        return [{ count: SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length }];
+      }
+      return [];
+    });
+    const isolatedRepository = new SearchSyncOutboxRepository({
+      execute: execute as LobeChatDatabase['execute'],
+    });
+
+    await isolatedRepository.enableCapture();
+
+    const activation = statements.find((statement) =>
+      statement.includes('INSERT INTO search_sync_settings'),
+    );
+    expect(activation).toContain('LOCK TABLE');
+    expect(activation).toContain('IN SHARE MODE NOWAIT');
+    expect(activation!.indexOf('LOCK TABLE')).toBeLessThan(
+      activation!.indexOf('INSERT INTO search_sync_settings'),
+    );
+    for (const table of new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))) {
+      expect(activation).toContain(`"${table}"`);
+    }
   });
 
   it('keeps capture disabled unless a deployment explicitly enables it', async () => {
