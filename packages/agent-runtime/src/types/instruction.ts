@@ -384,6 +384,11 @@ export interface AgentInstructionCompressContext extends AgentInstructionBase {
     existingSummary?: string;
     /** Messages to compress */
     messages: any[];
+    /**
+     * Token budget for the trailing messages kept verbatim beside the summary.
+     * Omitted / `0` preserves only a trailing user message.
+     */
+    preserveTailTokens?: number;
   };
   type: 'compress_context';
 }

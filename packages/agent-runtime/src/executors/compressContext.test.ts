@@ -62,10 +62,14 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   ...overrides,
 });
 
-const createInstruction = (messages: any[]): AgentInstructionCompressContext => ({
+const createInstruction = (
+  messages: any[],
+  preserveTailTokens?: number,
+): AgentInstructionCompressContext => ({
   payload: {
     currentTokenCount: 5000,
     messages,
+    preserveTailTokens,
   },
   type: 'compress_context',
 });
@@ -278,6 +282,158 @@ describe('compressContext executor', () => {
       { content: 'historical summary', id: 'group-123', role: 'compressedGroup' },
       activeContract,
     ]);
+  });
+
+  /** ~1 token per 2 chars under tokenx — big enough to sit outside the tail budget. */
+  const bulk = (tokens: number) => 'a '.repeat(tokens * 2);
+
+  // Compressing mid-loop used to keep only the latest user turn, so an agent
+  // that compacted between tool calls lost the results it was working from and
+  // went back to re-reading the same files. The tail budget keeps the whole
+  // trailing round verbatim beside the summary.
+  it('keeps a whole trailing tool round out of the compressed group', async () => {
+    const history = [
+      { content: bulk(5000), id: 'msg-uold', role: 'user' },
+      { content: bulk(5000), id: 'msg-aold', role: 'assistant' },
+    ];
+    const tail = [
+      { content: 'latest instruction', id: 'msg-ulatest', role: 'user' },
+      { content: 'read the config', id: 'msg-a1', role: 'assistant' },
+      { content: 'file contents', id: 'msg-t1', role: 'tool', tool_call_id: 'call-1' },
+      { content: 'now editing', id: 'msg-a2', role: 'assistant' },
+    ];
+    const rawRows = [...history, ...tail];
+
+    messagesQuery.mockResolvedValue(rawRows);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: history,
+    });
+    llmStream.mockResolvedValue({ content: 'summary' });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'summary', id: 'group-123', role: 'compressedGroup' }, ...tail],
+    });
+
+    const state = createState({ messages: rawRows as any });
+    const result = await compressContext(host)(createInstruction(state.messages, 2_000), state);
+
+    // Only the pre-tail history is folded into the group.
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['msg-uold', 'msg-aold'] }),
+    );
+    expect(result.newState.messages.map((m: any) => m.id)).toEqual([
+      'group-123',
+      'msg-ulatest',
+      'msg-a1',
+      'msg-t1',
+      'msg-a2',
+    ]);
+  });
+
+  // Server runs rehydrate `state.messages` through conversation-flow, so a tool
+  // chain arrives as ONE virtual `assistantGroup` whose id is only its first
+  // assistant, while this executor filters raw DB rows. Without expanding the
+  // folded child ids, the child assistants and tool rows are compressed away
+  // and the preserved round is gutted — the opposite of what the tail is for.
+  it('protects folded assistantGroup children from the compression group', async () => {
+    const history = [
+      { content: bulk(5000), id: 'msg-uold', role: 'user' },
+      { content: bulk(5000), id: 'msg-aold', role: 'assistant' },
+    ];
+    const latestUser = { content: 'latest instruction', id: 'msg-ulatest', role: 'user' };
+    const foldedGroup = {
+      children: [
+        {
+          content: '',
+          id: 'msg-a1',
+          tools: [{ id: 'call-1', result: { id: 'msg-t1' }, result_msg_id: 'msg-t1' }],
+        },
+        { content: 'now editing', id: 'msg-a2' },
+      ],
+      content: '',
+      // The wrapper inherits the FIRST assistant's id.
+      id: 'msg-a1',
+      role: 'assistantGroup',
+    };
+    const rawTail = [
+      latestUser,
+      { content: '', id: 'msg-a1', role: 'assistant' },
+      { content: 'file contents', id: 'msg-t1', role: 'tool', tool_call_id: 'call-1' },
+      { content: 'now editing', id: 'msg-a2', role: 'assistant' },
+    ];
+
+    messagesQuery.mockResolvedValue([...history, ...rawTail]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: history,
+    });
+    llmStream.mockResolvedValue({ content: 'summary' });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'summary', id: 'group-123', role: 'compressedGroup' }, ...rawTail],
+    });
+
+    const state = createState({ messages: [...history, latestUser, foldedGroup] as any });
+    const result = await compressContext(host)(createInstruction(state.messages, 2_000), state);
+
+    // msg-a1 / msg-t1 / msg-a2 all belong to the preserved round.
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['msg-uold', 'msg-aold'] }),
+    );
+    expect(result.newState.messages.map((m: any) => m.id)).toEqual([
+      'group-123',
+      'msg-ulatest',
+      'msg-a1',
+      'msg-t1',
+      'msg-a2',
+    ]);
+  });
+
+  // `tasks` / `agentCouncil` / `compare` wrappers carry a SYNTHETIC id
+  // (`tasks-<parent>-<childIds>`) that matches no persisted row, so a
+  // top-level id check re-appends the wrapper on top of the raw child rows the
+  // DB already returned and the next LLM call sees the task output twice.
+  it('does not re-append a synthetic container wrapper over its raw children', async () => {
+    const history = [
+      { content: bulk(5000), id: 'msg-uold', role: 'user' },
+      { content: bulk(5000), id: 'msg-aold', role: 'assistant' },
+    ];
+    const latestUser = { content: 'latest instruction', id: 'msg-ulatest', role: 'user' };
+    const tasksWrapper = {
+      content: '',
+      id: 'tasks-msg-parent-msg-task1,msg-task2',
+      role: 'tasks',
+      tasks: [
+        { content: 'task one', id: 'msg-task1', role: 'task' },
+        { content: 'task two', id: 'msg-task2', role: 'task' },
+      ],
+    };
+    const rawTail = [
+      latestUser,
+      { content: 'task one', id: 'msg-task1', role: 'task' },
+      { content: 'task two', id: 'msg-task2', role: 'task' },
+    ];
+
+    messagesQuery.mockResolvedValue([...history, ...rawTail]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: history,
+    });
+    llmStream.mockResolvedValue({ content: 'summary' });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'summary', id: 'group-123', role: 'compressedGroup' }, ...rawTail],
+    });
+
+    const state = createState({ messages: [...history, latestUser, tasksWrapper] as any });
+    const result = await compressContext(host)(createInstruction(state.messages, 2_000), state);
+
+    // The children survive exactly once, as raw rows — no duplicated wrapper.
+    expect(result.newState.messages.map((m: any) => m.id)).toEqual([
+      'group-123',
+      'msg-ulatest',
+      'msg-task1',
+      'msg-task2',
+    ]);
+    expect(result.newState.messages.some((m: any) => m.role === 'tasks')).toBe(false);
   });
 
   it('skips without compression side effects when topic context is missing', async () => {

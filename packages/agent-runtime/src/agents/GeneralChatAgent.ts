@@ -25,6 +25,7 @@ import {
   type SubAgentResultPayload,
   type SubAgentsBatchResultPayload,
 } from '../types';
+import { getTailPreserveBudget } from '../utils/preserveTail';
 import { shouldCompress } from '../utils/tokenCounter';
 
 const TOOL_NOT_ALLOWED_CONTENT =
@@ -33,8 +34,6 @@ const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
 // Leave 35% of the model window for server-side context engineering (system
 // role, knowledge, memories, skills, etc.) and the model's completion. The
 // initial 50% threshold still supplies the lower side of the hysteresis band.
-const DEFAULT_RECOMPRESSION_THRESHOLD_RATIO = 0.65;
-
 /**
  * ChatAgent - The "Brain" of the chat agent
  *
@@ -542,15 +541,23 @@ export class GeneralChatAgent implements Agent {
    * makes one small tool result trigger another compression before the model can
    * act on it. Keep the initial threshold conservative, then allow the compressed
    * context to grow to a higher watermark before compressing it again.
+   *
+   * The watermark itself is resolved in `getCompressionThreshold`, which layers
+   * it over the headroom budget rather than substituting for it.
    */
-  private getCompressionThresholdRatio(messages: any[]): number | undefined {
-    const initialRatio = this.config.compressionConfig?.thresholdRatio;
-    if (!this.findExistingSummary(messages)) return initialRatio;
-
-    const configuredRecompressionRatio = this.config.compressionConfig?.recompressionThresholdRatio;
-    if (configuredRecompressionRatio !== undefined) return configuredRecompressionRatio;
-
-    return Math.max(initialRatio ?? 0, DEFAULT_RECOMPRESSION_THRESHOLD_RATIO);
+  private buildCompressionOptions(messages: any[], tools: any[] | undefined) {
+    return {
+      // Drives the recompression hysteresis inside `getCompressionThreshold`,
+      // where it is applied over the window's headroom budget instead of
+      // replacing it. Collapsing it to a ratio here (the previous shape) would
+      // drag a large window back down to 65% and undo the headroom budget.
+      hasExistingSummary: Boolean(this.findExistingSummary(messages)),
+      maxOutputToken: this.config.compressionConfig?.maxOutputToken,
+      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      recompressionThresholdRatio: this.config.compressionConfig?.recompressionThresholdRatio,
+      thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+      tools,
+    };
   }
 
   /**
@@ -569,11 +576,10 @@ export class GeneralChatAgent implements Agent {
     // executor strips all tools via buildStepToolDelta (deactivatedToolIds: ['*']),
     // so they must not count against the compression budget either — otherwise
     // we'd burn an extra summarization pass on tool tokens that won't be sent.
-    const compressionOptions = {
-      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-      thresholdRatio: this.getCompressionThresholdRatio(payloadWithAllowedToolNames.messages),
-      tools: state.forceFinish ? undefined : payloadWithAllowedToolNames.tools,
-    };
+    const compressionOptions = this.buildCompressionOptions(
+      payloadWithAllowedToolNames.messages,
+      state.forceFinish ? undefined : payloadWithAllowedToolNames.tools,
+    );
 
     if (compressionEnabled) {
       const messages = payloadWithAllowedToolNames.messages;
@@ -585,6 +591,7 @@ export class GeneralChatAgent implements Agent {
             currentTokenCount: compressionCheck.currentTokenCount,
             existingSummary: this.findExistingSummary(messages),
             messages,
+            preserveTailTokens: getTailPreserveBudget(compressionCheck.threshold),
           },
           type: 'compress_context',
         };
@@ -640,22 +647,23 @@ export class GeneralChatAgent implements Agent {
         const compressionEnabled = this.config.compressionConfig?.enabled ?? true; // Default to enabled
         // Mirror RuntimeExecutors.callLlm: force-finish steps ship without tools,
         // so they must not count against the compression budget here either.
-        const compressionOptions = {
-          maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-          thresholdRatio: this.getCompressionThresholdRatio(state.messages),
-          tools: state.forceFinish ? undefined : this.getTools(state),
-        };
+        const compressionOptions = this.buildCompressionOptions(
+          state.messages,
+          state.forceFinish ? undefined : this.getTools(state),
+        );
 
         if (compressionEnabled) {
           const compressionCheck = shouldCompress(state.messages, compressionOptions);
 
           if (compressionCheck.needsCompression) {
-            // Context exceeds threshold, compress ALL messages into a single summary
+            // Context exceeds threshold — summarize history, keeping the most
+            // recent messages verbatim beside the summary.
             return {
               payload: {
                 currentTokenCount: compressionCheck.currentTokenCount,
                 existingSummary: this.findExistingSummary(state.messages),
                 messages: state.messages,
+                preserveTailTokens: getTailPreserveBudget(compressionCheck.threshold),
               },
               type: 'compress_context',
             } as AgentInstructionCompressContext;
