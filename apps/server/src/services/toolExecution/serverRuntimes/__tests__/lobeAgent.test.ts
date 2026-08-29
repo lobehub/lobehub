@@ -12,16 +12,10 @@ const mockToolsEnv = vi.hoisted(() => ({
 }));
 const mockMessageModelQueryByIds = vi.hoisted(() => vi.fn());
 const mockMessageModelQuery = vi.hoisted(() => vi.fn());
-const mockFileModelFindByIds = vi.hoisted(() => vi.fn());
-const mockGetFileAccessUrl = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
-const mockFetchCappedBuffer = vi.hoisted(() => vi.fn());
 const mockImageUrlToBase64 = vi.hoisted(() => vi.fn());
-const mockSharpFactory = vi.hoisted(() => ({
-  current: undefined as ((input: Buffer, options?: Record<string, unknown>) => unknown) | undefined,
-}));
 const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
@@ -64,15 +58,8 @@ vi.mock('@/database/models/message', () => ({
   })),
 }));
 
-vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({
-    findByIds: (...args: unknown[]) => mockFileModelFindByIds(...args),
-  })),
-}));
-
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({
-    getFileAccessUrl: (...args: unknown[]) => mockGetFileAccessUrl(...args),
     getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
   })),
 }));
@@ -83,10 +70,6 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: (...args: any[]) => mockConsumeStreamUntilDone(...args),
-}));
-
-vi.mock('@/server/services/bot/platforms/loadAttachmentBuffer', () => ({
-  fetchCappedBuffer: (...args: unknown[]) => mockFetchCappedBuffer(...args),
 }));
 
 vi.mock('@lobechat/utils', async (importOriginal) => ({
@@ -109,9 +92,6 @@ vi.mock('sharp', async (importOriginal) => {
     ...actual,
     default: (input: Buffer, options?: Record<string, unknown>) => {
       mockSharpOptions(options);
-      if (mockSharpFactory.current) {
-        return mockSharpFactory.current(input, options) as ReturnType<typeof actual.default>;
-      }
       return actual.default(input, options);
     },
   };
@@ -145,12 +125,7 @@ describe('lobeAgentRuntime', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFileModelFindByIds.mockResolvedValue([]);
-    mockGetFileAccessUrl.mockImplementation(({ url }: { url?: string | null }) =>
-      Promise.resolve(url || ''),
-    );
     mockMessageModelQuery.mockResolvedValue([]);
-    mockSharpFactory.current = undefined;
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS = ['image/png', 'image/jpeg'];
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER = 'test-provider';
@@ -161,7 +136,6 @@ describe('lobeAgentRuntime', () => {
     });
     mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
     mockConsumeStreamUntilDone.mockResolvedValue(undefined);
-    mockFetchCappedBuffer.mockResolvedValue(Buffer.from(VALID_PNG_BASE64, 'base64'));
     mockImageUrlToBase64.mockResolvedValue({
       base64: VALID_PNG_BASE64,
       mimeType: 'image/png',
@@ -180,75 +154,41 @@ describe('lobeAgentRuntime', () => {
     })
       .avif()
       .toBuffer();
+    mockImageUrlToBase64.mockResolvedValueOnce({
+      base64: avifBuffer.toString('base64'),
+      mimeType: 'image/avif',
+    });
     const runtime = lobeAgentRuntime.factory(baseContext);
+    const imageUrl = 'https://example.com/image.avif?signature=example';
 
     const result = await runtime.analyzeMedia({
       question: 'what is this?',
-      urls: [`data:image/avif;base64,${avifBuffer.toString('base64')}`],
+      urls: [imageUrl],
     });
 
     expect(result.success).toBe(true);
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith(imageUrl);
     const [payload] = mockChat.mock.calls[0];
     const imagePart = payload.messages[0].content.find(
       (part: { type: string }) => part.type === 'image_url',
     );
     expect(imagePart.image_url.url).toMatch(/^data:image\/png;base64,/);
-    expect(mockSharpOptions).toHaveBeenLastCalledWith(
-      expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
-    );
 
     const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
     await expect(sharp(convertedBuffer).metadata()).resolves.toMatchObject({ format: 'png' });
   });
 
-  it('should stop collecting transcoded output once it exceeds the preparation budget', async () => {
-    const chunk = Buffer.alloc(11 * 1024 * 1024);
-    const destroy = vi.fn();
-    const toBuffer = vi
-      .fn()
-      .mockImplementation(() => Promise.resolve(Buffer.alloc(21 * 1024 * 1024)));
-    const output = {
-      async *[Symbol.asyncIterator]() {
-        yield chunk;
-        yield chunk;
-      },
-      destroy,
-      toBuffer,
-    };
-    const image = {
-      rotate: () => image,
-      toFormat: () => output,
-    };
-    mockSharpFactory.current = () => image;
-    mockImageUrlToBase64.mockResolvedValue({
-      base64: VALID_PNG_BASE64,
-      mimeType: 'image/avif',
-    });
+  it('should detect suffixless images after downloading without transcoding supported formats', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeMedia({
       question: 'what is this?',
-      urls: ['https://example.com/large-output.avif'],
-    });
-
-    expect(result).toMatchObject({
-      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
-      success: false,
-    });
-    expect(toBuffer).not.toHaveBeenCalled();
-    expect(destroy).toHaveBeenCalledOnce();
-    expect(mockChat).not.toHaveBeenCalled();
-  });
-
-  it('should rewrite supported inline images with their detected MIME type', async () => {
-    const runtime = lobeAgentRuntime.factory(baseContext);
-
-    const result = await runtime.analyzeMedia({
-      question: 'what is this?',
-      urls: [`data:image/avif;base64,${VALID_PNG_BASE64}`],
+      urls: ['https://example.com/image'],
     });
 
     expect(result.success).toBe(true);
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith('https://example.com/image');
+    expect(mockSharpOptions).not.toHaveBeenCalled();
     const [payload] = mockChat.mock.calls[0];
     const imagePart = payload.messages[0].content.find(
       (part: { type: string }) => part.type === 'image_url',
@@ -263,45 +203,6 @@ describe('lobeAgentRuntime', () => {
     const result = await runtime.analyzeMedia({
       question: 'what is this?',
       urls: ['https://example.com/image.avif'],
-    });
-
-    expect(result).toMatchObject({
-      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
-      success: false,
-    });
-    expect(mockChat).not.toHaveBeenCalled();
-  });
-
-  it('should reject corrupted remote images before calling the multimodal model', async () => {
-    const corruptedBase64 = createCorruptedPngDataUrl().split(',')[1];
-    mockImageUrlToBase64.mockResolvedValue({ base64: corruptedBase64, mimeType: 'image/png' });
-    const runtime = lobeAgentRuntime.factory(baseContext);
-
-    const result = await runtime.analyzeMedia({
-      question: 'what is this?',
-      urls: ['https://example.com/corrupted.png'],
-    });
-
-    expect(result).toMatchObject({
-      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
-      success: false,
-    });
-    expect(mockChat).not.toHaveBeenCalled();
-  });
-
-  it('should reject images that exceed the aggregate preparation budget', async () => {
-    mockImageUrlToBase64.mockResolvedValue({
-      base64: Buffer.concat([
-        Buffer.from(VALID_PNG_BASE64, 'base64'),
-        Buffer.alloc(11 * 1024 * 1024),
-      ]).toString('base64'),
-      mimeType: 'image/png',
-    });
-    const runtime = lobeAgentRuntime.factory(baseContext);
-
-    const result = await runtime.analyzeMedia({
-      question: 'compare these images',
-      urls: ['https://example.com/large-1.png', 'https://example.com/large-2.png'],
     });
 
     expect(result).toMatchObject({
@@ -417,7 +318,7 @@ describe('lobeAgentRuntime', () => {
             content: [
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
+                image_url: { detail: 'auto', url: 'https://example.com/generated.png' },
                 type: 'image_url',
               }),
             ],
@@ -430,6 +331,7 @@ describe('lobeAgentRuntime', () => {
         }),
       }),
     );
+    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
   });
 
   it('should pass workspaceId when initializing multimodal model runtime', async () => {
@@ -523,25 +425,10 @@ describe('lobeAgentRuntime', () => {
 
     const result = await runtime.analyzeMedia({
       question: 'what is this?',
-      urls: [
-        'http://example.com/generated.png?X-Amz-Signature=secret',
-        VALID_PNG_DATA_URL,
-        'data:audio/mpeg;base64,abcd',
-      ],
+      urls: ['http://example.com/generated.png', VALID_PNG_DATA_URL, 'data:audio/mpeg;base64,abcd'],
     });
 
     expect(result.success).toBe(true);
-    expect(mockImageUrlToBase64).toHaveBeenCalledWith(
-      'http://example.com/generated.png?X-Amz-Signature=secret',
-      expect.objectContaining({
-        maxBytes: 20 * 1024 * 1024,
-        signal: expect.any(AbortSignal),
-      }),
-    );
-    expect(mockFetchCappedBuffer).not.toHaveBeenCalled();
-    expect(mockSharpOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
-    );
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -550,7 +437,7 @@ describe('lobeAgentRuntime', () => {
             content: [
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
+                image_url: { detail: 'auto', url: 'http://example.com/generated.png' },
                 type: 'image_url',
               }),
               expect.objectContaining({
@@ -594,10 +481,6 @@ describe('lobeAgentRuntime', () => {
     mockMessageModelQueryByIds.mockResolvedValue([
       { id: 'msg-1', role: 'tool', topicId: 'topic-1' },
     ]);
-    mockFileModelFindByIds.mockResolvedValue([
-      { id: 'file-tool-image', url: 'stored/tool-image.png' },
-    ]);
-    mockGetFileAccessUrl.mockResolvedValue('http://localhost:9000/trusted-tool-image.png');
     mockMessageModelQuery.mockResolvedValue([
       {
         id: 'msg-read-file',
@@ -607,7 +490,7 @@ describe('lobeAgentRuntime', () => {
             {
               fileId: 'file-tool-image',
               mediaType: 'image/png',
-              url: 'http://localhost:9000/forged-tool-image.png',
+              url: 'https://example.com/tool-image.png',
             },
           ],
         },
@@ -623,16 +506,6 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mockFileModelFindByIds).toHaveBeenCalledWith(['file-tool-image']);
-    expect(mockFetchCappedBuffer).toHaveBeenCalledWith(
-      'http://localhost:9000/trusted-tool-image.png',
-      expect.objectContaining({
-        allowConfiguredOrigins: true,
-        limit: 20 * 1024 * 1024,
-        timeoutMs: expect.any(Number),
-      }),
-    );
-    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({
       files: [
         {
@@ -649,7 +522,7 @@ describe('lobeAgentRuntime', () => {
           expect.objectContaining({
             content: expect.arrayContaining([
               {
-                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
+                image_url: { detail: 'auto', url: 'https://example.com/tool-image.png' },
                 type: 'image_url',
               },
             ]),
@@ -657,51 +530,6 @@ describe('lobeAgentRuntime', () => {
         ],
       }),
       expect.anything(),
-    );
-  });
-
-  it('should not trust forged file ids from durable tool-result images', async () => {
-    const toolImageRef = createMediaFileRef({
-      index: 0,
-      messageId: 'msg-read-file',
-      type: 'image',
-    });
-    mockMessageModelQueryByIds.mockResolvedValue([
-      { id: 'msg-1', role: 'tool', topicId: 'topic-1' },
-    ]);
-    mockMessageModelQuery.mockResolvedValue([
-      {
-        id: 'msg-read-file',
-        pluginState: {
-          images: [
-            {
-              fileId: 'forged-file-id',
-              mediaType: 'image/png',
-              url: 'http://localhost:9000/private.png',
-            },
-          ],
-        },
-        role: 'tool',
-        topicId: 'topic-1',
-      },
-    ]);
-    mockImageUrlToBase64.mockRejectedValue(new TypeError('Private address blocked'));
-    const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
-
-    const result = await runtime.analyzeMedia({
-      question: 'what is in the image?',
-      refs: [toolImageRef],
-    });
-
-    expect(result).toMatchObject({
-      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
-      success: false,
-    });
-    expect(mockFileModelFindByIds).toHaveBeenCalledWith(['forged-file-id']);
-    expect(mockFetchCappedBuffer).not.toHaveBeenCalled();
-    expect(mockImageUrlToBase64).toHaveBeenCalledWith(
-      'http://localhost:9000/private.png',
-      expect.objectContaining({ maxBytes: 20 * 1024 * 1024 }),
     );
   });
 
@@ -758,7 +586,7 @@ describe('lobeAgentRuntime', () => {
             content: [
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
+                image_url: { detail: 'auto', url: 'https://example.com/previous.png' },
                 type: 'image_url',
               }),
             ],

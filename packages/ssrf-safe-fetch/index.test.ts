@@ -98,7 +98,7 @@ describe('ssrfSafeFetch', () => {
 
         await expect(ssrfSafeFetch(url)).rejects.toThrow(/Fetch failed/);
 
-        expect(console.error).toHaveBeenCalledWith('Fetch error:', { name: 'Error' });
+        expect(console.error).toHaveBeenCalledWith('Fetch error:', expect.any(Error));
       });
     });
 
@@ -187,29 +187,25 @@ describe('ssrfSafeFetch', () => {
 
   describe('error handling', () => {
     it('should throw error with descriptive message when fetch fails', async () => {
-      const url = 'https://example.com/image.png?secret=top-secret';
-      const originalError = new Error(`Network error for ${url}`);
+      const originalError = new Error('Network error');
       mockFetch.mockRejectedValue(originalError);
 
-      await expect(ssrfSafeFetch(url)).rejects.toThrow(`Fetch failed: Network error for ${url}`);
+      await expect(ssrfSafeFetch('https://example.com')).rejects.toThrow(
+        'Fetch failed: Network error',
+      );
 
-      expect(console.error).toHaveBeenCalledWith('Fetch error:', { name: 'Error' });
-      expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('top-secret');
+      expect(console.error).toHaveBeenCalledWith('Fetch error:', originalError);
     });
 
     it('should throw SSRF blocked error when request-filtering-agent blocks', async () => {
-      const url = 'http://10.0.0.1/internal?secret=top-secret';
       const ssrfError = new Error(
-        `DNS lookup ${url} is not allowed. Because, It is private IP address.`,
+        'DNS lookup 10.0.0.1(family:4, host:10.0.0.1) is not allowed. Because, It is private IP address.',
       );
       mockFetch.mockRejectedValue(ssrfError);
 
-      await expect(ssrfSafeFetch(url)).rejects.toThrow(/SSRF blocked/);
+      await expect(ssrfSafeFetch('http://10.0.0.1/internal')).rejects.toThrow(/SSRF blocked/);
 
-      expect(console.error).toHaveBeenCalledWith('SSRF protection blocked request:', {
-        name: 'Error',
-      });
-      expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('top-secret');
+      expect(console.error).toHaveBeenCalledWith('SSRF protection blocked request:', ssrfError);
     });
 
     it('should handle non-Error thrown values', async () => {

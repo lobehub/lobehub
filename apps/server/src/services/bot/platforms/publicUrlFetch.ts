@@ -191,37 +191,9 @@ interface SafeTarget {
   url: URL;
 }
 
-/** Stop awaiting non-cancellable work once the request-wide deadline fires. */
-const waitWithSignal = async <T>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
-  if (signal.aborted) throw signal.reason;
-
-  return new Promise<T>((resolve, reject) => {
-    const cleanup = () => signal.removeEventListener('abort', onAbort);
-    const onAbort = () => {
-      cleanup();
-      reject(signal.reason);
-    };
-
-    signal.addEventListener('abort', onAbort, { once: true });
-    if (signal.aborted) return onAbort();
-
-    promise.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error) => {
-        cleanup();
-        reject(error);
-      },
-    );
-  });
-};
-
 const resolveSafeUrl = async (
   raw: string,
   trusted: TrustedOrigin[],
-  signal: AbortSignal,
 ): Promise<SafeTarget | undefined> => {
   let url: URL;
   try {
@@ -251,9 +223,8 @@ const resolveSafeUrl = async (
     answers = [{ address: host, family: isIP(host) }];
   } else {
     try {
-      answers = await waitWithSignal(dns.lookup(host, { all: true }), signal);
+      answers = await dns.lookup(host, { all: true });
     } catch (error) {
-      if (signal.aborted) throw signal.reason;
       log('resolveSafeUrl: DNS lookup failed for %s: %O', host, error);
       return undefined;
     }
@@ -367,12 +338,10 @@ export const fetchPublicUrl = async (
   };
 
   let target = rawUrl;
-  /** One timeout budget for the entire redirect chain, not one budget per hop. */
-  const signal = AbortSignal.timeout(timeoutMs);
 
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const safe = await resolveSafeUrl(target, trusted, signal);
+      const safe = await resolveSafeUrl(target, trusted);
       if (!safe) {
         await dispose();
         return undefined;
@@ -395,7 +364,7 @@ export const fetchPublicUrl = async (
         dispatcher,
         method,
         redirect: 'manual',
-        signal,
+        signal: AbortSignal.timeout(timeoutMs),
       } as RequestInit);
 
       if (response.status < 300 || response.status >= 400) return { dispose, response };

@@ -43,28 +43,10 @@ export const imageToBase64 = ({
 export interface ImageUrlToBase64Options {
   /** Abort the download once the response exceeds this many bytes. */
   maxBytes?: number;
-  /** Abort the download when the caller's deadline or cancellation fires. */
-  signal?: AbortSignal;
 }
 
 const sizeLimitError = (maxBytes: number) =>
   new RangeError(`Remote binary exceeds the ${maxBytes}-byte download limit`);
-
-/**
- * Apply the byte ceiling at the SSRF fetch boundary before its server adapter buffers the body.
- * The adapter uses a soft truncation cap, so one extra byte lets the outer reader detect overflow.
- */
-const fetchServerBinary = async (
-  imageUrl: string,
-  { maxBytes, signal }: ImageUrlToBase64Options,
-) => {
-  const { ssrfSafeFetch } = await import('@lobechat/ssrf-safe-fetch');
-  const requestOptions = signal ? { signal } : undefined;
-
-  return maxBytes
-    ? ssrfSafeFetch(imageUrl, requestOptions, { maxContentLength: maxBytes + 1 })
-    : ssrfSafeFetch(imageUrl, requestOptions);
-};
 
 const readBlobWithLimit = async (response: Response, maxBytes: number): Promise<Blob> => {
   const declaredLength = Number(response.headers.get('content-length'));
@@ -118,10 +100,8 @@ export const imageUrlToBase64 = async (
 
     // Use SSRF-safe fetch on server-side to prevent SSRF attacks
     const res = isServer
-      ? await fetchServerBinary(imageUrl, options)
-      : options.signal
-        ? await fetch(imageUrl, { signal: options.signal })
-        : await fetch(imageUrl);
+      ? await import('@lobechat/ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
+      : await fetch(imageUrl);
 
     const blob = options.maxBytes
       ? await readBlobWithLimit(res, options.maxBytes)
@@ -138,10 +118,7 @@ export const imageUrlToBase64 = async (
 
     return { base64, mimeType };
   } catch (error) {
-    /** Raw fetch errors can contain presigned URL query credentials. */
-    console.error('Error converting image to base64:', {
-      name: error instanceof Error ? error.name : typeof error,
-    });
+    console.error('Error converting image to base64:', error);
     throw error;
   }
 };
