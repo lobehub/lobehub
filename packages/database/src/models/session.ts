@@ -5,6 +5,7 @@ import type {
   LobeAgentSession,
   LobeGroupSession,
 } from '@lobechat/types';
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { and, asc, count, desc, eq, inArray, not, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -521,7 +522,7 @@ export class SessionModel {
 
     return this.db
       .update(agents)
-      .set(mergedValue)
+      .set({ ...mergedValue, ...deriveAgentRuntimeFields(mergedValue.agencyConfig) })
       .where(and(eq(agents.id, session.agent.id), this.agentsOwnership()));
   };
 

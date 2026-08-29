@@ -1,3 +1,4 @@
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
@@ -87,10 +88,11 @@ export class AgentService extends BaseService {
 
     try {
       return await this.db.transaction(async (tx) => {
+        const agencyConfig = request.agencyConfig || null;
         // Prepare creation data
         const newAgentData: NewAgent = {
           accessedAt: new Date(),
-          agencyConfig: request.agencyConfig || null,
+          agencyConfig,
           avatar: request.avatar || null,
           chatConfig: request.chatConfig || null,
           createdAt: new Date(),
@@ -103,6 +105,7 @@ export class AgentService extends BaseService {
           systemRole: request.systemRole || null,
           title: request.title,
           updatedAt: new Date(),
+          ...deriveAgentRuntimeFields(agencyConfig),
           ...this.buildWorkspacePayload({}),
         };
 
@@ -182,10 +185,12 @@ export class AgentService extends BaseService {
                 workspaceId: existingAgent.workspaceId,
               })));
 
-          updateData.agencyConfig =
+          const agencyConfig =
             request.agencyConfig === null
               ? resolveClearedAgencyConfig(existingAgent.agencyConfig, canWritePolicies)
               : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
+          updateData.agencyConfig = agencyConfig;
+          Object.assign(updateData, deriveAgentRuntimeFields(agencyConfig));
         }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
         if (request.chatConfig !== undefined) {

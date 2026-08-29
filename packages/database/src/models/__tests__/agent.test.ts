@@ -823,6 +823,28 @@ describe('AgentModel', () => {
       expect(result?.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
     });
 
+    it('should synchronize runtime identity when agencyConfig changes', async () => {
+      const agent = await agentModel.create({ title: 'Runtime Agent' });
+
+      await agentModel.update(agent.id, {
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      });
+
+      const heterogeneous = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(heterogeneous?.runtimeKind).toBe('heterogeneous');
+      expect(heterogeneous?.runtimeType).toBe('codex');
+
+      await agentModel.update(agent.id, { agencyConfig: null });
+
+      const lobe = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(lobe?.runtimeKind).toBe('lobe');
+      expect(lobe?.runtimeType).toBeNull();
+    });
+
     it('should not update another user agent', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1232,6 +1254,22 @@ describe('AgentModel', () => {
       expect(result?.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
     });
 
+    it('should synchronize runtime identity after partially merging agencyConfig', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(result?.runtimeKind).toBe('heterogeneous');
+      expect(result?.runtimeType).toBe('codex');
+    });
+
     it('should persist only reference fields in an API binding and clear fast model with null', async () => {
       const agent = await agentModel.create({
         agencyConfig: {
@@ -1554,6 +1592,25 @@ describe('AgentModel', () => {
   });
 
   describe('create', () => {
+    it('should derive runtime identity instead of accepting caller-provided values', async () => {
+      const lobe = await agentModel.create({
+        runtimeKind: 'heterogeneous',
+        runtimeType: 'codex',
+        title: 'Lobe Agent',
+      });
+      const heterogeneous = await agentModel.create({
+        agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+        runtimeKind: 'lobe',
+        runtimeType: null,
+        title: 'Connected Agent',
+      });
+
+      expect(lobe.runtimeKind).toBe('lobe');
+      expect(lobe.runtimeType).toBeNull();
+      expect(heterogeneous.runtimeKind).toBe('heterogeneous');
+      expect(heterogeneous.runtimeType).toBe('openclaw');
+    });
+
     it('should strip secrets and unknown fields from an API binding', async () => {
       const agent = await agentModel.create({
         agencyConfig: {
@@ -1642,6 +1699,8 @@ describe('AgentModel', () => {
       const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
 
       await agentModel.update(agent.id, {
+        runtimeKind: 'heterogeneous',
+        runtimeType: 'codex',
         slug: 'agent-builder',
         title: 'Renamed',
         userId: userId2,
@@ -1653,10 +1712,14 @@ describe('AgentModel', () => {
       expect(afterUpdate?.slug).toBe('ordinary-slug');
       expect(afterUpdate?.userId).toBe(userId);
       expect(afterUpdate?.virtual).toBe(false);
+      expect(afterUpdate?.runtimeKind).toBe('lobe');
+      expect(afterUpdate?.runtimeType).toBeNull();
       // the mutable field in the same patch still lands
       expect(afterUpdate?.title).toBe('Renamed');
 
       await agentModel.updateConfig(agent.id, {
+        runtimeKind: 'heterogeneous',
+        runtimeType: 'codex',
         slug: 'inbox',
         virtual: true,
         visibility: 'private',
@@ -1667,6 +1730,8 @@ describe('AgentModel', () => {
       });
       expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
       expect(afterUpdateConfig?.virtual).toBe(false);
+      expect(afterUpdateConfig?.runtimeKind).toBe('lobe');
+      expect(afterUpdateConfig?.runtimeType).toBeNull();
       // `visibility` has its own creator/owner-gated endpoints — a config patch
       // must not be able to hide a shared row from everyone else.
       expect(afterUpdateConfig?.visibility).toBe('public');

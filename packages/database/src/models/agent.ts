@@ -3,6 +3,7 @@ import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
+  deriveAgentRuntimeFields,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
@@ -150,6 +151,10 @@ const IMMUTABLE_AGENT_FIELDS = [
   // resolve — it then renders in Ungrouped for every member.
   'sessionGroupId',
   'slug',
+  // Runtime identity is derived from `agencyConfig.heterogeneousProvider` and
+  // must never be accepted as an independent caller-controlled value.
+  'runtimeKind',
+  'runtimeType',
   'userId',
   'virtual',
   // `visibility` has its own authorization rules (`setVisibility` is creator /
@@ -567,6 +572,7 @@ export class AgentModel {
         description: agents.description,
         id: agents.id,
         name: agents.name,
+        runtimeType: agents.runtimeType,
         slug: agents.slug,
         title: agents.title,
         userId: agents.userId,
@@ -579,9 +585,12 @@ export class AgentModel {
       .offset(offset);
 
     // Surface only the hetero runtime type, not the full agencyConfig payload.
-    return rows.map(({ slug, agencyConfig, ...row }) =>
+    return rows.map(({ slug, agencyConfig, runtimeType, ...row }) =>
       normalizeInboxAgentMeta(
-        { ...row, heteroType: agencyConfig?.heterogeneousProvider?.type },
+        {
+          ...row,
+          heteroType: runtimeType ?? agencyConfig?.heterogeneousProvider?.type,
+        },
         { slug },
       ),
     );
@@ -1063,6 +1072,7 @@ export class AgentModel {
             ...config,
             agencyConfig,
             model: typeof config.model === 'string' ? config.model : null,
+            ...deriveAgentRuntimeFields(agencyConfig),
           },
         ),
       ])
@@ -1101,6 +1111,7 @@ export class AgentModel {
             {
               ...config,
               model: typeof config.model === 'string' ? config.model : null,
+              ...deriveAgentRuntimeFields(config.agencyConfig),
             },
           ),
         ),
@@ -1116,10 +1127,14 @@ export class AgentModel {
       agentId,
       this.stripImmutableFields(apiSafeData),
     );
+    const writeData =
+      Object.hasOwn(apiSafeData, 'agencyConfig') && apiSafeData.agencyConfig !== undefined
+        ? { ...sanitizedData, ...deriveAgentRuntimeFields(apiSafeData.agencyConfig) }
+        : sanitizedData;
 
     return this.db
       .update(agents)
-      .set({ ...sanitizedData, updatedAt: new Date() })
+      .set({ ...writeData, updatedAt: new Date() })
       .where(and(eq(agents.id, agentId), this.ownership()));
   };
 
@@ -1438,6 +1453,8 @@ export class AgentModel {
       }
     }
 
+    Object.assign(mergedValue, deriveAgentRuntimeFields(mergedValue.agencyConfig));
+
     // A character sheet is authored as a whole: the studio reads the current
     // profile and writes the version it wants. Deep-merging it would make a
     // cleared trait or a removed artwork impossible to express, since a missing
@@ -1638,6 +1655,7 @@ export class AgentModel {
             // preserve it, otherwise a heterogeneous agent is copied as a plain
             // one and its external runtime config is silently lost.
             agencyConfig,
+            ...deriveAgentRuntimeFields(agencyConfig),
             avatar: sourceAgent.avatar,
             backgroundColor: sourceAgent.backgroundColor,
             chatConfig: sourceAgent.chatConfig,
@@ -2187,14 +2205,16 @@ export class AgentModel {
       const visibilityUpdate =
         targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       for (const agent of foundAgents) {
+        const agencyConfig = targetWorkspaceId
+          ? (resolvedAgencyConfigs.get(agent.id) ?? null)
+          : (agent.agencyConfig ?? null);
         await trx
           .update(agents)
           .set({
             ...ownershipUpdate,
             ...visibilityUpdate,
-            agencyConfig: targetWorkspaceId
-              ? (resolvedAgencyConfigs.get(agent.id) ?? null)
-              : (agent.agencyConfig ?? null),
+            agencyConfig,
+            ...deriveAgentRuntimeFields(agencyConfig),
             // Pins are shared state now, exactly like the folder above: a pin
             // the previous owner set for themselves would arrive as a pin for
             // every member of the target workspace. Both belong to the source
@@ -2648,6 +2668,7 @@ export class AgentModel {
       .set({
         agencyConfig: cleanedAgencyConfig,
         clientId: null,
+        ...deriveAgentRuntimeFields(cleanedAgencyConfig),
         updatedAt: agents.updatedAt,
         userId: toUserId,
       })

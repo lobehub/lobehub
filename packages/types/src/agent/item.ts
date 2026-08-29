@@ -4,8 +4,9 @@ import { z } from 'zod';
 import type { FileItem } from '../files';
 import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
-import type { LobeAgentAgencyConfig } from './agencyConfig';
+import type { AgentRuntimeKind, LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
+import type { HeterogeneousAgentType } from './heterogeneousAgent';
 import { type AgentPluginEntry, AgentPluginEntrySchema } from './pluginConfig';
 import type { AgentProfile } from './profile';
 import type { LobeAgentTTSConfig } from './tts';
@@ -91,6 +92,11 @@ export interface LobeAgentConfig {
    *  Model provider
    */
   provider?: string;
+
+  /** Query-friendly runtime family derived from `agencyConfig`. */
+  runtimeKind?: AgentRuntimeKind;
+  /** External runtime identifier; null for the built-in Lobe runtime. */
+  runtimeType?: HeterogeneousAgentType | null;
 
   /**
    * System role
@@ -179,6 +185,10 @@ export interface AgentItem {
   /** Character sheet — traits and artwork; see {@link AgentProfile}. */
   profile?: AgentProfile | null;
   provider?: string | null;
+  /** Query-friendly runtime family derived from `agencyConfig`. */
+  runtimeKind?: AgentRuntimeKind;
+  /** External runtime identifier; null for the built-in Lobe runtime. */
+  runtimeType?: HeterogeneousAgentType | null;
   /** Session group ID for direct grouping */
   sessionGroupId?: string | null;
   slug?: string | null;

@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
@@ -979,6 +980,7 @@ export class ChatGroupModel {
           .set({
             agencyConfig: cleanedConfigs[index],
             clientId: null,
+            ...deriveAgentRuntimeFields(cleanedConfigs[index]),
             updatedAt: agents.updatedAt,
             userId: toUserId,
           })

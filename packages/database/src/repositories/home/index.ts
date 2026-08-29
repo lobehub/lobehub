@@ -87,6 +87,7 @@ export class HomeRepository {
         id: agents.id,
         name: agents.name,
         pinned: agents.pinned,
+        runtimeType: agents.runtimeType,
         sessionGroupId: sessions.groupId,
         sessionId: sessions.id,
         sessionPinned: sessions.pinned,
@@ -282,6 +283,7 @@ export class HomeRepository {
       id: string;
       name: string | null;
       pinned: boolean | null;
+      runtimeType: string | null;
       sessionGroupId: string | null;
       sessionId: string | null;
       sessionPinned: boolean | null;
@@ -348,7 +350,9 @@ export class HomeRepository {
           groupId: this.workspaceId
             ? a.agentSessionGroupId
             : (a.agentSessionGroupId ?? a.sessionGroupId),
-          heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
+          // Keep the JSON fallback until the asynchronous runtime-column
+          // backfill has converged for every existing agent.
+          heterogeneousType: a.runtimeType ?? a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),

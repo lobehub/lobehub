@@ -6,6 +6,7 @@ import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   canPublishAgentTopicLink,
+  deriveAgentRuntimeFields,
   formatServerDefaultHeterogeneousModel,
   isServerDefaultHeterogeneousModel,
   normalizeHeterogeneousProviderConfig,
@@ -84,6 +85,44 @@ describe('normalizeHeterogeneousProviderConfig', () => {
     const legacyConfig = { command: 'custom-agent' } as unknown as HeterogeneousProviderConfig;
 
     expect(normalizeHeterogeneousProviderConfig(legacyConfig).type).toBe('claude-code');
+  });
+});
+
+describe('deriveAgentRuntimeFields', () => {
+  it('identifies the built-in Lobe runtime when no heterogeneous provider exists', () => {
+    expect(deriveAgentRuntimeFields(undefined)).toEqual({
+      runtimeKind: 'lobe',
+      runtimeType: null,
+    });
+    expect(deriveAgentRuntimeFields({})).toEqual({
+      runtimeKind: 'lobe',
+      runtimeType: null,
+    });
+  });
+
+  it('projects the configured heterogeneous runtime type', () => {
+    expect(deriveAgentRuntimeFields({ heterogeneousProvider: { type: 'openclaw' } })).toEqual({
+      runtimeKind: 'heterogeneous',
+      runtimeType: 'openclaw',
+    });
+  });
+
+  it('normalizes legacy heterogeneous provider identities', () => {
+    expect(
+      deriveAgentRuntimeFields({
+        heterogeneousProvider: {
+          adapterType: 'codex',
+          command: 'custom-agent',
+        } as unknown as HeterogeneousProviderConfig,
+      }),
+    ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'codex' });
+    expect(
+      deriveAgentRuntimeFields({
+        heterogeneousProvider: {
+          command: '/usr/local/bin/claude',
+        } as unknown as HeterogeneousProviderConfig,
+      }),
+    ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'claude-code' });
   });
 });
 

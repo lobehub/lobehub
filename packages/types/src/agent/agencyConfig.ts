@@ -937,6 +937,31 @@ export interface LobeAgentAgencyConfig {
   workingDirByDevice?: Record<string, WorkingDirConfigValue>;
 }
 
+/** Agent runtime family persisted on the agent row for direct filtering. */
+export type AgentRuntimeKind = 'heterogeneous' | 'lobe';
+
+/**
+ * Runtime identity derived from the executable provider config.
+ *
+ * `agencyConfig.heterogeneousProvider` remains the detailed runtime config;
+ * these fields are its query-friendly projection on `agents` and must not be
+ * accepted as independent caller input.
+ */
+export type AgentRuntimeFields =
+  | { runtimeKind: 'heterogeneous'; runtimeType: HeterogeneousAgentType }
+  | { runtimeKind: 'lobe'; runtimeType: null };
+
+export const deriveAgentRuntimeFields = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+): AgentRuntimeFields => {
+  if (!agencyConfig?.heterogeneousProvider) {
+    return { runtimeKind: 'lobe', runtimeType: null };
+  }
+
+  const provider = normalizeHeterogeneousProviderConfig(agencyConfig.heterogeneousProvider);
+  return { runtimeKind: 'heterogeneous', runtimeType: provider.type };
+};
+
 /**
  * The `agencyConfig` keys that govern every workspace member rather than the
  * agent's own behaviour, and which only the agent's creator or the workspace
