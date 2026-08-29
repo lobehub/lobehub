@@ -1,3 +1,4 @@
+import { type ChatImageItem } from '@lobechat/types';
 import { PreviewGroup } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -6,16 +7,8 @@ import ImageItem from '@/components/ImageItem';
 
 import { downloadPreviewImage } from './downloadPreviewImage';
 
-interface ImageFileItem {
-  alt?: string;
-  id: string;
-  loading?: boolean;
-  onRemove?: (id: string) => void;
-  url: string;
-}
-
 interface FileListProps {
-  items: ImageFileItem[];
+  items: ChatImageItem[];
 }
 
 const ImageFileListViewer = memo<FileListProps>(({ items }) => {

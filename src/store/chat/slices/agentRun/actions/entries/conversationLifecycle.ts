@@ -924,6 +924,7 @@ export class ConversationLifecycleActionImpl {
     const tempImages: ChatImageItem[] = filesForPreview
       .filter((f) => f.file?.type?.startsWith('image'))
       .map((f) => ({
+        ...f.dimensions,
         id: f.id,
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
         alt: f.file?.name || f.id,
