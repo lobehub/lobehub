@@ -114,6 +114,25 @@ describe('TopicModel guardShareProvenance', () => {
     expect(row.metadata?.runningOperation).toMatchObject({ operationId: 'op-1' });
   });
 
+  it('refuses generic updates on a share topic — the historySummary injection path', async () => {
+    await expect(
+      guardedModel.update('guarded-share-topic', { historySummary: 'x'.repeat(10) }),
+    ).rejects.toThrow(/belongs to an agent share/);
+
+    const [row] = await serverDB.select().from(topics).where(eq(topics.id, 'guarded-share-topic'));
+    expect(row.historySummary).toBeNull();
+  });
+
+  it('still updates ordinary topics, and internal writers update share topics', async () => {
+    await guardedModel.update('guarded-plain-topic', { title: 'Renamed' });
+    await internalModel.update('guarded-share-topic', { title: 'Internal rename' });
+
+    const rows = await serverDB.select().from(topics).orderBy(topics.id);
+    const byId = Object.fromEntries(rows.map((row) => [row.id, row.title]));
+    expect(byId['guarded-plain-topic']).toBe('Renamed');
+    expect(byId['guarded-share-topic']).toBe('Internal rename');
+  });
+
   it('refuses generic metadata updates on a share topic — the runningOperation clear path', async () => {
     await expect(
       guardedModel.updateMetadata('guarded-share-topic', { runningOperation: null }),

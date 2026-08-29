@@ -1763,6 +1763,21 @@ export class TopicModel {
   // **************** Update *************** //
 
   update = async (id: string, data: Partial<TopicItem>) => {
+    // Generic updates carry `historySummary`, which the context builder
+    // injects verbatim into `<refer_topic>` prompts of later creator-funded
+    // runs — same wall as `updateMetadata`. See
+    // `TopicModelOptions.guardShareProvenance`.
+    if (this.guardShareProvenance) {
+      const [existing] = await this.db
+        .select({ shareId: topics.shareId })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()));
+      if (existing?.shareId)
+        throw new Error(
+          `Topic ${id} belongs to an agent share and cannot be updated through generic topic APIs`,
+        );
+    }
+
     return this.db
       .update(topics)
       .set({ ...data, updatedAt: new Date() })
