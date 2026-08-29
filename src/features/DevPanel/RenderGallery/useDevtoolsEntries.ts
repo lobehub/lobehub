@@ -13,11 +13,13 @@ import type {
   BuiltinStreaming,
 } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
-import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { getToolRenderFixture, getToolRenderMeta, type ToolRenderFixture } from './fixtures';
+import { localizeRenderGalleryApi, localizeRenderGalleryToolset } from './localization';
 
 export interface ApiEntry {
+  apiDisplayName: string;
   apiName: string;
   description?: string;
   fixture: ToolRenderFixture;
@@ -27,6 +29,7 @@ export interface ApiEntry {
   placeholder?: BuiltinPlaceholder;
   render?: BuiltinRender;
   streaming?: BuiltinStreaming;
+  toolDisplayName: string;
 }
 
 export interface ToolsetEntry {
@@ -56,8 +59,12 @@ const isDeprecatedApi = (identifier: string, apiName: string) =>
 
 export const toApiAnchor = (apiName: string) => `api-${apiName}`;
 
-export const useDevtoolsEntries = (): DevtoolsEntries =>
-  useMemo(() => {
+export const useDevtoolsEntries = (): DevtoolsEntries => {
+  const { t } = useTranslation('plugin');
+
+  // This is a development-only gallery. Rebuild the small registry on render so
+  // language/resource hot updates cannot leave stale English labels in useMemo.
+  const buildEntries = () => {
     const pairKey = (identifier: string, apiName: string) => `${identifier}:${apiName}`;
 
     const byKey = new Map<
@@ -121,10 +128,26 @@ export const useDevtoolsEntries = (): DevtoolsEntries =>
 
       const meta = getToolRenderMeta(identifier, apiName);
       const fixture = getToolRenderFixture(identifier, apiName, meta.api);
+      const localizedApi = localizeRenderGalleryApi(
+        { apiName, description: meta.description, identifier },
+        t,
+      );
+      const toolset = toolsetMap.get(identifier);
+      const localizedToolset =
+        toolset ??
+        localizeRenderGalleryToolset(
+          {
+            identifier,
+            toolsetDescription: meta.toolsetDescription,
+            toolsetName: meta.toolsetName,
+          },
+          t,
+        );
 
       const api: ApiEntry = {
+        apiDisplayName: localizedApi.apiDisplayName,
         apiName,
-        description: meta.description,
+        description: localizedApi.description,
         fixture,
         identifier,
         inspector,
@@ -132,17 +155,17 @@ export const useDevtoolsEntries = (): DevtoolsEntries =>
         placeholder,
         render,
         streaming,
+        toolDisplayName: localizedToolset.toolsetName,
       };
 
-      const toolset = toolsetMap.get(identifier);
       if (toolset) {
         toolset.apis.push(api);
       } else {
         toolsetMap.set(identifier, {
           apis: [api],
           identifier,
-          toolsetDescription: meta.toolsetDescription,
-          toolsetName: meta.toolsetName,
+          toolsetDescription: localizedToolset.toolsetDescription,
+          toolsetName: localizedToolset.toolsetName,
         });
       }
     }
@@ -165,4 +188,7 @@ export const useDevtoolsEntries = (): DevtoolsEntries =>
       menuItems,
       toolsetMap,
     };
-  }, []);
+  };
+
+  return buildEntries();
+};

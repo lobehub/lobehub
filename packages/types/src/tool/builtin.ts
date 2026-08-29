@@ -439,6 +439,8 @@ export type BuiltinPlaceholder = (props: BuiltinPlaceholderProps) => ReactNode;
 // ==================== Inspector Renderer Types ====================
 
 export interface BuiltinInspectorProps<Arguments = any, State = any> {
+  /** Optional localized API label supplied by preview or debug surfaces. */
+  apiDisplayName?: string;
   apiName: string;
   args: Arguments;
   identifier: string;
@@ -457,6 +459,8 @@ export interface BuiltinInspectorProps<Arguments = any, State = any> {
    * via `metadata.sourceToolCallId`.
    */
   toolCallId?: string;
+  /** Optional localized tool label supplied by preview or debug surfaces. */
+  toolDisplayName?: string;
 }
 
 export type BuiltinInspector = <A = any, S = any>(props: BuiltinInspectorProps<A, S>) => ReactNode;

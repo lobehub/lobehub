@@ -91,6 +91,7 @@ export const ToolInspectorSlot = memo<ToolInspectorSlotProps>(
     return (
       <RenderBoundary label={'Inspector'}>
         <Inspector
+          apiDisplayName={api.apiDisplayName}
           apiName={api.apiName}
           args={derived.args}
           identifier={api.identifier}
@@ -99,6 +100,7 @@ export const ToolInspectorSlot = memo<ToolInspectorSlotProps>(
           partialArgs={derived.partialArgs}
           pluginState={derived.pluginState}
           toolCallId={toolCallId}
+          toolDisplayName={api.toolDisplayName}
           result={{
             content: coerceInspectorContent(variant.content),
             error: derived.pluginError,

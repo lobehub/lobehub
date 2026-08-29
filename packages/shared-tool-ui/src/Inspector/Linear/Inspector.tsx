@@ -236,10 +236,18 @@ const pickChip = (parsed: ParsedTool, args: Record<string, unknown> | undefined)
 };
 
 const LinearInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>(
-  ({ apiName, args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({
+    apiDisplayName,
+    apiName,
+    args,
+    partialArgs,
+    isArgumentsStreaming,
+    isLoading,
+    toolDisplayName,
+  }) => {
     const effectiveArgs = args ?? partialArgs;
     const parsed = parseToolName(apiName);
-    const label = labelFor(parsed, effectiveArgs);
+    const label = apiDisplayName || labelFor(parsed, effectiveArgs);
     const { primary, parentId } = pickChip(parsed, effectiveArgs);
 
     return (
@@ -250,7 +258,7 @@ const LinearInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>
         )}
       >
         <LinearLogomark />
-        <span className={styles.productPrefix}>Linear</span>
+        <span className={styles.productPrefix}>{toolDisplayName || 'Linear'}</span>
         <span className={styles.chip}>
           <span className={styles.chipAction}>{label}</span>
           {primary && (

@@ -94,7 +94,7 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
       <Flexbox className={styles.cardHeader}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
           <Text fontSize={18} weight={600}>
-            {api.apiName}
+            {api.apiDisplayName}
           </Text>
           <Tag>{api.identifier}</Tag>
           {variants.length > 1 && (
