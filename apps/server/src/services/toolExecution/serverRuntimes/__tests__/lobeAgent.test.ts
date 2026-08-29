@@ -167,9 +167,28 @@ describe('lobeAgentRuntime', () => {
       (part: { type: string }) => part.type === 'image_url',
     );
     expect(imagePart.image_url.url).toMatch(/^data:image\/png;base64,/);
+    expect(mockSharpOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
+    );
 
     const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
     await expect(sharp(convertedBuffer).metadata()).resolves.toMatchObject({ format: 'png' });
+  });
+
+  it('should rewrite supported inline images with their detected MIME type', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: [`data:image/avif;base64,${VALID_PNG_BASE64}`],
+    });
+
+    expect(result.success).toBe(true);
+    const [payload] = mockChat.mock.calls[0];
+    const imagePart = payload.messages[0].content.find(
+      (part: { type: string }) => part.type === 'image_url',
+    );
+    expect(imagePart.image_url.url).toBe(VALID_PNG_DATA_URL);
   });
 
   it('should fail before calling the multimodal model when image preparation fails', async () => {
@@ -404,6 +423,9 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith('http://example.com/generated.png', {
+      maxBytes: 20 * 1024 * 1024,
+    });
     expect(mockSharpOptions).toHaveBeenCalledWith(
       expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
     );

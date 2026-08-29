@@ -10,6 +10,12 @@ const SHARP_FORMAT_BY_MIME_TYPE = {
 
 type MultimodalImageMimeType = keyof typeof SHARP_FORMAT_BY_MIME_TYPE;
 
+/** Reject oversized remote responses before buffering and base64 expansion. */
+const MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+/** Share the same decompression-bomb ceiling across validation and transcoding. */
+export const MAX_MULTIMODAL_IMAGE_PIXELS = 25_000_000;
+
 const readImage = async (uri: string) => {
   if (/^data:image\//i.test(uri)) {
     const { base64, mimeType, type } = parseDataUri(uri);
@@ -18,16 +24,25 @@ const readImage = async (uri: string) => {
     const buffer = Buffer.from(base64, 'base64');
     const detectedMimeType = await resolveImageMimeTypeFromBytes(mimeType, buffer);
 
-    return { buffer, mimeType: detectedMimeType };
+    return {
+      buffer,
+      mimeType: detectedMimeType,
+      shouldRewriteUri: Boolean(detectedMimeType && detectedMimeType !== mimeType?.toLowerCase()),
+    };
   }
 
-  const { base64, mimeType } = await imageUrlToBase64(uri);
-  return { buffer: Buffer.from(base64, 'base64'), mimeType };
+  const { base64, mimeType } = await imageUrlToBase64(uri, {
+    maxBytes: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
+  });
+  return { buffer: Buffer.from(base64, 'base64'), mimeType, shouldRewriteUri: false };
 };
 
 const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMimeType) => {
   const { default: sharp } = await import('sharp');
-  let image = sharp(buffer, { failOn: 'error' }).rotate();
+  let image = sharp(buffer, {
+    failOn: 'error',
+    limitInputPixels: MAX_MULTIMODAL_IMAGE_PIXELS,
+  }).rotate();
 
   // JPEG cannot retain transparency. Flatten onto white so transparent pixels do not
   // become black when the configured visual model only accepts JPEG input.
@@ -60,7 +75,14 @@ export const normalizeMultimodalImageItems = async (
 
     const source = await readImage(item.uri);
     if (source.mimeType && supportedFormatSet.has(source.mimeType as MultimodalImageMimeType)) {
-      normalizedItems.push(item);
+      normalizedItems.push(
+        source.shouldRewriteUri
+          ? {
+              ...item,
+              uri: `data:${source.mimeType};base64,${source.buffer.toString('base64')}`,
+            }
+          : item,
+      );
       continue;
     }
 
