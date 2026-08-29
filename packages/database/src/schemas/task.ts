@@ -12,7 +12,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
-import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
+import { createdAt, softDeleteColumns, timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { agentCronJobs } from './agentCronJob';
 import { documents } from './file';
@@ -101,6 +101,8 @@ export const tasks = pgTable(
     // Timestamps
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [

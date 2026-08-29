@@ -71,6 +71,8 @@ describe('generationBatchRouter', () => {
       ratio: null,
       config: null,
       accessedAt: new Date(),
+      deletedAt: null,
+      isDeleted: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -120,6 +122,8 @@ describe('generationBatchRouter', () => {
       ratio: null,
       config: null,
       accessedAt: new Date(),
+      deletedAt: null,
+      isDeleted: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -169,6 +173,8 @@ describe('generationBatchRouter', () => {
       ratio: null,
       config: null,
       accessedAt: new Date(),
+      deletedAt: null,
+      isDeleted: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -255,6 +261,8 @@ describe('generationBatchRouter', () => {
       ratio: null,
       config: null,
       accessedAt: new Date(),
+      deletedAt: null,
+      isDeleted: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -339,6 +347,8 @@ describe('generationBatchRouter', () => {
       ratio: null,
       config: null,
       accessedAt: new Date(),
+      deletedAt: null,
+      isDeleted: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
