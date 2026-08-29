@@ -209,14 +209,15 @@ class BrowserWebviewRegistry {
   private syncBounds(retained: RetainedWebview): void {
     if (!retained.visible || !retained.host) return;
     const bounds = retained.host.getBoundingClientRect();
-    const boundsKey = `${bounds.left},${bounds.top},${bounds.width},${bounds.height}`;
+    const clippedByAncestor = this.isClippedByCollapsedAncestor(retained.host);
+    const boundsKey = `${clippedByAncestor},${bounds.left},${bounds.top},${bounds.width},${bounds.height}`;
     if (retained.lastBoundsKey === boundsKey) return;
     retained.lastBoundsKey = boundsKey;
 
-    // A zero-sized Electron guest can leave its last compositor frame on screen while
-    // the sidebar collapses. Move it offscreen instead of asking Chromium to paint a
-    // zero-width surface; the latter shows up as a thin strip of the guest page.
-    if (bounds.width <= 0 || bounds.height <= 0) {
+    // The draggable panel keeps its fixed-width child mounted while its clipping
+    // ancestor collapses to zero. Checking the host alone therefore misses the
+    // closed state and leaves the guest's last compositor frame on screen.
+    if (clippedByAncestor || bounds.width <= 0 || bounds.height <= 0) {
       Object.assign(retained.webview.style, {
         height: '800px',
         left: '-10000px',
@@ -251,6 +252,22 @@ class BrowserWebviewRegistry {
       });
       if (!retained.restoreInteraction) retained.interactionBridge.style.pointerEvents = 'auto';
     }
+  }
+
+  private isClippedByCollapsedAncestor(host: HTMLElement): boolean {
+    let element = host.parentElement;
+    while (element && element !== document.body) {
+      const bounds = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      if (
+        (bounds.width <= 0 && style.overflowX !== 'visible') ||
+        (bounds.height <= 0 && style.overflowY !== 'visible')
+      ) {
+        return true;
+      }
+      element = element.parentElement;
+    }
+    return false;
   }
 
   private mountResizeBridge(retained: RetainedWebview): void {

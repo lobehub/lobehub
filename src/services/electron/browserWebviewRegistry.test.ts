@@ -155,6 +155,42 @@ describe('browserWebviewRegistry', () => {
     vi.useRealTimers();
   });
 
+  it('moves the guest offscreen when a collapsed ancestor clips a fixed-width host', async () => {
+    vi.useFakeTimers();
+
+    const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
+    let panelWidth = 360;
+    const panel = document.createElement('aside');
+    panel.style.overflow = 'hidden';
+    panel.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, top: 40, width: panelWidth }) as DOMRect;
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, right: 680, top: 40, width: 360 }) as DOMRect;
+    panel.append(viewport);
+    document.body.append(panel);
+
+    const attaching = browserWebviewRegistry.attach('clipped-topic', viewport);
+    const webview = document.querySelector<HTMLElement>('webview');
+    webview?.dispatchEvent(new Event('dom-ready'));
+    await vi.advanceTimersByTimeAsync(0);
+    await attaching;
+    expect(webview).toHaveStyle({ left: '320px', opacity: '1', width: '360px' });
+
+    panelWidth = 0;
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(webview).toHaveStyle({ left: '-10000px', opacity: '0', width: '1200px' });
+
+    panelWidth = 360;
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(webview).toHaveStyle({ left: '320px', opacity: '1', width: '360px' });
+
+    await browserWebviewRegistry.detach('clipped-topic', viewport);
+    vi.useRealTimers();
+  });
+
   it('forwards edge drags to the panel resize handle without shrinking the webview', async () => {
     const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
     const portalRoot = document.createElement('div');
@@ -162,6 +198,8 @@ describe('browserWebviewRegistry', () => {
     document.body.append(portalRoot);
     const draggablePanel = document.createElement('aside');
     draggablePanel.className = 'ant-draggable-panel';
+    draggablePanel.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, right: 680, top: 40, width: 360 }) as DOMRect;
     document.body.append(draggablePanel);
     const viewport = document.createElement('div');
     viewport.getBoundingClientRect = () =>
