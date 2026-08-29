@@ -167,24 +167,19 @@ export const UpdateNotification: React.FC = () => {
   if (rendererUpdateReady && !updateDownloaded && !updateAvailable) {
     return (
       <div className={styles.installLaterToast}>
-        {tElectron('updater.rendererUpdateReady')}
+        {tElectron('updater.updateReady')}
+        <BaseButton size={'small'} type={'text'} onClick={() => setRendererUpdateReady(false)}>
+          {tElectron('updater.ignore')}
+        </BaseButton>
         <BaseButton
           size={'small'}
-          type={'primary'}
+          type={'text'}
           onClick={() => {
             rendererOtaService.applyNow().catch(() => {});
           }}
         >
-          {tElectron('updater.refreshToApply')}
+          {tElectron('updater.upgradeNow')}
         </BaseButton>
-        <button
-          aria-label="Close"
-          className={styles.installLaterCloseButton}
-          type="button"
-          onClick={() => setRendererUpdateReady(false)}
-        >
-          <Icon icon={X} style={{ fontSize: 14 }} />
-        </button>
       </div>
     );
   }
