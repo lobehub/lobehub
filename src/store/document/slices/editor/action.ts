@@ -342,7 +342,7 @@ export class EditorActionImpl {
       try {
         result = await requestSave();
       } catch (error) {
-        result = await this.retrySaveAfterLockReclaim(id, doc.lockOwnerId, error, requestSave);
+        result = await this.retrySaveAfterLockReclaim(id, doc, error, requestSave);
       }
 
       // Mark as clean and update save status
@@ -398,34 +398,41 @@ export class EditorActionImpl {
    */
   private retrySaveAfterLockReclaim = async <T>(
     id: string,
-    lockOwnerId: string | undefined,
+    baseDoc: {
+      lastSavedContent?: string;
+      lastSavedEditorData?: unknown;
+      lockOwnerId?: string;
+    },
     error: unknown,
     requestSave: (expectedUpdatedAt?: Date) => Promise<T>,
   ): Promise<T> => {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
+    const lockOwnerId = baseDoc.lockOwnerId;
     if (errorCode !== 'CONFLICT' || !lockOwnerId) throw error;
 
     // The rejected lease may have belonged to ANOTHER member who saved and
     // released it between our failed save and this recovery — reclaiming a
     // now-free lease alone cannot tell that apart from a self conflict. Only
     // retry when the server's stored version (content AND editorData) is still
-    // exactly what this session last hydrated or saved, and pin the retried
-    // save to that verified version via `expectedUpdatedAt` — the server
-    // re-checks it atomically inside the write transaction, so a collaborator
-    // save landing at any point after this fetch fails the retry instead of
-    // being overwritten. Any mismatch keeps the original CONFLICT flow
-    // (read-only + rehydrate, unsaved content kept for copy-out).
+    // exactly the version THIS request was based on — `baseDoc` is the
+    // immutable store snapshot captured when the failed save started, not the
+    // live store, so an overlapping newer save from this same tab fails the
+    // check instead of being replayed over. The retried save is then pinned to
+    // that verified version via `expectedUpdatedAt`, which the server
+    // re-checks atomically inside the write transaction — a save landing at
+    // any point after this fetch fails the retry instead of being overwritten.
+    // Any mismatch keeps the original CONFLICT flow (read-only + rehydrate,
+    // unsaved content kept for copy-out).
     let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
     try {
       latest = await documentService.getDocumentById(id);
     } catch {
       throw error;
     }
-    const doc = this.#get().documents[id];
-    if (!latest?.updatedAt || !doc) throw error;
+    if (!latest?.updatedAt) throw error;
     const isKnownVersion =
-      (latest.content ?? '') === (doc.lastSavedContent ?? '') &&
-      isEqual(latest.editorData ?? null, doc.lastSavedEditorData ?? null);
+      (latest.content ?? '') === (baseDoc.lastSavedContent ?? '') &&
+      isEqual(latest.editorData ?? null, baseDoc.lastSavedEditorData ?? null);
     if (!isKnownVersion) throw error;
 
     let lockedByOther: boolean;

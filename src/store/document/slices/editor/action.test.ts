@@ -1030,6 +1030,55 @@ name: skill-name
       expect(result.current.documents['doc-1'].isDirty).toBe(true);
     });
 
+    it('does not retry when a newer save from this tab landed while the failed save was in flight', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+        data: { code: 'CONFLICT' },
+      });
+      // While this save is in flight, an overlapping newer save from the same
+      // tab completes and advances lastSaved* — then this save conflicts.
+      vi.mocked(documentService.updateDocument).mockImplementationOnce(async () => {
+        useDocumentStore.getState().internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lastSavedContent: '# Newer save' },
+        });
+        throw lockError;
+      });
+      vi.mocked(documentService.getDocumentById).mockResolvedValueOnce({
+        content: '# Newer save',
+        id: 'doc-1',
+        updatedAt: new Date('2026-01-01T00:00:20.000Z'),
+      } as any);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      // The recovery compares against the version THIS request was based on
+      // ('# Test'), not the live store — replaying the older payload over the
+      // newer save must be refused.
+      expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+    });
+
     it('releases the reclaimed lease when the CAS-guarded retry itself fails', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createValidMockEditor() as any;
