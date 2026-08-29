@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "匯入文稿",
   "pageEditor.menu.move": "移動",
   "pageEditor.menu.pin": "置頂文稿",
+  "pageEditor.saveFailed": "無法儲存頁面，請稍後再試",
   "pageEditor.saving": "儲存中...",
   "pageEditor.titlePlaceholder": "無標題",
   "pageEditor.wordCount": "{{wordCount}} 字",

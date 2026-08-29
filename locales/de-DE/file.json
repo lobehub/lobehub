@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Seite importieren",
   "pageEditor.menu.move": "Verschieben",
   "pageEditor.menu.pin": "Seite anheften",
+  "pageEditor.saveFailed": "Das Speichern der Seite ist fehlgeschlagen. Bitte versuchen Sie es später erneut.",
   "pageEditor.saving": "Speichern...",
   "pageEditor.titlePlaceholder": "Unbenannt",
   "pageEditor.wordCount": "{{wordCount}} Wörter",

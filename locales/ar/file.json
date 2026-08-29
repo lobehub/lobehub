@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "استيراد صفحة",
   "pageEditor.menu.move": "نقل",
   "pageEditor.menu.pin": "تثبيت الصفحة",
+  "pageEditor.saveFailed": "فشل حفظ الصفحة، يرجى المحاولة مرة أخرى لاحقًا",
   "pageEditor.saving": "جارٍ الحفظ...",
   "pageEditor.titlePlaceholder": "بدون عنوان",
   "pageEditor.wordCount": "{{wordCount}} كلمة",

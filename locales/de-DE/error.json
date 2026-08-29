@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "Die Verbindung zum Server hat eine Zeitüberschreitung verursacht. Dies deutet normalerweise auf ein lokales Netzwerkproblem hin — bitte überprüfen Sie Ihre Netzwerkqualität, Proxy- oder VPN-Einstellungen und versuchen Sie es erneut.",
   "response.RemoteServerUnreachable": "Der Server konnte nicht erreicht werden. Dies deutet normalerweise auf ein lokales Netzwerkproblem hin — bitte überprüfen Sie Ihre Internetverbindung, Proxy- oder VPN-Einstellungen und versuchen Sie es erneut.",
   "response.ServerAgentRuntimeError": "Agent-Dienst derzeit nicht verfügbar. Bitte später erneut versuchen.",
-  "response.SubscriptionKeyMismatch": "Ihr Abonnement ist derzeit inaktiv. Bitte klicken Sie unten, um es wiederherzustellen.",
   "response.SubscriptionPlanLimit": "Ihr Abonnement ist aufgebraucht. Bitte upgraden oder benutzerdefinierte API konfigurieren.",
   "response.SubscriptionPlanLimitUltimate": "Ihr Abonnement ist aufgebraucht. Bitte Guthaben aufladen oder API konfigurieren.",
   "response.SystemTimeNotMatchError": "Ihre Systemzeit stimmt nicht mit dem Server überein. Bitte Zeit prüfen.",

@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Importer une page",
   "pageEditor.menu.move": "Déplacer",
   "pageEditor.menu.pin": "Épingler la page",
+  "pageEditor.saveFailed": "Échec de l'enregistrement de la page, veuillez réessayer plus tard",
   "pageEditor.saving": "Enregistrement...",
   "pageEditor.titlePlaceholder": "Sans titre",
   "pageEditor.wordCount": "{{wordCount}} mots",

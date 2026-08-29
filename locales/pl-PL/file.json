@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Importuj stronę",
   "pageEditor.menu.move": "Przenieś",
   "pageEditor.menu.pin": "Przypnij stronę",
+  "pageEditor.saveFailed": "Nie udało się zapisać strony, spróbuj ponownie później",
   "pageEditor.saving": "Zapisywanie...",
   "pageEditor.titlePlaceholder": "Bez tytułu",
   "pageEditor.wordCount": "{{wordCount}} słów",

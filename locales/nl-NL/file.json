@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Pagina importeren",
   "pageEditor.menu.move": "Verplaatsen",
   "pageEditor.menu.pin": "Pagina vastzetten",
+  "pageEditor.saveFailed": "Het opslaan van de pagina is mislukt, probeer het later opnieuw",
   "pageEditor.saving": "Bezig met opslaan...",
   "pageEditor.titlePlaceholder": "Naamloos",
   "pageEditor.wordCount": "{{wordCount}} woorden",

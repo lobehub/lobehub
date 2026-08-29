@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Nhập Trang",
   "pageEditor.menu.move": "Di chuyển",
   "pageEditor.menu.pin": "Ghim Trang",
+  "pageEditor.saveFailed": "Không thể lưu trang, vui lòng thử lại sau",
   "pageEditor.saving": "Đang lưu...",
   "pageEditor.titlePlaceholder": "Chưa có tiêu đề",
   "pageEditor.wordCount": "{{wordCount}} từ",
