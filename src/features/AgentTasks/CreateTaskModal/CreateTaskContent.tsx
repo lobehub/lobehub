@@ -68,24 +68,23 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     // irrelevant and the chip is hidden anyway.
     const [visibility, setVisibility] = useState<'private' | 'public'>('public');
 
-    // A private agent can only run a private task. When the selected agent
-    // is private we force visibility back to private and lock the chip so
-    // the user can't pick Workspace.
     const assigneeVisibility = useAgentVisibility(assigneeAgentId);
     const isPrivateAgent = assigneeVisibility === 'private';
-    useEffect(() => {
-      if (isPrivateAgent && visibility === 'public') setVisibility('private');
-    }, [isPrivateAgent, visibility]);
-
-    // The mirror constraint: a task assigned to another member must stay
-    // visible to the workspace — a private task is creator-only, so the
-    // assignee could never see it. Selecting a member flips visibility to
-    // workspace and locks the chip.
     const selfUserId = useUserStore(userProfileSelectors.userId);
     const isOtherMemberAssignee = Boolean(assigneeUserId) && assigneeUserId !== selfUserId;
+
+    // Resolve the two visibility constraints in one place so an old draft or an
+    // externally privatized agent cannot make separate effects toggle forever.
+    // A private agent is the stronger constraint, so drop an incompatible member.
     useEffect(() => {
+      if (isPrivateAgent) {
+        if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+        if (visibility === 'public') setVisibility('private');
+        return;
+      }
+
       if (isOtherMemberAssignee && visibility === 'private') setVisibility('public');
-    }, [isOtherMemberAssignee, visibility]);
+    }, [isOtherMemberAssignee, isPrivateAgent, visibility]);
 
     const editor = useEditor();
     const instructionRef = useRef('');

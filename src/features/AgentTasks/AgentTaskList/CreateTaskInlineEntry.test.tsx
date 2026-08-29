@@ -72,6 +72,11 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ user: { id: 'self-user' } }),
+}));
+
 vi.mock('../features/TaskPriorityTag', () => ({
   default: ({ children }: { children?: ReactNode }) => (
     <div data-testid="priority">{children ?? 'priority'}</div>
@@ -79,8 +84,16 @@ vi.mock('../features/TaskPriorityTag', () => ({
 }));
 
 vi.mock('../features/AssigneeAgentSelector', () => ({
-  default: ({ children, onChange }: { children: ReactNode; onChange?: (id: string) => void }) => (
-    <div>
+  default: ({
+    children,
+    currentAgentId,
+    onChange,
+  }: {
+    children: ReactNode;
+    currentAgentId?: string;
+    onChange?: (id: string) => void;
+  }) => (
+    <div data-current-agent-id={currentAgentId ?? ''} data-testid="agent-selector">
       {children}
       <span data-testid="select-agent" onClick={() => onChange?.('agent-1')} />
     </div>
@@ -88,8 +101,16 @@ vi.mock('../features/AssigneeAgentSelector', () => ({
 }));
 
 vi.mock('../features/AssigneeMemberSelector', () => ({
-  default: ({ children, onChange }: { children: ReactNode; onChange?: (id: string) => void }) => (
-    <div>
+  default: ({
+    children,
+    currentUserId,
+    onChange,
+  }: {
+    children: ReactNode;
+    currentUserId?: string;
+    onChange?: (id: string) => void;
+  }) => (
+    <div data-current-user-id={currentUserId ?? ''} data-testid="member-selector">
       {children}
       <span data-testid="select-member" onClick={() => onChange?.('user-1')} />
     </div>
@@ -109,8 +130,20 @@ vi.mock('../shared/useUserDisplayMeta', () => ({
 }));
 
 vi.mock('../features/TaskVisibilityTag', () => ({
-  default: ({ children, lockedReason }: { children?: ReactNode; lockedReason?: string }) => (
-    <button data-locked={String(Boolean(lockedReason))} data-testid="visibility-trigger">
+  default: ({
+    children,
+    lockedReason,
+    visibility,
+  }: {
+    children?: ReactNode;
+    lockedReason?: string;
+    visibility: 'private' | 'public';
+  }) => (
+    <button
+      data-locked={String(Boolean(lockedReason))}
+      data-testid="visibility-trigger"
+      data-visibility={visibility}
+    >
       {children}
     </button>
   ),
@@ -133,6 +166,7 @@ describe('CreateTaskInlineEntry', () => {
     createTaskMock.mockResolvedValue({ identifier: 'task-1' });
     editorMarkdownMock.value = '';
     insertNewlineMock.mockReset();
+    localStorage.clear();
   });
 
   it('renders the task editor as disabled when the user cannot create content', () => {
@@ -203,5 +237,31 @@ describe('CreateTaskInlineEntry', () => {
         expect.objectContaining({ assigneeAgentId: 'agent-1', assigneeUserId: 'user-1' }),
       ),
     );
+  });
+
+  it('drops an incompatible restored member when the assigned agent is private', async () => {
+    localStorage.setItem(
+      'lobehub:task-create-draft:all',
+      JSON.stringify({
+        assigneeAgentId: 'agent-private',
+        assigneeUserId: 'user-1',
+        markdown: 'Coordinate a private task',
+        visibility: 'public',
+      }),
+    );
+
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-selector')).toHaveAttribute(
+        'data-current-agent-id',
+        'agent-private',
+      );
+      expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', '');
+      expect(screen.getByTestId('visibility-trigger')).toHaveAttribute(
+        'data-visibility',
+        'private',
+      );
+    });
   });
 });
