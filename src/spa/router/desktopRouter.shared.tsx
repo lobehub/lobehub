@@ -1170,6 +1170,16 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
             ),
             path: 'provider',
           },
+          // Path-shaped provider deep-links (`/:slug/settings/provider/:id`)
+          // redirect to the query form the workspace provider page uses, so
+          // they don't fall through to the catch-all and leave the workspace.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/[workspaceSlug]/settings/provider/redirect'),
+              'Desktop > Workspace > Settings > Provider > Redirect',
+            ),
+            path: 'provider/:providerId',
+          },
           {
             element: dynamicElement(
               () => import('@/routes/(main)/[workspaceSlug]/settings/skill'),
