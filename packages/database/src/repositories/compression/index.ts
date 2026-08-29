@@ -1,9 +1,9 @@
 import type { CompressionGroupMetadata } from '@lobechat/types';
 import { MessageGroupType } from '@lobechat/types';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import type { MessageGroupItem } from '../../schemas';
-import { messageGroups, messages } from '../../schemas';
+import { messageGroups, messages, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
@@ -33,6 +33,21 @@ export interface CompressionGroupResult {
   type: string | null;
 }
 
+export interface CompressionRepositoryOptions {
+  /**
+   * Refuse compression writes that touch Agent Share conversations.
+   *
+   * Share conversation rows are owned by the visitor, so the plain
+   * `userId × workspace` ownership predicates pass for them — but compression
+   * summaries are injected verbatim into the next creator-funded run
+   * (`GeneralChatAgent.findExistingSummary`), which would let a visitor smuggle
+   * unbounded prompt content past the share guards. Enabled only on the
+   * generic lambda message router; internal writers stay unguarded — see
+   * `MessageModelOptions.guardShareProvenance`.
+   */
+  guardShareProvenance?: boolean;
+}
+
 /**
  * Compression Repository - handles message compression operations
  */
@@ -40,12 +55,62 @@ export class CompressionRepository {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private guardShareProvenance: boolean;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: CompressionRepositoryOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.guardShareProvenance = options?.guardShareProvenance ?? false;
   }
+
+  private throwShareProvenance = (topicId: string): never => {
+    throw new Error(
+      `Topic ${topicId} belongs to an agent share; generic compression writes are not allowed on share conversations`,
+    );
+  };
+
+  private assertTopicsNotShareProvenance = async (topicIds: (string | null | undefined)[]) => {
+    if (!this.guardShareProvenance) return;
+    const ids = [...new Set(topicIds.filter((id): id is string => !!id))];
+    if (ids.length === 0) return;
+
+    const [shareTopic] = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(inArray(topics.id, ids), isNotNull(topics.shareId)))
+      .limit(1);
+    if (shareTopic) this.throwShareProvenance(shareTopic.id);
+  };
+
+  private assertGroupsNotShareProvenance = async (groupIds: string[]) => {
+    if (!this.guardShareProvenance || groupIds.length === 0) return;
+
+    const [shareGroup] = await this.db
+      .select({ topicId: messageGroups.topicId })
+      .from(messageGroups)
+      .innerJoin(topics, eq(topics.id, messageGroups.topicId))
+      .where(and(inArray(messageGroups.id, groupIds), isNotNull(topics.shareId)))
+      .limit(1);
+    if (shareGroup?.topicId) this.throwShareProvenance(shareGroup.topicId);
+  };
+
+  private assertMessagesNotShareProvenance = async (messageIds: string[]) => {
+    if (!this.guardShareProvenance || messageIds.length === 0) return;
+
+    const [shareMessage] = await this.db
+      .select({ topicId: messages.topicId })
+      .from(messages)
+      .innerJoin(topics, eq(topics.id, messages.topicId))
+      .where(and(inArray(messages.id, messageIds), isNotNull(topics.shareId)))
+      .limit(1);
+    if (shareMessage?.topicId) this.throwShareProvenance(shareMessage.topicId);
+  };
 
   private groupsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups);
@@ -58,6 +123,8 @@ export class CompressionRepository {
    */
   async createCompressionGroup(params: CreateCompressionGroupParams): Promise<string> {
     const { topicId, content, editorData, messageIds, metadata } = params;
+
+    await this.assertTopicsNotShareProvenance([topicId]);
 
     // Store metadata in the description field as JSON string
     const description = JSON.stringify(metadata);
@@ -125,6 +192,8 @@ export class CompressionRepository {
     content: string,
     metadata?: Partial<CompressionGroupMetadata>,
   ): Promise<void> {
+    await this.assertGroupsNotShareProvenance([groupId]);
+
     const updateData: Record<string, unknown> = {
       content,
       updatedAt: new Date(),
@@ -154,6 +223,9 @@ export class CompressionRepository {
    */
   async finalizeCompressionGroup(params: FinalizeCompressionGroupParams): Promise<void> {
     const { content, groupId, topicId } = params;
+
+    await this.assertTopicsNotShareProvenance([topicId]);
+
     const requestedSourceGroupIds = [
       ...new Set((params.sourceGroupIds ?? []).filter((id) => id !== groupId)),
     ];
@@ -217,6 +289,8 @@ export class CompressionRepository {
     groupId: string,
     metadata: Partial<CompressionGroupMetadata>,
   ): Promise<void> {
+    await this.assertGroupsNotShareProvenance([groupId]);
+
     // Get existing metadata and merge
     const existing = await this.db
       .select({ metadata: messageGroups.metadata })
@@ -238,6 +312,8 @@ export class CompressionRepository {
   async markMessagesAsCompressed(messageIds: string[], groupId: string): Promise<void> {
     if (messageIds.length === 0) return;
 
+    await this.assertMessagesNotShareProvenance(messageIds);
+
     await this.db
       .update(messages)
       .set({ messageGroupId: groupId })
@@ -250,6 +326,8 @@ export class CompressionRepository {
   async unmarkMessagesFromCompression(messageIds: string[]): Promise<void> {
     if (messageIds.length === 0) return;
 
+    await this.assertMessagesNotShareProvenance(messageIds);
+
     await this.db
       .update(messages)
       .set({ messageGroupId: null })
@@ -260,6 +338,8 @@ export class CompressionRepository {
    * Toggle pin status for a message
    */
   async toggleMessagePin(messageId: string, pinned: boolean): Promise<void> {
+    await this.assertMessagesNotShareProvenance([messageId]);
+
     // Get current metadata
     const [message] = await this.db
       .select({ metadata: messages.metadata })
@@ -309,6 +389,8 @@ export class CompressionRepository {
    * Delete a compression group and unmark all associated messages
    */
   async deleteCompressionGroup(groupId: string): Promise<void> {
+    await this.assertGroupsNotShareProvenance([groupId]);
+
     // 1. Unmark all messages
     await this.db
       .update(messages)

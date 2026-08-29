@@ -107,7 +107,12 @@ export class MessageService {
   ) {
     this.messageModel = new MessageModel(db, userId, workspaceId, messageModelOptions);
     this.fileService = new FileService(db, userId, workspaceId);
-    this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
+    this.compressionRepository = new CompressionRepository(db, userId, workspaceId, {
+      // Compression summaries feed the next creator-funded run, so the trpc
+      // compression mutations must respect the same share wall — see
+      // `CompressionRepositoryOptions.guardShareProvenance`.
+      guardShareProvenance: messageModelOptions?.guardShareProvenance,
+    });
   }
 
   /**

@@ -60,7 +60,9 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
   return opts.next({
     ctx: {
-      compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId),
+      compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId, {
+        guardShareProvenance: true,
+      }),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId, messageModelOptions),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId, messageModelOptions),
