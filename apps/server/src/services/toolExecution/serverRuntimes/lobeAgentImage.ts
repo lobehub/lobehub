@@ -24,7 +24,12 @@ const MAX_MULTIMODAL_IMAGE_PREPARATION_MS = 30_000;
 /** Share the same decompression-bomb ceiling across validation and transcoding. */
 export const MAX_MULTIMODAL_IMAGE_PIXELS = 25_000_000;
 
-const readImage = async (item: MediaFileItem, signal: AbortSignal, deadlineAt: number) => {
+const readImage = async (
+  item: MediaFileItem,
+  signal: AbortSignal,
+  deadlineAt: number,
+  authorizedUrl?: string,
+) => {
   const { uri } = item;
 
   if (/^data:image\//i.test(uri)) {
@@ -41,12 +46,8 @@ const readImage = async (item: MediaFileItem, signal: AbortSignal, deadlineAt: n
     };
   }
 
-  /**
-   * Stable file IDs prove this URL came from a stored attachment record. Allow only
-   * configured app/storage origins so self-hosted private endpoints remain reachable.
-   */
-  if (item.id) {
-    const buffer = await fetchCappedBuffer(uri, {
+  if (authorizedUrl) {
+    const buffer = await fetchCappedBuffer(authorizedUrl, {
       allowConfiguredOrigins: true,
       limit: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
       timeoutMs: Math.max(1, deadlineAt - Date.now()),
@@ -95,6 +96,7 @@ const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMim
 export const normalizeMultimodalImageItems = async (
   items: MediaFileItem[],
   supportedFormats: MultimodalImageMimeType[],
+  authorizedImageUrls: ReadonlyMap<string, string> = new Map(),
 ) => {
   const supportedFormatSet = new Set(supportedFormats);
   const targetMimeType = supportedFormats[0];
@@ -111,7 +113,12 @@ export const normalizeMultimodalImageItems = async (
       continue;
     }
 
-    const source = await readImage(item, signal, deadlineAt);
+    const source = await readImage(
+      item,
+      signal,
+      deadlineAt,
+      item.id ? authorizedImageUrls.get(item.id) : undefined,
+    );
     if (source.mimeType && supportedFormatSet.has(source.mimeType as MultimodalImageMimeType)) {
       preparedImageBytes = consumePreparationBudget(preparedImageBytes, source.buffer.byteLength);
       normalizedItems.push(

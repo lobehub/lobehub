@@ -12,6 +12,8 @@ const mockToolsEnv = vi.hoisted(() => ({
 }));
 const mockMessageModelQueryByIds = vi.hoisted(() => vi.fn());
 const mockMessageModelQuery = vi.hoisted(() => vi.fn());
+const mockFileModelFindByIds = vi.hoisted(() => vi.fn());
+const mockGetFileAccessUrl = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
@@ -59,8 +61,15 @@ vi.mock('@/database/models/message', () => ({
   })),
 }));
 
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn().mockImplementation(() => ({
+    findByIds: (...args: unknown[]) => mockFileModelFindByIds(...args),
+  })),
+}));
+
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({
+    getFileAccessUrl: (...args: unknown[]) => mockGetFileAccessUrl(...args),
     getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
   })),
 }));
@@ -130,6 +139,10 @@ describe('lobeAgentRuntime', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFileModelFindByIds.mockResolvedValue([]);
+    mockGetFileAccessUrl.mockImplementation(({ url }: { url?: string | null }) =>
+      Promise.resolve(url || ''),
+    );
     mockMessageModelQuery.mockResolvedValue([]);
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS = ['image/png', 'image/jpeg'];
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
@@ -511,6 +524,10 @@ describe('lobeAgentRuntime', () => {
     mockMessageModelQueryByIds.mockResolvedValue([
       { id: 'msg-1', role: 'tool', topicId: 'topic-1' },
     ]);
+    mockFileModelFindByIds.mockResolvedValue([
+      { id: 'file-tool-image', url: 'stored/tool-image.png' },
+    ]);
+    mockGetFileAccessUrl.mockResolvedValue('http://localhost:9000/trusted-tool-image.png');
     mockMessageModelQuery.mockResolvedValue([
       {
         id: 'msg-read-file',
@@ -520,7 +537,7 @@ describe('lobeAgentRuntime', () => {
             {
               fileId: 'file-tool-image',
               mediaType: 'image/png',
-              url: 'http://localhost:9000/tool-image.png',
+              url: 'http://localhost:9000/forged-tool-image.png',
             },
           ],
         },
@@ -536,8 +553,9 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(mockFileModelFindByIds).toHaveBeenCalledWith(['file-tool-image']);
     expect(mockFetchCappedBuffer).toHaveBeenCalledWith(
-      'http://localhost:9000/tool-image.png',
+      'http://localhost:9000/trusted-tool-image.png',
       expect.objectContaining({
         allowConfiguredOrigins: true,
         limit: 20 * 1024 * 1024,
@@ -569,6 +587,51 @@ describe('lobeAgentRuntime', () => {
         ],
       }),
       expect.anything(),
+    );
+  });
+
+  it('should not trust forged file ids from durable tool-result images', async () => {
+    const toolImageRef = createMediaFileRef({
+      index: 0,
+      messageId: 'msg-read-file',
+      type: 'image',
+    });
+    mockMessageModelQueryByIds.mockResolvedValue([
+      { id: 'msg-1', role: 'tool', topicId: 'topic-1' },
+    ]);
+    mockMessageModelQuery.mockResolvedValue([
+      {
+        id: 'msg-read-file',
+        pluginState: {
+          images: [
+            {
+              fileId: 'forged-file-id',
+              mediaType: 'image/png',
+              url: 'http://localhost:9000/private.png',
+            },
+          ],
+        },
+        role: 'tool',
+        topicId: 'topic-1',
+      },
+    ]);
+    mockImageUrlToBase64.mockRejectedValue(new TypeError('Private address blocked'));
+    const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is in the image?',
+      refs: [toolImageRef],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
+      success: false,
+    });
+    expect(mockFileModelFindByIds).toHaveBeenCalledWith(['forged-file-id']);
+    expect(mockFetchCappedBuffer).not.toHaveBeenCalled();
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith(
+      'http://localhost:9000/private.png',
+      expect.objectContaining({ maxBytes: 20 * 1024 * 1024 }),
     );
   });
 

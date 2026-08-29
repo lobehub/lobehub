@@ -24,6 +24,7 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 
+import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -110,6 +111,34 @@ const getModelAbilities = async (model: string, provider: string) => {
     builtinModels.find((item) => item.id === model && item.providerId === provider) ??
     builtinModels.find((item) => item.id === model)
   )?.abilities;
+};
+
+/**
+ * Resolve image IDs through the current user's file scope before their URLs may
+ * use configured private origins. Tool-result state can contain arbitrary IDs
+ * and URLs, so the MediaFileItem values themselves are not authorization proof.
+ */
+const resolveAuthorizedImageUrls = async (
+  items: MediaFileItem[],
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId?: string,
+) => {
+  const fileIds = [
+    ...new Set(items.flatMap((item) => (item.type === 'image' && item.id ? [item.id] : []))),
+  ];
+  if (fileIds.length === 0) return new Map<string, string>();
+
+  const files = await new FileModel(db, userId, workspaceId).findByIds(fileIds);
+  const fileService = new FileService(db, userId, workspaceId);
+  const entries = await Promise.all(
+    files.map(
+      async (file) =>
+        [file.id, await fileService.getFileAccessUrl({ id: file.id, url: file.url })] as const,
+    ),
+  );
+
+  return new Map(entries);
 };
 
 interface ServerMediaSourceMessage extends MediaSourceMessage {
@@ -418,9 +447,16 @@ class LobeAgentExecutionRuntime {
     let modelItems = selectedItems;
     if (hasImages) {
       try {
+        const authorizedImageUrls = await resolveAuthorizedImageUrls(
+          selectedItems,
+          this.db,
+          this.userId,
+          this.workspaceId,
+        );
         modelItems = await normalizeMultimodalImageItems(
           selectedItems,
           toolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS,
+          authorizedImageUrls,
         );
       } catch (error) {
         console.error('Failed to prepare images for multimodal understanding:', {
