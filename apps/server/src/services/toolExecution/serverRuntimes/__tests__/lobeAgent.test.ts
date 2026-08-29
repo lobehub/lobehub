@@ -178,6 +178,42 @@ describe('lobeAgentRuntime', () => {
     await expect(sharp(convertedBuffer).metadata()).resolves.toMatchObject({ format: 'png' });
   });
 
+  it('should flatten transparent images onto white when transcoding to JPEG', async () => {
+    const { default: sharp } = await import('sharp');
+    const transparentWebp = await sharp({
+      create: {
+        background: { alpha: 0, b: 0, g: 0, r: 0 },
+        channels: 4,
+        height: 1,
+        width: 1,
+      },
+    })
+      .webp({ lossless: true })
+      .toBuffer();
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS = ['image/jpeg', 'image/png'];
+    mockImageUrlToBase64.mockResolvedValueOnce({
+      base64: transparentWebp.toString('base64'),
+      mimeType: 'image/webp',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/transparent.webp'],
+    });
+
+    expect(result.success).toBe(true);
+    const [payload] = mockChat.mock.calls[0];
+    const imagePart = payload.messages[0].content.find(
+      (part: { type: string }) => part.type === 'image_url',
+    );
+    expect(imagePart.image_url.url).toMatch(/^data:image\/jpeg;base64,/);
+
+    const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
+    const pixel = await sharp(convertedBuffer).raw().toBuffer();
+    expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
+  });
+
   it('should detect suffixless images after downloading without transcoding supported formats', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 

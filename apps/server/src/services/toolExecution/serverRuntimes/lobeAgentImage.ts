@@ -40,9 +40,14 @@ const readImage = async (uri: string) => {
   return { base64, buffer: Buffer.from(base64, 'base64'), mimeType: normalizeMimeType(mimeType) };
 };
 
+/** Transcode images, using white for alpha pixels because JPEG cannot preserve transparency. */
 const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMimeType) => {
   const { default: sharp } = await import('sharp');
-  return sharp(buffer).rotate().toFormat(SHARP_FORMAT_BY_MIME_TYPE[targetMimeType]).toBuffer();
+  const image = sharp(buffer).rotate();
+
+  if (targetMimeType === 'image/jpeg') image.flatten({ background: '#fff' });
+
+  return image.toFormat(SHARP_FORMAT_BY_MIME_TYPE[targetMimeType]).toBuffer();
 };
 
 /** Convert only image formats that the configured visual fallback does not accept. */
