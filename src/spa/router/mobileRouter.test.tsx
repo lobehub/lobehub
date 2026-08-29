@@ -35,9 +35,9 @@ describe('mobileRouter workspace provider routes', () => {
     // The mobile route must use the mobile variant, otherwise the page renders
     // the desktop 280px provider menu layout on phones.
     expect(source).toContain('m.WorkspaceProviderSettingMobile');
-    expect(source).toContain(
-      "import('@/routes/(main)/[workspaceSlug]/settings/provider/redirect')",
-    );
+    // The redirect is statically imported: lazy-loading it would flash the
+    // generic brand loader before redirecting.
+    expect(source).toContain("from '@/features/WorkspaceSetting/ProviderRedirect'");
     expect(source).toContain("path: 'provider'");
     expect(source).toContain("path: 'provider/:providerId'");
   });
