@@ -38,7 +38,6 @@ const prefixes = {
   threads: 'thd',
   topicComments: 'tcm',
   topics: 'tpc',
-  trashItems: 'trash',
   user: 'user',
   workspaceAuditLogs: 'wal',
   workspaceInvitations: 'wsi',

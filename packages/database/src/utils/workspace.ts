@@ -1,10 +1,12 @@
 import { and, eq, getTableName, isNull, or, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
+import { notTrashed } from './softDelete';
+
 /**
  * Tables carrying the recycle-bin columns (`softDeleteColumns()` in
  * `schemas/_helpers.ts`). For these, `buildWorkspaceWhere` transparently adds
- * `is_deleted = false` whenever the caller passes the whole table (or a `cols`
+ * `is_deleted IS NOT TRUE` whenever the caller passes the whole table (or a `cols`
  * object carrying `isDeleted`), so a trashed row is invisible to every
  * ownership-scoped read in the codebase — models, repositories and services
  * alike — without each of the ~250 call sites opting in.
@@ -109,7 +111,7 @@ export function buildWorkspaceWhere(
 ): SQL {
   const base = buildScopeWhere(ctx, cols);
   if (ctx.includeTrashed || !isTrashFlag(cols.isDeleted)) return base;
-  return and(base, eq(cols.isDeleted, false)) as SQL;
+  return and(base, notTrashed(cols.isDeleted)) as SQL;
 }
 
 function buildScopeWhere(

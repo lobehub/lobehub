@@ -189,8 +189,8 @@ export class TaskModel {
     return this.workspaceId
       ? sql`${prefix}workspace_id = ${this.workspaceId}
             AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})
-            AND ${prefix}is_deleted = false`
-      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL AND ${prefix}is_deleted = false`;
+            AND ${prefix}is_deleted IS NOT TRUE`
+      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL AND ${prefix}is_deleted IS NOT TRUE`;
   };
 
   private buildListConditions = ({
