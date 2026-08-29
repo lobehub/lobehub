@@ -102,6 +102,37 @@ describe('MessageModel guardShareProvenance', () => {
       expect(result.success).toBe(true);
     });
 
+    it('refuses the alternate state mutations on share rows', async () => {
+      await serverDB.insert(messagePlugins).values({ id: 'share-msg', userId: visitorId });
+
+      await expect(
+        guardedModel.updatePluginState('share-msg', { images: ['data:huge'] }),
+      ).rejects.toThrow(/belongs to an agent share/);
+      await expect(guardedModel.updateMetadata('share-msg', { anything: 'x' })).rejects.toThrow(
+        /belongs to an agent share/,
+      );
+      await expect(
+        guardedModel.updateMessageRAG('share-msg', { fileChunks: [], ragQueryId: 'q-1' }),
+      ).rejects.toThrow(/belongs to an agent share/);
+      await expect(guardedModel.updateTranslate('share-msg', { content: 'x' })).rejects.toThrow(
+        /belongs to an agent share/,
+      );
+      await expect(guardedModel.updateTTS('share-msg', { voice: 'alloy' })).rejects.toThrow(
+        /belongs to an agent share/,
+      );
+      await expect(guardedModel.addFiles('share-msg', ['file-1'])).rejects.toThrow(
+        /belongs to an agent share/,
+      );
+    });
+
+    it('still runs the alternate state mutations on ordinary rows', async () => {
+      await guardedModel.updateMetadata('plain-msg', { anything: 'x' });
+      await guardedModel.updateTranslate('plain-msg', { content: 'translated' });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'plain-msg'));
+      expect(row.metadata).toMatchObject({ anything: 'x' });
+    });
+
     it('refuses updateMessagePlugin and updateToolArguments on share rows', async () => {
       await serverDB.insert(messages).values([
         {

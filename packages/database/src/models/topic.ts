@@ -1920,6 +1920,22 @@ export class TopicModel {
   batchMoveToAgent = async (topicIds: string[], targetAgentId: string) => {
     if (topicIds.length === 0) return;
 
+    // Moving a share topic to another agent would detach it from
+    // `countVisitorShareTopics`' (agentId × shareId) predicate and refund a
+    // `maxTopicsPerVisitor` slot, so guarded (generic-API) moves exclude share
+    // rows the same way batchDelete does — see
+    // `TopicModelOptions.guardShareProvenance`.
+    let movableTopicIds = topicIds;
+    if (this.guardShareProvenance) {
+      const shareRows = await this.db
+        .select({ id: topics.id })
+        .from(topics)
+        .where(and(inArray(topics.id, topicIds), isNotNull(topics.shareId)));
+      const shareTopicIds = new Set(shareRows.map((row) => row.id));
+      movableTopicIds = topicIds.filter((id) => !shareTopicIds.has(id));
+      if (movableTopicIds.length === 0) return;
+    }
+
     return this.db.transaction(async (tx) => {
       const [targetAgent] = await tx
         .select({ id: agents.id })
@@ -1939,19 +1955,19 @@ export class TopicModel {
       await tx
         .update(topics)
         .set({ agentId: targetAgentId, sessionId: null, updatedAt: new Date() })
-        .where(and(inArray(topics.id, topicIds), this.ownership()));
+        .where(and(inArray(topics.id, movableTopicIds), this.ownership()));
 
       await tx
         .update(messages)
         .set({ agentId: targetAgentId, sessionId: null })
-        .where(and(inArray(messages.topicId, topicIds), this.messageOwnership()));
+        .where(and(inArray(messages.topicId, movableTopicIds), this.messageOwnership()));
 
       await tx
         .update(threads)
         .set({ agentId: targetAgentId })
         .where(
           and(
-            inArray(threads.topicId, topicIds),
+            inArray(threads.topicId, movableTopicIds),
             buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
           ),
         );

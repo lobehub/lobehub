@@ -79,6 +79,22 @@ describe('TopicModel guardShareProvenance', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('excludes share topics from batchMoveToAgent — the quota-refund-by-move path', async () => {
+    await serverDB
+      .insert(agents)
+      .values({ id: 'guarded-visitor-agent', title: 'Mine', userId: visitorId });
+
+    await guardedModel.batchMoveToAgent(
+      ['guarded-share-topic', 'guarded-plain-topic'],
+      'guarded-visitor-agent',
+    );
+
+    const rows = await serverDB.select().from(topics).orderBy(topics.id);
+    const byId = Object.fromEntries(rows.map((row) => [row.id, row.agentId]));
+    expect(byId['guarded-share-topic']).toBe(agentId);
+    expect(byId['guarded-plain-topic']).toBe('guarded-visitor-agent');
+  });
+
   it('refuses to settle a running operation on a share topic', async () => {
     await serverDB
       .update(topics)

@@ -1026,6 +1026,34 @@ export class MessageModel {
   };
 
   /**
+   * Same wall keyed by message id: resolves each target message's topic and
+   * refuses share-provenance rows. Used by the alternate state mutations
+   * (plugin state, metadata, RAG, translate, TTS, file attach) whose payloads
+   * are loaded back into the dispatched history of the next creator-funded
+   * run — see `MessageModelOptions.guardShareProvenance`.
+   */
+  private assertMessageTargetsNotShareProvenance = async (
+    messageIds: (string | null | undefined)[],
+  ) => {
+    if (!this.guardShareProvenance) return;
+
+    const ids = [...new Set(messageIds.filter((id): id is string => !!id))];
+    if (ids.length === 0) return;
+
+    const [shareMessage] = await this.db
+      .select({ topicId: messages.topicId })
+      .from(messages)
+      .innerJoin(topics, eq(topics.id, messages.topicId))
+      .where(and(inArray(messages.id, ids), isNotNull(topics.shareId)))
+      .limit(1);
+
+    if (shareMessage?.topicId)
+      throw new Error(
+        `Topic ${shareMessage.topicId} belongs to an agent share; generic message writes are not allowed on share conversations`,
+      );
+  };
+
+  /**
    * Extra predicate for guarded bulk sweeps: keep only messages whose topic is
    * NOT share-provenance (messages without a topic always pass). Also applied
    * to the share-run snapshot scope so a run whose messages are not being
@@ -3450,6 +3478,8 @@ export class MessageModel {
   };
 
   updateMetadata = async (id: string, metadata: Record<string, any>) => {
+    await this.assertMessageTargetsNotShareProvenance([id]);
+
     const item = await this.db.query.messages.findFirst({
       where: and(eq(messages.id, id), this.ownership()),
     });
@@ -3467,6 +3497,9 @@ export class MessageModel {
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
+    // `messagePlugins.id` IS the tool message id, so the message-id wall applies.
+    await this.assertMessageTargetsNotShareProvenance([id]);
+
     const updated = await this.db
       .update(messagePlugins)
       .set({
@@ -4335,6 +4368,8 @@ export class MessageModel {
   };
 
   updateTranslate = async (id: string, translate: Partial<ChatTranslate>) => {
+    await this.assertMessageTargetsNotShareProvenance([id]);
+
     const result = await this.db.query.messageTranslates.findFirst({
       where: and(eq(messageTranslates.id, id), this.translatesOwnership()),
     });
@@ -4361,6 +4396,8 @@ export class MessageModel {
     // Older clients sent an empty payload when starting TTS, so keep this backward-compatible.
     if ([contentMd5, file, voice].every((value) => value === undefined)) return;
 
+    await this.assertMessageTargetsNotShareProvenance([id]);
+
     const result = await this.db.query.messageTTS.findFirst({
       where: and(eq(messageTTS.id, id), this.ttsOwnership()),
     });
@@ -4385,6 +4422,8 @@ export class MessageModel {
   };
 
   async updateMessageRAG(id: string, { ragQueryId, fileChunks }: UpdateMessageRAGParams) {
+    await this.assertMessageTargetsNotShareProvenance([id]);
+
     return this.db.insert(messageQueryChunks).values(
       fileChunks.map((chunk) => ({
         chunkId: chunk.id,
@@ -4691,6 +4730,10 @@ export class MessageModel {
     // otherwise a caller could attach files to another tenant's message.
     const message = await this.findById(messageId);
     if (!message) return { success: false };
+
+    // Keep the wall check outside the try below — the catch flattens every
+    // error into `{ success: false }` and would swallow the refusal.
+    await this.assertMessageTargetsNotShareProvenance([messageId]);
 
     try {
       await this.db.insert(messagesFiles).values(
