@@ -7,6 +7,7 @@ import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
 
 // @ts-ignore tsgo handle esm import cjs and compatibility issues
 import { DB_FAIL_INIT_HINT, DUPLICATE_EMAIL_HINT, PGVECTOR_HINT } from './errorHint';
+import { runMigrationWithLockRetry } from './retry';
 
 // Load environment variables in priority order:
 // 1. .env (lowest priority)
@@ -24,11 +25,13 @@ const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
 
   const time = Date.now();
-  if (process.env.DATABASE_DRIVER === 'node') {
-    await nodeMigrate(serverDB, { migrationsFolder });
-  } else {
-    await neonMigrate(serverDB, { migrationsFolder });
-  }
+  await runMigrationWithLockRetry(async () => {
+    if (process.env.DATABASE_DRIVER === 'node') {
+      await nodeMigrate(serverDB, { migrationsFolder });
+    } else {
+      await neonMigrate(serverDB, { migrationsFolder });
+    }
+  });
 
   console.log('✅ database migration pass. use: %s ms', Date.now() - time);
 

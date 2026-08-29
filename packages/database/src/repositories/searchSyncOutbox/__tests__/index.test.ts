@@ -103,6 +103,7 @@ describe('SearchSyncOutboxRepository', () => {
     const migrationSql = migration.sql.join('\n');
 
     expect(migrationSql).toContain('CREATE TRIGGER');
+    expect(migrationSql).toContain("set_config('lock_timeout', '3s', true)");
     expect(migrationSql).toContain('user_memories_contexts_user_memory_ids_gin_idx');
     expect(migrationSql).not.toContain('CREATE TABLE IF NOT EXISTS "search_sync_settings"');
   });
