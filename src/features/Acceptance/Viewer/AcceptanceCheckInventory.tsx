@@ -233,7 +233,6 @@ const AcceptanceCheckInventory = ({
         )}
       </Flexbox>
       {children}
-      <AcceptanceInteractionCost data={data} />
       <CheckList
         canReview={canReview}
         checks={checks}
@@ -304,6 +303,9 @@ const AcceptanceCheckInventory = ({
           })
         }
       />
+      {/* After the list, never inside it: the checks are the decision surface,
+          and a row sitting among them reads as one more thing to review. */}
+      <AcceptanceInteractionCost data={data} />
     </>
   );
 };
