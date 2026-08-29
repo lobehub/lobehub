@@ -226,8 +226,9 @@ What is specific to this repository:
   an explicit instruction first; else the current conversation's `topic:<id>` (the
   default for iterative fixes and review follow-ups); else an existing `task:<id>`
   that already owns the deliverable; else `document:<id>` when the document is the
-  subject; and only then a new Task via `lh task create`. Inside a LobeHub topic,
-  ingest uses `LOBEHUB_TOPIC_ID` automatically — do not ask the user for it. A
+  subject; and only then a new Task via `lh task create`. When the run was started
+  from a conversation, ingest attaches to it on its own — pass `--subject` only to
+  override that, and never ask the user for an id the CLI already resolves. A
   terminal Acceptance on the right Topic means a **new Acceptance on that same
   Topic**, never a new Task invented to dodge it.
 
