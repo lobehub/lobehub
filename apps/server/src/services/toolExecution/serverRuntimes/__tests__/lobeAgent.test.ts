@@ -18,7 +18,6 @@ const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
 const mockFetchCappedBuffer = vi.hoisted(() => vi.fn());
-const mockImageUrlToBase64 = vi.hoisted(() => vi.fn());
 const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
@@ -86,11 +85,6 @@ vi.mock('@/server/services/bot/platforms/loadAttachmentBuffer', () => ({
   fetchCappedBuffer: (...args: unknown[]) => mockFetchCappedBuffer(...args),
 }));
 
-vi.mock('@lobechat/utils', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  imageUrlToBase64: (...args: unknown[]) => mockImageUrlToBase64(...args),
-}));
-
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels: vi.fn().mockResolvedValue(mockBuiltinModels),
 }));
@@ -155,10 +149,6 @@ describe('lobeAgentRuntime', () => {
     mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
     mockConsumeStreamUntilDone.mockResolvedValue(undefined);
     mockFetchCappedBuffer.mockResolvedValue(Buffer.from(VALID_PNG_BASE64, 'base64'));
-    mockImageUrlToBase64.mockResolvedValue({
-      base64: VALID_PNG_BASE64,
-      mimeType: 'image/png',
-    });
   });
 
   it('should transcode unsupported images before calling the multimodal model', async () => {
@@ -211,7 +201,7 @@ describe('lobeAgentRuntime', () => {
   });
 
   it('should fail before calling the multimodal model when image preparation fails', async () => {
-    mockImageUrlToBase64.mockRejectedValueOnce(new Error('download failed'));
+    mockFetchCappedBuffer.mockResolvedValueOnce(undefined);
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeMedia({
@@ -226,11 +216,27 @@ describe('lobeAgentRuntime', () => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
-  it('should reject images that exceed the aggregate preparation budget', async () => {
-    mockImageUrlToBase64.mockResolvedValue({
-      base64: Buffer.alloc(11 * 1024 * 1024).toString('base64'),
-      mimeType: 'image/png',
+  it('should reject corrupted remote images before calling the multimodal model', async () => {
+    const corruptedBase64 = createCorruptedPngDataUrl().split(',')[1];
+    mockFetchCappedBuffer.mockResolvedValue(Buffer.from(corruptedBase64, 'base64'));
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/corrupted.png'],
     });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
+      success: false,
+    });
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('should reject images that exceed the aggregate preparation budget', async () => {
+    mockFetchCappedBuffer.mockResolvedValue(
+      Buffer.concat([Buffer.from(VALID_PNG_BASE64, 'base64'), Buffer.alloc(11 * 1024 * 1024)]),
+    );
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeMedia({
@@ -457,18 +463,22 @@ describe('lobeAgentRuntime', () => {
 
     const result = await runtime.analyzeMedia({
       question: 'what is this?',
-      urls: ['http://example.com/generated.png', VALID_PNG_DATA_URL, 'data:audio/mpeg;base64,abcd'],
+      urls: [
+        'http://example.com/generated.png?X-Amz-Signature=secret',
+        VALID_PNG_DATA_URL,
+        'data:audio/mpeg;base64,abcd',
+      ],
     });
 
     expect(result.success).toBe(true);
-    expect(mockImageUrlToBase64).toHaveBeenCalledWith(
-      'http://example.com/generated.png',
+    expect(mockFetchCappedBuffer).toHaveBeenCalledWith(
+      'http://example.com/generated.png?X-Amz-Signature=secret',
       expect.objectContaining({
-        maxBytes: 20 * 1024 * 1024,
-        signal: expect.any(AbortSignal),
+        allowConfiguredOrigins: false,
+        limit: 20 * 1024 * 1024,
+        timeoutMs: expect.any(Number),
       }),
     );
-    expect(mockFetchCappedBuffer).not.toHaveBeenCalled();
     expect(mockSharpOptions).toHaveBeenCalledWith(
       expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
     );
@@ -562,7 +572,6 @@ describe('lobeAgentRuntime', () => {
         timeoutMs: expect.any(Number),
       }),
     );
-    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({
       files: [
         {
@@ -615,7 +624,7 @@ describe('lobeAgentRuntime', () => {
         topicId: 'topic-1',
       },
     ]);
-    mockImageUrlToBase64.mockRejectedValue(new TypeError('Private address blocked'));
+    mockFetchCappedBuffer.mockResolvedValue(undefined);
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
     const result = await runtime.analyzeMedia({
@@ -628,10 +637,9 @@ describe('lobeAgentRuntime', () => {
       success: false,
     });
     expect(mockFileModelFindByIds).toHaveBeenCalledWith(['forged-file-id']);
-    expect(mockFetchCappedBuffer).not.toHaveBeenCalled();
-    expect(mockImageUrlToBase64).toHaveBeenCalledWith(
+    expect(mockFetchCappedBuffer).toHaveBeenCalledWith(
       'http://localhost:9000/private.png',
-      expect.objectContaining({ maxBytes: 20 * 1024 * 1024 }),
+      expect.objectContaining({ allowConfiguredOrigins: false }),
     );
   });
 

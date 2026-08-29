@@ -1,5 +1,5 @@
 import type { MediaFileItem } from '@lobechat/builtin-tool-lobe-agent';
-import { imageUrlToBase64, resolveImageMimeTypeFromBytes } from '@lobechat/utils';
+import { resolveImageMimeTypeFromBytes } from '@lobechat/utils';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 
 import { fetchCappedBuffer } from '@/server/services/bot/platforms/loadAttachmentBuffer';
@@ -24,12 +24,7 @@ const MAX_MULTIMODAL_IMAGE_PREPARATION_MS = 30_000;
 /** Share the same decompression-bomb ceiling across validation and transcoding. */
 export const MAX_MULTIMODAL_IMAGE_PIXELS = 25_000_000;
 
-const readImage = async (
-  item: MediaFileItem,
-  signal: AbortSignal,
-  deadlineAt: number,
-  authorizedUrl?: string,
-) => {
+const readImage = async (item: MediaFileItem, deadlineAt: number, authorizedUrl?: string) => {
   const { uri } = item;
 
   if (/^data:image\//i.test(uri)) {
@@ -42,27 +37,24 @@ const readImage = async (
     return {
       buffer,
       mimeType: detectedMimeType,
+      requiresDecodeValidation: false,
       shouldRewriteUri: Boolean(detectedMimeType && detectedMimeType !== mimeType?.toLowerCase()),
     };
   }
 
-  if (authorizedUrl) {
-    const buffer = await fetchCappedBuffer(authorizedUrl, {
-      allowConfiguredOrigins: true,
-      limit: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
-      timeoutMs: Math.max(1, deadlineAt - Date.now()),
-    });
-    if (!buffer) throw new TypeError('Failed to download stored multimodal image');
-
-    const mimeType = await resolveImageMimeTypeFromBytes(undefined, buffer);
-    return { buffer, mimeType, shouldRewriteUri: true };
-  }
-
-  const { base64, mimeType } = await imageUrlToBase64(uri, {
-    maxBytes: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
-    signal,
+  /**
+   * This fetcher both enforces SSRF/size limits and redacts signed query
+   * parameters from URL-bearing error logs.
+   */
+  const buffer = await fetchCappedBuffer(authorizedUrl || uri, {
+    allowConfiguredOrigins: Boolean(authorizedUrl),
+    limit: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
+    timeoutMs: Math.max(1, deadlineAt - Date.now()),
   });
-  return { buffer: Buffer.from(base64, 'base64'), mimeType, shouldRewriteUri: true };
+  if (!buffer) throw new TypeError('Failed to download multimodal image');
+
+  const mimeType = await resolveImageMimeTypeFromBytes(undefined, buffer);
+  return { buffer, mimeType, requiresDecodeValidation: true, shouldRewriteUri: true };
 };
 
 const consumePreparationBudget = (usedBytes: number, imageBytes: number) => {
@@ -89,6 +81,15 @@ const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMim
   return image.toFormat(SHARP_FORMAT_BY_MIME_TYPE[targetMimeType]).toBuffer();
 };
 
+/** Decode supported remote images once before forwarding their original bytes. */
+const validateImage = async (buffer: Buffer) => {
+  const { default: sharp } = await import('sharp');
+  await sharp(buffer, {
+    failOn: 'error',
+    limitInputPixels: MAX_MULTIMODAL_IMAGE_PIXELS,
+  }).stats();
+};
+
 /**
  * Detect images from their actual bytes and transcode unsupported formats before
  * the visual fallback request reaches a provider-specific message builder.
@@ -104,7 +105,6 @@ export const normalizeMultimodalImageItems = async (
 
   const normalizedItems: MediaFileItem[] = [];
   const deadlineAt = Date.now() + MAX_MULTIMODAL_IMAGE_PREPARATION_MS;
-  const signal = AbortSignal.timeout(MAX_MULTIMODAL_IMAGE_PREPARATION_MS);
   let preparedImageBytes = 0;
 
   for (const item of items) {
@@ -115,11 +115,11 @@ export const normalizeMultimodalImageItems = async (
 
     const source = await readImage(
       item,
-      signal,
       deadlineAt,
       item.id ? authorizedImageUrls.get(item.id) : undefined,
     );
     if (source.mimeType && supportedFormatSet.has(source.mimeType as MultimodalImageMimeType)) {
+      if (source.requiresDecodeValidation) await validateImage(source.buffer);
       preparedImageBytes = consumePreparationBudget(preparedImageBytes, source.buffer.byteLength);
       normalizedItems.push(
         source.shouldRewriteUri
