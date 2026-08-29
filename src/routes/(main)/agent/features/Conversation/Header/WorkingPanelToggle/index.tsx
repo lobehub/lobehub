@@ -13,14 +13,21 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 const WorkingPanelToggle = memo(() => {
   const { t } = useTranslation('chat');
   const { pathname } = useLocation();
-  const [showRightPanel, showWorkingOverview, toggleRightPanel, updateSystemStatus, isStatusInit] =
-    useGlobalStore((s) => [
-      systemStatusSelectors.showRightPanel(s),
-      s.status.showWorkingOverview ?? !s.status.showRightPanel,
-      s.toggleRightPanel,
-      s.updateSystemStatus,
-      systemStatusSelectors.isStatusInit(s),
-    ]);
+  const [
+    showRightPanel,
+    showWorkingOverview,
+    toggleRightPanel,
+    openWorkingSidebar,
+    updateSystemStatus,
+    isStatusInit,
+  ] = useGlobalStore((s) => [
+    systemStatusSelectors.showRightPanel(s),
+    s.status.showWorkingOverview ?? !s.status.showRightPanel,
+    s.toggleRightPanel,
+    s.openWorkingSidebar,
+    s.updateSystemStatus,
+    systemStatusSelectors.isStatusInit(s),
+  ]);
 
   // The popup window has no WorkingSidebar — hide the toggle to avoid a
   // button that does nothing visible.
@@ -50,10 +57,7 @@ const WorkingPanelToggle = memo(() => {
           icon={PanelRightOpenIcon}
           size={DESKTOP_HEADER_ICON_SMALL_SIZE}
           title={t('workingPanel.title')}
-          onClick={() => {
-            updateSystemStatus({ showWorkingOverview: false });
-            toggleRightPanel(true);
-          }}
+          onClick={() => openWorkingSidebar()}
         />
       )}
     </>

@@ -647,9 +647,7 @@ export class ChatPortalActionImpl {
   };
 
   openTopicComments = (topicId: string, messageId?: string): void => {
-    const { setWorkingSidebarTab, toggleRightPanel } = useGlobalStore.getState();
-    toggleRightPanel(true);
-    setWorkingSidebarTab('comments');
+    useGlobalStore.getState().openWorkingSidebar('comments');
     this.#get().pushPortalView({ messageId, topicId, type: PortalViewType.TopicComments });
   };
 

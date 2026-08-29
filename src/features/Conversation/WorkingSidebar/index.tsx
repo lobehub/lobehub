@@ -213,6 +213,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     portalWidths,
     updateSystemStatus,
     toggleRightPanel,
+    openWorkingSidebar,
     toggleTerminalPanel,
     setWorkingSidebarTab,
     showRightPanel,
@@ -225,6 +226,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     systemStatusSelectors.portalWidths(s),
     s.updateSystemStatus,
     s.toggleRightPanel,
+    s.openWorkingSidebar,
     s.toggleTerminalPanel,
     s.setWorkingSidebarTab,
     // Panel open/collapsed state (drives the `<RightPanel>` expand). Used to gate
@@ -467,8 +469,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     ]),
   );
   const openedTabsSignature = openedTabs.join('\0');
-  const [optimisticTab, setOptimisticTab] = useState<string>();
+  const [optimisticSelection, setOptimisticSelection] = useState<{
+    contextKey: string;
+    tab: string;
+  }>();
   const previousStoredTabRef = useRef(storedTab);
+  const resolvedActiveTab: string =
+    storedTab && openedTabs.includes(storedTab) ? storedTab : (openedTabs[0] ?? 'overview');
+  const activeTab =
+    optimisticSelection?.contextKey === openTabsContextKey
+      ? optimisticSelection.tab
+      : resolvedActiveTab;
 
   const updateOpenedTabs = useCallback(
     (updater: (tabs: string[]) => string[]) => {
@@ -493,17 +504,16 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const openTab = useCallback(
     (tab: string) => {
       if (tab !== 'overview' && !isAvailableTab(tab)) return;
-      setOptimisticTab(tab);
+      if (tab !== activeTab) setOptimisticSelection({ contextKey: openTabsContextKey, tab });
       if (tab !== 'overview') {
         updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
-        toggleRightPanel(true);
-        updateSystemStatus({ showWorkingOverview: false });
+        openWorkingSidebar(tab);
       }
       if (tab === 'comments' && topicId && !isCurrentTopicComments) {
         openTopicComments(topicId);
         return;
       }
-      setWorkingSidebarTab(tab);
+      if (tab === 'overview') setWorkingSidebarTab(tab);
     },
     [
       isAvailableTab,
@@ -511,8 +521,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       openTopicComments,
       setWorkingSidebarTab,
       topicId,
-      toggleRightPanel,
-      updateSystemStatus,
+      activeTab,
+      openWorkingSidebar,
+      openTabsContextKey,
       updateOpenedTabs,
     ],
   );
@@ -523,26 +534,26 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     const tab =
       currentBrowserTabs.length === 0 ? BROWSER_TAB_KEY : `${BROWSER_TAB_PREFIX}${nanoid(8)}`;
     updateOpenedTabs((current) => [...current, tab]);
-    setOptimisticTab(tab);
-    setWorkingSidebarTab(tab);
+    setOptimisticSelection({ contextKey: openTabsContextKey, tab });
+    openWorkingSidebar(tab);
     return tab;
   }, [
     browserAvailable,
     openTabsByContext,
     openTabsContextKey,
-    setWorkingSidebarTab,
+    openWorkingSidebar,
     updateOpenedTabs,
   ]);
-
-  const resolvedActiveTab: string =
-    storedTab && openedTabs.includes(storedTab) ? storedTab : (openedTabs[0] ?? 'overview');
-  const activeTab = optimisticTab ?? resolvedActiveTab;
 
   useEffect(() => {
     if (previousStoredTabRef.current === storedTab) return;
     previousStoredTabRef.current = storedTab;
-    setOptimisticTab(undefined);
+    setOptimisticSelection(undefined);
   }, [storedTab]);
+
+  useEffect(() => {
+    setOptimisticSelection(undefined);
+  }, [availableTabsSignature, openTabsContextKey]);
 
   useEffect(() => {
     if (
@@ -605,7 +616,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         const nextTab = remainingTabs.includes(fallbackTab)
           ? fallbackTab
           : (remainingTabs[0] ?? 'overview');
-        setOptimisticTab(nextTab);
+        setOptimisticSelection({ contextKey: openTabsContextKey, tab: nextTab });
         setWorkingSidebarTab(nextTab);
       }
       if (remainingTabs.length === 0) {
@@ -615,6 +626,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     [
       activeTab,
       openedTabs,
+      openTabsContextKey,
       pinnedTabsSet,
       setWorkingSidebarTab,
       toggleRightPanel,
@@ -786,6 +798,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     portalWidth: portalOpen ? portalWidth : 0,
   });
   const fits = widthBudget >= minDisplayWidth;
+  const overviewFits = widthBudget >= MIN_PANEL_WIDTH;
   const renderWidth = Math.min(displayWidth, Math.max(widthBudget, minDisplayWidth));
   // Also cap the drag range so releasing a drag can never persist a width that
   // immediately fails the fit check and hides the panel.
@@ -873,7 +886,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewPanel = showWorkingOverview && fits && (
+  const overviewPanel = showWorkingOverview && overviewFits && (
     <Flexbox className={styles.overviewPanel} role={'complementary'}>
       <Flexbox
         horizontal
@@ -914,10 +927,10 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         stableLayout
         collapseThreshold={320}
         defaultWidth={renderWidth}
-        expand={Boolean(showRightPanel) && fits && activeTab !== 'overview'}
+        expand={Boolean(showRightPanel) && fits}
         maxWidth={maxPanelWidth}
         minWidth={MIN_PANEL_WIDTH}
-        style={!showRightPanel || activeTab === 'overview' ? { visibility: 'hidden' } : undefined}
+        style={!showRightPanel ? { visibility: 'hidden' } : undefined}
         width={renderWidth}
         onSizeChange={(size) => {
           if (!size?.width) return;

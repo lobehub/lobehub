@@ -153,6 +153,29 @@ describe('createPreferenceSlice', () => {
     });
   });
 
+  describe('openWorkingSidebar', () => {
+    it('opens a requested workspace tab and closes the independent overview atomically', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showRightPanel: false,
+            showWorkingOverview: true,
+          },
+        });
+        result.current.openWorkingSidebar('review');
+      });
+
+      expect(result.current.status.showRightPanel).toBe(true);
+      expect(result.current.status.showWorkingOverview).toBe(false);
+      expect(result.current.status.workingSidebarTab).toBe('review');
+      expect(result.current.status.workingSidebarTabRequest?.tab).toBe('review');
+    });
+  });
+
   describe('openInBrowserTab / clearBrowserTabRequest', () => {
     it('should raise a one-shot browser request and retire it once consumed', () => {
       const { result } = renderHook(() => useGlobalStore());

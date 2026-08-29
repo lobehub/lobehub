@@ -310,13 +310,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
 
   const { model, provider } = useEffectiveModel(agentId);
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
-  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
-    useGlobalStore((s) => [
+  const [showRightPanel, workingSidebarTab, openWorkingSidebar, toggleRightPanel] = useGlobalStore(
+    (s) => [
       systemStatusSelectors.showRightPanel(s),
       s.status.workingSidebarTab,
-      s.setWorkingSidebarTab,
+      s.openWorkingSidebar,
       s.toggleRightPanel,
-    ]);
+    ],
+  );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
@@ -407,9 +408,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       toggleRightPanel(false);
       return;
     }
-    setWorkingSidebarTab('params');
-    toggleRightPanel(true);
-  }, [close, isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
+    openWorkingSidebar('params');
+  }, [close, isParamsPanelActive, openWorkingSidebar, toggleRightPanel]);
 
   const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
