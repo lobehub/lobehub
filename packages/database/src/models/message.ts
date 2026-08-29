@@ -60,6 +60,7 @@ import {
   lte,
   ne,
   not,
+  notExists,
   or,
   sql,
 } from 'drizzle-orm';
@@ -84,6 +85,7 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  topics,
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -932,6 +934,27 @@ export const toVisitorMessage = (message: UIChatMessage): UIChatMessage =>
 
 export interface MessageModelOptions {
   /**
+   * Wall the GENERIC message surface off from Agent Share conversations.
+   *
+   * Share conversation rows are visitor-owned, so ownership predicates alone
+   * let the visitor reach them through every generic router procedure — and
+   * the share abuse guards count LIVE rows: deleting a user message refunds
+   * `maxTurnsPerTopic`, and generic create/update accepts unbounded `content`
+   * that `shareChat.execAgent` later loads into the creator-billed history.
+   *
+   * Set ONLY by the generic lambda `message` router. Share-internal writers
+   * (`AiAgentService` run persistence, gateway bookkeeping) never set it and
+   * keep full access. When true:
+   * - `create` refuses a target topic with `shareId` set;
+   * - `update` refuses share rows unless the patch touches nothing but
+   *   `error` (the share client persists sanitized run errors through the
+   *   generic update — see `gatewayEventHandler`'s share error branch);
+   * - `deleteMessage` / `deleteMessages` refuse share rows;
+   * - bulk sweeps (`deleteMessagesBySession` / `deleteAllMessages` /
+   *   `batchDeleteByAgentId`) silently exclude share rows.
+   */
+  guardShareProvenance?: boolean;
+  /**
    * Called with the snapshot of Agent Share runs that were still in-flight on
    * a message-level bulk/batch delete (`deleteMessage` / `deleteMessages` /
    * `deleteMessagesBySession` / `deleteAllMessages` / `batchDeleteByAgentId`)
@@ -961,6 +984,8 @@ export class MessageModel {
   private workspaceId?: string;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
+  private guardShareProvenance: boolean;
+
   constructor(
     db: LobeChatDatabase,
     userId: string,
@@ -971,7 +996,50 @@ export class MessageModel {
     this.db = db;
     this.workspaceId = workspaceId;
     this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
+    this.guardShareProvenance = options?.guardShareProvenance ?? false;
   }
+
+  /**
+   * Throws when any of the given topics is share-provenance — see
+   * `MessageModelOptions.guardShareProvenance`. No-op (no query) when the
+   * guard is off, so internal hot paths pay nothing.
+   */
+  private assertTopicsNotShareProvenance = async (
+    executor: LobeChatDatabase | Transaction,
+    topicIds: (string | null | undefined)[],
+  ) => {
+    if (!this.guardShareProvenance) return;
+
+    const ids = [...new Set(topicIds.filter((id): id is string => !!id))];
+    if (ids.length === 0) return;
+
+    const [shareTopic] = await executor
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(inArray(topics.id, ids), isNotNull(topics.shareId)))
+      .limit(1);
+
+    if (shareTopic)
+      throw new Error(
+        `Topic ${shareTopic.id} belongs to an agent share; generic message writes are not allowed on share conversations`,
+      );
+  };
+
+  /**
+   * Extra predicate for guarded bulk sweeps: keep only messages whose topic is
+   * NOT share-provenance (messages without a topic always pass). Also applied
+   * to the share-run snapshot scope so a run whose messages are not being
+   * deleted is never interrupted.
+   */
+  private shareSweepGuard = () =>
+    this.guardShareProvenance
+      ? notExists(
+          this.db
+            .select({ one: sql`1` })
+            .from(topics)
+            .where(and(eq(topics.id, messages.topicId), isNotNull(topics.shareId))),
+        )
+      : undefined;
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
@@ -3119,6 +3187,8 @@ export class MessageModel {
     id: string = this.genId(),
     timing?: ModelTimingContext,
   ): Promise<DBMessageItem> => {
+    await this.assertTopicsNotShareProvenance(this.db, [params.topicId]);
+
     return runTimedStage(
       timing,
       'db.message.create.transaction',
@@ -3251,6 +3321,31 @@ export class MessageModel {
     { imageList, metadata, usage, ...message }: Partial<UpdateMessageParams>,
     timing?: ModelTimingContext,
   ): Promise<{ success: boolean }> => {
+    if (this.guardShareProvenance) {
+      // The ONLY generic write a share conversation legitimately receives is
+      // the share client persisting a sanitized run error (see
+      // `MessageModelOptions.guardShareProvenance`); everything else must not
+      // reach share rows.
+      const patchKeys = [
+        ...Object.keys(message).filter(
+          (key) => (message as Record<string, unknown>)[key] !== undefined,
+        ),
+        ...(imageList === undefined ? [] : ['imageList']),
+        ...(metadata === undefined ? [] : ['metadata']),
+        ...(usage === undefined ? [] : ['usage']),
+      ];
+      const isErrorOnlyPatch = patchKeys.every((key) => key === 'error');
+
+      if (!isErrorOnlyPatch) {
+        const [target] = await this.db
+          .select({ topicId: messages.topicId })
+          .from(messages)
+          .where(and(eq(messages.id, id), this.ownership()))
+          .limit(1);
+        await this.assertTopicsNotShareProvenance(this.db, [target?.topicId]);
+      }
+    }
+
     // Accept legacy callers that still send `metadata.usage`, but persist usage
     // exclusively in the dedicated top-level column.
     const { usage: legacyUsage, ...metadataPatch } = (metadata as Record<string, any>) || {};
@@ -4383,6 +4478,8 @@ export class MessageModel {
       // If the message to be deleted is not found, return directly
       if (message.length === 0) return;
 
+      await this.assertTopicsNotShareProvenance(tx, [message[0].topicId]);
+
       activeShareRuns = await this.snapshotActiveShareRunsForTopics(tx, [message[0].topicId]);
 
       const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
@@ -4454,6 +4551,11 @@ export class MessageModel {
         .where(and(this.ownership(), inArray(messages.id, ids)));
 
       if (toDelete.length === 0) return;
+
+      await this.assertTopicsNotShareProvenance(
+        tx,
+        toDelete.map((message) => message.topicId),
+      );
 
       activeShareRuns = await this.snapshotActiveShareRunsForTopics(
         tx,
@@ -4660,7 +4762,8 @@ export class MessageModel {
    * that transaction commits — never before, so a rolled-back delete cannot
    * interrupt a run that is still perfectly alive.
    */
-  private deleteMessagesWithShareRunSnapshot = async (where: SQL | undefined) => {
+  private deleteMessagesWithShareRunSnapshot = async (rawWhere: SQL | undefined) => {
+    const where = and(rawWhere, this.shareSweepGuard());
     let activeShareRuns: ActiveShareRun[] = [];
 
     const result = await this.db.transaction(async (tx) => {

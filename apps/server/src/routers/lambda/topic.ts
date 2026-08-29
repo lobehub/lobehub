@@ -85,6 +85,9 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       // share conversation is the VISITOR deleting their own — see
       // `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, {
+        // Generic topic procedures must not reach Agent Share conversations —
+        // see `TopicModelOptions.guardShareProvenance`'s JSDoc.
+        guardShareProvenance: true,
         onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
       }),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),

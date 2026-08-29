@@ -347,6 +347,24 @@ export type ActiveShareRun = {
 
 export interface TopicModelOptions {
   /**
+   * Wall the GENERIC topic surface off from Agent Share conversations.
+   *
+   * A share conversation is visitor-owned (`topics.userId` = visitor,
+   * `topics.shareId` set), so ownership predicates alone let the visitor
+   * reach it through every generic router procedure. But
+   * `maxTopicsPerVisitor` counts LIVE rows — deleting a finished share topic
+   * refunds the quota and lets the visitor mint a fresh creator-funded turn
+   * allowance forever. Until consumption is tracked durably, generic deletes
+   * must not touch share-provenance rows at all.
+   *
+   * Set ONLY by the generic lambda `topic` router. Share-internal writers
+   * (`shareChat`'s hidden-topic cleanup, `AiAgentService`) never set it and
+   * keep full access. When true: `delete` throws on a share row; bulk sweeps
+   * (`deleteAll` / `batchDelete` / `batchDeleteBy*`) silently exclude share
+   * rows instead of failing the whole sweep.
+   */
+  guardShareProvenance?: boolean;
+  /**
    * Called with the snapshot of Agent Share visitor runs that were still
    * in-flight on a topic sweep this model just committed (`delete` /
    * `deleteAll` / `batchDelete` / `batchDeleteByAgentId` /
@@ -376,6 +394,7 @@ export class TopicModel {
   private db: LobeChatDatabase;
   private workspaceId?: string;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
+  private guardShareProvenance: boolean;
 
   constructor(
     db: LobeChatDatabase,
@@ -387,7 +406,16 @@ export class TopicModel {
     this.db = db;
     this.workspaceId = workspaceId;
     this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
+    this.guardShareProvenance = options?.guardShareProvenance ?? false;
   }
+
+  /**
+   * Extra predicate for guarded bulk sweeps — see
+   * `TopicModelOptions.guardShareProvenance`. Also applied to the share-run
+   * snapshot `match` so a run whose topic is NOT being deleted is never
+   * interrupted.
+   */
+  private shareSweepGuard = () => (this.guardShareProvenance ? isNull(topics.shareId) : undefined);
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
@@ -1607,6 +1635,19 @@ export class TopicModel {
    * `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   delete = async (id: string) => {
+    if (this.guardShareProvenance) {
+      const [row] = await this.db
+        .select({ shareId: topics.shareId })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .limit(1);
+      // `shareId` is written once at creation, so check-then-delete is safe.
+      if (row?.shareId)
+        throw new Error(
+          `Topic ${id} belongs to an agent share and cannot be deleted through generic topic APIs`,
+        );
+    }
+
     return this.deleteWithShareRunSnapshot(eq(topics.id, id), (trx) =>
       trx.delete(topics).where(and(eq(topics.id, id), this.ownership())),
     );
@@ -1624,15 +1665,18 @@ export class TopicModel {
     sessionId?: string | null,
     options?: { restrictToCreator?: boolean },
   ) => {
-    return this.deleteWithShareRunSnapshot(this.matchSession(sessionId), (trx) =>
-      trx
-        .delete(topics)
-        .where(
-          and(
-            this.matchSession(sessionId),
-            options?.restrictToCreator ? this.mine() : this.ownership(),
+    return this.deleteWithShareRunSnapshot(
+      and(this.matchSession(sessionId), this.shareSweepGuard()),
+      (trx) =>
+        trx
+          .delete(topics)
+          .where(
+            and(
+              this.matchSession(sessionId),
+              options?.restrictToCreator ? this.mine() : this.ownership(),
+              this.shareSweepGuard(),
+            ),
           ),
-        ),
     );
   };
 
@@ -1647,15 +1691,18 @@ export class TopicModel {
     groupId?: string | null,
     options?: { restrictToCreator?: boolean },
   ) => {
-    return this.deleteWithShareRunSnapshot(this.matchGroup(groupId), (trx) =>
-      trx
-        .delete(topics)
-        .where(
-          and(
-            this.matchGroup(groupId),
-            options?.restrictToCreator ? this.mine() : this.ownership(),
+    return this.deleteWithShareRunSnapshot(
+      and(this.matchGroup(groupId), this.shareSweepGuard()),
+      (trx) =>
+        trx
+          .delete(topics)
+          .where(
+            and(
+              this.matchGroup(groupId),
+              options?.restrictToCreator ? this.mine() : this.ownership(),
+              this.shareSweepGuard(),
+            ),
           ),
-        ),
     );
   };
 
@@ -1668,15 +1715,18 @@ export class TopicModel {
    * `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
-    return this.deleteWithShareRunSnapshot(eq(topics.agentId, agentId), (trx) =>
-      trx
-        .delete(topics)
-        .where(
-          and(
-            options?.restrictToCreator ? this.mine() : this.ownership(),
-            eq(topics.agentId, agentId),
+    return this.deleteWithShareRunSnapshot(
+      and(eq(topics.agentId, agentId), this.shareSweepGuard()),
+      (trx) =>
+        trx
+          .delete(topics)
+          .where(
+            and(
+              options?.restrictToCreator ? this.mine() : this.ownership(),
+              eq(topics.agentId, agentId),
+              this.shareSweepGuard(),
+            ),
           ),
-        ),
     );
   };
 
@@ -1687,8 +1737,12 @@ export class TopicModel {
    * see `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   batchDelete = async (ids: string[]) => {
-    return this.deleteWithShareRunSnapshot(inArray(topics.id, ids), (trx) =>
-      trx.delete(topics).where(and(inArray(topics.id, ids), this.ownership())),
+    return this.deleteWithShareRunSnapshot(
+      and(inArray(topics.id, ids), this.shareSweepGuard()),
+      (trx) =>
+        trx
+          .delete(topics)
+          .where(and(inArray(topics.id, ids), this.ownership(), this.shareSweepGuard())),
     );
   };
 
@@ -1701,8 +1755,8 @@ export class TopicModel {
    * See `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
    */
   deleteAll = async () => {
-    return this.deleteWithShareRunSnapshot(undefined, (trx) =>
-      trx.delete(topics).where(this.mine()),
+    return this.deleteWithShareRunSnapshot(this.shareSweepGuard(), (trx) =>
+      trx.delete(topics).where(and(this.mine(), this.shareSweepGuard())),
     );
   };
 

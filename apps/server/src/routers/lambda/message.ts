@@ -52,6 +52,9 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   // transaction has committed. See `MessageModelOptions
   // .onShareRunsInterrupted`'s JSDoc.
   const messageModelOptions = {
+    // Generic message procedures must not reach Agent Share conversations —
+    // see `MessageModelOptions.guardShareProvenance`'s JSDoc.
+    guardShareProvenance: true,
     onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
   };
 
