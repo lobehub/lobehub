@@ -789,6 +789,7 @@ export default {
   'minimap.previousMessage': 'Previous message',
   'minimap.senderAssistant': 'Agent',
   'minimap.senderUser': 'You',
+  'modelSelector.model': 'Model',
   'createModal.createBlank': 'Start Blank',
   'createModal.groupPlaceholder': 'Describe what this Group should do...',
   'createModal.groupTitle': 'What should this Group do?',

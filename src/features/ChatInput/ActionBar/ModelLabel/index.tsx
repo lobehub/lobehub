@@ -11,7 +11,9 @@ import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
 import { useModelLockTooltip } from '../../hooks/useModelLockTooltip';
+import { useReasoningEffortControl } from '../../hooks/useReasoningEffortControl';
 import { useActionBarContext } from '../context';
+import SelectorMenu from '../Model/SelectorMenu';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -68,6 +70,11 @@ const ModelLabel = memo(() => {
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
+  // Reasoning effort is a per-model user preference, so it rides along with the
+  // model trigger instead of claiming a second action slot.
+  const effort = useReasoningEffortControl(model, provider);
+  // A pinned model still opens the menu when there is an effort to pick there.
+  const interactive = canSelectModel || effort.hasReasoningParams;
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
@@ -83,18 +90,37 @@ const ModelLabel = memo(() => {
     <Center
       horizontal
       aria-label={displayName}
-      className={cx(styles.trigger, !canSelectModel && styles.triggerReadonly)}
+      className={cx(styles.trigger, !interactive && styles.triggerReadonly)}
       height={28}
       paddingInline={6}
     >
       <Flexbox horizontal align={'center'} gap={2}>
         <span className={styles.name}>{displayName}</span>
-        {canSelectModel ? <ChevronDownIcon className={styles.chevron} size={12} /> : null}
+        {interactive ? <ChevronDownIcon className={styles.chevron} size={12} /> : null}
       </Flexbox>
     </Center>
   );
 
   if (!canDisplayModel) return null;
+
+  // Model + effort in one menu, so the two settings that decide how a turn runs
+  // are picked in the same place (see SelectorMenu).
+  if (effort.hasReasoningParams)
+    return (
+      <SelectorMenu
+        canSelectModel={canSelectModel}
+        displayName={displayName}
+        effort={effort}
+        model={model}
+        openOnHover={false}
+        placement={dropdownPlacement}
+        provider={provider}
+        onModelChange={handleModelChange}
+      >
+        {trigger}
+      </SelectorMenu>
+    );
+
   // Locked: the chevron is gone and clicking does nothing, so the tooltip is the
   // only place that can say why the model is pinned here.
   if (!canSelectModel)

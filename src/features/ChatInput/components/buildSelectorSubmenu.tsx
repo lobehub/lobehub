@@ -25,7 +25,7 @@ export interface SelectorOption<T extends string> {
  * `renderDropdownMenuItems` renders `extra` on submenu rows too, but @lobehub/ui
  * only declares it on leaf items — widen it so the current-value column stays typed.
  */
-type SelectorSubmenuItem = DropdownItem & { extra?: ReactNode };
+export type SelectorSubmenuItem = DropdownItem & { extra?: ReactNode };
 
 export const buildSelectorSubmenu = <T extends string>({
   current,

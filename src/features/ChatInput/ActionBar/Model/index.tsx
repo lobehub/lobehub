@@ -11,7 +11,9 @@ import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
 import { useModelLockTooltip } from '../../hooks/useModelLockTooltip';
+import { useReasoningEffortControl } from '../../hooks/useReasoningEffortControl';
 import { useActionBarContext } from '../context';
+import SelectorMenu from './SelectorMenu';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   icon: css`
@@ -72,6 +74,11 @@ const ModelSwitch = memo(() => {
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
+  // Reasoning effort is a per-model user preference, so it rides along with the
+  // model trigger instead of claiming a second action slot.
+  const effort = useReasoningEffortControl(model, provider);
+  // A pinned model still opens the menu when there is an effort to pick there.
+  const interactive = canSelectModel || effort.hasReasoningParams;
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
@@ -85,9 +92,9 @@ const ModelSwitch = memo(() => {
 
   const trigger = (
     <Center
-      aria-disabled={!canSelectModel}
+      aria-disabled={!interactive}
       aria-label={displayName}
-      className={cx(styles.model, !canSelectModel && styles.modelReadonly)}
+      className={cx(styles.model, !interactive && styles.modelReadonly)}
       height={blockSize}
       width={blockSize}
     >
@@ -98,6 +105,23 @@ const ModelSwitch = memo(() => {
   );
 
   if (!canDisplayModel) return null;
+
+  // Model + effort in one menu, so the two settings that decide how a turn runs
+  // are picked in the same place (see SelectorMenu).
+  if (effort.hasReasoningParams)
+    return (
+      <SelectorMenu
+        canSelectModel={canSelectModel}
+        displayName={displayName}
+        effort={effort}
+        model={model}
+        placement={dropdownPlacement}
+        provider={provider}
+        onModelChange={handleModelChange}
+      >
+        {trigger}
+      </SelectorMenu>
+    );
 
   // Locked: say which model is pinned AND why it can't be changed here — the
   // bare model name used to leave the inert button unexplained.
