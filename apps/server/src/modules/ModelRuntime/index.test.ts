@@ -31,6 +31,7 @@ import {
   getServerDefaultHeterogeneousModels,
   initModelRuntimeFromServerConfig,
   initModelRuntimeWithUserPayload,
+  resolveProviderSdkType,
   resolveServerDefaultHeterogeneousModel,
   resolveServerModel,
 } from './index';
@@ -986,6 +987,20 @@ describe('buildPayloadFromKeyVaults', () => {
       });
     });
 
+    it('DeepSeek: preserves the configured SDK type for router selection', () => {
+      const keyVaults = {
+        apiKey: 'test-api-key',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.DeepSeek, 'openai');
+
+      expect(payload).toEqual({
+        apiKey: 'test-api-key',
+        baseURL: undefined,
+        runtimeProvider: ModelProvider.DeepSeek,
+        sdkType: 'openai',
+      });
+    });
+
     it('ChatGPT: returns the OAuth access token and account id', () => {
       const keyVaults = {
         oauthAccessToken: 'oauth-access-token',
@@ -1206,5 +1221,15 @@ describe('buildPayloadFromKeyVaults', () => {
       expect(payload.vertexAIRegion).toBe('asia-northeast1');
       expect(payload.runtimeProvider).toBe(ModelProvider.VertexAI);
     });
+  });
+});
+
+describe('resolveProviderSdkType', () => {
+  it('uses the model-bank default when a builtin provider has no persisted sdkType', () => {
+    expect(resolveProviderSdkType(ModelProvider.DeepSeek)).toBe('openai');
+  });
+
+  it('keeps an explicit provider override', () => {
+    expect(resolveProviderSdkType(ModelProvider.DeepSeek, 'anthropic')).toBe('anthropic');
   });
 });
