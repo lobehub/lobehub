@@ -191,9 +191,37 @@ interface SafeTarget {
   url: URL;
 }
 
+/** Stop awaiting non-cancellable work once the request-wide deadline fires. */
+const waitWithSignal = async <T>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
+  if (signal.aborted) throw signal.reason;
+
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(signal.reason);
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) return onAbort();
+
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+};
+
 const resolveSafeUrl = async (
   raw: string,
   trusted: TrustedOrigin[],
+  signal: AbortSignal,
 ): Promise<SafeTarget | undefined> => {
   let url: URL;
   try {
@@ -223,8 +251,9 @@ const resolveSafeUrl = async (
     answers = [{ address: host, family: isIP(host) }];
   } else {
     try {
-      answers = await dns.lookup(host, { all: true });
+      answers = await waitWithSignal(dns.lookup(host, { all: true }), signal);
     } catch (error) {
+      if (signal.aborted) throw signal.reason;
       log('resolveSafeUrl: DNS lookup failed for %s: %O', host, error);
       return undefined;
     }
@@ -343,7 +372,7 @@ export const fetchPublicUrl = async (
 
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const safe = await resolveSafeUrl(target, trusted);
+      const safe = await resolveSafeUrl(target, trusted, signal);
       if (!safe) {
         await dispose();
         return undefined;

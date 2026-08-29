@@ -20,6 +20,7 @@ describe('fetchPublicUrl', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -366,6 +367,27 @@ describe('fetchPublicUrl', () => {
     expect(timeoutSpy).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls.map(([, options]) => options.signal)).toEqual([signal, signal]);
     await result!.dispose();
+  });
+
+  it('applies the shared timeout while waiting for DNS resolution', async () => {
+    const controller = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
+    mocks.lookup.mockImplementation(() => new Promise(() => {}));
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = fetchPublicUrl('https://stalled.example.com/a.png', 1000);
+    controller.abort();
+    const outcome = await Promise.race([
+      request.then(
+        () => 'resolved',
+        () => 'rejected',
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('stalled'), 20)),
+    ]);
+
+    expect(outcome).toBe('rejected');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('gives up on a redirect loop', async () => {
