@@ -325,10 +325,11 @@ export class EditorActionImpl {
       // Preserve diff nodes (pending review) through the save path.
       // Normalization only happens when the user explicitly clicks Accept/Reject
       // in DiffAllToolbar, which mutates editor state before calling performSave.
-      const requestSave = () =>
+      const requestSave = (expectedUpdatedAt?: Date) =>
         documentService.updateDocument({
           content: currentContent,
           editorData: JSON.stringify(currentEditorData),
+          expectedUpdatedAt,
           id,
           lockOwnerId: doc.lockOwnerId,
           metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
@@ -399,7 +400,7 @@ export class EditorActionImpl {
     id: string,
     lockOwnerId: string | undefined,
     error: unknown,
-    requestSave: () => Promise<T>,
+    requestSave: (expectedUpdatedAt?: Date) => Promise<T>,
   ): Promise<T> => {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
     if (errorCode !== 'CONFLICT' || !lockOwnerId) throw error;
@@ -407,10 +408,13 @@ export class EditorActionImpl {
     // The rejected lease may have belonged to ANOTHER member who saved and
     // released it between our failed save and this recovery — reclaiming a
     // now-free lease alone cannot tell that apart from a self conflict. Only
-    // retry when the server's stored content is still exactly what this
-    // session last hydrated or saved, so resending our payload cannot clobber
-    // a collaborator's newer version. Any mismatch keeps the original
-    // CONFLICT flow (read-only + rehydrate, unsaved content kept for copy-out).
+    // retry when the server's stored version (content AND editorData) is still
+    // exactly what this session last hydrated or saved, and pin the retried
+    // save to that verified version via `expectedUpdatedAt` — the server
+    // re-checks it atomically inside the write transaction, so a collaborator
+    // save landing at any point after this fetch fails the retry instead of
+    // being overwritten. Any mismatch keeps the original CONFLICT flow
+    // (read-only + rehydrate, unsaved content kept for copy-out).
     let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
     try {
       latest = await documentService.getDocumentById(id);
@@ -418,7 +422,12 @@ export class EditorActionImpl {
       throw error;
     }
     const doc = this.#get().documents[id];
-    if (!latest || !doc || (latest.content ?? '') !== (doc.lastSavedContent ?? '')) throw error;
+    const isKnownVersion =
+      latest &&
+      doc &&
+      (latest.content ?? '') === (doc.lastSavedContent ?? '') &&
+      isEqual(latest.editorData ?? null, doc.lastSavedEditorData ?? null);
+    if (!isKnownVersion || !latest.updatedAt) throw error;
 
     let lockedByOther: boolean;
     try {
@@ -428,7 +437,7 @@ export class EditorActionImpl {
     }
     if (lockedByOther) throw error;
 
-    return requestSave();
+    return requestSave(latest.updatedAt);
   };
 
   setEditorState = (editorState: LobehubEditorState | undefined): void => {

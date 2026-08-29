@@ -10,7 +10,11 @@ import { useDocumentStore } from '../../store';
 vi.mock('@/services/document', () => ({
   documentService: {
     acquireDocumentLock: vi.fn().mockResolvedValue({ holderId: null, lockedByOther: false }),
-    getDocumentById: vi.fn().mockResolvedValue({ content: '# Test', id: 'doc-1' }),
+    getDocumentById: vi.fn().mockResolvedValue({
+      content: '# Test',
+      id: 'doc-1',
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    }),
     updateDocument: vi.fn().mockResolvedValue({ historyAppended: false, id: 'doc-1' }),
   },
 }));
@@ -53,7 +57,11 @@ describe('DocumentStore - Editor Actions', () => {
       .mockResolvedValue({ holderId: null, lockedByOther: false } as any);
     vi.mocked(documentService.getDocumentById)
       .mockReset()
-      .mockResolvedValue({ content: '# Test', id: 'doc-1' } as any);
+      .mockResolvedValue({
+        content: '# Test',
+        id: 'doc-1',
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      } as any);
 
     // Reset store state before each test
     const { result } = renderHook(() => useDocumentStore());
@@ -968,6 +976,11 @@ name: skill-name
 
       expect(documentService.acquireDocumentLock).toHaveBeenCalledWith('doc-1', 'owner-1');
       expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      // The retry pins the save to the verified server version so an
+      // interleaved collaborator write fails the CAS instead of being lost.
+      expect(documentService.updateDocument).toHaveBeenLastCalledWith(
+        expect.objectContaining({ expectedUpdatedAt: new Date('2026-01-01T00:00:00.000Z') }),
+      );
       expect(result.current.documents['doc-1'].isDirty).toBe(false);
       expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(false);
       expect(result.current.documents['doc-1'].saveStatus).toBe('saved');
@@ -1011,6 +1024,47 @@ name: skill-name
       expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
       expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
       expect(result.current.documents['doc-1'].isDirty).toBe(true);
+    });
+
+    it('does not retry when only the server editorData differs (editor-data-only collaborator change)', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData: { blocks: [{ type: 'paragraph' }] },
+          sourceType: 'page',
+        });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+        data: { code: 'CONFLICT' },
+      });
+      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      // Same markdown, different editorData — still a collaborator's version.
+      vi.mocked(documentService.getDocumentById).mockResolvedValueOnce({
+        content: '# Test',
+        editorData: { blocks: [{ type: 'heading' }] },
+        id: 'doc-1',
+        updatedAt: new Date('2026-01-01T00:00:10.000Z'),
+      } as any);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
     });
 
     it('keeps the save lock-blocked without retrying when another member holds the lease', async () => {
