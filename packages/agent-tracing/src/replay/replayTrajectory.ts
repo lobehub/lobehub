@@ -34,9 +34,15 @@ export interface TrajectoryNode {
 export interface TrajectoryResult {
   divergedAtNode?: number;
   nodes: TrajectoryNode[];
-  /** Semantic comparison of the final node's output against the recorded one. */
-  reproduction?: { passed: boolean; reason?: string; score: number };
   totalNodes: number;
+  /**
+   * Did this model get the job done — the question the whole replay exists to
+   * answer. Judged semantically against the recorded outcome, because a
+   * different model may reach the same result by a different route, and
+   * demanding an identical tool sequence would fail it for succeeding
+   * differently.
+   */
+  verdict?: { passed: boolean; reason?: string; score: number };
 }
 
 export interface ReplayTrajectoryParams {
@@ -50,22 +56,29 @@ export interface ReplayTrajectoryParams {
    * rather than by arrival. `nodes` in the result is always ordered.
    */
   onNode?: (node: TrajectoryNode) => void;
-  reproductionJudge?: { judgeModel: ModelTarget };
   snapshot: ExecutionSnapshot;
   target: ModelTarget;
   temperature?: number;
+  /** Judge that decides pass / fail. `criteria` overrides the default rubric. */
+  verdictJudge?: { criteria?: string; judgeModel: ModelTarget };
   withTools?: boolean;
 }
 
 const DEFAULT_CONCURRENCY = 4;
 
-const REPRODUCTION_CRITERIA = [
-  'The [Output] is a replay of a recorded agent turn and is compared against the',
-  'recorded original in [Expected]. Score 1.0 when it reaches a materially',
-  'equivalent conclusion — same decision, same substantive claims, same answer to',
-  'the user — allowing for differences in wording, ordering, formatting and',
-  'verbosity. Score 0.0 when it reaches a different conclusion, omits something',
-  'the original established, or asserts something the original did not.',
+/**
+ * Judges the outcome, not the route. A replacement model that solved the same
+ * problem by calling different tools has passed; one that answered differently
+ * has not.
+ */
+const DEFAULT_VERDICT_CRITERIA = [
+  'The [Output] is another model replaying a recorded agent run and is compared',
+  'against what the original run produced in [Expected]. Score 1.0 when it gets',
+  'the job done: same decision, same substantive claims, same answer to the user',
+  '— allowing for differences in wording, ordering, formatting, verbosity, and',
+  'in which tools were used to get there. Score 0.0 when it reaches a different',
+  'conclusion, omits something the original established, or asserts something the',
+  'original did not.',
 ].join(' ');
 
 /**
@@ -111,10 +124,10 @@ export const replayTrajectory = async ({
   connection,
   maxTokens,
   onNode,
-  reproductionJudge,
   snapshot,
   target,
   temperature,
+  verdictJudge,
   withTools = true,
 }: ReplayTrajectoryParams): Promise<TrajectoryResult> => {
   const calls = listFrozenCalls(snapshot);
@@ -163,15 +176,26 @@ export const replayTrajectory = async ({
   };
 
   const lastNode = nodes.at(-1);
-  if (reproductionJudge && lastNode && !lastNode.attempt.error) {
-    result.reproduction = await judgeReplay({
-      actual: lastNode.attempt.content,
-      connection,
-      criteria: REPRODUCTION_CRITERIA,
-      expected: lastNode.recorded.content,
-      judgeModel: reproductionJudge.judgeModel,
-    });
+  if (!verdictJudge || !lastNode) return result;
+
+  // A final call that never reached the model is a failed run, not an absent
+  // verdict — a pass/fail tool that silently returns neither is useless.
+  if (lastNode.attempt.error) {
+    result.verdict = {
+      passed: false,
+      reason: `The final call did not reach the model: ${lastNode.attempt.error}`,
+      score: 0,
+    };
+    return result;
   }
+
+  result.verdict = await judgeReplay({
+    actual: lastNode.attempt.content,
+    connection,
+    criteria: verdictJudge.criteria ?? DEFAULT_VERDICT_CRITERIA,
+    expected: lastNode.recorded.content,
+    judgeModel: verdictJudge.judgeModel,
+  });
 
   return result;
 };

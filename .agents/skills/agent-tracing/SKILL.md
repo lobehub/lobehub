@@ -171,14 +171,19 @@ lh trace op replay <operationId> --all-steps
 lh trace op replay <operationId> --all-steps --concurrency 8
 ```
 
-`--all-steps` replays **each call independently**, against the payload the harness actually built
-for it. Node 4 is asked "given exactly this context, do you make the same decision?", so a
-different answer at node 2 cannot contaminate it, a node that fails to reach the provider costs
-only itself, and the calls can go out concurrently (4 at a time by default).
+`--all-steps` answers the question the whole feature exists for: **take a run that succeeded, put
+another model on it, and see whether that model also gets the job done.** It ends in a PASS / FAIL
+verdict from an llm-rubric judge comparing the replayed outcome against the recorded one; pass
+`--judge "<criteria>"` to define success yourself instead of using the default rubric.
 
-Nodes are compared on `toolSignature` — the sequence of tool names. Arguments are deliberately
-excluded, since two models can reach the same step phrased differently. The final node's content
-is additionally scored against the recorded one by an llm-rubric judge.
+The judge scores the **outcome, not the route**. A model that solved the same problem by calling
+different tools has passed. The per-call tool comparison (`toolSignature`) is reported underneath
+as supporting evidence — where the run took another path — and never decides pass / fail. A final
+call that never reached the model is a FAIL, not a missing verdict.
+
+Each call is replayed independently, against the payload the harness actually built for it, so a
+different answer at call 2 cannot contaminate call 4, a call that fails to reach the provider
+costs only itself, and the calls go out concurrently (4 at a time by default).
 
 Chaining the nodes — feeding each replayed output into the next — was built and then removed. A
 trace cannot regenerate tool output, only hand back what was recorded, so the moment the model

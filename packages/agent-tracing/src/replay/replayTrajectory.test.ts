@@ -178,6 +178,23 @@ describe('replayTrajectory', () => {
     expect(result.nodes[1].attempt.content).toBe('42');
   });
 
+  it('fails the verdict when the final call never reached the model', async () => {
+    // A pass/fail tool that returns neither is useless: the run did not get the
+    // job done, so it is a FAIL, not an absent verdict.
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 503, text: async () => 'down' }));
+
+    const result = await replayTrajectory({
+      connection,
+      snapshot: twoNodeSnapshot(),
+      target,
+      verdictJudge: { judgeModel: target },
+    });
+
+    expect(result.verdict?.passed).toBe(false);
+    expect(result.verdict?.score).toBe(0);
+    expect(result.verdict?.reason).toContain('503');
+  });
+
   it('settles nodes as they finish but returns them in order', async () => {
     const seen: number[] = [];
     let call = 0;

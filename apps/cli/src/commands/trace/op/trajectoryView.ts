@@ -1,21 +1,16 @@
 import type { TrajectoryNode, TrajectoryResult } from '@lobechat/agent-tracing';
 import pc from 'picocolors';
 
-const truncate = (text: string, max = 160) => {
-  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
-};
-
 /**
- * One glyph per LLM call, laid out left to right in call order — the shape of
- * the run is the thing you want first, not a scroll of per-node paragraphs.
+ * One glyph per LLM call, left to right in call order.
  *
- * Divergence gets its own colour rather than sharing red with a transport
- * failure: "the model chose different tools here" is the finding the replay
- * exists to surface, while "this call never reached the model" says nothing
- * about the model at all.
+ * A different tool route is drawn neutral, not as a warning: the replay asks
+ * whether another model gets the job done, and a model that solved the same
+ * problem by calling different tools has not done anything wrong. Only a call
+ * that never reached the model is red. The pass / fail answer comes from the
+ * judge, above.
  */
-const GLYPH = { diverged: '◆', error: '✕', matched: '●', pending: '·' } as const;
+const GLYPH = { diverged: '○', error: '✕', matched: '●', pending: '·' } as const;
 
 type NodeState = keyof typeof GLYPH;
 
@@ -28,7 +23,7 @@ const stateOf = (node: TrajectoryNode | undefined): NodeState => {
 const paint = (state: NodeState): string => {
   const glyph = GLYPH[state];
   if (state === 'matched') return pc.green(glyph);
-  if (state === 'diverged') return pc.yellow(glyph);
+  if (state === 'diverged') return pc.cyan(glyph);
   if (state === 'error') return pc.red(glyph);
   return pc.dim(glyph);
 };
@@ -102,9 +97,9 @@ export class TrajectoryStrip {
   }
 }
 
-/** Detail for the nodes worth reading: the ones that diverged or failed. */
+/** Supporting detail for the calls that took another route or never answered. */
 const printNodeDetail = (node: TrajectoryNode) => {
-  const at = `${pc.bold(`node ${node.nodeIndex + 1}`)} ${pc.dim(`step ${node.stepIndex}`)}`;
+  const at = `call ${String(node.nodeIndex + 1).padStart(3)} ${pc.dim(`step ${node.stepIndex}`)}`;
 
   if (node.attempt.error) {
     console.log(`  ${pc.red(GLYPH.error)} ${at}  ${pc.red(node.attempt.error)}`);
@@ -114,53 +109,65 @@ const printNodeDetail = (node: TrajectoryNode) => {
   const divergence = node.divergence;
   if (!divergence) return;
 
-  console.log(`  ${pc.yellow(GLYPH.diverged)} ${at}  ${pc.dim(divergence.field)}`);
-  console.log(pc.dim(`      recorded  ${divergence.recorded || '(final answer)'}`));
-  console.log(pc.dim(`      replayed  ${divergence.replayed || '(final answer)'}`));
-  if (node.attempt.content) {
-    console.log(pc.dim(`      said      ${truncate(node.attempt.content, 120)}`));
+  console.log(
+    `  ${pc.cyan(GLYPH.diverged)} ${at}  ${pc.dim('recorded')} ${divergence.recorded || pc.dim('(final answer)')}` +
+      `  ${pc.dim('→ replayed')} ${divergence.replayed || pc.dim('(final answer)')}`,
+  );
+};
+
+const wrap = (text: string, width: number, indent: string): string[] => {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+
+  for (const word of words) {
+    if (line && line.length + word.length + 1 > width) {
+      lines.push(indent + line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
   }
+  if (line) lines.push(indent + line);
+
+  return lines;
 };
 
 export const printTrajectorySummary = (result: TrajectoryResult) => {
   const total = result.nodes.length;
-  const diverged = result.nodes.filter((node) => node.divergence);
+  const rerouted = result.nodes.filter((node) => node.divergence);
   const failed = result.nodes.filter((node) => node.attempt.error);
-  const matched = total - diverged.length - failed.length;
+  const elapsed = result.nodes.reduce((sum, node) => sum + (node.attempt.durationMs ?? 0), 0);
 
-  // Reprint the finished strip: under a TTY this replaces the live one, and
-  // without a TTY it is the only time the shape is shown.
   console.log('');
-  for (const row of stripRows(result.nodes.map((node) => stateOf(node)))) console.log(row);
+
+  // The verdict is the answer the replay was run to get, so it leads.
+  if (result.verdict) {
+    const { passed, reason, score } = result.verdict;
+    const badge = passed ? pc.bold(pc.green('✔ PASS')) : pc.bold(pc.red('✘ FAIL'));
+    console.log(`  ${badge}  ${pc.bold(score.toFixed(2))}`);
+    if (reason) {
+      console.log('');
+      for (const line of wrap(reason, 76, '  ')) console.log(pc.dim(line));
+    }
+  } else {
+    console.log(`  ${pc.dim('no verdict — run with a judge model to get pass / fail')}`);
+  }
 
   console.log('');
   console.log(
-    [
-      `  ${pc.green(`${GLYPH.matched} ${matched} matched`)}`,
-      diverged.length > 0
-        ? pc.yellow(`${GLYPH.diverged} ${diverged.length} different tools`)
-        : pc.dim(`${GLYPH.diverged} 0 different tools`),
-      failed.length > 0
-        ? pc.red(`${GLYPH.error} ${failed.length} no response`)
-        : pc.dim(`${GLYPH.error} 0 no response`),
-      pc.dim(`· ${total} calls`),
-    ].join(pc.dim('   ')),
+    pc.dim(
+      `  ${total} calls · ${(elapsed / 1000).toFixed(1)}s · ` +
+        `${total - rerouted.length - failed.length}/${total} took the recorded tool route`,
+    ),
   );
 
-  if (diverged.length > 0 || failed.length > 0) {
+  for (const row of stripRows(result.nodes.map((node) => stateOf(node)))) console.log(row);
+
+  if (rerouted.length > 0 || failed.length > 0) {
     console.log('');
     for (const node of result.nodes) {
       if (node.divergence || node.attempt.error) printNodeDetail(node);
     }
-  }
-
-  if (result.reproduction) {
-    const verdict = result.reproduction.passed ? pc.green('PASS') : pc.red('FAIL');
-    console.log('');
-    console.log(
-      `  final answer  ${verdict} ${result.reproduction.score.toFixed(2)} ${pc.dim(
-        result.reproduction.reason ?? '',
-      )}`,
-    );
   }
 };

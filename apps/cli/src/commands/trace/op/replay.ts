@@ -108,8 +108,8 @@ export function registerOpReplayCommand(parent: Command) {
           targets = options.model
             ? parseModelTargets(options.model, snapshot.provider)
             : originalTarget(snapshot);
-          // Trajectory runs always score reproduction against the recorded output,
-          // so they need a judge even when no behavioural criteria was given.
+          // Replaying every call always ends in a pass / fail verdict, so it
+          // needs a judge even when no explicit criteria was given.
           judgeModel =
             options.judge || allSteps ? parseModelTargets(options.judgeModel)[0] : undefined;
         } catch (error) {
@@ -142,7 +142,7 @@ export function registerOpReplayCommand(parent: Command) {
             connection,
             maxTokens: options.maxTokens,
             onNode: (node) => strip?.settle(node),
-            reproductionJudge: judgeModel ? { judgeModel } : undefined,
+            verdictJudge: judgeModel ? { criteria: options.judge, judgeModel } : undefined,
             snapshot,
             target: targets[0],
             temperature: options.temperature,

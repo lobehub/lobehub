@@ -139,7 +139,7 @@ export function registerReplayCommand(program: Command) {
                         ? `  ${node.divergence.field}: recorded ${node.divergence.recorded || '(final answer)'} / replayed ${node.divergence.replayed || '(final answer)'}`
                         : ''),
                   ),
-            reproductionJudge: judgeModel ? { judgeModel } : undefined,
+            verdictJudge: judgeModel ? { criteria: opts.judge, judgeModel } : undefined,
             snapshot,
             target: targets[0],
             temperature:
@@ -150,13 +150,12 @@ export function registerReplayCommand(program: Command) {
           console.log(
             opts.json
               ? JSON.stringify({ ...result, operationId: snapshot.operationId }, null, 2)
-              : `\n${result.nodes.length}/${result.totalNodes} nodes replayed` +
-                  (result.divergedAtNode === undefined
-                    ? ''
-                    : `, diverged at node ${result.divergedAtNode + 1}`) +
-                  (result.reproduction
-                    ? `\nreproduction ${result.reproduction.passed ? 'PASS' : 'FAIL'} ${result.reproduction.score.toFixed(2)} ${result.reproduction.reason ?? ''}`
-                    : ''),
+              : (result.verdict
+                  ? `\n${result.verdict.passed ? 'PASS' : 'FAIL'} ${result.verdict.score.toFixed(2)}  ${result.verdict.reason ?? ''}`
+                  : '\nno verdict — pass a judge model to get pass / fail') +
+                  `\n${result.totalNodes} calls, ` +
+                  `${result.nodes.filter((node) => !node.divergence && !node.attempt.error).length}` +
+                  ` took the recorded tool route`,
           );
           return;
         }
