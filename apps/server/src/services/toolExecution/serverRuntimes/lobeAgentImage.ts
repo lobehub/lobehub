@@ -79,7 +79,11 @@ const consumePreparationBudget = (usedBytes: number, imageBytes: number) => {
   return usedBytes + imageBytes;
 };
 
-const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMimeType) => {
+const transcodeImage = async (
+  buffer: Buffer,
+  targetMimeType: MultimodalImageMimeType,
+  maxOutputBytes: number,
+) => {
   const { default: sharp } = await import('sharp');
   let image = sharp(buffer, {
     failOn: 'error',
@@ -92,7 +96,24 @@ const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMim
     image = image.flatten({ background: '#fff' });
   }
 
-  return image.toFormat(SHARP_FORMAT_BY_MIME_TYPE[targetMimeType]).toBuffer();
+  const output = image.toFormat(SHARP_FORMAT_BY_MIME_TYPE[targetMimeType]);
+  const chunks: Buffer[] = [];
+  let outputBytes = 0;
+
+  /** Stop Sharp while it is encoding instead of allocating an oversized result first. */
+  for await (const chunk of output) {
+    const outputChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    if (outputChunk.byteLength > maxOutputBytes - outputBytes) {
+      output.destroy();
+      throw new RangeError('Transcoded image exceeds the remaining preparation byte limit');
+    }
+
+    chunks.push(outputChunk);
+    outputBytes += outputChunk.byteLength;
+  }
+
+  if (chunks.length === 1) return chunks[0];
+  return Buffer.concat(chunks, outputBytes);
 };
 
 /** Decode supported remote images once before forwarding their original bytes. */
@@ -148,7 +169,11 @@ export const normalizeMultimodalImageItems = async (
       continue;
     }
 
-    const converted = await transcodeImage(source.buffer, targetMimeType);
+    const converted = await transcodeImage(
+      source.buffer,
+      targetMimeType,
+      MAX_MULTIMODAL_IMAGE_PREPARATION_BYTES - preparedImageBytes,
+    );
     preparedImageBytes = consumePreparationBudget(preparedImageBytes, converted.byteLength);
     normalizedItems.push({
       ...item,

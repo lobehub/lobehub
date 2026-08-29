@@ -19,6 +19,9 @@ const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
 const mockFetchCappedBuffer = vi.hoisted(() => vi.fn());
 const mockImageUrlToBase64 = vi.hoisted(() => vi.fn());
+const mockSharpFactory = vi.hoisted(() => ({
+  current: undefined as ((input: Buffer, options?: Record<string, unknown>) => unknown) | undefined,
+}));
 const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
@@ -106,6 +109,9 @@ vi.mock('sharp', async (importOriginal) => {
     ...actual,
     default: (input: Buffer, options?: Record<string, unknown>) => {
       mockSharpOptions(options);
+      if (mockSharpFactory.current) {
+        return mockSharpFactory.current(input, options) as ReturnType<typeof actual.default>;
+      }
       return actual.default(input, options);
     },
   };
@@ -144,6 +150,7 @@ describe('lobeAgentRuntime', () => {
       Promise.resolve(url || ''),
     );
     mockMessageModelQuery.mockResolvedValue([]);
+    mockSharpFactory.current = undefined;
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS = ['image/png', 'image/jpeg'];
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER = 'test-provider';
@@ -192,6 +199,45 @@ describe('lobeAgentRuntime', () => {
 
     const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
     await expect(sharp(convertedBuffer).metadata()).resolves.toMatchObject({ format: 'png' });
+  });
+
+  it('should stop collecting transcoded output once it exceeds the preparation budget', async () => {
+    const chunk = Buffer.alloc(11 * 1024 * 1024);
+    const destroy = vi.fn();
+    const toBuffer = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(Buffer.alloc(21 * 1024 * 1024)));
+    const output = {
+      async *[Symbol.asyncIterator]() {
+        yield chunk;
+        yield chunk;
+      },
+      destroy,
+      toBuffer,
+    };
+    const image = {
+      rotate: () => image,
+      toFormat: () => output,
+    };
+    mockSharpFactory.current = () => image;
+    mockImageUrlToBase64.mockResolvedValue({
+      base64: VALID_PNG_BASE64,
+      mimeType: 'image/avif',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/large-output.avif'],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
+      success: false,
+    });
+    expect(toBuffer).not.toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(mockChat).not.toHaveBeenCalled();
   });
 
   it('should rewrite supported inline images with their detected MIME type', async () => {
