@@ -9,64 +9,29 @@
 // Prints one line of JSON: {"ok":true,"bytes":N,"ms":N,"targetUrl":"..."} or {"ok":false,"error":"..."}
 // Exit 0 on success, non-zero on failure/timeout.
 //
-// Requires the `ws` package to be resolvable from this file's own location —
-// Node's require() walks up ancestor node_modules automatically, so this works
-// whether the skill ships inside @lobehub/cli's own node_modules or a hoisted
-// monorepo root; no manual NODE_PATH wiring needed. An installed
-// skill dir lives inside a consumer repo's harness skills dir, though, so the
-// ancestor walk from there never reaches @lobehub/cli's node_modules — fall
-// back to the `cliRoot` recorded in the sibling `.skill-meta.json`.
+// Requires the `ws` package. The script lives in this repo's own
+// `.agents/acceptance/scripts/`, so Node's ancestor node_modules walk reaches the
+// workspace root — no NODE_PATH wiring, and an unresolvable `ws` means the repo's
+// dependencies simply are not installed.
 
 const http = require('node:http');
 const fs = require('node:fs');
-const path = require('node:path');
 
 function resolveWs() {
-  const attempted = [];
   try {
     return require('ws');
   } catch {
-    attempted.push('ancestor node_modules walk from ' + __filename);
+    console.log(
+      JSON.stringify({
+        ok: false,
+        error:
+          "Cannot find module 'ws' from " +
+          __filename +
+          '. Install the repository dependencies (pnpm install) and retry.',
+      }),
+    );
+    process.exit(7);
   }
-
-  const markerDir = path.join(__dirname, '..');
-  const metaPath = path.join(markerDir, '.skill-meta.json');
-  let cliRoot;
-  try {
-    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-    cliRoot = meta && meta.cliRoot;
-    if (cliRoot && !path.isAbsolute(cliRoot)) {
-      cliRoot = path.resolve(markerDir, cliRoot);
-    }
-  } catch {
-    attempted.push(metaPath + ' (missing or unreadable)');
-  }
-
-  if (cliRoot) {
-    // createRequire, not a hand-built <cliRoot>/node_modules/ws path: pnpm
-    // links a package's deps NEXT TO it (.pnpm/<pkg>@<v>/node_modules/ws),
-    // so only Node's real resolution walk anchored inside cliRoot finds ws
-    // across both npm and pnpm layouts.
-    try {
-      return require('node:module').createRequire(path.join(cliRoot, 'package.json'))('ws');
-    } catch {
-      attempted.push("createRequire('ws') from " + cliRoot + ' (via .skill-meta.json cliRoot)');
-    }
-  }
-
-  console.log(
-    JSON.stringify({
-      ok: false,
-      error:
-        "Cannot find module 'ws'. Tried: " +
-        attempted.join('; ') +
-        ". This script requires the 'ws' package to be resolvable " +
-        'from its own install location (a dependency of @lobehub/cli, or installed ' +
-        "alongside it). Run 'npm install ws' in the consuming project if using this " +
-        'script standalone.',
-    }),
-  );
-  process.exit(7);
 }
 
 const WebSocket = resolveWs();

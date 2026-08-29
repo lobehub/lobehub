@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { AcceptanceSkill } from './index';
+
 const skillDir = path.dirname(fileURLToPath(import.meta.url));
 const readMarkdownBundle = (directory: string): string =>
   readdirSync(directory, { withFileTypes: true })
@@ -13,6 +15,13 @@ const readMarkdownBundle = (directory: string): string =>
       return entry.name.endsWith('.md') ? readFileSync(filePath, 'utf8') : [];
     })
     .join('\n');
+
+const listMarkdown = (directory: string): string[] =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const filePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return listMarkdown(filePath);
+    return entry.name.endsWith('.md') ? [path.relative(skillDir, filePath)] : [];
+  });
 
 const skillContent = readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8');
 const skillBundle = readMarkdownBundle(skillDir);
@@ -26,6 +35,23 @@ describe('AcceptanceSkill', () => {
     expect(skillContent).toContain(
       'Put no images, local paths, local file links, or internal run-page paths',
     );
+  });
+
+  it('ships every reference on disk — an unregistered file never reaches a builder', () => {
+    // The bundle is built from `resources`, not from the directory: a reference
+    // added to the folder but not registered here is invisible to every puller
+    // while still looking present in the repo.
+    const onDisk = listMarkdown(skillDir)
+      .filter((file) => file !== 'SKILL.md')
+      .sort();
+
+    expect(Object.keys(AcceptanceSkill.resources ?? {}).sort()).toEqual(onDisk);
+  });
+
+  it('routes to the project layer before touching an environment', () => {
+    expect(skillContent).toContain('.agents/acceptance/');
+    expect(skillContent).toContain('PROCESS.md');
+    expect(skillContent).toContain('project-adapter.md');
   });
 
   it('keeps the latest evidence and multi-round acceptance contracts', () => {

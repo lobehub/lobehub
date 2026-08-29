@@ -1,10 +1,11 @@
 # Probe / Mock Pattern Library (generic layer)
 
-> **This is the GENERIC layer of the living log.** It is read-only in a consumer
-> repo and updated only by PR to the CLI repo that ships this skill. Every recipe
-> here must be **product-independent** — framework-level or tool-level, no project's
-> stores, routes, tables, env vars, or file paths. Project-specific probes and mocks
-> go to `.agents/acceptance/probe-mock-patterns.md` (the writable project layer).
+> **This is the GENERIC layer of the living log.** It ships with the skill, so a
+> consumer repo's copy is materialized and read-only — change it by PR to the
+> skill source. Every recipe here must be **product-independent**: framework-level
+> or tool-level, no project's stores, routes, tables, env vars, or file paths.
+> Project-specific probes and mocks go to
+> `.agents/acceptance/probe-mock-patterns.md`, the writable project layer.
 >
 > **Read this before any run that must force an error state or inspect runtime
 > state.** Each item: Situation / Doesn't work / Works.

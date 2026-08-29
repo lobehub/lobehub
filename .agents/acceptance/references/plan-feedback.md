@@ -1,6 +1,6 @@
-# Phase 1 Plan Feedback
+# Phase 1 plan feedback
 
-Use this template at the end of Phase 1. Match the user's conversation language.
+Use this template at the end of Phase 1 (see [`../PROCESS.md`](../PROCESS.md)). Match the user's conversation language.
 Keep it concrete and compact: report observed state, not generic readiness claims.
 
 ## Readiness verdicts
@@ -69,46 +69,19 @@ Do not include irrelevant environment rows. Add a row when the run has another h
 prerequisite, such as a native app, gateway, fixture repository, or specific
 external account.
 
-## Case selection gate (hard rule)
+## What a planned case may be
 
-Every planned case MUST be a delivery outcome a person can judge — what the
-user sees, hears, reads, or receives. **Never plan a case whose subject is the
-repo's own programmatic gate**: unit / integration / regression tests, test
-suites, coverage, type-check, lint, format, or a clean build. Run those gates as
-part of your own diligence and report them as one line of narrative in
-`report.md` → Verification — they are preconditions of shipping, not things the
-user accepts, and `lh acceptance run ingest` drops them from the round (a
-gates-only round fails to publish entirely). A plan feedback that lists such a
-case wastes the user's approval on a row that will never reach the page.
+The skill's HARD RULE decides this, and the gate must not propose a case that
+will never reach the page: every case is a delivery outcome a person judges, and
+the repo's own programmatic gates (tests, coverage, type-check, lint, build) are
+never cases — ingest drops them and a gates-only round fails to publish. Run them
+as diligence and report them as one line of narrative.
 
-The gate is about the check's _subject_, not its verifier: a CLI behavior case
-asserted by a command is a good case (`verifier: "program"`); "`bun run test`
-is green" is not.
-
-When a check refines or replaces a requirement from an earlier Acceptance round,
-keep the old stable id if it is the same assertion. If the semantic assertion needs
-a new id, declare the replacement explicitly with `supersedes: ['old-check-id']`;
-title similarity is never a merge signal. For every user-visible UI case, plan a
-dedicated screenshot or recording for that exact claim — program output may
-supplement it but cannot replace visual evidence.
-
-On a follow-up round, seed the plan from
-`lh acceptance view <subject> --json` before writing any case:
-
-- Accepted checks are user-settled; omit them from the new plan.
-- Rejected, non-stale checks are the primary repair items. Carry their comments
-  and annotations into the expected outcome, and reuse their exact stable ids.
-- Plan all remaining checks from their current state, again reusing stable ids.
-  A semantic replacement requires a new id plus `supersedes: ['old-id']`.
-- Treat `supersedes` as persistent lineage. When a later round reuses a successor
-  id, copy its complete historical `supersedes` list into the new plan again.
-  Never assume an earlier round made the relationship permanent: the Acceptance
-  union uses the latest plan snapshot for that id, so a later omission can split
-  the successor and replaced check back into parallel rows.
-- Before publish, compare every reused plan id against `acceptance view`. If its
-  latest or historical plan declared `supersedes`, fail the preflight until the
-  new plan carries the same complete list (unless this round deliberately creates
-  another semantic replacement and declares that new chain explicitly).
+Seed a follow-up plan from `lh acceptance view <subject> --json`, not from
+memory: omit accepted checks, repair non-stale rejects under their exact stable
+ids, and carry every `supersedes` chain forward unchanged. For every user-visible
+UI case, plan the screenshot or recording that proves that exact claim — program
+output may supplement visual evidence but never replaces it.
 
 ## Confirmation behavior
 

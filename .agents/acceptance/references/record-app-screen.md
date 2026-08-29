@@ -17,10 +17,10 @@ works under Xvfb and is unaffected by display sleep.
 ## Commands
 
 ```bash
-# $SKILL_DIR = the skill's install dir; the target app must be running with CDP
-"$SKILL_DIR/scripts/record-app-screen.sh" start [output_name] # start recording
-"$SKILL_DIR/scripts/record-app-screen.sh" stop                # stop + assemble video
-"$SKILL_DIR/scripts/record-app-screen.sh" status              # is recording active?
+# The target app must be running with CDP exposed.
+.agents/acceptance/scripts/record-app-screen.sh start [output_name] # start recording
+.agents/acceptance/scripts/record-app-screen.sh stop                # stop + assemble video
+.agents/acceptance/scripts/record-app-screen.sh status              # is recording active?
 ```
 
 ### Arguments
@@ -78,7 +78,7 @@ The `.records/` directory is at the repo root and is gitignored.
 # 1. Start the Electron dev instance (launch command from PROJECT.md §4)
 
 # 2. Start recording
-"$SKILL_DIR/scripts/record-app-screen.sh" start my-test
+.agents/acceptance/scripts/record-app-screen.sh start my-test
 
 # 3. Drive the automation
 agent-browser --cdp 9222 click @e61
@@ -87,7 +87,7 @@ agent-browser --cdp 9222 press Enter
 sleep 10
 
 # 4. Stop and get results
-"$SKILL_DIR/scripts/record-app-screen.sh" stop
+.agents/acceptance/scripts/record-app-screen.sh stop
 # → .records/my-test.mp4 + .records/my-test/*.png
 ```
 

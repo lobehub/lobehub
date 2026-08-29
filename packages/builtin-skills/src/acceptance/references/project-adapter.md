@@ -1,4 +1,4 @@
-# Project Adapter (`.agents/acceptance/PROJECT.md`)
+# Project layer (`.agents/acceptance/`)
 
 This skill is project-agnostic. Everything specific to the project under test — how
 to start and stop it, which ports and services it needs, how auth works, which
@@ -6,14 +6,25 @@ surfaces it has, and how to jump straight into app state — lives in a per-proj
 adapter at `.agents/acceptance/PROJECT.md`. The skill reads it; it never guesses the
 project's commands.
 
+A repository that verifies itself often has more than commands to share: an
+approval gate before touching the environment, a teardown discipline, a publish
+target, a report directory convention. Those live beside the adapter in
+`.agents/acceptance/PROCESS.md`. **When that file exists it owns the run process,
+and this skill supplies the acceptance contract** — plan, evidence, report,
+round. Read both before executing; where they disagree about _how to run_, the
+project layer wins, and where they disagree about _what a valid round is_, this
+skill wins.
+
 ## Where the adapter lives
 
 ```text
-<repo>/.agents/acceptance/            # committed — the adapter and project logs are team assets
-├── PROJECT.md                    # the adapter (this contract)
+<repo>/.agents/acceptance/        # committed — the adapter and project logs are team assets
+├── PROJECT.md                    # the adapter: commands, ports, services, auth, surfaces
+├── PROCESS.md                    # optional: the project's run process (gate, teardown, publish)
 ├── common-mistakes.md            # PROJECT-layer living log (writable)
 ├── probe-mock-patterns.md        # PROJECT-layer living log (writable)
-└── scripts/                      # optional: project env / probe scripts
+├── references/                   # optional: project-owned how-tos
+└── scripts/                      # optional: project env / probe / capture scripts
 ```
 
 `.agents/acceptance/` is **committed** (the adapter and the project living logs are
@@ -55,7 +66,7 @@ anywhere in the repo.
 ## Copy-pasteable template
 
 ```markdown
-# PROJECT.md — agent-testing adapter for <project name>
+# PROJECT.md — acceptance adapter for <project name>
 
 ## 1. Project summary
 
@@ -120,7 +131,7 @@ which directory/package is the server, the web app, the desktop shell, the CLI.>
 - <e.g. "OS-capture surfaces are macOS-only">
 ```
 
-## First-run bootstrap (SKILL.md Step 0.5)
+## First-run bootstrap
 
 When `.agents/acceptance/PROJECT.md` is absent, build it before doing anything else:
 
@@ -139,9 +150,9 @@ When `.agents/acceptance/PROJECT.md` is absent, build it before doing anything e
 4. **Write it only after approval**, to `.agents/acceptance/PROJECT.md`. Create
    `.agents/acceptance/` if it does not exist.
 
-`install` (the CLI's `lh verify install`) only places the skill files; it does no repo
-exploration. The adapter draft needs a model, so the first verification run is what
-bootstraps `PROJECT.md`.
+`lh acceptance install` only places the skill files; it does no repo exploration.
+The adapter draft needs a model, so the first verification run is what bootstraps
+`PROJECT.md`.
 
 ## Drift rule
 
@@ -153,10 +164,15 @@ next run should not rediscover the same divergence.
 ## Two living-log layers
 
 The skill's `references/common-mistakes.md` and `references/probe-mock-patterns.md`
-are the **generic layer** — product-independent, read-only in consumer repos,
-updated only by PR to the CLI repo. The project's own
+are the **generic layer** — product-independent, and read-only in a consumer repo:
+the installed copy is materialized from the skill source, so an edit there is lost
+on the next update. Change it by PR to the skill source. The project's own
 `.agents/acceptance/common-mistakes.md` and `.agents/acceptance/probe-mock-patterns.md` are
 the **project layer** — writable, and the only place a run records project-specific
 learnings. At runtime the agent reads both layers and writes only the project layer.
 When a project-layer entry turns out to be product-independent, genericize it (drop
 every project-specific noun) and PR it to the generic layer upstream.
+
+**Confidentiality runs one way.** Anything naming a project's packages, routes,
+schemas, env vars, service names, or business logic stays in the project layer;
+only a rule that reads correctly with every project noun removed may be promoted.

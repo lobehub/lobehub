@@ -1,16 +1,16 @@
 # Common Mistakes (generic layer)
 
-> **This is the GENERIC layer of the living log.** It is read-only in a consumer
-> repo and updated only by PR to the CLI repo that ships this skill. Every entry
-> here must be **product-independent** — no project's packages, routes, schemas,
-> env vars, service names, or business logic. Project-specific learnings go to
-> `.agents/acceptance/common-mistakes.md` (the writable project layer).
+> **This is the GENERIC layer of the living log.** It ships with the skill, so a
+> consumer repo's copy is materialized and read-only — change it by PR to the
+> skill source. Every entry here must be **product-independent**: no project's
+> packages, routes, schemas, env vars, service names, or business logic. Those go
+> to `.agents/acceptance/common-mistakes.md`, the writable project layer.
 >
-> **Mandatory:** read this file in full before every agent-testing run and
-> self-check against each case. When the user gives negative feedback that is
-> product-independent, genericize it and PR it here; otherwise record it in the
-> project layer. Each case: Wrong approach / Why it's wrong / What it breaks /
-> Correct approach.
+> **Read this file in full before executing a round that drives a product
+> surface**, and self-check against each case before calling a check passed. When
+> the user gives negative feedback that is product-independent, genericize it and
+> PR it here; otherwise record it in the project layer. Each case: Wrong approach
+> / Why it's wrong / What it breaks / Correct approach.
 
 ---
 

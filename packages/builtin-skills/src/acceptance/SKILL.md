@@ -1,15 +1,16 @@
 ---
 name: acceptance
 description: >
-  Self-evidence for delivery verification in any repository, with or without
-  LOBE_OPERATION_ID or a preconfigured verify plan. Discover an existing plan
-  when present; otherwise author checks and publish a standalone acceptance.
-  Pick the proving surface (CLI / web / desktop / iOS Simulator), capture real
-  evidence, and submit it with the lh CLI. Triggers on 'verify the task',
-  'collect evidence',
-  'prove it works', 'upload evidence', 'verify plan', 'requiredEvidence', or any
-  run that must self-certify its delivery. Missing LobeHub environment IDs never
-  make this skill inapplicable.
+  End-to-end verification and self-evidence for a delivery in any repository,
+  with or without LOBE_OPERATION_ID or a preconfigured verify plan. Discover an
+  existing plan when present; otherwise author checks and publish a standalone
+  acceptance. Pick the proving surface (CLI / web / desktop / iOS Simulator),
+  drive the real product, capture visually confirmed evidence, and publish a
+  round with the lh CLI. Triggers on 'verify the task', 'collect evidence',
+  'prove it works', 'upload evidence', 'verify plan', 'requiredEvidence',
+  'local test', 'manual test', 'test report', 'test with cli', 'test in
+  electron', 'test desktop', or any local end-to-end verification task. Missing
+  LobeHub environment IDs never make this skill inapplicable.
 ---
 
 # Verify (Builder Self-Evidence)
@@ -20,6 +21,37 @@ criteria demand **evidence** (a screenshot, a DOM snapshot, CLI output…). A
 criterion that declares `requiredEvidence` **cannot pass on your text alone**:
 if the artifact is missing, the structural gate marks it `uncertain` and the
 delivery is held.
+
+## Read the project layer first (when the repository has one)
+
+Before touching an environment, check for `.agents/acceptance/`. A repository
+that verifies itself keeps its own layer there, and it outranks any guess you
+would otherwise make:
+
+| File                     | What it owns                                                 |
+| ------------------------ | ------------------------------------------------------------ |
+| `PROJECT.md`             | Start/stop commands, ports, services, auth, surfaces, probes |
+| `PROCESS.md`             | The run process: approval gate, execution rules, teardown    |
+| `common-mistakes.md`     | Project living log — what earlier rounds got wrong here      |
+| `probe-mock-patterns.md` | Project living log — how to force state on this product      |
+
+**The division of labor:** the project layer owns _how this repository is run_;
+this skill owns _what a valid acceptance round is_ (plan, evidence, report,
+immutable round, the hard rule below). Where they disagree on running, the
+project layer wins. Where they disagree on what may be published, this skill
+wins. Never invent a start command, a port, or an auth flow that `PROJECT.md`
+already answers, and never work around a divergence silently — fix the adapter
+in place during the run.
+
+No `.agents/acceptance/` means the repository has no project layer yet. Continue
+with the portable path below; if the run needs an adapter, bootstrap one first —
+[project-adapter.md](references/project-adapter.md).
+
+Read both living-log layers before executing a round that drives a product
+surface: this skill's generic
+[common-mistakes.md](references/common-mistakes.md) and
+[probe-mock-patterns.md](references/probe-mock-patterns.md), plus the project's
+own copies. Record new project-specific learnings in the project layer only.
 
 ## Applicability invariant
 
@@ -203,6 +235,12 @@ Rules of thumb:
   Simulator HID/Accessibility CLI for taps, long press, swipe, pan, and UI-tree
   inspection; use `simctl` for lifecycle/framebuffer capture. If the available
   CLI cannot express the planned touch sequence, mark the case `blocked`.
+- **A UI round may also price its interaction cost.** While driving the product,
+  record each action's raw KLM operator counts into `interaction-trace.jsonl` in
+  the report directory; ingest prices them with the platform's pinned timing
+  model. It is an optional overlay — a CLI round, or a machine with no UI driver
+  installed, records no trace and publishes normally. Never hand-write the
+  numbers. See [interaction-cost.md](references/interaction-cost.md).
 - **Auth is a gate, scoped to the surface.** If the state under test is behind a
   login, authenticate that surface first or every capture lands on the sign-in
   page. Follow the selected surface's Auth section; load
@@ -289,8 +327,12 @@ Load detailed references only after selecting the applicable path:
 
 | Need                                                   | Reference                                                           |
 | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| The project layer, and bootstrapping an adapter        | [project-adapter.md](references/project-adapter.md)                 |
+| Verification mistakes to self-check against            | [common-mistakes.md](references/common-mistakes.md)                 |
+| Forcing state, error injection, runtime probes         | [probe-mock-patterns.md](references/probe-mock-patterns.md)         |
 | Existing verify-plan schema and join keys              | [plan-format.md](references/plan-format.md)                         |
 | Shared media, provenance, submission, and safety rules | [evidence.md](references/evidence.md)                               |
+| Interaction cost for a UI round (optional overlay)     | [interaction-cost.md](references/interaction-cost.md)               |
 | Authored structured rounds and `result.json`           | [report.md](references/report.md)                                   |
 | Web/Electron Chromium CLI commands                     | [agent-browser.md](references/agent-browser.md)                     |
 | Authenticated Web session                              | [auth-web.md](references/auth-web.md)                               |
