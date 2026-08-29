@@ -231,7 +231,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     // the resources pane's document fetch so a collapsed sidebar doesn't pull the
     // full agent-document list into the conversation's initial batch.
     s.status.showRightPanel,
-    s.status.showWorkingOverview ?? true,
+    s.status.showWorkingOverview ?? !s.status.showRightPanel,
     s.status.workingSidebarTab,
     s.status.workingSidebarTabRequest,
   ]);
@@ -474,10 +474,10 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     (updater: (tabs: string[]) => string[]) => {
       setOpenTabsByContext((current) => ({
         ...current,
-        [openTabsContextKey]: updater(current[openTabsContextKey] ?? []),
+        [openTabsContextKey]: updater(current[openTabsContextKey] ?? defaultOpenedTabs),
       }));
     },
-    [openTabsContextKey, setOpenTabsByContext],
+    [defaultOpenedTabs, openTabsContextKey, setOpenTabsByContext],
   );
 
   const updatePinnedTabs = useCallback(
@@ -599,12 +599,16 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       const removableTabs = new Set(tabs.filter((tab) => !pinnedTabsSet.has(tab)));
       if (removableTabs.size === 0) return;
 
-      updateOpenedTabs((current) => current.filter((tab) => !removableTabs.has(tab)));
+      const remainingTabs = openedTabs.filter((tab) => !removableTabs.has(tab));
+      updateOpenedTabs(() => remainingTabs);
       if (removableTabs.has(activeTab)) {
-        setOptimisticTab(fallbackTab);
-        setWorkingSidebarTab(fallbackTab);
+        const nextTab = remainingTabs.includes(fallbackTab)
+          ? fallbackTab
+          : (remainingTabs[0] ?? 'overview');
+        setOptimisticTab(nextTab);
+        setWorkingSidebarTab(nextTab);
       }
-      if (openedTabs.every((tab) => removableTabs.has(tab) || pinnedTabsSet.has(tab))) {
+      if (remainingTabs.length === 0) {
         toggleRightPanel(false);
       }
     },
@@ -869,7 +873,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewPanel = showWorkingOverview && (
+  const overviewPanel = showWorkingOverview && fits && (
     <Flexbox className={styles.overviewPanel} role={'complementary'}>
       <Flexbox
         horizontal

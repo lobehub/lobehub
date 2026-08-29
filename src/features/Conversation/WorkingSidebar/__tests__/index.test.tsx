@@ -105,7 +105,7 @@ const globalStore = vi.hoisted(() => ({
     portalWidth: 400 as number | undefined,
     portalWidths: undefined as Record<string, number> | undefined,
     showRightPanel: true,
-    showWorkingOverview: true,
+    showWorkingOverview: true as boolean | undefined,
     workingSidebarTab: 'params' as string | undefined,
     workingSidebarTabRequest: undefined as { nonce: number; tab: string } | undefined,
     workingSidebarWidth: 360 as number | undefined,
@@ -499,6 +499,14 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     expect(rightPanel.current?.expand).toBe(false);
   });
 
+  it('also yields the Overview card when the conversation width budget is too small', () => {
+    globalStore.status.showRightPanel = false;
+
+    render(<AgentWorkingSidebar availableWidth={600} />);
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  });
+
   it('keeps a fitting stored width untouched on a measured row', () => {
     render(<AgentWorkingSidebar availableWidth={1540} />);
 
@@ -793,6 +801,39 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('overview');
   });
 
+  it('preserves the other implicit default tabs when one default tab closes', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'skills';
+
+    render(<AgentWorkingSidebar />);
+    const skillsTab = screen.getByRole('button', {
+      name: 'workingPanel.resources.filter.skills',
+    });
+    fireEvent.click(skillsTab.parentElement!.querySelector('[data-tab-close="true"]')!);
+
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.resources.filter.skills' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'workingPanel.resources.filter.documents' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(globalStore.toggleRightPanel).not.toHaveBeenCalled();
+  });
+
+  it('keeps the panel open and selects a surviving pinned tab when the active tab closes', () => {
+    agentStore.activeAgentId = 'agent';
+    localStorageState.openTabsByContext = { 'draft:agent:none': ['works', 'params'] };
+    localStorageState.pinnedTabsByAgent = { agent: ['works'] };
+    globalStore.status.workingSidebarTab = 'params';
+
+    render(<AgentWorkingSidebar />);
+    const paramsTab = screen.getByRole('button', { name: 'settingModel.params.panel.tab' });
+    fireEvent.click(paramsTab.parentElement!.querySelector('[data-tab-close="true"]')!);
+
+    expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('works');
+    expect(globalStore.toggleRightPanel).not.toHaveBeenCalled();
+  });
+
   it('preserves agent-pinned tabs when closing other tabs', () => {
     agentStore.activeAgentId = 'agent';
     localStorageState.openTabsByContext = {
@@ -1029,6 +1070,16 @@ describe('AgentWorkingSidebar — tab strip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.closePanel' }));
 
     expect(globalStore.updateSystemStatus).toHaveBeenCalledWith({ showWorkingOverview: false });
+  });
+
+  it('does not show Overview beside a legacy persisted open workspace panel', () => {
+    globalStore.status.showRightPanel = true;
+    globalStore.status.showWorkingOverview = undefined;
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(rightPanel.current?.expand).toBe(true);
   });
 
   it('lets the independent Overview close without removing pinned tabs', () => {

@@ -107,6 +107,24 @@ describe('createPreferenceSlice', () => {
       expect(result.current.status.showWorkingOverview).toBe(false);
       expect(result.current.status.showRightPanel).toBe(false);
     });
+
+    it('derives a missing legacy overview flag from the workspace panel state', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showRightPanel: true,
+            showWorkingOverview: undefined,
+          },
+        });
+        result.current.toggleWorkingOverview();
+      });
+
+      expect(result.current.status.showWorkingOverview).toBe(true);
+    });
   });
 
   describe('setWorkingSidebarTab', () => {

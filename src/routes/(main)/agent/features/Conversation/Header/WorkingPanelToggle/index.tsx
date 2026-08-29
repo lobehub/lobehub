@@ -16,7 +16,7 @@ const WorkingPanelToggle = memo(() => {
   const [showRightPanel, showWorkingOverview, toggleRightPanel, updateSystemStatus, isStatusInit] =
     useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
-      s.status.showWorkingOverview ?? true,
+      s.status.showWorkingOverview ?? !s.status.showRightPanel,
       s.toggleRightPanel,
       s.updateSystemStatus,
       systemStatusSelectors.isStatusInit(s),
