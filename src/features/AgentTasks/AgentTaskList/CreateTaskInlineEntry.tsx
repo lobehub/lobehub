@@ -21,9 +21,9 @@ import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import type { TaskAssigneePayload } from '../features/AssigneeAgentSelector';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
@@ -122,11 +122,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const draftRestoredKeyRef = useRef<string | null>(null);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
-  const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
+  const memberMeta = useUserDisplayMeta(assigneeUserId);
 
-  const handleAssigneeChange = useCallback((assignee: TaskAssigneePayload) => {
-    setAssigneeAgentId(assignee.assigneeAgentId ?? undefined);
-    setAssigneeUserId(assignee.assigneeUserId ?? undefined);
+  const handleAgentChange = useCallback((nextAgentId: string | null) => {
+    setAssigneeAgentId(nextAgentId ?? undefined);
+  }, []);
+  const handleMemberChange = useCallback((nextUserId: string | null) => {
+    setAssigneeUserId(nextUserId ?? undefined);
   }, []);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
@@ -182,8 +184,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
-      if (!lockAssignee && !draft.assigneeAgentId && draft.assigneeUserId)
-        setAssigneeUserId(draft.assigneeUserId);
+      if (draft.assigneeUserId) setAssigneeUserId(draft.assigneeUserId);
       if (draft.visibility) setVisibility(draft.visibility);
     } catch {
       /* ignore a malformed draft */
@@ -407,12 +408,62 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             </Block>
           </TaskPriorityTag>
 
-          {(() => {
-            const assigneeChip = (
+          {activeWorkspaceId && (
+            <AssigneeMemberSelector
+              currentUserId={assigneeUserId}
+              taskVisibility={visibility}
+              onChange={handleMemberChange}
+            >
               <Block
+                clickable
                 horizontal
                 align="center"
-                clickable={!lockAssignee}
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {assigneeUserId ? (
+                  <>
+                    <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                    <Text fontSize={12}>{memberMeta?.title}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                    <Text color={cssVar.colorTextDescription} fontSize={12}>
+                      {t('createTask.member')}
+                    </Text>
+                  </>
+                )}
+              </Block>
+            </AssigneeMemberSelector>
+          )}
+
+          {lockAssignee ? (
+            <Block
+              horizontal
+              align="center"
+              gap={6}
+              height={24}
+              paddingBlock={3}
+              paddingInline={8}
+              variant={'borderless'}
+            >
+              <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+              <Text fontSize={12}>{assigneeMeta?.title}</Text>
+            </Block>
+          ) : (
+            <AssigneeAgentSelector
+              currentAgentId={assigneeAgentId}
+              taskVisibility={isOtherMemberAssignee ? 'public' : undefined}
+              onChange={handleAgentChange}
+            >
+              <Block
+                clickable
+                horizontal
+                align="center"
                 gap={6}
                 height={24}
                 paddingBlock={3}
@@ -424,11 +475,6 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                     <AssigneeAvatar agentId={assigneeAgentId} size={18} />
                     <Text fontSize={12}>{assigneeMeta?.title}</Text>
                   </>
-                ) : assigneeUserId ? (
-                  <>
-                    <AssigneeUserAvatar size={18} userId={assigneeUserId} />
-                    <Text fontSize={12}>{memberMeta?.title}</Text>
-                  </>
                 ) : (
                   <>
                     <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
@@ -438,20 +484,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   </>
                 )}
               </Block>
-            );
-
-            return lockAssignee ? (
-              assigneeChip
-            ) : (
-              <AssigneeAgentSelector
-                currentAgentId={assigneeAgentId}
-                currentUserId={assigneeUserId}
-                onChange={handleAssigneeChange}
-              >
-                {assigneeChip}
-              </AssigneeAgentSelector>
-            );
-          })()}
+            </AssigneeAgentSelector>
+          )}
 
           <ActionIcon
             icon={Paperclip}

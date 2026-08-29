@@ -1108,6 +1108,35 @@ describe('Task Router Integration', () => {
   });
 
   describe('human assignee (assigneeUserId)', () => {
+    it('should persist agent and member assignments independently', async () => {
+      const created = await caller.create({
+        assigneeAgentId: testAgentId,
+        assigneeUserId: userId,
+        instruction: 'Dual-assigned task',
+      });
+
+      expect(created.data.assigneeAgentId).toBe(testAgentId);
+      expect(created.data.assigneeUserId).toBe(userId);
+
+      const memberCleared = await caller.update({
+        assigneeUserId: null,
+        id: created.data.id,
+      });
+      expect(memberCleared.data.assigneeAgentId).toBe(testAgentId);
+      expect(memberCleared.data.assigneeUserId).toBeNull();
+
+      const memberRestored = await caller.update({
+        assigneeUserId: userId,
+        id: created.data.id,
+      });
+      const agentCleared = await caller.update({
+        assigneeAgentId: null,
+        id: memberRestored.data.id,
+      });
+      expect(agentCleared.data.assigneeAgentId).toBeNull();
+      expect(agentCleared.data.assigneeUserId).toBe(userId);
+    });
+
     it('should allow assigning to self in personal mode', async () => {
       const created = await caller.create({
         assigneeUserId: userId,

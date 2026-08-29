@@ -20,9 +20,9 @@ import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import type { TaskAssigneePayload } from '../features/AssigneeAgentSelector';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
@@ -91,11 +91,13 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const instructionRef = useRef('');
 
     const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
-    const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
+    const memberMeta = useUserDisplayMeta(assigneeUserId);
 
-    const handleAssigneeChange = useCallback((assignee: TaskAssigneePayload) => {
-      setAssigneeAgentId(assignee.assigneeAgentId ?? undefined);
-      setAssigneeUserId(assignee.assigneeUserId ?? undefined);
+    const handleAgentChange = useCallback((nextAgentId: string | null) => {
+      setAssigneeAgentId(nextAgentId ?? undefined);
+    }, []);
+    const handleMemberChange = useCallback((nextUserId: string | null) => {
+      setAssigneeUserId(nextUserId ?? undefined);
     }, []);
 
     const handleInline = useCallback(() => {
@@ -247,12 +249,60 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               </Block>
             </TaskPriorityTag>
 
-            {(() => {
-              const assigneeChip = (
+            {activeWorkspaceId && (
+              <AssigneeMemberSelector
+                currentUserId={assigneeUserId}
+                taskVisibility={visibility}
+                onChange={handleMemberChange}
+              >
                 <Block
+                  clickable
                   horizontal
                   align="center"
-                  clickable={!lockAssignee}
+                  gap={6}
+                  paddingBlock={4}
+                  paddingInline={8}
+                  variant={'borderless'}
+                >
+                  {assigneeUserId ? (
+                    <>
+                      <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                      <Text fontSize={12}>{memberMeta?.title}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                      <Text color={cssVar.colorTextDescription} fontSize={12}>
+                        {t('createTask.member')}
+                      </Text>
+                    </>
+                  )}
+                </Block>
+              </AssigneeMemberSelector>
+            )}
+
+            {lockAssignee ? (
+              <Block
+                horizontal
+                align="center"
+                gap={6}
+                paddingBlock={4}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                <Text fontSize={12}>{assigneeMeta?.title}</Text>
+              </Block>
+            ) : (
+              <AssigneeAgentSelector
+                currentAgentId={assigneeAgentId}
+                taskVisibility={isOtherMemberAssignee ? 'public' : undefined}
+                onChange={handleAgentChange}
+              >
+                <Block
+                  clickable
+                  horizontal
+                  align="center"
                   gap={6}
                   paddingBlock={4}
                   paddingInline={8}
@@ -263,11 +313,6 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                       <AssigneeAvatar agentId={assigneeAgentId} size={18} />
                       <Text fontSize={12}>{assigneeMeta?.title}</Text>
                     </>
-                  ) : assigneeUserId ? (
-                    <>
-                      <AssigneeUserAvatar size={18} userId={assigneeUserId} />
-                      <Text fontSize={12}>{memberMeta?.title}</Text>
-                    </>
                   ) : (
                     <>
                       <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
@@ -277,20 +322,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                     </>
                   )}
                 </Block>
-              );
-
-              return lockAssignee ? (
-                assigneeChip
-              ) : (
-                <AssigneeAgentSelector
-                  currentAgentId={assigneeAgentId}
-                  currentUserId={assigneeUserId}
-                  onChange={handleAssigneeChange}
-                >
-                  {assigneeChip}
-                </AssigneeAgentSelector>
-              );
-            })()}
+              </AssigneeAgentSelector>
+            )}
 
             {activeWorkspaceId && (
               <TaskVisibilityTag

@@ -27,7 +27,7 @@ class TaskService {
     assigneeAgentId?: string;
     automated?: boolean;
     excludeStatuses?: TaskStatus[];
-    groupBy?: 'assignee' | 'priority';
+    groupBy?: 'assignee' | 'member' | 'priority';
     groups?: Array<{
       key: string;
       limit?: number;

@@ -62,4 +62,10 @@ describe('TaskSubtaskProgressTag', () => {
 
     expect(onSubtaskClick).toHaveBeenCalledWith('T-2', 'agt_child');
   });
+
+  it('renders a lightweight progress summary without a subtask tree', () => {
+    render(<TaskSubtaskProgressTag progress={{ completed: 2, total: 3 }} />);
+
+    expect(screen.getByText('2/3')).toBeInTheDocument();
+  });
 });

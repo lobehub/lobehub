@@ -73,6 +73,7 @@ const renderTaskListBlock = (rows: TaskRow[], sub?: boolean, routeScope?: TaskIt
 const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
   'assignee',
   'automationMode',
+  'member',
   'none',
   'priority',
   'status',

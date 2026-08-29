@@ -332,7 +332,7 @@ export const taskKeys = {
     (
       agentKey: string | undefined,
       visibility: 'all' | 'private' | 'workspace' = 'all',
-      groupBy: 'assignee' | 'priority' | 'status' = 'status',
+      groupBy: 'assignee' | 'member' | 'priority' | 'status' = 'status',
       excludeStatuses?: string,
       projectId?: string,
       automated?: boolean,

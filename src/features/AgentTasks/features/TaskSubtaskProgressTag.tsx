@@ -1,4 +1,4 @@
-import type { TaskDetailSubtask } from '@lobechat/types';
+import type { TaskDetailSubtask, TaskSubtaskProgress } from '@lobechat/types';
 import { type DropdownMenuProps } from '@lobehub/ui';
 import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
@@ -77,28 +77,31 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
 interface TaskSubtaskProgressTagProps {
   currentIdentifier?: string;
   onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
+  progress?: TaskSubtaskProgress;
   subtasks?: TaskDetailSubtask[];
 }
 
 const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
-  ({ subtasks, currentIdentifier, onSubtaskClick }) => {
+  ({ subtasks, currentIdentifier, onSubtaskClick, progress }) => {
     const flattenedSubtasks = useMemo(() => {
       if (!subtasks || subtasks.length === 0) return [];
       return flattenSubtasks(subtasks);
     }, [subtasks]);
 
     const data = useMemo(() => {
-      if (flattenedSubtasks.length === 0) return undefined;
-
-      const total = flattenedSubtasks.length;
-      const completed = flattenedSubtasks.filter((item) => item.task.status === 'completed').length;
+      const total = flattenedSubtasks.length || progress?.total || 0;
       if (total === 0) return undefined;
+
+      const completed =
+        flattenedSubtasks.length > 0
+          ? flattenedSubtasks.filter((item) => item.task.status === 'completed').length
+          : (progress?.completed ?? 0);
 
       return {
         text: `${completed}/${total}`,
         percent: (completed / total) * 100,
       };
-    }, [flattenedSubtasks]);
+    }, [flattenedSubtasks, progress]);
 
     if (!data) return null;
 

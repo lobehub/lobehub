@@ -2,17 +2,18 @@ import type { TaskStatus } from '@lobechat/types';
 import { Block, ContextMenuTrigger, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { LockIcon } from 'lucide-react';
+import { LockIcon, UserCircle2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
+import AssigneeMemberSelector from './AssigneeMemberSelector';
 import AssigneeUserAvatar from './AssigneeUserAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
 import TaskPriorityTag from './TaskPriorityTag';
@@ -47,15 +48,12 @@ const toTaskStatus = (status: string): TaskStatus =>
 const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant = 'default' }) => {
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
-  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
-  useFetchTaskDetail(task.identifier);
-
-  const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
   const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } = useTaskItemContextMenu(
     task,
     routeScope,
   );
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
     formatOtherYear: t('time.formatOtherYear'),
@@ -73,13 +71,6 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
       ),
     );
   }, [navigate, routeScope, task.assigneeAgentId, task.identifier]);
-
-  const handleSubtaskClick = useCallback(
-    (identifier: string, assigneeAgentId?: string) => {
-      navigate(taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined));
-    },
-    [navigate, routeScope],
-  );
 
   const scheduledBadge =
     status === 'scheduled' ? (
@@ -125,36 +116,44 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
         </Text>
       )}
       {scheduledBadge}
-      <TaskSubtaskProgressTag
-        currentIdentifier={task.identifier}
-        subtasks={taskDetail?.subtasks}
-        onSubtaskClick={handleSubtaskClick}
-      />
+      <TaskSubtaskProgressTag currentIdentifier={task.identifier} progress={task.subtaskProgress} />
     </Flexbox>
   );
 
   const assigneeNode = (
-    <AssigneeAgentSelector
-      currentAgentId={task.assigneeAgentId}
-      currentUserId={task.assigneeUserId}
-      disabled={status === 'running'}
-      hideMembers={Boolean(task.automationMode)}
-      taskCreatorId={task.createdByUserId}
-      taskIdentifier={task.identifier}
-      taskVisibility={task.visibility}
-    >
-      {!task.assigneeAgentId && task.assigneeUserId ? (
-        <AssigneeUserAvatar userId={task.assigneeUserId} />
-      ) : (
-        <AssigneeAvatar agentId={task.assigneeAgentId} />
+    <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+      {activeWorkspaceId && !task.automationMode && (
+        <AssigneeMemberSelector
+          currentUserId={task.assigneeUserId}
+          disabled={status === 'running'}
+          taskCreatorId={task.createdByUserId}
+          taskIdentifier={task.identifier}
+          taskVisibility={task.visibility}
+        >
+          <Tooltip title={tChat('createTask.member')}>
+            {task.assigneeUserId ? (
+              <AssigneeUserAvatar userId={task.assigneeUserId} />
+            ) : (
+              <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
+            )}
+          </Tooltip>
+        </AssigneeMemberSelector>
       )}
-    </AssigneeAgentSelector>
+      <AssigneeAgentSelector
+        currentAgentId={task.assigneeAgentId}
+        disabled={status === 'running'}
+        taskIdentifier={task.identifier}
+        taskVisibility={task.visibility}
+      >
+        <AssigneeAvatar agentId={task.assigneeAgentId} />
+      </AssigneeAgentSelector>
+    </Flexbox>
   );
 
   const scheduleNode = task.automationMode ? (
     <TaskTriggerTag
       automationMode={task.automationMode}
-      heartbeatInterval={taskDetail?.heartbeat?.interval}
+      heartbeatInterval={task.heartbeatInterval}
       schedulePattern={task.schedulePattern}
       scheduleTimezone={task.scheduleTimezone}
     />
@@ -189,8 +188,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
             {scheduledBadge}
             <TaskSubtaskProgressTag
               currentIdentifier={task.identifier}
-              subtasks={taskDetail?.subtasks}
-              onSubtaskClick={handleSubtaskClick}
+              progress={task.subtaskProgress}
             />
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>

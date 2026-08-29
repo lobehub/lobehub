@@ -9,7 +9,6 @@ import AgentTaskItem from './AgentTaskItem';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
-  taskDetailMap: {} as Record<string, { subtasks?: any[] }>,
   useFetchTaskDetail: vi.fn(),
 }));
 
@@ -27,17 +26,28 @@ vi.mock('react-router', () => ({
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) =>
     selector({
-      taskDetailMap: mocks.taskDetailMap,
       useFetchTaskDetail: mocks.useFetchTaskDetail,
     }),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => 'workspace-1',
 }));
 
 vi.mock('./AssigneeAgentSelector', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('./AssigneeMemberSelector', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('./AssigneeAvatar', () => ({
   default: () => <span>assignee</span>,
+}));
+
+vi.mock('./AssigneeUserAvatar', () => ({
+  default: () => <span>member</span>,
 }));
 
 vi.mock('./formatTaskItemDate', () => ({
@@ -53,32 +63,16 @@ vi.mock('./TaskStatusTag', () => ({
 }));
 
 vi.mock('./TaskSubtaskProgressTag', () => ({
-  default: ({
-    onSubtaskClick,
-    subtasks,
-  }: {
-    onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
-    subtasks?: any[];
-  }) => {
-    const subtask = subtasks?.[0];
-    if (!subtask) return null;
-
-    return (
-      <span
-        data-testid="subtask-progress"
-        onClick={(event) => {
-          event.stopPropagation();
-          onSubtaskClick?.(subtask.identifier, subtask.assignee?.id ?? undefined);
-        }}
-      >
-        subtask
-      </span>
-    );
-  },
+  default: ({ progress }: { progress?: { completed: number; total: number } }) =>
+    progress ? (
+      <span data-testid="subtask-progress">{`${progress.completed}/${progress.total}`}</span>
+    ) : null,
 }));
 
 vi.mock('./TaskTriggerTag', () => ({
-  default: () => <span>trigger</span>,
+  default: ({ heartbeatInterval }: { heartbeatInterval?: number | null }) => (
+    <span data-testid="trigger">{heartbeatInterval}</span>
+  ),
 }));
 
 vi.mock('./useTaskItemContextMenu', () => ({
@@ -99,7 +93,6 @@ const createTask = (assigneeAgentId?: string | null) =>
 describe('AgentTaskItem', () => {
   beforeEach(() => {
     mocks.navigate.mockClear();
-    mocks.taskDetailMap = {};
     mocks.useFetchTaskDetail.mockClear();
   });
 
@@ -131,62 +124,31 @@ describe('AgentTaskItem', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
   });
 
-  it("opens a subtask inside the clicked subtask's assignee route", () => {
-    mocks.taskDetailMap = {
-      'T-22': {
-        subtasks: [
-          {
-            assignee: { id: 'agt_child' },
-            identifier: 'T-23',
-            status: 'backlog',
-          },
-        ],
-      },
-    };
+  it('shows the agent and member assignees together', () => {
+    render(
+      <AgentTaskItem
+        task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1', automationMode: null }}
+      />,
+    );
 
-    render(<AgentTaskItem task={createTask('agt_parent')} />);
-
-    fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
-
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-23');
+    expect(screen.getAllByText('assignee').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('member').length).toBeGreaterThan(0);
   });
 
-  it('opens a clicked subtask on the global route in global scope', () => {
-    mocks.taskDetailMap = {
-      'T-22': {
-        subtasks: [
-          {
-            assignee: { id: 'agt_child' },
-            identifier: 'T-23',
-            status: 'backlog',
-          },
-        ],
-      },
-    };
+  it('uses list summaries without fetching task detail', () => {
+    render(
+      <AgentTaskItem
+        task={{
+          ...createTask('agt_parent'),
+          automationMode: 'heartbeat',
+          heartbeatInterval: 1800,
+          subtaskProgress: { completed: 3, total: 8 },
+        }}
+      />,
+    );
 
-    render(<AgentTaskItem routeScope="global" task={createTask('agt_parent')} />);
-
-    fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
-
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-23');
-  });
-
-  it('falls back to the global route when the clicked subtask has no assignee', () => {
-    mocks.taskDetailMap = {
-      'T-22': {
-        subtasks: [
-          {
-            identifier: 'T-23',
-            status: 'backlog',
-          },
-        ],
-      },
-    };
-
-    render(<AgentTaskItem task={createTask('agt_parent')} />);
-
-    fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
-
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-23');
+    expect(mocks.useFetchTaskDetail).not.toHaveBeenCalled();
+    expect(screen.getByTestId('subtask-progress')).toHaveTextContent('3/8');
+    expect(screen.getByTestId('trigger')).toHaveTextContent('1800');
   });
 });

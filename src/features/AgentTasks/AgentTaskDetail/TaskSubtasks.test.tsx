@@ -38,6 +38,10 @@ vi.mock('@/libs/contextMenu', () => ({
   showContextMenu: mocks.showContextMenu,
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => 'workspace-1',
+}));
+
 vi.mock('antd', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   App: {
@@ -106,6 +110,10 @@ vi.mock('../AgentTaskList/CreateTaskInlineEntry', () => ({
 }));
 
 vi.mock('../features/AssigneeAgentSelector', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('../features/AssigneeMemberSelector', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 

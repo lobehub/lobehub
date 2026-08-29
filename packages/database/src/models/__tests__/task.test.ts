@@ -446,6 +446,19 @@ describe('TaskModel', () => {
       expect(result.total).toBe(1);
       expect(result.tasks[0].instruction).toBe('Project task');
     });
+
+    it('should aggregate recursive subtask progress for the returned page', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const root = await model.create({ instruction: 'Root task' });
+      const child = await model.create({ instruction: 'Completed child', parentTaskId: root.id });
+      await model.updateStatus(child.id, 'completed', { completedAt: new Date() });
+      await model.create({ instruction: 'Nested child', parentTaskId: child.id });
+
+      const result = await model.list({ parentTaskId: null });
+      const listedRoot = result.tasks.find(({ id }) => id === root.id);
+
+      expect(listedRoot?.subtaskProgress).toEqual({ completed: 1, total: 2 });
+    });
   });
 
   describe('groupList', () => {
@@ -474,7 +487,7 @@ describe('TaskModel', () => {
         groupBy: 'assignee',
       });
 
-      expect(result).toHaveLength(4);
+      expect(result).toHaveLength(3);
       const firstAgent = result.find((group) => group.key === `assignee:${firstAgentId}`);
       expect(firstAgent?.total).toBe(2);
       expect(firstAgent?.tasks.map((task) => task.instruction).sort()).toEqual([
@@ -482,14 +495,31 @@ describe('TaskModel', () => {
         'Legacy dual-assigned task',
       ]);
       expect(result.find((group) => group.key === `assignee:${secondAgentId}`)?.total).toBe(1);
-      const member = result.find((group) => group.key === `assignee:user:${userId2}`);
-      expect(member?.assigneeUserId).toBe(userId2);
-      expect(member?.total).toBe(1);
-      expect(member?.tasks.map((task) => task.instruction)).toEqual(['Member assigned task']);
       const unassigned = result.find((group) => group.key === 'assignee:unassigned');
       expect(unassigned?.assigneeAgentId).toBeNull();
-      expect(unassigned?.assigneeUserId).toBeNull();
-      expect(unassigned?.tasks.map((task) => task.instruction)).toEqual(['Unassigned task']);
+      expect(unassigned?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'Member assigned task',
+        'Unassigned task',
+      ]);
+
+      const memberResult = await model.groupList({
+        excludeStatuses: ['completed', 'canceled'],
+        groupBy: 'member',
+      });
+      const member = memberResult.find((group) => group.key === `member:${userId2}`);
+      expect(member?.assigneeUserId).toBe(userId2);
+      expect(member?.total).toBe(2);
+      expect(member?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'Legacy dual-assigned task',
+        'Member assigned task',
+      ]);
+      const memberUnassigned = memberResult.find((group) => group.key === 'member:unassigned');
+      expect(memberUnassigned?.assigneeUserId).toBeNull();
+      expect(memberUnassigned?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'First assigned task',
+        'Second assigned task',
+        'Unassigned task',
+      ]);
 
       const agentScopedResult = await model.groupList({
         assigneeAgentId: firstAgentId,
@@ -757,6 +787,22 @@ describe('TaskModel', () => {
 
       expect(measuredRoot?.totalRunCost).toBeCloseTo(0.05);
       expect(measuredRoot?.totalRunDuration).toBe(120_000);
+    });
+
+    it('should aggregate recursive subtask progress for grouped tasks', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const root = await model.create({ instruction: 'Root task' });
+      const child = await model.create({ instruction: 'Completed child', parentTaskId: root.id });
+      await model.updateStatus(child.id, 'completed', { completedAt: new Date() });
+      await model.create({ instruction: 'Nested child', parentTaskId: child.id });
+
+      const [group] = await model.groupList({
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+        parentTaskId: null,
+      });
+      const listedRoot = group.tasks.find(({ id }) => id === root.id);
+
+      expect(listedRoot?.subtaskProgress).toEqual({ completed: 1, total: 2 });
     });
   });
 

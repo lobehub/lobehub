@@ -79,11 +79,33 @@ vi.mock('../features/TaskPriorityTag', () => ({
 }));
 
 vi.mock('../features/AssigneeAgentSelector', () => ({
-  default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  default: ({ children, onChange }: { children: ReactNode; onChange?: (id: string) => void }) => (
+    <div>
+      {children}
+      <span data-testid="select-agent" onClick={() => onChange?.('agent-1')} />
+    </div>
+  ),
+}));
+
+vi.mock('../features/AssigneeMemberSelector', () => ({
+  default: ({ children, onChange }: { children: ReactNode; onChange?: (id: string) => void }) => (
+    <div>
+      {children}
+      <span data-testid="select-member" onClick={() => onChange?.('user-1')} />
+    </div>
+  ),
 }));
 
 vi.mock('../features/AssigneeAvatar', () => ({
   default: () => <div />,
+}));
+
+vi.mock('../features/AssigneeUserAvatar', () => ({
+  default: () => <div />,
+}));
+
+vi.mock('../shared/useUserDisplayMeta', () => ({
+  useUserDisplayMeta: () => undefined,
 }));
 
 vi.mock('../features/TaskVisibilityTag', () => ({
@@ -166,5 +188,20 @@ describe('CreateTaskInlineEntry', () => {
 
     expect(insertNewlineMock).not.toHaveBeenCalled();
     await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('submits agent and member assignments together', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('select-agent'));
+    fireEvent.click(screen.getByTestId('select-member'));
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agent-1', assigneeUserId: 'user-1' }),
+      ),
+    );
   });
 });
