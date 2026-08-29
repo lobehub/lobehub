@@ -14,6 +14,7 @@ import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
+import AcceptanceInteractionCost from './AcceptanceInteractionCost';
 import { useAcceptanceScope } from './AcceptanceScope';
 import CheckList, {
   type CheckFilter,
@@ -232,6 +233,7 @@ const AcceptanceCheckInventory = ({
         )}
       </Flexbox>
       {children}
+      <AcceptanceInteractionCost data={data} />
       <CheckList
         canReview={canReview}
         checks={checks}
