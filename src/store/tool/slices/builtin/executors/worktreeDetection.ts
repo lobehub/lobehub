@@ -7,6 +7,7 @@ import type {
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
+import { applyWorktreeExitToConfig } from '@/helpers/workingDirectoryPath';
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
@@ -653,37 +654,6 @@ const applyWorktreeAddToConfig = (
 
   if (info.branch) delete git.detached;
   if (branchChanged) {
-    delete git.github;
-    delete git.upstream;
-  }
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
-  };
-};
-
-/**
- * The session left the worktree and is back in the source repo. `branch`, its
- * `upstream` ref and the linked `github` PR described the worktree's branch, not the
- * source repo's, so they are dropped rather than left pointing at a branch the topic
- * is no longer on — the source branch is unknown until the next `git switch` /
- * `checkout` refreshes it.
- */
-const applyWorktreeExitToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-): WorkingDirConfig => {
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    isWorktree: false,
-  };
-
-  delete git.activeWorktree;
-  if (currentConfig?.git?.isWorktree) {
-    delete git.branch;
     delete git.github;
     delete git.upstream;
   }

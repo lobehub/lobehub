@@ -54,3 +54,47 @@ export const isWorktreeCheckout = ({
   sourcePath?: string;
 }): boolean =>
   !!git?.isWorktree || (!!sourcePath && !!effectivePath && effectivePath !== sourcePath);
+
+/**
+ * The effective checkout is back to the source repo: drop the worktree
+ * override. `branch`, its `upstream` ref and the linked `github` PR described
+ * the worktree's branch, not the source repo's, so they are dropped rather than
+ * left pointing at a branch the topic is no longer on — the source branch is
+ * unknown until the next `git switch` / `checkout` refreshes it.
+ *
+ * The single funnel for un-setting a worktree, shared by the `ExitWorktree`
+ * recorder (the session walked out of it) and the run-start prune (the
+ * directory was deleted underneath it), so the two cannot drift into recording
+ * different shapes for the same state.
+ */
+export const applyWorktreeExitToConfig = (
+  currentConfig: WorkingDirConfig | undefined,
+  source: string,
+): WorkingDirConfig => {
+  const currentGit = currentConfig?.git;
+  const git: NonNullable<WorkingDirConfig['git']> = { ...currentGit, isWorktree: false };
+
+  // `isWorktree` is only stamped by the newer snapshot writer, so a topic
+  // recorded before it carries `{ activeWorktree, branch, github }` and nothing
+  // else. Keying the cleanup off that flag alone left those configs pointing at
+  // the source repo while still advertising the abandoned worktree's branch and
+  // PR — the same pre-flag shape `staleSnapshot` already reads by comparing
+  // paths. Leaving the override is what makes it a worktree, flag or not.
+  const wasWorktree =
+    !!currentGit?.isWorktree ||
+    (!!currentGit?.activeWorktree && currentGit.activeWorktree !== source);
+
+  delete git.activeWorktree;
+  if (wasWorktree) {
+    delete git.branch;
+    delete git.github;
+    delete git.upstream;
+  }
+
+  return {
+    ...currentConfig,
+    git,
+    path: source,
+    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+  };
+};

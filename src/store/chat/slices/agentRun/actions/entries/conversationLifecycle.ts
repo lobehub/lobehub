@@ -28,7 +28,6 @@ import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
 import {
-  resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
@@ -88,6 +87,7 @@ import {
 } from '@/store/chat/utils/compression';
 import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { pruneMissingWorktree } from '@/store/chat/utils/pruneMissingWorktree';
 import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
@@ -1133,12 +1133,49 @@ export class ConversationLifecycleActionImpl {
           workspaceScoped,
         }
       : undefined;
-    const agentWorkingDirectory = runCwdParams
-      ? resolveAgentWorkingDirectory(runCwdParams)
-      : undefined;
-    const agentWorkingDirectoryConfig = runCwdParams
-      ? resolveAgentWorkingDirectoryConfig(runCwdParams)
-      : undefined;
+    // A recorded worktree can be deleted out from under both levels of config
+    // (`git worktree remove`, a cleanup pass, a wiped branch folder). Nothing
+    // else notices: the picker shows the SOURCE repo either way, so the bar
+    // reads healthy while every tool call spawns in a directory that is gone —
+    // and an agent-level override hands that dead path to every NEW topic. Drop
+    // it here, at the moment of use, so the run falls back to the source repo.
+    // Costs nothing when no worktree is recorded (no probe, no round-trip).
+    const agentWorkingDirectoryConfig = await pruneMissingWorktree({
+      config: runCwdParams ? resolveAgentWorkingDirectoryConfig(runCwdParams) : undefined,
+      deviceId: runCwdDeviceId,
+    });
+    const agentWorkingDirectory = getWorkingDirEffectivePath(agentWorkingDirectoryConfig);
+    const topicWorkingDirectoryConfig = await pruneMissingWorktree({
+      config: existingTopic?.metadata?.workingDirectoryConfig,
+      deviceId: runCwdDeviceId,
+    });
+    // The topic keeps the dead worktree on its row until something rewrites it,
+    // and the SERVER re-resolves the cwd from that row — for an existing topic
+    // the corrected config does NOT ride along with the request (only a NEW
+    // topic's metadata does), so the row is the only channel this run has.
+    // Hence AWAIT, not fire-and-forget: dispatching first would race the write
+    // and let this very turn resolve the dead path again.
+    if (
+      existingTopic &&
+      topicWorkingDirectoryConfig !== existingTopic.metadata?.workingDirectoryConfig
+    ) {
+      const repairedMetadata = {
+        workingDirectory: getWorkingDirEffectivePath(topicWorkingDirectoryConfig),
+        workingDirectoryConfig: topicWorkingDirectoryConfig,
+      };
+      try {
+        // `updateTopicMetadata` returns early for a topic the paginated store
+        // doesn't hold — exactly the deep-linked case `resolveExistingTopicForRun`
+        // fetched from the server — so persist directly for those instead of
+        // silently writing nothing.
+        await (topicSelectors.getTopicById(existingTopic.id)(this.#get())
+          ? this.#get().updateTopicMetadata(existingTopic.id, repairedMetadata)
+          : topicService.updateTopicMetadata(existingTopic.id, repairedMetadata));
+      } catch {
+        // Metadata bookkeeping must never fail a run that is otherwise fine —
+        // the shell still reports the missing directory by name.
+      }
+    }
     // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
     // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
     // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
@@ -1154,11 +1191,11 @@ export class ConversationLifecycleActionImpl {
       ? getWorkingDirSourcePath
       : getWorkingDirEffectivePath;
     const workingDirectory =
-      resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
+      resolveWorkingDirPath(topicWorkingDirectoryConfig) ??
       existingTopic?.metadata?.workingDirectory ??
       agentWorkingDirectory;
     const workingDirectoryConfig =
-      existingTopic?.metadata?.workingDirectoryConfig ??
+      topicWorkingDirectoryConfig ??
       (existingTopic?.metadata?.workingDirectory
         ? { path: existingTopic.metadata.workingDirectory }
         : agentWorkingDirectoryConfig);
