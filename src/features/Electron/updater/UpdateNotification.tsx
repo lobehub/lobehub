@@ -47,14 +47,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-inline-start: 16px;
 
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 
     max-inline-size: calc(100vw - 32px);
-    padding-block: 6px;
-    padding-inline: 12px 6px;
-    border-radius: ${cssVar.borderRadius};
+    padding-block: 8px;
+    padding-inline: 12px 8px;
+    border-radius: ${cssVar.borderRadiusLG};
 
+    font-size: 14px;
+    line-height: 1.25;
     color: ${cssVar.colorText};
 
     background: ${cssVar.colorBgElevated};
