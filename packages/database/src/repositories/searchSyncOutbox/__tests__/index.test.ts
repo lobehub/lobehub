@@ -177,7 +177,7 @@ describe('SearchSyncOutboxRepository', () => {
       return [];
     });
     const isolatedRepository = new SearchSyncOutboxRepository({
-      execute: execute as LobeChatDatabase['execute'],
+      execute: execute as unknown as LobeChatDatabase['execute'],
     });
 
     await isolatedRepository.enableCapture();

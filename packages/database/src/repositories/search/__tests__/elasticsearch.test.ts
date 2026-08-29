@@ -920,9 +920,9 @@ describe('ElasticsearchSearchBackend', () => {
 
     const response = await backend.search(request('topics', { limit: 2 }));
 
-    expect(response.items.map(({ id }) => id)).toEqual([
-      'paging-visible-recent',
-      'paging-visible-old',
+    expect(response.items).toEqual([
+      expect.objectContaining({ id: 'paging-visible-recent' }),
+      expect.objectContaining({ id: 'paging-visible-old' }),
     ]);
     expect(client.search).toHaveBeenCalledTimes(2);
     expect(client.search).toHaveBeenNthCalledWith(
@@ -1002,9 +1002,9 @@ describe('ElasticsearchSearchBackend', () => {
 
     const response = await backend.search(request('messages', { limit: 2 }));
 
-    expect(response.items.map(({ id }) => id)).toEqual([
-      'message-paging-visible-recent',
-      'message-paging-visible-old',
+    expect(response.items).toEqual([
+      expect.objectContaining({ id: 'message-paging-visible-recent' }),
+      expect.objectContaining({ id: 'message-paging-visible-old' }),
     ]);
     expect(client.search).toHaveBeenCalledTimes(2);
     expect(client.search).toHaveBeenNthCalledWith(
@@ -1047,7 +1047,7 @@ describe('ElasticsearchSearchBackend', () => {
 
     const response = await backend.search(request('topics', { limit: 2 }));
 
-    expect(response.items.map(({ id }) => id)).toEqual(['budget-visible-topic']);
+    expect(response.items).toEqual([expect.objectContaining({ id: 'budget-visible-topic' })]);
     expect(response.candidates).toHaveLength(40);
     expect(client.search).toHaveBeenCalledTimes(5);
   });
