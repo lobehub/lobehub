@@ -1515,9 +1515,15 @@ const aiAgentProcedure = aiAgentBaseProcedure.use(async (opts) => {
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      // Generic aiAgent writes (thread task creation, client-task completion
+      // patching the source message) must not reach Agent Share conversations —
+      // the share flow runs through `shareChat` with internal, unguarded
+      // models. See `MessageModelOptions.guardShareProvenance`.
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId, {
+        guardShareProvenance: true,
+      }),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, { guardShareProvenance: true }),
     },
   });
 });
