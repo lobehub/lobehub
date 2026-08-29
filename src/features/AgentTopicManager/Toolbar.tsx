@@ -24,14 +24,12 @@ import {
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { useTopicsViewStore } from './store';
 import type {
-  BotChannelFilter,
-  BotChannelGroup,
+  BotChannelOption,
   GroupBy,
   SortBy,
   StatusFilter,
@@ -170,7 +168,7 @@ const SORT_OPTIONS: SortBy[] = ['updatedAt', 'createdAt', 'title'];
 const GROUP_OPTIONS: GroupBy[] = ['byTime', 'byProject', 'none'];
 
 interface ToolbarProps {
-  botChannelGroups: BotChannelGroup[];
+  botChannelOptions: BotChannelOption[];
   projects: { label: string; value: string }[];
   statusCounts: Record<StatusFilter, number>;
 }
@@ -213,7 +211,7 @@ const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }
   );
 });
 
-const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelGroups }) => {
+const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions }) => {
   const { t } = useTranslation('topic');
 
   const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
@@ -266,39 +264,25 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelGroups }
     }));
   }, [projects, groupIds, t, setGroupIds]);
 
-  // Two-level "send source" filter: bot (platform + application) → channels.
+  // Flattened "send source" filter: one entry per bot platform (per review,
+  // only distinguish tg/discord level — no per-channel submenu).
   const botChannelItems: DropdownItem[] = useMemo(() => {
-    if (botChannelGroups.length === 0) {
+    if (botChannelOptions.length === 0) {
       return [{ disabled: true, key: 'empty', label: t('management.filters.botChannel.empty') }];
     }
-    return botChannelGroups.map((group) => {
-      const ProviderIcon = getPlatformIcon(group.platform);
-      return {
-        children: group.channels.map((channel) => {
-          const toggle = (key: BotChannelFilter) =>
-            setBotChannels(
-              botChannels.includes(key)
-                ? botChannels.filter((x) => x !== key)
-                : [...botChannels, key],
-            );
-          return {
-            extra: <CheckMark visible={botChannels.includes(channel.key)} />,
-            key: channel.key,
-            label: channel.label,
-            onClick: () => toggle(channel.key),
-          };
-        }),
-        icon: ProviderIcon ? (
-          <Icon icon={ProviderIcon} size={14} />
-        ) : (
-          <Icon icon={Hash} size={14} />
+    return botChannelOptions.map((option) => ({
+      extra: <CheckMark visible={botChannels.includes(option.key)} />,
+      icon: <Icon icon={Hash} size={14} />,
+      key: option.key,
+      label: option.label,
+      onClick: () =>
+        setBotChannels(
+          botChannels.includes(option.key)
+            ? botChannels.filter((x) => x !== option.key)
+            : [...botChannels, option.key],
         ),
-        key: group.key,
-        label: group.label,
-        type: 'submenu',
-      };
-    });
-  }, [botChannelGroups, botChannels, setBotChannels, t]);
+    }));
+  }, [botChannelOptions, botChannels, setBotChannels, t]);
 
   const timeItems: DropdownItem[] = useMemo(
     () =>
@@ -402,16 +386,12 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelGroups }
       ? (t(`management.filters.trigger.${triggers[0]}` as any) as string)
       : `${triggers.length} selected`;
 
-  // Single selection shows "Bot · channel"; multi shows a count.
+  // Single selection shows the channel (platform) name; multi shows a count.
   const botChannelChipValue = useMemo(() => {
     if (botChannels.length !== 1) return `${botChannels.length} selected`;
     const selected = botChannels[0];
-    for (const group of botChannelGroups) {
-      const channel = group.channels.find((c) => c.key === selected);
-      if (channel) return `${group.label} · ${channel.label}`;
-    }
-    return selected;
-  }, [botChannels, botChannelGroups]);
+    return botChannelOptions.find((o) => o.key === selected)?.label ?? selected;
+  }, [botChannels, botChannelOptions]);
 
   const handleArchiveStale = useCallback(() => {
     const cutoff = Date.now() - THREE_MONTHS_MS;

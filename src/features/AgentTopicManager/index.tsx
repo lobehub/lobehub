@@ -24,7 +24,7 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import {
-  buildBotChannelGroups,
+  buildBotChannelOptions,
   getProjectFilterLabel,
   matchesBotChannel,
   matchesGroup,
@@ -161,7 +161,7 @@ const AgentTopicManager = memo(() => {
     return Array.from(map, ([value, label]) => ({ label, value }));
   }, [baseTopics]);
 
-  const botChannelGroups = useMemo(() => buildBotChannelGroups(baseTopics), [baseTopics]);
+  const botChannelOptions = useMemo(() => buildBotChannelOptions(baseTopics), [baseTopics]);
 
   const totalAfterFilter = filtered.length;
   // 'active' is the default tab, so it doesn't count as a user-applied filter
@@ -234,7 +234,7 @@ const AgentTopicManager = memo(() => {
           }}
         >
           <Toolbar
-            botChannelGroups={botChannelGroups}
+            botChannelOptions={botChannelOptions}
             projects={projects}
             statusCounts={statusCounts}
           />

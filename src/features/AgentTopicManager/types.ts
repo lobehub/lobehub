@@ -11,31 +11,16 @@ export type SortBy = 'updatedAt' | 'createdAt' | 'title';
 export type GroupBy = 'byProject' | 'byTime' | 'none';
 
 /**
- * A bot-source channel, identified by `topic.metadata.bot.platformThreadId`
- * (e.g. `discord:guild:channel:thread`). One value selects topics that came
- * from one bot's channel on one platform.
+ * A bot source platform, identified by `topic.metadata.bot.platform`
+ * (e.g. `discord` / `telegram`). One value selects topics that arrived
+ * through any channel of that platform's bot.
  */
 export type BotChannelFilter = string;
 
-/** One selectable bot-source channel inside a bot group. */
+/** One selectable bot source platform inside the flattened channel menu. */
 export interface BotChannelOption {
-  /** bot application id, e.g. the platform app/bot id. */
-  applicationId: string;
-  /** `platformThreadId` — the filter value. */
+  /** Platform id, e.g. `discord` — the filter value. */
   key: string;
-  /** Display label for the channel (short-id fallback). */
+  /** Display label, e.g. `Discord` / `Telegram`. */
   label: string;
-  /** Platform id, e.g. `discord`. */
-  platform: string;
-}
-
-/** A bot (platform + application) owning a set of channels. */
-export interface BotChannelGroup {
-  channels: BotChannelOption[];
-  /** `${platform}:${applicationId}` — one bot install. */
-  key: string;
-  /** Display label for the bot (platform name fallback). */
-  label: string;
-  /** Platform id, e.g. `discord`. */
-  platform: string;
 }

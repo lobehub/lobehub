@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useTopicItemDropdownMenu } from '@/features/AgentSidebar/Topic/List/Item/useDropdownMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
@@ -178,6 +179,9 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
     ? (rawTrigger as TriggerFilter)
     : 'chat';
   const triggerLabel = t(`management.filters.trigger.${triggerKey}` as any) as string;
+  // Bot source platform icon (same identity mark as the sidebar topic item).
+  const botPlatform = topic.metadata?.bot?.platform;
+  const BotPlatformIcon = botPlatform ? getPlatformIcon(botPlatform) : undefined;
 
   return (
     <div
@@ -196,6 +200,13 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
         <Flexbox horizontal align={'center'} gap={6}>
           {topic.favorite && (
             <Icon icon={Star} size={12} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+          )}
+          {BotPlatformIcon && (
+            <BotPlatformIcon
+              color={cssVar.colorTextDescription}
+              size={13}
+              style={{ flexShrink: 0 }}
+            />
           )}
           <Text className={styles.title} fontSize={13} weight={500}>
             {topic.title || t('defaultTitle')}

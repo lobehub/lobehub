@@ -8,7 +8,7 @@ import type { ChatTopic } from '@/types/topic';
 
 import type {
   BotChannelFilter,
-  BotChannelGroup,
+  BotChannelOption,
   SortBy,
   StatusFilter,
   TimeRangeFilter,
@@ -57,8 +57,8 @@ export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boo
 
 export const matchesBotChannel = (topic: ChatTopic, botChannels: BotChannelFilter[]): boolean => {
   if (botChannels.length === 0) return true;
-  const thread = topic.metadata?.bot?.platformThreadId;
-  return !!thread && botChannels.includes(thread);
+  const platform = topic.metadata?.bot?.platform;
+  return !!platform && botChannels.includes(platform);
 };
 
 export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): boolean => {
@@ -148,40 +148,20 @@ export const getBotPlatformName = (platform: string): string =>
   PLATFORM_DISPLAY_NAMES[platform.toLowerCase()] ?? platform;
 
 /**
- * Last segment of a `platformThreadId` (`discord:guild:channel:thread` →
- * `thread`). Compact fallback label when a channel carries no readable title.
+ * Derive the flattened bot-source option list from a topic set — one entry
+ * per platform that actually owns topics (per review: only distinguish
+ * tg/discord level, no per-channel nesting).
  */
-export const getBotChannelShortLabel = (platformThreadId: string): string =>
-  platformThreadId.split(':').findLast(Boolean) ?? platformThreadId;
-
-/**
- * Derive the bot → channel option tree from a topic set. Only channels that
- * actually own topics appear; each bot groups its channels under
- * `${platform}:${applicationId}`.
- */
-export const buildBotChannelGroups = (topics: ChatTopic[]): BotChannelGroup[] => {
-  const groups = new Map<string, BotChannelGroup>();
+export const buildBotChannelOptions = (topics: ChatTopic[]): BotChannelOption[] => {
+  const seen = new Set<string>();
   for (const topic of topics) {
-    const bot = topic.metadata?.bot;
-    if (!bot?.platformThreadId) continue;
-    const platform = bot.platform;
-    const applicationId = bot.applicationId ?? '';
-    const groupKey = `${platform}:${applicationId}`;
-    let group = groups.get(groupKey);
-    if (!group) {
-      group = { channels: [], key: groupKey, label: getBotPlatformName(platform), platform };
-      groups.set(groupKey, group);
-    }
-    if (!group.channels.some((c) => c.key === bot.platformThreadId)) {
-      group.channels.push({
-        applicationId,
-        key: bot.platformThreadId,
-        label: getBotChannelShortLabel(bot.platformThreadId),
-        platform,
-      });
-    }
+    const platform = topic.metadata?.bot?.platform;
+    if (platform) seen.add(platform);
   }
-  return Array.from(groups.values());
+  return Array.from(seen).map((platform) => ({
+    key: platform,
+    label: getBotPlatformName(platform),
+  }));
 };
 
 /**
