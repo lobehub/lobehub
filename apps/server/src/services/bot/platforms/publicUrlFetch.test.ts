@@ -347,6 +347,27 @@ describe('fetchPublicUrl', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('shares one timeout signal across redirect hops', async () => {
+    const signal = new AbortController().signal;
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        body: null,
+        headers: new Headers({ location: 'https://cdn.example.com/real.png' }),
+        status: 302,
+      } as any)
+      .mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+    expect(result).toBeTruthy();
+    expect(timeoutSpy).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([, options]) => options.signal)).toEqual([signal, signal]);
+    await result!.dispose();
+  });
+
   it('gives up on a redirect loop', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       body: null,

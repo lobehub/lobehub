@@ -338,6 +338,8 @@ export const fetchPublicUrl = async (
   };
 
   let target = rawUrl;
+  /** One timeout budget for the entire redirect chain, not one budget per hop. */
+  const signal = AbortSignal.timeout(timeoutMs);
 
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -364,7 +366,7 @@ export const fetchPublicUrl = async (
         dispatcher,
         method,
         redirect: 'manual',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal,
       } as RequestInit);
 
       if (response.status < 300 || response.status >= 400) return { dispose, response };
