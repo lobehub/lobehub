@@ -75,8 +75,10 @@ const DesktopChatInput = memo(() => {
             <ChatInputActionBar
               left={
                 <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
-                  <Flexbox horizontal align={'center'} className={styles.leftActions}>
-                    <ActionBar disableCollapse />
+                  <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+                    <Flexbox horizontal align={'center'} className={styles.leftActions}>
+                      <ActionBar disableCollapse />
+                    </Flexbox>
                     <ComposerExpandButton />
                   </Flexbox>
                   <ChatInputNotice />

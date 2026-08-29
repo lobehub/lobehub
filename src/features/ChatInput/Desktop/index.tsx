@@ -198,16 +198,22 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       />
     ) : null;
     const noticeNode = !isConfigLoading && <ChatInputNotice />;
+    // The action bar is `width: 100%`, so a sibling placed *inside* its
+    // shrink-to-fit box is pushed past the bar's right edge and leaves a
+    // one-slot hole between the last action and the expand toggle. Keep the
+    // toggle in a row outside that box.
     const leftSlotContent = (
-      <Flexbox horizontal align={'center'} className={styles.leftActions}>
-        {leftContent ?? (
-          <ActionBar
-            disableCollapse
-            borderRadius={borderRadius}
-            dropdownPlacement={dropdownPlacement}
-            extraActionItems={extraActionItems}
-          />
-        )}
+      <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+        <Flexbox horizontal align={'center'} className={styles.leftActions}>
+          {leftContent ?? (
+            <ActionBar
+              disableCollapse
+              borderRadius={borderRadius}
+              dropdownPlacement={dropdownPlacement}
+              extraActionItems={extraActionItems}
+            />
+          )}
+        </Flexbox>
         <ComposerExpandButton />
       </Flexbox>
     );
