@@ -1028,10 +1028,12 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  /** `limit` is part of the key: the merge picker asks for a wider window than the panel. */
-  acceptances: def('verify:acceptances', (limit?: number) => [
+  /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
+  acceptances: def('verify:acceptances', (limit?: number, q?: string, filter?: string) => [
     'verify:acceptances',
     String(limit ?? ''),
+    q ?? '',
+    filter ?? '',
   ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [

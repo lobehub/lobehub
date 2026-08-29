@@ -92,11 +92,21 @@ export const useAcceptanceBySubject = (
  */
 export const useAcceptanceList = (
   enabled: boolean,
-  options?: { limit?: number; revalidateOnMount?: boolean },
+  options?: {
+    filter?: 'active' | 'all' | 'completed';
+    limit?: number;
+    q?: string;
+    revalidateOnMount?: boolean;
+  },
 ) =>
   useClientDataSWR(
-    enabled ? verifyKeys.acceptances(options?.limit) : null,
-    () => verifyService.listAcceptances({ limit: options?.limit }),
+    enabled ? verifyKeys.acceptances(options?.limit, options?.q, options?.filter) : null,
+    () =>
+      verifyService.listAcceptances({
+        filter: options?.filter,
+        limit: options?.limit,
+        q: options?.q,
+      }),
     {
       ...VERIFY_REPORT_SWR_CONFIG,
       ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),

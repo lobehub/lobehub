@@ -9,7 +9,9 @@ import { Outlet, useParams, useSearchParams } from 'react-router';
 
 import { RouteMetaBridge } from '@/features/RouteMeta';
 
+import { useAcceptanceList } from '../hooks';
 import AcceptanceListPanel from './AcceptanceListPanel';
+import AcceptanceOnboarding from './AcceptanceOnboarding';
 import AcceptanceProjectActions from './AcceptanceProjectActions';
 import { useReportPanelExpand } from './useReportPanelExpand';
 
@@ -56,6 +58,20 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+interface AcceptanceOnboardingState {
+  data?: unknown[];
+  enabled: boolean;
+  error?: unknown;
+  isLoading: boolean;
+}
+
+export const shouldShowAcceptanceOnboarding = ({
+  data,
+  enabled,
+  error,
+  isLoading,
+}: AcceptanceOnboardingState) => enabled && !isLoading && !error && data?.length === 0;
+
 const AcceptanceWorkspace = memo(() => {
   const { t } = useTranslation('verify');
   const panel = useReportPanelExpand();
@@ -63,6 +79,28 @@ const AcceptanceWorkspace = memo(() => {
   const [searchParams] = useSearchParams();
   const hasFocusedCheck = Boolean(checkId || searchParams.get('check'));
   const showList = !hasFocusedCheck;
+  const {
+    data: allAcceptances,
+    error,
+    isLoading,
+  } = useAcceptanceList(showList, {
+    filter: 'all',
+  });
+  const isFirstUse = shouldShowAcceptanceOnboarding({
+    data: allAcceptances,
+    enabled: showList,
+    error,
+    isLoading,
+  });
+
+  if (isFirstUse) {
+    return (
+      <>
+        <RouteMetaBridge />
+        <AcceptanceOnboarding />
+      </>
+    );
+  }
 
   return (
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>

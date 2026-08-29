@@ -5,6 +5,7 @@ import path from 'node:path';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 
 import type { TrpcClient } from '../api/client';
+import { rasterDimensions } from './rasterDimensions';
 
 export interface UploadLocalFileOptions {
   knowledgeBaseId?: string;
@@ -26,7 +27,7 @@ export interface UploadFileBufferInput {
  *
  * @returns the created file record (`{ id, url, ... }`)
  */
-const uploadFileBuffer = async (
+export const uploadFileBuffer = async (
   client: TrpcClient,
   { buffer, fileName, fileType }: UploadFileBufferInput,
   options: UploadLocalFileOptions = {},
@@ -36,6 +37,7 @@ const uploadFileBuffer = async (
 
   const ext = path.extname(fileName).toLowerCase().slice(1);
   const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const dimensions = fileType.startsWith('image/') ? rasterDimensions(buffer) : undefined;
 
   // 1. Dedup: if the same bytes are already stored (and the object still
   // exists), skip the S3 upload entirely and reuse the existing url.
@@ -73,6 +75,7 @@ const uploadFileBuffer = async (
       dirname: '',
       filename: fileName,
       path: pathname,
+      ...dimensions,
     },
     name: fileName,
     parentId: options.parentId,

@@ -38,9 +38,6 @@ export default {
   'acceptance.bar.progressDone': 'All {{total}} checks confirmed — ready to accept',
   'acceptance.bar.progressZero': '{{total}} checks awaiting your review',
   'acceptance.bar.rejectComment': 'Reject with comment',
-  'acceptance.bar.rerun': 'Fix',
-  'acceptance.bar.rerunDrafted': 'Drafted into your composer — review and send it.',
-  'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
   'acceptance.checks.allAccepted.desc': 'Nice work — every acceptance check has been signed off.',
   'acceptance.checks.allAccepted.title': 'All checks accepted 🎉',
   'acceptance.checks.copied': 'Copied',
@@ -319,6 +316,29 @@ export default {
   'acceptance.workspace.listEmpty':
     'Ingest a verification report with the CLI and its acceptance will show up here.',
   'acceptance.workspace.listEmptyTitle': 'No acceptances yet',
+  'acceptance.workspace.onboarding.description':
+    'Add the Acceptance skill to your project, then start a review from your coding agent.',
+  'acceptance.workspace.onboarding.agent.description':
+    'Copy this prompt to your coding agent and let it complete the setup.',
+  'acceptance.workspace.onboarding.agent.prompt':
+    'Read https://lobehub.com/acceptance/skill.md and follow the instructions to install Acceptance.',
+  'acceptance.workspace.onboarding.agent.title': 'Install with an Agent',
+  'acceptance.workspace.onboarding.enable.description': 'Run this from your project root.',
+  'acceptance.workspace.onboarding.enable.title': 'Enable Acceptance',
+  'acceptance.workspace.onboarding.install.description': 'Install the CLI once on this device.',
+  'acceptance.workspace.onboarding.install.title': 'Install the LobeHub CLI',
+  'acceptance.workspace.onboarding.installSection': 'Install Acceptance',
+  'acceptance.workspace.onboarding.manual.description':
+    'Run both commands yourself from the project root.',
+  'acceptance.workspace.onboarding.manual.title': 'Install manually',
+  'acceptance.workspace.onboarding.example.command':
+    '/acceptance Review the current changes, focusing on the core flow, empty states, and error states',
+  'acceptance.workspace.onboarding.example.description':
+    'After installation, send this example to your coding agent to create the first review.',
+  'acceptance.workspace.onboarding.example.title': 'Try your first acceptance',
+  'acceptance.workspace.onboarding.run.description': 'Enter this in your coding agent chat.',
+  'acceptance.workspace.onboarding.run.title': 'Start an acceptance run',
+  'acceptance.workspace.onboarding.title': 'Set up Acceptance',
   'acceptance.workspace.project.add': 'Add to project',
   'acceptance.workspace.project.addSuccess': 'Added to the project',
   'acceptance.workspace.project.create': 'New project with this delivery',

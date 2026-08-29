@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceStatus } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { ActionIcon, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -40,12 +40,9 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 4px;
     padding-inline: 4px;
   `,
-  itemSub: css`
-    display: flex;
-    gap: 8px;
-
-    margin-block-start: 2px;
-
+  itemTime: css`
+    flex: none;
+    padding-inline-start: 8px;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
@@ -375,15 +372,8 @@ const AcceptanceRow = memo<{
           />
         </DropdownMenu>
       }
-      description={
-        <Flexbox horizontal className={styles.itemSub} gap={8}>
-          <span>
-            {item.checkCount != null
-              ? t('acceptance.workspace.checkCount', { count: item.checkCount })
-              : t(`acceptance.status.${item.status}` as any)}
-          </span>
-          <span>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
-        </Flexbox>
+      extra={
+        <span className={styles.itemTime}>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
       }
       icon={
         <Icon

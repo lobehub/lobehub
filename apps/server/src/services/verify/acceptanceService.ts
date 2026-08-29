@@ -962,20 +962,52 @@ export class AcceptanceService {
    * subject degrades to a null title instead of dropping the row. Each row also
    * carries the latest round's check count for the panel's at-a-glance line.
    */
-  listWithSubjects = async (limit = 50) => {
-    const rows = await this.acceptanceModel.query(limit);
+  listWithSubjects = async (
+    options: {
+      filter?: 'active' | 'all' | 'completed';
+      limit?: number;
+      q?: string;
+    } = {},
+  ) => {
+    const { filter = 'all', limit = 50, q } = options;
+    const statuses: AcceptanceStatus[] | undefined =
+      filter === 'active'
+        ? ['pending', 'planned', 'verifying', 'repairing', 'delivered', 'rejected', 'errored']
+        : filter === 'completed'
+          ? ['accepted', 'closed']
+          : undefined;
+    const normalizedQuery = q?.trim().toLocaleLowerCase();
+
+    // A title search must span the complete owned set. Subject titles live in
+    // their source entities (task/topic/document), so resolve them before
+    // applying the result cap instead of searching only the latest page.
+    const candidates = await this.acceptanceModel.query({
+      limit: normalizedQuery ? undefined : limit,
+      statuses,
+      unbounded: Boolean(normalizedQuery),
+    });
+    const withSubjects = await Promise.all(
+      candidates.map(async (row) => ({ row, subject: await this.resolveSubject(row) })),
+    );
+    const matched = normalizedQuery
+      ? withSubjects
+          .filter(({ row, subject }) =>
+            (subject.title || row.subjectId).toLocaleLowerCase().includes(normalizedQuery),
+          )
+          .slice(0, limit)
+      : withSubjects;
+    const rows = matched.map(({ row }) => row);
     const [checkCounts, projects] = await Promise.all([
       this.latestCheckCounts(rows.map((row) => row.id)),
       this.resolveProjects(rows),
     ]);
-    return Promise.all(
-      rows.map(async (row) => ({
-        ...row,
-        checkCount: checkCounts.get(row.id) ?? null,
-        project: projects.get(row.id) ?? null,
-        subject: await this.resolveSubject(row),
-      })),
-    );
+
+    return matched.map(({ row, subject }) => ({
+      ...row,
+      checkCount: checkCounts.get(row.id) ?? null,
+      project: projects.get(row.id) ?? null,
+      subject,
+    }));
   };
 
   /**

@@ -168,12 +168,14 @@ export class VerifyService {
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
   listAcceptances = (options?: {
+    filter?: 'active' | 'all' | 'completed';
     /** Widen the recency window (server-capped) — the merge picker asks for more. */
     limit?: number;
+    q?: string;
     quiet?: boolean;
   }): Promise<AcceptanceListItem[]> =>
     lambdaClient.acceptance.list.query(
-      options?.limit ? { limit: options.limit } : undefined,
+      options ? { filter: options.filter, limit: options.limit, q: options.q } : undefined,
       options?.quiet ? { context: { showNotification: false } } : undefined,
     );
 

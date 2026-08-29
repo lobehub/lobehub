@@ -13,6 +13,7 @@ import {
 } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import { useDebounce } from 'ahooks';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
@@ -21,7 +22,6 @@ import {
   FolderClosed,
   ListFilter,
   PanelLeftClose,
-  ScrollText,
   Search,
   TriangleAlert,
 } from 'lucide-react';
@@ -40,7 +40,6 @@ import { acceptanceHomePath } from '../Viewer/routes';
 import {
   type AcceptanceListFilter,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
-  filterAcceptanceList,
   normalizeAcceptanceListFilter,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
@@ -189,11 +188,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   groupTitle: css`
     display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 14px;
     color: ${cssVar.colorTextSecondary};
   `,
   emptyState: css`
@@ -244,10 +242,6 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     const navigate = useNavigate();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
-    const { data, error, isLoading, mutate } = useAcceptanceList(true);
-
-    // Client-side filter: the list endpoint returns the caller's full recent set
-    // (bounded, no pagination), so filtering the loaded rows IS filtering the set.
     const [query, setQuery] = useState('');
     const [storedFilter, setStoredFilter] = useLocalStorageState<AcceptanceListFilter>(
       ACCEPTANCE_LIST_FILTER_STORAGE_KEY,
@@ -257,8 +251,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     // mount — the project a delivery was just filed into — must come in open.
     const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
     const filter = normalizeAcceptanceListFilter(storedFilter);
-    const filtered = filterAcceptanceList(data ?? [], filter, query);
-    const groups = groupAcceptanceList(filtered);
+    const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
+    const { data, error, isLoading, mutate } = useAcceptanceList(true, {
+      filter,
+      q: debouncedQuery || undefined,
+    });
+    const items = data ?? [];
+    const groups = groupAcceptanceList(items);
     const showGroups = hasProjectAcceptanceGroups(groups);
     const trimmedQuery = query.trim();
 
@@ -371,7 +370,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               </Center>
             ) : isLoading ? (
               <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
-            ) : filtered.length === 0 ? (
+            ) : items.length === 0 ? (
               trimmedQuery || filter !== 'all' ? (
                 // A zero-result FILTER must read as "no match for this query",
                 // never as the first-run empty state.
@@ -398,7 +397,6 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <Center className={styles.emptyState}>
                   <Empty
                     description={t('acceptance.workspace.listEmpty')}
-                    icon={ScrollText}
                     title={t('acceptance.workspace.listEmptyTitle')}
                   />
                 </Center>
@@ -426,8 +424,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                           <span className={styles.groupTitle}>
                             <Icon icon={FolderClosed} size={14} />
                             <span>
-                              {group.projectName ?? t('acceptance.workspace.groups.ungrouped')} ·{' '}
-                              {group.items.length}
+                              {group.projectName ?? t('acceptance.workspace.groups.ungrouped')}
                             </span>
                           </span>
                         }
@@ -446,7 +443,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                     ))}
                   </Accordion>
                 ) : (
-                  filtered.map((item) => (
+                  items.map((item) => (
                     <AcceptanceRow
                       active={item.id === acceptanceId}
                       item={item}
