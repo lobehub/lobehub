@@ -3,7 +3,7 @@ import { nanoid } from '@lobechat/utils';
 import { Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   BoxesIcon,
   CheckIcon,
@@ -12,7 +12,6 @@ import {
   FileTextIcon,
   Globe2Icon,
   GlobeIcon,
-  LayoutDashboardIcon,
   MessageCircleIcon,
   PanelRightCloseIcon,
   PanelsTopLeftIcon,
@@ -112,6 +111,39 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 2px;
     object-fit: contain;
   `,
+  overviewBody: css`
+    overflow-y: auto;
+    min-height: 0;
+  `,
+  overviewHeader: css`
+    flex-shrink: 0;
+    padding-block: 6px;
+    padding-inline: 12px 8px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  overviewPanel: css`
+    overflow: hidden;
+    flex-shrink: 0;
+    align-self: flex-start;
+
+    width: min(340px, calc(100% - 32px));
+    max-height: calc(100% - 32px);
+    margin: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 20px;
+
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
+  `,
+  overviewTitle: css`
+    overflow: hidden;
+    flex: 1;
+
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   tabs: css`
     overflow-anchor: none;
     scrollbar-width: none;
@@ -185,6 +217,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
     setWorkingSidebarTab,
     showRightPanel,
+    showWorkingOverview,
     storedTab,
     tabRequest,
   ] = useGlobalStore((s) => [
@@ -199,6 +232,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     // the resources pane's document fetch so a collapsed sidebar doesn't pull the
     // full agent-document list into the conversation's initial batch.
     s.status.showRightPanel,
+    s.status.showWorkingOverview ?? true,
     s.status.workingSidebarTab,
     s.status.workingSidebarTabRequest,
   ]);
@@ -395,6 +429,13 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     ? `topic:${topicId}`
     : `draft:${activeAgentId ?? 'default'}:${workingDirectory ?? 'none'}`;
   const pinnedTabsAgentKey = activeAgentId ?? 'default';
+  const defaultOpenedTabs = useMemo(
+    () =>
+      [filesAvailable ? 'files' : undefined, 'skills', isHetero ? undefined : 'documents'].filter(
+        (tab): tab is string => Boolean(tab) && isAvailableTab(tab!),
+      ),
+    [filesAvailable, isAvailableTab, isHetero],
+  );
   const [openTabsByContext, setOpenTabsByContext] = useLocalStorageState<Record<string, string[]>>(
     OPEN_TABS_STORAGE_KEY,
     {},
@@ -422,11 +463,13 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const openedTabs = Array.from(
     new Set([
       ...pinnedTabs,
-      ...(openTabsByContext[openTabsContextKey] ?? []).filter(isAvailableTab),
+      ...(openTabsByContext[openTabsContextKey] ?? defaultOpenedTabs).filter(isAvailableTab),
       ...(requestedTab ? [requestedTab] : []),
     ]),
   );
   const openedTabsSignature = openedTabs.join('\0');
+  const [optimisticTab, setOptimisticTab] = useState<string>();
+  const previousStoredTabRef = useRef(storedTab);
 
   const updateOpenedTabs = useCallback(
     (updater: (tabs: string[]) => string[]) => {
@@ -451,8 +494,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const openTab = useCallback(
     (tab: string) => {
       if (tab !== 'overview' && !isAvailableTab(tab)) return;
+      setOptimisticTab(tab);
       if (tab !== 'overview') {
         updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
+        toggleRightPanel(true);
+        updateSystemStatus({ showWorkingOverview: false });
       }
       if (tab === 'comments' && topicId && !isCurrentTopicComments) {
         openTopicComments(topicId);
@@ -466,6 +512,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       openTopicComments,
       setWorkingSidebarTab,
       topicId,
+      toggleRightPanel,
+      updateSystemStatus,
       updateOpenedTabs,
     ],
   );
@@ -476,6 +524,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     const tab =
       currentBrowserTabs.length === 0 ? BROWSER_TAB_KEY : `${BROWSER_TAB_PREFIX}${nanoid(8)}`;
     updateOpenedTabs((current) => [...current, tab]);
+    setOptimisticTab(tab);
     setWorkingSidebarTab(tab);
     return tab;
   }, [
@@ -486,10 +535,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     updateOpenedTabs,
   ]);
 
-  const activeTab: string =
-    storedTab && (storedTab === 'overview' || openedTabs.includes(storedTab))
-      ? storedTab
-      : 'overview';
+  const resolvedActiveTab: string =
+    storedTab && openedTabs.includes(storedTab) ? storedTab : (openedTabs[0] ?? 'overview');
+  const activeTab = optimisticTab ?? resolvedActiveTab;
+
+  useEffect(() => {
+    if (previousStoredTabRef.current === storedTab) return;
+    previousStoredTabRef.current = storedTab;
+    setOptimisticTab(undefined);
+  }, [storedTab]);
 
   useEffect(() => {
     if (
@@ -547,9 +601,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       if (removableTabs.size === 0) return;
 
       updateOpenedTabs((current) => current.filter((tab) => !removableTabs.has(tab)));
-      if (removableTabs.has(activeTab)) setWorkingSidebarTab(fallbackTab);
+      if (removableTabs.has(activeTab)) {
+        setOptimisticTab(fallbackTab);
+        setWorkingSidebarTab(fallbackTab);
+      }
+      if (openedTabs.every((tab) => removableTabs.has(tab) || pinnedTabsSet.has(tab))) {
+        toggleRightPanel(false);
+      }
     },
-    [activeTab, pinnedTabsSet, setWorkingSidebarTab, updateOpenedTabs],
+    [
+      activeTab,
+      openedTabs,
+      pinnedTabsSet,
+      setWorkingSidebarTab,
+      toggleRightPanel,
+      updateOpenedTabs,
+    ],
   );
 
   const closeTab = useCallback((tab: string) => closeTabs([tab]), [closeTabs]);
@@ -570,9 +637,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       };
     })
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
-  // Overview is the only tab that always exists, so once it stands alone the
-  // strip has nothing left to close — closing it collapses the whole panel.
-  const isOverviewOnlyTab = displayedTabs.length === 0;
   const createTabContextMenuItems = useCallback(
     (tab: string, index: number): NativeContextMenuItem[] => {
       const pinned = pinnedTabsSet.has(tab);
@@ -623,28 +687,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       ];
     },
     [closeTab, closeTabs, openedTabs, pinTab, pinnedTabsSet, t, unpinTab],
-  );
-  const overviewContextMenuItems = useMemo<NativeContextMenuItem[]>(
-    () => [
-      ...(isOverviewOnlyTab
-        ? [
-            {
-              icon: XIcon,
-              key: 'closePanel',
-              label: t('workingPanel.tabs.closePanel'),
-              onClick: () => toggleRightPanel(false),
-            } as NativeContextMenuItem,
-            { type: 'divider' as const },
-          ]
-        : []),
-      {
-        disabled: !openedTabs.some((tab) => !pinnedTabsSet.has(tab)),
-        key: 'closeOthers',
-        label: t('workingPanel.tabs.closeOthers'),
-        onClick: () => closeTabs(openedTabs),
-      },
-    ],
-    [closeTabs, isOverviewOnlyTab, openedTabs, pinnedTabsSet, t, toggleRightPanel],
   );
   const tabsRef = useRef<HTMLDivElement>(null);
   const pendingTabFocusRef = useRef<string | undefined>(undefined);
@@ -828,210 +870,228 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  return (
-    <RightPanel
-      stableLayout
-      collapseThreshold={320}
-      defaultWidth={renderWidth}
-      expand={Boolean(showRightPanel) && fits}
-      maxWidth={maxPanelWidth}
-      minWidth={MIN_PANEL_WIDTH}
-      width={renderWidth}
-      onSizeChange={(size) => {
-        if (!size?.width) return;
-        // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
-        // the controlled width actually updates (otherwise the panel snaps back).
-        const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
-        if (!Number.isFinite(w) || w === storedWidth) return;
-        updateSystemStatus({ workingSidebarWidth: w });
-      }}
-    >
-      <Flexbox height={'100%'} width={'100%'}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.header}
-          gap={4}
-          height={44}
-          justify={'space-between'}
-          paddingInline={4}
-        >
-          <div className={styles.tabsArea}>
-            <div className={styles.tabs} ref={tabsRef}>
-              <WorkspaceTab
-                active={activeTab === 'overview'}
-                closeLabel={t('workingPanel.tabs.closePanel')}
-                contextMenuItems={overviewContextMenuItems}
-                icon={LayoutDashboardIcon}
-                label={t('workingPanel.overview.title')}
-                tabKey={'overview'}
-                onClose={isOverviewOnlyTab ? () => toggleRightPanel(false) : undefined}
-                onSelect={() => openTab('overview')}
-              />
-              {displayedTabs.map((tab, index) => (
-                <WorkspaceTab
-                  active={activeTab === tab.key}
-                  closeLabel={t('workingPanel.tabs.close')}
-                  contextMenuItems={createTabContextMenuItems(tab.key, index)}
-                  icon={tab.icon}
-                  iconNode={tab.iconNode}
-                  key={tab.key}
-                  label={tab.label}
-                  pinned={pinnedTabsSet.has(tab.key)}
-                  pinnedLabel={t('workingPanel.tabs.pinned')}
-                  tabKey={tab.key}
-                  onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
-                  onSelect={() => openTab(tab.key)}
-                />
-              ))}
-            </div>
-            <DropdownMenu
-              items={openMenuItems}
-              placement={'bottomRight'}
-              onOpenChangeComplete={(open) => {
-                if (open) return;
-                if (pendingTabFocusRef.current) focusPendingTab();
-                else scrollActiveTabIntoView();
-              }}
-            >
-              <ActionIcon
-                className={styles.add}
-                icon={PlusIcon}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-                title={t('workingPanel.openMenu.title')}
-              />
-            </DropdownMenu>
-          </div>
-          <ActionIcon
-            className={styles.close}
-            icon={PanelRightCloseIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            onClick={() => toggleRightPanel(false)}
+  const overviewPanel = showWorkingOverview && (
+    <Flexbox className={styles.overviewPanel} role={'complementary'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.overviewHeader}
+        gap={8}
+        justify={'space-between'}
+      >
+        <span className={styles.overviewTitle}>{t('workingPanel.overview.title')}</span>
+        <ActionIcon
+          aria-label={t('workingPanel.tabs.closePanel')}
+          icon={PanelRightCloseIcon}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={t('workingPanel.tabs.closePanel')}
+          onClick={() => updateSystemStatus({ showWorkingOverview: false })}
+        />
+      </Flexbox>
+      <Flexbox className={styles.overviewBody}>
+        {!contentReady && <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />}
+        {contentReady && (
+          <Overview
+            active
+            deviceId={remoteDeviceId}
+            environmentAvailable={filesystemEnvironmentAvailable}
+            repoType={environmentRepoType}
+            workingDirectory={environmentWorkingDirectory}
+            onOpenTab={openTab}
           />
-        </Flexbox>
-        <Flexbox className={styles.body} width={'100%'}>
-          {!contentReady && <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />}
-          {contentReady && (
-            <>
-              <Flexbox className={activeTab === 'overview' ? styles.pane : styles.paneHidden}>
-                <Overview
-                  active={Boolean(showRightPanel) && activeTab === 'overview'}
-                  deviceId={remoteDeviceId}
-                  environmentAvailable={filesystemEnvironmentAvailable}
-                  repoType={environmentRepoType}
-                  workingDirectory={environmentWorkingDirectory}
-                  onOpenTab={openTab}
-                />
-              </Flexbox>
-              {commentsAvailable && (
-                <Flexbox
-                  className={activeTab === 'comments' ? styles.pane : styles.paneHidden}
-                  style={{ overflow: 'hidden' }}
-                >
-                  <TopicCommentsSidebar />
-                </Flexbox>
-              )}
-              {paramsAvailable && activeTab === 'params' && (
-                <Flexbox className={styles.pane}>
-                  <Suspense
-                    fallback={
-                      <Skeleton
-                        active
-                        className={styles.paramsLoading}
-                        paragraph={{ rows: 6 }}
-                        title={false}
-                      />
-                    }
-                  >
-                    <ParamsSection />
-                  </Suspense>
-                </Flexbox>
-              )}
-              {reviewAvailable && (
-                <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
-                  <Review
-                    active={activeTab === 'review'}
-                    composerTarget={composerTarget}
-                    deviceId={remoteDeviceId}
-                    showTree={showReviewTree}
-                    workingDirectory={workingDirectory}
-                    onToggleTree={() => setShowReviewTree((v) => !v)}
-                  />
-                </Flexbox>
-              )}
-              {filesAvailable && (
-                <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
-                  <Flexbox className={styles.pane}>
-                    <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
-                  </Flexbox>
-                </Activity>
-              )}
-              {browserAvailable &&
-                openedTabs.filter(isBrowserTab).map((tab) => {
-                  const sessionId =
-                    tab === BROWSER_TAB_KEY
-                      ? browserSessionId
-                      : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
+        )}
+      </Flexbox>
+    </Flexbox>
+  );
 
-                  return (
-                    <Flexbox
-                      className={activeTab === tab ? styles.pane : styles.paneHidden}
-                      key={sessionId}
+  return (
+    <>
+      {overviewPanel}
+      <RightPanel
+        stableLayout
+        collapseThreshold={320}
+        defaultWidth={renderWidth}
+        expand={Boolean(showRightPanel) && fits && activeTab !== 'overview'}
+        maxWidth={maxPanelWidth}
+        minWidth={MIN_PANEL_WIDTH}
+        style={!showRightPanel || activeTab === 'overview' ? { visibility: 'hidden' } : undefined}
+        width={renderWidth}
+        onSizeChange={(size) => {
+          if (!size?.width) return;
+          // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
+          // the controlled width actually updates (otherwise the panel snaps back).
+          const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
+          if (!Number.isFinite(w) || w === storedWidth) return;
+          updateSystemStatus({ workingSidebarWidth: w });
+        }}
+      >
+        <Flexbox height={'100%'} width={'100%'}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={styles.header}
+            gap={4}
+            height={44}
+            justify={'space-between'}
+            paddingInline={4}
+          >
+            <div className={styles.tabsArea}>
+              <div className={styles.tabs} ref={tabsRef}>
+                {displayedTabs.map((tab, index) => (
+                  <WorkspaceTab
+                    active={activeTab === tab.key}
+                    closeLabel={t('workingPanel.tabs.close')}
+                    contextMenuItems={createTabContextMenuItems(tab.key, index)}
+                    icon={tab.icon}
+                    iconNode={tab.iconNode}
+                    key={tab.key}
+                    label={tab.label}
+                    pinned={pinnedTabsSet.has(tab.key)}
+                    pinnedLabel={t('workingPanel.tabs.pinned')}
+                    tabKey={tab.key}
+                    onClose={pinnedTabsSet.has(tab.key) ? undefined : () => closeTab(tab.key)}
+                    onSelect={() => openTab(tab.key)}
+                  />
+                ))}
+              </div>
+              <DropdownMenu
+                items={openMenuItems}
+                placement={'bottomRight'}
+                onOpenChangeComplete={(open) => {
+                  if (open) return;
+                  if (pendingTabFocusRef.current) focusPendingTab();
+                  else scrollActiveTabIntoView();
+                }}
+              >
+                <ActionIcon
+                  className={styles.add}
+                  icon={PlusIcon}
+                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  title={t('workingPanel.openMenu.title')}
+                />
+              </DropdownMenu>
+            </div>
+            <ActionIcon
+              className={styles.close}
+              icon={PanelRightCloseIcon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              onClick={() => toggleRightPanel(false)}
+            />
+          </Flexbox>
+          <Flexbox className={styles.body} width={'100%'}>
+            {!contentReady && <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />}
+            {contentReady && (
+              <>
+                {commentsAvailable && (
+                  <Flexbox
+                    className={activeTab === 'comments' ? styles.pane : styles.paneHidden}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <TopicCommentsSidebar />
+                  </Flexbox>
+                )}
+                {paramsAvailable && activeTab === 'params' && (
+                  <Flexbox className={styles.pane}>
+                    <Suspense
+                      fallback={
+                        <Skeleton
+                          active
+                          className={styles.paramsLoading}
+                          paragraph={{ rows: 6 }}
+                          title={false}
+                        />
+                      }
                     >
-                      <BrowserPane
-                        agentId={activeAgentId}
-                        composerTarget={composerTarget}
-                        sessionId={sessionId}
-                        onMetadataChange={(metadata) => {
-                          const metadataKey = `${openTabsContextKey}:${tab}`;
-                          setBrowserTabMetadata((current) =>
-                            current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
-                            current[metadataKey]?.title === metadata.title &&
-                            current[metadataKey]?.url === metadata.url
-                              ? current
-                              : { ...current, [metadataKey]: metadata },
-                          );
-                        }}
-                      />
+                      <ParamsSection />
+                    </Suspense>
+                  </Flexbox>
+                )}
+                {reviewAvailable && (
+                  <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
+                    <Review
+                      active={activeTab === 'review'}
+                      composerTarget={composerTarget}
+                      deviceId={remoteDeviceId}
+                      showTree={showReviewTree}
+                      workingDirectory={workingDirectory}
+                      onToggleTree={() => setShowReviewTree((v) => !v)}
+                    />
+                  </Flexbox>
+                )}
+                {filesAvailable && (
+                  <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane}>
+                      <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
                     </Flexbox>
-                  );
-                })}
-              {businessTabs.map((tab) => (
-                <Flexbox
-                  className={activeTab === tab.key ? styles.pane : styles.paneHidden}
-                  key={tab.key}
-                >
-                  {tab.pane}
-                </Flexbox>
-              ))}
-              {/* Resource/works panes stay mounted to keep their state, but hidden ones
+                  </Activity>
+                )}
+                {browserAvailable &&
+                  openedTabs.filter(isBrowserTab).map((tab) => {
+                    const sessionId =
+                      tab === BROWSER_TAB_KEY
+                        ? browserSessionId
+                        : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
+
+                    return (
+                      <Flexbox
+                        className={activeTab === tab ? styles.pane : styles.paneHidden}
+                        key={sessionId}
+                      >
+                        <BrowserPane
+                          agentId={activeAgentId}
+                          composerTarget={composerTarget}
+                          sessionId={sessionId}
+                          onMetadataChange={(metadata) => {
+                            const metadataKey = `${openTabsContextKey}:${tab}`;
+                            setBrowserTabMetadata((current) =>
+                              current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
+                              current[metadataKey]?.title === metadata.title &&
+                              current[metadataKey]?.url === metadata.url
+                                ? current
+                                : { ...current, [metadataKey]: metadata },
+                            );
+                          }}
+                        />
+                      </Flexbox>
+                    );
+                  })}
+                {businessTabs.map((tab) => (
+                  <Flexbox
+                    className={activeTab === tab.key ? styles.pane : styles.paneHidden}
+                    key={tab.key}
+                  >
+                    {tab.pane}
+                  </Flexbox>
+                ))}
+                {/* Resource/works panes stay mounted to keep their state, but hidden ones
            go through Activity so their updates render at background priority
            instead of blocking visible commits (BrowserPane must NOT move here —
            hiding it would unmount the effects keeping its session alive). */}
-              {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
-                <Activity
-                  key={resourceTab}
-                  mode={showRightPanel && activeTab === resourceTab ? 'visible' : 'hidden'}
-                >
-                  <Flexbox className={styles.pane} width={'100%'}>
-                    <ResourcesSection
-                      deviceId={remoteDeviceId}
-                      enabled={showRightPanel && activeTab === resourceTab}
-                      filter={resourceTab as 'skills' | 'documents' | 'web'}
-                    />
+                {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
+                  <Activity
+                    key={resourceTab}
+                    mode={showRightPanel && activeTab === resourceTab ? 'visible' : 'hidden'}
+                  >
+                    <Flexbox className={styles.pane} width={'100%'}>
+                      <ResourcesSection
+                        deviceId={remoteDeviceId}
+                        enabled={showRightPanel && activeTab === resourceTab}
+                        filter={resourceTab as 'skills' | 'documents' | 'web'}
+                      />
+                    </Flexbox>
+                  </Activity>
+                ))}
+                <Activity mode={showRightPanel && activeTab === 'works' ? 'visible' : 'hidden'}>
+                  <Flexbox className={styles.pane}>
+                    <WorksSection active={showRightPanel && activeTab === 'works'} />
                   </Flexbox>
                 </Activity>
-              ))}
-              <Activity mode={showRightPanel && activeTab === 'works' ? 'visible' : 'hidden'}>
-                <Flexbox className={styles.pane}>
-                  <WorksSection active={showRightPanel && activeTab === 'works'} />
-                </Flexbox>
-              </Activity>
-            </>
-          )}
+              </>
+            )}
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
-    </RightPanel>
+      </RightPanel>
+    </>
   );
 });
 

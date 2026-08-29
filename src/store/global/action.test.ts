@@ -95,6 +95,20 @@ describe('createPreferenceSlice', () => {
     });
   });
 
+  describe('toggleWorkingOverview', () => {
+    it('toggles the overview independently from the workspace panel', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleWorkingOverview(false);
+      });
+
+      expect(result.current.status.showWorkingOverview).toBe(false);
+      expect(result.current.status.showRightPanel).toBe(false);
+    });
+  });
+
   describe('setWorkingSidebarTab', () => {
     it('emits a new request when the already-selected tab is requested again', () => {
       const { result } = renderHook(() => useGlobalStore());
