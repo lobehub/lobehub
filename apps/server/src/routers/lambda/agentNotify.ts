@@ -40,8 +40,14 @@ const agentNotifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
           ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
         workspaceId: wsId,
       }),
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
+      // `lh notify` writes assistant content and settles running operations as
+      // the caller — a share visitor must not use it to write into or settle a
+      // share conversation (share runs execute under the creator principal via
+      // internal models). See `MessageModelOptions.guardShareProvenance`.
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId, {
+        guardShareProvenance: true,
+      }),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, { guardShareProvenance: true }),
     },
   });
 });

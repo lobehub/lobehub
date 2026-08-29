@@ -43,7 +43,12 @@ const threadProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 
   return opts.next({
     ctx: {
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      // Thread creation writes a message into the target topic — a share
+      // visitor must not seed content into a share conversation this way.
+      // See `MessageModelOptions.guardShareProvenance`.
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId, {
+        guardShareProvenance: true,
+      }),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
