@@ -116,17 +116,20 @@ describe('publishWorkspaceHtmlArtifact', () => {
     );
 
     expect(result.publicUrl).toBe('https://example.lobehub.com/page');
-    expect(publishSite).toHaveBeenCalledWith({
-      artifactIdentifier: 'workspace-html-index-html',
-      files: [
-        expect.objectContaining({
-          path: '/hero.png',
-        }),
-      ],
-      html: expect.stringContaining('src="/hero.png"'),
-      requestedSlug: 'Demo',
-      topicId: 'tpc_1',
-    });
+    expect(publishSite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifactIdentifier: 'workspace-html-index-html',
+        files: [
+          expect.objectContaining({
+            path: '/hero.png',
+          }),
+        ],
+        html: expect.stringContaining('src="/hero.png"'),
+        requestedSlug: 'Demo',
+        title: 'Demo',
+        topicId: 'tpc_1',
+      }),
+    );
   });
 
   it('publishes a prepacked plan without re-packing the file set', async () => {
@@ -198,6 +201,7 @@ describe('publishWorkspaceHtmlArtifact', () => {
           entryPath: 'index.html',
           files: [],
           identifier: 'workspace-html-index-html',
+          packed: { html: '<main>small</main>', sidecars: [] },
           title: 'Demo',
           topicId: 'tpc_1',
         },

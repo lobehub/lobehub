@@ -2128,6 +2128,7 @@
   "workingPanel.localFile.publish.unresolvedLocals": "This page still points at local files that were not packed, so those assets would break after publish.",
   "workingPanel.localFile.publish.upload_one": "1 larger file will be uploaded with the page.",
   "workingPanel.localFile.publish.upload_other": "{{count}} larger files will be uploaded with the page.",
+  "workingPanel.localFile.publish.uploadingProgress": "Uploading {{completed}} / {{total}} · {{percent}}%",
   "workingPanel.localFile.publish.version": "Publish this version",
   "workingPanel.localFile.sandboxUnavailable": "This file is no longer available — its sandbox environment has been recycled",
   "workingPanel.localFile.truncated": "File preview truncated to {{limit}} characters",
