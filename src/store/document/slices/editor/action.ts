@@ -422,12 +422,11 @@ export class EditorActionImpl {
       throw error;
     }
     const doc = this.#get().documents[id];
+    if (!latest?.updatedAt || !doc) throw error;
     const isKnownVersion =
-      latest &&
-      doc &&
       (latest.content ?? '') === (doc.lastSavedContent ?? '') &&
       isEqual(latest.editorData ?? null, doc.lastSavedEditorData ?? null);
-    if (!isKnownVersion || !latest.updatedAt) throw error;
+    if (!isKnownVersion) throw error;
 
     let lockedByOther: boolean;
     try {

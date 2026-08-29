@@ -140,6 +140,8 @@ export interface UpdateDocumentInput {
   breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: string;
+  /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
+  expectedUpdatedAt?: Date;
   fileType?: string;
   id: string;
   lockOwnerId?: string;
