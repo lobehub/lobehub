@@ -2,9 +2,12 @@ import { Tooltip } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { BanIcon, CheckIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
+
+import { getLocalizedConnectorTool } from './localization';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   btn: css`
@@ -82,66 +85,72 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface ToolPermissionRowProps {
   /** Read-only mode — the caller lacks the manage permission for this connector. */
+  connectorIdentifier: string;
   disabled?: boolean;
   onPermissionChange: (toolId: string, permission: ConnectorToolPermission) => void;
   tool: ConnectorTool;
 }
 
-const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPermissionChange }) => {
-  const btnClass = (permission: ConnectorToolPermission) =>
-    tool.permission === permission ? `${styles.btn} ${styles.btnActive}` : styles.btn;
+const ToolPermissionRow = memo<ToolPermissionRowProps>(
+  ({ connectorIdentifier, disabled, tool, onPermissionChange }) => {
+    const { t } = useTranslation('plugin');
+    const { t: tt } = useTranslation('tool');
+    const localizedTool = getLocalizedConnectorTool(connectorIdentifier, tool, t);
+    const btnClass = (permission: ConnectorToolPermission) =>
+      tool.permission === permission ? `${styles.btn} ${styles.btnActive}` : styles.btn;
 
-  const handleChange = (permission: ConnectorToolPermission) => {
-    if (disabled) return;
-    onPermissionChange(tool.id, permission);
-  };
+    const handleChange = (permission: ConnectorToolPermission) => {
+      if (disabled) return;
+      onPermissionChange(tool.id, permission);
+    };
 
-  return (
-    <div className={styles.row}>
-      <div className={styles.nameCell}>
-        <div className={styles.toolName}>{tool.toolName}</div>
-        {tool.description && (
-          <Tooltip mouseEnterDelay={0.5} title={tool.description}>
-            <div className={styles.description}>{tool.description}</div>
-          </Tooltip>
-        )}
+    return (
+      <div className={styles.row}>
+        <div className={styles.nameCell}>
+          <div className={styles.toolName}>{localizedTool.name}</div>
+          {localizedTool.description && (
+            <Tooltip mouseEnterDelay={0.5} title={localizedTool.description}>
+              <div className={styles.description}>{localizedTool.description}</div>
+            </Tooltip>
+          )}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexShrink: 0,
+            gap: 2,
+            ...(disabled && { cursor: 'not-allowed', opacity: 0.45 }),
+          }}
+        >
+          <div
+            className={btnClass(ConnectorToolPermission.auto)}
+            style={disabled ? { pointerEvents: 'none' } : undefined}
+            title={tt('connector.permission.auto', 'Auto — AI calls directly')}
+            onClick={() => handleChange(ConnectorToolPermission.auto)}
+          >
+            <CheckIcon size={15} />
+          </div>
+          <div
+            className={btnClass(ConnectorToolPermission.needs_approval)}
+            style={disabled ? { pointerEvents: 'none' } : undefined}
+            title={tt('connector.permission.approval', 'Needs approval')}
+            onClick={() => handleChange(ConnectorToolPermission.needs_approval)}
+          >
+            <HandIcon size={15} />
+          </div>
+          <div
+            className={btnClass(ConnectorToolPermission.disabled)}
+            style={disabled ? { pointerEvents: 'none' } : undefined}
+            title={tt('connector.permission.disabled', 'Disabled — hidden from AI')}
+            onClick={() => handleChange(ConnectorToolPermission.disabled)}
+          >
+            <BanIcon size={15} />
+          </div>
+        </div>
       </div>
-      <div
-        style={{
-          display: 'flex',
-          flexShrink: 0,
-          gap: 2,
-          ...(disabled && { cursor: 'not-allowed', opacity: 0.45 }),
-        }}
-      >
-        <div
-          className={btnClass(ConnectorToolPermission.auto)}
-          style={disabled ? { pointerEvents: 'none' } : undefined}
-          title="Auto — AI calls directly"
-          onClick={() => handleChange(ConnectorToolPermission.auto)}
-        >
-          <CheckIcon size={15} />
-        </div>
-        <div
-          className={btnClass(ConnectorToolPermission.needs_approval)}
-          style={disabled ? { pointerEvents: 'none' } : undefined}
-          title="Needs approval"
-          onClick={() => handleChange(ConnectorToolPermission.needs_approval)}
-        >
-          <HandIcon size={15} />
-        </div>
-        <div
-          className={btnClass(ConnectorToolPermission.disabled)}
-          style={disabled ? { pointerEvents: 'none' } : undefined}
-          title="Disabled — hidden from AI"
-          onClick={() => handleChange(ConnectorToolPermission.disabled)}
-        >
-          <BanIcon size={15} />
-        </div>
-      </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 ToolPermissionRow.displayName = 'ToolPermissionRow';
 

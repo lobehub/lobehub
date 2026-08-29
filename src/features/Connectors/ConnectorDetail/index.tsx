@@ -366,6 +366,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           {hasTools ? (
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <ToolPermissionGroup
+                connectorIdentifier={connector.identifier}
                 disabled={!canManage}
                 label={t('connector.readOnlyTools', 'Read-only tools')}
                 tools={readTools}
@@ -373,6 +374,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 onPermissionChange={handlePermissionChange}
               />
               <ToolPermissionGroup
+                connectorIdentifier={connector.identifier}
                 disabled={!canManage}
                 label={t('connector.createTools', 'Create tools')}
                 tools={createTools}
@@ -380,6 +382,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 onPermissionChange={handlePermissionChange}
               />
               <ToolPermissionGroup
+                connectorIdentifier={connector.identifier}
                 disabled={!canManage}
                 label={t('connector.updateTools', 'Update tools')}
                 tools={updateTools}
@@ -387,6 +390,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 onPermissionChange={handlePermissionChange}
               />
               <ToolPermissionGroup
+                connectorIdentifier={connector.identifier}
                 disabled={!canManage}
                 label={t('connector.deleteTools', 'Delete tools')}
                 tools={deleteTools}
