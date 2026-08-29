@@ -1,24 +1,19 @@
-import { type UpdateInfo } from '@lobechat/electron-client-ipc';
+import { type RendererOtaUpdateInfo, type UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Button as BaseButton, createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
-import { CircleFadingArrowUp, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    position: fixed;
-    z-index: 1000;
-    inset-block-end: 16px;
-    inset-inline-start: 16px;
-  `,
-
   installLaterCloseButton: css`
     all: unset;
 
@@ -146,6 +141,8 @@ export const UpdateNotification: React.FC = () => {
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
   const [rendererUpdateReady, setRendererUpdateReady] = useState(false);
+  const [rendererUpdateInfo, setRendererUpdateInfo] = useState<RendererOtaUpdateInfo | null>(null);
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   useWatchBroadcast('updateDownloaded', (info: UpdateInfo) => {
     setUpdateInfo(info);
@@ -160,14 +157,18 @@ export const UpdateNotification: React.FC = () => {
     setTimeout(() => setInstallConfirmMode(null), 5000);
   });
 
-  useWatchBroadcast('rendererUpdateReady', () => {
+  useWatchBroadcast('rendererUpdateReady', (info: RendererOtaUpdateInfo) => {
+    setRendererUpdateInfo(info);
     setRendererUpdateReady(true);
   });
 
   if (rendererUpdateReady && !updateDownloaded && !updateAvailable) {
     return (
       <div className={styles.installLaterToast}>
-        {tElectron('updater.updateReady')}
+        <span>
+          {tElectron('updater.updateReady')}
+          {isDevMode && rendererUpdateInfo?.version ? ` · ${rendererUpdateInfo.version}` : ''}
+        </span>
         <BaseButton size={'small'} type={'text'} onClick={() => setRendererUpdateReady(false)}>
           {tElectron('updater.ignore')}
         </BaseButton>
@@ -204,53 +205,36 @@ export const UpdateNotification: React.FC = () => {
 
   if (installConfirmMode === 'unconfirm')
     return (
-      <div className={styles.container}>
-        <div
-          style={{
-            alignItems: 'center',
-            background: cssVar.colorBgElevated,
-            border: `1px solid ${cssVar.colorBorderSecondary}`,
-            borderRadius: 12,
-            boxShadow: cssVar.boxShadow,
-            color: cssVar.colorText,
-            display: 'flex',
-            gap: 8,
-            padding: '8px 10px',
+      <div className={styles.installLaterToast}>
+        <span
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            if (updateInfo) openUpdateDetailModal(updateInfo);
           }}
         >
-          <Icon icon={CircleFadingArrowUp} style={{ fontSize: 16 }} />
-          <div
-            style={{ cursor: 'pointer', fontSize: 12 }}
-            onClick={() => {
-              if (updateInfo) openUpdateDetailModal(updateInfo);
-            }}
-          >
-            {tElectron('updater.updateReady')}
-            {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
-          </div>
-          <div style={{ flex: 1 }} />
-          <BaseButton
-            size="small"
-            type="text"
-            onClick={() => {
-              autoUpdateService.installLater();
-            }}
-          >
-            {tElectron('updater.later')}
-          </BaseButton>
-
-          <BaseButton
-            loading={isInstalling}
-            size="small"
-            type="primary"
-            onClick={() => {
-              setIsInstalling(true);
-              autoUpdateService.installNow();
-            }}
-          >
-            {tElectron('updater.upgradeNow')}
-          </BaseButton>
-        </div>
+          {tElectron('updater.updateReady')}
+          {isDevMode && updateInfo?.version ? ` · ${updateInfo.version}` : ''}
+        </span>
+        <BaseButton
+          size={'small'}
+          type={'text'}
+          onClick={() => {
+            autoUpdateService.installLater();
+          }}
+        >
+          {tElectron('updater.later')}
+        </BaseButton>
+        <BaseButton
+          loading={isInstalling}
+          size={'small'}
+          type={'text'}
+          onClick={() => {
+            setIsInstalling(true);
+            autoUpdateService.installNow();
+          }}
+        >
+          {tElectron('updater.upgradeNow')}
+        </BaseButton>
       </div>
     );
 
