@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalTraceModel } from '@/database/models/goalTrace';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileS3 } from '@/server/modules/S3';
@@ -24,6 +25,7 @@ const agentTraceProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
         ctx.userId,
         ctx.workspaceId ?? undefined,
       ),
+      goalTraceModel: new GoalTraceModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
     },
   });
 });
@@ -74,6 +76,80 @@ export const agentTraceRouter = router({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to sign the trace snapshot URL',
+        });
+      }
+    }),
+
+  /**
+   * Pre-signed GET for one goal's trajectory object.
+   *
+   * A goal trajectory has no derivable key — unlike an operation snapshot,
+   * whose id carries its agent and topic — so this is the only way to reach
+   * one. Same reasoning as `getSnapshotUrl` for not returning the blob itself:
+   * it is zstd and the client decompresses it directly.
+   */
+  getGoalTrajectoryUrl: agentTraceProcedure
+    .input(z.object({ goalId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const trace = await ctx.goalTraceModel.findById(input.goalId);
+        if (!trace) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message:
+              'No trajectory was recorded for this goal. It may predate goal tracing, ' +
+              'or trace upload was disabled when it ran.',
+          });
+        }
+
+        if (!trace.traceS3Key) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'This goal has an observation row but no trajectory object to download.',
+          });
+        }
+
+        return {
+          data: {
+            goalId: trace.goalId,
+            key: trace.traceS3Key,
+            url: await new FileS3().createPreSignedUrlForPreview(trace.traceS3Key),
+          },
+          success: true as const,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[agentTrace:getGoalTrajectoryUrl]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to sign the goal trajectory URL',
+        });
+      }
+    }),
+
+  /** Goals that recorded a trajectory, newest run first. */
+  listGoalTraces: agentTraceProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const traces = await ctx.goalTraceModel.list(input.limit);
+
+        return {
+          // The key is an internal storage detail; callers only need to know
+          // whether there is an object to fetch.
+          data: traces.map(({ traceS3Key, ...trace }) => ({
+            ...trace,
+            hasTrace: Boolean(traceS3Key),
+          })),
+          success: true as const,
+        };
+      } catch (error) {
+        console.error('[agentTrace:listGoalTraces]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list goal traces',
         });
       }
     }),

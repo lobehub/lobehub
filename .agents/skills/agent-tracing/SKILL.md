@@ -79,7 +79,7 @@ Implementation: `packages/agent-tracing/src/store/loadSnapshot.ts` (resolution o
 
 A goal is one complete _goal_ execution the way an operation is one complete agent execution, so it gets the same trace format one level up: `GoalTrajectory : AdvanceSnapshot` mirrors `ExecutionSnapshot : StepSnapshot`. There is no table of advances, exactly as there is no `agent_steps` table — `goal_traces` holds one rollup row per goal plus the object key, and the detail lives in the object.
 
-The leaves join back down: an advance records the `operationId`s it put in flight (on `tick.effects[].operationId`), so `inspect <opId>` continues from where the goal trace stops.
+The leaves join back down: an advance records the `operationId`s it put in flight (on `tick.effects[].operationId`), so `lh trace op inspect <opId>` continues from where the goal trace stops.
 
 ```bash
 agent-tracing goal               # list local goal trajectories

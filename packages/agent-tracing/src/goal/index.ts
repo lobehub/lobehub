@@ -22,6 +22,8 @@ export {
 } from './replay';
 export { buildGoalTraceRollup, type GoalTraceRollup } from './rollup';
 export { FileGoalTraceStore } from './store/file-store';
+export { loadGoalTrajectory, type LoadGoalTrajectoryOptions } from './store/loadTrajectory';
+export { RemoteGoalTraceStore } from './store/remote-store';
 export type { IGoalTraceStore } from './store/types';
 export type {
   FrontierCandidate,
