@@ -43,6 +43,35 @@ describe('createGatewayEventBuffer', () => {
     expect(listener.mock.calls[1][0].data).toMatchObject({ content: 'BC' });
   });
 
+  it('flushes merged deltas in order when a delayed timer is already overdue', () => {
+    const listener = vi.fn();
+    const unschedule = vi.fn();
+    let now = 0;
+    let scheduledFlush: (() => void) | undefined;
+    const buffer = createGatewayEventBuffer(listener, {
+      now: () => now,
+      schedule: (callback) => {
+        scheduledFlush = callback;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      },
+      unschedule,
+    });
+
+    buffer.push(makeEvent('text', 'A'));
+    buffer.push(makeEvent('text', 'B'));
+    now = 301;
+    buffer.push(makeEvent('text', 'C'));
+
+    expect(listener.mock.calls.map(([event]) => event.data)).toEqual([
+      expect.objectContaining({ content: 'A' }),
+      expect.objectContaining({ content: 'BC' }),
+    ]);
+    expect(unschedule).toHaveBeenCalledTimes(1);
+
+    scheduledFlush?.();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
   it('flushes pending prose before a semantic boundary', () => {
     const listener = vi.fn();
     const buffer = createGatewayEventBuffer(listener);
@@ -74,8 +103,8 @@ describe('createGatewayEventBuffer', () => {
       });
 
     buffer.push(snapshot('A', 1));
-    buffer.push(snapshot('AB', 2));
     buffer.push(snapshot('ABC', 3));
+    buffer.push(snapshot('AB', 2));
     vi.advanceTimersByTime(300);
 
     expect(listener).toHaveBeenCalledTimes(2);

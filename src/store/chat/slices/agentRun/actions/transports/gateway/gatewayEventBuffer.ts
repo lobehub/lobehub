@@ -35,6 +35,16 @@ const mergeBufferedChunk = (
   incomingData: StreamChunkData,
 ): BufferedChunk => {
   if (current.data.snapshotMode === 'replace') {
+    const currentSequence = current.data.snapshotSeq;
+    const incomingSequence = incomingData.snapshotSeq;
+    if (
+      typeof currentSequence === 'number' &&
+      typeof incomingSequence === 'number' &&
+      incomingSequence <= currentSequence
+    ) {
+      return current;
+    }
+
     return toBufferedChunk(incomingEvent, current.kind);
   }
 
@@ -131,7 +141,17 @@ export const createGatewayEventBuffer = (
       buffered.event.stepIndex === event.stepIndex &&
       buffered.data.snapshotMode === data.snapshotMode;
 
-    if (buffered && !canMerge) flush();
+    if (buffered && canMerge) {
+      buffered = mergeBufferedChunk(buffered, event, data);
+      if (now() - lastDeliveredAt >= GATEWAY_STREAM_UPDATE_INTERVAL_MS) {
+        flush();
+      } else {
+        scheduleFlush();
+      }
+      return;
+    }
+
+    if (buffered) flush();
 
     if (now() - lastDeliveredAt >= GATEWAY_STREAM_UPDATE_INTERVAL_MS) {
       listener(event);
@@ -139,7 +159,7 @@ export const createGatewayEventBuffer = (
       return;
     }
 
-    buffered = canMerge ? mergeBufferedChunk(buffered!, event, data) : toBufferedChunk(event, kind);
+    buffered = toBufferedChunk(event, kind);
     scheduleFlush();
   };
 
