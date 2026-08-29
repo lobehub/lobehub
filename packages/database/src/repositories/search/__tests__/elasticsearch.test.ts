@@ -316,7 +316,23 @@ describe('ElasticsearchSearchBackend', () => {
     );
   });
 
-  it('uses legacy field and scope semantics for candidate-only conversation searches', async () => {
+  it('rejects message topic scope when PostgreSQL parent filtering is unavailable', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchSearchBackend(db, { client, indexNamespace });
+
+    await expect(
+      backend.search({
+        entity: 'messages',
+        filters: { topicScope: { groupId: 'group-1' } },
+        pagination: { limit: 5 },
+        query: { text: 'scoped message' },
+        scope: { userId, workspaceId },
+      }),
+    ).rejects.toThrow('Elasticsearch message topic scope requires candidate-only search');
+    expect(client.search).not.toHaveBeenCalled();
+  });
+
+  it('applies topic scope only where the indexed document owns the scope fields', async () => {
     const client = createClient([]);
     const backend = new ElasticsearchSearchBackend(db, { client, indexNamespace });
 
@@ -329,8 +345,40 @@ describe('ElasticsearchSearchBackend', () => {
       scope: { userId, workspaceId },
     });
     await backend.search({
+      entity: 'topics',
+      filters: { topicScope: { groupId: 'group-1' } },
+      mode: 'candidates',
+      pagination: {},
+      query: { fields: ['title'], text: 'legacy topic' },
+      scope: { userId, workspaceId },
+    });
+    await backend.search({
+      entity: 'topics',
+      filters: { topicScope: { containerId: 'container-1' } },
+      mode: 'candidates',
+      pagination: {},
+      query: { fields: ['title'], text: 'legacy topic' },
+      scope: { userId, workspaceId },
+    });
+    await backend.search({
       entity: 'messages',
       filters: { topicScope: { groupId: 'group-1' } },
+      mode: 'candidates',
+      pagination: {},
+      query: { fields: ['content'], text: 'legacy message' },
+      scope: { userId, workspaceId },
+    });
+    await backend.search({
+      entity: 'messages',
+      filters: { topicScope: { agentId: 'agent-1' } },
+      mode: 'candidates',
+      pagination: {},
+      query: { fields: ['content'], text: 'legacy message' },
+      scope: { userId, workspaceId },
+    });
+    await backend.search({
+      entity: 'messages',
+      filters: { topicScope: { containerId: 'container-1' } },
       mode: 'candidates',
       pagination: {},
       query: { fields: ['content'], text: 'legacy message' },
@@ -369,6 +417,54 @@ describe('ElasticsearchSearchBackend', () => {
           query: {
             bool: expect.objectContaining({
               filter: [{ term: { workspace_id: workspaceId } }, { term: { group_id: 'group-1' } }],
+            }),
+          },
+        }),
+        entity: 'topics',
+      }),
+    );
+    expect(client.search).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              filter: [
+                { term: { workspace_id: workspaceId } },
+                {
+                  bool: {
+                    minimum_should_match: 1,
+                    should: [
+                      { term: { session_id: 'container-1' } },
+                      { term: { group_id: 'container-1' } },
+                    ],
+                  },
+                },
+              ],
+            }),
+          },
+        }),
+        entity: 'topics',
+      }),
+    );
+    expect(client.search).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              filter: [
+                { term: { workspace_id: workspaceId } },
+                {
+                  bool: {
+                    minimum_should_match: 1,
+                    should: [
+                      { term: { group_id: 'group-1' } },
+                      { bool: { must_not: [{ exists: { field: 'group_id' } }] } },
+                    ],
+                  },
+                },
+              ],
               must_not: [{ term: { search_sync_deleted: true } }],
             }),
           },
@@ -376,6 +472,62 @@ describe('ElasticsearchSearchBackend', () => {
         entity: 'messages',
         index: 'lobehub-dev-messages',
         pagination: 'unbounded',
+      }),
+    );
+    expect(client.search).toHaveBeenNthCalledWith(
+      5,
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              filter: [
+                { term: { workspace_id: workspaceId } },
+                {
+                  bool: {
+                    minimum_should_match: 1,
+                    should: [
+                      { term: { agent_id: 'agent-1' } },
+                      { bool: { must_not: [{ exists: { field: 'agent_id' } }] } },
+                    ],
+                  },
+                },
+              ],
+            }),
+          },
+        }),
+        entity: 'messages',
+      }),
+    );
+    expect(client.search).toHaveBeenNthCalledWith(
+      6,
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              filter: [
+                { term: { workspace_id: workspaceId } },
+                {
+                  bool: {
+                    minimum_should_match: 1,
+                    should: [
+                      { term: { session_id: 'container-1' } },
+                      { term: { group_id: 'container-1' } },
+                      {
+                        bool: {
+                          must_not: [
+                            { exists: { field: 'session_id' } },
+                            { exists: { field: 'group_id' } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+          },
+        }),
+        entity: 'messages',
       }),
     );
   });

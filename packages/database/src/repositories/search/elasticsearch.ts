@@ -321,6 +321,17 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     }
 
     if (
+      target.entity === 'messages' &&
+      request.mode !== 'candidates' &&
+      request.filters.topicScope
+    ) {
+      /** Only the candidate-only TopicModel flow rejoins parent topics before returning results. */
+      throw new Error(
+        'Elasticsearch message topic scope requires candidate-only search and PostgreSQL parent filtering',
+      );
+    }
+
+    if (
       request.mode !== 'candidates' &&
       (target.entity === 'topics' || target.entity === 'messages')
     ) {
@@ -755,6 +766,11 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     }
   }
 
+  /**
+   * Topics own their scope fields. Messages may carry the same fields for candidate pruning, but
+   * topic-bound messages are also valid with only topic_id, so missing fields must survive until
+   * PostgreSQL applies the authoritative parent-topic scope.
+   */
   private appendTopicScopeFilters(
     entity: ElasticsearchSearchEntity,
     filters: SearchBackendFilters,
@@ -765,17 +781,37 @@ export class ElasticsearchSearchBackend implements SearchBackend {
     const scope = filters.topicScope;
     if (!scope) return;
     if (scope.groupId) {
-      clauses.push({ term: { group_id: scope.groupId } });
+      const exactClause = { term: { group_id: scope.groupId } };
+      clauses.push(
+        entity === 'messages' ? exactOrLegacyMissingFilter('group_id', exactClause) : exactClause,
+      );
     } else if (scope.agentId) {
-      clauses.push({ term: { agent_id: scope.agentId } });
+      const exactClause = { term: { agent_id: scope.agentId } };
+      clauses.push(
+        entity === 'messages' ? exactOrLegacyMissingFilter('agent_id', exactClause) : exactClause,
+      );
     } else if (scope.containerId) {
+      const exactClauses = [
+        { term: { session_id: scope.containerId } },
+        { term: { group_id: scope.containerId } },
+      ];
       clauses.push({
         bool: {
           minimum_should_match: 1,
-          should: [
-            { term: { session_id: scope.containerId } },
-            { term: { group_id: scope.containerId } },
-          ],
+          should:
+            entity === 'messages'
+              ? [
+                  ...exactClauses,
+                  {
+                    bool: {
+                      must_not: [
+                        { exists: { field: 'session_id' } },
+                        { exists: { field: 'group_id' } },
+                      ],
+                    },
+                  },
+                ]
+              : exactClauses,
         },
       });
     }
