@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { imageToBase64, imageUrlToBase64 } from './imageToBase64';
 
+const mockSsrfSafeFetch = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: (...args: unknown[]) => mockSsrfSafeFetch(...args),
+}));
+
 describe('imageToBase64', () => {
   let mockImage: HTMLImageElement;
   let mockCanvas: HTMLCanvasElement;
@@ -67,6 +73,7 @@ describe('imageUrlToBase64', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('should convert image URL to base64 string', async () => {
@@ -145,5 +152,20 @@ describe('imageUrlToBase64', () => {
       imageUrlToBase64('https://example.com/declared-large.wav', { maxBytes: 8 }),
     ).rejects.toThrow('8-byte download limit');
     expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('should enforce the byte limit at the server-side SSRF fetch boundary', async () => {
+    vi.stubGlobal('window', undefined);
+    mockSsrfSafeFetch.mockResolvedValue(
+      new Response(mockArrayBuffer, { headers: { 'content-type': 'image/png' } }),
+    );
+
+    await imageUrlToBase64('https://example.com/server-image.png', { maxBytes: 8 });
+
+    expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
+      'https://example.com/server-image.png',
+      undefined,
+      { maxContentLength: 9 },
+    );
   });
 });

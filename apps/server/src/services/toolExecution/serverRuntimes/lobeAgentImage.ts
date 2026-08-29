@@ -34,7 +34,7 @@ const readImage = async (uri: string) => {
   const { base64, mimeType } = await imageUrlToBase64(uri, {
     maxBytes: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
   });
-  return { buffer: Buffer.from(base64, 'base64'), mimeType, shouldRewriteUri: false };
+  return { buffer: Buffer.from(base64, 'base64'), mimeType, shouldRewriteUri: true };
 };
 
 const transcodeImage = async (buffer: Buffer, targetMimeType: MultimodalImageMimeType) => {

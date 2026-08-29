@@ -313,7 +313,7 @@ describe('lobeAgentRuntime', () => {
             content: [
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: 'https://example.com/generated.png' },
+                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
                 type: 'image_url',
               }),
             ],
@@ -437,7 +437,7 @@ describe('lobeAgentRuntime', () => {
             content: [
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: 'http://example.com/generated.png' },
+                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
                 type: 'image_url',
               }),
               expect.objectContaining({
@@ -522,7 +522,7 @@ describe('lobeAgentRuntime', () => {
           expect.objectContaining({
             content: expect.arrayContaining([
               {
-                image_url: { detail: 'auto', url: 'https://example.com/tool-image.png' },
+                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
                 type: 'image_url',
               },
             ]),
@@ -586,7 +586,7 @@ describe('lobeAgentRuntime', () => {
             content: [
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
-                image_url: { detail: 'auto', url: 'https://example.com/previous.png' },
+                image_url: { detail: 'auto', url: VALID_PNG_DATA_URL },
                 type: 'image_url',
               }),
             ],

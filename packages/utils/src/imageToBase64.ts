@@ -48,6 +48,18 @@ export interface ImageUrlToBase64Options {
 const sizeLimitError = (maxBytes: number) =>
   new RangeError(`Remote binary exceeds the ${maxBytes}-byte download limit`);
 
+/**
+ * Apply the byte ceiling at the SSRF fetch boundary before its server adapter buffers the body.
+ * The adapter uses a soft truncation cap, so one extra byte lets the outer reader detect overflow.
+ */
+const fetchServerBinary = async (imageUrl: string, maxBytes?: number) => {
+  const { ssrfSafeFetch } = await import('@lobechat/ssrf-safe-fetch');
+
+  return maxBytes
+    ? ssrfSafeFetch(imageUrl, undefined, { maxContentLength: maxBytes + 1 })
+    : ssrfSafeFetch(imageUrl);
+};
+
 const readBlobWithLimit = async (response: Response, maxBytes: number): Promise<Blob> => {
   const declaredLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
@@ -100,7 +112,7 @@ export const imageUrlToBase64 = async (
 
     // Use SSRF-safe fetch on server-side to prevent SSRF attacks
     const res = isServer
-      ? await import('@lobechat/ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
+      ? await fetchServerBinary(imageUrl, options.maxBytes)
       : await fetch(imageUrl);
 
     const blob = options.maxBytes
