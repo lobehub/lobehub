@@ -15,6 +15,7 @@ const mockMessageModelQuery = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
+const mockFetchCappedBuffer = vi.hoisted(() => vi.fn());
 const mockImageUrlToBase64 = vi.hoisted(() => vi.fn());
 const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
@@ -70,6 +71,10 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: (...args: any[]) => mockConsumeStreamUntilDone(...args),
+}));
+
+vi.mock('@/server/services/bot/platforms/loadAttachmentBuffer', () => ({
+  fetchCappedBuffer: (...args: unknown[]) => mockFetchCappedBuffer(...args),
 }));
 
 vi.mock('@lobechat/utils', async (importOriginal) => ({
@@ -136,6 +141,7 @@ describe('lobeAgentRuntime', () => {
     });
     mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
     mockConsumeStreamUntilDone.mockResolvedValue(undefined);
+    mockFetchCappedBuffer.mockResolvedValue(Buffer.from(VALID_PNG_BASE64, 'base64'));
     mockImageUrlToBase64.mockResolvedValue({
       base64: VALID_PNG_BASE64,
       mimeType: 'image/png',
@@ -449,6 +455,7 @@ describe('lobeAgentRuntime', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(mockFetchCappedBuffer).not.toHaveBeenCalled();
     expect(mockSharpOptions).toHaveBeenCalledWith(
       expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
     );
@@ -513,7 +520,7 @@ describe('lobeAgentRuntime', () => {
             {
               fileId: 'file-tool-image',
               mediaType: 'image/png',
-              url: 'https://example.com/tool-image.png',
+              url: 'http://localhost:9000/tool-image.png',
             },
           ],
         },
@@ -529,6 +536,15 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(mockFetchCappedBuffer).toHaveBeenCalledWith(
+      'http://localhost:9000/tool-image.png',
+      expect.objectContaining({
+        allowConfiguredOrigins: true,
+        limit: 20 * 1024 * 1024,
+        timeoutMs: expect.any(Number),
+      }),
+    );
+    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({
       files: [
         {

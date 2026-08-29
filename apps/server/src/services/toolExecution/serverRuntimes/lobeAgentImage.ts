@@ -2,6 +2,8 @@ import type { MediaFileItem } from '@lobechat/builtin-tool-lobe-agent';
 import { imageUrlToBase64, resolveImageMimeTypeFromBytes } from '@lobechat/utils';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 
+import { fetchCappedBuffer } from '@/server/services/bot/platforms/loadAttachmentBuffer';
+
 const SHARP_FORMAT_BY_MIME_TYPE = {
   'image/jpeg': 'jpeg',
   'image/png': 'png',
@@ -22,7 +24,9 @@ const MAX_MULTIMODAL_IMAGE_PREPARATION_MS = 30_000;
 /** Share the same decompression-bomb ceiling across validation and transcoding. */
 export const MAX_MULTIMODAL_IMAGE_PIXELS = 25_000_000;
 
-const readImage = async (uri: string, signal: AbortSignal) => {
+const readImage = async (item: MediaFileItem, signal: AbortSignal, deadlineAt: number) => {
+  const { uri } = item;
+
   if (/^data:image\//i.test(uri)) {
     const { base64, mimeType, type } = parseDataUri(uri);
     if (type !== 'base64' || !base64) throw new TypeError('Invalid inline image data');
@@ -35,6 +39,22 @@ const readImage = async (uri: string, signal: AbortSignal) => {
       mimeType: detectedMimeType,
       shouldRewriteUri: Boolean(detectedMimeType && detectedMimeType !== mimeType?.toLowerCase()),
     };
+  }
+
+  /**
+   * Stable file IDs prove this URL came from a stored attachment record. Allow only
+   * configured app/storage origins so self-hosted private endpoints remain reachable.
+   */
+  if (item.id) {
+    const buffer = await fetchCappedBuffer(uri, {
+      allowConfiguredOrigins: true,
+      limit: MAX_MULTIMODAL_IMAGE_DOWNLOAD_BYTES,
+      timeoutMs: Math.max(1, deadlineAt - Date.now()),
+    });
+    if (!buffer) throw new TypeError('Failed to download stored multimodal image');
+
+    const mimeType = await resolveImageMimeTypeFromBytes(undefined, buffer);
+    return { buffer, mimeType, shouldRewriteUri: true };
   }
 
   const { base64, mimeType } = await imageUrlToBase64(uri, {
@@ -81,6 +101,7 @@ export const normalizeMultimodalImageItems = async (
   if (!targetMimeType) throw new TypeError('At least one multimodal image format is required');
 
   const normalizedItems: MediaFileItem[] = [];
+  const deadlineAt = Date.now() + MAX_MULTIMODAL_IMAGE_PREPARATION_MS;
   const signal = AbortSignal.timeout(MAX_MULTIMODAL_IMAGE_PREPARATION_MS);
   let preparedImageBytes = 0;
 
@@ -90,7 +111,7 @@ export const normalizeMultimodalImageItems = async (
       continue;
     }
 
-    const source = await readImage(item.uri, signal);
+    const source = await readImage(item, signal, deadlineAt);
     if (source.mimeType && supportedFormatSet.has(source.mimeType as MultimodalImageMimeType)) {
       preparedImageBytes = consumePreparationBudget(preparedImageBytes, source.buffer.byteLength);
       normalizedItems.push(
