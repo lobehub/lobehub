@@ -1,9 +1,14 @@
 # Interaction cost (GOMS-KLM)
 
 An optional overlay for **UI rounds**: while you drive the product, record what a
-person would have had to do to reach the same state. The acceptance page then
-renders the round's _user-equivalent_ interaction cost next to its checks, so a
-reviewer can see that a flow passed **and** what it costs to walk it.
+person would have had to do to reach the same state. The round then carries a
+_user-equivalent_ interaction cost, so a flow can be judged on what it costs to
+walk, not just on whether it passed.
+
+**Where it surfaces:** in that round's report, as its own collapsible section —
+which on the acceptance page opens from the round history, available to the
+acceptance owner. It is not part of the shared aggregate a non-owner viewer
+sees, so never promise a reviewer they will see it there.
 
 **Skip it whenever it does not apply.** A CLI or backend round has no interaction
 to price. A machine without a UI driver installed (no `agent-browser`) records no

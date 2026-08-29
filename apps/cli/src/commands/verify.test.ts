@@ -901,6 +901,31 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     warnSpy.mockRestore();
   });
 
+  it('still prices the trace when result.json scaffolds interactionCost as null', async () => {
+    // Regression (found by running the flow): `report-init.sh` writes
+    // `"interactionCost": null` to document the field. Treating key presence as
+    // an explicit summary made the project's own scaffolder silently suppress
+    // pricing on every traced round it created.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({ cases: [], interactionCost: null }),
+    );
+    writeFileSync(
+      path.join(dir, 'interaction-trace.jsonl'),
+      `${JSON.stringify({
+        klm: { category: 'action', operators: { P: 1 } },
+        schema: 'lobehub.agentBrowserKlmTrace@1',
+      })}\n`,
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate.mock.calls[0][0].metadata.interactionCost).toMatchObject({
+      totalSeconds: 1.1,
+    });
+  });
+
   it('keeps an explicit result.json interactionCost over the trace', async () => {
     const verify = mockTrpcClient.verify as Record<string, any>;
     writeFileSync(

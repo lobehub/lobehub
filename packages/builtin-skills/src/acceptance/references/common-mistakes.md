@@ -34,6 +34,14 @@ before pass/fail. Greps/counts are supporting signals only, never the verdict. A
 blank page / watermark / layout-shell-only = fail or uncertain — go find the root
 cause.
 
+**The mirror case — asserting a feature is ABSENT by grep.** Searching the page
+text for a feature's name to prove it is _not_ rendered is worse than the positive
+case, because your own report prose is on that page: an acceptance whose goal
+sentence names the feature will match its own words and report the feature as
+present. When the claim is about presence or absence of a UI section, assert it
+against structured state (the API/metadata that drives it, or a located DOM node),
+not against a substring of the rendered text.
+
 ---
 
 ## M2 — Goal is verifying error states, but stopping at happy-path because injection is hard

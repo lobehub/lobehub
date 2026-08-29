@@ -807,15 +807,20 @@ export function originFromEnv(): VerifyRunOrigin | undefined {
  *
  * Interaction cost is an optional overlay. A round with no UI driver — a CLI
  * verification, or a machine without agent-browser — simply has no trace, and
- * that is silently skipped, never a warning and never a failure. An explicit
- * `result.json.interactionCost` still wins, so a driver that computed its own
- * summary is not overwritten.
+ * that is silently skipped, never a warning and never a failure. A driver that
+ * computed its own summary still wins.
+ *
+ * "Its own summary" means an actual object. A scaffolded `result.json` carries
+ * `"interactionCost": null` to document the field, and a null is the absence of
+ * a measurement, not an assertion that this round cost nothing — treating mere
+ * key presence as an override let the report scaffolder silently suppress
+ * pricing on every traced run it created.
  */
 export function interactionCostFromReportDir(
   dir: string,
   result: Record<string, unknown>,
 ): VerifyInteractionCost | undefined {
-  if (Object.prototype.hasOwnProperty.call(result, 'interactionCost')) return undefined;
+  if (objectValue(result.interactionCost)) return undefined;
 
   const tracePath = path.join(dir, GOMS_KLM_TRACE_FILE);
   if (!existsSync(tracePath)) return undefined;
