@@ -61,14 +61,16 @@ describe('TopicModel guardShareProvenance', () => {
   it('excludes share topics from deleteAll instead of failing the sweep', async () => {
     await guardedModel.deleteAll();
 
-    const rows = await serverDB.select().from(topics);
+    // Scope to this test's user — the CI database is shared across test files.
+    const rows = await serverDB.select().from(topics).where(eq(topics.userId, visitorId));
     expect(rows.map((row) => row.id)).toEqual(['guarded-share-topic']);
   });
 
   it('excludes share topics from batchDelete', async () => {
     await guardedModel.batchDelete(['guarded-share-topic', 'guarded-plain-topic']);
 
-    const rows = await serverDB.select().from(topics);
+    // Scope to this test's user — the CI database is shared across test files.
+    const rows = await serverDB.select().from(topics).where(eq(topics.userId, visitorId));
     expect(rows.map((row) => row.id)).toEqual(['guarded-share-topic']);
   });
 

@@ -198,14 +198,16 @@ describe('MessageModel guardShareProvenance', () => {
       );
 
       // The transaction rolled back — the ordinary row survives too.
-      const rows = await serverDB.select().from(messages);
+      // Scope to this test's user — the CI database is shared across test files.
+      const rows = await serverDB.select().from(messages).where(eq(messages.userId, visitorId));
       expect(rows).toHaveLength(2);
     });
 
     it('excludes share rows from bulk sweeps instead of failing them', async () => {
       await guardedModel.deleteAllMessages();
 
-      const rows = await serverDB.select().from(messages);
+      // Scope to this test's user — the CI database is shared across test files.
+      const rows = await serverDB.select().from(messages).where(eq(messages.userId, visitorId));
       expect(rows.map((row) => row.id)).toEqual(['share-msg']);
     });
 
