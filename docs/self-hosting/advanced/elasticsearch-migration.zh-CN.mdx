@@ -34,9 +34,21 @@ tags:
 ## 开始前
 
 1. 在正式使用的区域创建一个新的空 Elasticsearch 项目。
-2. 先执行同一 LobeHub 版本自带的数据库迁移。
-3. 备份 PostgreSQL。
-4. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
+
+2. 对于现有正式数据库，请先在数据库 SQL 编辑器中、事务之外执行以下语句，再执行当前版本的数据库迁移。全新安装可以在数据库迁移完成后执行，但必须在首次运行回填 `--apply` 前完成。这样可以在不阻塞写入的情况下创建 Memory 扇出索引：
+
+   ```sql
+   CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
+   ON "user_memories_contexts" USING gin ("user_memory_ids");
+   ```
+
+   如果并发创建中断并留下无效索引，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，再重新执行上面的创建语句。
+
+3. 执行同一 LobeHub 版本自带的数据库迁移。
+
+4. 备份 PostgreSQL。
+
+5. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
 
 首次正式映射版本是 `v1`。工具会创建 `lobehub-messages-v1` 这类实体索引；14 类索引全部完成且数量与断点记录一致后，再创建 `lobehub-messages` 这类稳定别名。别名只是 Elasticsearch 内部长期不变的名字，创建别名不会改变用户请求当前使用的搜索后端。
 
@@ -61,7 +73,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` 会在首批回填前开启 PostgreSQL 增量队列采集。必须显式传入 `--yes`，用于确认这个持久化数据库变更；命令不会弹出交互确认。
+`--apply` 会先校验 Memory 扇出所需的 GIN 索引，再逐表安装增量采集触发器；每次获取表锁最多等待 3 秒。首次执行应安排在低流量时段。如果某张表未能及时获得短锁，命令会在开启采集前停止，使用同一个状态目录重新执行即可。全部采集设施就绪后，命令才会在首批回填前开启 PostgreSQL 增量队列采集。必须显式传入 `--yes`，用于确认这个持久化数据库变更；命令不会弹出交互确认。
 
 工具还会把 run ID 写入每个物理索引的 mapping 元数据，使用另一份本地 checkpoint 时无法静默继续写入同一组物理索引。禁止在多台机器上并发运行同一份 checkpoint。
 

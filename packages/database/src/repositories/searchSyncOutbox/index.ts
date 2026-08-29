@@ -3,6 +3,11 @@ import { sql } from 'drizzle-orm';
 import type { LobeChatDatabase } from '../../type';
 import type { SearchDocumentEntity } from '../searchDocument';
 import { SEARCH_DOCUMENT_ENTITIES } from '../searchDocument';
+import {
+  SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS,
+  SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+  SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX,
+} from './captureInfrastructure';
 
 export interface SearchSyncWork {
   documentId: string;
@@ -69,8 +74,52 @@ const revisionNumber = (value: number | string | undefined, operation: string, m
 export class SearchSyncOutboxRepository {
   constructor(private readonly db: SearchSyncDatabase) {}
 
-  /** Enables trigger capture for deployments that operate an outbox consumer. */
+  /**
+   * Installs lock-sensitive capture infrastructure outside automatic deployment migrations.
+   * Each trigger is a separate short transaction, so a lock timeout can be retried without
+   * rolling back triggers already installed on quieter tables.
+   */
+  async installCaptureInfrastructure(): Promise<void> {
+    const indexResult = await this.db.execute(sql`
+      SELECT indisvalid AS is_valid
+      FROM pg_index
+      WHERE indexrelid = to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})
+    `);
+    const [index] = rowsOf<{ is_valid: boolean }>(indexResult);
+    if (!index?.is_valid) {
+      throw new Error(
+        `A valid ${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX} index is required before enabling search sync capture; drop any invalid copy with DROP INDEX CONCURRENTLY, then recreate it with CREATE INDEX CONCURRENTLY`,
+      );
+    }
+
+    for (const statement of SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
+      await this.db.execute(statement);
+    }
+
+    const triggerTargets = sql.join(
+      SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(
+        ({ name, table }) => sql`(${name}, ${`public.${table}`}::regclass)`,
+      ),
+      sql`, `,
+    );
+    const triggerResult = await this.db.execute(sql`
+      SELECT count(*)::integer AS count
+      FROM pg_trigger
+      WHERE NOT tgisinternal
+        AND tgenabled IN ('O', 'A')
+        AND (tgname, tgrelid) IN (${triggerTargets})
+    `);
+    const installed = Number(rowsOf<{ count: number }>(triggerResult)[0]?.count ?? 0);
+    if (installed !== SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length) {
+      throw new Error(
+        `Failed to install search sync capture triggers (${installed}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length})`,
+      );
+    }
+  }
+
+  /** Installs capture infrastructure, then enables it for deployments with an outbox consumer. */
   async enableCapture(): Promise<void> {
+    await this.installCaptureInfrastructure();
     await this.db.execute(sql`
       INSERT INTO search_sync_settings (key, enabled)
       VALUES ('default', true)

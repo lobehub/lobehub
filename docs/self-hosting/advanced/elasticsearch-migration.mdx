@@ -40,9 +40,26 @@ host.
 ## Before you start
 
 1. Create a new empty Elasticsearch project in the intended production region.
-2. Apply the database migrations for the same LobeHub release.
-3. Back up PostgreSQL.
-4. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
+
+2. For an existing production database, run the following statement in the database SQL editor,
+   outside a transaction, before applying the release migration. A new installation can run it
+   after its migrations finish, but it must exist before the first reindex `--apply`. This builds
+   the Memory fanout index without blocking writes:
+
+   ```sql
+   CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
+   ON "user_memories_contexts" USING gin ("user_memory_ids");
+   ```
+
+   If an interrupted concurrent build left this index invalid, run `DROP INDEX CONCURRENTLY
+   "user_memories_contexts_user_memory_ids_gin_idx"` outside a transaction, then retry the create
+   statement.
+
+3. Apply the database migrations for the same LobeHub release.
+
+4. Back up PostgreSQL.
+
+5. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
 The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
 
@@ -67,8 +84,12 @@ Only the first invocation uses `--fresh-run`. Resume the same run with the same 
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` enables PostgreSQL Outbox capture before the first backfill batch. The required `--yes`
-acknowledges that persistent database-side effect; it is not an interactive prompt.
+`--apply` verifies the Memory fanout GIN index, then installs the capture triggers one table at a
+time with a three-second lock timeout. Run the first apply during a low-traffic window. If a trigger
+cannot acquire its short lock, the command stops before enabling capture and is safe to rerun with
+the same state directory. After all capture infrastructure is ready, it enables PostgreSQL Outbox
+capture before the first backfill batch. The required `--yes` acknowledges that persistent
+database-side effect; it is not an interactive prompt.
 
 The run ID is also stored in each physical index's mapping metadata. A different local checkpoint
 cannot silently continue writing the same physical indexes. Never run copies of one checkpoint

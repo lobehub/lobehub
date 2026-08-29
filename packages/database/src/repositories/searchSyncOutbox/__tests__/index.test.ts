@@ -3,14 +3,16 @@ import path from 'node:path';
 
 import { and, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, searchSyncOutbox, searchSyncSettings, users } from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
 import { SearchDocumentBuilder } from '../../searchDocument';
 import { SearchSyncOutboxRepository } from '..';
 
 const USER_ID = 'search-sync-integration-user';
+const isServerDB = process.env.TEST_SERVER_DB === '1';
 
 const db = await getTestDB();
 const builder = new SearchDocumentBuilder(db);
@@ -20,6 +22,22 @@ const sortKeys = (keys: { documentId: string; entity: string }[]) =>
   keys.toSorted((left, right) =>
     `${left.entity}:${left.documentId}`.localeCompare(`${right.entity}:${right.documentId}`),
   );
+
+beforeAll(async () => {
+  if (isServerDB) {
+    await db.execute(sql`
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS user_memories_contexts_user_memory_ids_gin_idx
+      ON user_memories_contexts USING gin (user_memory_ids)
+    `);
+    return;
+  }
+
+  /** PGlite does not support PostgreSQL's concurrent-index implementation. */
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS user_memories_contexts_user_memory_ids_gin_idx
+    ON user_memories_contexts USING gin (user_memory_ids)
+  `);
+});
 
 beforeEach(async () => {
   await db.delete(users).where(eq(users.id, USER_ID));
@@ -54,7 +72,7 @@ describe('SearchSyncOutboxRepository', () => {
     for (const statement of migration.sql) await db.execute(sql.raw(statement));
   });
 
-  it('does not replace triggers that were installed before the deployment migration', () => {
+  it('keeps existing-table DDL out of the automatic deployment migration', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),
     }).find((item) =>
@@ -64,14 +82,13 @@ describe('SearchSyncOutboxRepository', () => {
     );
 
     if (!migration) throw new Error('Search sync migration was not generated');
-    const triggerSql = migration.sql.filter((statement) => statement.includes('CREATE TRIGGER'));
+    const migrationSql = migration.sql.join('\n');
 
-    expect(triggerSql).toHaveLength(1);
-    expect(triggerSql[0]).toContain('IF NOT EXISTS');
-    expect(triggerSql[0]).not.toContain('CREATE OR REPLACE TRIGGER');
+    expect(migrationSql).not.toContain('CREATE TRIGGER');
+    expect(migrationSql).not.toContain('user_memories_contexts_user_memory_ids_gin_idx');
   });
 
-  it('installs every direct and relation-fanout trigger', async () => {
+  it('requires a valid GIN index and installs every capture trigger explicitly', async () => {
     const result = await db.execute(sql`
       SELECT tgname
       FROM pg_trigger
@@ -98,6 +115,42 @@ describe('SearchSyncOutboxRepository', () => {
       'search_sync_user_memories',
       'search_sync_user_memories_fanout',
     ]);
+
+    const indexResult = await db.execute(sql`
+      SELECT indisvalid AS is_valid
+      FROM pg_index
+      WHERE indexrelid = 'user_memories_contexts_user_memory_ids_gin_idx'::regclass
+    `);
+    const indexRows = Array.isArray(indexResult) ? indexResult : indexResult.rows;
+    expect(indexRows).toEqual([{ is_valid: true }]);
+  });
+
+  it.each([{ indexRows: [] }, { indexRows: [{ is_valid: false }] }])(
+    'refuses to enable capture when the required GIN index is missing or invalid',
+    async ({ indexRows }) => {
+      const execute = vi.fn().mockResolvedValueOnce(indexRows);
+      const isolatedRepository = new SearchSyncOutboxRepository({
+        execute: execute as LobeChatDatabase['execute'],
+      });
+
+      await expect(isolatedRepository.enableCapture()).rejects.toThrow(
+        'A valid user_memories_contexts_user_memory_ids_gin_idx index is required',
+      );
+      expect(execute).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps capture disabled when trigger installation fails', async () => {
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce([{ is_valid: true }])
+      .mockRejectedValueOnce(new Error('lock timeout'));
+    const isolatedRepository = new SearchSyncOutboxRepository({
+      execute: execute as LobeChatDatabase['execute'],
+    });
+
+    await expect(isolatedRepository.enableCapture()).rejects.toThrow('lock timeout');
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('keeps capture disabled unless a deployment explicitly enables it', async () => {
