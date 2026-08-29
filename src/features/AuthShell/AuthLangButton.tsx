@@ -16,9 +16,9 @@ const setCookieSimple = (key: string, value: string, days: number) => {
 
 const AuthLangButton = memo(() => {
   const { i18n } = useTranslation();
-  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
-  const current = normalizeLocale(i18n.resolvedLanguage || i18n.language || browserLanguage);
-  const currentLabel = localeOptions.find((item) => item.value === current)?.label || 'English';
+  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : 'zh-CN';
+  const current = normalizeLocale(i18n.language || i18n.resolvedLanguage || browserLanguage);
+  const currentLabel = localeOptions.find((item) => item.value === current)?.label || '简体中文';
 
   const items = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
