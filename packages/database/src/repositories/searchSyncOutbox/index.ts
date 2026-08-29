@@ -12,6 +12,8 @@ import {
 export interface SearchSyncWork {
   documentId: string;
   entity: SearchDocumentEntity;
+  /** Opaque fencing token that binds settlement to the worker's exact lease. */
+  leaseToken: string;
   revision: number;
 }
 
@@ -45,6 +47,7 @@ type SearchSyncDatabase = Pick<LobeChatDatabase, 'execute'>;
 interface SearchSyncRow {
   document_id: string;
   entity: SearchDocumentEntity;
+  lease_token: string;
   revision: number | string;
 }
 
@@ -56,6 +59,7 @@ const rowsOf = <Row>(result: unknown): Row[] => {
 const toWork = (row: SearchSyncRow): SearchSyncWork => ({
   documentId: row.document_id,
   entity: row.entity,
+  leaseToken: row.lease_token,
   revision: Number(row.revision),
 });
 
@@ -188,12 +192,13 @@ export class SearchSyncOutboxRepository {
 
     const values = sql.join(
       works.map(
-        (work) => sql`(${work.entity}::text, ${work.documentId}::text, ${work.revision}::bigint)`,
+        (work) =>
+          sql`(${work.entity}::text, ${work.documentId}::text, ${work.revision}::bigint, ${work.leaseToken}::numeric)`,
       ),
       sql`, `,
     );
     const result = await this.db.execute(sql`
-      WITH acknowledged(entity, document_id, revision) AS (
+      WITH acknowledged(entity, document_id, revision, lease_token) AS (
         VALUES ${values}
       )
       DELETE FROM search_sync_outbox AS outbox
@@ -201,12 +206,15 @@ export class SearchSyncOutboxRepository {
       WHERE outbox.entity = acknowledged.entity
         AND outbox.document_id = acknowledged.document_id
         AND outbox.revision = acknowledged.revision
-      RETURNING outbox.entity, outbox.document_id, outbox.revision
+        AND EXTRACT(EPOCH FROM outbox.locked_until) = acknowledged.lease_token
+      RETURNING outbox.entity, outbox.document_id, outbox.revision,
+                EXTRACT(EPOCH FROM outbox.locked_until)::text AS lease_token
     `);
 
     return rowsOf<SearchSyncRow>(result).map(toWork);
   }
 
+  /** Keeps PostgreSQL's microsecond precision in the token instead of truncating through JS Date. */
   async claim(limit = 100, leaseSeconds = 300): Promise<SearchSyncWork[]> {
     const result = await this.db.execute(sql`
       WITH expired AS MATERIALIZED (
@@ -250,9 +258,10 @@ export class SearchSyncOutboxRepository {
           AND outbox.document_id = candidates.document_id
           AND outbox.revision = candidates.revision
         RETURNING outbox.entity, outbox.document_id, outbox.revision,
+                  EXTRACT(EPOCH FROM outbox.locked_until)::text AS lease_token,
                   outbox.priority, outbox.available_at
       )
-      SELECT entity, document_id, revision
+      SELECT entity, document_id, revision, lease_token
       FROM claimed
       ORDER BY priority, available_at, revision
     `);
@@ -294,12 +303,12 @@ export class SearchSyncOutboxRepository {
     const values = sql.join(
       failures.map(
         (failure) =>
-          sql`(${failure.entity}::text, ${failure.documentId}::text, ${failure.revision}::bigint, ${errorMessage(failure.error)}::text, ${failure.permanent ?? false}::boolean)`,
+          sql`(${failure.entity}::text, ${failure.documentId}::text, ${failure.revision}::bigint, ${failure.leaseToken}::numeric, ${errorMessage(failure.error)}::text, ${failure.permanent ?? false}::boolean)`,
       ),
       sql`, `,
     );
     const result = await this.db.execute(sql`
-      WITH failed(entity, document_id, revision, last_error, permanent) AS (
+      WITH failed(entity, document_id, revision, lease_token, last_error, permanent) AS (
         VALUES ${values}
       )
       UPDATE search_sync_outbox AS outbox
@@ -321,7 +330,7 @@ export class SearchSyncOutboxRepository {
       WHERE outbox.entity = failed.entity
         AND outbox.document_id = failed.document_id
         AND outbox.revision = failed.revision
-        AND outbox.locked_until IS NOT NULL
+        AND EXTRACT(EPOCH FROM outbox.locked_until) = failed.lease_token
       RETURNING outbox.dead_at IS NOT NULL AS dead
     `);
 
@@ -333,12 +342,13 @@ export class SearchSyncOutboxRepository {
 
     const values = sql.join(
       works.map(
-        (work) => sql`(${work.entity}::text, ${work.documentId}::text, ${work.revision}::bigint)`,
+        (work) =>
+          sql`(${work.entity}::text, ${work.documentId}::text, ${work.revision}::bigint, ${work.leaseToken}::numeric)`,
       ),
       sql`, `,
     );
     await this.db.execute(sql`
-      WITH released(entity, document_id, revision) AS (
+      WITH released(entity, document_id, revision, lease_token) AS (
         VALUES ${values}
       )
       UPDATE search_sync_outbox AS outbox
@@ -347,7 +357,7 @@ export class SearchSyncOutboxRepository {
       WHERE outbox.entity = released.entity
         AND outbox.document_id = released.document_id
         AND outbox.revision = released.revision
-        AND outbox.locked_until IS NOT NULL
+        AND EXTRACT(EPOCH FROM outbox.locked_until) = released.lease_token
     `);
   }
 

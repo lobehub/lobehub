@@ -290,6 +290,45 @@ describe('SearchSyncOutboxRepository', () => {
     await expect(repository.stats()).resolves.toMatchObject({ dead: 1, inFlight: 0, ready: 1 });
   });
 
+  it('prevents stale workers from settling a reclaimed lease', async () => {
+    await db.insert(agents).values({ id: 'reclaimed-agent', title: 'one', userId: USER_ID });
+    const [stale] = await repository.claim(1, 1);
+
+    /** Simulate the lease reaper making the same revision available to another worker. */
+    await db
+      .update(searchSyncOutbox)
+      .set({ availableAt: new Date(0), lockedUntil: null })
+      .where(eq(searchSyncOutbox.documentId, stale.documentId));
+    const [current] = await repository.claim(1, 300);
+    expect(current.leaseToken).not.toBe(stale.leaseToken);
+    const [claimedRow] = await db
+      .select()
+      .from(searchSyncOutbox)
+      .where(eq(searchSyncOutbox.documentId, current.documentId));
+
+    await repository.releaseMany([stale]);
+    await expect(
+      db.select().from(searchSyncOutbox).where(eq(searchSyncOutbox.documentId, current.documentId)),
+    ).resolves.toMatchObject([{ lockedUntil: claimedRow.lockedUntil }]);
+
+    await repository.markFailures([
+      { ...stale, error: new Error('late failure'), permanent: true },
+    ]);
+    await expect(
+      db.select().from(searchSyncOutbox).where(eq(searchSyncOutbox.documentId, current.documentId)),
+    ).resolves.toMatchObject([
+      {
+        attempts: claimedRow.attempts,
+        deadAt: claimedRow.deadAt,
+        lastError: claimedRow.lastError,
+        lockedUntil: claimedRow.lockedUntil,
+      },
+    ]);
+
+    await expect(repository.acknowledgeMany([stale])).resolves.toEqual([]);
+    await expect(repository.acknowledgeMany([current])).resolves.toEqual([current]);
+  });
+
   it('returns revocations before ordinary edits', async () => {
     await db.insert(agents).values([
       { id: 'ordinary-agent', title: 'before', userId: USER_ID },
