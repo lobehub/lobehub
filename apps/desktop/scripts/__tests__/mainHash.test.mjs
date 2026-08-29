@@ -1,42 +1,58 @@
-import { randomUUID } from 'node:crypto';
-import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import { discoverFirstPartyNativeAddons } from '../../native-deps.config.mjs';
-import { computeExternalModulesHash, computeMainHash, createMainHash } from '../mainHash.mjs';
+import {
+  computeExternalModulesHash,
+  createMainHash,
+  createMainHashFromProbes,
+} from '../mainHash.mjs';
 
 const desktopRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const repoRoot = path.dirname(path.dirname(desktopRoot));
+const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
 describe('mainHash', () => {
-  it('hashes emitted main/preload code, not unrelated workspace files', () => {
-    const ignoredProbe = path.join(
-      repoRoot,
-      'packages',
-      'types',
-      'src',
-      `__mainhash-probe-${randomUUID()}.ts`,
-    );
-    const bundledFile = path.join(desktopRoot, 'src', 'common', 'routes.ts');
-    const originalBundledFile = readFileSync(bundledFile, 'utf8');
-    const before = computeMainHash();
-    writeFileSync(ignoredProbe, 'export type MainHashProbe = string;\n');
-    try {
-      expect(computeMainHash()).toBe(before);
+  it('creates the lineage hash from all platform probes without running builds', () => {
+    const calls = [];
+    const runProbe = (flag, platform, target) => {
+      calls.push([flag, platform, target]);
+      return sha256(`${platform}/${target}/bundle-v1`);
+    };
+    const before = createMainHashFromProbes({
+      cloudRef: 'a'.repeat(40),
+      publicKey: 'key-a',
+      runProbe,
+      version: '1.0.0',
+    });
 
-      writeFileSync(
-        bundledFile,
-        originalBundledFile.replace('Developer Tools', `Developer Tools ${randomUUID()}`),
-      );
-      expect(computeMainHash()).not.toBe(before);
-    } finally {
-      rmSync(ignoredProbe, { force: true });
-      writeFileSync(bundledFile, originalBundledFile);
-    }
-  }, 30_000);
+    expect(calls).toEqual([
+      ['--bundle-probe', 'darwin', 'main'],
+      ['--bundle-probe', 'darwin', 'preload'],
+      ['--externals-probe', 'darwin', 'externals'],
+      ['--bundle-probe', 'linux', 'main'],
+      ['--bundle-probe', 'linux', 'preload'],
+      ['--externals-probe', 'linux', 'externals'],
+      ['--bundle-probe', 'win32', 'main'],
+      ['--bundle-probe', 'win32', 'preload'],
+      ['--externals-probe', 'win32', 'externals'],
+    ]);
+    expect(before).toMatch(/^[0-9a-f]{64}$/);
+    expect(
+      createMainHashFromProbes({
+        cloudRef: 'a'.repeat(40),
+        publicKey: 'key-a',
+        runProbe: (flag, platform, target) =>
+          flag === '--bundle-probe' && platform === 'darwin' && target === 'main'
+            ? sha256(`${platform}/${target}/bundle-v2`)
+            : sha256(`${platform}/${target}/bundle-v1`),
+        version: '1.0.0',
+      }),
+    ).not.toBe(before);
+  });
 
   it('tracks externalized first-party native addon sources', async () => {
     process.env.npm_config_platform = 'darwin';
@@ -54,6 +70,43 @@ describe('mainHash', () => {
       rmSync(probe, { force: true });
     }
     expect(await computeExternalModulesHash('darwin')).toBe(before);
+  });
+
+  it('tracks nested external dependency instances by resolved path', async () => {
+    const id = randomUUID();
+    const addonName = `@lobechat/mainhash-probe-${id}`;
+    const dependencyName = `mainhash-probe-dep-${id}`;
+    const addonDir = path.join(desktopRoot, 'node_modules', ...addonName.split('/'));
+    const nestedDependencyDir = path.join(addonDir, 'node_modules', dependencyName);
+    const rootDependencyDir = path.join(desktopRoot, 'node_modules', dependencyName);
+
+    const writePackageJson = (dir, packageJson) => {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify(packageJson)}\n`);
+    };
+
+    writePackageJson(addonDir, {
+      dependencies: { [dependencyName]: '^2.0.0' },
+      name: addonName,
+      version: '1.0.0',
+    });
+    writeFileSync(path.join(addonDir, 'binding.gyp'), '{}\n');
+    writePackageJson(rootDependencyDir, { name: dependencyName, version: '1.0.0' });
+    writePackageJson(nestedDependencyDir, { name: dependencyName, version: '2.0.0' });
+
+    try {
+      const before = await computeExternalModulesHash('linux');
+
+      writePackageJson(nestedDependencyDir, { name: dependencyName, version: '2.0.1' });
+      expect(await computeExternalModulesHash('linux')).not.toBe(before);
+
+      writePackageJson(nestedDependencyDir, { name: dependencyName, version: '2.0.0' });
+      writePackageJson(rootDependencyDir, { name: dependencyName, version: '1.0.1' });
+      expect(await computeExternalModulesHash('linux')).toBe(before);
+    } finally {
+      rmSync(addonDir, { force: true, recursive: true });
+      rmSync(rootDependencyDir, { force: true, recursive: true });
+    }
   });
 
   it('starts a new lineage when bundle metadata changes', () => {

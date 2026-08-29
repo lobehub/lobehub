@@ -1,6 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -88,22 +95,41 @@ function walkModuleFiles(dir, files = []) {
   return files;
 }
 
-function updateExternalModuleHash(hash, name) {
-  const moduleDir = path.join(desktopRoot, 'node_modules', name);
-  let realDir;
+function readModulePackageJson(moduleDir) {
   try {
-    realDir = realpathSync(moduleDir);
+    return JSON.parse(readFileSync(path.join(moduleDir, 'package.json'), 'utf8'));
   } catch {
+    return {};
+  }
+}
+
+function resolveInstalledModuleDir(name, fromDirs) {
+  for (const fromDir of fromDirs) {
+    let current = fromDir;
+    while (true) {
+      const candidate = path.join(current, 'node_modules', name);
+      if (existsSync(path.join(candidate, 'package.json'))) return candidate;
+
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+}
+
+function updateExternalModuleHash(hash, name, fromDirs, options = {}, visited = new Set()) {
+  const moduleDir = resolveInstalledModuleDir(name, fromDirs);
+  if (!moduleDir) {
     hash.update(`${name}\0(absent)\0`);
     return;
   }
 
-  let version = '';
-  try {
-    version = JSON.parse(readFileSync(path.join(realDir, 'package.json'), 'utf8')).version ?? '';
-  } catch {
-    // A dependency without a readable manifest still needs a stable identity.
-  }
+  const realDir = realpathSync(moduleDir);
+  if (visited.has(realDir)) return;
+  visited.add(realDir);
+
+  const packageJson = readModulePackageJson(realDir);
+  const version = packageJson.version ?? '';
   hash.update(`${name}\0${version}\0`);
 
   // Workspace packages keep the same version across every source change, so a
@@ -112,13 +138,23 @@ function updateExternalModuleHash(hash, name) {
   const isWorkspacePackage =
     realDir.startsWith(`${repoRoot}${path.sep}`) &&
     !realDir.includes(`${path.sep}node_modules${path.sep}`);
-  if (!isWorkspacePackage) return;
+  if (isWorkspacePackage) {
+    for (const file of walkModuleFiles(realDir).sort()) {
+      hash.update(path.relative(realDir, file).replaceAll('\\', '/'));
+      hash.update('\0');
+      hash.update(readFileSync(file));
+      hash.update('\0');
+    }
+  }
 
-  for (const file of walkModuleFiles(realDir).sort()) {
-    hash.update(path.relative(realDir, file).replaceAll('\\', '/'));
-    hash.update('\0');
-    hash.update(readFileSync(file));
-    hash.update('\0');
+  const dependencies = {
+    ...(packageJson.dependencies || {}),
+    ...(options.skipOptionalDependenciesFor?.has(packageJson.name)
+      ? {}
+      : packageJson.optionalDependencies || {}),
+  };
+  for (const dependency of Object.keys(dependencies).sort()) {
+    updateExternalModuleHash(hash, dependency, [realDir, moduleDir, desktopRoot], options, visited);
   }
 }
 
@@ -134,13 +170,12 @@ export async function computeExternalModulesHash(platform) {
           import(`${pathToFileURL(path.join(desktopRoot, file)).href}?platform=${platform}`),
       ),
     );
-    const modules = new Set([
-      ...runtimeDeps.getAllExternalRuntimeDependencies(),
-      ...nativeDeps.getNativeExternalDependencies(),
-    ]);
+    const modules = new Set([...runtimeDeps.externalRuntimeModules, ...nativeDeps.nativeModules]);
 
     const hash = createHash('sha256');
-    for (const name of [...modules].sort()) updateExternalModuleHash(hash, name);
+    for (const name of [...modules].sort()) {
+      updateExternalModuleHash(hash, name, [desktopRoot], nativeDeps.dependencyOptions);
+    }
     return hash.digest('hex');
   } finally {
     if (originalPlatform === undefined) delete process.env.npm_config_platform;
@@ -159,10 +194,31 @@ export function createMainHash({ bundleHashes, cloudRef = '', publicKey = '', ve
   return hash.digest('hex');
 }
 
+export function createMainHashFromProbes({ cloudRef, publicKey, runProbe, version }) {
+  const bundleHashes = [];
+
+  for (const platform of PLATFORMS) {
+    for (const target of TARGETS) {
+      bundleHashes.push({ hash: runProbe('--bundle-probe', platform, target), platform, target });
+    }
+    bundleHashes.push({
+      hash: runProbe('--externals-probe', platform, EXTERNALS_TARGET),
+      platform,
+      target: EXTERNALS_TARGET,
+    });
+  }
+
+  return createMainHash({
+    bundleHashes,
+    cloudRef,
+    publicKey,
+    version,
+  });
+}
+
 export function computeMainHash() {
   const packageJson = JSON.parse(readFileSync(path.join(desktopRoot, 'package.json'), 'utf8'));
   const childEnv = { ...process.env, [probeEnv]: '1' };
-  const bundleHashes = [];
   delete childEnv.MAIN_HASH;
 
   const runProbe = (flag, platform, target) => {
@@ -182,21 +238,10 @@ export function computeMainHash() {
     return output;
   };
 
-  for (const platform of PLATFORMS) {
-    for (const target of TARGETS) {
-      bundleHashes.push({ hash: runProbe('--bundle-probe', platform, target), platform, target });
-    }
-    bundleHashes.push({
-      hash: runProbe('--externals-probe', platform, EXTERNALS_TARGET),
-      platform,
-      target: EXTERNALS_TARGET,
-    });
-  }
-
-  return createMainHash({
-    bundleHashes,
+  return createMainHashFromProbes({
     cloudRef: process.env.CLOUD_REF,
     publicKey: process.env.RENDERER_OTA_PUBLIC_KEY,
+    runProbe,
     version: packageJson.version,
   });
 }
