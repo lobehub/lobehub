@@ -25,7 +25,7 @@ const state = (
   }) as SearchReindexRunState;
 
 const harness = (
-  existing: SearchReindexRunState,
+  existing: SearchReindexRunState | undefined,
   before = { enabled: false, version: 'capture-0' as string | null },
   after = { enabled: true, version: 'capture-1' as string | null },
 ) => {
@@ -63,6 +63,46 @@ describe('search reindex capture safety', () => {
 
   it('prepares Elasticsearch before enabling capture for an untouched checkpoint', async () => {
     const { calls, options } = harness(state());
+
+    await expect(prepareSearchReindexCapture(options)).resolves.toBeUndefined();
+
+    expect(calls).toEqual(['indices', 'capture', 'version:capture-1']);
+  });
+
+  it('starts a fresh reindex while capture is disabled', async () => {
+    const { calls, options } = harness(undefined);
+
+    await expect(prepareSearchReindexCapture(options)).resolves.toBeUndefined();
+
+    expect(calls).toEqual(['indices', 'capture', 'version:capture-1']);
+  });
+
+  it('rejects a fresh reindex while capture is already enabled', async () => {
+    const { options } = harness(undefined, { enabled: true, version: 'capture-1' });
+
+    await expect(prepareSearchReindexCapture(options)).rejects.toThrow(
+      'Cannot prepare an unactivated reindex checkpoint while capture is enabled',
+    );
+    expect(options.prepareIndices).not.toHaveBeenCalled();
+    expect(options.enableCapture).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unactivated empty checkpoint while capture is already enabled', async () => {
+    const { options } = harness(state(), { enabled: true, version: 'capture-1' });
+
+    await expect(prepareSearchReindexCapture(options)).rejects.toThrow(
+      'Cannot prepare an unactivated reindex checkpoint while capture is enabled',
+    );
+    expect(options.prepareIndices).not.toHaveBeenCalled();
+    expect(options.enableCapture).not.toHaveBeenCalled();
+  });
+
+  it('resumes an activated empty checkpoint while its capture version remains active', async () => {
+    const { calls, options } = harness(
+      state({}, 'capture-1'),
+      { enabled: true, version: 'capture-1' },
+      { enabled: true, version: 'capture-1' },
+    );
 
     await expect(prepareSearchReindexCapture(options)).resolves.toBeUndefined();
 
@@ -109,7 +149,11 @@ describe('search reindex capture safety', () => {
   });
 
   it('does not enable capture when Elasticsearch index preparation fails', async () => {
-    const { options } = harness(state(), { enabled: true, version: 'capture-1' });
+    const { options } = harness(
+      state({}, 'capture-1'),
+      { enabled: true, version: 'capture-1' },
+      { enabled: true, version: 'capture-1' },
+    );
     options.prepareIndices.mockRejectedValue(new Error('analysis-icu is unavailable'));
 
     await expect(prepareSearchReindexCapture(options)).rejects.toThrow(

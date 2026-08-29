@@ -33,6 +33,14 @@ export const validateSearchReindexCapture = async ({
   assertSearchReindexCaptureState(expectedVersion, capture);
 };
 
+const assertSafeStart = (existing: SearchReindexRunState | undefined, capture: CaptureState) => {
+  if (!existing?.run.captureVersion && capture.enabled) {
+    throw new Error(
+      'Cannot prepare an unactivated reindex checkpoint while capture is enabled; disable capture before retrying',
+    );
+  }
+};
+
 const assertSafeResume = (existing: SearchReindexRunState | undefined, capture: CaptureState) => {
   if (!existing || !hasDurableProgress(existing)) return;
   if (!capture.enabled) {
@@ -64,7 +72,9 @@ export const prepareSearchReindexCapture = async ({
   prepareIndices: () => Promise<void>;
   setCaptureVersion: (captureVersion: string) => Promise<void>;
 }) => {
-  assertSafeResume(existing, await getCaptureState());
+  const initialCapture = await getCaptureState();
+  assertSafeStart(existing, initialCapture);
+  assertSafeResume(existing, initialCapture);
 
   await prepareIndices();
   await enableCapture();
@@ -73,5 +83,9 @@ export const prepareSearchReindexCapture = async ({
     throw new Error('Search sync capture did not expose an enabled version after activation');
   }
   assertSafeResume(existing, capture);
+  /**
+   * Persist activation evidence immediately. If interrupted before this write, the next run must
+   * conservatively disable capture and reacquire the table-lock fence before it can continue.
+   */
   await setCaptureVersion(capture.version);
 };
