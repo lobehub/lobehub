@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
-import { timestamps, timestamptz } from './_helpers';
+import { softDeleteColumns, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { knowledgeBases } from './file';
@@ -64,6 +64,8 @@ export const projects = pgTable(
     completedAt: timestamptz('completed_at'),
     archivedAt: timestamptz('archived_at'),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [
