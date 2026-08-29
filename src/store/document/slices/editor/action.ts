@@ -437,7 +437,18 @@ export class EditorActionImpl {
     }
     if (lockedByOther) throw error;
 
-    return requestSave(latest.updatedAt);
+    try {
+      return await requestSave(latest.updatedAt);
+    } catch (retryError) {
+      // The reclaim above transferred the lease to this session for a retry
+      // that then failed (e.g. the server-side version predicate caught an
+      // interleaved collaborator save). Keeping the stolen lease would make
+      // the lock recovery read this tab as the legitimate holder and clear
+      // the save block over a stale editor — release it so the lease goes
+      // back to whoever is actually editing.
+      void documentService.releaseDocumentLock(id, lockOwnerId).catch(() => {});
+      throw retryError;
+    }
   };
 
   setEditorState = (editorState: LobehubEditorState | undefined): void => {

@@ -10,6 +10,7 @@ import { useDocumentStore } from '../../store';
 vi.mock('@/services/document', () => ({
   documentService: {
     acquireDocumentLock: vi.fn().mockResolvedValue({ holderId: null, lockedByOther: false }),
+    releaseDocumentLock: vi.fn().mockResolvedValue(undefined),
     getDocumentById: vi.fn().mockResolvedValue({
       content: '# Test',
       id: 'doc-1',
@@ -62,6 +63,9 @@ describe('DocumentStore - Editor Actions', () => {
         id: 'doc-1',
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
       } as any);
+    vi.mocked(documentService.releaseDocumentLock)
+      .mockReset()
+      .mockResolvedValue(undefined as any);
 
     // Reset store state before each test
     const { result } = renderHook(() => useDocumentStore());
@@ -1022,6 +1026,50 @@ name: skill-name
 
       expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
       expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
+      expect(result.current.documents['doc-1'].isDirty).toBe(true);
+    });
+
+    it('releases the reclaimed lease when the CAS-guarded retry itself fails', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+        data: { code: 'CONFLICT' },
+      });
+      const casError = Object.assign(new Error('Document has been updated by another session'), {
+        data: { code: 'CONFLICT' },
+      });
+      // First save conflicts; the retry's server-side version predicate then
+      // rejects an interleaved collaborator save.
+      vi.mocked(documentService.updateDocument)
+        .mockRejectedValueOnce(lockError)
+        .mockRejectedValueOnce(casError);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      // The lease stolen for the failed retry is handed back so the lock
+      // recovery cannot treat this tab as the legitimate holder and reopen
+      // the stale editor.
+      expect(documentService.releaseDocumentLock).toHaveBeenCalledWith('doc-1', 'owner-1');
       expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
       expect(result.current.documents['doc-1'].isDirty).toBe(true);
     });
