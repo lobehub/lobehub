@@ -8,6 +8,7 @@ import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useEvalStore } from '@/store/eval';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import TestCaseDetail from '../../../../../../features/TestCaseDetail';
 
@@ -22,12 +23,18 @@ const Page = memo(() => {
   const useFetchTestCase = useEvalStore((s) => s.useFetchTestCase);
   const { data: testCase, error, isLoading, mutate } = useFetchTestCase(caseId);
 
+  // A deleted or mistyped case id is an absent resource, not a failed request:
+  // `getTestCase` throws NOT_FOUND, and AsyncBoundary reads `error` before
+  // `isEmpty`, so without this it renders a generic "load failed" page offering
+  // a Retry that can never succeed.
+  const isMissing = isTrpcErrorCode(error, 'NOT_FOUND');
+
   return (
     <AsyncBoundary
-      data={testCase}
-      error={error}
+      data={isMissing ? null : testCase}
+      error={isMissing ? undefined : error}
       errorVariant={'page'}
-      isEmpty={!testCase}
+      isEmpty={isMissing || !testCase}
       isLoading={isLoading}
       empty={
         <Center flex={1}>
