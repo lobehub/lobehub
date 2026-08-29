@@ -65,16 +65,14 @@ describe('share visitor message.update', () => {
 
     // Mirrors `AiAgentService.execAgent`'s assistant placeholder for a share
     // run: visitor-owned row stamped with the creator's `agentId`.
-    const [message] = await serverDB
-      .insert(messages)
-      .values({
-        agentId: creatorAgentId,
-        content: '',
-        role: 'assistant',
-        topicId: visitorTopicId,
-        userId: visitorId,
-      })
-      .returning();
+    const messageInsert: typeof messages.$inferInsert = {
+      agentId: creatorAgentId,
+      content: '',
+      role: 'assistant',
+      topicId: visitorTopicId,
+      userId: visitorId,
+    };
+    const [message] = await serverDB.insert(messages).values(messageInsert).returning();
     assistantMessageId = message.id;
   });
 

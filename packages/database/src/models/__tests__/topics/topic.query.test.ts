@@ -2411,7 +2411,9 @@ describe('TopicModel - Query', () => {
             deviceId: 'device-internal',
             deviceUserId: 'creator-device-user',
             heteroType: 'claude-code',
-            hooks: [{ kind: 'onComplete' }],
+            hooks: [
+              { id: 'hook-1', type: 'onComplete', webhook: { url: 'https://example.com/hook' } },
+            ],
             operationId: 'op-root-1',
             scope: 'main',
             threadId: null,

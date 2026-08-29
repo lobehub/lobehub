@@ -395,7 +395,12 @@ describe('TopicModel - Delete', () => {
         agentId,
         id: 'visitor-hetero-topic',
         metadata: {
-          runningOperation: { deviceId: 'device-1', heteroType: 'codex', operationId: 'op-2' },
+          runningOperation: {
+            assistantMessageId: 'msg-hetero-1',
+            deviceId: 'device-1',
+            heteroType: 'codex',
+            operationId: 'op-2',
+          },
         },
         shareId,
         title: 'Visitor',
