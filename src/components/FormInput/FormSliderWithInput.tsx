@@ -1,5 +1,5 @@
 import { SliderWithInput, type SliderWithInputProps } from '@lobehub/ui/base-ui';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 interface FormSliderWithInputProps extends Omit<SliderWithInputProps, 'onChange' | 'value'> {
   onChange?: (value: number) => void;
@@ -13,24 +13,33 @@ interface FormSliderWithInputProps extends Omit<SliderWithInputProps, 'onChange'
 const FormSliderWithInput = memo<FormSliderWithInputProps>(
   ({ onChange, value: defaultValue, ...props }) => {
     const [value, setValue] = useState(defaultValue ?? 0);
+    const valueRef = useRef(defaultValue ?? 0);
 
     useEffect(() => {
-      setValue(defaultValue ?? 0);
+      const nextValue = defaultValue ?? 0;
+      valueRef.current = nextValue;
+      setValue(nextValue);
     }, [defaultValue]);
 
     return (
-      <SliderWithInput
-        onBlur={() => {
-          onChange?.(value);
+      <div
+        style={{ width: '100%' }}
+        onBlurCapture={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          onChange?.(valueRef.current);
         }}
-        onChange={(newValue) => {
-          if (typeof newValue === 'number') {
-            setValue(newValue);
-          }
-        }}
-        {...props}
-        value={value}
-      />
+      >
+        <SliderWithInput
+          onChange={(newValue) => {
+            if (typeof newValue === 'number') {
+              valueRef.current = newValue;
+              setValue(newValue);
+            }
+          }}
+          {...props}
+          value={value}
+        />
+      </div>
     );
   },
 );
