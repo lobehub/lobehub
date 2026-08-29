@@ -207,6 +207,25 @@ describe('lobeAgentRuntime', () => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
+  it('should reject images that exceed the aggregate preparation budget', async () => {
+    mockImageUrlToBase64.mockResolvedValue({
+      base64: Buffer.alloc(11 * 1024 * 1024).toString('base64'),
+      mimeType: 'image/png',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'compare these images',
+      urls: ['https://example.com/large-1.png', 'https://example.com/large-2.png'],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
+      success: false,
+    });
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
   it('should have the correct identifier', () => {
     expect(lobeAgentRuntime.identifier).toBe(LobeAgentIdentifier);
   });
@@ -423,9 +442,13 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mockImageUrlToBase64).toHaveBeenCalledWith('http://example.com/generated.png', {
-      maxBytes: 20 * 1024 * 1024,
-    });
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith(
+      'http://example.com/generated.png',
+      expect.objectContaining({
+        maxBytes: 20 * 1024 * 1024,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(mockSharpOptions).toHaveBeenCalledWith(
       expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
     );

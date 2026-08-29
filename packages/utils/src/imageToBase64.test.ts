@@ -156,15 +156,16 @@ describe('imageUrlToBase64', () => {
 
   it('should enforce the byte limit at the server-side SSRF fetch boundary', async () => {
     vi.stubGlobal('window', undefined);
+    const signal = new AbortController().signal;
     mockSsrfSafeFetch.mockResolvedValue(
       new Response(mockArrayBuffer, { headers: { 'content-type': 'image/png' } }),
     );
 
-    await imageUrlToBase64('https://example.com/server-image.png', { maxBytes: 8 });
+    await imageUrlToBase64('https://example.com/server-image.png', { maxBytes: 8, signal });
 
     expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
       'https://example.com/server-image.png',
-      undefined,
+      { signal },
       { maxContentLength: 9 },
     );
   });
