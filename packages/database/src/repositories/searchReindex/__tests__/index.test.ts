@@ -17,7 +17,7 @@ beforeEach(async () => {
   revision = 10;
   repository = new SearchReindexFileRepository({
     readHighWaterRevision: vi.fn(async () => revision),
-    reserveRevision: vi.fn(async () => ++revision),
+    reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
     stateDirectory,
   });
 });
@@ -31,7 +31,7 @@ describe('SearchReindexFileRepository', () => {
     const first = await repository.createOrResume('test-search', 1);
     const resumed = await new SearchReindexFileRepository({
       readHighWaterRevision: vi.fn(async () => revision),
-      reserveRevision: vi.fn(async () => ++revision),
+      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
       stateDirectory,
     }).createOrResume('test-search', 1);
 
@@ -62,23 +62,13 @@ describe('SearchReindexFileRepository', () => {
     await expect(readdir(stateDirectory)).resolves.toEqual([checkpointFile]);
   });
 
-  it('persists the capture version that makes a checkpoint safe to resume', async () => {
-    const state = await repository.createOrResume('capture-version-search', 1);
-
-    await repository.setCaptureVersion(state.run.id, 'capture-version-1');
-
-    await expect(repository.getRun(state.run.id)).resolves.toMatchObject({
-      run: { captureVersion: 'capture-version-1' },
-    });
-  });
-
   it('loads the exact target without parsing an unrelated corrupt checkpoint', async () => {
     const state = await repository.createOrResume('healthy-search', 1);
     await writeFile(path.join(stateDirectory, 'reindex-unrelated-deadbeef-v1.json'), '{');
 
     const restarted = new SearchReindexFileRepository({
       readHighWaterRevision: vi.fn(async () => revision),
-      reserveRevision: vi.fn(async () => ++revision),
+      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
       stateDirectory,
     });
     await expect(restarted.getTargetRun('healthy-search', 1)).resolves.toMatchObject({

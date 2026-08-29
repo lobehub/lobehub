@@ -13,7 +13,7 @@ tags:
 3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复制到新的 Elasticsearch 项目。工具会把游标、计数和逐条失败记录原子写入本地 checkpoint 文件，因此中断后使用同一个状态目录重复执行命令即可续跑。
 
 <Callout type="warning">
-  全量回填命令不会把产品搜索请求切到 Elasticsearch。回填和验收期间，应用必须继续使用 PostgreSQL 搜索。
+  全量回填命令不会把产品搜索请求切到 Elasticsearch。回填和验收期间，应用必须继续使用 PostgreSQL 搜索。数据库迁移完成后会立即把源数据变更记录到 PostgreSQL 增量队列，即使增量消费器仍处于暂停状态也是如此。
 </Callout>
 
 ## 环境变量
@@ -37,7 +37,7 @@ tags:
    [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
    插件。Elastic Cloud Serverless 已包含核心分析插件；Elastic Cloud Hosted 需要为部署启用官方插件；自行管理的 Elasticsearch 必须在所有节点安装插件并重启所有节点。请在首次执行 `--apply` 前完成。
 
-2. 对于现有正式数据库，请先在数据库 SQL 编辑器中、事务之外执行以下语句，再执行当前版本的数据库迁移。全新安装可以在数据库迁移完成后执行，但必须在首次运行回填 `--apply` 前完成。这样可以在不阻塞写入的情况下创建 Memory 扇出索引：
+2. 对于仍在接收写入的现有数据库，请先在数据库 SQL 编辑器中、事务之外执行以下语句，再执行当前版本的数据库迁移。这样可以在不阻塞写入的情况下创建 Memory 扇出索引。全新安装不需要这一步，数据库迁移会自动创建同一个索引。数据库迁移还会安装永久的 PostgreSQL 变更采集触发器；迁移完成后会立即记录源数据变更。暂停增量消费器只会暂停写入 Elasticsearch，不会暂停 PostgreSQL 采集：
 
    ```sql
    CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
@@ -46,7 +46,7 @@ tags:
 
    `IF NOT EXISTS` 不会校验同名索引的定义。如果并发创建留下无效索引，或 `--apply` 提示索引的表、列、GIN 操作符类或条件不正确，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，再重新执行上面的创建语句。
 
-3. 执行同一 LobeHub 版本自带的数据库迁移。
+3. 执行同一 LobeHub 版本自带的数据库迁移。对于现有数据库，务必先完成上面的并发建索引步骤，避免迁移中的普通索引创建在新建索引时持有阻塞写入的锁。
 
 4. 备份 PostgreSQL。
 
@@ -75,7 +75,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，再校验 Memory 扇出所需的 GIN 索引，并逐表安装增量采集触发器；每次获取表锁最多等待 3 秒。首次执行应安排在低流量时段。全部采集设施就绪后，启用操作会获取所有采集表的共享锁，并在同一事务中开启 PostgreSQL 增量队列采集，随后才开始首批回填。如果仍有启用前的写事务，保护锁会立即失败，避免迁移阻塞生产写入。如果 Elasticsearch 分析能力、某张表的触发器检查或启用保护锁失败，命令会保持采集关闭，使用同一个状态目录重新执行即可。必须显式传入 `--yes`，用于确认这个持久化数据库变更；命令不会弹出交互确认。
+`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，再校验 Memory 扇出所需的 GIN 索引，然后读取源数据。永久采集触发器由数据库迁移安装，不由这个命令安装或关闭。读取源数据前，命令会短暂阻挡所有触发器源表的写入，等待持有较旧 Outbox 版本的事务结束；如果三秒内拿不到锁，应先让长事务结束，再重新运行命令。首次回填期间可以暂停增量消费器；PostgreSQL 仍会把变更追加到增量队列，完整快照准备好后再由消费器追平。必须显式传入 `--yes`，用于确认这个会写入数据的操作；命令不会弹出交互确认。
 
 工具还会把 run ID 写入每个物理索引的 mapping 元数据，使用另一份本地 checkpoint 时无法静默继续写入同一组物理索引。禁止在多台机器上并发运行同一份 checkpoint。
 
@@ -120,14 +120,14 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
 
 ## 续跑与验收
 
-- 进程崩溃或 Elasticsearch 临时失败后，使用同一个状态目录重新执行 `--apply --yes`，但不要再传 `--fresh-run`。已完成的数据类型会被跳过，未完成的数据类型从本地游标后继续。只有首次持久化批次之后采集始终保持开启，这种续跑才安全。
+- 进程崩溃或 Elasticsearch 临时失败后，使用同一个状态目录重新执行 `--apply --yes`，但不要再传 `--fresh-run`。已完成的数据类型会被跳过，未完成的数据类型从本地游标后继续。只要迁移安装的采集触发器仍在，暂停期间的变更就会保留在增量队列中，因此可以安全续跑。
 - 整个请求失败时不会推进游标；如果同一批中的部分并发请求成功、另一部分失败，续跑时会安全重放整个数据库批次。逐条写入失败会写入本地 checkpoint，并在该数据类型完成前重试。
 - 任何数据类型或逐条失败尚未完成时，工具都会拒绝创建别名。
 - 最终状态为 `ready_for_incremental_sync`。此时全量快照、别名和增量队列的追平边界已经就绪，但用户查询仍必须留在 PostgreSQL。
 
 这个修订号只用于观察增量追平进度，不是数据库已经提交的快照边界。增量消费器必须处理队列里的每一条记录，不能仅因修订号小于或等于该值就丢弃记录。
 
-继续下一阶段前，运行 `--status`，确认 `captureEnabled` 符合预期、14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
+继续下一阶段前，运行 `--status`，确认 14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。增量消费器暂停时，队列中有待处理记录是预期现象；这不代表源数据变更采集已暂停。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
 
 修正被拒绝的源数据或映射后，再执行 `--apply --yes` 即可重试。如果运维人员明确接受某一条不可重试的数据暂时不进入初始 Elasticsearch 快照，可以显式解除阻塞，然后继续回填：
 
@@ -137,13 +137,9 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-只有不可重试的失败可以跳过，且跳过不会把该文档计为写入成功。只有在检查源记录，并接受它需要等后续数据变更或增量修复后才能被搜索到时，才能使用这个命令。需要停止采集新变更、但保留增量队列中已有记录时，执行：
+只有不可重试的失败可以跳过，且跳过不会把该文档计为写入成功。只有在检查源记录，并接受它需要等后续数据变更或增量修复后才能被搜索到时，才能使用这个命令。
 
-```bash
-bun run search:reindex -- --disable-capture --yes
-```
-
-对于已经产生持久化进度的 checkpoint，关闭采集后不能再续跑。采集中断期间的变更不会进入队列，因此工具会拒绝继续使用旧 checkpoint。若要在采集中断后重新开始，必须使用新的 checkpoint 和空 Elasticsearch 目标执行完整回填。
+回填期间如需暂停写入 Elasticsearch，请使用部署环境提供的增量消费器开关。这只会暂停消费增量队列，不会停止数据库迁移安装的 PostgreSQL 触发器；源数据变更会继续进入增量队列，消费器重新开启后即可追平。回填进行期间不要禁用或删除触发器，也不要清空增量队列。
 
 <Callout type="info">
   PostgreSQL 到 Elasticsearch 的持续同步需要使用已经包含增量消费器的版本。全量回填命令本身不会宣称应用已经可以切换搜索后端。

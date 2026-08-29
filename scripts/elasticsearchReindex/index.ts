@@ -29,11 +29,6 @@ import {
 } from '../../packages/observability-otel/src/modules/search-reindex';
 import { DiagLogLevel, register, shutdownSafely } from '../../packages/observability-otel/src/node';
 import {
-  assertSearchReindexCaptureState,
-  prepareSearchReindexCapture,
-  validateSearchReindexCapture,
-} from './captureSafety';
-import {
   assertSearchReindexElasticsearchHostname,
   assertSearchReindexTelemetryExportConfigured,
   resolveSearchReindexElasticsearchEnvironment,
@@ -70,7 +65,6 @@ const readNonNegativeIntegerArgument = (name: string) => {
 
 const args = new Set(process.argv.slice(2));
 const apply = args.has('--apply');
-const disableCapture = args.has('--disable-capture');
 const freshRun = args.has('--fresh-run');
 const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-failure='));
 const status = args.has('--status');
@@ -85,13 +79,7 @@ const requestTimeoutMs = readPositiveIntegerArgument('--request-timeout-ms');
 const retryBaseDelayMs = readNonNegativeIntegerArgument('--retry-base-delay-ms');
 const telemetryEnvironment = resolveSearchReindexTelemetryEnvironment(process.argv.slice(2));
 
-const knownArguments = new Set([
-  '--apply',
-  '--disable-capture',
-  '--fresh-run',
-  '--status',
-  '--yes',
-]);
+const knownArguments = new Set(['--apply', '--fresh-run', '--status', '--yes']);
 const unknownArgument = process.argv
   .slice(2)
   .find(
@@ -114,9 +102,9 @@ const unknownArgument = process.argv
   );
 if (unknownArgument) throw new Error(`Unknown argument: ${unknownArgument}`);
 
-const mutationModes = [apply, disableCapture, Boolean(skipFailureArgument)].filter(Boolean).length;
+const mutationModes = [apply, Boolean(skipFailureArgument)].filter(Boolean).length;
 if (mutationModes > 1 || (status && mutationModes > 0)) {
-  throw new Error('Choose exactly one of --status, --apply, --disable-capture, or --skip-failure');
+  throw new Error('Choose exactly one of --status, --apply, or --skip-failure');
 }
 if (mutationModes > 0 && !yes) {
   throw new Error('Mutating commands require --yes after reviewing their documented effects');
@@ -202,19 +190,17 @@ const db = drizzle(pool, { schema });
 const outbox = new SearchSyncOutboxRepository(db);
 const repository = new SearchReindexFileRepository({
   readHighWaterRevision: () => outbox.readHighWaterRevision(),
-  reserveRevision: () => outbox.reserveRevision(),
+  reserveRevisionWithWriteFence: () => outbox.reserveRevisionWithWriteFence(),
   stateDirectory,
 });
 
 const readStatus = async () => {
   const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
-  const captureEnabled = await outbox.isCaptureEnabled();
   const unresolvedFailures = state ? await repository.listUnresolvedFailures(state.run.id) : [];
   const outboxStats = await outbox.stats();
   return {
     namespace,
     outbox: {
-      captureEnabled,
       dead: outboxStats.dead,
       highWaterRevision: outboxStats.highWaterRevision,
       oldestActiveRevision: outboxStats.oldestActiveRevision,
@@ -225,7 +211,6 @@ const readStatus = async () => {
       ? {
           baseRevision: state.run.baseRevision,
           backfillHighWaterRevision: state.run.backfillHighWaterRevision,
-          captureVersion: state.run.captureVersion ?? null,
           entities: state.progress.map((progress) => ({
             cursor: progress.cursor,
             entity: progress.entity,
@@ -262,12 +247,6 @@ let auditLogger: SearchReindexFileLogger | undefined;
 const executionStartedAt = Date.now();
 
 const run = async () => {
-  if (disableCapture) {
-    await outbox.disableCapture();
-    await printStatus();
-    return;
-  }
-
   if (failureReference) {
     const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
     if (!state) throw new Error(`No reindex run exists for namespace ${namespace}`);
@@ -290,6 +269,7 @@ const run = async () => {
 
   const endpointHostname = new URL(elasticsearchUrl!).hostname;
   assertSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
+  await outbox.assertCaptureInfrastructure();
   console.log(
     JSON.stringify({
       endpointEnvName: urlEnvironmentName,
@@ -309,6 +289,9 @@ const run = async () => {
     throw new Error(`Checkpoint ${existing.run.id} already exists; omit --fresh-run to resume it`);
   }
   const prepared = await repository.createOrResume(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  if (existing && existing.run.status !== 'ready_for_incremental_sync') {
+    await outbox.fenceSourceWrites();
+  }
   auditLogger = new SearchReindexFileLogger({
     runId: prepared.run.id,
     sessionId: randomUUID(),
@@ -352,11 +335,6 @@ const run = async () => {
     bulkConcurrency,
     bulkMaxBytes,
     entityConcurrency,
-    finalizeRun: (state, markReady) =>
-      outbox.withCaptureStateLock(async (capture) => {
-        assertSearchReindexCaptureState(state.run.captureVersion, capture);
-        await markReady();
-      }),
     maxBatchesPerEntity,
     maxRequestRetries,
     onProgress: async (event) => {
@@ -382,19 +360,7 @@ const run = async () => {
       await auditLogger!.append(event);
     },
     retryBaseDelayMs,
-    validateFinalization: (state) =>
-      validateSearchReindexCapture({
-        expectedVersion: state.run.captureVersion,
-        getCaptureState: () => outbox.getCaptureState(),
-      }),
-  });
-  await prepareSearchReindexCapture({
-    enableCapture: () => outbox.enableCapture(),
-    existing,
-    getCaptureState: () => outbox.getCaptureState(),
-    prepareIndices: () => service.prepareIndices(prepared),
-    setCaptureVersion: (captureVersion) =>
-      repository.setCaptureVersion(prepared.run.id, captureVersion),
+    validateIncrementalSyncSource: () => outbox.assertCaptureInfrastructure(),
   });
   const result = await service.run(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   console.log(JSON.stringify(result));

@@ -57,8 +57,6 @@ export interface SearchReindexRun {
    */
   backfillHighWaterRevision: number | null;
   baseRevision: number;
-  /** Opaque database capture version bound to this checkpoint after the first apply. */
-  captureVersion?: string | null;
   createdAt: string;
   id: string;
   namespace: string;
@@ -74,7 +72,7 @@ export interface SearchReindexRunState {
 
 export interface SearchReindexFileRepositoryOptions {
   readHighWaterRevision: () => Promise<number>;
-  reserveRevision: () => Promise<number>;
+  reserveRevisionWithWriteFence: () => Promise<number>;
   stateDirectory: string;
 }
 
@@ -115,7 +113,6 @@ const runSchema = z.object({
   aliasesCreatedAt: z.string().datetime().nullable(),
   backfillHighWaterRevision: z.number().int().nonnegative().nullable(),
   baseRevision: z.number().int().positive(),
-  captureVersion: z.string().min(1).nullable().default(null),
   createdAt: z.string().datetime(),
   id: z.string().uuid(),
   namespace: z.string().min(1),
@@ -406,7 +403,7 @@ export class SearchReindexFileRepository {
     if (existing) return this.stateOf(checkpointPath, existing);
 
     /** Reserve outside the file lock so a slow database connection cannot stale the local lock. */
-    const baseRevision = await this.options.reserveRevision();
+    const baseRevision = await this.options.reserveRevisionWithWriteFence();
     if (!Number.isSafeInteger(baseRevision) || baseRevision < 1) {
       throw new Error('Failed to reserve a valid search reindex base revision');
     }
@@ -432,7 +429,6 @@ export class SearchReindexFileRepository {
           aliasesCreatedAt: null,
           backfillHighWaterRevision: null,
           baseRevision,
-          captureVersion: null,
           createdAt: timestamp,
           id: randomUUID(),
           namespace,
@@ -459,13 +455,6 @@ export class SearchReindexFileRepository {
     const checkpointPath = await this.findCheckpointPath(runId);
     if (!checkpointPath) return;
     return this.stateOf(checkpointPath, await this.readCheckpoint(checkpointPath));
-  }
-
-  async setCaptureVersion(runId: string, captureVersion: string): Promise<void> {
-    if (!captureVersion) throw new Error('Search reindex capture version must not be empty');
-    await this.updateCheckpoint(runId, (checkpoint) => {
-      checkpoint.run.captureVersion = captureVersion;
-    });
   }
 
   async listUnresolvedFailures(runId: string, entity?: SearchDocumentEntity) {

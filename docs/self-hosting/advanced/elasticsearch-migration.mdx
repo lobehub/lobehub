@@ -13,7 +13,7 @@ tags:
 The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It atomically records the cursor, counters, and item-level failures in a local checkpoint file, so running the same command with the same state directory resumes the existing attempt.
 
 <Callout type="warning">
-  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes.
+  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes. The release database migration starts recording source changes in the PostgreSQL Outbox as soon as it completes, even if the incremental consumer is still paused.
 </Callout>
 
 ## Environment variables
@@ -46,10 +46,13 @@ host.
    the provided plugin for the deployment; on self-managed Elasticsearch, install it on every node
    and restart every node before the first `--apply`.
 
-2. For an existing production database, run the following statement in the database SQL editor,
-   outside a transaction, before applying the release migration. A new installation can run it
-   after its migrations finish, but it must exist before the first reindex `--apply`. This builds
-   the Memory fanout index without blocking writes:
+2. For an existing database that receives writes, run the following statement in the database SQL
+   editor, outside a transaction, before applying the release migration. This builds the Memory
+   fanout index without blocking writes. A new installation does not need this pre-step: the
+   release migration creates the same index. The release migration also installs the permanent
+   PostgreSQL change-capture triggers; once that migration completes, source changes are recorded
+   immediately. Pausing the incremental consumer only pauses Elasticsearch writes; it does not
+   pause PostgreSQL capture.
 
    ```sql
    CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
@@ -61,7 +64,9 @@ host.
    wrong, run `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"` outside a
    transaction, then retry the create statement.
 
-3. Apply the database migrations for the same LobeHub release.
+3. Apply the database migrations for the same LobeHub release. For an existing database, complete
+   the concurrent index step first so the migration's ordinary index definition does not need to
+   build a new index while holding a write-blocking lock.
 
 4. Back up PostgreSQL.
 
@@ -90,15 +95,16 @@ Only the first invocation uses `--fresh-run`. Resume the same run with the same 
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` verifies every physical Elasticsearch index and its ICU analysis settings before touching
-capture state. It then verifies the Memory fanout GIN index and installs the capture triggers one
-table at a time with a three-second lock timeout. Run the first apply during a low-traffic window.
-After all capture infrastructure is ready, activation acquires a share lock on every captured table
-and enables PostgreSQL Outbox capture in the same transaction before the first backfill batch. It
-fails immediately if a pre-activation writer is still active, preventing the migration from
-blocking production writes. If Elasticsearch analysis, a trigger check, or the activation fence
-fails, capture remains disabled and the command is safe to rerun with the same state directory. The
-required `--yes` acknowledges that persistent database-side effect; it is not an interactive prompt.
+`--apply` verifies every physical Elasticsearch index and its ICU analysis settings before reading
+source rows. It then verifies the Memory fanout GIN index. The release database migration, rather
+than this command, installs the permanent capture triggers, so the command neither installs nor
+disables PostgreSQL capture. Before reading source rows, the command briefly fences writes to all
+trigger source tables so transactions holding older Outbox revisions finish before the snapshot.
+If the three-second lock timeout expires, let the long transaction finish and rerun the command.
+Keep the incremental consumer paused during the initial backfill if
+needed; PostgreSQL continues to append changes to the Outbox, and the consumer can drain them
+after the full snapshot is ready. The required `--yes` acknowledges the mutating operation; it is
+not an interactive prompt.
 
 The run ID is also stored in each physical index's mapping metadata. A different local checkpoint
 cannot silently continue writing the same physical indexes. Never run copies of one checkpoint
@@ -168,7 +174,7 @@ application server.
 
 ## Resume and verify
 
-- After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor. This is safe only while capture has remained enabled after the first durable batch.
+- After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor. This is safe while the migration-installed capture triggers remain in place, because changes made during the pause are retained in the Outbox.
 - Request-level failures do not advance the cursor. If one concurrent bulk succeeds and another fails, the entire database batch is replayed safely on resume. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
 - The tool refuses to create aliases while any entity or item-level failure is incomplete.
 - The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
@@ -177,11 +183,12 @@ The high-water revision is an observation point for catch-up monitoring, not a c
 snapshot. An incremental consumer must process every queued row and must never discard rows only
 because their revision is at or below that value.
 
-Run `--status` and confirm `captureEnabled` has the intended value, all 14 entities show
-`completed`, every `failedCount` is `0`, and the Outbox `dead` count is `0` before proceeding with
-the release-specific incremental-sync and query-cutover steps. The status output lists unresolved
-document IDs, retryability, and attempt counts without persisting or printing Elasticsearch error
-reasons that may contain source text.
+Run `--status` and confirm all 14 entities show `completed`, every `failedCount` is `0`, and the
+Outbox `dead` count is `0` before proceeding with the release-specific incremental-sync and
+query-cutover steps. A paused incremental consumer may leave queued Outbox work; that is expected
+while backfill is running and does not mean source-change capture is paused. The status output
+lists unresolved document IDs, retryability, and attempt counts without persisting or printing
+Elasticsearch error reasons that may contain source text.
 
 After correcting a rejected source document or mapping, run `--apply --yes` again to retry it. If an
 operator deliberately accepts that one document with a non-retryable failure will be absent from
@@ -195,16 +202,13 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --
 
 Only non-retryable failures can be skipped, and skipping does not count the document as indexed. Use
 it only after reviewing the source record and accepting that it will not be searchable until a
-later source change or incremental repair writes it. To stop capturing new changes without deleting
-queued Outbox rows:
+later source change or incremental repair writes it.
 
-```bash
-bun run search:reindex -- --disable-capture --yes
-```
-
-Disabling capture is terminal for any checkpoint that has already made durable progress. Changes
-made during the gap are not queued, so the tool refuses to resume that checkpoint. To restart after
-a capture gap, use a new checkpoint and an empty Elasticsearch target for a complete backfill.
+To pause incremental Elasticsearch writes during backfill, pause the deployment's incremental
+consumer using its normal worker setting. This does not stop the migration-installed PostgreSQL
+triggers: source changes continue to accumulate in the Outbox and can be drained when the consumer
+is enabled. Do not disable or remove the triggers, or truncate the Outbox, while a reindex is in
+progress.
 
 <Callout type="info">
   Continuous PostgreSQL-to-Elasticsearch synchronization requires a release that includes the incremental consumer. The full-reindex command deliberately does not claim that the application is ready to switch search backends by itself.

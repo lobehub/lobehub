@@ -33,7 +33,7 @@ Classify every database change into one of these three rollout paths before gene
 
 Do not choose a rollout path from hypothetical claims such as “this migration might be slow” or “installing these triggers could block deployment.” Before deciding that a schema change needs a manual production step, deferred installation, or a dedicated backfill, test the relevant operation against the project's actual Dev database.
 
-- Classify the database target first using the `access-pg` skill; never read secret-bearing `.env` files directly.
+- Classify the database target first using the project's approved database-access tooling; never read secret-bearing `.env` files directly.
 - Measure the real operation or the closest safe equivalent, such as creating an identically defined probe index under a temporary name or installing temporary triggers inside a transaction that is rolled back.
 - Record the tested SQL or operation, representative row count and table size, elapsed time, and cleanup verification.
 - Keep probes reversible and remove every temporary database object after the measurement.

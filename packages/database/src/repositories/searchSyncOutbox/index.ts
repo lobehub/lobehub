@@ -3,21 +3,6 @@ import { sql } from 'drizzle-orm';
 import type { LobeChatDatabase } from '../../type';
 import type { SearchDocumentEntity } from '../searchDocument';
 import { SEARCH_DOCUMENT_ENTITIES } from '../searchDocument';
-import {
-  SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS,
-  SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
-  SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX,
-} from './captureInfrastructure';
-
-const SEARCH_SYNC_CAPTURE_SOURCE_TABLES = [
-  ...new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table)),
-];
-const SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
-  SEARCH_SYNC_CAPTURE_SOURCE_TABLES.map(
-    (table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`,
-  ),
-  sql`, `,
-);
 
 export interface SearchSyncWork {
   documentId: string;
@@ -52,8 +37,33 @@ export interface SearchSyncOutboxStats extends SearchSyncOutboxEntityStats {
 /** Approximately one day of durable retries when the exponential delay is capped at one hour. */
 export const SEARCH_SYNC_MAX_ATTEMPTS = 36;
 
-type SearchSyncDatabase = Pick<LobeChatDatabase, 'execute'> &
-  Partial<Pick<LobeChatDatabase, 'transaction'>>;
+const SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS = [
+  { name: 'search_sync_agents', table: 'agents' },
+  { name: 'search_sync_topics', table: 'topics' },
+  { name: 'search_sync_files', table: 'files' },
+  { name: 'search_sync_knowledge_bases', table: 'knowledge_bases' },
+  { name: 'search_sync_chat_groups', table: 'chat_groups' },
+  { name: 'search_sync_documents', table: 'documents' },
+  { name: 'search_sync_messages', table: 'messages' },
+  { name: 'search_sync_user_memories', table: 'user_memories' },
+  { name: 'search_sync_user_memories_fanout', table: 'user_memories' },
+  { name: 'search_sync_memory_contexts', table: 'user_memories_contexts' },
+  { name: 'search_sync_memory_preferences', table: 'user_memories_preferences' },
+  { name: 'search_sync_memory_activities', table: 'user_memories_activities' },
+  { name: 'search_sync_memory_identities', table: 'user_memories_identities' },
+  { name: 'search_sync_memory_experiences', table: 'user_memories_experiences' },
+  { name: 'search_sync_persona_documents', table: 'user_memory_persona_documents' },
+  { name: 'search_sync_knowledge_base_files', table: 'knowledge_base_files' },
+] as const;
+
+const SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
+  [...new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))].map(
+    (table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`,
+  ),
+  sql`, `,
+);
+
+type SearchSyncDatabase = Pick<LobeChatDatabase, 'execute' | 'transaction'>;
 
 interface SearchSyncRow {
   document_id: string;
@@ -89,12 +99,8 @@ const revisionNumber = (value: number | string | undefined, operation: string, m
 export class SearchSyncOutboxRepository {
   constructor(private readonly db: SearchSyncDatabase) {}
 
-  /**
-   * Installs lock-sensitive capture infrastructure outside automatic deployment migrations.
-   * Each trigger is a separate short transaction, so a lock timeout can be retried without
-   * rolling back triggers already installed on quieter tables.
-   */
-  async installCaptureInfrastructure(): Promise<void> {
+  /** Fails before a reindex if migration-managed capture infrastructure is incomplete or disabled. */
+  async assertCaptureInfrastructure(): Promise<void> {
     const indexResult = await this.db.execute(sql`
       SELECT (
         search_index.indisvalid
@@ -122,17 +128,13 @@ export class SearchSyncOutboxRepository {
         AND indexed_attribute.attnum = search_index.indkey[0]
       INNER JOIN pg_opclass operator_class ON operator_class.oid = search_index.indclass[0]
       WHERE search_index.indexrelid =
-        to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})
+        to_regclass('public.user_memories_contexts_user_memory_ids_gin_idx')
     `);
     const [index] = rowsOf<{ is_valid: boolean }>(indexResult);
     if (!index?.is_valid) {
       throw new Error(
-        `A valid, non-partial GIN ${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX} index on user_memories_contexts.user_memory_ids is required before enabling search sync capture; drop any mismatched copy with DROP INDEX CONCURRENTLY, then recreate it with CREATE INDEX CONCURRENTLY`,
+        'Search sync requires a valid, non-partial GIN index on user_memories_contexts.user_memory_ids',
       );
-    }
-
-    for (const statement of SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
-      await this.db.execute(statement);
     }
 
     const triggerTargets = sql.join(
@@ -151,89 +153,9 @@ export class SearchSyncOutboxRepository {
     const installed = Number(rowsOf<{ count: number }>(triggerResult)[0]?.count ?? 0);
     if (installed !== SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length) {
       throw new Error(
-        `Failed to install search sync capture triggers (${installed}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length})`,
+        `Search sync requires all migration-managed capture triggers (${installed}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length} enabled)`,
       );
     }
-  }
-
-  /**
-   * Installs capture infrastructure, then enables it for deployments with an outbox consumer.
-   * The activation fence fails fast while a writer that observed capture as disabled is active;
-   * after every lock is held, new writers wait and observe capture as enabled after it commits.
-   */
-  async enableCapture(): Promise<void> {
-    await this.installCaptureInfrastructure();
-    await this.db.execute(sql`
-      DO $search_sync_activation$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM search_sync_settings WHERE key = 'default' AND enabled
-        ) THEN
-          LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS}
-            IN SHARE MODE NOWAIT;
-          INSERT INTO search_sync_settings (key, enabled)
-          VALUES ('default', true)
-          ON CONFLICT (key) DO UPDATE SET
-            enabled = EXCLUDED.enabled,
-            updated_at = now()
-          WHERE search_sync_settings.enabled IS DISTINCT FROM EXCLUDED.enabled;
-        END IF;
-      END;
-      $search_sync_activation$ LANGUAGE plpgsql
-    `);
-  }
-
-  /** Disables trigger capture without deleting already queued changes. */
-  async disableCapture(): Promise<void> {
-    await this.db.execute(sql`
-      INSERT INTO search_sync_settings (key, enabled)
-      VALUES ('default', false)
-      ON CONFLICT (key) DO UPDATE SET
-        enabled = EXCLUDED.enabled,
-        updated_at = now()
-      WHERE search_sync_settings.enabled IS DISTINCT FROM EXCLUDED.enabled
-    `);
-  }
-
-  /** Returns an opaque version that changes whenever capture is enabled or disabled. */
-  async getCaptureState(): Promise<{ enabled: boolean; version: string | null }> {
-    const result = await this.db.execute(sql`
-      SELECT
-        enabled,
-        EXTRACT(EPOCH FROM updated_at)::text AS version
-      FROM search_sync_settings
-      WHERE key = 'default'
-    `);
-    const state = rowsOf<{ enabled: boolean; version: string }>(result)[0];
-    return state ?? { enabled: false, version: null };
-  }
-
-  /** Serialize final checkpoint acceptance with capture enable/disable updates. */
-  async withCaptureStateLock<Result>(
-    callback: (state: { enabled: boolean; version: string | null }) => Promise<Result>,
-  ): Promise<Result> {
-    if (!this.db.transaction) {
-      throw new Error('Search sync capture finalization requires transaction support');
-    }
-    return this.db.transaction(async (tx) => {
-      const result = await tx.execute(sql`
-        SELECT
-          enabled,
-          EXTRACT(EPOCH FROM updated_at)::text AS version
-        FROM search_sync_settings
-        WHERE key = 'default'
-        FOR UPDATE
-      `);
-      const state = rowsOf<{ enabled: boolean; version: string }>(result)[0] ?? {
-        enabled: false,
-        version: null,
-      };
-      return callback(state);
-    });
-  }
-
-  async isCaptureEnabled(): Promise<boolean> {
-    return (await this.getCaptureState()).enabled;
   }
 
   /** Observes the latest allocated revision without treating it as a committed snapshot boundary. */
@@ -248,16 +170,37 @@ export class SearchSyncOutboxRepository {
     );
   }
 
-  /** Reserves a version for idempotent full-reindex writes before Outbox changes are drained. */
-  async reserveRevision(): Promise<number> {
-    const result = await this.db.execute(sql`
-      SELECT nextval('search_sync_revision_seq')::bigint AS revision
-    `);
-    return revisionNumber(
-      rowsOf<{ revision: number | string }>(result)[0]?.revision,
-      'reserving a reindex version',
-      1,
-    );
+  /**
+   * Reserves the full-reindex version, then waits for writers that allocated an older revision.
+   * Without this fence, a long transaction could commit an older Outbox revision after the
+   * backfill has already written stale data at the newer base revision.
+   */
+  async reserveRevisionWithWriteFence(): Promise<number> {
+    return this.db.transaction(async (transaction) => {
+      const result = await transaction.execute(sql`
+        SELECT nextval('search_sync_revision_seq')::bigint AS revision
+      `);
+      const revision = revisionNumber(
+        rowsOf<{ revision: number | string }>(result)[0]?.revision,
+        'reserving a reindex version',
+        1,
+      );
+      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+      await transaction.execute(
+        sql`LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
+      );
+      return revision;
+    });
+  }
+
+  /** Re-establishes the write fence before resuming a checkpoint created by an older process. */
+  async fenceSourceWrites(): Promise<void> {
+    await this.db.transaction(async (transaction) => {
+      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+      await transaction.execute(
+        sql`LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
+      );
+    });
   }
 
   async acknowledgeMany(works: SearchSyncWork[]): Promise<SearchSyncWork[]> {

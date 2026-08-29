@@ -94,10 +94,18 @@ describe('SearchReindexService', () => {
   it('creates aliases only after all 14 entities complete', async () => {
     const { builder, client, repository, state } = createDependencies();
     const events: unknown[] = [];
+    const lifecycle: string[] = [];
+    const validateIncrementalSyncSource = vi.fn(async () => {
+      lifecycle.push('validate-incremental-sync-source');
+    });
+    vi.mocked(client.ensureAlias).mockImplementation(async () => {
+      lifecycle.push('create-alias');
+    });
     const service = new SearchReindexService(builder, repository, client, {
       onProgress: (event) => {
         events.push(event);
       },
+      validateIncrementalSyncSource,
     });
 
     await expect(service.run('test', 1)).resolves.toMatchObject({
@@ -124,28 +132,30 @@ describe('SearchReindexService', () => {
         ),
       ),
     );
+    expect(validateIncrementalSyncSource).toHaveBeenCalledOnce();
+    expect(lifecycle).toEqual([
+      'validate-incremental-sync-source',
+      ...Array.from({ length: 14 }, () => 'create-alias'),
+    ]);
   });
 
-  it('revalidates external safety before aliases and while marking the run ready', async () => {
+  it('does not create aliases or mark a run ready when incremental source validation fails', async () => {
     const { builder, client, repository } = createDependencies();
-    const validateFinalization = vi.fn().mockResolvedValue(undefined);
-    const finalizeRun = vi.fn(async () => {
-      throw new Error('capture version changed');
-    });
+    const validateIncrementalSyncSource = vi
+      .fn()
+      .mockRejectedValue(new Error('incremental sync source is not healthy'));
     const service = new SearchReindexService(builder, repository, client, {
-      finalizeRun,
-      validateFinalization,
+      validateIncrementalSyncSource,
     });
 
-    await expect(service.run('test', 1)).rejects.toThrow('capture version changed');
+    await expect(service.run('test', 1)).rejects.toThrow('incremental sync source is not healthy');
 
-    expect(validateFinalization).toHaveBeenCalledOnce();
-    expect(finalizeRun).toHaveBeenCalledOnce();
-    expect(client.ensureAlias).toHaveBeenCalledTimes(14);
+    expect(validateIncrementalSyncSource).toHaveBeenCalledOnce();
+    expect(client.ensureAlias).not.toHaveBeenCalled();
     expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
   });
 
-  it('reuses index preparation when capture setup already completed it', async () => {
+  it('reuses index preparation when the run already prepared it', async () => {
     const { builder, client, repository, state } = createDependencies();
     const service = new SearchReindexService(builder, repository, client);
 

@@ -1,20 +1,34 @@
 // @vitest-environment node
 import path from 'node:path';
 
-import { and, eq, type SQL, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import { PgDialect } from 'drizzle-orm/pg-core';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, searchSyncOutbox, searchSyncSettings, users } from '../../../schemas';
-import type { LobeChatDatabase } from '../../../type';
+import { agents, searchSyncOutbox, users } from '../../../schemas';
 import { SearchDocumentBuilder } from '../../searchDocument';
 import { SearchSyncOutboxRepository } from '..';
-import { SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS } from '../captureInfrastructure';
 
 const USER_ID = 'search-sync-integration-user';
-const isServerDB = process.env.TEST_SERVER_DB === '1';
+const SEARCH_SYNC_TRIGGER_NAMES = [
+  'search_sync_agents',
+  'search_sync_chat_groups',
+  'search_sync_documents',
+  'search_sync_files',
+  'search_sync_knowledge_base_files',
+  'search_sync_knowledge_bases',
+  'search_sync_memory_activities',
+  'search_sync_memory_contexts',
+  'search_sync_memory_experiences',
+  'search_sync_memory_identities',
+  'search_sync_memory_preferences',
+  'search_sync_messages',
+  'search_sync_persona_documents',
+  'search_sync_topics',
+  'search_sync_user_memories',
+  'search_sync_user_memories_fanout',
+] as const;
 
 const db = await getTestDB();
 const builder = new SearchDocumentBuilder(db);
@@ -25,26 +39,9 @@ const sortKeys = (keys: { documentId: string; entity: string }[]) =>
     `${left.entity}:${left.documentId}`.localeCompare(`${right.entity}:${right.documentId}`),
   );
 
-beforeAll(async () => {
-  if (isServerDB) {
-    await db.execute(sql`
-      CREATE INDEX CONCURRENTLY IF NOT EXISTS user_memories_contexts_user_memory_ids_gin_idx
-      ON user_memories_contexts USING gin (user_memory_ids)
-    `);
-    return;
-  }
-
-  /** PGlite does not support PostgreSQL's concurrent-index implementation. */
-  await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS user_memories_contexts_user_memory_ids_gin_idx
-    ON user_memories_contexts USING gin (user_memory_ids)
-  `);
-});
-
 beforeEach(async () => {
   await db.delete(users).where(eq(users.id, USER_ID));
   await db.delete(searchSyncOutbox);
-  await repository.enableCapture();
   await db.insert(users).values({ id: USER_ID });
 });
 
@@ -54,8 +51,8 @@ afterAll(async () => {
 });
 
 describe('SearchSyncOutboxRepository', () => {
-  it('reserves and observes revisions for a local full-reindex checkpoint', async () => {
-    const revision = await repository.reserveRevision();
+  it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
+    const revision = await repository.reserveRevisionWithWriteFence();
 
     expect(revision).toBeGreaterThan(0);
     await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
@@ -65,13 +62,21 @@ describe('SearchSyncOutboxRepository', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),
     }).find((item) =>
-      item.sql.some((statement) =>
-        statement.includes('CREATE TABLE IF NOT EXISTS "search_sync_outbox"'),
+      item.sql.some(
+        (statement) =>
+          statement.includes('search_sync_revision_seq') &&
+          statement.includes('search_sync_outbox'),
       ),
     );
 
     if (!migration) throw new Error('Search sync migration was not generated');
     for (const statement of migration.sql) await db.execute(sql.raw(statement));
+
+    const settingsResult = await db.execute(
+      sql`SELECT to_regclass('search_sync_settings')::text AS table_name`,
+    );
+    const settingsRows = Array.isArray(settingsResult) ? settingsResult : settingsResult.rows;
+    expect(settingsRows).toEqual([{ table_name: null }]);
   });
 
   it('indexes durable dead-letter checks', async () => {
@@ -83,164 +88,89 @@ describe('SearchSyncOutboxRepository', () => {
     expect(rows).toEqual([{ index_name: 'search_sync_outbox_dead_idx' }]);
   });
 
-  it('keeps existing-table DDL out of the automatic deployment migration', () => {
+  it('keeps the GIN index and permanent capture triggers in the deployment migration', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),
     }).find((item) =>
-      item.sql.some((statement) =>
-        statement.includes('CREATE TABLE IF NOT EXISTS "search_sync_outbox"'),
+      item.sql.some(
+        (statement) =>
+          statement.includes('search_sync_revision_seq') &&
+          statement.includes('search_sync_outbox'),
       ),
     );
 
     if (!migration) throw new Error('Search sync migration was not generated');
     const migrationSql = migration.sql.join('\n');
 
-    expect(migrationSql).not.toContain('CREATE TRIGGER');
-    expect(migrationSql).not.toContain('user_memories_contexts_user_memory_ids_gin_idx');
+    expect(migrationSql).toContain('CREATE TRIGGER');
+    expect(migrationSql).toContain('user_memories_contexts_user_memory_ids_gin_idx');
+    expect(migrationSql).not.toContain('CREATE TABLE IF NOT EXISTS "search_sync_settings"');
   });
 
-  it('requires a valid GIN index and installs every capture trigger explicitly', async () => {
+  it('creates a valid GIN index and enables every permanent capture trigger', async () => {
     const result = await db.execute(sql`
-      SELECT tgname
+      SELECT tgname, tgenabled
       FROM pg_trigger
       WHERE NOT tgisinternal AND tgname LIKE 'search_sync_%'
       ORDER BY tgname
     `);
     const rows = Array.isArray(result) ? result : result.rows;
 
-    expect(rows.map((row) => row.tgname)).toEqual([
-      'search_sync_agents',
-      'search_sync_chat_groups',
-      'search_sync_documents',
-      'search_sync_files',
-      'search_sync_knowledge_base_files',
-      'search_sync_knowledge_bases',
-      'search_sync_memory_activities',
-      'search_sync_memory_contexts',
-      'search_sync_memory_experiences',
-      'search_sync_memory_identities',
-      'search_sync_memory_preferences',
-      'search_sync_messages',
-      'search_sync_persona_documents',
-      'search_sync_topics',
-      'search_sync_user_memories',
-      'search_sync_user_memories_fanout',
-    ]);
+    expect(rows).toEqual(SEARCH_SYNC_TRIGGER_NAMES.map((tgname) => ({ tgname, tgenabled: 'O' })));
 
     const indexResult = await db.execute(sql`
-      SELECT indisvalid AS is_valid
-      FROM pg_index
-      WHERE indexrelid = 'user_memories_contexts_user_memory_ids_gin_idx'::regclass
+      SELECT
+        access_method.amname AS access_method,
+        indexed_attribute.attname AS indexed_column,
+        indexed_attribute.atttypid = 'jsonb'::regtype AS is_jsonb,
+        search_index.indpred IS NULL AS is_not_partial,
+        search_index.indisready AS is_ready,
+        search_index.indisvalid AS is_valid
+      FROM pg_index AS search_index
+      JOIN pg_class AS index_relation ON index_relation.oid = search_index.indexrelid
+      JOIN pg_am AS access_method ON access_method.oid = index_relation.relam
+      JOIN pg_attribute AS indexed_attribute
+        ON indexed_attribute.attrelid = search_index.indrelid
+        AND indexed_attribute.attnum = ANY(search_index.indkey)
+      WHERE search_index.indexrelid =
+        'user_memories_contexts_user_memory_ids_gin_idx'::regclass
     `);
     const indexRows = Array.isArray(indexResult) ? indexResult : indexResult.rows;
-    expect(indexRows).toEqual([{ is_valid: true }]);
-  });
-
-  it.each([{ indexRows: [] }, { indexRows: [{ is_valid: false }] }])(
-    'refuses to enable capture when the required GIN index is missing or invalid',
-    async ({ indexRows }) => {
-      const execute = vi.fn().mockResolvedValueOnce(indexRows);
-      const isolatedRepository = new SearchSyncOutboxRepository({
-        execute: execute as LobeChatDatabase['execute'],
-      });
-
-      await expect(isolatedRepository.enableCapture()).rejects.toThrow(
-        'A valid, non-partial GIN user_memories_contexts_user_memory_ids_gin_idx index',
-      );
-      expect(execute).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it('keeps capture disabled when trigger installation fails', async () => {
-    const execute = vi
-      .fn()
-      .mockResolvedValueOnce([{ is_valid: true }])
-      .mockRejectedValueOnce(new Error('lock timeout'));
-    const isolatedRepository = new SearchSyncOutboxRepository({
-      execute: execute as LobeChatDatabase['execute'],
-    });
-
-    await expect(isolatedRepository.enableCapture()).rejects.toThrow('lock timeout');
-    expect(execute).toHaveBeenCalledTimes(2);
-  });
-
-  it('fences every captured table in the same statement that enables capture', async () => {
-    const dialect = new PgDialect();
-    const statements: string[] = [];
-    const execute = vi.fn(async (query: SQL) => {
-      const statement = dialect.sqlToQuery(query).sql;
-      statements.push(statement);
-      if (statement.includes('FROM pg_index')) return [{ is_valid: true }];
-      if (statement.includes('SELECT count(*)::integer AS count')) {
-        return [{ count: SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length }];
-      }
-      return [];
-    });
-    const isolatedRepository = new SearchSyncOutboxRepository({
-      execute: execute as unknown as LobeChatDatabase['execute'],
-    });
-
-    await isolatedRepository.enableCapture();
-
-    expect(statements[0]).toContain("access_method.amname = 'gin'");
-    expect(statements[0]).toContain("source_table.relname = 'user_memories_contexts'");
-    expect(statements[0]).toContain("indexed_attribute.attname = 'user_memory_ids'");
-    expect(statements[0]).toContain('search_index.indpred IS NULL');
-    expect(statements[0]).toContain("indexed_attribute.atttypid = 'jsonb'::regtype");
-    expect(statements[0]).toContain("operator_class.opcname IN ('jsonb_ops', 'jsonb_path_ops')");
-
-    const activation = statements.find((statement) =>
-      statement.includes('INSERT INTO search_sync_settings'),
-    );
-    expect(activation).toContain('LOCK TABLE');
-    expect(activation).toContain('IN SHARE MODE NOWAIT');
-    expect(activation!.indexOf('LOCK TABLE')).toBeLessThan(
-      activation!.indexOf('INSERT INTO search_sync_settings'),
-    );
-    for (const table of new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))) {
-      expect(activation).toContain(`"${table}"`);
-    }
-  });
-
-  it('keeps capture disabled unless a deployment explicitly enables it', async () => {
-    await db
-      .update(searchSyncSettings)
-      .set({ enabled: false })
-      .where(eq(searchSyncSettings.key, 'default'));
-    await db.insert(agents).values({ id: 'disabled-agent', title: 'one', userId: USER_ID });
-    await expect(db.select().from(searchSyncOutbox)).resolves.toEqual([]);
-
-    await repository.enableCapture();
-    await db.update(agents).set({ title: 'two' }).where(eq(agents.id, 'disabled-agent'));
-
-    await expect(db.select().from(searchSyncOutbox)).resolves.toMatchObject([
-      { documentId: 'disabled-agent', entity: 'agents' },
+    expect(indexRows).toEqual([
+      {
+        access_method: 'gin',
+        indexed_column: 'user_memory_ids',
+        is_jsonb: true,
+        is_not_partial: true,
+        is_ready: true,
+        is_valid: true,
+      },
     ]);
   });
 
-  it('reports and disables capture without deleting queued work', async () => {
-    await db.insert(agents).values({ id: 'capture-agent', title: 'one', userId: USER_ID });
-    const enabledState = await repository.getCaptureState();
-    await expect(repository.isCaptureEnabled()).resolves.toBe(true);
-    expect(enabledState).toMatchObject({ enabled: true, version: expect.any(String) });
+  it('validates capture infrastructure and rejects a disabled trigger', async () => {
+    await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
 
-    await repository.disableCapture();
+    await db.execute(sql`ALTER TABLE agents DISABLE TRIGGER search_sync_agents`);
+    try {
+      await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
+        'Search sync requires all migration-managed capture triggers (15/16 enabled)',
+      );
+    } finally {
+      await db.execute(sql`ALTER TABLE agents ENABLE TRIGGER search_sync_agents`);
+    }
 
-    const disabledState = await repository.getCaptureState();
-    await expect(repository.isCaptureEnabled()).resolves.toBe(false);
-    expect(disabledState.version).not.toBe(enabledState.version);
-    await expect(db.select().from(searchSyncOutbox)).resolves.toHaveLength(1);
+    await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
   });
 
-  it('holds the capture settings row while a finalization callback runs', async () => {
-    const expected = await repository.getCaptureState();
+  it('captures the first mutation immediately without a runtime enable step', async () => {
+    await db.insert(agents).values({ id: 'immediate-agent', title: 'one', userId: USER_ID });
 
-    const result = await repository.withCaptureStateLock(async (capture) => {
-      expect(capture).toEqual(expected);
-      return 'accepted';
-    });
-
-    expect(result).toBe('accepted');
+    await expect(
+      db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'immediate-agent', entity: 'agents' }]);
   });
 
   it('coalesces mutations and increases the revision, prioritizing revocations', async () => {

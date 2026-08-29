@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
-  boolean,
   index,
   integer,
   pgSequence,
@@ -15,19 +14,6 @@ import {
 import { createdAt, timestamptz, updatedAt } from './_helpers';
 
 export const searchSyncRevisionSequence = pgSequence('search_sync_revision_seq');
-
-/** Opt-in switch for installations that run a search-sync outbox consumer. */
-export const searchSyncSettings = pgTable(
-  'search_sync_settings',
-  {
-    createdAt: createdAt(),
-    enabled: boolean('enabled').notNull().default(false),
-    id: uuid('id').primaryKey().defaultRandom(),
-    key: text('key').notNull().default('default'),
-    updatedAt: updatedAt(),
-  },
-  (table) => [uniqueIndex('search_sync_settings_key_unique').on(table.key)],
-);
 
 /** Durable, coalescing queue for asynchronously refreshing search projections. */
 export const searchSyncOutbox = pgTable(
