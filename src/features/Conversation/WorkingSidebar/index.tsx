@@ -54,6 +54,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -838,12 +839,18 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       minWidth={MIN_PANEL_WIDTH}
       width={renderWidth}
       onSizeChange={(size) => {
+        browserWebviewRegistry.setInteractionEnabled(true);
         if (!size?.width) return;
         // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
         // the controlled width actually updates (otherwise the panel snaps back).
         const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
         if (!Number.isFinite(w) || w === storedWidth) return;
         updateSystemStatus({ workingSidebarWidth: w });
+      }}
+      onSizeDragging={() => {
+        // The retained Electron guest follows the panel bounds. Without disabling
+        // hit-testing it moves under the cursor and steals the remaining drag events.
+        browserWebviewRegistry.setInteractionEnabled(false);
       }}
     >
       <Flexbox height={'100%'} width={'100%'}>

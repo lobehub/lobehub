@@ -120,6 +120,27 @@ describe('browserWebviewRegistry', () => {
     vi.useRealTimers();
   });
 
+  it('temporarily removes visible webviews from pointer hit-testing', async () => {
+    const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
+    const viewport = document.createElement('div');
+    document.body.append(viewport);
+
+    const attaching = browserWebviewRegistry.attach('dragging-topic', viewport);
+    const webview = document.querySelector<HTMLElement>('webview');
+    webview?.dispatchEvent(new Event('dom-ready'));
+    await attaching;
+
+    expect(webview?.style.pointerEvents).toBe('auto');
+
+    browserWebviewRegistry.setInteractionEnabled(false);
+    expect(webview?.style.pointerEvents).toBe('none');
+
+    browserWebviewRegistry.setInteractionEnabled(true);
+    expect(webview?.style.pointerEvents).toBe('auto');
+
+    await browserWebviewRegistry.detach('dragging-topic', viewport);
+  });
+
   it('does not evict a recently touched hidden webview', async () => {
     let now = 0;
     vi.spyOn(Date, 'now').mockImplementation(() => now);

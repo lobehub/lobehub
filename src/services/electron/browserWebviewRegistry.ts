@@ -52,6 +52,18 @@ const getHiddenHost = () => {
 class BrowserWebviewRegistry {
   private retained = new Map<string, RetainedWebview>();
 
+  /**
+   * Electron webviews own a separate guest surface and can steal the pointer from
+   * a resize handle as their projected bounds move underneath the cursor. Keep
+   * visible guests out of hit-testing for the duration of a surrounding drag.
+   */
+  setInteractionEnabled(enabled: boolean): void {
+    for (const retained of this.retained.values()) {
+      if (!retained.visible) continue;
+      retained.webview.style.pointerEvents = enabled ? 'auto' : 'none';
+    }
+  }
+
   async attach(sessionId: string, host: HTMLElement): Promise<BrowserWebviewElement> {
     const webview = await this.ensure(sessionId);
     const retained = this.retained.get(sessionId);

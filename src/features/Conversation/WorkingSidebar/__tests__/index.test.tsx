@@ -18,6 +18,7 @@ interface CapturedRightPanelProps {
   expand?: boolean;
   maxWidth?: number | string;
   onSizeChange?: (size?: { height?: number | string; width?: number | string }) => void;
+  onSizeDragging?: () => void;
   width?: number | string;
 }
 
@@ -84,6 +85,8 @@ const dropdownMenuState = vi.hoisted(() => ({
 
 const workspace = vi.hoisted(() => ({ id: undefined as string | undefined }));
 
+const webviewInteraction = vi.hoisted(() => ({ setInteractionEnabled: vi.fn() }));
+
 const chatStore = vi.hoisted(() => ({
   activeAgentId: undefined as string | undefined,
   activeGroupId: undefined as string | undefined,
@@ -115,6 +118,10 @@ vi.mock('@/features/RightPanel', () => ({
     rightPanel.current = props;
     return <div data-testid="right-panel">{props.children}</div>;
   },
+}));
+
+vi.mock('@/services/electron/browserWebviewRegistry', () => ({
+  browserWebviewRegistry: webviewInteraction,
 }));
 
 // ─── stub every downstream dependency so the sidebar renders deterministically ──
@@ -464,6 +471,16 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     unmount();
     render(<AgentWorkingSidebar />);
     expect(rightPanel.current?.width).toBe(500);
+  });
+
+  it('keeps the browser webview from stealing pointer events during panel resize', () => {
+    render(<AgentWorkingSidebar />);
+
+    act(() => rightPanel.current?.onSizeDragging?.());
+    expect(webviewInteraction.setInteractionEnabled).toHaveBeenLastCalledWith(false);
+
+    act(() => rightPanel.current?.onSizeChange?.({ width: 500 }));
+    expect(webviewInteraction.setInteractionEnabled).toHaveBeenLastCalledWith(true);
   });
 
   // Regression: dragging the panel wide persisted a width that immediately
