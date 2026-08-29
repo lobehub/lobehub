@@ -43,7 +43,6 @@ import {
   topics,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { bumpAgentShareGeneration } from '../../utils/agentShareGeneration';
 import { insertInBatches, splitCrossBatchSelfReferences } from '../../utils/batchInsert';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
 import { copyMessagesInDatabase, type IdPair } from '../../utils/copyMessagesInDatabase';
@@ -147,7 +146,7 @@ export interface AgentGroupRepositoryOptions {
    * `AgentModelOptions.onShareReset`'s full JSDoc in
    * `packages/database/src/models/agent.ts`.
    */
-  onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  onShareReset?: (agentId: string) => void;
 
   /**
    * Same contract as `AgentModelOptions.onShareRunsInterrupted` /
@@ -174,7 +173,7 @@ export class AgentGroupRepository {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
-  private onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  private onShareReset?: (agentId: string) => void;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
@@ -1172,7 +1171,7 @@ export class AgentGroupRepository {
     // `writeAgentConfigWithShareReset` / `AgentModel.transferAgents`: an
     // interrupt is a side effect that must never fire on a rolled-back
     // transfer.
-    const shareResetGenerations = new Map<string, number>();
+    const shareResetAgentIds = new Set<string>();
 
     const result = await this.db.transaction(async (trx) => {
       // Lock the group row first: it is the one serialization point every
@@ -1308,12 +1307,12 @@ export class AgentGroupRepository {
       // need the same personal-scope share reset here. Otherwise a round trip
       // through a workspace silently revives an old distributed link.
       //
-      // Routed through the SAME generation-bump + `onShareReset` contract as
-      // `AgentModel.transferAgents` — a bare visibility flip leaves a
-      // reservation staked (or an operation already running) under the
-      // pre-transfer generation able to confirm/continue after the move, with
-      // no way for the visitor to stop it. See that method's comment. The row lock on `agents` taken above (still held here,
-      // same `trx`) is what `bumpAgentShareGeneration` requires.
+      // Routed through the SAME `onShareReset` contract as
+      // `AgentModel.transferAgents` — a bare visibility flip leaves an
+      // operation already running under the pre-transfer grants able to
+      // continue after the move; the caller's one-shot
+      // `findActiveVisitorRunTopics` interrupt, scheduled by that same
+      // callback, is what tears it down. See that method's comment.
       if (!this.workspaceId && targetWorkspaceId && ownedAgentIds.length > 0) {
         const resetShares = await trx
           .update(agentShares)
@@ -1324,10 +1323,7 @@ export class AgentGroupRepository {
           .returning({ agentId: agentShares.agentId });
 
         for (const { agentId: resetAgentId } of resetShares) {
-          shareResetGenerations.set(
-            resetAgentId,
-            await bumpAgentShareGeneration(trx, resetAgentId),
-          );
+          shareResetAgentIds.add(resetAgentId);
         }
       }
 
@@ -1569,13 +1565,13 @@ export class AgentGroupRepository {
 
     // Fired only after the transaction above has committed, once per owned
     // member agent whose share was actually reset — see
-    // `shareResetGenerations`'s JSDoc above and
+    // `shareResetAgentIds`'s JSDoc above and
     // `writeAgentConfigWithShareReset`'s `onShareReset` timing. NO
     // `targetWorkspaceId` — the post-commit interrupt re-queries by `agentId`
     // alone now, so it stays correct even across a later, second transfer.
     // See `AgentGroupRepositoryOptions.onShareReset`'s JSDoc.
-    for (const [resetAgentId, revocationGeneration] of shareResetGenerations) {
-      this.onShareReset?.(resetAgentId, revocationGeneration);
+    for (const resetAgentId of shareResetAgentIds) {
+      this.onShareReset?.(resetAgentId);
     }
 
     return result;

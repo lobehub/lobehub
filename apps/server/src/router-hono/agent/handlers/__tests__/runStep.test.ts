@@ -286,35 +286,6 @@ describe('runStep handler', () => {
     expect(captured.headers).toEqual({ 'Retry-After': '37' });
   });
 
-  // Regression test for the case where the Agent Share
-  // step-0 gate exhausts its retry budget without ever reading agent state
-  // (`AgentExecutionResult.shareGateStateUnavailable`), it has no way to
-  // durably invalidate the reservation or persist `interrupted` — acking here
-  // would let a racing `confirmReservation` leave the topic's
-  // `runningOperation` marker pointing at a dead operation. The delivery must
-  // stay retryable, mirroring the locked/backoff-exhausted 429 above.
-  it('returns 429 with Retry-After header when the share gate state is unavailable', async () => {
-    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      shareGateStateUnavailable: true,
-      state: {},
-      success: false,
-    });
-
-    const { ctx, getCaptures } = buildContext({ body: validBody });
-    const res = await runStep(ctx);
-
-    expect(res.status).toBe(429);
-    const captured = getCaptures()[0];
-    expect(captured.body).toMatchObject({
-      error: 'Share reservation gate state unavailable, retry later',
-      operationId: 'op-1',
-      stepIndex: 2,
-    });
-    expect(captured.headers).toEqual({ 'Retry-After': '2' });
-  });
-
   it('forwards the upstash-retried header to executeStep as externalRetryCount', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockResolvedValue({

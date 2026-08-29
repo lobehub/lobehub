@@ -92,7 +92,6 @@ export async function runStep(c: Context): Promise<Response> {
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
       lockRetryAttempt,
-      shareGateRetryAttempt,
     } = { ...body, ...body.payload };
 
     if (!operationId) {
@@ -163,50 +162,10 @@ export async function runStep(c: Context): Promise<Response> {
       rejectAndContinue,
       rejectionReason,
       resumeAsyncTool,
-      shareGateRetryAttempt,
       stepIndex,
       toolMessageId,
       verifyAsyncToolBarrier,
     });
-
-    // The Agent Share step-0 gate already re-queued its own bounded retry on
-    // its own backoff (see `AgentRuntimeService.deferShareGateStep`) — ACK so
-    // QStash doesn't ALSO retry this delivery on top of that and burn its own
-    // (much shorter) retry budget, mirroring the `lockRescheduled` handling
-    // below.
-    if (result.shareGateDeferred) {
-      log(`[${operationId}] Step ${stepIndex} share reservation gate deferred, re-queued`);
-      return c.json({
-        nextStepScheduled: true,
-        operationId,
-        shareGateDeferred: true,
-        stepIndex,
-        success: true,
-      });
-    }
-
-    // The Agent Share step-0 gate exhausted its own retry budget WITHOUT ever
-    // reading agent state, so it has no `agentId`/`topicId` to invalidate or
-    // verify the reservation, and no state it could durably mark
-    // `interrupted` — see `AgentExecutionResult.shareGateStateUnavailable`'s
-    // JSDoc for the marker-leak this avoids.
-    // Mirror the `locked` (backoff-exhausted) fallback below: return a
-    // retryable response so the queue's OWN retry budget keeps redelivering
-    // step 0 until the state store recovers and the gate can decide for real.
-    if (result.shareGateStateUnavailable) {
-      log(
-        `[${operationId}] Step ${stepIndex} share reservation gate state unavailable, returning 429`,
-      );
-      return c.json(
-        {
-          error: 'Share reservation gate state unavailable, retry later',
-          operationId,
-          stepIndex,
-        },
-        429,
-        { 'Retry-After': '2' },
-      );
-    }
 
     // A non-stale lock conflict means another delivery is still executing this
     // operation.

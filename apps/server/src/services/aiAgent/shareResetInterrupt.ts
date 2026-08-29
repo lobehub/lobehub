@@ -26,29 +26,22 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * constructor options instead.
  *
  * Deliberately constructs `AiAgentService` WITHOUT a `workspaceId`: this
- * callback fires post-commit, arbitrarily long after the write that produced
- * `revocationGeneration`, so the caller's OWN scope at write time (`AgentModel
- * .transferAgents` / `AgentGroupRepository.transferToWorkspace` fire this from
- * inside a scope change) is already the wrong thing to remember. An earlier
- * version threaded the transfer's destination workspace through here so
- * `interruptActiveShareRuns`'s `TopicModel` re-query could be scoped to it —
- * that broke the moment a SECOND transfer landed before this callback ran:
- * the topic moves again, but the second transfer schedules no callback of its
- * own (the share is already `private` after the first move, so its own
- * `ne(visibility, 'private')` reset guard finds nothing), leaving the one
- * scheduled callback permanently scoped to a now-stale workspace. Both steps
- * `interruptActiveShareRuns` runs are workspace-independent by design instead:
- * `revokeReservations` matches on `agentShareRunReservations.agentId` (no
- * workspace column exists on that table), and
+ * callback fires post-commit, arbitrarily long after the write that triggered
+ * it, so the caller's OWN scope at write time (`AgentModel.transferAgents` /
+ * `AgentGroupRepository.transferToWorkspace` fire this from inside a scope
+ * change) is already the wrong thing to remember. `interruptActiveShareRuns`
+ * is workspace-independent by design instead:
  * `TopicModel.findActiveVisitorRunTopics` matches on `topics.agentId` alone.
  * `agentId` is the one identity that survives any number of transfers, so a
- * `workspaceId` was never actually load-bearing for this path; passing one in
- * was the accidental coupling that caused this bug class in the first place.
- * See that method's JSDoc for the double-transfer window this closes.
+ * `workspaceId` was never actually load-bearing for this path.
+ *
+ * This is a ONE-SHOT sweep, not a durable cutoff — see
+ * `AiAgentService.interruptActiveShareRuns`'s JSDoc for the accepted tradeoff
+ * (a run still standing up when this fires can escape it).
  */
 export const scheduleShareRunInterruptOnReset =
   (serverDB: LobeChatDatabase, ownerId: string) =>
-  (agentId: string, revocationGeneration: number): void => {
+  (agentId: string): void => {
     after(async () => {
       // Dynamic import, not a static one: `services/agent/index.ts` (one of
       // this callback's callers) is itself imported by `./index.ts`
@@ -58,12 +51,8 @@ export const scheduleShareRunInterruptOnReset =
       // loading) breaks it without changing behavior.
       const { AiAgentService } = await import('.');
 
-      // `revocationGeneration` was captured by `writeAgentConfigWithShareReset`
-      // at write time and threaded straight through — see
-      // `interruptActiveShareRuns`'s JSDoc for why it must never be re-read
-      // here instead.
       await new AiAgentService(serverDB, createOwnerPrincipal(ownerId))
-        .interruptActiveShareRuns(agentId, revocationGeneration)
+        .interruptActiveShareRuns(agentId)
         .catch((error) =>
           console.error('[agentConfigShareReset] interruptActiveShareRuns failed', error),
         );

@@ -151,7 +151,7 @@ describe('AgentShareModel', () => {
         shareConfig: { maxGuestTopics: 12 } as unknown as AgentShareConfig,
       });
 
-      const { share: updated } = await agentShareModel.updateVisibility(agentId, 'link');
+      const updated = await agentShareModel.updateVisibility(agentId, 'link');
 
       expect(updated?.shareConfig).toEqual({
         allowReadMemory: false,
@@ -180,7 +180,7 @@ describe('AgentShareModel', () => {
         maxTurnsPerTopic: 40,
       };
 
-      const { share: updated } = await agentShareModel.updateConfig(agentId, config);
+      const updated = await agentShareModel.updateConfig(agentId, config);
       const readBack = await agentShareModel.getByAgentId(agentId);
 
       expect(updated?.shareConfig).toEqual(config);
@@ -194,7 +194,7 @@ describe('AgentShareModel', () => {
         filePermissionConfig: { agentFiles: 'read' },
         maxTopicsPerVisitor: 10,
       });
-      const { share: updated } = await agentShareModel.updateConfig(agentId, {
+      const updated = await agentShareModel.updateConfig(agentId, {
         filePermissionConfig: { uploadAllowed: true },
         maxTurnsPerTopic: 40,
       });
@@ -247,33 +247,24 @@ describe('AgentShareModel', () => {
     it('updates visibility and deletes the share', async () => {
       const created = await agentShareModel.create(agentId);
 
-      const { revocationGeneration, share: updated } = await agentShareModel.updateVisibility(
-        agentId,
-        'link',
-      );
+      const updated = await agentShareModel.updateVisibility(agentId, 'link');
       expect(updated?.visibility).toBe('link');
-      // Publishing never bumps the generation — nothing to invalidate.
-      expect(revocationGeneration).toBeUndefined();
 
-      const deleteResult = await agentShareModel.deleteByAgentId(agentId);
-      expect(deleteResult.share?.id).toBe(created?.id);
-      // Disabling unconditionally revokes, so this is always a real bump.
-      expect(deleteResult.revocationGeneration).toBeGreaterThan(0);
+      const deleted = await agentShareModel.deleteByAgentId(agentId);
+      expect(deleted?.id).toBe(created?.id);
       expect(await AgentShareModel.findByShareId(serverDB, created!.id)).toBeNull();
     });
 
     it('returns null for missing shares', async () => {
       expect(await agentShareModel.getByAgentId(agentId)).toBeNull();
       expect(
-        (
-          await agentShareModel.updateConfig(agentId, {
-            maxTopicsPerVisitor: 5,
-            maxTurnsPerTopic: 20,
-          })
-        ).share,
+        await agentShareModel.updateConfig(agentId, {
+          maxTopicsPerVisitor: 5,
+          maxTurnsPerTopic: 20,
+        }),
       ).toBeNull();
-      expect((await agentShareModel.updateVisibility(agentId, 'link')).share).toBeNull();
-      expect((await agentShareModel.deleteByAgentId(agentId)).share).toBeNull();
+      expect(await agentShareModel.updateVisibility(agentId, 'link')).toBeNull();
+      expect(await agentShareModel.deleteByAgentId(agentId)).toBeNull();
     });
 
     it("does not read, update, or delete another user's share", async () => {
@@ -281,15 +272,13 @@ describe('AgentShareModel', () => {
 
       expect(await agentShareModel.getByAgentId(otherAgentId)).toBeNull();
       expect(
-        (
-          await agentShareModel.updateConfig(otherAgentId, {
-            maxTopicsPerVisitor: 5,
-            maxTurnsPerTopic: 20,
-          })
-        ).share,
+        await agentShareModel.updateConfig(otherAgentId, {
+          maxTopicsPerVisitor: 5,
+          maxTurnsPerTopic: 20,
+        }),
       ).toBeNull();
-      expect((await agentShareModel.updateVisibility(otherAgentId, 'link')).share).toBeNull();
-      expect((await agentShareModel.deleteByAgentId(otherAgentId)).share).toBeNull();
+      expect(await agentShareModel.updateVisibility(otherAgentId, 'link')).toBeNull();
+      expect(await agentShareModel.deleteByAgentId(otherAgentId)).toBeNull();
       expect(await otherAgentShareModel.getByAgentId(otherAgentId)).toEqual(otherShare);
     });
 
@@ -330,13 +319,8 @@ describe('AgentShareModel', () => {
         .set({ agencyConfig: { heterogeneousProvider: { type: 'codex' } } })
         .where(eq(agents.id, agentId));
 
-      const { revocationGeneration, share: updated } = await agentShareModel.updateVisibility(
-        agentId,
-        'private',
-      );
+      const updated = await agentShareModel.updateVisibility(agentId, 'private');
       expect(updated?.visibility).toBe('private');
-      // `link → private` always bumps the generation.
-      expect(revocationGeneration).toBeGreaterThan(0);
     });
   });
 

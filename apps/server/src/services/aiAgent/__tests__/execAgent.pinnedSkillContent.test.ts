@@ -126,9 +126,7 @@ vi.mock('@/database/models/topic', () => ({
 // `shareVisitorAbuseGuards.*.race.test.ts`.
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: vi.fn().mockImplementation(() => ({
-    assertRunnableForVisitor: vi.fn().mockResolvedValue(undefined),
-    confirmReservation: vi.fn().mockResolvedValue(true),
-    releaseReservation: vi.fn().mockResolvedValue(undefined),
+    getByAgentId: vi.fn().mockResolvedValue({ visibility: 'link' }),
   })),
 }));
 

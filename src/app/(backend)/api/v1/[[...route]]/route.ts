@@ -23,13 +23,12 @@ const handleAgentShareResetSignal = (response: Response): Response => {
   const signal = response.headers.get(AGENT_SHARE_RESET_SIGNAL_HEADER);
   if (!signal) return response;
 
-  const [ownerId, agentId, revocationGenerationRaw] = signal.split(':');
-  const revocationGeneration = Number(revocationGenerationRaw);
-  if (ownerId && agentId && Number.isFinite(revocationGeneration)) {
+  const [ownerId, agentId] = signal.split(':');
+  if (ownerId && agentId) {
     after(async () => {
       const serverDB = await getServerDB();
       await new AiAgentService(serverDB, createOwnerPrincipal(ownerId))
-        .interruptActiveShareRuns(agentId, revocationGeneration)
+        .interruptActiveShareRuns(agentId)
         .catch((error) => console.error('[openapi] interruptActiveShareRuns failed', error));
     });
   }

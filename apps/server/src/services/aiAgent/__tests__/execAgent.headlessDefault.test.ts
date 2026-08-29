@@ -117,9 +117,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
  */
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: vi.fn().mockImplementation(() => ({
-    assertRunnableForVisitor: vi.fn().mockResolvedValue(undefined),
-    confirmReservation: vi.fn().mockResolvedValue(true),
-    releaseReservation: vi.fn().mockResolvedValue(undefined),
+    getByAgentId: vi.fn().mockResolvedValue({ visibility: 'link' }),
   })),
 }));
 
@@ -242,7 +240,7 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     // run carrying a `shareGate` must be forced onto the fail-closed `reject`
     // policy regardless of what the caller passed, so this can't be bypassed
     // by a future execAgent call site that forgets to set it explicitly.
-    const shareGate = { ...buildShareGate({ agentId: 'agent-1' }), generation: 1 };
+    const shareGate = buildShareGate({ agentId: 'agent-1' });
 
     // A share run carries BOTH halves — the gate and a delegated principal.
     // `execAgent` rejects an owner principal paired with a gate, because the

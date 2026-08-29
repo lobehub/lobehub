@@ -84,11 +84,8 @@ export class AgentController extends BaseController {
         // `@/server/*` access) can schedule the interrupt after the response
         // is built. Stripped from the response before it reaches the API
         // caller — see that route file.
-        onShareReset: ({ agentId, ownerId, revocationGeneration }) => {
-          c.header(
-            AGENT_SHARE_RESET_SIGNAL_HEADER,
-            `${ownerId}:${agentId}:${revocationGeneration}`,
-          );
+        onShareReset: ({ agentId, ownerId }) => {
+          c.header(AGENT_SHARE_RESET_SIGNAL_HEADER, `${ownerId}:${agentId}`);
         },
       });
 

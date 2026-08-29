@@ -1158,12 +1158,12 @@ describe('ChatGroupModel', () => {
 
     // Regression test for the group-delete bypass: `deleteOwnedMemberAgents`
     // removes an owned member's `agents` row directly, cascading its
-    // `agentShares` / `agentShareRunReservations` rows away with it — but an
-    // owned member is an ordinary personal agent as far as Agent Share is
-    // concerned and can carry its own `link` share the same as any other. A
-    // group delete must snapshot and interrupt its in-flight visitor runs
-    // exactly like `AgentModel.delete()` does, not silently cascade the
-    // active run's runtime operation away with no notice to the visitor.
+    // `agentShares` row away with it — but an owned member is an ordinary
+    // personal agent as far as Agent Share is concerned and can carry its own
+    // `link` share the same as any other. A group delete must snapshot and
+    // interrupt its in-flight visitor runs exactly like `AgentModel.delete()`
+    // does, not silently cascade the active run's runtime operation away with
+    // no notice to the visitor.
     it('snapshots and reports in-flight Agent Share visitor runs on an owned member before deleting it', async () => {
       const shareOwnerId = 'chat-group-share-owner';
       const visitorId = 'chat-group-share-visitor';
@@ -1195,32 +1195,21 @@ describe('ChatGroupModel', () => {
       const share = await agentShareModel.create(supervisorId, 'link');
 
       const operationId = 'op-share-cleanup-group';
+      const startedAt = new Date().toISOString();
       // The topic belongs to the VISITOR (`userId: visitorId`); `shareId` is
       // its only provenance marker back to the creator's agent — proving the
       // group delete reaches a run owned by someone else, not the owner's
-      // own row.
+      // own row. `metadata.runningOperation` is written directly, standing in
+      // for the durable marker a real in-flight run would have.
       const [topic] = await serverDB
         .insert(topics)
-        .values({ agentId: supervisorId, shareId: share.id, userId: visitorId })
+        .values({
+          agentId: supervisorId,
+          shareId: share.id,
+          userId: visitorId,
+          metadata: { runningOperation: { assistantMessageId: 'msg', operationId, startedAt } },
+        })
         .returning();
-      await agentShareModel.assertRunnableForVisitor({
-        agentId: supervisorId,
-        expectedGeneration: 1,
-        operationId,
-        topicId: topic.id,
-        visitorUserId: visitorId,
-      });
-      const startedAt = new Date().toISOString();
-      const confirmed = await agentShareModel.confirmReservation({
-        operationId,
-        runningOperation: {
-          assistantMessageId: 'msg',
-          operationId,
-          startedAt,
-        },
-        topicId: topic.id,
-      });
-      expect(confirmed).toBe(true);
 
       const onShareRunsInterrupted = vi.fn();
       const modelWithCallback = new ChatGroupModel(serverDB, shareOwnerId, undefined, {
@@ -1236,7 +1225,6 @@ describe('ChatGroupModel', () => {
             runningOperation: {
               assistantMessageId: 'msg',
               operationId,
-              shareGeneration: 1,
               startedAt,
             },
           },

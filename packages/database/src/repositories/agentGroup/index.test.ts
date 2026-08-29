@@ -1009,32 +1009,21 @@ describe('AgentGroupRepository', () => {
       const share = await agentShareModel.create('remove-virtual', 'link');
 
       const operationId = 'op-remove-agents-from-group';
+      const startedAt = new Date().toISOString();
       // The topic belongs to the VISITOR (`userId: visitorId`); `shareId` is
       // its only provenance marker back to the owner's agent — proving the
       // group removal reaches a run owned by someone else, not the owner's
-      // own row.
+      // own row. `metadata.runningOperation` is written directly, standing in
+      // for the durable marker a real in-flight run would have.
       const [topic] = await serverDB
         .insert(topics)
-        .values({ agentId: 'remove-virtual', shareId: share.id, userId: visitorId })
+        .values({
+          agentId: 'remove-virtual',
+          shareId: share.id,
+          userId: visitorId,
+          metadata: { runningOperation: { assistantMessageId: 'msg', operationId, startedAt } },
+        })
         .returning();
-      await agentShareModel.assertRunnableForVisitor({
-        agentId: 'remove-virtual',
-        expectedGeneration: 1,
-        operationId,
-        topicId: topic.id,
-        visitorUserId: visitorId,
-      });
-      const startedAt = new Date().toISOString();
-      const confirmed = await agentShareModel.confirmReservation({
-        operationId,
-        runningOperation: {
-          assistantMessageId: 'msg',
-          operationId,
-          startedAt,
-        },
-        topicId: topic.id,
-      });
-      expect(confirmed).toBe(true);
 
       const onShareRunsInterrupted = vi.fn();
       const repoWithCallback = new AgentGroupRepository(serverDB, userId, undefined, {
@@ -1053,7 +1042,6 @@ describe('AgentGroupRepository', () => {
             runningOperation: {
               assistantMessageId: 'msg',
               operationId,
-              shareGeneration: 1,
               startedAt,
             },
           },

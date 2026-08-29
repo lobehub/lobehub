@@ -31,10 +31,10 @@ const log = debug('lobe-server:router:shareChat');
  * config, credentials, balance — belongs to the creator.
  *
  * Note this is deliberately NOT a replacement for `AgentShareGate` — the gate
- * is the authorization SNAPSHOT (`generation` plus the full `shareConfig`) that
- * `assertRunnableForVisitor` re-checks right before the operation is created,
- * and it stays a method-level argument. The principal answers the narrower
- * question of *who* the run acts as and *whose* resources it may reach.
+ * is the authorization snapshot (the full `shareConfig`) resolved once here at
+ * `findByShareIdWithAccessCheck` and threaded through as a method-level
+ * argument for the whole run. The principal answers the narrower question of
+ * *who* the run acts as and *whose* resources it may reach.
  */
 const toVisitorPrincipal = (
   share: {
@@ -274,11 +274,6 @@ export const shareChatRouter = router({
       // budget.
       const shareGate: AgentShareGate = {
         agentId: share.agentId,
-        // See `AgentShareGate.generation`'s JSDoc — carried forward from this
-        // SAME `findByShareIdWithAccessCheck` read as `shareConfig` above, so
-        // `assertRunnableForVisitor` can detect a tightening that lands
-        // between now and operation creation.
-        generation: share.generation,
         shareConfig: share.shareConfig,
         // See `AgentShareGate.shareId`'s JSDoc — the share instance this run
         // is authorized against, for `topics.shareId` comparisons.

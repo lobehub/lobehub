@@ -64,7 +64,8 @@ describe('acquireTopicStartReservation — visitor concurrent-send race (real Po
     const firstOperationId = 'share-visitor-race-op-first';
 
     // Operation A is genuinely running (mirrors the DB state right after
-    // `execAgent`'s `confirmReservation` write, well before the run finishes).
+    // `execAgent` writes the topic's running-operation marker, well before
+    // the run finishes).
     await serverDB.insert(agentOperations).values({
       id: firstOperationId,
       status: 'running',

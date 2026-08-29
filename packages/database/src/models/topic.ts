@@ -1234,22 +1234,13 @@ export class TopicModel {
    * 1. Share conversations belong to their VISITORS, so a creator-scoped
    *    query would never see a single one of the runs it is trying to stop.
    * 2. `AiAgentService.interruptActiveShareRuns` runs this inside `after()`,
-   *    arbitrarily long after the write that produced `revocationGeneration`
-   *    committed. In between, the agent can have been transferred AGAIN (a
-   *    second `AgentModel.transferAgents` / `AgentGroupRepository
+   *    arbitrarily long after the triggering write committed. In between, the
+   *    agent can have been transferred AGAIN (a second
+   *    `AgentModel.transferAgents` / `AgentGroupRepository
    *    .transferToWorkspace`), moving its topics' `workspaceId` a second
-   *    time. That second transfer bumps no new generation and schedules no
-   *    new reset callback, because the share was already flipped to `private`
-   *    by the FIRST move (the `ne(visibility, 'private')` guard both transfer
-   *    paths use finds nothing left to reset) — see
-   *    `scheduleShareRunInterruptOnReset`'s JSDoc. The only callback that
-   *    will ever fire still carries the FIRST transfer's target workspace.
-   *
-   * `agentId` is the one identity that never changes across any number of
-   * transfers. This sweep's authority comes from holding that id plus a
-   * generation cutoff authenticated under the `agents.id FOR UPDATE` lock
-   * that produced it (see `bumpAgentShareGeneration`), not from the caller's
-   * own tenant scope.
+   *    time — `agentId` is the one identity that survives any number of
+   *    transfers, so this query keys on it instead of the caller's own tenant
+   *    scope.
    *
    * A topic qualifies on `shareId IS NOT NULL` — the provenance marker (see
    * `topics.shareId`'s JSDoc). Only the root `runningOperation.operationId`
@@ -1259,22 +1250,12 @@ export class TopicModel {
    * its own scoped `findById` re-fetch for remote-hetero cancellation
    * dispatch, a re-fetch that would hit the same scope drift described above.
    *
-   * `revocationGeneration`, when passed, ALSO filters to `shareGeneration <
-   * revocationGeneration` (see `ChatTopicMetadata.runningOperation
-   * .shareGeneration`'s JSDoc): a running operation confirmed AT OR AFTER
-   * `revocationGeneration` was authorized by a write that happened no earlier
-   * than the caller's own revocation (e.g. a republish racing a stale
-   * deferred callback) and must survive it. A marker with no
-   * `shareGeneration` at all (`COALESCE(..., 0)`) is always treated as older
-   * than any cutoff — fail closed rather than let an unstamped legacy /
-   * edge-case marker silently escape every future revocation.
-   *
-   * Omitted (no filter, every active run returned) by the agent/session
-   * DELETE snapshot paths (`AgentModel.delete`, `SessionModel`'s orphan
-   * cleanup): those hand the result straight to `AiAgentService.interruptTask`
-   * per run, not to the generation-scoped `interruptActiveShareRuns` sweep,
-   * and the agent row is cascading away in the SAME transaction regardless of
-   * generation — there is no "legitimate newer run" to protect there.
+   * This is a one-shot, best-effort snapshot: it interrupts whatever visitor
+   * runs are already-running at the moment the caller queries it, right after
+   * a disable/tighten commits. A run that is still "standing up" (past the
+   * config read but before `runningOperation` is written) can race past this
+   * snapshot and escape — an accepted tradeoff now that there is no durable
+   * reservation to close that window.
    *
    * The "has a running operation" predicate is written as a COALESCE
    * comparison rather than `IS NOT NULL`: an `IS [NOT] NULL` test on an
@@ -1282,10 +1263,7 @@ export class TopicModel {
    * bm25-indexed tables, and `topics` carries such an index.
    * `jsonbNullTest.test.ts` guards the shape.
    */
-  findActiveVisitorRunTopics = async (
-    agentId: string,
-    revocationGeneration?: number,
-  ): Promise<ActiveShareRun[]> => {
+  findActiveVisitorRunTopics = async (agentId: string): Promise<ActiveShareRun[]> => {
     const rows = await this.db
       .select({ id: topics.id, metadata: topics.metadata })
       .from(topics)
@@ -1294,9 +1272,6 @@ export class TopicModel {
           eq(topics.agentId, agentId),
           isNotNull(topics.shareId),
           sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'operationId', '') <> ''`,
-          revocationGeneration === undefined
-            ? undefined
-            : sql`COALESCE((${topics.metadata} -> 'runningOperation' ->> 'shareGeneration')::int, 0) < ${revocationGeneration}`,
         ),
       );
 

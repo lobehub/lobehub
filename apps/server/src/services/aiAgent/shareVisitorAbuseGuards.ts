@@ -10,55 +10,35 @@ import type { CreateTopicParams } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
 import type { TopicItem } from '@/database/schemas';
 import { agentShares } from '@/database/schemas';
-import { readAgentShareGeneration } from '@/database/utils/agentShareGeneration';
 
 /**
- * Re-validate the share is still `link` AND still on the generation the
- * caller observed, from INSIDE the same `agents.id FOR UPDATE` transaction
- * `AgentShareModel.lockOwnedAgentRow` just took (see `shareVisitorAbuseGuards.ts:100`).
+ * Re-validate the share is still `link`, from INSIDE the same `agents.id FOR
+ * UPDATE` transaction `AgentShareModel.lockOwnedAgentRow` just took (see
+ * `shareVisitorAbuseGuards.ts:100`).
  *
  * WHY this must run BEFORE the topic/message INSERT the two guard functions
- * below perform, not only later in `AgentShareModel.assertRunnableForVisitor`:
- * that method re-validates right before `createOperation`, but by then the
- * topic and the visitor's user message it guards are already persisted — a
- * rejection there does not by itself unwind them (see
- * `AiAgentService.execAgentWithReservation`'s `cleanupRejectedShareVisitorTurn`
- * for the defense-in-depth that covers the remaining, unavoidable window
- * between this check and that one). Checking HERE, before any row exists,
- * means an owner who makes the link private — or disables and republishes it,
- * see below — while a visitor's request is mid-flight never gets ANY row
- * written under the stale authorization in the first place;
- * `assertRunnableForVisitor` is a second gate, not the only one.
+ * below perform: checking HERE, before any row exists, means an owner who
+ * makes the link private while a visitor's request is mid-flight never gets
+ * ANY row written under the stale authorization in the first place — rather
+ * than relying solely on the plain visibility recheck `AiAgentService`
+ * performs right before `createOperation` (by which point the topic and the
+ * visitor's user message would already be persisted; see
+ * `cleanupRejectedShareVisitorTurn`'s defense-in-depth for the remaining,
+ * unavoidable window between this check and that one).
  *
- * `expectedGeneration`, not merely `visibility === 'link'`, is what closes the
- * disable → re-enable race: `AgentShareModel.create()` mints a brand new
- * `agentShares.id` every disable → re-enable cycle, so a stale request that
- * started under the OLD instance would otherwise pass a bare visibility check
- * (the NEW instance is also `link`) and get `readCurrentVisitorCaps`'s
- * freshly-read `shareId` stamped onto it — silently re-filing a
- * pre-revocation conversation under the REPLACEMENT share. Both
- * `updateVisibility('private')` and `deleteByAgentId` bump
- * `agentShareGenerations` unconditionally (see their JSDoc in
- * `packages/database/src/models/agentShare.ts`), so the generation a visitor
- * observed at `findByShareIdWithAccessCheck` time can never still match after
- * either. Fail closed on any mismatch or non-`link` visibility.
+ * A disable → re-enable cycle mints a brand new `agentShares.id`; a stale
+ * request that started under the OLD instance is not distinguished here from
+ * one against the freshly-recreated instance beyond the plain `visibility ===
+ * 'link'` check. Accepted tradeoff: the plain visibility check is the sole
+ * gate for this race.
  */
-const assertShareStillAuthorized = async (
-  tx: LobeChatDatabase,
-  agentId: string,
-  expectedGeneration: number,
-): Promise<void> => {
+const assertShareStillAuthorized = async (tx: LobeChatDatabase, agentId: string): Promise<void> => {
   const [share] = await tx
     .select({ visibility: agentShares.visibility })
     .from(agentShares)
     .where(eq(agentShares.agentId, agentId));
 
   if (share?.visibility !== 'link') {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
-  }
-
-  const currentGeneration = await readAgentShareGeneration(tx, agentId);
-  if (currentGeneration !== expectedGeneration) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
   }
 };
@@ -78,8 +58,7 @@ const assertShareStillAuthorized = async (
  *
  * `AgentShareModel.lockOwnedAgentRow` takes `FOR UPDATE` on the SAME
  * `agents.id` row every other share-mutation path locks (`create`,
- * `updateConfig`, `updateVisibility`, `deleteByAgentId`,
- * `assertRunnableForVisitor` — see that method's JSDoc and
+ * `updateConfig`, `updateVisibility`, `deleteByAgentId` — see
  * `withOwnedPersonalAgentLock`'s JSDoc for the full family). The recount and
  * the INSERT both run inside that one locked transaction, so whichever of two
  * concurrent callers loses the lock re-reads the FIRST caller's
@@ -111,9 +90,7 @@ const assertShareStillAuthorized = async (
  * never affect requests already past the initial read, since the locked
  * recount would keep enforcing the OLD, higher number it was handed. Reading
  * fresh here means the recount always compares against whatever the owner
- * has configured right now. See `readCurrentVisitorCaps`'s JSDoc and
- * `isConfigTightening`'s JSDoc (`AgentShareModel`) for why this fix, not a
- * generation bump, is the correct one for these two fields.
+ * has configured right now. See `readCurrentVisitorCaps`'s JSDoc.
  */
 export const reserveShareVisitorTopicOrThrow = async (params: {
   agentId: string;
@@ -127,19 +104,11 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
    */
   create: (topicModel: TopicModel, shareId: string) => Promise<TopicItem>;
   db: LobeChatDatabase;
-  /**
-   * The `agentShareGenerations` value the caller observed alongside the
-   * `shareConfig`/`shareId` it resolved this request against
-   * (`AgentShareGate.generation`) — re-checked fresh under this same row
-   * lock via {@link assertShareStillAuthorized} before anything is inserted.
-   * See that function's JSDoc for the stale-authorization insert this closes.
-   */
-  expectedGeneration: number;
   ownerId: string;
   visitorUserId: string;
   workspaceId?: string;
 }): Promise<TopicItem> => {
-  const { agentId, create, db, expectedGeneration, ownerId, visitorUserId, workspaceId } = params;
+  const { agentId, create, db, ownerId, visitorUserId, workspaceId } = params;
 
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
@@ -153,9 +122,9 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     }
 
     // Fail closed BEFORE any row is written — see `assertShareStillAuthorized`'s
-    // JSDoc for why this must run here and not only later, in
-    // `assertRunnableForVisitor`.
-    await assertShareStillAuthorized(tx, agentId, expectedGeneration);
+    // JSDoc for why this must run here and not only later, in the plain
+    // pre-run visibility recheck in `AiAgentService.execAgent`.
+    await assertShareStillAuthorized(tx, agentId);
 
     // Fresh read under the lock, not a caller-supplied value — see this
     // function's JSDoc and `readCurrentVisitorCaps`'s JSDoc for the
@@ -198,7 +167,6 @@ export const reserveShareVisitorTopic = (
   params: {
     agentId: string;
     db: LobeChatDatabase;
-    expectedGeneration: number;
     ownerId: string;
     visitorUserId: string;
     workspaceId?: string;
@@ -221,7 +189,7 @@ export const reserveShareVisitorTopic = (
  * Structurally the same race as {@link reserveShareVisitorTopicOrThrow}:
  * `shareChat.ts` pre-checks `MessageModel.countByTopic` against the cap
  * before dispatch, but the actual user-message INSERT happens later, deep in
- * `execAgentWithReservation`, on a separate statement with nothing
+ * `AiAgentService.execAgent`, on a separate statement with nothing
  * serializing the two. A burst of concurrent sends to the SAME topic can all
  * pass the pre-check and all insert, exceeding `maxTurnsPerTopic` by an
  * arbitrary amount. Fixed as a class — every count-then-act guard here takes
@@ -241,10 +209,7 @@ export const reserveShareVisitorTopic = (
  * is coarser contention (this now serializes against every OTHER topic's
  * turn-reservation and topic-reservation for the same agent, not just this
  * one topic's), which is acceptable: these transactions are a single
- * count-then-insert each, no external I/O, and `assertRunnableForVisitor`
- * already takes this exact row lock once per run start on the very same
- * request path — this is not a new contention point, only the same one
- * applied consistently.
+ * count-then-insert each, no external I/O.
  *
  * Same stale-snapshot fix as {@link reserveShareVisitorTopicOrThrow}: the cap
  * is read fresh via `AgentShareModel.readCurrentVisitorCaps` from inside this
@@ -257,16 +222,13 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
   agentId: string;
   create: (messageModel: MessageModel) => Promise<DBMessageItem | undefined>;
   db: LobeChatDatabase;
-  /** See {@link reserveShareVisitorTopicOrThrow}'s `expectedGeneration` param JSDoc. */
-  expectedGeneration: number;
   ownerId: string;
   topicId: string;
   /** See {@link reserveShareVisitorTopicOrThrow}'s `visitorUserId` — the message row is theirs. */
   visitorUserId: string;
   workspaceId?: string;
 }): Promise<DBMessageItem | undefined> => {
-  const { agentId, create, db, expectedGeneration, ownerId, topicId, visitorUserId, workspaceId } =
-    params;
+  const { agentId, create, db, ownerId, topicId, visitorUserId, workspaceId } = params;
 
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
@@ -279,9 +241,9 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
     }
 
     // Fail closed BEFORE any row is written — see `assertShareStillAuthorized`'s
-    // JSDoc for why this must run here and not only later, in
-    // `assertRunnableForVisitor`.
-    await assertShareStillAuthorized(tx, agentId, expectedGeneration);
+    // JSDoc for why this must run here and not only later, in the plain
+    // pre-run visibility recheck in `AiAgentService.execAgent`.
+    await assertShareStillAuthorized(tx, agentId);
 
     // Fresh read under the lock, not a caller-supplied value — see this
     // function's JSDoc for the stale-cap flood this closes.
@@ -308,7 +270,6 @@ export const reserveShareVisitorTurn = (
   params: {
     agentId: string;
     db: LobeChatDatabase;
-    expectedGeneration: number;
     ownerId: string;
     topicId: string;
     visitorUserId: string;

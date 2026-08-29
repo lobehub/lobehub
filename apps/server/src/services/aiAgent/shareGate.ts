@@ -34,29 +34,17 @@ const PLUGIN_SCHEMA_SEPARATOR = '____';
  *
  * Built exclusively by the shareChat router after the share access check —
  * never from client input. The gate is applied at operation-build time inside
- * `AiAgentService.execAgentWithReservation`, so the restricted tool/memory/file
+ * `AiAgentService.execAgentInternal`, so the restricted tool/memory/file
  * surface is snapshotted into the operation state and every later step
  * inherits it without the context engine knowing about shares.
  */
 export interface AgentShareGate {
   agentId: string;
-  /**
-   * The `agentShareGenerations` value observed alongside `shareConfig` above,
-   * at the SAME read (`AgentShareModel.findByShareId`, via `shareChat.ts`'s
-   * `findByShareIdWithAccessCheck`). `shareConfig` is snapshotted into this
-   * run's runtime state for its whole lifetime, so nothing downstream
-   * re-reads it — this value is what lets `assertRunnableForVisitor` detect,
-   * right before the operation is actually created, that the config this run
-   * is about to execute with has since been tightened (the generation moved
-   * on) and fail closed instead of starting with a stale, over-broad grant.
-   * See `agentShareGenerations`'s JSDoc (`packages/database/src/schemas/agentShare.ts`).
-   */
-  generation: number;
   shareConfig: AgentShareConfig;
   /**
    * The `agentShares.id` this run was authorized against — the SAME read
    * (`AgentShareModel.findByShareId`, via `findByShareIdWithAccessCheck`) as
-   * `generation`/`shareConfig` above. Used for AUTHORIZATION comparisons
+   * `shareConfig` above. Used for AUTHORIZATION comparisons
    * against `topics.shareId` (e.g. `shareChat.ts`'s `findVisitorTopicOrThrow`,
    * the topic-reference tool's `isTopicVisibleToRun`) — a topic stamped with a
    * DIFFERENT share id belongs to a share instance the owner has since

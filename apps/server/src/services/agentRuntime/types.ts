@@ -180,15 +180,6 @@ export interface AgentExecutionParams {
    * via `tryResumeParentFromAsyncTool`.
    */
   resumeAsyncTool?: boolean;
-  /**
-   * 1-based attempt number carried by a re-delivery that the Agent Share
-   * step-0 confirmation gate scheduled after finding its signal not yet
-   * resolvable (a transient state-store read failure, or a reservation still
-   * pending `confirmReservation`). Bounds how long the gate defers before
-   * failing closed — see `AgentRuntimeService.abortUnconfirmedShareRun`'s
-   * JSDoc. Absent (treated as attempt 0) on the original delivery.
-   */
-  shareGateRetryAttempt?: number;
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
@@ -221,29 +212,6 @@ export interface AgentExecutionResult {
    */
   lockRescheduled?: boolean;
   nextStepScheduled: boolean;
-  /**
-   * Set when the Agent Share step-0 confirmation gate could not yet resolve
-   * (a transient state-store read failure, or a reservation still pending
-   * `confirmReservation`) and re-queued itself for a bounded retry instead of
-   * executing unconfirmed or aborting immediately. Callers should ACK (2xx),
-   * mirroring `lockRescheduled` — the redelivery is already scheduled on our
-   * own backoff.
-   */
-  shareGateDeferred?: boolean;
-  /**
-   * Set when the Agent Share step-0 gate exhausted its own bounded retry
-   * budget WITHOUT ever successfully reading agent state — so it has neither
-   * `agentId`/`topicId` to invalidate-or-verify the reservation through
-   * `resolveShareGateAbort`, nor a state object it could durably persist
-   * `interrupted` onto (its `interruptOperation` fallback would just hit the
-   * same failing read). Unlike `shareGateDeferred` (which re-queues on our
-   * own backoff and wants an ACK), callers should return a retryable (non-2xx)
-   * response here — mirroring the `locked` (without `lockRescheduled`)
-   * fallback — so the queue's OWN retry budget keeps redelivering step 0
-   * until the state store recovers and the gate can make its real decision.
-   * See `AgentRuntimeService.deferShareGateStep`'s JSDoc.
-   */
-  shareGateStateUnavailable?: boolean;
   state: any;
   stepResult?: any;
   success: boolean;
@@ -425,17 +393,6 @@ export interface OperationCreationParams {
     allowReadMemory?: boolean;
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
-    /**
-     * The `agentShareGenerations` value this run was authorized under
-     * (`AgentShareGate.generation`, captured once at `shareChat.ts`'s
-     * `findByShareIdWithAccessCheck` and re-verified at reservation stake
-     * time). Persisted here so `AgentRuntimeService.executeStep` can re-check
-     * it against the CURRENT value on every step, not only step 0 — see
-     * `AgentShareModel.isRunStillAuthorized`'s JSDoc for why a per-step
-     * recheck is what actually closes the leak from a failed,
-     * unretried `interruptActiveShareRuns` interrupt.
-     */
-    generation: number;
     knowledgeBaseIds?: string[];
     /** The `agentShares.id` this run was authorized against — see `AgentRuntimeContext.agentShare`'s JSDoc (`../../modules/AgentRuntime/context.ts`). */
     shareId: string;

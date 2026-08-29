@@ -59,7 +59,6 @@ import {
 
 const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): AgentShareGate => ({
   agentId: 'agent-1',
-  generation: 1,
   shareId: 'share-1',
   shareConfig: {
     maxTopicsPerVisitor: 5,

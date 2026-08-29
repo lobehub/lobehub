@@ -83,7 +83,6 @@ import {
 } from '../utils/agentKnowledgeMounts';
 import { rehomeAgentLabelsForRecipient } from '../utils/agentLabelsOwnership';
 import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBindings';
-import { bumpAgentShareGeneration } from '../utils/agentShareGeneration';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
@@ -245,7 +244,7 @@ export interface AgentModelOptions {
    * must key on it instead. See `TopicModel.findActiveVisitorRunTopics`'s
    * JSDoc for the double-transfer window this avoids.
    */
-  onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  onShareReset?: (agentId: string) => void;
 
   /**
    * Called with the snapshot of Agent Share visitor runs that were still
@@ -267,7 +266,7 @@ export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
-  private onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  private onShareReset?: (agentId: string) => void;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
@@ -2245,7 +2244,7 @@ export class AgentModel {
     // `onShareReset` once per reset agent. Same commit-then-notify split as
     // `writeAgentConfigWithShareReset`: interrupting a runtime operation is a
     // side effect that must never fire on a rolled-back transfer.
-    const shareResetGenerations = new Map<string, number>();
+    const shareResetAgentIds = new Set<string>();
 
     const result = await this.db.transaction(async (trx) => {
       // 1. Verify all agents exist and belong to current scope. FOR UPDATE so
@@ -2266,21 +2265,16 @@ export class AgentModel {
       // Reset it before leaving that scope so moving the same agent back later
       // cannot silently reactivate a previously distributed URL.
       //
-      // Routed through the SAME generation-bump + `onShareReset` contract
-      // every other restrictive share write uses (`writeAgentConfigWithShareReset`,
+      // Routed through the SAME `onShareReset` contract every other
+      // restrictive share write uses (`writeAgentConfigWithShareReset`,
       // `AgentShareModel.updateVisibility` / `deleteByAgentId`) instead of a
-      // bare visibility flip: without bumping `agentShareGenerations`, a
-      // reservation staked (`AgentShareModel.assertRunnableForVisitor`) or an
-      // operation already running under the pre-transfer grants would survive
-      // the move — `revokeReservations` / `findActiveVisitorRunTopics` only
-      // sweep generations strictly older than the one a revocation bumps TO,
-      // so a bare flip with no bump leaves them nothing to match. The row
-      // lock on `agents` taken in step 1 above (still held here, same `trx`)
-      // is what `bumpAgentShareGeneration` requires. `.returning()` +
-      // `ne(visibility, 'private')` mirror `writeAgentConfigWithShareReset`'s
-      // own guard: only an ACTUAL transition schedules a post-commit
-      // interrupt, so a share that was already private (or never existed)
-      // never pays for one.
+      // bare visibility flip: an operation already running under the
+      // pre-transfer grants is torn down by the caller's one-shot
+      // `findActiveVisitorRunTopics` interrupt, scheduled by that same
+      // callback. `.returning()` + `ne(visibility, 'private')` mirror
+      // `writeAgentConfigWithShareReset`'s own guard: only an ACTUAL
+      // transition schedules a post-commit interrupt, so a share that was
+      // already private (or never existed) never pays for one.
       if (!this.workspaceId && targetWorkspaceId) {
         const resetShares = await trx
           .update(agentShares)
@@ -2289,10 +2283,7 @@ export class AgentModel {
           .returning({ agentId: agentShares.agentId });
 
         for (const { agentId: resetAgentId } of resetShares) {
-          shareResetGenerations.set(
-            resetAgentId,
-            await bumpAgentShareGeneration(trx, resetAgentId),
-          );
+          shareResetAgentIds.add(resetAgentId);
         }
       }
 
@@ -2754,14 +2745,14 @@ export class AgentModel {
     });
 
     // Fired only after the transaction above has committed, once per agent
-    // whose share was actually reset — see `shareResetGenerations`'s JSDoc
+    // whose share was actually reset — see `shareResetAgentIds`'s JSDoc
     // above and `writeAgentConfigWithShareReset`'s `onShareReset` timing. NO
     // `targetWorkspaceId` — the post-commit interrupt re-queries by `agentId`
     // alone now, so it stays correct even if the agent is transferred AGAIN
     // before the deferred callback runs. See `AgentModelOptions.onShareReset`'s
     // JSDoc.
-    for (const [resetAgentId, revocationGeneration] of shareResetGenerations) {
-      this.onShareReset?.(resetAgentId, revocationGeneration);
+    for (const resetAgentId of shareResetAgentIds) {
+      this.onShareReset?.(resetAgentId);
     }
 
     return result;

@@ -109,27 +109,22 @@ export const topics = pgTable(
      * those stale topics against the brand-new share, potentially making it
      * unusable immediately.
      *
-     * Deliberately NOT `agentShareGenerations.generation`: that counter is
-     * bumped by ANY restrictive `shareConfig` change on a still-`link` share
-     * (`AgentShareModel.isConfigTightening` — e.g. dropping a tool), not only
-     * by a disable/re-enable cycle. Scoping visitor topics by generation
-     * would wrongly reset a visitor's history and cap every time the owner
-     * merely tightened permissions on the SAME live link, which is not the
-     * "new share instance" case this column exists for. `shareId` answers
-     * "which share row was live when I created this topic"; `generation`
-     * answers a different question — "which grants/runs are still valid
-     * right now" — see `agentShareGenerations`'s JSDoc
-     * (`./agentShare.ts`).
+     * `shareId` only pins the SHARE INSTANCE a topic was created under — it
+     * does not track whether that instance's grants are still current. A
+     * topic keeps its original `shareId` for its whole life even if the
+     * owner later tightens or loosens the same live `link` share's config;
+     * only a disable/re-enable cycle (which mints a brand-new `agentShares.id`
+     * via `create()`) actually changes which instance a NEW topic is stamped
+     * with. So a stale topic from a previous share instance simply keeps a
+     * dangling old id after the owner disables and re-enables sharing — it is
+     * never rewritten to point at the new instance.
      *
      * No FK to `agentShares.id`: that row is hard-deleted on every disable
      * (see above), so a live reference is neither expected nor desired to
      * survive — this column is a point-in-time marker, not a live
-     * relationship. (A cross-file FK would also create a schema import
-     * cycle with `./agentShare.ts`, which itself references `./topic.ts`
-     * for `agentShareRunReservations.topicId`.) `NULL` for regular
-     * (non-share) conversations and for visitor topics created before this
-     * column existed — see the backfill migration for how pre-existing rows
-     * are handled.
+     * relationship. `NULL` for regular (non-share) conversations and for
+     * visitor topics created before this column existed — see the backfill
+     * migration for how pre-existing rows are handled.
      */
     shareId: uuid('share_id'),
 

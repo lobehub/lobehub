@@ -8,8 +8,7 @@ const source = readFileSync(new URL('./agentShare.ts', import.meta.url), 'utf8')
 describe('AgentShareModel mutation locking', () => {
   it('locks the owned Agent row before every share mutation', () => {
     expect(source).toContain(".for('update')");
-    // create, updateConfig, updateVisibility, deleteByAgentId, and
-    // assertRunnableForVisitor.
-    expect(source.match(/this\.withOwnedPersonalAgentLock\(/g)).toHaveLength(5);
+    // create, updateConfig, updateVisibility, and deleteByAgentId.
+    expect(source.match(/this\.withOwnedPersonalAgentLock\(/g)).toHaveLength(4);
   });
 });

@@ -79,7 +79,6 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
       Array.from({ length: CONCURRENT_REQUESTS }, (_, i) =>
         reserveShareVisitorTopicOrThrow({
           agentId,
-          expectedGeneration: 1,
           create: (topicModel, shareId) =>
             topicModel.create({ agentId, shareId, title: `topic-${i}` }),
           db: serverDB,
@@ -127,7 +126,6 @@ describe('reserveShareVisitorTopicOrThrow / reserveShareVisitorTurnOrThrow — s
       Array.from({ length: CONCURRENT_REQUESTS }, (_, i) =>
         reserveShareVisitorTurnOrThrow({
           agentId,
-          expectedGeneration: 1,
           create: (messageModel) =>
             messageModel.create({
               agentId,

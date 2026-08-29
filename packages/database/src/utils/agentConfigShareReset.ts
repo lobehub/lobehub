@@ -5,7 +5,6 @@ import { and, eq, ne } from 'drizzle-orm';
 
 import { agents, agentShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { bumpAgentShareGeneration } from './agentShareGeneration';
 
 interface HeterogeneityCheckInput {
   agencyConfig?: LobeAgentAgencyConfig | null;
@@ -33,13 +32,8 @@ interface WriteAgentConfigWithShareResetParams {
    * `agentShareRouter.disableShare` / `updateVisibility` already do for
    * explicit revocation.
    *
-   * `revocationGeneration` is the EXACT value this function itself just
-   * bumped `agentShareGenerations` to as part of the SAME transaction as the
-   * reset — pass it straight through to `interruptActiveShareRuns`, never a
-   * value re-read at callback time. See `agentShareGenerations`'s JSDoc
-   * (`../schemas/agentShare.ts`) and that method's JSDoc for why.
    */
-  onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  onShareReset?: (agentId: string) => void;
   /** Post-merge `model` / `agencyConfig` that the write is about to persist. */
   resultingConfig: HeterogeneityCheckInput;
   /** Whether this write touches `model` or `agencyConfig` — skip the heterogeneity check otherwise, so a plain title/plugin/etc. update never pays for the extra query. */
@@ -92,13 +86,12 @@ export async function writeAgentConfigWithShareReset(
   const mayNeedShareReset =
     touchesHeterogeneityFields && isHeterogeneousAgentConfig(resultingConfig);
 
-  const { didResetShare, revocationGeneration, updated } = await db.transaction(async (trx) => {
+  const { didResetShare, updated } = await db.transaction(async (trx) => {
     await trx.select({ id: agents.id }).from(agents).where(where).for('update');
 
     const [updated] = await trx.update(agents).set(updateData).where(where).returning();
 
     let didResetShare = false;
-    let revocationGeneration: number | undefined;
     // `updated` undefined means the ownership-scoped `where` matched no agent
     // row — the caller was not authorized to touch this agent, so it must not
     // be able to flip someone else's live share to private via the bare
@@ -117,21 +110,15 @@ export async function writeAgentConfigWithShareReset(
         .where(and(eq(agentShares.agentId, agentId), ne(agentShares.visibility, 'private')))
         .returning({ agentId: agentShares.agentId });
       didResetShare = resetRows.length > 0;
-
-      // Bumped in the SAME transaction as the reset above (still holding the
-      // `agents.id FOR UPDATE` lock taken at the top of this function) — see
-      // `bumpAgentShareGeneration`'s JSDoc for why every writer/reader of
-      // this counter must share that lock.
-      if (didResetShare) revocationGeneration = await bumpAgentShareGeneration(trx, agentId);
     }
 
-    return { didResetShare, revocationGeneration, updated: updated ?? null };
+    return { didResetShare, updated: updated ?? null };
   });
 
   // Fired only after the transaction above has committed — `onShareReset`
   // callers schedule runtime side effects (device gateway calls, operation
   // interrupts) that must never fire on a rollback. See this param's JSDoc.
-  if (didResetShare) onShareReset?.(agentId, revocationGeneration!);
+  if (didResetShare) onShareReset?.(agentId);
 
   return updated;
 }

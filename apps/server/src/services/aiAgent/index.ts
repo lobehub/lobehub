@@ -161,8 +161,6 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   EvalRuntimeContext,
-  ShareReservationInvalidationOutcome,
-  ShareReservationStatus,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -795,9 +793,6 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
-        verifyShareReservationStatus: this.verifyShareReservationStatus,
-        verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
-        invalidatePendingShareReservation: this.invalidatePendingShareReservation,
       },
       workspaceId: wsId,
     });
@@ -1547,7 +1542,7 @@ export class AiAgentService {
     };
 
     try {
-      return await this.execAgentWithReservation(params, approvalClaim);
+      return await this.execAgentInternal(params, approvalClaim);
     } finally {
       if (
         !approvalClaim.continuationPrepared &&
@@ -1622,7 +1617,7 @@ export class AiAgentService {
     };
   }
 
-  private async execAgentWithReservation(
+  private async execAgentInternal(
     params: InternalExecAgentParams,
     approvalClaim: {
       continuationPrepared: boolean;
@@ -2688,7 +2683,6 @@ export class AiAgentService {
             {
               agentId: resolvedAgentId,
               db: this.db,
-              expectedGeneration: shareGate.generation,
               ownerId: this.principal.resourceOwnerUserId,
               visitorUserId: shareGate.visitorUserId,
               workspaceId: this.workspaceId,
@@ -2861,7 +2855,6 @@ export class AiAgentService {
             {
               agentId: shareGate.agentId,
               db: this.db,
-              expectedGeneration: shareGate.generation,
               ownerId: this.principal.resourceOwnerUserId,
               topicId,
               visitorUserId: shareGate.visitorUserId,
@@ -5636,15 +5629,6 @@ export class AiAgentService {
       operationSkillSet?.skills?.length ?? 0,
     );
 
-    // Constructed outside the try so the catch block below can release an
-    // in-flight reservation on ANY failure path between
-    // `assertRunnableForVisitor` staking it and `confirmReservation`
-    // redeeming it (e.g. `createOperation` throwing) — see
-    // `agentShareRunReservations`'s JSDoc.
-    const agentShareModel = shareGate
-      ? new AgentShareModel(this.db, this.principal.resourceOwnerUserId)
-      : undefined;
-
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
@@ -5658,24 +5642,22 @@ export class AiAgentService {
       // dispatch it guards, and NOT earlier — so a rejection lands in the
       // SAME error path `createOperation` failures already use (message
       // updated with an error card, no operation created), instead of a raw
-      // unhandled throw. See `AgentShareModel.assertRunnableForVisitor`'s
-      // JSDoc for the exact race this closes.
+      // unhandled throw.
       //
-      // Also stakes the durable `agentShareRunReservations` claim that
-      // `confirmReservation` below redeems — see that method's JSDoc for why
-      // this pair (not a bounded retry) is what actually closes the window
-      // between this recheck and the operation being fully stood up.
-      if (shareGate && agentShareModel) {
-        await agentShareModel.assertRunnableForVisitor({
-          agentId: shareGate.agentId,
-          // See `AgentShareGate.generation`'s JSDoc — fails closed if a
-          // tightening committed between `shareGate` being resolved and this
-          // recheck.
-          expectedGeneration: shareGate.generation,
-          operationId,
-          topicId,
-          visitorUserId: shareGate.visitorUserId,
-        });
+      // This is a plain, unlocked re-read — a ONE-SHOT recheck, not a durable
+      // staking mechanism. A revoke that lands strictly between this read and
+      // `createOperation` finishing can still let the run start; the owner-side
+      // `interruptActiveShareRuns` one-shot sweep (see its JSDoc) is what stops
+      // an already-started run in that case. That race is an accepted tradeoff.
+      if (shareGate) {
+        const share = await new AgentShareModel(
+          this.db,
+          this.principal.resourceOwnerUserId,
+        ).getByAgentId(shareGate.agentId);
+
+        if (share?.visibility !== 'link') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+        }
       }
 
       const result = await this.agentRuntimeService.createOperation({
@@ -5701,14 +5683,6 @@ export class AiAgentService {
               // `BuiltinToolsExecutor` can re-check the knowledge-base /
               // agent-documents tools' grant at dispatch time.
               filePermissionConfig: shareGate.shareConfig.filePermissionConfig,
-              // Snapshot of `agentShareGenerations` this run was authorized
-              // under — see `OperationCreationParams['agentShare'].generation`'s
-              // JSDoc. Re-read (not reused) on every step by
-              // `AgentRuntimeService.executeStep` via
-              // `AgentShareModel.isRunStillAuthorized` so a restrictive change
-              // committed mid-run is caught at the next step boundary instead
-              // of only at creation time.
-              generation: shareGate.generation,
               // Sourced from the agent's OWN persisted assignment
               // (`agentConfig.knowledgeBases`, already gated by
               // `applyShareGateToAgentConfig` above — empty unless
@@ -5879,49 +5853,9 @@ export class AiAgentService {
           threadId: appContext?.threadId ?? undefined,
         };
 
-        if (shareGate && agentShareModel) {
-          // Redeem the reservation staked above, ATOMICALLY with this marker
-          // write (same DB transaction — see `confirmReservation`'s JSDoc).
-          // `false` means a revoke landed and durably claimed this
-          // reservation first: fail closed — tear down everything
-          // `createOperation` already stood up (gateway registration, saved
-          // state, scheduled queue message) instead of letting the operation
-          // run unstoppably under the creator's budget.
-          const confirmed = await agentShareModel.confirmReservation({
-            operationId,
-            runningOperation: runningOperationMarker,
-            topicId,
-          });
-
-          if (!confirmed) {
-            await this.agentRuntimeService
-              .interruptOperation(operationId)
-              .catch((error) =>
-                log(
-                  'execAgent: interruptOperation failed while tearing down a revoked share reservation, operationId=%s: %O',
-                  operationId,
-                  error,
-                ),
-              );
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
-          }
-        } else {
-          await this.topicModel.updateMetadata(topicId, {
-            runningOperation: runningOperationMarker,
-          });
-        }
-      } else if (shareGate && agentShareModel) {
-        // Share-visitor runs are never isolation-thread children or
-        // topic-start-owned continuations today (`shareGate` is not
-        // propagated into `callAgent`/`callSubAgent`/group-member dispatch —
-        // see `execAgent`'s call sites). If that invariant ever breaks, fail
-        // closed rather than silently leaving the reservation both
-        // unconfirmed and unreleased, which would make it neither
-        // interruptible via the topic marker nor cleanable.
-        await agentShareModel.releaseReservation(operationId);
-        throw new Error(
-          'Agent Share visitor run unexpectedly skipped the runningOperation marker write; reservation released defensively.',
-        );
+        await this.topicModel.updateMetadata(topicId, {
+          runningOperation: runningOperationMarker,
+        });
       }
 
       // Generate a short-lived JWT for Gateway WebSocket authentication. It is
@@ -5958,22 +5892,6 @@ export class AiAgentService {
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     } catch (error) {
-      // Best-effort, idempotent: no-ops if `confirmReservation` already
-      // deleted the row (success path throwing later) or if
-      // `assertRunnableForVisitor` never inserted one (rejected before
-      // reaching that point). See the declaration above for why this lives
-      // outside the try.
-      if (agentShareModel) {
-        await agentShareModel
-          .releaseReservation(operationId)
-          .catch((releaseError) =>
-            log(
-              'execAgent: releaseReservation failed for operationId=%s: %O',
-              operationId,
-              releaseError,
-            ),
-          );
-      }
       if (params.topicStartOwnerOperationId) {
         await this.topicModel.removeRunningOperationChild(topicId, operationId).catch(() => false);
       }
@@ -5982,15 +5900,14 @@ export class AiAgentService {
       // disable → re-enable cycle, which mints a brand new `agentShares.id`)
       // strictly between this turn's `reserveShareVisitorTopic` /
       // `reserveShareVisitorTurn` (already revalidated up front — see their
-      // JSDoc) and this final `assertRunnableForVisitor` recheck /
-      // `confirmReservation` redemption. That gap cannot be closed by
-      // checking earlier: agent-config/tool/knowledge-base resolution between
-      // the two is real I/O. Unwind whatever THIS turn persisted rather than
-      // leaving a topic/user-message pair the owner never authorized
-      // reachable by the visitor (see `shareVisitorAbuseGuards.ts:100`).
-      // Rethrow unchanged so the caller
-      // (`shareChat.ts`) surfaces the real FORBIDDEN instead of the generic
-      // "operation failed to start" shape below.
+      // JSDoc) and this final plain visibility recheck right before
+      // `createOperation`. That gap cannot be closed by checking earlier:
+      // agent-config/tool/knowledge-base resolution between the two is real
+      // I/O. Unwind whatever THIS turn persisted rather than leaving a
+      // topic/user-message pair the owner never authorized reachable by the
+      // visitor (see `shareVisitorAbuseGuards.ts:100`). Rethrow unchanged so
+      // the caller (`shareChat.ts`) surfaces the real FORBIDDEN instead of the
+      // generic "operation failed to start" shape below.
       if (
         shareGate &&
         error instanceof TRPCError &&
@@ -6064,12 +5981,12 @@ export class AiAgentService {
 
   /**
    * Unwind the topic/message rows a share-visitor turn persisted before its
-   * final authorization recheck (`AgentShareModel.assertRunnableForVisitor` /
-   * `confirmReservation`) rejected the run as stale.
+   * final plain visibility recheck (right before `createOperation`) rejected
+   * the run as stale.
    *
    * This is defense-in-depth, not the primary fix: `reserveShareVisitorTopic`
    * / `reserveShareVisitorTurn` (`shareVisitorAbuseGuards.ts`) already
-   * revalidate visibility + generation BEFORE inserting, so a request that is
+   * revalidate visibility BEFORE inserting, so a request that is
    * ALREADY stale when it reaches them never creates these rows at all. This
    * method only covers the residual window between that revalidation and the
    * final recheck right before `createOperation` — agent-config/tool/
@@ -6178,104 +6095,6 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
-
-  /**
-   * `AgentRuntimeDelegate.verifyShareReservationStatus` implementation — see
-   * that interface member's JSDoc for the exact process-death window this
-   * closes at step-0 pickup, and for why the result is a tri-state.
-   *
-   * Checks the topic's `runningOperation` marker first (the same field
-   * run) — `this.topicModel.findById` scopes the lookup to
-   * `this.principal.actorUserId`, the VISITOR who owns the share conversation
-   * (see `packages/database/src/schemas/topic.ts`), matching
-   * `confirmReservation`'s own write. This is why `runStep.ts` rebuilds the
-   * full split principal from `state.metadata.agentShare` rather than an
-   * owner-only one: a creator-scoped `findById` would find nothing here and
-   * every step would read as "reservation gone". Only when the marker doesn't name this
-   * operation does it fall back to the `agent_share_run_reservations` row's
-   * existence (`hasPendingReservation`) to tell "still pending" apart from
-   * "revoked/swept/released" — the row alone cannot do this distinction
-   * because it is deleted on every terminal path, confirmed included.
-   *
-   * Arrow field (not a method) so it stays bound when handed to
-   * AgentRuntimeService.
-   */
-  verifyShareReservationStatus = async (params: {
-    agentId: string;
-    operationId: string;
-    topicId: string;
-  }): Promise<ShareReservationStatus> => {
-    const topic = await this.topicModel.findById(params.topicId);
-    const runningOperation = (topic?.metadata as ChatTopicMetadata | undefined)?.runningOperation;
-    if (runningOperation?.operationId === params.operationId) return 'confirmed';
-
-    const pending = await new AgentShareModel(
-      this.db,
-      this.principal.resourceOwnerUserId,
-    ).hasPendingReservation(params.operationId);
-    return pending ? 'pending' : 'revoked';
-  };
-
-  /**
-   * `AgentRuntimeDelegate.invalidatePendingShareReservation` implementation —
-   * see that interface member's JSDoc for the confirm-after-abort race this
-   * closes and why sharing `confirmReservation`'s own
-   * DELETE predicate is what makes this atomic.
-   *
-   * Two steps, in this order:
-   * 1. Try to delete the row while it is still `pending`
-   *    (`AgentShareModel.invalidateReservation`). If that succeeds, THIS call
-   *    won the race against any concurrent `confirmReservation` — the run is
-   *    genuinely being aborted, so `'invalidated'`.
-   * 2. If the row was already gone, the deleting transaction (whichever it
-   *    was) has already committed — re-run the SAME marker/row check
-   *    `verifyShareReservationStatus` uses to find out which. `'pending'`
-   *    cannot come back here (the row cannot un-delete itself), so only
-   *    `'confirmed'` / `'revoked'` are possible; the latter is reported as
-   *    `'gone'` to keep the two share-gate delegate methods' vocabularies
-   *    distinct (`'gone'` always means "nothing left to invalidate", never
-   *    "keep waiting").
-   *
-   * Arrow field (not a method) so it stays bound when handed to
-   * AgentRuntimeService.
-   */
-  invalidatePendingShareReservation = async (params: {
-    agentId: string;
-    operationId: string;
-    topicId: string;
-  }): Promise<ShareReservationInvalidationOutcome> => {
-    const invalidated = await new AgentShareModel(
-      this.db,
-      this.principal.resourceOwnerUserId,
-    ).invalidateReservation(params.operationId);
-    if (invalidated) return 'invalidated';
-
-    const status = await this.verifyShareReservationStatus(params);
-    return status === 'confirmed' ? 'confirmed' : 'gone';
-  };
-
-  /**
-   * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
-   * that interface member's and `AgentShareModel.isRunStillAuthorized`'s
-   * JSDoc for what "authorized" checks and why a per-step recheck (not only
-   * at step 0) is what actually closes the leak from a failed,
-   * unretried `interruptActiveShareRuns` interrupt: it no longer needs to be
-   * retried to be effective — the very next step re-proves authorization on
-   * its own and aborts if it can't.
-   *
-   * A plain top-level `db` read (not scoped to `this.principal.resourceOwnerUserId`/workspace):
-   * `agent_shares` has no ownership predicate applicable here — this call
-   * runs from inside the CREATOR's own runtime step, so `this.db` is already
-   * the correct connection.
-   *
-   * Arrow field (not a method) so it stays bound when handed to
-   * AgentRuntimeService.
-   */
-  verifyShareRunStillAuthorized = async (params: {
-    agentId: string;
-    generation: number;
-    shareId: string;
-  }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**
    * Execute an agent in an isolated Thread context.
@@ -7307,128 +7126,35 @@ export class AiAgentService {
    * stop the others from being attempted, and must never re-open the
    * already-committed revocation.
    *
-   * Queries ONCE, not on a bounded retry loop — the previous stopgap here
-   * polled `findActiveVisitorRunTopics` 4x/750ms to catch a request that
-   * passed its own live-visibility recheck (`AgentShareModel
-   * .assertRunnableForVisitor`) a moment earlier and finished creating its
-   * operation shortly after this function's first query. That window is not
-   * actually bounded by anything — `AgentRuntimeService.createOperation` does
-   * gateway registration, state persistence, and queue scheduling, any of
-   * which can outlast a fixed 3s window under load, letting the run start
-   * unstoppably anyway.
-   *
-   * This now relies on `AgentShareModel.revokeReservations` for durability
-   * instead: it revokes every reservation `assertRunnableForVisitor` staked
-   * (in the SAME locked transaction as the visibility check) BEFORE
-   * `createOperation`'s I/O begins, and — because that revoke and a
-   * concurrent `confirmReservation` both write the SAME row —
-   * `revokeReservations` cannot return until every reservation it could
-   * possibly race against has been resolved one way or the other (ordinary
-   * Postgres row locking, not a timing assumption). By the time it returns,
-   * `findActiveVisitorRunTopics` querying ONCE is guaranteed to see every
-   * operation that won that race and got as far as writing its
-   * `runningOperation` marker.
-   *
-   * `revocationGeneration` scopes BOTH steps below to runs that predate the
-   * triggering write, instead of every pending/running visitor operation on
-   * the agent: without it, an owner who revokes and then republishes before
-   * this `after()`-scheduled call actually runs would have this sweep
-   * revoke/interrupt runs the REPUBLISH legitimately authorized (they look
-   * identical to a stale one — same agentId, still pending/running — with
-   * only the generation telling them apart). Callers MUST pass the exact
-   * value the triggering write bumped `agentShareGenerations` to (see
-   * `agentShareGenerations`'s JSDoc), not a value re-read at call time.
+   * This is a ONE-SHOT sweep: it queries `findActiveVisitorRunTopics` once and
+   * interrupts whatever it finds. A run that is still standing up (between the
+   * router-level `findByShareIdWithAccessCheck` visibility check and this
+   * agent's operation/topic-marker write) can race past this and escape —
+   * that is an accepted tradeoff, not a bug this method tries to close.
    */
-  async interruptActiveShareRuns(agentId: string, revocationGeneration: number): Promise<void> {
-    const interruptedOperationIds = new Set<string>();
+  async interruptActiveShareRuns(agentId: string): Promise<void> {
+    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
+    if (activeRuns.length === 0) return;
 
-    const interrupt = async (
-      operationId: string,
-      topicId: string,
-      topicMetadata?: ChatTopicMetadata | null,
-    ) => {
-      if (interruptedOperationIds.has(operationId)) return;
-      interruptedOperationIds.add(operationId);
-      try {
-        await this.interruptTask({ operationId, topicId, topicMetadata });
-      } catch (error) {
-        // One bounded, in-process retry for a transient coordinator/database/
-        // runtime hiccup — cheap because it costs nothing beyond this
-        // already-running `after()` callback and needs no durable
-        // infrastructure. This is NOT what makes a missed interrupt safe:
-        // even though `/api/workflows/agent-share/sweep` IS invoked by the
-        // deployment's cron schedule, it only runs on a bounded interval
-        // (see `sweepAbandonedReservations`'s `maxAgeMs`), so leaning on it
-        // alone would leave a run unstoppable for up to that whole window if
-        // BOTH attempts here fail (or the process dies in between).
-        // The actual backstop is `AgentRuntimeService.executeStep` re-checking
-        // this run's share generation on every step
-        // (`AgentShareModel.isRunStillAuthorized`). This retry only shaves latency off remote-hetero
-        // task cancellation and Thread status settlement, which that
-        // per-step recheck does not cover (the runtime step loop is what it
-        // gates, not the remote process or the Thread row).
-        log(
-          'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s, retrying once: %O',
-          operationId,
-          topicId,
-          error,
-        );
+    log(
+      'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s)',
+      agentId,
+      activeRuns.length,
+    );
+
+    await Promise.all(
+      activeRuns.map(async ({ operationId, topicId, metadata }) => {
         try {
-          await this.interruptTask({ operationId, topicId, topicMetadata });
-        } catch (retryError) {
+          await this.interruptTask({ operationId, topicId, topicMetadata: metadata });
+        } catch (error) {
           log(
-            'interruptActiveShareRuns: retry failed to interrupt operationId=%s topicId=%s: %O',
+            'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
             operationId,
             topicId,
-            retryError,
+            error,
           );
         }
-      }
-    };
-
-    // 1. Revoke every reservation still standing up THAT PREDATES THIS
-    // REVOCATION (`generation < revocationGeneration`). Also try to
-    // interrupt each — most won't have registered with the runtime yet
-    // (harmless no-op via `interruptTask`), but some may have reached that
-    // point by the time this revoke wins the row-lock race.
-    const revokedReservations = await new AgentShareModel(
-      this.db,
-      this.principal.resourceOwnerUserId,
-    ).revokeReservations(agentId, revocationGeneration);
-    if (revokedReservations.length > 0) {
-      log(
-        'interruptActiveShareRuns: agentId=%s revoked %d pending reservation(s)',
-        agentId,
-        revokedReservations.length,
-      );
-    }
-    await Promise.all(
-      revokedReservations.map(({ operationId, topicId }) => interrupt(operationId, topicId)),
-    );
-
-    // 2. A single (not retried) query for already-confirmed/running
-    // operations THAT PREDATE THIS REVOCATION — safe per this method's
-    // JSDoc.
-    //
-    // `findActiveVisitorRunTopics` matches on `agentId` alone — no user or
-    // workspace scope. It has to: the conversations being stopped belong to
-    // their VISITORS, and this call runs from `after()`, by which time the
-    // agent may also have been transferred again. See that method's JSDoc.
-    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(
-      agentId,
-      revocationGeneration,
-    );
-    if (activeRuns.length > 0) {
-      log(
-        'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s)',
-        agentId,
-        activeRuns.length,
-      );
-    }
-    await Promise.all(
-      activeRuns.map(({ operationId, topicId, metadata }) =>
-        interrupt(operationId, topicId, metadata),
-      ),
+      }),
     );
   }
 

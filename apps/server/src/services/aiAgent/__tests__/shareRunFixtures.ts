@@ -25,7 +25,7 @@ export const SHARE_ID = 'share-1';
 export const buildShareGate = (params: {
   agentId: string;
   shareConfig?: Partial<AgentShareConfig>;
-}): Omit<AgentShareGate, 'generation'> => ({
+}): AgentShareGate => ({
   agentId: params.agentId,
   shareConfig: (params.shareConfig ?? {}) as AgentShareConfig,
   shareId: SHARE_ID,

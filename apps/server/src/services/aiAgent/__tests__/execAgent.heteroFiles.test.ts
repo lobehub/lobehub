@@ -142,7 +142,7 @@ vi.mock('@/database/models/topic', () => ({
 }));
 
 const agentShareMock = {
-  revokeReservations: vi.fn().mockResolvedValue([]),
+  getByAgentId: vi.fn().mockResolvedValue({ visibility: 'link' }),
 };
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: vi.fn().mockImplementation(() => agentShareMock),
@@ -1644,109 +1644,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       // Otherwise this child would never be recognized by
       // heteroIngest/heteroFinish at all.
       expect(findRunningOpSeed()).toBeDefined();
-    });
-  });
-
-  // Regression test: revoking an Agent Share must proactively stop
-  // every in-flight visitor run instead of only re-authorizing cancellation
-  // for a visitor who may no longer be present (closed tab).
-  describe('interruptActiveShareRuns', () => {
-    it('interrupts every active visitor run found for the agent', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
-        { operationId: 'op-1', topicId: 'topic-1' },
-        { operationId: 'op-2', topicId: 'topic-2' },
-      ]);
-      const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
-
-      await service.interruptActiveShareRuns('agent-1', 2);
-
-      // Agent-scoped and deliberately UNSCOPED by user/workspace — see
-      // `findActiveVisitorRunTopics`'s JSDoc: the runs it stops belong to
-      // visitors while the caller is the creator, and keying on `agentId`
-      // alone also covers the double-transfer window where an agent moves
-      // between workspaces.
-      expect(topicMock.findActiveVisitorRunTopics).toHaveBeenCalledWith('agent-1', 2);
-      expect(interruptTaskSpy).toHaveBeenCalledWith({
-        operationId: 'op-1',
-        topicId: 'topic-1',
-        topicMetadata: undefined,
-      });
-      expect(interruptTaskSpy).toHaveBeenCalledWith({
-        operationId: 'op-2',
-        topicId: 'topic-2',
-        topicMetadata: undefined,
-      });
-    });
-
-    it('passes each run’s already-fetched topic metadata straight through, skipping interruptTask’s own scoped re-fetch', async () => {
-      const runningOperation = { operationId: 'op-1' };
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
-        { metadata: { runningOperation }, operationId: 'op-1', topicId: 'topic-1' },
-      ]);
-      const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
-
-      await service.interruptActiveShareRuns('agent-1', 2);
-
-      expect(interruptTaskSpy).toHaveBeenCalledWith({
-        operationId: 'op-1',
-        topicId: 'topic-1',
-        topicMetadata: { runningOperation },
-      });
-      // `interruptTask` must not re-fetch by id when metadata was handed in.
-      expect(topicMock.findById).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when the agent has no active visitor run', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([]);
-      const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
-
-      await service.interruptActiveShareRuns('agent-1', 2);
-
-      expect(interruptTaskSpy).not.toHaveBeenCalled();
-    });
-
-    it('keeps interrupting the remaining runs when one interrupt fails on both attempts', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
-        { operationId: 'op-1', topicId: 'topic-1' },
-        { operationId: 'op-2', topicId: 'topic-2' },
-      ]);
-      const interruptTaskSpy = vi
-        .spyOn(service, 'interruptTask')
-        .mockImplementation(async ({ operationId }) => {
-          if (operationId === 'op-1') throw new Error('device gateway unreachable');
-          return { operationId, success: true };
-        });
-
-      await expect(service.interruptActiveShareRuns('agent-1', 2)).resolves.toBeUndefined();
-
-      // op-1: initial attempt + one retry, both failing; op-2: succeeds on the
-      // first attempt. See the regression below for the retry succeeding.
-      expect(interruptTaskSpy).toHaveBeenCalledTimes(3);
-      expect(interruptTaskSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ operationId: 'op-1' }),
-      );
-      expect(interruptTaskSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ operationId: 'op-2' }),
-      );
-    });
-
-    // Regression test: `interruptTask` rejecting on a
-    // transient failure must not be the end of the story for this run — the
-    // in-process retry here recovers it without waiting for the per-step
-    // authorization recheck in `AgentRuntimeService` (covered separately in
-    // `AgentRuntimeService.shareGeneration.test.ts`).
-    it('retries once and succeeds when the first interrupt attempt rejects', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
-        { operationId: 'op-1', topicId: 'topic-1' },
-      ]);
-      const interruptTaskSpy = vi
-        .spyOn(service, 'interruptTask')
-        .mockRejectedValueOnce(new Error('transient coordinator error'))
-        .mockResolvedValueOnce({ operationId: 'op-1', success: true });
-
-      await expect(service.interruptActiveShareRuns('agent-1', 2)).resolves.toBeUndefined();
-
-      expect(interruptTaskSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

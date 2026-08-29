@@ -10,9 +10,9 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * `AiAgentService.interruptTask` for every snapshotted Agent Share visitor
  * run after the deleting transaction commits.
  *
- * WHY this cannot just re-query and call `AiAgentService
- * .interruptActiveShareRuns(agentId, revocationGeneration)` like the
- * reset-path sibling
+ * WHY this cannot just re-query and call
+ * `AiAgentService.interruptActiveShareRuns(agentId)` like the reset-path
+ * sibling
  * (`scheduleShareRunInterruptOnReset`): resetting a share leaves the agent
  * and its topic rows in place, so re-querying them post-commit still finds
  * the same runs. Deleting the agent CASCADES those topic rows away in the
