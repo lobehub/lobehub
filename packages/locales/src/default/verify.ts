@@ -417,10 +417,8 @@ export default {
 
   'dock.confirm': 'Confirm & run',
   'dock.edit': 'Adjust checks',
-  'dock.forceDeliver': 'Ignore & deliver',
   'dock.repairHint':
     'The next round is fixing the failed checks. A new result is produced and the checker re-runs when it finishes.',
-  'dock.saveAndRepair': 'Save input & repair now',
   'dock.skip': 'Skip checks',
   'dock.title': 'Delivery Checker',
 
@@ -428,11 +426,6 @@ export default {
   'editor.cancel': 'Cancel',
   'editor.placeholder': 'Check title',
   'editor.save': 'Save',
-
-  'input.hint':
-    'This goes to the next repair round as checker input — it will not appear as a chat message.',
-  'input.label': 'Extra input for the next repair round',
-  'input.placeholder': 'e.g. run type-check first; if it still fails, just add a risk note.',
 
   'list.failedCount': '{{count}} failed',
   'list.running': 'Verifying…',
