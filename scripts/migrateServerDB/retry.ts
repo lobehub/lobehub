@@ -19,25 +19,27 @@ const isLockTimeoutError = (error: unknown): boolean => {
 };
 
 /**
- * Retries lock-sensitive migrations from a fresh Drizzle transaction.
+ * Retries a lock-sensitive database operation after PostgreSQL lock timeouts.
  *
- * PostgreSQL releases every DDL lock when a migration attempt rolls back, so retrying the whole
- * migrator is safer than waiting longer while earlier tables remain locked.
+ * Callers must ensure that each failed attempt either rolls back all partial changes before
+ * rejecting or is idempotent, because this helper invokes the operation again from its beginning.
+ * PostgreSQL releases transaction-scoped locks when an attempt rolls back, so retrying the whole
+ * operation is safer than waiting longer while earlier work remains locked.
  */
-export const runMigrationWithLockRetry = async (
-  migrate: () => Promise<void>,
+export const runWithLockRetry = async (
+  operation: () => Promise<void>,
   wait: Wait = defaultWait,
 ): Promise<void> => {
   for (let attempt = 0; ; attempt++) {
     try {
-      await migrate();
+      await operation();
       return;
     } catch (error) {
       const delayMs = LOCK_RETRY_DELAYS_MS[attempt];
       if (!isLockTimeoutError(error) || delayMs === undefined) throw error;
 
       console.warn(
-        'Database migration lock timed out; retrying the full migration in %d ms (%d/%d)',
+        'Database operation lock timed out; retrying the operation in %d ms (%d/%d)',
         delayMs,
         attempt + 1,
         LOCK_RETRY_DELAYS_MS.length,

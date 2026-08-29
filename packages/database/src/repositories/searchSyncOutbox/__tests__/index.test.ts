@@ -3,41 +3,121 @@ import path from 'node:path';
 
 import { and, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, searchSyncOutbox, users } from '../../../schemas';
 import { SearchDocumentBuilder } from '../../searchDocument';
 import { SearchSyncOutboxRepository } from '..';
+import {
+  SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+  SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX,
+} from '../captureInfrastructure';
 
 const USER_ID = 'search-sync-integration-user';
-const SEARCH_SYNC_TRIGGER_NAMES = [
-  'search_sync_agents',
-  'search_sync_chat_groups',
-  'search_sync_documents',
-  'search_sync_files',
-  'search_sync_knowledge_base_files',
-  'search_sync_knowledge_bases',
-  'search_sync_memory_activities',
-  'search_sync_memory_contexts',
-  'search_sync_memory_experiences',
-  'search_sync_memory_identities',
-  'search_sync_memory_preferences',
-  'search_sync_messages',
-  'search_sync_persona_documents',
-  'search_sync_topics',
-  'search_sync_user_memories',
-  'search_sync_user_memories_fanout',
+const SEARCH_SYNC_TRIGGER_TARGETS = [
+  { name: 'search_sync_agents', table: 'agents' },
+  { name: 'search_sync_chat_groups', table: 'chat_groups' },
+  { name: 'search_sync_documents', table: 'documents' },
+  { name: 'search_sync_files', table: 'files' },
+  { name: 'search_sync_knowledge_base_files', table: 'knowledge_base_files' },
+  { name: 'search_sync_knowledge_bases', table: 'knowledge_bases' },
+  { name: 'search_sync_memory_activities', table: 'user_memories_activities' },
+  { name: 'search_sync_memory_contexts', table: 'user_memories_contexts' },
+  { name: 'search_sync_memory_experiences', table: 'user_memories_experiences' },
+  { name: 'search_sync_memory_identities', table: 'user_memories_identities' },
+  { name: 'search_sync_memory_preferences', table: 'user_memories_preferences' },
+  { name: 'search_sync_messages', table: 'messages' },
+  { name: 'search_sync_persona_documents', table: 'user_memory_persona_documents' },
+  { name: 'search_sync_topics', table: 'topics' },
+  { name: 'search_sync_user_memories', table: 'user_memories' },
+  { name: 'search_sync_user_memories_fanout', table: 'user_memories' },
+] as const;
+const SEARCH_SYNC_CAPTURE_FUNCTION_NAMES = [
+  'capture_search_sync_change',
+  'capture_search_sync_knowledge_base_files',
+  'capture_search_sync_memory_fanout',
+  'enqueue_search_sync_outbox',
 ] as const;
 
 const db = await getTestDB();
 const builder = new SearchDocumentBuilder(db);
 const repository = new SearchSyncOutboxRepository(db);
+let restoreCaptureInfrastructure = false;
 
 const sortKeys = (keys: { documentId: string; entity: string }[]) =>
   keys.toSorted((left, right) =>
     `${left.entity}:${left.documentId}`.localeCompare(`${right.entity}:${right.documentId}`),
   );
+
+const dropCaptureInfrastructure = async () => {
+  for (const { name, table } of SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
+    await db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${name}" ON "${table}"`));
+  }
+
+  await db.execute(sql.raw(`DROP INDEX IF EXISTS "${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}"`));
+
+  for (const functionName of SEARCH_SYNC_CAPTURE_FUNCTION_NAMES) {
+    const signature =
+      functionName === 'enqueue_search_sync_outbox' ? '(text, text[], smallint)' : '()';
+    await db.execute(sql.raw(`DROP FUNCTION IF EXISTS "${functionName}"${signature}`));
+  }
+};
+
+const hasCompleteCaptureInfrastructure = async () => {
+  const triggerTargets = sql.join(
+    SEARCH_SYNC_TRIGGER_TARGETS.map(
+      ({ name, table }) => sql`(${name}, ${`public.${table}`}::regclass)`,
+    ),
+    sql`, `,
+  );
+  const functionNames = sql.join(
+    SEARCH_SYNC_CAPTURE_FUNCTION_NAMES.map((name) => sql`${name}`),
+    sql`, `,
+  );
+  const result = await db.execute(sql`
+    SELECT
+      EXISTS (
+        SELECT 1
+        FROM pg_index
+        WHERE indexrelid = to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})
+          AND indisready
+          AND indisvalid
+      ) AS has_gin_index,
+      (
+        SELECT count(DISTINCT proname)::integer
+        FROM pg_proc
+        WHERE pronamespace = 'public'::regnamespace
+          AND proname IN (${functionNames})
+      ) AS function_count,
+      (
+        SELECT count(*)::integer
+        FROM pg_trigger
+        WHERE NOT tgisinternal
+          AND (tgname, tgrelid) IN (${triggerTargets})
+      ) AS trigger_count,
+      (
+        SELECT count(*)::integer
+        FROM pg_trigger
+        WHERE NOT tgisinternal
+          AND tgenabled IN ('O', 'A')
+          AND (tgname, tgrelid) IN (${triggerTargets})
+      ) AS enabled_trigger_count
+  `);
+  const [row] = Array.isArray(result) ? result : result.rows;
+
+  return (
+    row?.has_gin_index === true &&
+    Number(row.function_count) === SEARCH_SYNC_CAPTURE_FUNCTION_NAMES.length &&
+    Number(row.trigger_count) === SEARCH_SYNC_TRIGGER_TARGETS.length &&
+    Number(row.enabled_trigger_count) === SEARCH_SYNC_TRIGGER_TARGETS.length
+  );
+};
+
+beforeAll(async () => {
+  restoreCaptureInfrastructure = await hasCompleteCaptureInfrastructure();
+  await dropCaptureInfrastructure();
+});
 
 beforeEach(async () => {
   await db.delete(users).where(eq(users.id, USER_ID));
@@ -48,47 +128,15 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.delete(users).where(eq(users.id, USER_ID));
   await db.delete(searchSyncOutbox);
+  if (restoreCaptureInfrastructure) {
+    await repository.installCaptureInfrastructure();
+  } else {
+    await dropCaptureInfrastructure();
+  }
 });
 
-describe('SearchSyncOutboxRepository', () => {
-  it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
-    const revision = await repository.reserveRevisionWithWriteFence();
-
-    expect(revision).toBeGreaterThan(0);
-    await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
-  });
-
-  it('replays the migration safely', async () => {
-    const migration = readMigrationFiles({
-      migrationsFolder: path.join(__dirname, '../../../../migrations'),
-    }).find((item) =>
-      item.sql.some(
-        (statement) =>
-          statement.includes('search_sync_revision_seq') &&
-          statement.includes('search_sync_outbox'),
-      ),
-    );
-
-    if (!migration) throw new Error('Search sync migration was not generated');
-    for (const statement of migration.sql) await db.execute(sql.raw(statement));
-
-    const settingsResult = await db.execute(
-      sql`SELECT to_regclass('search_sync_settings')::text AS table_name`,
-    );
-    const settingsRows = Array.isArray(settingsResult) ? settingsResult : settingsResult.rows;
-    expect(settingsRows).toEqual([{ table_name: null }]);
-  });
-
-  it('indexes durable dead-letter checks', async () => {
-    const result = await db.execute(sql`
-      SELECT to_regclass('search_sync_outbox_dead_idx')::text AS index_name
-    `);
-    const rows = Array.isArray(result) ? result : result.rows;
-
-    expect(rows).toEqual([{ index_name: 'search_sync_outbox_dead_idx' }]);
-  });
-
-  it('keeps the GIN index and permanent capture triggers in the deployment migration', () => {
+describe.sequential('SearchSyncOutboxRepository', () => {
+  it('keeps optional capture infrastructure out of the deployment migration', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),
     }).find((item) =>
@@ -102,22 +150,99 @@ describe('SearchSyncOutboxRepository', () => {
     if (!migration) throw new Error('Search sync migration was not generated');
     const migrationSql = migration.sql.join('\n');
 
-    expect(migrationSql).toContain('CREATE TRIGGER');
-    expect(migrationSql).toContain("set_config('lock_timeout', '3s', true)");
-    expect(migrationSql).toContain('user_memories_contexts_user_memory_ids_gin_idx');
-    expect(migrationSql).not.toContain('CREATE TABLE IF NOT EXISTS "search_sync_settings"');
+    expect(migrationSql).toContain('search_sync_revision_seq');
+    expect(migrationSql).toContain('search_sync_outbox');
+    expect(migrationSql).not.toContain('CREATE TRIGGER');
+    expect(migrationSql).not.toContain('capture_search_sync_change');
+    expect(migrationSql).not.toContain("set_config('lock_timeout', '3s', true)");
+    expect(migrationSql).not.toContain(SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX);
+    expect(migrationSql).not.toContain('search_sync_settings');
   });
 
-  it('creates a valid GIN index and enables every permanent capture trigger', async () => {
-    const result = await db.execute(sql`
-      SELECT tgname, tgenabled
+  it('does not install capture infrastructure or enqueue ordinary writes by default', async () => {
+    const triggerResult = await db.execute(sql`
+      SELECT tgname
       FROM pg_trigger
       WHERE NOT tgisinternal AND tgname LIKE 'search_sync_%'
       ORDER BY tgname
     `);
+    const triggerRows = Array.isArray(triggerResult) ? triggerResult : triggerResult.rows;
+    expect(triggerRows).toEqual([]);
+
+    const indexResult = await db.execute(sql`
+      SELECT to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})::text AS index_name
+    `);
+    const indexRows = Array.isArray(indexResult) ? indexResult : indexResult.rows;
+    expect(indexRows).toEqual([{ index_name: null }]);
+
+    const functionResult = await db.execute(sql`
+      SELECT proname
+      FROM pg_proc
+      WHERE pronamespace = 'public'::regnamespace
+        AND proname IN (${sql.join(
+          SEARCH_SYNC_CAPTURE_FUNCTION_NAMES.map((name) => sql`${name}`),
+          sql`, `,
+        )})
+      ORDER BY proname
+    `);
+    const functionRows = Array.isArray(functionResult) ? functionResult : functionResult.rows;
+    expect(functionRows).toEqual([]);
+
+    await db.insert(agents).values({ id: 'base-agent', title: 'one', userId: USER_ID });
+    await expect(db.select().from(searchSyncOutbox)).resolves.toEqual([]);
+  });
+
+  it('replays the outbox migration safely', async () => {
+    const migration = readMigrationFiles({
+      migrationsFolder: path.join(__dirname, '../../../../migrations'),
+    }).find((item) =>
+      item.sql.some(
+        (statement) =>
+          statement.includes('search_sync_revision_seq') &&
+          statement.includes('search_sync_outbox'),
+      ),
+    );
+
+    if (!migration) throw new Error('Search sync migration was not generated');
+    for (const statement of migration.sql) await db.execute(sql.raw(statement));
+
+    const outboxResult = await db.execute(
+      sql`SELECT to_regclass('public.search_sync_outbox')::text AS table_name`,
+    );
+    const outboxRows = Array.isArray(outboxResult) ? outboxResult : outboxResult.rows;
+    expect(outboxRows).toEqual([{ table_name: 'search_sync_outbox' }]);
+  });
+
+  it('indexes durable dead-letter checks', async () => {
+    const result = await db.execute(sql`
+      SELECT to_regclass('search_sync_outbox_dead_idx')::text AS index_name
+    `);
     const rows = Array.isArray(result) ? result : result.rows;
 
-    expect(rows).toEqual(SEARCH_SYNC_TRIGGER_NAMES.map((tgname) => ({ tgname, tgenabled: 'O' })));
+    expect(rows).toEqual([{ index_name: 'search_sync_outbox_dead_idx' }]);
+  });
+
+  it('installs a valid GIN index and all exact capture triggers', async () => {
+    await repository.installCaptureInfrastructure();
+
+    const result = await db.execute(sql`
+      SELECT pg_trigger.tgname, pg_trigger.tgenabled, source_table.relname AS table_name
+      FROM pg_trigger
+      JOIN pg_class AS source_table ON source_table.oid = pg_trigger.tgrelid
+      JOIN pg_namespace AS source_namespace ON source_namespace.oid = source_table.relnamespace
+      WHERE NOT tgisinternal AND tgname LIKE 'search_sync_%'
+        AND source_namespace.nspname = 'public'
+      ORDER BY tgname
+    `);
+    const rows = Array.isArray(result) ? result : result.rows;
+
+    expect(rows).toEqual(
+      SEARCH_SYNC_TRIGGER_TARGETS.map(({ name: tgname, table: table_name }) => ({
+        tgname,
+        tgenabled: 'O',
+        table_name,
+      })),
+    );
 
     const indexResult = await db.execute(sql`
       SELECT
@@ -149,13 +274,33 @@ describe('SearchSyncOutboxRepository', () => {
     ]);
   });
 
+  it('keeps capture installation idempotent', async () => {
+    await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
+    await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
+
+    const result = await db.execute(sql`
+      SELECT count(*)::integer AS count
+      FROM pg_trigger
+      WHERE NOT tgisinternal AND tgname LIKE 'search_sync_%'
+    `);
+    const rows = Array.isArray(result) ? result : result.rows;
+    expect(rows).toEqual([{ count: 16 }]);
+  });
+
+  it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
+    const revision = await repository.reserveRevisionWithWriteFence();
+
+    expect(revision).toBeGreaterThan(0);
+    await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
+  });
+
   it('validates capture infrastructure and rejects a disabled trigger', async () => {
     await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
 
     await db.execute(sql`ALTER TABLE agents DISABLE TRIGGER search_sync_agents`);
     try {
       await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
-        'Search sync requires all migration-managed capture triggers (15/16 enabled)',
+        'Search sync requires all installer-managed capture triggers (15/16 enabled)',
       );
     } finally {
       await db.execute(sql`ALTER TABLE agents ENABLE TRIGGER search_sync_agents`);
@@ -164,7 +309,7 @@ describe('SearchSyncOutboxRepository', () => {
     await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
   });
 
-  it('captures the first mutation immediately without a runtime enable step', async () => {
+  it('captures the first mutation immediately after opt-in installation', async () => {
     await db.insert(agents).values({ id: 'immediate-agent', title: 'one', userId: USER_ID });
 
     await expect(

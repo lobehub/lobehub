@@ -3,6 +3,12 @@ import { sql } from 'drizzle-orm';
 import type { LobeChatDatabase } from '../../type';
 import type { SearchDocumentEntity } from '../searchDocument';
 import { SEARCH_DOCUMENT_ENTITIES } from '../searchDocument';
+import {
+  SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS,
+  SEARCH_SYNC_CAPTURE_GIN_INDEX_STATEMENT,
+  SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS,
+  SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+} from './captureInfrastructure';
 
 export interface SearchSyncWork {
   documentId: string;
@@ -36,25 +42,6 @@ export interface SearchSyncOutboxStats extends SearchSyncOutboxEntityStats {
 
 /** Approximately one day of durable retries when the exponential delay is capped at one hour. */
 export const SEARCH_SYNC_MAX_ATTEMPTS = 36;
-
-const SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS = [
-  { name: 'search_sync_agents', table: 'agents' },
-  { name: 'search_sync_topics', table: 'topics' },
-  { name: 'search_sync_files', table: 'files' },
-  { name: 'search_sync_knowledge_bases', table: 'knowledge_bases' },
-  { name: 'search_sync_chat_groups', table: 'chat_groups' },
-  { name: 'search_sync_documents', table: 'documents' },
-  { name: 'search_sync_messages', table: 'messages' },
-  { name: 'search_sync_user_memories', table: 'user_memories' },
-  { name: 'search_sync_user_memories_fanout', table: 'user_memories' },
-  { name: 'search_sync_memory_contexts', table: 'user_memories_contexts' },
-  { name: 'search_sync_memory_preferences', table: 'user_memories_preferences' },
-  { name: 'search_sync_memory_activities', table: 'user_memories_activities' },
-  { name: 'search_sync_memory_identities', table: 'user_memories_identities' },
-  { name: 'search_sync_memory_experiences', table: 'user_memories_experiences' },
-  { name: 'search_sync_persona_documents', table: 'user_memory_persona_documents' },
-  { name: 'search_sync_knowledge_base_files', table: 'knowledge_base_files' },
-] as const;
 
 const SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
   [...new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))].map(
@@ -99,7 +86,34 @@ const revisionNumber = (value: number | string | undefined, operation: string, m
 export class SearchSyncOutboxRepository {
   constructor(private readonly db: SearchSyncDatabase) {}
 
-  /** Fails before a reindex if migration-managed capture infrastructure is incomplete or disabled. */
+  /**
+   * Installs lock-sensitive capture infrastructure outside automatic deployment migrations.
+   * The GIN index and each trigger use separate short transactions, so lock timeouts can be
+   * retried without holding locks already acquired for other source tables.
+   *
+   * A successful install is only a prerequisite to a full reindex, not proof that earlier writes
+   * were captured. The later full snapshot covers writes committed before installation completed,
+   * while its write fence waits for older in-flight transactions. Callers must not enable
+   * incremental-only synchronization after a partial install or without completing that reindex.
+   */
+  async installCaptureInfrastructure(): Promise<void> {
+    await this.db.transaction(async (transaction) => {
+      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+      await transaction.execute(SEARCH_SYNC_CAPTURE_GIN_INDEX_STATEMENT);
+    });
+
+    for (const statement of SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
+      await this.db.execute(statement);
+    }
+
+    for (const statement of SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
+      await this.db.execute(statement);
+    }
+
+    await this.assertCaptureInfrastructure();
+  }
+
+  /** Fails before a reindex if installer-managed capture infrastructure is incomplete. */
   async assertCaptureInfrastructure(): Promise<void> {
     const indexResult = await this.db.execute(sql`
       SELECT (
@@ -153,7 +167,7 @@ export class SearchSyncOutboxRepository {
     const installed = Number(rowsOf<{ count: number }>(triggerResult)[0]?.count ?? 0);
     if (installed !== SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length) {
       throw new Error(
-        `Search sync requires all migration-managed capture triggers (${installed}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length} enabled)`,
+        `Search sync requires all installer-managed capture triggers (${installed}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length} enabled)`,
       );
     }
   }

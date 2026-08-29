@@ -28,12 +28,14 @@ import {
   recordSearchReindexReconciliation,
 } from '../../packages/observability-otel/src/modules/search-reindex';
 import { DiagLogLevel, register, shutdownSafely } from '../../packages/observability-otel/src/node';
+import { runWithLockRetry } from '../migrateServerDB/retry';
 import {
   assertSearchReindexElasticsearchHostname,
   assertSearchReindexTelemetryExportConfigured,
   resolveSearchReindexElasticsearchEnvironment,
   resolveSearchReindexTelemetryEnvironment,
 } from './options';
+import { runSearchReindexCommand } from './preparation';
 
 const { Pool } = pg;
 
@@ -248,37 +250,39 @@ const executionStartedAt = Date.now();
 
 const run = async () => {
   if (failureReference) {
-    const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
-    if (!state) throw new Error(`No reindex run exists for namespace ${namespace}`);
-    const skipped = await repository.skipFailure(
-      state.run.id,
-      failureReference.entity,
-      failureReference.documentId,
-    );
-    if (!skipped) {
-      throw new Error('The requested unresolved, non-retryable reindex failure was not found');
-    }
-    await printStatus();
+    await runSearchReindexCommand({
+      command: 'skip-failure',
+      installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
+      runWithLockRetry,
+      run: async () => {
+        const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+        if (!state) throw new Error(`No reindex run exists for namespace ${namespace}`);
+        const skipped = await repository.skipFailure(
+          state.run.id,
+          failureReference.entity,
+          failureReference.documentId,
+        );
+        if (!skipped) {
+          throw new Error('The requested unresolved, non-retryable reindex failure was not found');
+        }
+        await printStatus();
+      },
+    });
     return;
   }
 
   if (!apply) {
-    await printStatus();
+    await runSearchReindexCommand({
+      command: 'status',
+      installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
+      runWithLockRetry,
+      run: printStatus,
+    });
     return;
   }
 
   const endpointHostname = new URL(elasticsearchUrl!).hostname;
   assertSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
-  await outbox.assertCaptureInfrastructure();
-  console.log(
-    JSON.stringify({
-      endpointEnvName: urlEnvironmentName,
-      endpointHostname,
-      expectedHostPrefix: expectedHostPrefix ?? null,
-      type: 'reindex_target',
-    }),
-  );
-
   const existing = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   if (!existing && !freshRun) {
     throw new Error(
@@ -288,7 +292,22 @@ const run = async () => {
   if (existing && freshRun) {
     throw new Error(`Checkpoint ${existing.run.id} already exists; omit --fresh-run to resume it`);
   }
-  const prepared = await repository.createOrResume(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  const prepared = await runSearchReindexCommand({
+    command: 'apply',
+    installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
+    runWithLockRetry,
+    run: async () => {
+      console.log(
+        JSON.stringify({
+          endpointEnvName: urlEnvironmentName,
+          endpointHostname,
+          expectedHostPrefix: expectedHostPrefix ?? null,
+          type: 'reindex_target',
+        }),
+      );
+      return repository.createOrResume(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+    },
+  });
   if (existing && existing.run.status !== 'ready_for_incremental_sync') {
     await outbox.fenceSourceWrites();
   }

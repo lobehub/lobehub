@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { runMigrationWithLockRetry } from './retry';
+import { runWithLockRetry } from './retry';
 
-describe('runMigrationWithLockRetry', () => {
+describe('runWithLockRetry', () => {
   it('retries lock timeouts with increasing delays and succeeds', async () => {
     const firstLockError = { cause: { code: '55P03' } };
     const secondLockError = { code: '55P03' };
@@ -13,7 +13,7 @@ describe('runMigrationWithLockRetry', () => {
       .mockResolvedValueOnce(undefined);
     const wait = vi.fn<(delayMs: number) => Promise<void>>().mockResolvedValue(undefined);
 
-    await expect(runMigrationWithLockRetry(migrate, wait)).resolves.toBeUndefined();
+    await expect(runWithLockRetry(migrate, wait)).resolves.toBeUndefined();
 
     expect(migrate).toHaveBeenCalledTimes(3);
     expect(wait).toHaveBeenCalledTimes(2);
@@ -26,7 +26,7 @@ describe('runMigrationWithLockRetry', () => {
     const migrate = vi.fn<() => Promise<void>>().mockRejectedValue(error);
     const wait = vi.fn<(delayMs: number) => Promise<void>>().mockResolvedValue(undefined);
 
-    await expect(runMigrationWithLockRetry(migrate, wait)).rejects.toBe(error);
+    await expect(runWithLockRetry(migrate, wait)).rejects.toBe(error);
 
     expect(migrate).toHaveBeenCalledTimes(1);
     expect(wait).not.toHaveBeenCalled();
@@ -37,7 +37,7 @@ describe('runMigrationWithLockRetry', () => {
     const migrate = vi.fn<() => Promise<void>>().mockRejectedValue(error);
     const wait = vi.fn<(delayMs: number) => Promise<void>>().mockResolvedValue(undefined);
 
-    await expect(runMigrationWithLockRetry(migrate, wait)).rejects.toBe(error);
+    await expect(runWithLockRetry(migrate, wait)).rejects.toBe(error);
 
     expect(migrate).toHaveBeenCalledTimes(3);
     expect(wait).toHaveBeenCalledTimes(2);

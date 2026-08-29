@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
@@ -7,7 +7,7 @@ import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
 
 // @ts-ignore tsgo handle esm import cjs and compatibility issues
 import { DB_FAIL_INIT_HINT, DUPLICATE_EMAIL_HINT, PGVECTOR_HINT } from './errorHint';
-import { runMigrationWithLockRetry } from './retry';
+import { runWithLockRetry } from './retry';
 
 // Load environment variables in priority order:
 // 1. .env (lowest priority)
@@ -19,13 +19,13 @@ dotenvExpand.expand(dotenv.config()); // Load .env
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}` })); // Load .env.[env] and override
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })); // Load .env.[env].local and override
 
-const migrationsFolder = join(__dirname, '../../packages/database/migrations');
+const migrationsFolder = path.join(__dirname, '../../packages/database/migrations');
 
 const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
 
   const time = Date.now();
-  await runMigrationWithLockRetry(async () => {
+  await runWithLockRetry(async () => {
     if (process.env.DATABASE_DRIVER === 'node') {
       await nodeMigrate(serverDB, { migrationsFolder });
     } else {
