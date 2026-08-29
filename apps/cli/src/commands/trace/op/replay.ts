@@ -19,7 +19,7 @@ import pc from 'picocolors';
 import { getAuthInfo } from '../../../api/http';
 import { log } from '../../../utils/logger';
 import { resolveSnapshotOrExit } from './snapshot';
-import { printTrajectoryNode, printTrajectorySummary } from './trajectoryView';
+import { printTrajectorySummary, TrajectoryStrip } from './trajectoryView';
 
 const DEFAULT_JUDGE_MODEL = 'openai/gpt-4o-mini';
 
@@ -128,15 +128,20 @@ export function registerOpReplayCommand(parent: Command) {
             return;
           }
 
-          if (!options.json) printTrajectoryHeader(snapshot, targets[0]);
+          const strip = options.json
+            ? undefined
+            : new TrajectoryStrip(listReplayableSteps(snapshot).length);
+
+          if (!options.json) {
+            printTrajectoryHeader(snapshot, targets[0]);
+            strip?.start();
+          }
 
           const result = await replayTrajectory({
             concurrency: options.concurrency,
             connection,
             maxTokens: options.maxTokens,
-            onNode: options.json
-              ? undefined
-              : (node) => printTrajectoryNode(node, listReplayableSteps(snapshot).length),
+            onNode: (node) => strip?.settle(node),
             reproductionJudge: judgeModel ? { judgeModel } : undefined,
             snapshot,
             target: targets[0],

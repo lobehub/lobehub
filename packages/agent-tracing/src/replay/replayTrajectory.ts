@@ -44,7 +44,11 @@ export interface ReplayTrajectoryParams {
   concurrency?: number;
   connection: ReplayConnection;
   maxTokens?: number;
-  /** Called once per node, in node order, so a CLI can stream progress. */
+  /**
+   * Called as each node settles, which under concurrency is not node order —
+   * every node carries its own `nodeIndex`, so a caller renders by position
+   * rather than by arrival. `nodes` in the result is always ordered.
+   */
   onNode?: (node: TrajectoryNode) => void;
   reproductionJudge?: { judgeModel: ModelTarget };
   snapshot: ExecutionSnapshot;
@@ -145,13 +149,12 @@ export const replayTrajectory = async ({
         };
       }
 
+      onNode?.(node);
+
       return node;
     }),
     Math.max(1, concurrency),
   );
-
-  // Reported in node order regardless of the order they came back in.
-  for (const node of nodes) onNode?.(node);
 
   const result: TrajectoryResult = {
     divergedAtNode: nodes.find((node) => node.divergence)?.nodeIndex,

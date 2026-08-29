@@ -178,7 +178,7 @@ describe('replayTrajectory', () => {
     expect(result.nodes[1].attempt.content).toBe('42');
   });
 
-  it('reports nodes in order even when they finish out of order', async () => {
+  it('settles nodes as they finish but returns them in order', async () => {
     const seen: number[] = [];
     let call = 0;
     vi.stubGlobal('fetch', async () => {
@@ -199,7 +199,9 @@ describe('replayTrajectory', () => {
       target,
     });
 
-    expect(seen).toEqual([0, 1]);
+    // Progress arrives out of order — each node carries its own index, so a
+    // renderer places it rather than appending it.
+    expect(seen).toEqual([1, 0]);
     expect(result.nodes.map((node) => node.nodeIndex)).toEqual([0, 1]);
   });
 });
