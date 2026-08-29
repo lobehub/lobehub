@@ -28,7 +28,11 @@ import {
   recordSearchReindexReconciliation,
 } from '../../packages/observability-otel/src/modules/search-reindex';
 import { DiagLogLevel, register, shutdownSafely } from '../../packages/observability-otel/src/node';
-import { prepareSearchReindexCapture } from './captureSafety';
+import {
+  assertSearchReindexCaptureState,
+  prepareSearchReindexCapture,
+  validateSearchReindexCapture,
+} from './captureSafety';
 import {
   assertSearchReindexElasticsearchHostname,
   assertSearchReindexTelemetryExportConfigured,
@@ -348,6 +352,11 @@ const run = async () => {
     bulkConcurrency,
     bulkMaxBytes,
     entityConcurrency,
+    finalizeRun: (state, markReady) =>
+      outbox.withCaptureStateLock(async (capture) => {
+        assertSearchReindexCaptureState(state.run.captureVersion, capture);
+        await markReady();
+      }),
     maxBatchesPerEntity,
     maxRequestRetries,
     onProgress: async (event) => {
@@ -373,6 +382,11 @@ const run = async () => {
       await auditLogger!.append(event);
     },
     retryBaseDelayMs,
+    validateFinalization: (state) =>
+      validateSearchReindexCapture({
+        expectedVersion: state.run.captureVersion,
+        getCaptureState: () => outbox.getCaptureState(),
+      }),
   });
   await prepareSearchReindexCapture({
     enableCapture: () => outbox.enableCapture(),

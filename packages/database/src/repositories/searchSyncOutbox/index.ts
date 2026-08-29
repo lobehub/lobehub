@@ -52,7 +52,8 @@ export interface SearchSyncOutboxStats extends SearchSyncOutboxEntityStats {
 /** Approximately one day of durable retries when the exponential delay is capped at one hour. */
 export const SEARCH_SYNC_MAX_ATTEMPTS = 36;
 
-type SearchSyncDatabase = Pick<LobeChatDatabase, 'execute'>;
+type SearchSyncDatabase = Pick<LobeChatDatabase, 'execute'> &
+  Partial<Pick<LobeChatDatabase, 'transaction'>>;
 
 interface SearchSyncRow {
   document_id: string;
@@ -181,6 +182,30 @@ export class SearchSyncOutboxRepository {
     `);
     const state = rowsOf<{ enabled: boolean; version: string }>(result)[0];
     return state ?? { enabled: false, version: null };
+  }
+
+  /** Serialize final checkpoint acceptance with capture enable/disable updates. */
+  async withCaptureStateLock<Result>(
+    callback: (state: { enabled: boolean; version: string | null }) => Promise<Result>,
+  ): Promise<Result> {
+    if (!this.db.transaction) {
+      throw new Error('Search sync capture finalization requires transaction support');
+    }
+    return this.db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT
+          enabled,
+          EXTRACT(EPOCH FROM updated_at)::text AS version
+        FROM search_sync_settings
+        WHERE key = 'default'
+        FOR UPDATE
+      `);
+      const state = rowsOf<{ enabled: boolean; version: string }>(result)[0] ?? {
+        enabled: false,
+        version: null,
+      };
+      return callback(state);
+    });
   }
 
   async isCaptureEnabled(): Promise<boolean> {

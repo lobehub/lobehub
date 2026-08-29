@@ -126,6 +126,25 @@ describe('SearchReindexService', () => {
     );
   });
 
+  it('revalidates external safety before aliases and while marking the run ready', async () => {
+    const { builder, client, repository } = createDependencies();
+    const validateFinalization = vi.fn().mockResolvedValue(undefined);
+    const finalizeRun = vi.fn(async () => {
+      throw new Error('capture version changed');
+    });
+    const service = new SearchReindexService(builder, repository, client, {
+      finalizeRun,
+      validateFinalization,
+    });
+
+    await expect(service.run('test', 1)).rejects.toThrow('capture version changed');
+
+    expect(validateFinalization).toHaveBeenCalledOnce();
+    expect(finalizeRun).toHaveBeenCalledOnce();
+    expect(client.ensureAlias).toHaveBeenCalledTimes(14);
+    expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
+  });
+
   it('reuses index preparation when capture setup already completed it', async () => {
     const { builder, client, repository, state } = createDependencies();
     const service = new SearchReindexService(builder, repository, client);

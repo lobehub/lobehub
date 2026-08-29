@@ -11,6 +11,28 @@ interface CaptureState {
   version: string | null;
 }
 
+export const assertSearchReindexCaptureState = (
+  expectedVersion: string | null | undefined,
+  capture: CaptureState,
+) => {
+  if (!capture.enabled || !expectedVersion || capture.version !== expectedVersion) {
+    throw new Error(
+      'Search sync capture changed during reindex; use a new checkpoint and an empty Elasticsearch target for a full backfill',
+    );
+  }
+};
+
+export const validateSearchReindexCapture = async ({
+  expectedVersion,
+  getCaptureState,
+}: {
+  expectedVersion: string | null | undefined;
+  getCaptureState: () => Promise<CaptureState>;
+}) => {
+  const capture = await getCaptureState();
+  assertSearchReindexCaptureState(expectedVersion, capture);
+};
+
 const assertSafeResume = (existing: SearchReindexRunState | undefined, capture: CaptureState) => {
   if (!existing || !hasDurableProgress(existing)) return;
   if (!capture.enabled) {

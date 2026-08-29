@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SearchReindexRunState } from '../../../packages/database/src/repositories/searchReindex';
-import { prepareSearchReindexCapture } from '../captureSafety';
+import { prepareSearchReindexCapture, validateSearchReindexCapture } from '../captureSafety';
 
 const state = (
   progress: Partial<SearchReindexRunState['progress'][number]> = {},
@@ -49,6 +49,18 @@ const harness = (
 };
 
 describe('search reindex capture safety', () => {
+  it.each([
+    { capture: { enabled: false, version: 'capture-1' }, expectedVersion: 'capture-1' },
+    { capture: { enabled: true, version: 'capture-2' }, expectedVersion: 'capture-1' },
+  ])('rejects capture changes before finalization', async ({ capture, expectedVersion }) => {
+    await expect(
+      validateSearchReindexCapture({
+        expectedVersion,
+        getCaptureState: async () => capture,
+      }),
+    ).rejects.toThrow('Search sync capture changed during reindex');
+  });
+
   it('prepares Elasticsearch before enabling capture for an untouched checkpoint', async () => {
     const { calls, options } = harness(state());
 

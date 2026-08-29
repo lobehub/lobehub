@@ -225,6 +225,17 @@ describe('SearchSyncOutboxRepository', () => {
     await expect(db.select().from(searchSyncOutbox)).resolves.toHaveLength(1);
   });
 
+  it('holds the capture settings row while a finalization callback runs', async () => {
+    const expected = await repository.getCaptureState();
+
+    const result = await repository.withCaptureStateLock(async (capture) => {
+      expect(capture).toEqual(expected);
+      return 'accepted';
+    });
+
+    expect(result).toBe('accepted');
+  });
+
   it('coalesces mutations and increases the revision, prioritizing revocations', async () => {
     await db.insert(agents).values({ id: 'sync-agent', title: 'one', userId: USER_ID });
     const [inserted] = await db

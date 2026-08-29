@@ -47,10 +47,12 @@ export interface SearchReindexServiceOptions {
   bulkConcurrency: number;
   bulkMaxBytes: number;
   entityConcurrency: number;
+  finalizeRun: (state: SearchReindexRunState, markReady: () => Promise<void>) => Promise<void>;
   maxBatchesPerEntity?: number;
   maxRequestRetries: number;
   onProgress: (event: SearchReindexProgressEvent) => Promise<void> | void;
   retryBaseDelayMs: number;
+  validateFinalization: (state: SearchReindexRunState) => Promise<void> | void;
 }
 
 export type SearchReindexStateRepository = Pick<
@@ -227,10 +229,12 @@ export class SearchReindexService {
       bulkConcurrency: options.bulkConcurrency ?? DEFAULT_BULK_CONCURRENCY,
       bulkMaxBytes: options.bulkMaxBytes ?? DEFAULT_BULK_MAX_BYTES,
       entityConcurrency: options.entityConcurrency ?? DEFAULT_ENTITY_CONCURRENCY,
+      finalizeRun: options.finalizeRun ?? ((_state, markReady) => markReady()),
       maxBatchesPerEntity: options.maxBatchesPerEntity,
       maxRequestRetries: options.maxRequestRetries ?? DEFAULT_MAX_REQUEST_RETRIES,
       onProgress: options.onProgress ?? (() => {}),
       retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
+      validateFinalization: options.validateFinalization ?? (() => {}),
     };
     if (!Number.isInteger(this.options.batchSize) || this.options.batchSize < 1) {
       throw new Error('Search reindex batch size must be a positive integer');
@@ -654,13 +658,16 @@ export class SearchReindexService {
 
     const completedState = await this.repository.getRun(initialState.run.id);
     if (!completedState) throw new Error(`Missing reindex run ${initialState.run.id}`);
+    await this.options.validateFinalization(completedState);
     for (const progress of completedState.progress) {
       await this.client.ensureAlias(
         getSearchIndexAlias(namespace, progress.entity),
         progress.physicalIndex,
       );
     }
-    await this.repository.markReadyForIncrementalSync(initialState.run.id);
+    await this.options.finalizeRun(completedState, () =>
+      this.repository.markReadyForIncrementalSync(initialState.run.id),
+    );
     await this.emitProgress({ type: 'aliases_created' });
 
     return {
