@@ -145,7 +145,7 @@ agent-tracing ctx-map --html out.html
 # Re-issue a recorded LLM call against other models (see "replay" below)
 agent-tracing replay <operationId|traceId|path.json>
 agent-tracing replay <target> -s 4 -m openai/gpt-5,anthropic/claude-sonnet-5
-agent-tracing replay <target> --chain
+agent-tracing replay <target> --all-steps
 ```
 
 ## replay — Re-issue a Frozen Call
@@ -161,36 +161,29 @@ Available from both CLIs — `agent-tracing replay` (reads `LOBEHUB_JWT`) and `l
 LobeHub chat route.
 
 ```bash
-# Single call: defaults to the last call_llm step and the model the op ran on
+# One call: defaults to the last call_llm step and the model the op ran on
 lh trace op replay <operationId>
 lh trace op replay <operationId> -s 4 -m openai/gpt-5,anthropic/claude-sonnet-5
 lh trace op replay <operationId> --judge "answers with a concrete file path"
 
-# Whole trajectory
-lh trace op replay <operationId> --all-steps   # each node against its own recorded payload
-lh trace op replay <operationId> --chain       # feed each replayed output into the next node
-lh trace op replay <operationId> --chain --on-divergence continue
+# Every call of the operation
+lh trace op replay <operationId> --all-steps
+lh trace op replay <operationId> --all-steps --concurrency 8
 ```
 
-Modes:
+`--all-steps` replays **each call independently**, against the payload the harness actually built
+for it. Node 4 is asked "given exactly this context, do you make the same decision?", so a
+different answer at node 2 cannot contaminate it, a node that fails to reach the provider costs
+only itself, and the calls can go out concurrently (4 at a time by default).
 
-- **single** (default) — one `call_llm` step, one or more target models side by side.
-- **`--all-steps`** (anchored) — replay every node against its own recorded payload, so a
-  divergence at one node cannot contaminate the ones after it.
-- **`--chain`** — feed each node's replayed output into the next. Bounded by what a trace can
-  give back: tool output cannot be regenerated, only reused from the recording.
+Nodes are compared on `toolSignature` — the sequence of tool names. Arguments are deliberately
+excluded, since two models can reach the same step phrased differently. The final node's content
+is additionally scored against the recorded one by an llm-rubric judge.
 
-What chain mode reports, and why:
-
-- **`toolSignature` divergence** — the model called a different sequence of tools. Argument
-  wording is deliberately excluded here, since two models can reach the same step phrased
-  differently.
-- **`toolArguments` divergence** — same tools, different arguments, so the recording holds no
-  output for the call actually made. The chain stops rather than answering `readFile("b")` with
-  the body recorded for `readFile("a")`.
-- **incomplete / `anchor_lost`** — a later payload no longer contains any earlier assistant turn
-  to splice the replayed tail onto (context compression drops them). Reported explicitly; a
-  truncated run is never scored for reproduction.
+Chaining the nodes — feeding each replayed output into the next — was built and then removed. A
+trace cannot regenerate tool output, only hand back what was recorded, so the moment the model
+deviates there is no ground truth left; the run then measures nothing while still looking like it
+succeeded. Independent replay is the design, not a fallback.
 
 Known limitation: **sampling parameters are not recorded.** The recorder stores the runtime step
 context under `context.payload`, not the provider request body, so temperature, `top_p`,

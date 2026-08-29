@@ -1,7 +1,6 @@
 import type { Command } from 'commander';
 
 import {
-  type DivergencePolicy,
   judgeReplay,
   listReplayableSteps,
   type ModelTarget,
@@ -61,13 +60,8 @@ export function registerReplayCommand(program: Command) {
     .argument('[target]', 'Operation id, trace id, snapshot json path, URL, or "latest"')
     .option('-s, --step <n>', 'Snapshot step index to replay (default: the last call_llm step)')
     .option('-m, --model <list>', 'Comma-separated provider/model targets')
-    .option('--chain', 'Replay every call as a node, feeding each output into the next')
-    .option('--all-steps', 'Replay every call against its own recorded payload')
-    .option(
-      '--on-divergence <policy>',
-      'What --chain does at the first tool-call divergence: stop | continue',
-      'stop',
-    )
+    .option('--all-steps', 'Replay every call of the operation against its own recorded payload')
+    .option('--concurrency <n>', 'How many calls to replay at once with --all-steps')
     .option('--judge <criteria>', 'Score every replayed output with an llm-rubric criteria')
     .option('--judge-model <model>', 'Judge model as provider/model', DEFAULT_JUDGE_MODEL)
     .option('--no-tools', 'Drop tool definitions from the replayed payload')
@@ -79,13 +73,12 @@ export function registerReplayCommand(program: Command) {
         target: string | undefined,
         opts: {
           allSteps?: boolean;
-          chain?: boolean;
+          concurrency?: string;
           json?: boolean;
           judge?: string;
           judgeModel: string;
           maxTokens?: string;
           model?: string;
-          onDivergence: DivergencePolicy;
           step?: string;
           temperature?: string;
           tools: boolean;
@@ -103,11 +96,11 @@ export function registerReplayCommand(program: Command) {
           process.exit(1);
         }
 
-        const trajectoryMode = opts.chain ? 'chain' : opts.allSteps ? 'anchored' : undefined;
+        const allSteps = Boolean(opts.allSteps);
         const stepIndex = opts.step === undefined ? undefined : Number.parseInt(opts.step, 10);
-        const call = trajectoryMode ? undefined : selectFrozenCall(snapshot, stepIndex);
+        const call = allSteps ? undefined : selectFrozenCall(snapshot, stepIndex);
 
-        if (!trajectoryMode && !call) {
+        if (!allSteps && !call) {
           console.error(
             stepIndex === undefined
               ? 'Snapshot has no call_llm step with a recorded payload — nothing to replay.'
@@ -123,21 +116,20 @@ export function registerReplayCommand(program: Command) {
           targets = opts.model
             ? parseModelTargets(opts.model, snapshot.provider)
             : originalTarget(snapshot);
-          judgeModel =
-            opts.judge || trajectoryMode ? parseModelTargets(opts.judgeModel)[0] : undefined;
+          judgeModel = opts.judge || allSteps ? parseModelTargets(opts.judgeModel)[0] : undefined;
           connection = resolveConnection();
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
           process.exit(1);
         }
 
-        if (trajectoryMode) {
+        if (allSteps) {
           const result = await replayTrajectory({
+            concurrency:
+              opts.concurrency === undefined ? undefined : Number.parseInt(opts.concurrency, 10),
             connection,
             maxTokens:
               opts.maxTokens === undefined ? undefined : Number.parseInt(opts.maxTokens, 10),
-            mode: trajectoryMode,
-            onDivergence: opts.onDivergence,
             onNode: opts.json
               ? undefined
               : (node) =>

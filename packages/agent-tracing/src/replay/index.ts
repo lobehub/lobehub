@@ -21,7 +21,6 @@ export {
   type ReplayFrozenCallParams,
 } from './replayFrozenCall';
 export {
-  type DivergencePolicy,
   replayTrajectory,
   type ReplayTrajectoryParams,
   type TrajectoryDivergence,
@@ -29,17 +28,9 @@ export {
   type TrajectoryResult,
 } from './replayTrajectory';
 export {
-  type AnchorMatch,
-  buildToolMessages,
-  type ChainTurn,
-  findChainAnchor,
   listFrozenCalls,
-  normalizeToolArguments,
-  recordedAssistantTurn,
   type RecordedOutcome,
   recordedOutcome,
   type RecordedToolCall,
-  type RecordedToolResult,
-  recordedToolResults,
   toolSignature,
 } from './trajectory';

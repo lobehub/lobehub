@@ -26,10 +26,6 @@ export const printTrajectoryNode = (node: TrajectoryNode, totalNodes: number) =>
     console.log(pc.dim(`    ${node.recorded.toolSignature}`));
   }
 
-  if (node.unmatchedTools?.length) {
-    console.log(pc.yellow(`    no recorded result for: ${node.unmatchedTools.join(', ')}`));
-  }
-
   if (node.attempt.content) console.log(pc.dim(`    ${truncate(node.attempt.content)}`));
 };
 
@@ -41,25 +37,15 @@ export const printTrajectorySummary = (result: TrajectoryResult) => {
   console.log(pc.bold('Trajectory'));
   console.log(`  nodes replayed  ${replayed}/${result.totalNodes}`);
 
-  if (result.mode === 'chain') {
-    if (result.incomplete) {
-      console.log(
-        `  ${pc.yellow(`stopped at node ${result.incomplete.nodeIndex + 1}: no anchor left to chain onto`)}`,
-      );
-      console.log(
-        pc.dim('    context compression dropped every earlier assistant turn from that payload'),
-      );
-    } else if (result.divergedAtNode === undefined) {
-      console.log(`  ${pc.green('stayed on the recorded trajectory end to end')}`);
-    } else {
-      console.log(`  ${pc.yellow(`diverged at node ${result.divergedAtNode + 1}`)}`);
-    }
-  } else {
-    console.log(
-      diverged === 0
-        ? `  ${pc.green('every node matched the recorded tool sequence')}`
-        : `  ${pc.yellow(`${diverged}/${replayed} nodes chose different tools`)}`,
-    );
+  const failed = result.nodes.filter((node) => node.attempt.error).length;
+
+  console.log(
+    diverged === 0
+      ? `  ${pc.green('every node matched the recorded tool sequence')}`
+      : `  ${pc.yellow(`${diverged}/${replayed} nodes chose different tools`)}`,
+  );
+  if (failed > 0) {
+    console.log(`  ${pc.red(`${failed}/${replayed} nodes did not reach the model`)}`);
   }
 
   if (result.reproduction) {

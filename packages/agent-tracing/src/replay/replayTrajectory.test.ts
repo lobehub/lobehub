@@ -110,12 +110,7 @@ describe('replayTrajectory', () => {
   it('replays every node and reports a matching trajectory as no divergence', async () => {
     stubModel([{ content: 'looking it up', toolCalls: ['fs____readFile'] }, { content: '42' }]);
 
-    const result = await replayTrajectory({
-      connection,
-      mode: 'chain',
-      snapshot: twoNodeSnapshot(),
-      target,
-    });
+    const result = await replayTrajectory({ connection, snapshot: twoNodeSnapshot(), target });
 
     expect(result.totalNodes).toBe(2);
     expect(result.nodes).toHaveLength(2);
@@ -123,75 +118,22 @@ describe('replayTrajectory', () => {
     expect(result.nodes.every((node) => node.divergence === undefined)).toBe(true);
   });
 
-  it('feeds the recorded tool output back into the next node', async () => {
-    const sent = stubModel([
-      { content: 'looking it up', toolCalls: ['fs____readFile'] },
-      { content: '42' },
-    ]);
-
-    await replayTrajectory({ connection, mode: 'chain', snapshot: twoNodeSnapshot(), target });
-
-    const secondPayload = sent[1].messages;
-    // The harness-rendered prefix survives, the model's turn replaces the
-    // recorded one, and the tool result is spliced in behind it.
-    expect(secondPayload.slice(0, 3).map((m: any) => m.content)).toEqual([
-      'system',
-      'injected block',
-      'question',
-    ]);
-    expect(secondPayload.at(-1)).toMatchObject({ content: 'FILE BODY', role: 'tool' });
-  });
-
-  it('stops the chain at the first tool-call divergence by default', async () => {
-    stubModel([{ content: 'guessing', toolCalls: ['fs____writeFile'] }]);
-
-    const result = await replayTrajectory({
-      connection,
-      mode: 'chain',
-      snapshot: twoNodeSnapshot(),
-      target,
-    });
-
-    expect(result.divergedAtNode).toBe(0);
-    expect(result.nodes).toHaveLength(1);
-    expect(result.nodes[0].divergence).toEqual({
-      field: 'toolSignature',
-      recorded: 'fs____readFile',
-      replayed: 'fs____writeFile',
-    });
-    expect(result.nodes[0].unmatchedTools).toEqual(['fs____writeFile']);
-  });
-
-  it('keeps going past a divergence when asked to', async () => {
-    stubModel([{ content: 'guessing', toolCalls: ['fs____writeFile'] }, { content: '43' }]);
-
-    const result = await replayTrajectory({
-      connection,
-      mode: 'chain',
-      onDivergence: 'continue',
-      snapshot: twoNodeSnapshot(),
-      target,
-    });
-
-    expect(result.divergedAtNode).toBe(0);
-    expect(result.nodes).toHaveLength(2);
-  });
-
-  it('anchored mode replays every node against its own recorded payload', async () => {
+  it('replays each node against its own recorded payload', async () => {
     const sent = stubModel([
       { content: 'guessing', toolCalls: ['fs____writeFile'] },
       { content: '43' },
     ]);
 
     const result = await replayTrajectory({
+      concurrency: 1,
       connection,
-      mode: 'anchored',
       snapshot: twoNodeSnapshot(),
       target,
     });
 
-    // A divergence at node 0 is recorded but does not contaminate node 1, whose
-    // payload is the recorded one including the original assistant turn.
+    // Node 0 diverged, but node 1 still gets the payload the harness built for
+    // it — including the ORIGINAL assistant turn and tool result, not the
+    // replayed ones. That independence is the point of the mode.
     expect(result.divergedAtNode).toBe(0);
     expect(result.nodes).toHaveLength(2);
     expect(sent[1].messages.map((m: any) => m.content)).toEqual([
@@ -203,69 +145,61 @@ describe('replayTrajectory', () => {
     ]);
   });
 
-  // The recorded run read "a"; the replay reads "b". Tool names match, so
-  // toolSignature sees nothing — but the recording holds no output for "b", and
-  // feeding it the body of "a" would produce a falsely successful chain.
-  it('treats the same tool called with different arguments as a divergence', async () => {
-    const snap = twoNodeSnapshot();
-    snap.steps[0].toolsCalling = [
-      { apiName: 'readFile', arguments: '{"path":"a"}', identifier: 'fs' },
-    ];
-    stubModel([
-      {
-        content: 'looking it up',
-        toolCalls: [{ arguments: '{"path":"b"}', name: 'fs____readFile' }],
-      },
-    ]);
+  it('a divergence never stops the nodes after it', async () => {
+    stubModel([{ content: 'guessing', toolCalls: ['fs____writeFile'] }, { content: '43' }]);
 
-    const result = await replayTrajectory({ connection, mode: 'chain', snapshot: snap, target });
+    const result = await replayTrajectory({ connection, snapshot: twoNodeSnapshot(), target });
 
-    expect(result.nodes[0].unmatchedTools).toEqual(['fs____readFile']);
-    expect(result.nodes[0].divergence).toEqual({
-      field: 'toolArguments',
-      recorded: 'fs____readFile({"path":"a"})',
-      replayed: 'fs____readFile({"path":"b"})',
-    });
     expect(result.divergedAtNode).toBe(0);
-    // Stopped rather than continuing on a tool result it never earned.
-    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes).toHaveLength(2);
   });
 
-  it('reports a lost anchor as incomplete instead of a finished trajectory', async () => {
-    const snap = twoNodeSnapshot();
-    // Compression rewrote node 1's payload so no earlier assistant turn is left
-    // to splice the replayed tail onto.
-    (snap.steps[2] as any).contextEngine = {
-      output: [{ content: 'compressed summary', role: 'user' }],
-    };
-    stubModel([{ content: 'looking it up', toolCalls: ['fs____readFile'] }, { content: '42' }]);
-
-    const result = await replayTrajectory({
-      connection,
-      mode: 'chain',
-      reproductionJudge: { judgeModel: target },
-      snapshot: snap,
-      target,
+  it('a node that cannot reach the model costs only itself', async () => {
+    let call = 0;
+    vi.stubGlobal('fetch', async () => {
+      // Only the first node fails; the second must still be replayed.
+      if (call++ === 0) return { ok: false, status: 500, text: async () => 'boom' };
+      return {
+        json: async () => ({ choices: [{ message: { content: '42' } }] }),
+        ok: true,
+      };
     });
 
-    expect(result.incomplete).toEqual({ nodeIndex: 1, reason: 'anchor_lost' });
-    expect(result.nodes).toHaveLength(1);
-    expect(result.totalNodes).toBe(2);
-    // A truncated run has no whole-run output to score.
-    expect(result.reproduction).toBeUndefined();
-  });
-
-  it('stops when a node errors', async () => {
-    vi.stubGlobal('fetch', async () => ({ ok: false, status: 500, text: async () => 'boom' }));
-
     const result = await replayTrajectory({
+      concurrency: 1,
       connection,
-      mode: 'chain',
       snapshot: twoNodeSnapshot(),
       target,
     });
 
-    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes).toHaveLength(2);
     expect(result.nodes[0].attempt.error).toContain('500');
+    expect(result.nodes[1].attempt.error).toBeUndefined();
+    expect(result.nodes[1].attempt.content).toBe('42');
+  });
+
+  it('reports nodes in order even when they finish out of order', async () => {
+    const seen: number[] = [];
+    let call = 0;
+    vi.stubGlobal('fetch', async () => {
+      // The first node resolves last.
+      const index = call++;
+      await new Promise((resolve) => setTimeout(resolve, index === 0 ? 20 : 0));
+      return {
+        json: async () => ({ choices: [{ message: { content: `answer ${index}` } }] }),
+        ok: true,
+      };
+    });
+
+    const result = await replayTrajectory({
+      concurrency: 4,
+      connection,
+      onNode: (node) => seen.push(node.nodeIndex),
+      snapshot: twoNodeSnapshot(),
+      target,
+    });
+
+    expect(seen).toEqual([0, 1]);
+    expect(result.nodes.map((node) => node.nodeIndex)).toEqual([0, 1]);
   });
 });

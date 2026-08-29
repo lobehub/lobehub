@@ -6,18 +6,7 @@ import {
   type ReplayConnection,
   replayFrozenCall,
 } from './replayFrozenCall';
-import {
-  buildToolMessages,
-  type ChainTurn,
-  findChainAnchor,
-  listFrozenCalls,
-  recordedAssistantTurn,
-  recordedOutcome,
-  recordedToolResults,
-  toolSignature,
-} from './trajectory';
-
-export type DivergencePolicy = 'continue' | 'stop';
+import { listFrozenCalls, recordedOutcome, toolSignature } from './trajectory';
 
 /**
  * One field of a node that came out differently from the recording.
@@ -28,7 +17,7 @@ export type DivergencePolicy = 'continue' | 'stop';
  * differ and is judged rather than failed.
  */
 export interface TrajectoryDivergence {
-  field: 'toolArguments' | 'toolSignature';
+  field: 'toolSignature';
   recorded: string;
   replayed: string;
 }
@@ -40,39 +29,22 @@ export interface TrajectoryNode {
   nodeIndex: number;
   recorded: { content: string; toolSignature: string };
   stepIndex: number;
-  /** Tool calls with no recorded result to feed back (chain mode only). */
-  unmatchedTools?: string[];
 }
 
 export interface TrajectoryResult {
   divergedAtNode?: number;
-  /**
-   * Set when the replay stopped before covering every node for a reason that is
-   * not a divergence — so a caller can never render a truncated run as a
-   * complete one. `anchor_lost` means a later recorded payload no longer
-   * contained any earlier assistant turn to splice against (context
-   * compression drops them), leaving nowhere to attach the replayed tail.
-   */
-  incomplete?: { nodeIndex: number; reason: 'anchor_lost' };
-  /** How the payload for each node was built. */
-  mode: 'anchored' | 'chain';
   nodes: TrajectoryNode[];
-  /** Semantic comparison of the final output against the recorded one. */
+  /** Semantic comparison of the final node's output against the recorded one. */
   reproduction?: { passed: boolean; reason?: string; score: number };
   totalNodes: number;
 }
 
 export interface ReplayTrajectoryParams {
+  /** How many nodes to have in flight at once. */
+  concurrency?: number;
   connection: ReplayConnection;
   maxTokens?: number;
-  /**
-   * chain: feed each node's replayed output into the next one.
-   * anchored: replay every node against its own recorded payload, so a
-   * divergence at one node cannot contaminate the ones after it.
-   */
-  mode: 'anchored' | 'chain';
-  onDivergence?: DivergencePolicy;
-  /** Called after each node so a CLI can stream progress. */
+  /** Called once per node, in node order, so a CLI can stream progress. */
   onNode?: (node: TrajectoryNode) => void;
   reproductionJudge?: { judgeModel: ModelTarget };
   snapshot: ExecutionSnapshot;
@@ -81,9 +53,7 @@ export interface ReplayTrajectoryParams {
   withTools?: boolean;
 }
 
-/** `tool(args)` list, for showing which call had no recorded counterpart. */
-const argumentSignature = (calls: Array<{ arguments?: string; name: string }>): string =>
-  calls.map((call) => `${call.name}(${call.arguments?.trim() ?? ''})`).join(' → ');
+const DEFAULT_CONCURRENCY = 4;
 
 const REPRODUCTION_CRITERIA = [
   'The [Output] is a replay of a recorded agent turn and is compared against the',
@@ -95,19 +65,47 @@ const REPRODUCTION_CRITERIA = [
 ].join(' ');
 
 /**
- * Replay every `call_llm` node of a recorded operation.
+ * Run `tasks` with at most `limit` in flight, resolving to their results in
+ * input order.
+ */
+const mapWithConcurrency = async <T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+): Promise<T[]> => {
+  const results = Array.from({ length: tasks.length }) as T[];
+  let next = 0;
+
+  const worker = async () => {
+    while (next < tasks.length) {
+      const index = next++;
+      results[index] = await tasks[index]();
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+
+  return results;
+};
+
+/**
+ * Replay every `call_llm` node of a recorded operation, each against the
+ * payload the harness actually built for it.
  *
- * Chain mode is bounded by what a trace can give back: tool output cannot be
- * regenerated, only reused from the recording, so the moment the model calls a
- * tool the original run did not, the trajectory has no ground truth to continue
- * on. That point is the finding, which is why it is reported rather than
- * papered over.
+ * The nodes are independent by construction, and that is the point: node 4 is
+ * asked "given exactly this context, do you make the same decision?", so a
+ * different answer at node 2 cannot contaminate it. Chaining the nodes instead
+ * — feeding each replayed output into the next — was tried and removed: a trace
+ * cannot regenerate tool output, only replay what was recorded, so the moment
+ * the model deviates there is no ground truth left and the run silently
+ * measures nothing.
+ *
+ * Independence also means the nodes can go out concurrently, and that a node
+ * that fails to reach the provider costs only itself.
  */
 export const replayTrajectory = async ({
+  concurrency = DEFAULT_CONCURRENCY,
   connection,
   maxTokens,
-  mode,
-  onDivergence = 'stop',
   onNode,
   reproductionJudge,
   snapshot,
@@ -116,128 +114,53 @@ export const replayTrajectory = async ({
   withTools = true,
 }: ReplayTrajectoryParams): Promise<TrajectoryResult> => {
   const calls = listFrozenCalls(snapshot);
-  const nodes: TrajectoryNode[] = [];
 
-  // Recorded assistant turns, used to locate the model-produced tail inside a
-  // later payload; accumulated replayed turns take their place.
-  const recordedAssistants: ChainTurn[] = [];
-  const replayedTurns: ChainTurn[] = [];
-
-  let divergedAtNode: number | undefined;
-  let incomplete: TrajectoryResult['incomplete'];
-
-  for (const [nodeIndex, call] of calls.entries()) {
-    let messages = call.messages;
-
-    if (mode === 'chain' && nodeIndex > 0) {
-      const anchor = findChainAnchor(call.messages, recordedAssistants);
-      if (!anchor) {
-        // No earlier assistant turn survives in this payload, so there is
-        // nothing to splice the replayed tail onto. Record why the run is short
-        // rather than exiting as if it had finished.
-        incomplete = { nodeIndex, reason: 'anchor_lost' };
-        break;
-      }
-      messages = [
-        ...call.messages.slice(0, anchor.index),
-        ...replayedTurns.slice(anchor.nodeOffset),
-      ];
-    }
-
-    const attempt = await replayFrozenCall({
-      call: { ...call, messages },
-      connection,
-      maxTokens,
-      target,
-      temperature,
-      withTools,
-    });
-
-    const recorded = recordedOutcome(snapshot, call.stepIndex);
-    const recordedSignature = toolSignature(recorded.toolCalls);
-    const actualSignature = toolSignature(attempt.toolCalls);
-
-    const node: TrajectoryNode = {
-      attempt,
-      nodeIndex,
-      recorded: { content: recorded.content, toolSignature: recordedSignature },
-      stepIndex: call.stepIndex,
-    };
-
-    if (!attempt.error && actualSignature !== recordedSignature) {
-      node.divergence = {
-        field: 'toolSignature',
-        recorded: recordedSignature,
-        replayed: actualSignature,
-      };
-      divergedAtNode ??= nodeIndex;
-    }
-
-    if (mode === 'chain') {
-      const assistantTurn = recordedAssistantTurn(snapshot, call.stepIndex);
-      if (assistantTurn) recordedAssistants.push(assistantTurn);
-
-      const toolCalls = attempt.toolCalls.map((toolCall, index) => ({
-        arguments: toolCall.arguments,
-        id: `replay_${nodeIndex}_${index}`,
-        name: toolCall.name,
-      }));
-
-      replayedTurns.push({
-        content: attempt.content,
-        role: 'assistant',
-        ...(toolCalls.length > 0 && {
-          tool_calls: toolCalls.map((toolCall, index) => ({
-            function: {
-              arguments: attempt.toolCalls[index].arguments ?? '{}',
-              name: toolCall.name,
-            },
-            id: toolCall.id,
-            type: 'function',
-          })),
-        }),
+  const nodes = await mapWithConcurrency(
+    calls.map((call, nodeIndex) => async (): Promise<TrajectoryNode> => {
+      const attempt = await replayFrozenCall({
+        call,
+        connection,
+        maxTokens,
+        target,
+        temperature,
+        withTools,
       });
 
-      const recordedResults = recordedToolResults(snapshot, call.stepIndex);
-      const { messages: toolMessages, unmatched } = buildToolMessages(toolCalls, recordedResults);
-      replayedTurns.push(...toolMessages);
+      const recorded = recordedOutcome(snapshot, call.stepIndex);
+      const recordedSignature = toolSignature(recorded.toolCalls);
 
-      if (unmatched.length > 0) {
-        node.unmatchedTools = unmatched;
+      const node: TrajectoryNode = {
+        attempt,
+        nodeIndex,
+        recorded: { content: recorded.content, toolSignature: recordedSignature },
+        stepIndex: call.stepIndex,
+      };
 
-        // The tool sequence can match name-for-name while the arguments differ,
-        // which `toolSignature` deliberately ignores. That still leaves the node
-        // without ground truth to continue on, so it has to register as a
-        // divergence rather than letting the chain run on a wrong tool result.
-        node.divergence ??= {
-          field: 'toolArguments',
-          recorded: argumentSignature(recordedResults),
-          replayed: argumentSignature(toolCalls),
+      const actualSignature = toolSignature(attempt.toolCalls);
+      if (!attempt.error && actualSignature !== recordedSignature) {
+        node.divergence = {
+          field: 'toolSignature',
+          recorded: recordedSignature,
+          replayed: actualSignature,
         };
-        divergedAtNode ??= nodeIndex;
       }
-    }
 
-    nodes.push(node);
-    onNode?.(node);
+      return node;
+    }),
+    Math.max(1, concurrency),
+  );
 
-    if (attempt.error) break;
-    if (mode === 'chain' && node.divergence && onDivergence === 'stop') break;
-  }
+  // Reported in node order regardless of the order they came back in.
+  for (const node of nodes) onNode?.(node);
 
   const result: TrajectoryResult = {
-    divergedAtNode,
-    mode,
+    divergedAtNode: nodes.find((node) => node.divergence)?.nodeIndex,
     nodes,
     totalNodes: calls.length,
-    ...(incomplete && { incomplete }),
   };
 
-  // Reproduction is a claim about the run as a whole, so a trajectory that lost
-  // its anchor part-way has nothing to make that claim about — scoring its last
-  // partial node would read as a passing replay.
   const lastNode = nodes.at(-1);
-  if (reproductionJudge && !incomplete && lastNode && !lastNode.attempt.error) {
+  if (reproductionJudge && lastNode && !lastNode.attempt.error) {
     result.reproduction = await judgeReplay({
       actual: lastNode.attempt.content,
       connection,
