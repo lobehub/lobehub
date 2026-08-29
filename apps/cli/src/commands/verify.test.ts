@@ -857,6 +857,77 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     );
   });
 
+  it('prices a recorded interaction trace with the platform counting logic', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    const atom = (operators: Record<string, number>) =>
+      JSON.stringify({
+        klm: { category: 'action', operators },
+        phase: { id: 'login', label: 'Login' },
+        schema: 'lobehub.agentBrowserKlmTrace@1',
+      });
+    writeFileSync(
+      path.join(dir, 'interaction-trace.jsonl'),
+      `${atom({ K: 1, P: 1 })}\n${atom({ R_ms: 2000 })}\n`,
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          interactionCost: expect.objectContaining({
+            activeSeconds: 1.3,
+            model: 'goms-klm@lobe-v1',
+            sourceTrace: 'interaction-trace.jsonl',
+            totalSeconds: 3.3,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('publishes without interaction cost when no trace was recorded', async () => {
+    // A CLI-only round, or a machine with no agent-browser, records no trace.
+    // Interaction cost is an optional overlay: absent must stay silent, never a
+    // warning and never a 0s measurement rendered as a real one.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    const warnSpy = vi.spyOn(log, 'warn').mockImplementation(() => {});
+
+    await run(['ingest-report', dir, '--json']);
+
+    const metadata = verify.createRun.mutate.mock.calls[0][0].metadata;
+    expect(metadata?.interactionCost).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('interaction'));
+    warnSpy.mockRestore();
+  });
+
+  it('keeps an explicit result.json interactionCost over the trace', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        interactionCost: {
+          activeSeconds: 9,
+          model: 'hand-written',
+          operators: {},
+          totalSeconds: 9,
+          waitSeconds: 0,
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(dir, 'interaction-trace.jsonl'),
+      `${JSON.stringify({ klm: { operators: { P: 1 } } })}\n`,
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate.mock.calls[0][0].metadata.interactionCost.model).toBe(
+      'hand-written',
+    );
+  });
+
   it('finishes the human (non-json) output path for a non-coding report', async () => {
     // Regression: `pullRequest` was block-scoped inside the coding branch while
     // the text success output still read it, so every non-json ingest crashed

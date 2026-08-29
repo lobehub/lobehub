@@ -20,6 +20,7 @@ import {
   evidenceTypeForFile,
   genericContextFromResult,
   inlineTextEvidenceForFile,
+  interactionCostFromReportDir,
   metadataForReport,
   originFromEnv,
   parseSubjectRef,
@@ -677,6 +678,10 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // Strictly the authoring conversation. `--operation` names the Agent Run
   // under test and is passed to `createRun` below — a different relation.
   const origin = originFromEnv();
+  // A UI run that traced its actions prices them here, with the platform's own
+  // counting logic; a run without a trace just has no interaction cost.
+  const tracedCost = interactionCostFromReportDir(dir, result);
+  if (tracedCost) result.interactionCost = tracedCost;
   const newRunMetadata = metadataForReport(result, undefined, origin);
 
   if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
