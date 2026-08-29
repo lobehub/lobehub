@@ -486,6 +486,8 @@ export default {
   'heteroAgent.modelSelector.reasoning.low': 'Low',
   'heteroAgent.modelSelector.reasoning.max': 'Max',
   'heteroAgent.modelSelector.reasoning.medium': 'Medium',
+  'heteroAgent.modelSelector.reasoning.minimal': 'Minimal',
+  'heteroAgent.modelSelector.reasoning.off': 'Off',
   'heteroAgent.modelSelector.reasoning.ultra': 'Ultra',
   'heteroAgent.modelSelector.reasoning.xhigh': 'Extra High',
   'heteroAgent.modelSelector.speed': 'Speed',

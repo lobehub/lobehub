@@ -73,14 +73,20 @@ const SelectorMenu = memo<SelectorMenuProps>(
     return (
       <DropdownMenuRoot>
         <DropdownMenuTrigger nativeButton={false}>
-          <Trigger ariaLabel={view.ariaLabel} fast={view.isFastSpeed} text={view.triggerText} />
+          <Trigger
+            ariaLabel={view.ariaLabel}
+            effortLabel={view.effortLabel}
+            fast={view.isFastSpeed}
+            modelLabel={view.modelLabel}
+            text={view.triggerText}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           {/* The trigger label changes width as selections change, and it sits in the
               right-anchored send area — only its right edge holds still. Aligning to
               the left edge drags the open popup sideways on every pick. */}
           <DropdownMenuPositioner placement="topRight" sideOffset={8}>
-            <DropdownMenuPopup style={{ width: 240 }}>
+            <DropdownMenuPopup style={{ minWidth: 240, maxWidth: 360 }}>
               {view.isCatalogModel && (
                 <ModelCatalogSelector
                   agentId={agentId}

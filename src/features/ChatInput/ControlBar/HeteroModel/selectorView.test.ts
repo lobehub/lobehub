@@ -46,11 +46,11 @@ describe('resolveSelectorShape', () => {
 
   it('gives catalog-only providers the bare picker', () => {
     expect(resolveSelectorShape({ type: 'opencode' }, true).kind).toBe('catalog');
-    expect(resolveSelectorShape({ type: 'pi' }, true).kind).toBe('catalog');
   });
 
   it('gives a catalog provider with another dimension the full menu', () => {
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
+    expect(resolveSelectorShape({ type: 'pi' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
   });
 

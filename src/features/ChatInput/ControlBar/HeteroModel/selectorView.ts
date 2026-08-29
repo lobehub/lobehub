@@ -36,9 +36,11 @@ export interface SelectorDimension {
 export interface SelectorView {
   ariaLabel: string;
   dimensions: SelectorDimension[];
+  effortLabel?: string;
   isCatalogModel: boolean;
   isFastSpeed: boolean;
   model: string;
+  modelLabel: string;
   triggerText: string;
 }
 
@@ -211,9 +213,11 @@ export const buildSelectorView = ({
           reasoning: effortLabel ?? defaultLabel,
         }),
     dimensions,
+    effortLabel,
     isCatalogModel,
     isFastSpeed,
     model,
+    modelLabel,
     triggerText: isModeOnly
       ? mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? t('heteroAgent.modelSelector.defaultConfig')

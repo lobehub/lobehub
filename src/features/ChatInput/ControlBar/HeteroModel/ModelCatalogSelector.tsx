@@ -92,12 +92,19 @@ const styles = createStaticStyles(({ css }) => ({
   stale: css`
     color: ${cssVar.colorWarning};
   `,
+  submenuLabel: css`
+    flex: none;
+  `,
   submenuMeta: css`
     overflow: hidden;
+    flex: 0 1 auto;
 
-    max-width: 150px;
+    min-width: 0;
+    margin-inline-start: auto;
+    padding-inline-start: 16px;
 
     font-family: inherit;
+    text-align: end;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -126,6 +133,9 @@ const styles = createStaticStyles(({ css }) => ({
     opacity: 0.5;
   `,
   triggerLabel: css`
+    overflow: hidden;
+    max-width: 240px;
+    text-overflow: ellipsis;
     white-space: nowrap;
   `,
 }));
@@ -399,7 +409,9 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
             openOnHover={false}
           >
             <DropdownMenuItemContent>
-              <DropdownMenuItemLabel>{t('heteroAgent.modelSelector.model')}</DropdownMenuItemLabel>
+              <DropdownMenuItemLabel className={styles.submenuLabel}>
+                {t('heteroAgent.modelSelector.model')}
+              </DropdownMenuItemLabel>
               <DropdownMenuItemExtra className={styles.submenuMeta}>
                 {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
                   ? t('heteroAgent.modelSelector.default')

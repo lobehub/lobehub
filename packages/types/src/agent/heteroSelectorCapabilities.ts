@@ -90,10 +90,35 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
+export const PI_THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+
+export type PiThinkingEffort = (typeof PI_THINKING_LEVELS)[number];
+
+export const isPiThinkingEffort = (value: string | undefined): value is PiThinkingEffort =>
+  !!value && (PI_THINKING_LEVELS as readonly string[]).includes(value);
+
+/**
+ * Pi accepts the full seven-level vocabulary on `--thinking <level>`.
+ * Whether a specific model supports every level is decided inside pi by
+ * `getSupportedThinkingLevels` (model.reasoning + thinkingLevelMap); pi
+ * clamps an unsupported level to the nearest valid one at runtime, so the
+ * selector can safely expose the whole vocabulary without mirroring each
+ * model's capability table.
+ */
+
 export type HeterogeneousReasoningEffortLevel =
   | ClaudeCodeReasoningEffort
   | CodexReasoningEffort
   | GrokBuildReasoningEffort
+  | PiThinkingEffort
   | QoderReasoningEffort;
 
 export type HeterogeneousReasoningEffort =
@@ -277,6 +302,13 @@ const resolveQoderReasoningEffort = (
   return isQoderReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
+const resolvePiThinkingEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): PiThinkingEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (getCliFlagValue(source?.args, '--thinking') ?? source?.effort)?.trim();
+  return isPiThinkingEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
 /**
  * Catalog providers persist the picked model id verbatim and never read it back
  * out of `args`. Widening them to the arg-first order that `buildHeteroSpawnArgs`
@@ -424,6 +456,11 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },
   'pi': {
+    effort: {
+      encodings: [{ flags: ['--thinking'], kind: 'flag' }],
+      levels: () => PI_THINKING_LEVELS,
+      resolve: resolvePiThinkingEffort,
+    },
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
       extraStripFlags: ['--provider'],

@@ -7,18 +7,28 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css }) => ({
   label: css`
     overflow: hidden;
-    max-width: 150px;
+    flex: 1 1 auto;
+
+    min-width: 0;
+    max-width: min(320px, 35vw);
+
     text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  effort: css`
+    flex: none;
     white-space: nowrap;
   `,
   trigger: css`
     cursor: pointer;
 
     display: flex;
-    flex: none;
+    flex: 1 1 auto;
     gap: 6px;
     align-items: center;
 
+    min-width: 0;
+    max-width: 100%;
     height: 28px;
     padding-inline: 8px;
     border-radius: 6px;
@@ -43,7 +53,9 @@ const styles = createStaticStyles(({ css }) => ({
  */
 interface TriggerProps extends ComponentPropsWithRef<'div'> {
   ariaLabel: string;
+  effortLabel?: string;
   fast?: boolean;
+  modelLabel?: string;
   text: string;
 }
 

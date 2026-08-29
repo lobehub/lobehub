@@ -505,11 +505,15 @@ describe('buildHeteroSpawnArgs', () => {
       '--offline',
       '--model',
       'anthropic/claude-sonnet-4-5',
+      '--thinking',
+      'high',
     ]);
     expect(buildHeteroExecArgs(provider)).toEqual([
       '--agent-arg=--offline',
       '--model',
       'anthropic/claude-sonnet-4-5',
+      '--effort',
+      'high',
     ]);
   });
 
