@@ -1,9 +1,10 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   deriveAgentRuntimeFields,
+  isHeterogeneousAgentModelId,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
@@ -151,8 +152,8 @@ const IMMUTABLE_AGENT_FIELDS = [
   // resolve — it then renders in Ungrouped for every member.
   'sessionGroupId',
   'slug',
-  // Runtime identity is derived from `agencyConfig.heterogeneousProvider` and
-  // must never be accepted as an independent caller-controlled value.
+  // Runtime identity is derived from executable Agent configuration and must
+  // never be accepted as an independent caller-controlled value.
   'runtimeKind',
   'runtimeType',
   'userId',
@@ -555,9 +556,9 @@ export class AgentModel {
    * Query non-virtual agents with optional keyword filter.
    * Returns minimal agent info (id, title, description, avatar, backgroundColor),
    * plus `userId`/`visibility` so callers can gate per-agent actions (e.g.
-   * transfer is creator/primary-owner only), and a compact `heteroType` derived
-   * from `agencyConfig` so callers can tell which results are heterogeneous
-   * (external CLI/device) agents.
+   * transfer is creator/primary-owner only), and a compact `heteroType` so
+   * callers can tell which results are heterogeneous (external CLI/device)
+   * agents.
    * Excludes virtual agents (like inbox, supervisors, etc).
    */
   queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
@@ -566,11 +567,14 @@ export class AgentModel {
 
     const rows = await this.db
       .select({
-        agencyConfig: agents.agencyConfig,
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        legacyRuntimeType: sql<
+          string | null
+        >`${agents.agencyConfig}->'heterogeneousProvider'->>'type'`,
+        model: agents.model,
         name: agents.name,
         runtimeType: agents.runtimeType,
         slug: agents.slug,
@@ -585,11 +589,14 @@ export class AgentModel {
       .offset(offset);
 
     // Surface only the hetero runtime type, not the full agencyConfig payload.
-    return rows.map(({ slug, agencyConfig, runtimeType, ...row }) =>
+    return rows.map(({ slug, legacyRuntimeType, model, runtimeType, ...row }) =>
       normalizeInboxAgentMeta(
         {
           ...row,
-          heteroType: runtimeType ?? agencyConfig?.heterogeneousProvider?.type,
+          heteroType:
+            runtimeType ??
+            legacyRuntimeType ??
+            (isHeterogeneousAgentModelId(model) ? model : undefined),
         },
         { slug },
       ),
@@ -1059,6 +1066,7 @@ export class AgentModel {
     const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(
       sanitizeAgentApiConfig(config.agencyConfig),
     );
+    const model = typeof config.model === 'string' ? config.model : null;
 
     await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
     await this.assertFixedExecutionTarget(this.workspaceId ?? null, agencyConfig);
@@ -1071,8 +1079,8 @@ export class AgentModel {
           {
             ...config,
             agencyConfig,
-            model: typeof config.model === 'string' ? config.model : null,
-            ...deriveAgentRuntimeFields(agencyConfig),
+            model,
+            ...deriveAgentRuntimeFields({ agencyConfig, model }),
           },
         ),
       ])
@@ -1105,16 +1113,18 @@ export class AgentModel {
     return this.db
       .insert(agents)
       .values(
-        normalizedConfigs.map((config) =>
-          buildWorkspacePayload(
+        normalizedConfigs.map((config) => {
+          const model = typeof config.model === 'string' ? config.model : null;
+
+          return buildWorkspacePayload(
             { userId: this.userId, workspaceId: this.workspaceId },
             {
               ...config,
-              model: typeof config.model === 'string' ? config.model : null,
-              ...deriveAgentRuntimeFields(config.agencyConfig),
+              model,
+              ...deriveAgentRuntimeFields({ agencyConfig: config.agencyConfig, model }),
             },
-          ),
-        ),
+          );
+        }),
       )
       .returning();
   };
@@ -1127,10 +1137,25 @@ export class AgentModel {
       agentId,
       this.stripImmutableFields(apiSafeData),
     );
-    const writeData =
-      Object.hasOwn(apiSafeData, 'agencyConfig') && apiSafeData.agencyConfig !== undefined
-        ? { ...sanitizedData, ...deriveAgentRuntimeFields(apiSafeData.agencyConfig) }
-        : sanitizedData;
+    let writeData = sanitizedData;
+    if (sanitizedData.agencyConfig !== undefined || sanitizedData.model !== undefined) {
+      const current = await this.db.query.agents.findFirst({
+        columns: { agencyConfig: true, model: true },
+        where: and(eq(agents.id, agentId), this.ownership()),
+      });
+      if (current) {
+        writeData = {
+          ...sanitizedData,
+          ...deriveAgentRuntimeFields({
+            agencyConfig:
+              sanitizedData.agencyConfig !== undefined
+                ? sanitizedData.agencyConfig
+                : current.agencyConfig,
+            model: sanitizedData.model !== undefined ? sanitizedData.model : current.model,
+          }),
+        };
+      }
+    }
 
     return this.db
       .update(agents)
@@ -1453,7 +1478,13 @@ export class AgentModel {
       }
     }
 
-    Object.assign(mergedValue, deriveAgentRuntimeFields(mergedValue.agencyConfig));
+    Object.assign(
+      mergedValue,
+      deriveAgentRuntimeFields({
+        agencyConfig: mergedValue.agencyConfig,
+        model: mergedValue.model,
+      }),
+    );
 
     // A character sheet is authored as a whole: the studio reads the current
     // profile and writes the version it wants. Deep-merging it would make a
@@ -1655,7 +1686,7 @@ export class AgentModel {
             // preserve it, otherwise a heterogeneous agent is copied as a plain
             // one and its external runtime config is silently lost.
             agencyConfig,
-            ...deriveAgentRuntimeFields(agencyConfig),
+            ...deriveAgentRuntimeFields({ agencyConfig, model: sourceAgent.model }),
             avatar: sourceAgent.avatar,
             backgroundColor: sourceAgent.backgroundColor,
             chatConfig: sourceAgent.chatConfig,
@@ -2214,7 +2245,7 @@ export class AgentModel {
             ...ownershipUpdate,
             ...visibilityUpdate,
             agencyConfig,
-            ...deriveAgentRuntimeFields(agencyConfig),
+            ...deriveAgentRuntimeFields({ agencyConfig, model: agent.model }),
             // Pins are shared state now, exactly like the folder above: a pin
             // the previous owner set for themselves would arrive as a pin for
             // every member of the target workspace. Both belong to the source
@@ -2668,7 +2699,7 @@ export class AgentModel {
       .set({
         agencyConfig: cleanedAgencyConfig,
         clientId: null,
-        ...deriveAgentRuntimeFields(cleanedAgencyConfig),
+        ...deriveAgentRuntimeFields({ agencyConfig: cleanedAgencyConfig, model: agent.model }),
         updatedAt: agents.updatedAt,
         userId: toUserId,
       })

@@ -1,7 +1,7 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
-import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
+import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
@@ -20,6 +20,7 @@ import {
   applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
+  isHeterogeneousAgentModelId,
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';

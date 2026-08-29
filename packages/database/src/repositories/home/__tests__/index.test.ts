@@ -695,6 +695,22 @@ describe('HomeRepository', () => {
       expect(result.ungrouped[0].heterogeneousType).toBe('claude-code');
     });
 
+    it('should fall back to a legacy heterogeneous model while rows are being backfilled', async () => {
+      await clientDB.insert(Schema.agents).values({
+        id: 'legacy-model-agent',
+        model: 'codex',
+        pinned: false,
+        title: 'Legacy Model Agent',
+        userId,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].heterogeneousType).toBe('codex');
+    });
+
     it('should leave heterogeneousType unset when agencyConfig has no heterogeneousProvider', async () => {
       await clientDB.insert(Schema.agents).values({
         id: 'no-hetero-agent',

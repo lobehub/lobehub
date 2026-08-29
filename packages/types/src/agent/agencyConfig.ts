@@ -5,6 +5,7 @@ import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
   HETEROGENEOUS_AGENT_CONFIGS,
+  isHeterogeneousAgentModelId,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './heterogeneousAgent';
 import type {
@@ -284,9 +285,10 @@ const LEGACY_COMMAND_INFERENCE_TYPES = new Set<LocalHeterogeneousAgentType>([
   'codex',
 ]);
 
-interface LegacyHeterogeneousProviderConfig extends HeterogeneousProviderConfig {
+type LegacyHeterogeneousProviderConfig = Omit<HeterogeneousProviderConfig, 'type'> & {
   adapterType?: unknown;
-}
+  type?: unknown;
+};
 
 const resolveKnownHeterogeneousAgentType = (value: unknown): HeterogeneousAgentType | undefined => {
   if (typeof value !== 'string' || !value) return;
@@ -938,28 +940,45 @@ export interface LobeAgentAgencyConfig {
 }
 
 /** Agent runtime family persisted on the agent row for direct filtering. */
-export type AgentRuntimeKind = 'heterogeneous' | 'lobe';
+export type AgentRuntimeKind = 'heterogeneous' | 'native';
 
 /**
- * Runtime identity derived from the executable provider config.
+ * Runtime identity derived from executable Agent configuration.
  *
  * `agencyConfig.heterogeneousProvider` remains the detailed runtime config;
- * these fields are its query-friendly projection on `agents` and must not be
- * accepted as independent caller input.
+ * the legacy `model` fallback remains part of runtime identity until old rows
+ * are upgraded. These fields are their query-friendly projection on `agents`
+ * and must not be accepted as independent caller input.
  */
 export type AgentRuntimeFields =
-  | { runtimeKind: 'heterogeneous'; runtimeType: HeterogeneousAgentType }
-  | { runtimeKind: 'lobe'; runtimeType: null };
+  | { runtimeKind: 'heterogeneous'; runtimeType: string }
+  | { runtimeKind: 'native'; runtimeType: null };
 
-export const deriveAgentRuntimeFields = (
-  agencyConfig: LobeAgentAgencyConfig | null | undefined,
-): AgentRuntimeFields => {
-  if (!agencyConfig?.heterogeneousProvider) {
-    return { runtimeKind: 'lobe', runtimeType: null };
+export const deriveAgentRuntimeFields = ({
+  agencyConfig,
+  model,
+}: {
+  agencyConfig?: LobeAgentAgencyConfig | null;
+  model?: string | null;
+}): AgentRuntimeFields => {
+  if (agencyConfig?.heterogeneousProvider) {
+    const provider = agencyConfig.heterogeneousProvider;
+    const persistedProvider = provider as unknown as LegacyHeterogeneousProviderConfig;
+    const runtimeType =
+      typeof persistedProvider.type === 'string' && persistedProvider.type
+        ? persistedProvider.type
+        : typeof persistedProvider.adapterType === 'string' && persistedProvider.adapterType
+          ? persistedProvider.adapterType
+          : normalizeHeterogeneousProviderConfig(provider).type;
+
+    return { runtimeKind: 'heterogeneous', runtimeType };
   }
 
-  const provider = normalizeHeterogeneousProviderConfig(agencyConfig.heterogeneousProvider);
-  return { runtimeKind: 'heterogeneous', runtimeType: provider.type };
+  if (isHeterogeneousAgentModelId(model)) {
+    return { runtimeKind: 'heterogeneous', runtimeType: model };
+  }
+
+  return { runtimeKind: 'native', runtimeType: null };
 };
 
 /**

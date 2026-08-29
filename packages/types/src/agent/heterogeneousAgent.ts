@@ -392,3 +392,28 @@ export type LocalHeterogeneousAgentType = (typeof HETEROGENEOUS_AGENT_CONFIGS)[n
 export type RemoteHeterogeneousAgentType =
   (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
 export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterogeneousAgentType;
+
+/**
+ * Legacy heterogeneous-agent model IDs. Before `agencyConfig.heterogeneousProvider`
+ * existed, these values alone routed an agent to the external runtime.
+ */
+export const HETEROGENEOUS_AGENT_MODEL_IDS = [
+  'amp',
+  'claude-code',
+  'codebuddy',
+  'codex',
+  'cursor',
+  'kimi-code',
+  'opencode',
+  'pi',
+  'qoder',
+] as const;
+
+export type HeterogeneousAgentModelId = (typeof HETEROGENEOUS_AGENT_MODEL_IDS)[number];
+
+const HETEROGENEOUS_AGENT_MODEL_ID_SET = new Set<string>(HETEROGENEOUS_AGENT_MODEL_IDS);
+
+/** Whether a bare `model` value identifies a legacy heterogeneous agent runtime. */
+export const isHeterogeneousAgentModelId = (
+  model?: string | null,
+): model is HeterogeneousAgentModelId => !!model && HETEROGENEOUS_AGENT_MODEL_ID_SET.has(model);

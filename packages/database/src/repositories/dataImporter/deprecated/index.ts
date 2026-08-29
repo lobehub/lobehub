@@ -154,7 +154,10 @@ export class DeprecatedDataImporterRepos {
                 // anyway.
                 plugins: config.plugins as unknown as string[] | undefined,
                 ...meta,
-                ...deriveAgentRuntimeFields(config.agencyConfig),
+                ...deriveAgentRuntimeFields({
+                  agencyConfig: config.agencyConfig,
+                  model: config.model,
+                }),
                 userId: this.userId,
                 workspaceId: this.workspaceId ?? null,
               })),

@@ -161,7 +161,7 @@ export class AgentGroupRepository {
     targetVisibility?: 'private' | 'public',
   ): NewAgent => ({
     agencyConfig: source?.agencyConfig,
-    ...deriveAgentRuntimeFields(source?.agencyConfig),
+    ...deriveAgentRuntimeFields({ agencyConfig: source?.agencyConfig, model: source?.model }),
     avatar: source?.avatar,
     backgroundColor: source?.backgroundColor,
     chatConfig: source?.chatConfig,

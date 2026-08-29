@@ -522,7 +522,13 @@ export class SessionModel {
 
     return this.db
       .update(agents)
-      .set({ ...mergedValue, ...deriveAgentRuntimeFields(mergedValue.agencyConfig) })
+      .set({
+        ...mergedValue,
+        ...deriveAgentRuntimeFields({
+          agencyConfig: mergedValue.agencyConfig,
+          model: mergedValue.model,
+        }),
+      })
       .where(and(eq(agents.id, session.agent.id), this.agentsOwnership()));
   };
 

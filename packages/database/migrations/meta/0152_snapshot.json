@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "42cd6e47-2aba-49ee-88b3-b8093a9f255d",
+  "id": "66fecac4-4c5d-40ef-a72e-beedd33e1a57",
   "policies": {},
   "prevId": "d213bbf4-1d2d-46bd-b62d-c4c6525a81ae",
   "roles": {},
@@ -131,7 +131,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'lobe'"
+          "default": "'native'"
         },
         "runtime_type": {
           "name": "runtime_type",

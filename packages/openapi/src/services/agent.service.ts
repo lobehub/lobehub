@@ -89,6 +89,7 @@ export class AgentService extends BaseService {
     try {
       return await this.db.transaction(async (tx) => {
         const agencyConfig = request.agencyConfig || null;
+        const model = request.model || null;
         // Prepare creation data
         const newAgentData: NewAgent = {
           accessedAt: new Date(),
@@ -98,14 +99,14 @@ export class AgentService extends BaseService {
           createdAt: new Date(),
           description: request.description || null,
           id: idGenerator('agents'),
-          model: request.model || null,
+          model,
           params: request.params ?? {},
           provider: request.provider || null,
           slug: randomSlug(4), // Auto-generated slug
           systemRole: request.systemRole || null,
           title: request.title,
           updatedAt: new Date(),
-          ...deriveAgentRuntimeFields(agencyConfig),
+          ...deriveAgentRuntimeFields({ agencyConfig, model }),
           ...this.buildWorkspacePayload({}),
         };
 
@@ -160,6 +161,7 @@ export class AgentService extends BaseService {
 
         // Only update fields actually provided in the request to avoid overwriting existing values with undefined
         const updateData: Record<string, unknown> = { updatedAt: new Date() };
+        let effectiveAgencyConfig = existingAgent.agencyConfig;
 
         if (request.agencyConfig !== undefined) {
           // Merged, not replaced. The request schema exposes only the graph
@@ -189,8 +191,8 @@ export class AgentService extends BaseService {
             request.agencyConfig === null
               ? resolveClearedAgencyConfig(existingAgent.agencyConfig, canWritePolicies)
               : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
+          effectiveAgencyConfig = agencyConfig;
           updateData.agencyConfig = agencyConfig;
-          Object.assign(updateData, deriveAgentRuntimeFields(agencyConfig));
         }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
         if (request.chatConfig !== undefined) {
@@ -207,6 +209,16 @@ export class AgentService extends BaseService {
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
         if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;
         if (request.title !== undefined) updateData.title = request.title;
+
+        if (request.agencyConfig !== undefined || request.model !== undefined) {
+          Object.assign(
+            updateData,
+            deriveAgentRuntimeFields({
+              agencyConfig: effectiveAgencyConfig,
+              model: request.model !== undefined ? (request.model ?? null) : existingAgent.model,
+            }),
+          );
+        }
 
         // Merge params instead of fully overwriting
         if (request.params !== undefined) {

@@ -89,38 +89,71 @@ describe('normalizeHeterogeneousProviderConfig', () => {
 });
 
 describe('deriveAgentRuntimeFields', () => {
-  it('identifies the built-in Lobe runtime when no heterogeneous provider exists', () => {
-    expect(deriveAgentRuntimeFields(undefined)).toEqual({
-      runtimeKind: 'lobe',
+  it('identifies the native runtime when no heterogeneous identity exists', () => {
+    expect(deriveAgentRuntimeFields({})).toEqual({
+      runtimeKind: 'native',
       runtimeType: null,
     });
-    expect(deriveAgentRuntimeFields({})).toEqual({
-      runtimeKind: 'lobe',
+    expect(deriveAgentRuntimeFields({ model: 'gpt-4o' })).toEqual({
+      runtimeKind: 'native',
       runtimeType: null,
     });
   });
 
   it('projects the configured heterogeneous runtime type', () => {
-    expect(deriveAgentRuntimeFields({ heterogeneousProvider: { type: 'openclaw' } })).toEqual({
+    expect(
+      deriveAgentRuntimeFields({
+        agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+      }),
+    ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'openclaw' });
+  });
+
+  it('projects a legacy heterogeneous model when no provider config exists', () => {
+    expect(deriveAgentRuntimeFields({ model: 'codex' })).toEqual({
       runtimeKind: 'heterogeneous',
-      runtimeType: 'openclaw',
+      runtimeType: 'codex',
     });
+  });
+
+  it('prefers the provider config over a legacy model identity', () => {
+    expect(
+      deriveAgentRuntimeFields({
+        agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+        model: 'codex',
+      }),
+    ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'openclaw' });
+  });
+
+  it('preserves an unknown persisted provider type without blocking projection', () => {
+    expect(
+      deriveAgentRuntimeFields({
+        agencyConfig: {
+          heterogeneousProvider: {
+            type: 'future-agent',
+          } as unknown as HeterogeneousProviderConfig,
+        },
+      }),
+    ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'future-agent' });
   });
 
   it('normalizes legacy heterogeneous provider identities', () => {
     expect(
       deriveAgentRuntimeFields({
-        heterogeneousProvider: {
-          adapterType: 'codex',
-          command: 'custom-agent',
-        } as unknown as HeterogeneousProviderConfig,
+        agencyConfig: {
+          heterogeneousProvider: {
+            adapterType: 'codex',
+            command: 'custom-agent',
+          } as unknown as HeterogeneousProviderConfig,
+        },
       }),
     ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'codex' });
     expect(
       deriveAgentRuntimeFields({
-        heterogeneousProvider: {
-          command: '/usr/local/bin/claude',
-        } as unknown as HeterogeneousProviderConfig,
+        agencyConfig: {
+          heterogeneousProvider: {
+            command: '/usr/local/bin/claude',
+          } as unknown as HeterogeneousProviderConfig,
+        },
       }),
     ).toEqual({ runtimeKind: 'heterogeneous', runtimeType: 'claude-code' });
   });

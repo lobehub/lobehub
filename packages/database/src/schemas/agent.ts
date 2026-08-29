@@ -1,7 +1,6 @@
 import type {
   AgentProfile,
   AgentRuntimeKind,
-  HeterogeneousAgentType,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   LobeAgentTTSConfig,
@@ -83,10 +82,10 @@ export const agents = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     agencyConfig: jsonb('agency_config').$type<LobeAgentAgencyConfig>(),
-    /** Query-friendly runtime family derived from `agencyConfig`. */
-    runtimeKind: text('runtime_kind').$type<AgentRuntimeKind>().default('lobe').notNull(),
-    /** External runtime identifier; null when `runtimeKind` is `lobe`. */
-    runtimeType: text('runtime_type').$type<HeterogeneousAgentType>(),
+    /** Query-friendly runtime family derived from executable Agent configuration. */
+    runtimeKind: text('runtime_kind').$type<AgentRuntimeKind>().default('native').notNull(),
+    /** External runtime identifier; null when `runtimeKind` is `native`. */
+    runtimeType: text('runtime_type'),
     chatConfig: jsonb('chat_config').$type<LobeAgentChatConfig>(),
 
     fewShots: jsonb('few_shots'),
@@ -137,8 +136,8 @@ export const insertAgentSchema = createInsertSchema(agents, {
   agencyConfig: z.custom<LobeAgentAgencyConfig>().nullish(),
   // Override chatConfig type to use the proper schema
   chatConfig: AgentChatConfigSchema.nullish(),
-  runtimeKind: z.enum(['heterogeneous', 'lobe']).optional(),
-  runtimeType: z.custom<HeterogeneousAgentType>().nullish(),
+  runtimeKind: z.enum(['heterogeneous', 'native']).optional(),
+  runtimeType: z.string().nullish(),
   // See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution.
   // `.optional()` preserves defaulted-column omit semantics at runtime.
   // Enum values from AGENT_VISIBILITY so column def and schema stay in sync.
