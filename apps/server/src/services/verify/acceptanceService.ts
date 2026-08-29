@@ -547,8 +547,20 @@ export class AcceptanceService {
     run: VerifyRunItem,
     acceptanceId: string,
   ): Promise<void> => {
-    const planIds = (run.plan ?? []).map((item) => item.id).filter(Boolean);
-    if (planIds.length === 0) return;
+    // Every identity by which an incoming item could come to rest on an
+    // existing row. The union keys rows by `sourceCriterionId ?? id`, and a
+    // `supersedes` declaration folds the named row into this one — so comparing
+    // physical ids alone lets both routes write into a settled row unblocked.
+    const candidates = new Map<string, string>();
+    for (const item of run.plan ?? []) {
+      const logicalId = item.sourceCriterionId ?? item.id;
+      if (logicalId) candidates.set(logicalId, item.id);
+      if (item.id) candidates.set(item.id, item.id);
+      for (const superseded of item.supersedes ?? []) {
+        if (superseded) candidates.set(superseded, item.id);
+      }
+    }
+    if (candidates.size === 0) return;
 
     const runs = await this.runModel.listByAcceptance(acceptanceId);
     if (runs.length === 0) return;
@@ -584,7 +596,15 @@ export class AcceptanceService {
       for (const superseded of check.supersededIds ?? []) blocked.add(superseded);
     }
 
-    const offenders = planIds.filter((id) => blocked.has(id));
+    // Report the plan item the author has to change, not the internal identity
+    // it collided through — those can differ, and only the former is editable.
+    const offenders = [
+      ...new Set(
+        [...candidates]
+          .filter(([identity]) => blocked.has(identity))
+          .map(([, planItemId]) => planItemId),
+      ),
+    ];
     if (offenders.length === 0) return;
 
     throw new Error(

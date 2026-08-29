@@ -112,6 +112,44 @@ describe('attaching a round that targets an accepted check', () => {
     expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
   });
 
+  it("refuses a fresh plan-item id that carries the settled check's sourceCriterionId", async () => {
+    // The union keys rows by `sourceCriterionId ?? id`, so a brand-new physical
+    // id pointing at the same criterion still lands on the settled row.
+    mocks.listByAcceptance.mockResolvedValue([
+      {
+        acceptanceId: 'acc-1',
+        id: 'run-1',
+        plan: [{ id: 'physical-1', index: 0, sourceCriterionId: 'crit-a', title: 'crit-a' }],
+        roundIndex: 1,
+      },
+    ]);
+    mocks.listByRuns.mockResolvedValue([acceptedResult('physical-1', 'run-1')]);
+    mocks.runFindById.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-2',
+      plan: [{ id: 'physical-2', index: 0, sourceCriterionId: 'crit-a', title: 'crit-a' }],
+      userId: 'u1',
+    });
+
+    // Names the plan item the author can actually edit, not the criterion id.
+    await expect(service().attachRun('run-2', 'acc-1')).rejects.toThrow(/physical-2/);
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new id that declares it supersedes the settled check', async () => {
+    // Superseding folds the accepted row's timeline into the newcomer, so the
+    // new result would render under the accepted verdict just the same.
+    mocks.runFindById.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-2',
+      plan: [{ id: 'replacement', index: 0, supersedes: ['settled-check'], title: 'replacement' }],
+      userId: 'u1',
+    });
+
+    await expect(service().attachRun('run-2', 'acc-1')).rejects.toThrow(/replacement/);
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
   it('attaches a round that only touches unreviewed or brand-new checks', async () => {
     mocks.runFindById.mockResolvedValue({
       acceptanceId: null,
