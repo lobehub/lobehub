@@ -138,7 +138,10 @@ export const imageUrlToBase64 = async (
 
     return { base64, mimeType };
   } catch (error) {
-    console.error('Error converting image to base64:', error);
+    /** Raw fetch errors can contain presigned URL query credentials. */
+    console.error('Error converting image to base64:', {
+      name: error instanceof Error ? error.name : typeof error,
+    });
     throw error;
   }
 };

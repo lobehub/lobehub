@@ -118,10 +118,16 @@ describe('imageUrlToBase64', () => {
   });
 
   it('should throw an error when fetch fails', async () => {
-    const mockError = new Error('Fetch failed');
+    const url = 'https://example.com/image.jpg?secret=top-secret';
+    const mockError = new Error(`Fetch failed for ${url}`);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockRejectedValue(mockError);
 
-    await expect(imageUrlToBase64('https://example.com/image.jpg')).rejects.toThrow('Fetch failed');
+    await expect(imageUrlToBase64(url)).rejects.toThrow(`Fetch failed for ${url}`);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error converting image to base64:', {
+      name: 'Error',
+    });
+    expect(JSON.stringify(consoleErrorSpy.mock.calls)).not.toContain('top-secret');
   });
 
   it('should cancel a streaming download once it exceeds the configured byte limit', async () => {
