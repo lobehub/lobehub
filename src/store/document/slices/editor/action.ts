@@ -390,7 +390,10 @@ export class EditorActionImpl {
    * missing lease and legitimately reclaims a same-user one — so the save can
    * be retried once. A lease genuinely held by ANOTHER member comes back as
    * `lockedByOther`, and the original CONFLICT is rethrown so the existing
-   * `saveBlockedByLock` read-only flow stays intact.
+   * `saveBlockedByLock` read-only flow stays intact. Before reclaiming, the
+   * server copy is compared against this session's last-known content so a
+   * collaborator's just-saved-then-released version can never be overwritten
+   * by the retry.
    */
   private retrySaveAfterLockReclaim = async <T>(
     id: string,
@@ -400,6 +403,22 @@ export class EditorActionImpl {
   ): Promise<T> => {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
     if (errorCode !== 'CONFLICT' || !lockOwnerId) throw error;
+
+    // The rejected lease may have belonged to ANOTHER member who saved and
+    // released it between our failed save and this recovery — reclaiming a
+    // now-free lease alone cannot tell that apart from a self conflict. Only
+    // retry when the server's stored content is still exactly what this
+    // session last hydrated or saved, so resending our payload cannot clobber
+    // a collaborator's newer version. Any mismatch keeps the original
+    // CONFLICT flow (read-only + rehydrate, unsaved content kept for copy-out).
+    let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
+    try {
+      latest = await documentService.getDocumentById(id);
+    } catch {
+      throw error;
+    }
+    const doc = this.#get().documents[id];
+    if (!latest || !doc || (latest.content ?? '') !== (doc.lastSavedContent ?? '')) throw error;
 
     let lockedByOther: boolean;
     try {
