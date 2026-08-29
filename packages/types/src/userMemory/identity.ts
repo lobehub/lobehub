@@ -48,7 +48,8 @@ export interface UserMemoryIdentity {
 
 export type UserMemoryIdentityWithoutVectors = Omit<UserMemoryIdentity, 'descriptionVector'>;
 
-export type UserMemoryIdentitiesListItem = UserMemoryIdentityWithoutVectors;
+export type UserMemoryIdentitiesListItem = UserMemoryIdentityWithoutVectors &
+  Pick<BaseListItem, 'capturedAt'>;
 
 export interface NewUserMemoryIdentity {
   description?: string;

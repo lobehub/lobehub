@@ -1091,6 +1091,7 @@ export class UserMemoryModel {
           .select({
             context: {
               accessedAt: userMemoriesContexts.accessedAt,
+              capturedAt: userMemoriesContexts.capturedAt,
               createdAt: userMemoriesContexts.createdAt,
               currentStatus: userMemoriesContexts.currentStatus,
               description: userMemoriesContexts.description,
@@ -1306,6 +1307,7 @@ export class UserMemoryModel {
             experience: {
               accessedAt: userMemoriesExperiences.accessedAt,
               action: userMemoriesExperiences.action,
+              capturedAt: userMemoriesExperiences.capturedAt,
               createdAt: userMemoriesExperiences.createdAt,
               id: userMemoriesExperiences.id,
               keyLearning: userMemoriesExperiences.keyLearning,
@@ -1498,6 +1500,7 @@ export class UserMemoryModel {
             memory: baseSelection,
             preference: {
               accessedAt: userMemoriesPreferences.accessedAt,
+              capturedAt: userMemoriesPreferences.capturedAt,
               conclusionDirectives: userMemoriesPreferences.conclusionDirectives,
               createdAt: userMemoriesPreferences.createdAt,
               id: userMemoriesPreferences.id,

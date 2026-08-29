@@ -87,6 +87,7 @@ async function createIdentityPair(opts: {
 // Helper to create a base memory + experience pair
 async function createExperiencePair(opts?: {
   action?: string;
+  capturedAt?: Date;
   possibleOutcome?: string;
   reasoning?: string;
   tags?: string[];
@@ -112,6 +113,7 @@ async function createExperiencePair(opts?: {
     .insert(userMemoriesExperiences)
     .values({
       action: opts?.action ?? 'did something',
+      capturedAt: opts?.capturedAt,
       keyLearning: 'learned stuff',
       possibleOutcome: opts?.possibleOutcome ?? 'better outcomes',
       reasoning: opts?.reasoning ?? 'careful reasoning',
@@ -128,6 +130,7 @@ async function createExperiencePair(opts?: {
 
 // Helper to create a base memory + preference pair
 async function createPreferencePair(opts?: {
+  capturedAt?: Date;
   conclusionDirectives?: string;
   suggestions?: string;
   tags?: string[];
@@ -152,6 +155,7 @@ async function createPreferencePair(opts?: {
   const [pref] = await serverDB
     .insert(userMemoriesPreferences)
     .values({
+      capturedAt: opts?.capturedAt,
       conclusionDirectives: opts?.conclusionDirectives ?? 'use dark mode',
       suggestions: opts?.suggestions ?? 'keep it concise',
       tags: opts?.tags,
@@ -215,6 +219,7 @@ async function createActivityPair(opts?: {
 async function createContextPair(opts?: {
   associatedObjectName?: string;
   associatedSubjectName?: string;
+  capturedAt?: Date;
   description?: string;
   tags?: string[];
   title?: string;
@@ -245,6 +250,7 @@ async function createContextPair(opts?: {
       associatedSubjects: opts?.associatedSubjectName
         ? [{ name: opts.associatedSubjectName, type: 'person' }]
         : [],
+      capturedAt: opts?.capturedAt,
       description: opts?.description ?? 'A context description',
       tags: opts?.tags,
       title: opts?.title ?? 'A context',
@@ -519,6 +525,19 @@ describe('UserMemoryModel', () => {
         expect(result.total).toBe(2);
       });
 
+      it('should return context capturedAt', async () => {
+        const capturedAt = new Date('2024-01-15T10:00:00.000Z');
+        await createContextPair({ capturedAt });
+
+        const result = await memoryModel.queryMemories({ layer: LayersEnum.Context });
+
+        const [item] = result.items;
+        expect(item?.layer).toBe(LayersEnum.Context);
+        if (item?.layer === LayersEnum.Context) {
+          expect(item.context.capturedAt).toEqual(capturedAt);
+        }
+      });
+
       // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
       const isServerDB = process.env.TEST_SERVER_DB === '1';
       it.skipIf(!isServerDB)('should filter by text query', async () => {
@@ -562,6 +581,19 @@ describe('UserMemoryModel', () => {
         expect(result.items.length).toBe(1);
         expect(result.total).toBe(1);
       });
+
+      it('should return experience capturedAt', async () => {
+        const capturedAt = new Date('2024-01-16T10:00:00.000Z');
+        await createExperiencePair({ capturedAt });
+
+        const result = await memoryModel.queryMemories({ layer: LayersEnum.Experience });
+
+        const [item] = result.items;
+        expect(item?.layer).toBe(LayersEnum.Experience);
+        if (item?.layer === LayersEnum.Experience) {
+          expect(item.experience.capturedAt).toEqual(capturedAt);
+        }
+      });
     });
 
     describe('identity layer', () => {
@@ -583,6 +615,19 @@ describe('UserMemoryModel', () => {
 
         expect(result.items.length).toBe(1);
         expect(result.total).toBe(1);
+      });
+
+      it('should return preference capturedAt', async () => {
+        const capturedAt = new Date('2024-01-17T10:00:00.000Z');
+        await createPreferencePair({ capturedAt });
+
+        const result = await memoryModel.queryMemories({ layer: LayersEnum.Preference });
+
+        const [item] = result.items;
+        expect(item?.layer).toBe(LayersEnum.Preference);
+        if (item?.layer === LayersEnum.Preference) {
+          expect(item.preference.capturedAt).toEqual(capturedAt);
+        }
       });
     });
 

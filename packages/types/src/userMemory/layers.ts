@@ -1,3 +1,5 @@
+import type { BaseListItem } from './shared';
+
 export interface UserMemoryTimestamps {
   accessedAt: Date;
   createdAt: Date;
@@ -80,7 +82,8 @@ export type UserMemoryContextWithoutVectors = Omit<
 export type UserMemoryContextsListItem = Omit<
   UserMemoryContextWithoutVectors,
   'associatedObjects' | 'associatedSubjects'
->;
+> &
+  Pick<BaseListItem, 'capturedAt'>;
 
 export interface UserMemoryExperience extends UserMemoryTimestamps {
   action: string | null;
@@ -108,7 +111,8 @@ export type UserMemoryExperienceWithoutVectors = Omit<
 export type UserMemoryExperiencesListItem = Omit<
   UserMemoryExperienceWithoutVectors,
   'possibleOutcome' | 'reasoning'
->;
+> &
+  Pick<BaseListItem, 'capturedAt'>;
 
 export interface UserMemoryPreference extends UserMemoryTimestamps {
   conclusionDirectives: string | null;
@@ -128,7 +132,11 @@ export type UserMemoryPreferenceWithoutVectors = Omit<
   'conclusionDirectivesVector'
 >;
 
-export type UserMemoryPreferencesListItem = Omit<UserMemoryPreferenceWithoutVectors, 'suggestions'>;
+export type UserMemoryPreferencesListItem = Omit<
+  UserMemoryPreferenceWithoutVectors,
+  'suggestions'
+> &
+  Pick<BaseListItem, 'capturedAt'>;
 
 export interface UserMemoryActivity extends UserMemoryTimestamps {
   associatedLocations: UserMemoryAssociatedLocation[] | null;
@@ -159,4 +167,5 @@ export type UserMemoryActivityWithoutVectors = Omit<
 export type UserMemoryActivitiesListItem = Omit<
   UserMemoryActivityWithoutVectors,
   'feedback' | 'narrative' | 'notes'
->;
+> &
+  Pick<BaseListItem, 'capturedAt'>;
