@@ -138,11 +138,18 @@ const styles = createStaticStyles(({ css }) => ({
     flex-wrap: wrap;
     gap: 8px 14px;
   `,
+  /* Secondary to the phase name: it may be a long check title, so it is the part
+     that gives way and truncates rather than squeezing the name out of the row. */
   phaseCheck: css`
-    flex: 0 0 auto;
-    font-family: ${cssVar.fontFamilyCode};
+    overflow: hidden;
+    flex: 1 1 auto;
+
+    min-width: 0;
+
     font-size: 11px;
     color: ${cssVar.colorTextQuaternary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   phaseList: css`
     display: flex;
@@ -155,15 +162,19 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: baseline;
 
+    min-width: 0;
+
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
     white-space: nowrap;
-
-    > span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+  `,
+  /* The phase is what tells two rows apart, so it never shrinks — a long check
+     title must not collapse it to nothing and leave the rows looking identical. */
+  phaseSlug: css`
+    overflow: hidden;
+    flex: 0 0 auto;
+    max-width: 60%;
+    text-overflow: ellipsis;
   `,
   phaseRow: css`
     display: grid;
@@ -303,7 +314,7 @@ const InteractionCostPanel = memo<InteractionCostPanelProps>(({ checkLabels, cos
                   className={styles.phaseName}
                   title={checkLabel ? `${name} · ${checkLabel}` : name}
                 >
-                  <span>{name}</span>
+                  <span className={styles.phaseSlug}>{name}</span>
                   {checkLabel && <span className={styles.phaseCheck}>{checkLabel}</span>}
                 </span>
                 <span className={styles.phaseTrack}>
