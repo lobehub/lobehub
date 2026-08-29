@@ -342,6 +342,11 @@ export class EditorActionImpl {
       try {
         result = await requestSave();
       } catch (error) {
+        // Self-heal only plain content saves: a save carrying title/emoji or a
+        // history restore replays fields the recovery's content+editorData
+        // comparison cannot vouch for (a collaborator's metadata-only change
+        // would be silently overwritten), so those keep the plain CONFLICT flow.
+        if (hasMetadataChanges || options?.restoreFromHistoryId) throw error;
         result = await this.retrySaveAfterLockReclaim(id, doc, error, requestSave);
       }
 

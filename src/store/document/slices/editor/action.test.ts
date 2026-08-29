@@ -1030,6 +1030,41 @@ name: skill-name
       expect(result.current.documents['doc-1'].isDirty).toBe(true);
     });
 
+    it('does not retry a save that carries metadata (title/emoji cannot be version-checked)', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+        data: { code: 'CONFLICT' },
+      });
+      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+
+      await act(async () => {
+        await result.current.performSave('doc-1', { title: 'Renamed while conflicted' });
+      });
+
+      // A collaborator may have changed only the title/emoji — the recovery's
+      // content comparison cannot vouch for those fields, so no self-heal.
+      expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
+    });
+
     it('does not retry when a newer save from this tab landed while the failed save was in flight', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createValidMockEditor() as any;
