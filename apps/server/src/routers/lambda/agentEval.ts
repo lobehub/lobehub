@@ -349,7 +349,9 @@ export const agentEvalRouter = router({
   createDataset: agentEvalProcedureWrite
     .input(
       z.object({
-        benchmarkId: z.string(),
+        // Optional: a dataset accumulated from captured cases belongs to no
+        // published benchmark.
+        benchmarkId: z.string().optional(),
         identifier: z.string(),
         name: z.string(),
         description: z.string().optional(),
@@ -392,9 +394,20 @@ export const agentEvalRouter = router({
     }),
 
   listDatasets: agentEvalProcedure
-    .input(z.object({ benchmarkId: z.string().optional() }).optional())
+    .input(
+      z
+        .object({
+          benchmarkId: z.string().optional(),
+          /** Only datasets that belong to no benchmark. */
+          unlinked: z.boolean().optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
-      return ctx.datasetModel.query({ benchmarkId: input?.benchmarkId });
+      return ctx.datasetModel.query({
+        benchmarkId: input?.benchmarkId,
+        unlinked: input?.unlinked,
+      });
     }),
 
   getDataset: agentEvalProcedure

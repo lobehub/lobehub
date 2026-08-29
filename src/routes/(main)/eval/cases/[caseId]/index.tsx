@@ -10,15 +10,11 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import { useEvalStore } from '@/store/eval';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import TestCaseDetail from '../../../../../../features/TestCaseDetail';
+import TestCaseDetail from '../../features/TestCaseDetail';
 
 const Page = memo(() => {
   const { t } = useTranslation('eval');
-  const { benchmarkId, caseId, datasetId } = useParams<{
-    benchmarkId: string;
-    caseId: string;
-    datasetId: string;
-  }>();
+  const { caseId } = useParams<{ caseId: string }>();
 
   const useFetchTestCase = useEvalStore((s) => s.useFetchTestCase);
   const { data: testCase, error, isLoading, mutate } = useFetchTestCase(caseId);
@@ -43,9 +39,7 @@ const Page = memo(() => {
       }
       onRetry={() => mutate()}
     >
-      {testCase && (
-        <TestCaseDetail benchmarkId={benchmarkId!} datasetId={datasetId!} testCase={testCase} />
-      )}
+      {testCase && <TestCaseDetail testCase={testCase} />}
     </AsyncBoundary>
   );
 });

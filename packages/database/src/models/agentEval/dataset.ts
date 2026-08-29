@@ -8,6 +8,8 @@ interface QueryDatasetsFilters {
   benchmarkId?: string;
   benchmarkIds?: string[];
   sourceExperimentId?: string;
+  /** Only datasets that belong to no benchmark. */
+  unlinked?: boolean;
 }
 
 export class AgentEvalDatasetModel {
@@ -60,8 +62,12 @@ export class AgentEvalDatasetModel {
    * @param filters - Optional benchmark / experiment filters
    */
   query = async (filters?: QueryDatasetsFilters) => {
-    const { benchmarkId, benchmarkIds, sourceExperimentId } = filters || {};
+    const { benchmarkId, benchmarkIds, sourceExperimentId, unlinked } = filters || {};
     const conditions = [this.ownership()];
+
+    if (unlinked) {
+      conditions.push(isNull(agentEvalDatasets.benchmarkId));
+    }
 
     if (benchmarkId) {
       conditions.push(eq(agentEvalDatasets.benchmarkId, benchmarkId));

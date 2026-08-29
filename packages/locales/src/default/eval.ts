@@ -182,10 +182,13 @@ export default {
   'dataset.import.upload.hint': 'Supports CSV, XLSX, JSON, JSONL',
   'dataset.import.upload.text': 'Click or drag file here to upload',
   'dataset.import.uploading': 'Uploading...',
+  'dataset.detail.backToEval': 'Back to Eval',
   'dataset.detail.backToBenchmark': 'Back to Benchmark',
   'dataset.detail.caseCount': '{{count}} test case{{count, plural, one {} other {s}}}',
   'dataset.detail.addRun': 'New Run',
   'dataset.detail.relatedRuns': 'Related Runs ({{count}})',
+  'dataset.detail.runsNeedBenchmark':
+    'Evaluation runs are still scoped to a benchmark, so this dataset cannot be run yet.',
   'dataset.detail.testCases': 'Test Cases',
   'dataset.detail.viewDetail': 'View Details',
   'dataset.switchDataset': 'Switch Dataset',

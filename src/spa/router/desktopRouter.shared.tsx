@@ -839,6 +839,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
           { preloadId: 'eval' },
         ),
       },
+      // A dataset and a case are addressable on their own. A dataset need not
+      // belong to a published benchmark, so a benchmark id cannot be part of
+      // their canonical path.
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/eval/datasets/[datasetId]'),
+          'Desktop > Eval > Dataset Detail',
+        ),
+        path: 'datasets/:datasetId',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/eval/cases/[caseId]'),
+          'Desktop > Eval > Test Case Detail',
+        ),
+        path: 'cases/:caseId',
+      },
       // Bench routes (with dedicated sidebar)
       {
         children: [
@@ -870,26 +887,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'runs/:runId',
           },
           {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]'),
-                  'Desktop > Eval > Dataset Detail',
-                ),
-                index: true,
-              },
-              {
-                // The case as a definition, addressable without a run. The
-                // `runs/:runId/cases/:caseId` route above is a different thing:
-                // that one renders a case's *result* inside one run.
-                element: dynamicElement(
-                  () =>
-                    import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]/cases/[caseId]'),
-                  'Desktop > Eval > Test Case Detail',
-                ),
-                path: 'cases/:caseId',
-              },
-            ],
+            // Legacy shape, kept so existing links still resolve; it redirects
+            // to the benchmark-free `/eval/datasets/:datasetId`.
+            element: dynamicElement(
+              () => import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]'),
+              'Desktop > Eval > Dataset Detail (legacy redirect)',
+            ),
             path: 'datasets/:datasetId',
           },
         ],

@@ -59,9 +59,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface TestCaseDetailProps {
-  benchmarkId: string;
-  datasetId: string;
   testCase: {
+    datasetId: string;
     content?: {
       input?: string;
       messages?: Array<{ content?: unknown; role?: string }>;
@@ -78,7 +77,7 @@ export interface TestCaseDetailProps {
  * without a run. The `runs/:runId/cases/:caseId` page is a different surface: it
  * renders one case's *result* inside a single run.
  */
-const TestCaseDetail = memo<TestCaseDetailProps>(({ benchmarkId, datasetId, testCase }) => {
+const TestCaseDetail = memo<TestCaseDetailProps>(({ testCase }) => {
   const { t } = useTranslation('eval');
 
   const content = testCase.content ?? {};
@@ -90,10 +89,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ benchmarkId, datasetId, test
 
   return (
     <Flexbox gap={24} style={{ maxWidth: 880, paddingBlock: 24, paddingInline: 32 }}>
-      <WorkspaceLink
-        className={styles.backLink}
-        to={`/eval/bench/${benchmarkId}/datasets/${datasetId}`}
-      >
+      <WorkspaceLink className={styles.backLink} to={`/eval/datasets/${testCase.datasetId}`}>
         <ArrowLeft size={16} />
         {t('testCaseDetail.backToDataset')}
       </WorkspaceLink>
