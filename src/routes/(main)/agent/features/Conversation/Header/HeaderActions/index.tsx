@@ -5,7 +5,8 @@ import { ActionIcon } from '@lobehub/ui/base-ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 
-import HeaderSlot from '../HeaderSlot';
+import HeaderSlot from '@/routes/(main)/agent/(chat)/_layout/HeaderSlot';
+
 import { useMenu } from './useMenu';
 
 const HeaderActions = memo(() => {

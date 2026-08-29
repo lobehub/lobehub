@@ -6,10 +6,10 @@ import { createStaticStyles } from 'antd-style';
 import { memo, useRef } from 'react';
 import { Outlet } from 'react-router';
 
-import ChatHeader from '@/features/AgentConversation/Header';
-import HeaderSlot from '@/features/AgentConversation/Header/HeaderSlot';
 import ChatTerminalPanel from '@/features/ChatTerminal';
 import AgentWorkingSidebar from '@/features/Conversation/WorkingSidebar';
+import HeaderSlot from '@/routes/(main)/agent/(chat)/_layout/HeaderSlot';
+import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
 import Portal from '@/routes/(main)/agent/features/Portal';
 
 const styles = createStaticStyles(({ css }) => ({

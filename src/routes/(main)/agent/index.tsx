@@ -2,8 +2,8 @@
 
 import { Flexbox } from '@lobehub/ui';
 
-import Conversation from '@/features/AgentConversation';
-import ChatHydration from '@/features/AgentConversation/ChatHydration';
+import Conversation from '@/routes/(main)/agent/features/Conversation';
+import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
 
 import TelemetryNotification from './features/TelemetryNotification';
 

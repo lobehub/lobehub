@@ -40,7 +40,7 @@ vi.mock('@/features/TopicPopupGuard/useTopicPopupsRegistry', () => ({
       : undefined,
 }));
 
-vi.mock('@/features/AgentConversation', () => ({
+vi.mock('@/routes/(main)/agent/features/Conversation', () => ({
   default: () => <div data-testid="conversation" />,
 }));
 

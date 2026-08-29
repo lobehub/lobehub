@@ -5,11 +5,11 @@ import { memo, useLayoutEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import Conversation from '@/features/AgentConversation';
 import { WelcomeExtraProvider } from '@/features/AgentHome/WelcomeExtraContext';
 import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import Conversation from '@/routes/(main)/agent/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

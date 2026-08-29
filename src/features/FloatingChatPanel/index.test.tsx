@@ -148,7 +148,7 @@ vi.mock('@/features/Conversation/store', () => ({
     selector(mockConversationState.current),
 }));
 
-vi.mock('@/features/AgentConversation/useActionsBarConfig', () => ({
+vi.mock('@/routes/(main)/agent/features/Conversation/useActionsBarConfig', () => ({
   useActionsBarConfig: () => ({ assistant: {}, user: {} }),
 }));
 

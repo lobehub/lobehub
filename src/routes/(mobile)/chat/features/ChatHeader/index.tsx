@@ -4,9 +4,9 @@ import { Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo, useState } from 'react';
 
-import ShareButton from '@/features/AgentConversation/Header/ShareButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import ShareButton from '@/routes/(main)/agent/features/Conversation/Header/ShareButton';
 
 import ChatHeaderTitle from './ChatHeaderTitle';
 

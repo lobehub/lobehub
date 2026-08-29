@@ -8,10 +8,10 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import ChatConversation from '@/features/AgentConversation';
-import ChatHydration from '@/features/AgentConversation/ChatHydration';
 import NavHeader from '@/features/NavHeader';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import ChatConversation from '@/routes/(main)/agent/features/Conversation';
+import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';

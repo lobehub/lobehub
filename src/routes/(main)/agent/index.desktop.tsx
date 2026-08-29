@@ -4,10 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
-import Conversation from '@/features/AgentConversation';
-import ChatHydration from '@/features/AgentConversation/ChatHydration';
 import TopicInPopupGuard from '@/features/TopicPopupGuard';
 import { useTopicInPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
+import Conversation from '@/routes/(main)/agent/features/Conversation';
+import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
 import { useChatStore } from '@/store/chat';
 
 import TelemetryNotification from './features/TelemetryNotification';
