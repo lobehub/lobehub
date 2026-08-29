@@ -186,6 +186,23 @@ describe('App', () => {
   });
 
   describe('service lifecycle', () => {
+    it('enables precise renderer heap metrics before Chromium is ready', async () => {
+      appInstance = new App();
+
+      await appInstance.bootstrap();
+
+      expect(electronApp.commandLine.appendSwitch).toHaveBeenCalledWith(
+        'enable-precise-memory-info',
+      );
+      const appendSwitch = vi.mocked(electronApp.commandLine.appendSwitch);
+      const preciseCall = appendSwitch.mock.calls.findIndex(
+        ([name]) => name === 'enable-precise-memory-info',
+      );
+      expect(appendSwitch.mock.invocationCallOrder[preciseCall]).toBeLessThan(
+        vi.mocked(electronApp.whenReady).mock.invocationCallOrder[0],
+      );
+    });
+
     it('destroys registered services before quitting', () => {
       appInstance = new App();
       const databaseService = appInstance.getService(LocalDatabaseService);
