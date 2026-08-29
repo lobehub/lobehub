@@ -45,6 +45,7 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 import { resolveNewThreadIntent } from '../../dispatch/newThreadIntent';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
+import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
@@ -256,9 +257,11 @@ export class GatewayActionImpl {
     let receivedTerminalEvent = false;
     let terminalSucceeded = false;
     let sessionCompleted = false;
+    const eventBuffer = createGatewayEventBuffer((event) => onEvent?.(event));
     const fireSessionComplete = (opts?: { authFailed?: boolean }) => {
       if (sessionCompleted) return;
       sessionCompleted = true;
+      eventBuffer.flush();
       onSessionComplete?.({
         authFailed: opts?.authFailed ?? false,
         succeeded: terminalSucceeded,
@@ -289,7 +292,7 @@ export class GatewayActionImpl {
       ) {
         terminalSucceeded = true;
       }
-      onEvent?.(event);
+      eventBuffer.push(event);
     });
 
     // Handle session completion
