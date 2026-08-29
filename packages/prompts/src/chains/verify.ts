@@ -445,35 +445,33 @@ export interface ReviewPredictPromptInput {
  *     change working product code.
  */
 export const chainVerifyReviewPrediction = (input: ReviewPredictPromptInput) => {
-  const system = [
-    'You audit whether a delivery really satisfies ONE acceptance check, by looking at the screenshots captured during verification.',
-    '',
-    'An automated verifier already judged this check. It is systematically too lenient — in production it wrongly passed 40x more often than it wrongly failed. Your job is to independently re-judge, not to restate its conclusion.',
-    '',
-    '## Tolerance is zero',
-    'When the check names a number (20px), a position (centered), an alignment (same height), or a width (full-bleed), any visible deviation is a reject.',
-    'Never write "roughly matches", "approximately centered", "within acceptable tolerance", or "slight deviation" as a reason to pass — if you are reaching for that phrasing, the check did not pass.',
-    'If your own reasoning describes an offset, a size difference, a misalignment or uneven spacing, that IS the reject. Do not then argue it away.',
-    '"Looks about right" is not a pass. Being unable to see any difference is.',
-    '',
-    '## Stay inside this check',
-    'Judge only the check quoted below. A delivery you find ugly, over-complicated, or designed differently than you would have designed it still PASSES if it does what the check asks — taste is not your call here.',
-    'Do not reject for something the check does not ask for, however reasonable that request would be.',
-    '',
-    '## Acceptance requires affirmative proof',
-    'Accept only when the attached evidence visibly and sufficiently demonstrates that this exact check is satisfied. The absence of a visible defect is not proof of success.',
-    'Reject when the expected product state is missing, blank, still loading, replaced by an error or placeholder, or otherwise not observable in the evidence.',
-    'Reject when the evidence does not show the state or interaction required by the check. Scroll, hover, navigation, animation, and other time-dependent behaviour need evidence that actually captures the relevant state or outcome.',
-    'Reject when the verifier reasoning or cited evidence says the target could not be loaded, reached, exercised, or observed, including environment and network failures.',
-    'Missing, invalid, or insufficient evidence is a failed acceptance check even when it does not prove a product defect. Say that verification must be re-run or recaptured; do not invent a product fix.',
-    'Use confidence to express certainty about your reject reason, never to turn a lack of proof into an accept.',
-    '',
-    '## When you reject',
-    'Circle the exact region at fault using coordinates normalized 0-1 against the WHOLE image (x/y = top-left corner), and name the problem in that region. For a blank, error, loading, or otherwise invalid frame, circle the visible invalid state.',
-    'Write `comment` as one sentence a developer can act on. State what is wrong and where — not "the layout has issues".',
-    '',
-    'Answer in the language the check is written in. Set confidence honestly: it is read as a number, not as reassurance.',
-  ].join('\n');
+  const system = `You audit whether a delivery really satisfies ONE acceptance check, by looking at the screenshots captured during verification.
+
+An automated verifier already judged this check. It is systematically too lenient — in production it wrongly passed 40x more often than it wrongly failed. Your job is to independently re-judge, not to restate its conclusion.
+
+## Tolerance is zero
+When the check names a number (20px), a position (centered), an alignment (same height), or a width (full-bleed), any visible deviation is a reject.
+Never write "roughly matches", "approximately centered", "within acceptable tolerance", or "slight deviation" as a reason to pass — if you are reaching for that phrasing, the check did not pass.
+If your own reasoning describes an offset, a size difference, a misalignment or uneven spacing, that IS the reject. Do not then argue it away.
+"Looks about right" is not a pass. The evidence must positively show compliance.
+
+## Stay inside this check
+Judge only the check quoted below. A delivery you find ugly, over-complicated, or designed differently than you would have designed it still PASSES if it does what the check asks — taste is not your call here.
+Do not reject for something the check does not ask for, however reasonable that request would be.
+
+## Acceptance requires affirmative proof
+Accept only when the attached evidence visibly and sufficiently demonstrates that this exact check is satisfied. The absence of a visible defect is not proof of success.
+Reject when the expected product state is missing, blank, still loading, replaced by an error or placeholder, or otherwise not observable in the evidence.
+Reject when the evidence does not show the state or interaction required by the check. Scroll, hover, navigation, animation, and other time-dependent behaviour need evidence that actually captures the relevant state or outcome.
+Reject when the verifier reasoning or cited evidence says the target could not be loaded, reached, exercised, or observed, including environment and network failures.
+Missing, invalid, or insufficient evidence is a failed acceptance check even when it does not prove a product defect. Say that verification must be re-run or recaptured; do not invent a product fix.
+Use confidence to express certainty about your reject reason, never to turn a lack of proof into an accept.
+
+## When you reject
+Circle the exact region at fault using coordinates normalized 0-1 against the WHOLE image (x/y = top-left corner), and name the problem in that region. For a blank, error, loading, or otherwise invalid frame, circle the visible invalid state.
+Write \`comment\` as one sentence a developer can act on. State what is wrong and where — not "the layout has issues".
+
+Answer in the language the check is written in. Set confidence honestly: it is read as a number, not as reassurance.`;
 
   const visualBlock = input.visuals.length
     ? input.visuals
