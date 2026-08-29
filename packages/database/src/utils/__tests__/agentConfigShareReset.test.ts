@@ -73,6 +73,32 @@ describe('writeAgentConfigWithShareReset (real Postgres)', () => {
     expect(persistedShare.visibility).toBe('private');
   });
 
+  it('leaves the share untouched when the ownership-scoped update matched no agent row', async () => {
+    await agentShareModel.create(agentId, 'link');
+
+    // Mirrors an unauthorized caller: the agent-management runtime forwards a
+    // model-supplied agent id, and the caller-scoped `where` matches nothing.
+    // The share reset must not run off the bare `agentId` in that case.
+    const onShareReset = vi.fn();
+    const updated = await writeAgentConfigWithShareReset(serverDB, {
+      agentId,
+      onShareReset,
+      resultingConfig: { agencyConfig: null, model: 'codex' },
+      touchesHeterogeneityFields: true,
+      updateData: { model: 'codex', updatedAt: new Date() },
+      where: eq(agents.id, 'someone-elses-agent-id'),
+    });
+
+    expect(updated).toBeNull();
+    expect(onShareReset).not.toHaveBeenCalled();
+
+    const [persistedShare] = await serverDB
+      .select({ visibility: agentShares.visibility })
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agentId));
+    expect(persistedShare.visibility).toBe('link');
+  });
+
   it('leaves a link share untouched when the write does not touch model/agencyConfig', async () => {
     await agentShareModel.create(agentId, 'link');
 

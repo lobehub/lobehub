@@ -3486,6 +3486,18 @@ export class MessageModel {
     });
     if (!item) throw new Error('Plugin not found');
 
+    // Same wall as `update` — plugin rows share the message id, and their
+    // payloads are creator-run output loaded back into the dispatched history.
+    // See `MessageModelOptions.guardShareProvenance`.
+    if (this.guardShareProvenance) {
+      const [target] = await this.db
+        .select({ topicId: messages.topicId })
+        .from(messages)
+        .where(and(eq(messages.id, id), this.ownership()))
+        .limit(1);
+      await this.assertTopicsNotShareProvenance(this.db, [target?.topicId]);
+    }
+
     return this.db
       .update(messagePlugins)
       .set(value)
@@ -4087,6 +4099,20 @@ export class MessageModel {
    * @param args - The new arguments string (already stringified JSON)
    */
   updateToolArguments = async (toolCallId: string, args: string): Promise<{ success: boolean }> => {
+    // Same wall as `update` — tool arguments feed straight back into the
+    // dispatched history. Checked BEFORE the try: the catch below flattens
+    // every failure into `{ success: false }`, and this refusal must surface.
+    // See `MessageModelOptions.guardShareProvenance`.
+    if (this.guardShareProvenance) {
+      const [target] = await this.db
+        .select({ topicId: messages.topicId })
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messages.id, messagePlugins.id))
+        .where(and(eq(messagePlugins.toolCallId, toolCallId), this.ownership()))
+        .limit(1);
+      await this.assertTopicsNotShareProvenance(this.db, [target?.topicId]);
+    }
+
     try {
       await this.db.transaction(async (trx) => {
         // 1. Find tool plugin and tool message with parentId in one query
@@ -4094,6 +4120,7 @@ export class MessageModel {
           .select({
             parentId: messages.parentId,
             toolPluginId: messagePlugins.id,
+            topicId: messages.topicId,
           })
           .from(messagePlugins)
           .innerJoin(messages, eq(messages.id, messagePlugins.id))

@@ -1984,13 +1984,22 @@ export class TopicModel {
     // while preserving the exact (shallow + nested onboardingSession) merge.
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
-        .select({ metadata: topics.metadata })
+        .select({ metadata: topics.metadata, shareId: topics.shareId })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
 
       // No row (missing or not owned) — nothing to update, mirror the old no-op.
       if (!existing) return [];
+
+      // The public schema accepts `runningOperation: null`, so a generic
+      // metadata write on a share topic is another way to clear the liveness
+      // marker and stack creator-funded runs — same wall as
+      // `settleRunningOperation`. See `TopicModelOptions.guardShareProvenance`.
+      if (this.guardShareProvenance && existing.shareId)
+        throw new Error(
+          `Topic ${id} belongs to an agent share and cannot be updated through generic topic APIs`,
+        );
 
       const mergedOnboardingSession =
         existing.metadata?.onboardingSession && metadata.onboardingSession

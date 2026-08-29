@@ -98,6 +98,19 @@ describe('TopicModel guardShareProvenance', () => {
     expect(row.metadata?.runningOperation).toMatchObject({ operationId: 'op-1' });
   });
 
+  it('refuses generic metadata updates on a share topic — the runningOperation clear path', async () => {
+    await expect(
+      guardedModel.updateMetadata('guarded-share-topic', { runningOperation: null }),
+    ).rejects.toThrow(/belongs to an agent share/);
+  });
+
+  it('still updates metadata on ordinary topics', async () => {
+    await guardedModel.updateMetadata('guarded-plain-topic', { model: 'gpt-4o' });
+
+    const [row] = await serverDB.select().from(topics).where(eq(topics.id, 'guarded-plain-topic'));
+    expect(row.metadata?.model).toBe('gpt-4o');
+  });
+
   it('still settles ordinary topics, and internal writers settle share topics', async () => {
     await serverDB
       .update(topics)

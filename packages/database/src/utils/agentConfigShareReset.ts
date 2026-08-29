@@ -99,7 +99,12 @@ export async function writeAgentConfigWithShareReset(
 
     let didResetShare = false;
     let revocationGeneration: number | undefined;
-    if (mayNeedShareReset) {
+    // `updated` undefined means the ownership-scoped `where` matched no agent
+    // row — the caller was not authorized to touch this agent, so it must not
+    // be able to flip someone else's live share to private via the bare
+    // `agentId` below (the agent-management runtime forwards model-supplied
+    // agent ids into `AgentModel.update`).
+    if (updated && mayNeedShareReset) {
       // `.returning()` here is load-bearing, not cosmetic: `mayNeedShareReset`
       // is only a possibility check (the new config is heterogeneous), it does
       // NOT mean a row actually flipped — the share may already be `private`

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messages, topics, users } from '../../../schemas';
+import { agents, messagePlugins, messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
@@ -100,6 +100,37 @@ describe('MessageModel guardShareProvenance', () => {
     it('still runs updateToolMessage on ordinary rows', async () => {
       const result = await guardedModel.updateToolMessage('plain-msg', { content: 'tooled' });
       expect(result.success).toBe(true);
+    });
+
+    it('refuses updateMessagePlugin and updateToolArguments on share rows', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: '',
+          id: 'share-parent',
+          role: 'assistant',
+          tools: [{ apiName: 'run', arguments: '{}', id: 'tc-1', identifier: 'tool' }],
+          topicId: 'share-topic',
+          userId: visitorId,
+        },
+        {
+          content: 'result',
+          id: 'share-tool',
+          parentId: 'share-parent',
+          role: 'tool',
+          topicId: 'share-topic',
+          userId: visitorId,
+        },
+      ]);
+      await serverDB
+        .insert(messagePlugins)
+        .values({ id: 'share-tool', toolCallId: 'tc-1', userId: visitorId });
+
+      await expect(
+        guardedModel.updateMessagePlugin('share-tool', { arguments: 'x'.repeat(10) }),
+      ).rejects.toThrow(/belongs to an agent share/);
+      await expect(guardedModel.updateToolArguments('tc-1', 'x'.repeat(10))).rejects.toThrow(
+        /belongs to an agent share/,
+      );
     });
   });
 
