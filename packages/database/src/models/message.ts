@@ -3262,6 +3262,11 @@ export class MessageModel {
       ...new Set([userMessage.topicId, assistantMessage.topicId].filter(Boolean) as string[]),
     ];
 
+    // Same wall as `create` — this is the `aiChat.sendMessageInServer` insert
+    // path, and a share visitor must not seed unbounded history into a share
+    // topic here either. See `MessageModelOptions.guardShareProvenance`.
+    await this.assertTopicsNotShareProvenance(this.db, topicIds);
+
     return runTimedStage(
       timing,
       'db.message.createUserAndAssistant.transaction',

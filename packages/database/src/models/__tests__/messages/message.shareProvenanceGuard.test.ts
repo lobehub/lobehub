@@ -53,6 +53,23 @@ describe('MessageModel guardShareProvenance', () => {
       ).rejects.toThrow(/belongs to an agent share/);
     });
 
+    it('refuses createUserAndAssistantMessages on a share topic — the aiChat.sendMessageInServer path', async () => {
+      await expect(
+        guardedModel.createUserAndAssistantMessages({
+          assistantMessage: { content: '', role: 'assistant', topicId: 'share-topic' },
+          userMessage: { content: 'x'.repeat(10), role: 'user', topicId: 'share-topic' },
+        }),
+      ).rejects.toThrow(/belongs to an agent share/);
+    });
+
+    it('still runs createUserAndAssistantMessages on ordinary topics', async () => {
+      const result = await guardedModel.createUserAndAssistantMessages({
+        assistantMessage: { content: '', role: 'assistant', topicId: 'plain-topic' },
+        userMessage: { content: 'hello', role: 'user', topicId: 'plain-topic' },
+      });
+      expect(result.userMessage.topicId).toBe('plain-topic');
+    });
+
     it('still creates into ordinary topics', async () => {
       const item = await guardedModel.create({
         content: 'fine',

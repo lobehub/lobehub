@@ -135,9 +135,14 @@ const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       aiGenerationService: new AiGenerationService(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      // Generic chat writes must not reach Agent Share conversations (the
+      // share flow runs through `shareChat` with internal, unguarded models) —
+      // see `MessageModelOptions.guardShareProvenance`.
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId, {
+        guardShareProvenance: true,
+      }),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, { guardShareProvenance: true }),
     },
   });
 });
