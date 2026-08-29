@@ -79,6 +79,40 @@ describe('TopicModel guardShareProvenance', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('refuses to settle a running operation on a share topic', async () => {
+    await serverDB
+      .update(topics)
+      .set({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' },
+        },
+        status: 'running',
+      })
+      .where(eq(topics.id, 'guarded-share-topic'));
+
+    await expect(
+      guardedModel.settleRunningOperation('guarded-share-topic', 'op-1'),
+    ).rejects.toThrow(/belongs to an agent share/);
+
+    const [row] = await serverDB.select().from(topics).where(eq(topics.id, 'guarded-share-topic'));
+    expect(row.metadata?.runningOperation).toMatchObject({ operationId: 'op-1' });
+  });
+
+  it('still settles ordinary topics, and internal writers settle share topics', async () => {
+    await serverDB
+      .update(topics)
+      .set({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' },
+        },
+        status: 'running',
+      })
+      .where(eq(topics.id, 'guarded-share-topic'));
+
+    const settled = await internalModel.settleRunningOperation('guarded-share-topic', 'op-1');
+    expect(settled.status).toBe('settled');
+  });
+
   it('leaves internal (unguarded) writers untouched — shareChat cleanup still works', async () => {
     await internalModel.delete('guarded-share-topic');
 

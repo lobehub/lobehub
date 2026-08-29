@@ -1290,7 +1290,10 @@ export class GatewayActionImpl {
         // was always "still spinning after a reload" — refreshing is what moved
         // the run off the primary path and onto this one.
         const viewing = this.#get().activeTopicId === topicId;
-        if (!superseded) {
+        // Share visitors skip the server settle exactly like the primary
+        // onSessionComplete path above: the runtime's finish executor already
+        // settled the topic, and the generic topic router refuses share rows.
+        if (!superseded && !agentShareId) {
           topicService
             .settleRunningOperation(
               topicId,

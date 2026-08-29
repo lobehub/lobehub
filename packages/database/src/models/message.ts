@@ -3937,6 +3937,19 @@ export class MessageModel {
       pluginState?: Record<string, any>;
     },
   ): Promise<{ applied: boolean; snapshotSeq?: number; success: boolean }> => {
+    // Same wall as `update` — this is the alternate content-bearing write the
+    // generic router (and `batchMutate`) exposes, and share tool messages are
+    // creator-run output the visitor must not tamper with. See
+    // `MessageModelOptions.guardShareProvenance`.
+    if (this.guardShareProvenance) {
+      const [target] = await this.db
+        .select({ topicId: messages.topicId })
+        .from(messages)
+        .where(and(eq(messages.id, id), this.ownership()))
+        .limit(1);
+      await this.assertTopicsNotShareProvenance(this.db, [target?.topicId]);
+    }
+
     const { content, heterogeneousToolState, metadata, pluginState, pluginError } = params;
 
     // `undefined` while no branch has looked for the row yet; see `update` above

@@ -87,6 +87,20 @@ describe('MessageModel guardShareProvenance', () => {
       const result = await guardedModel.update('plain-msg', { content: 'edited' });
       expect(result.success).toBe(true);
     });
+
+    it('refuses updateToolMessage on a share row — the batchMutate bypass', async () => {
+      await expect(
+        guardedModel.updateToolMessage('share-msg', { content: 'x'.repeat(10) }),
+      ).rejects.toThrow(/belongs to an agent share/);
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'share-msg'));
+      expect(row.content).toBe('turn');
+    });
+
+    it('still runs updateToolMessage on ordinary rows', async () => {
+      const result = await guardedModel.updateToolMessage('plain-msg', { content: 'tooled' });
+      expect(result.success).toBe(true);
+    });
   });
 
   describe('deletes', () => {

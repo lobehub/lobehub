@@ -1809,10 +1809,20 @@ export class TopicModel {
   ) => {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({ metadata: topics.metadata, shareId: topics.shareId, status: topics.status })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
+
+      // Clearing `runningOperation` on a share topic through the generic
+      // surface would let the visitor pass `tryReserveTaskCallback`'s liveness
+      // check and stack creator-funded runs — the run lifecycle settles share
+      // topics through its own unguarded model. See
+      // `TopicModelOptions.guardShareProvenance`.
+      if (this.guardShareProvenance && existing?.shareId)
+        throw new Error(
+          `Topic ${id} belongs to an agent share and cannot be settled through generic topic APIs`,
+        );
 
       const runningOperation = existing?.metadata?.runningOperation;
       if (!runningOperation) {
