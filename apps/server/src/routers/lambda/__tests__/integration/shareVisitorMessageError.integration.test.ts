@@ -65,15 +65,18 @@ describe('share visitor message.update', () => {
 
     // Mirrors `AiAgentService.execAgent`'s assistant placeholder for a share
     // run: visitor-owned row stamped with the creator's `agentId`.
-    const messageInsert: typeof messages.$inferInsert = {
+    // Explicit id + no `.returning()`: tsgo collapses the `messages` insert
+    // builder's `.returning()` type to `any[] | QueryResult<never>`, so follow
+    // the sibling integration tests' explicit-id convention instead.
+    assistantMessageId = 'share-visitor-assistant-message';
+    await serverDB.insert(messages).values({
       agentId: creatorAgentId,
       content: '',
+      id: assistantMessageId,
       role: 'assistant',
       topicId: visitorTopicId,
       userId: visitorId,
-    };
-    const [message] = await serverDB.insert(messages).values(messageInsert).returning();
-    assistantMessageId = message.id;
+    });
   });
 
   afterEach(async () => {
