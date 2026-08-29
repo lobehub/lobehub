@@ -299,14 +299,19 @@ export class BriefService {
       // import graph, mirroring the TaskRunner lazy-import above.
       const { getLLMGenerationTracingService } =
         await import('@/server/services/llmGenerationTracing');
-      await getLLMGenerationTracingService().recordFeedback(this.userId, tracingId, {
-        data: {
-          briefType: brief.type,
-          hasComment: !!options?.comment,
+      await getLLMGenerationTracingService().recordFeedback(
+        this.userId,
+        tracingId,
+        {
+          data: {
+            briefType: brief.type,
+            hasComment: !!options?.comment,
+          },
+          signal,
+          source,
         },
-        signal,
-        source,
-      });
+        this.workspaceId,
+      );
     } catch (error) {
       console.warn('[brief:resolve] recordFeedback failed', error);
     }

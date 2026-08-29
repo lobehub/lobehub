@@ -581,11 +581,16 @@ describe('BriefService', () => {
 
       await service.resolve('b1', { action: 'approve' });
 
-      expect(recordFeedback).toHaveBeenCalledWith('user-1', 'trace-1', {
-        data: { briefType: 'insight', hasComment: false },
-        signal: 'positive',
-        source: 'brief_approved',
-      });
+      expect(recordFeedback).toHaveBeenCalledWith(
+        'user-1',
+        'trace-1',
+        {
+          data: { briefType: 'insight', hasComment: false },
+          signal: 'positive',
+          source: 'brief_approved',
+        },
+        undefined,
+      );
     });
 
     it('reports a negative signal carrying the comment flag for feedback actions', async () => {
@@ -594,11 +599,16 @@ describe('BriefService', () => {
 
       await service.resolve('b1', { action: 'feedback', comment: 'tighten it' });
 
-      expect(recordFeedback).toHaveBeenCalledWith('user-1', 'trace-1', {
-        data: { briefType: 'decision', hasComment: true },
-        signal: 'negative',
-        source: 'brief_feedback',
-      });
+      expect(recordFeedback).toHaveBeenCalledWith(
+        'user-1',
+        'trace-1',
+        {
+          data: { briefType: 'decision', hasComment: true },
+          signal: 'negative',
+          source: 'brief_feedback',
+        },
+        undefined,
+      );
     });
 
     it('reports a negative signal for ignore', async () => {
@@ -611,6 +621,7 @@ describe('BriefService', () => {
         'user-1',
         'trace-1',
         expect.objectContaining({ signal: 'negative', source: 'brief_ignored' }),
+        undefined,
       );
     });
 
@@ -624,6 +635,21 @@ describe('BriefService', () => {
         'user-1',
         'trace-1',
         expect.objectContaining({ signal: 'neutral', source: 'brief_acknowledge' }),
+        undefined,
+      );
+    });
+
+    it('records feedback in the brief workspace scope', async () => {
+      const service = new BriefService(db, userId, 'workspace-1');
+      mockBriefModel.resolve.mockResolvedValue(briefWithTracing({}));
+
+      await service.resolve('b1', { action: 'approve' });
+
+      expect(recordFeedback).toHaveBeenCalledWith(
+        'user-1',
+        'trace-1',
+        expect.objectContaining({ signal: 'positive', source: 'brief_approved' }),
+        'workspace-1',
       );
     });
 
