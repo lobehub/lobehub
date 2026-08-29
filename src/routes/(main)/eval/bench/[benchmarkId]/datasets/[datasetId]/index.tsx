@@ -323,6 +323,11 @@ const DatasetDetail = memo(() => {
                   onImport={() =>
                     createDatasetImportModal({ datasetId: datasetId!, onSuccess: handleRefresh })
                   }
+                  onOpen={(testCase: any) =>
+                    navigate(
+                      `/eval/bench/${benchmarkId}/datasets/${datasetId}/cases/${testCase.id}`,
+                    )
+                  }
                   onSearchChange={(v) => {
                     setSearch(v);
                     setPagination((prev) => ({ ...prev, current: 1 }));

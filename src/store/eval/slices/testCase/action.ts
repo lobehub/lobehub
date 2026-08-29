@@ -21,6 +21,10 @@ export class TestCaseActionImpl {
     this.#get = get;
   }
 
+  getTestCaseById = (id: string): any | undefined => {
+    return this.#get().testCaseDetailCache[id];
+  };
+
   getTestCasesByDatasetId = (datasetId: string): any[] => {
     return this.#get().testCasesCache[datasetId]?.data || [];
   };
@@ -36,6 +40,28 @@ export class TestCaseActionImpl {
   refreshTestCases = async (datasetId: string): Promise<void> => {
     await mutate(
       (key) => Array.isArray(key) && key[0] === evalKeys.testCases.root && key[1] === datasetId,
+    );
+  };
+
+  /**
+   * A test case on its own, not as a row of a dataset page — the case detail
+   * route is reachable directly, so it cannot rely on the list being loaded.
+   */
+  useFetchTestCase = (id?: string): SWRResponse => {
+    return useClientDataSWR(
+      id ? evalKeys.testCaseDetail(id) : null,
+      () => agentEvalService.getTestCase(id!),
+      {
+        onSuccess: (data: any) => {
+          this.#set(
+            (state) => ({
+              testCaseDetailCache: { ...state.testCaseDetailCache, [data.id]: data },
+            }),
+            false,
+            `useFetchTestCase/success/${id}`,
+          );
+        },
+      },
     );
   };
 

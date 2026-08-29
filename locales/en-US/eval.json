@@ -418,5 +418,19 @@
   "testCase.preview.expected": "Expected",
   "testCase.preview.input": "Input",
   "testCase.preview.title": "Test Case Preview",
-  "testCase.search.placeholder": "Search cases..."
+  "testCase.search.placeholder": "Search cases...",
+  "testCaseDetail.backToDataset": "Back to Dataset",
+  "testCaseDetail.boundary": "The case starts here",
+  "testCaseDetail.criteria": "Criteria",
+  "testCaseDetail.criteria.empty": "No criteria set — this case is scored by its expected output alone.",
+  "testCaseDetail.definition": "Case definition",
+  "testCaseDetail.expected": "Expected output",
+  "testCaseDetail.expected.empty": "Not set — scored by the criteria alone.",
+  "testCaseDetail.notFound": "This test case no longer exists.",
+  "testCaseDetail.open": "Open case",
+  "testCaseDetail.role.assistant": "Assistant",
+  "testCaseDetail.role.system": "System",
+  "testCaseDetail.role.tool": "Tool",
+  "testCaseDetail.role.user": "User",
+  "testCaseDetail.title": "Test case"
 }

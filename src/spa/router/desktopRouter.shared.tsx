@@ -870,10 +870,26 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'runs/:runId',
           },
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]'),
-              'Desktop > Eval > Dataset Detail',
-            ),
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]'),
+                  'Desktop > Eval > Dataset Detail',
+                ),
+                index: true,
+              },
+              {
+                // The case as a definition, addressable without a run. The
+                // `runs/:runId/cases/:caseId` route above is a different thing:
+                // that one renders a case's *result* inside one run.
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]/cases/[caseId]'),
+                  'Desktop > Eval > Test Case Detail',
+                ),
+                path: 'cases/:caseId',
+              },
+            ],
             path: 'datasets/:datasetId',
           },
         ],

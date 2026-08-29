@@ -130,6 +130,10 @@ class AgentEvalService {
   }
 
   // ============ Test Case ============
+  async getTestCase(id: string) {
+    return lambdaClient.agentEval.getTestCase.query({ id });
+  }
+
   async listTestCases(params: { datasetId: string; limit?: number; offset?: number }) {
     return lambdaClient.agentEval.listTestCases.query(params);
   }

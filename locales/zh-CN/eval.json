@@ -418,5 +418,19 @@
   "testCase.preview.expected": "期望",
   "testCase.preview.input": "输入",
   "testCase.preview.title": "数据用例预览",
-  "testCase.search.placeholder": "搜索用例..."
+  "testCase.search.placeholder": "搜索用例...",
+  "testCaseDetail.backToDataset": "返回数据集",
+  "testCaseDetail.boundary": "用例从这里开始",
+  "testCaseDetail.criteria": "判定标准",
+  "testCaseDetail.criteria.empty": "未设置判定标准 —— 该用例仅按期望输出打分。",
+  "testCaseDetail.definition": "用例定义",
+  "testCaseDetail.expected": "期望输出",
+  "testCaseDetail.expected.empty": "未填写 —— 仅按判定标准打分。",
+  "testCaseDetail.notFound": "该测试用例已不存在。",
+  "testCaseDetail.open": "打开用例",
+  "testCaseDetail.role.assistant": "助手",
+  "testCaseDetail.role.system": "系统",
+  "testCaseDetail.role.tool": "工具",
+  "testCaseDetail.role.user": "用户",
+  "testCaseDetail.title": "测试用例"
 }

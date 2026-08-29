@@ -733,6 +733,7 @@ export const evalKeys = {
   runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
   runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
   runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
+  testCaseDetail: def('eval:testCaseDetail', (id: string) => ['eval:testCaseDetail', id]),
   testCases: def('eval:testCases', (datasetId: string, limit?: number, offset?: number) => [
     'eval:testCases',
     datasetId,
