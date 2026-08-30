@@ -386,7 +386,10 @@ export class OperationActionsImpl {
     );
   };
 
-  cancelOperation = (operationId: string, reason: string = 'User cancelled'): void => {
+  cancelOperation = async (
+    operationId: string,
+    reason: string = 'User cancelled',
+  ): Promise<void> => {
     const operation = this.#get().operations[operationId];
     if (!operation) {
       log('[cancelOperation] operation not found: %s', operationId);
@@ -421,7 +424,10 @@ export class OperationActionsImpl {
       this.#get().updateOperationMetadata(operationId, { isAborting: true });
     }
 
-    // 3. Call cancel handler if registered
+    // 3. Call cancel handler if registered. The local state transition below
+    // remains synchronous, while callers such as Send now can await the returned
+    // promise before starting a replacement native writer.
+    let cancelHandler: Promise<void> = Promise.resolve();
     if (operation.onCancelHandler) {
       log('[cancelOperation] calling cancel handler for %s (type=%s)', operationId, operation.type);
 
@@ -432,10 +438,11 @@ export class OperationActionsImpl {
         metadata: operation.metadata,
       };
 
-      // Execute handler asynchronously (don't block cancellation flow)
-      // Use try-catch to handle synchronous errors, then wrap in Promise for async errors
+      // Start the handler without delaying the synchronous local state transition.
+      // The returned cancellation promise still waits for this work so replacement
+      // operations can coordinate with the underlying transport shutdown.
       try {
-        Promise.resolve(operation.onCancelHandler(cancelContext)).catch((err) => {
+        cancelHandler = Promise.resolve(operation.onCancelHandler(cancelContext)).catch((err) => {
           log('[cancelOperation] cancel handler error for %s: %O', operationId, err);
         });
       } catch (err) {
@@ -460,13 +467,16 @@ export class OperationActionsImpl {
       n(`cancelOperation/${operationId}`),
     );
 
-    // 4. Cancel all child operations recursively
+    // 5. Cancel all child operations recursively
+    let childCancellations: Promise<void>[] = [];
     if (operation.childOperationIds && operation.childOperationIds.length > 0) {
       log('[cancelOperation] cancelling %d child operations', operation.childOperationIds.length);
-      operation.childOperationIds.forEach((childId) => {
-        this.#get().cancelOperation(childId, 'Parent operation cancelled');
-      });
+      childCancellations = operation.childOperationIds.map((childId) =>
+        this.#get().cancelOperation(childId, 'Parent operation cancelled'),
+      );
     }
+
+    await Promise.all([cancelHandler, ...childCancellations]);
   };
 
   failOperation = (

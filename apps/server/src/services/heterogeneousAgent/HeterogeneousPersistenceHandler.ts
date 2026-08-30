@@ -422,6 +422,10 @@ export class HeterogeneousPersistenceHandler {
     assistantMessageId?: string;
     error?: { body?: Record<string, unknown>; message: string; type: string };
     operationId: string;
+    /** Whether this finish still owns the topic-level native session binding. */
+    persistSessionBinding?: boolean;
+    /** True only when the producer proved the requested native session unusable. */
+    resumeSessionInvalidated?: boolean;
     result: 'success' | 'error' | 'cancelled';
     sessionId?: string;
     /**
@@ -463,23 +467,49 @@ export class HeterogeneousPersistenceHandler {
 
     try {
       await this.flushFinalState(state, params.error, params.result);
-      if (params.sessionId) {
-        await this.persistSessionId(state.topicId, params.sessionId);
-      } else if (params.result === 'error') {
-        // No new session id was produced and the run failed. The most common
-        // cause in cloud sandboxes is `--resume <staleId>` failing because the
-        // container was recycled and session files are gone. Clear any persisted
-        // `heteroSessionId` so the next turn starts a fresh CC session instead
-        // of looping on the same stale id.
-        //
-        // When CC ran (system.init was emitted) but produced an error result,
-        // `params.sessionId` is set — so this branch is NOT reached and the
-        // valid session id is kept for resume on the next turn.
-        await this.clearSessionId(state.topicId);
+      if (params.persistSessionBinding !== false) {
+        await this.updateResumeSessionBinding({
+          result: params.result,
+          resumeSessionInvalidated: params.resumeSessionInvalidated,
+          sessionId: params.sessionId,
+          topicId: state.topicId,
+        });
       }
     } finally {
       operationStates.delete(params.operationId);
     }
+  }
+
+  /**
+   * Updates the topic's native resume binding after operation ownership is verified.
+   *
+   * Use when:
+   * - A finish has flushed its operation-scoped message state.
+   * - The caller has confirmed that the operation is not stale.
+   *
+   * Expects:
+   * - `resumeSessionInvalidated` is true only for a proven unusable native token.
+   *
+   * Returns:
+   * - A promise that resolves after the best-effort topic metadata update.
+   */
+  async updateResumeSessionBinding(params: {
+    result: 'success' | 'error' | 'cancelled';
+    resumeSessionInvalidated?: boolean;
+    sessionId?: string;
+    topicId: string;
+  }): Promise<void> {
+    if (params.sessionId) {
+      await this.persistSessionId(params.topicId, params.sessionId);
+      return;
+    }
+    if (params.result !== 'error' || !params.resumeSessionInvalidated) return;
+
+    // Only the producer can distinguish a missing native session from a
+    // transient pre-init error such as Codex's "already has an active writer".
+    // Clearing on every error without a new session id destroys a still-valid
+    // resume token and forks the next turn into an empty thread.
+    await this.clearSessionId(params.topicId);
   }
 
   /**

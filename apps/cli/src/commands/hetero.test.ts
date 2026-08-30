@@ -1173,6 +1173,8 @@ describe('hetero exec command', () => {
           'cc-stale',
           '--operation-id',
           'op-fallback',
+          '--topic',
+          'topic-fallback',
         ]);
       } finally {
         await rm(dir, { force: true, recursive: true });
@@ -1185,6 +1187,13 @@ describe('hetero exec command', () => {
       });
       expect(mockSpawnAgent.mock.calls[1][0]).toMatchObject({ prompt: fallbackPrompt });
       expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'op-fallback',
+          resumeSessionInvalidated: true,
+          topicId: 'topic-fallback',
+        }),
+      );
     });
 
     it('does not consume the recovery prompt when native resume succeeds', async () => {

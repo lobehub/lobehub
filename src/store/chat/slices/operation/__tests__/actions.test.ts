@@ -974,6 +974,43 @@ describe('Operation Actions', () => {
   });
 
   describe('cancelOperation with cancel handler', () => {
+    /**
+     * @example Send-now can await cancellation before dispatching its replacement turn.
+     */
+    it('resolves only after the registered cancel handler completes', async () => {
+      const { result } = renderHook(() => useChatStore());
+      let releaseCancellation: (() => void) | undefined;
+      const handler = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseCancellation = resolve;
+          }),
+      );
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          context: { agentId: 'session1' },
+          type: 'execServerAgentRuntime',
+        }).operationId;
+        result.current.onOperationCancel(operationId, handler);
+      });
+
+      let settled = false;
+      const cancellation = result.current.cancelOperation(operationId!, 'send_now').then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+
+      expect(result.current.operations[operationId!].status).toBe('cancelled');
+      expect(settled).toBe(false);
+
+      releaseCancellation?.();
+      await cancellation;
+
+      expect(settled).toBe(true);
+    });
+
     it('should call cancel handler when operation is cancelled', async () => {
       const { result } = renderHook(() => useChatStore());
 

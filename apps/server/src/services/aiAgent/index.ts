@@ -1420,6 +1420,13 @@ export class AiAgentService {
       return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     }
 
+    // A replacement is allowed to take over the topic marker, but the device
+    // process that owned the old marker may still hold a native Codex/CC writer.
+    // Settle that physical run before reserving and dispatching the replacement;
+    // otherwise two `lh hetero exec` wrappers can resume the same thread.
+    if (params.replacesOperationId && !isInterventionThreadStart) {
+      await this.interruptTask({ operationId: params.replacesOperationId, topicId });
+    }
     const reserved = await acquireTopicStartReservation({
       allowSameReservationReentry: !params.approvalResolutionRequestId,
       replacesOperationId: isInterventionThreadStart ? undefined : params.replacesOperationId,
@@ -2855,7 +2862,7 @@ export class AiAgentService {
       // a serialized duplicate. Amp threads are server-backed, so they rely on
       // native continuation exclusively and never need this local-file fallback.
       let conversationHistory: ConversationHistoryEntry[] | undefined;
-      if (resumeSessionId && heteroType !== 'amp') {
+      if (heteroType !== 'amp') {
         try {
           const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
           const turns = recentMsgs
@@ -2883,17 +2890,19 @@ export class AiAgentService {
       // retry; successful same-session runs never consume the duplicate history.
       const systemContext = buildCloudHeteroContext({
         agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        conversationHistory: resumeSessionId ? undefined : conversationHistory,
         githubToken,
         repos: topicRepos,
       });
-      const resumeFallbackSystemContext = conversationHistory
-        ? buildCloudHeteroContext({
-            agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
-            conversationHistory,
-            githubToken,
-            repos: topicRepos,
-          })
-        : undefined;
+      const resumeFallbackSystemContext =
+        resumeSessionId && conversationHistory
+          ? buildCloudHeteroContext({
+              agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+              conversationHistory,
+              githubToken,
+              repos: topicRepos,
+            })
+          : undefined;
 
       // Feed the resolved images (signed URLs) to the dispatched CLI for vision —
       // mirrors the local-mode path, where the client feeds the persisted
@@ -3361,13 +3370,16 @@ export class AiAgentService {
           // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+            conversationHistory: resumeSessionId ? undefined : conversationHistory,
           });
-          const deviceResumeFallbackSystemContext = conversationHistory
-            ? buildRemoteDeviceHeteroContext({
-                agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
-                conversationHistory,
-              })
-            : undefined;
+          const deviceResumeFallbackSystemContext =
+            resumeSessionId && conversationHistory
+              ? buildRemoteDeviceHeteroContext({
+                  agentSystemContext:
+                    agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+                  conversationHistory,
+                })
+              : undefined;
 
           const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
@@ -6441,7 +6453,7 @@ export class AiAgentService {
       resolvedTopicId = operation?.topicId ?? undefined;
     }
 
-    // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
+    // 2. Cancel a device-hosted hetero process if applicable.
     // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
@@ -6471,11 +6483,12 @@ export class AiAgentService {
       if (
         targetOperation?.deviceId &&
         targetOperation.heteroType &&
-        isRemoteHeterogeneousType(targetOperation.heteroType)
+        (isRemoteHeterogeneousType(targetOperation.heteroType) ||
+          isLocalHeterogeneousType(targetOperation.heteroType))
       ) {
         const taskId = targetOperation.operationId ?? resolvedOperationId;
         log(
-          'interruptTask: cancelling remote hetero process heteroType=%s deviceId=%s taskId=%s',
+          'interruptTask: cancelling device hetero process heteroType=%s deviceId=%s taskId=%s',
           targetOperation.heteroType,
           targetOperation.deviceId,
           taskId,
@@ -6495,7 +6508,9 @@ export class AiAgentService {
               arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
               identifier: 'cancelHeteroTask',
             },
-            5_000,
+            // The device first gives the wrapper/native CLI 2s to stop
+            // cooperatively, then escalates and drains its terminal callback.
+            10_000,
           )
           .catch((err) => log('interruptTask: cancelHeteroTask dispatch failed: %O', err));
       }

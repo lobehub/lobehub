@@ -188,7 +188,7 @@ const QueueTray = memo(() => {
   // will pick them up after it finishes. Reads chatStore inline so we don't
   // re-subscribe the whole tray to the operations map.
   const handleSendNow = useCallback(
-    (msg: QueuedMessage) => {
+    async (msg: QueuedMessage) => {
       const chat = useChatStore.getState();
       // Cancel EVERY running blocker the item could be queued behind, not just the
       // first: matching one op would miss an interim blocker or the second of the
@@ -198,7 +198,7 @@ const QueueTray = memo(() => {
       // "Send now" becomes a no-op. The selector shares the queue-blocking
       // predicate with the enqueue check.
       const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
-      for (const id of runningOpIds) chat.cancelOperation(id, 'send_now');
+      await Promise.all(runningOpIds.map((id) => chat.cancelOperation(id, 'send_now')));
       removeQueuedMessage(contextKey, msg.id);
 
       // Reconstruct UploadFileItem-shaped objects so the optimistic temp message
@@ -208,16 +208,16 @@ const QueueTray = memo(() => {
         : msg.files?.length
           ? (msg.files.map((id) => ({ id })) as any)
           : undefined;
-      chat
-        .sendMessage({
+      try {
+        await chat.sendMessage({
           context,
           editorData: msg.editorData,
           files: filesArray,
           message: msg.content,
-        })
-        .catch((e: unknown) => {
-          console.error('[QueueTray] sendNow failed:', e);
         });
+      } catch (error) {
+        console.error('[QueueTray] sendNow failed:', error);
+      }
     },
     [context, contextKey, removeQueuedMessage],
   );

@@ -622,6 +622,57 @@ describe('HeterogeneousAgentCtr', () => {
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
+  describe('cancelSession', () => {
+    /**
+     * @example A replacement local Codex turn starts only after the interrupted CLI exits.
+     */
+    it('does not resolve CLI cancellation until the native process exits', async () => {
+      // ROOT CAUSE:
+      //
+      // cancelSession previously sent SIGINT and returned immediately. “Send now”
+      // could then start a second `codex exec resume` while the first process still
+      // owned the thread writer.
+      //
+      // Before: signal the child and schedule a detached escalation timer.
+      // After: signal, await exit, and synchronously escalate after a bounded wait.
+      const { proc } = createFakeProc();
+      proc.__start = vi.fn();
+      proc.exitCode = null;
+      proc.signalCode = null;
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      const prompt = ctr.sendPrompt({
+        operationId: 'op-cancel-wait',
+        prompt: 'sleep 60',
+        sessionId,
+      });
+      await vi.waitFor(() => expect(spawnCalls).toHaveLength(1));
+
+      let cancellationSettled = false;
+      const cancellation = ctr.cancelSession({ sessionId }).then(() => {
+        cancellationSettled = true;
+      });
+      await Promise.resolve();
+
+      expect(cancellationSettled).toBe(false);
+
+      proc.stdout.end();
+      proc.stderr.end();
+      proc.signalCode = 'SIGINT';
+      proc.emit('exit', null, 'SIGINT');
+
+      await cancellation;
+      await prompt;
+    });
+  });
+
   describe('image cache (delegates to shared `normalizeImage`)', () => {
     // Image fetch + cache moved to `@lobechat/heterogeneous-agents/spawn`'s
     // `normalizeImage`. The desktop controller passes its own cacheDir so the
@@ -3517,6 +3568,8 @@ describe('HeterogeneousAgentCtr', () => {
       const stdin = new EventEmitter() as any;
       stdin.end = vi.fn();
       stdin.write = vi.fn(() => true);
+      proc.kill = vi.fn(() => true);
+      proc.pid = 4321;
       proc.stdin = stdin;
       return proc;
     };
@@ -3701,6 +3754,50 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(ack).resolves.toEqual({ status: 'accepted' });
 
       expect(() => proc.stdin.emit('error', new Error('write EPIPE'))).not.toThrow();
+    });
+
+    /**
+     * @example A replacement waits until operation A's wrapper exits before operation B starts.
+     */
+    it('waits for the gateway CLI wrapper to exit when cancelling its operation', async () => {
+      // ROOT CAUSE:
+      //
+      // Device-dispatched Codex wrappers were not registered by operation id, so
+      // server cancellation returned while the native thread still had an active
+      // writer. A replacement resume then failed with `already has an active writer`.
+      //
+      // Before: spawnLhHeteroExec acknowledged the child and discarded its handle.
+      // After: cancelLhHeteroExec signals that handle and resolves only after exit.
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec(params);
+      proc.emit('spawn');
+      await ack;
+
+      let cancellationSettled = false;
+      const cancellation = ctr
+        .cancelLhHeteroExec({ operationId: params.operationId })
+        .then((result) => {
+          cancellationSettled = true;
+          return result;
+        });
+      await Promise.resolve();
+
+      expect(proc.kill).toHaveBeenCalledWith('SIGINT');
+      expect(cancellationSettled).toBe(false);
+
+      proc.emit('exit', 130, 'SIGINT');
+
+      await expect(cancellation).resolves.toEqual({
+        exited: true,
+        pid: 4321,
+        signal: 'SIGINT',
+      });
     });
   });
 

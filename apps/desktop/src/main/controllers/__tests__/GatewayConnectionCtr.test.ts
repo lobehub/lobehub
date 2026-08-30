@@ -247,6 +247,7 @@ const mockShellCommandCtr = {
 } as unknown as ShellCommandCtr;
 
 const mockHeterogeneousAgentCtr = {
+  cancelLhHeteroExec: vi.fn().mockResolvedValue(undefined),
   sendPrompt: vi.fn().mockResolvedValue(undefined),
   spawnLhHeteroExec: vi.fn().mockResolvedValue({ status: 'accepted' }),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
@@ -851,6 +852,7 @@ describe('GatewayConnectionCtr', () => {
     }
 
     beforeEach(() => {
+      vi.mocked(mockHeterogeneousAgentCtr.cancelLhHeteroExec).mockClear();
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
@@ -1313,6 +1315,30 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(2000);
       expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGKILL');
       killSpy.mockRestore();
+    });
+
+    /**
+     * @example Cancelling `op-codex` reaches the registered `lh hetero exec` wrapper.
+     */
+    it('cancels a device local hetero wrapper before checking platform tasks', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.cancelLhHeteroExec).mockResolvedValueOnce({
+        exited: true,
+        pid: 7777,
+        signal: 'SIGINT',
+      });
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'op-codex' },
+        'req-cancel-codex',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.cancelLhHeteroExec).toHaveBeenCalledWith({
+        operationId: 'op-codex',
+        signal: 'SIGINT',
+      });
     });
 
     it('does not escalate cancellation after the process group is gone', async () => {

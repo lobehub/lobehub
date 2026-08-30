@@ -1990,8 +1990,14 @@ export const executeHeterogeneousAgent = async (
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
     const sidForCancel = ipcRunSessionId;
-    get().onOperationCancel?.(operationId, () => {
-      heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
+    get().onOperationCancel?.(operationId, async () => {
+      try {
+        await heterogeneousAgentService.cancelSession(sidForCancel);
+      } catch (error) {
+        // Cancellation is best-effort for an already-closed IPC session, but the
+        // returned promise must still represent the main-process shutdown attempt.
+        console.error('[HeterogeneousAgent] IPC session cancellation failed:', error);
+      }
     });
 
     // ─── Debug tracing (dev only) ───

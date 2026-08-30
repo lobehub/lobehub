@@ -60,6 +60,7 @@ const createFakePersistenceHandler = () => {
     markEventPublished: vi.fn((_operationId: string, event: AgentStreamEvent) => {
       publishedKeys.add(gateKey(event));
     }),
+    updateResumeSessionBinding: vi.fn(async () => {}),
   };
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
@@ -514,9 +515,22 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
-    it('ignores a delayed finish when a newer operation owns the topic', async () => {
+    /**
+     * @example Operation A finishes after operation B owns the topic; A still becomes terminal.
+     */
+    it('settles a delayed finish without touching the newer topic operation', async () => {
+      // ROOT CAUSE:
+      //
+      // A delayed operation used to return on topic-owner conflict without
+      // settling its durable row. Persisting its session id before that conflict
+      // check could also overwrite the replacement operation's resume binding.
+      //
+      // Before: the old row remained running and its session binding could win.
+      // After: its message state flushes without a binding update, then its own
+      // row and terminal stream settle independently of the new topic owner.
       const { manager, published } = createFakeStreamManager();
       const persistenceHandler = createFakePersistenceHandler();
+      const agentOperationModel = { settleRunning: vi.fn(async () => true) };
       const topicModel = {
         settleRunningOperation: vi.fn(async () => ({
           activeOperationId: 'op-new',
@@ -528,6 +542,7 @@ describe('HeterogeneousAgentService', () => {
         .mockResolvedValue();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
         persistenceHandler,
+        agentOperationModel,
         snapshotStore: null,
         streamEventManager: manager,
         topicModel,
@@ -541,7 +556,16 @@ describe('HeterogeneousAgentService', () => {
       });
 
       expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
-      expect(published).toHaveLength(0);
+      expect(persistenceHandler.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ persistSessionBinding: false }),
+      );
+      expect(persistenceHandler.updateResumeSessionBinding).not.toHaveBeenCalled();
+      expect(agentOperationModel.settleRunning).toHaveBeenCalledWith('op-old', 'done');
+      expect(published).toHaveLength(1);
+      expect(published[0].event).toMatchObject({
+        data: { operationId: 'op-old', reason: 'success' },
+        type: 'agent_runtime_end',
+      });
       expect(completeOperationSpy).not.toHaveBeenCalled();
 
       completeOperationSpy.mockRestore();

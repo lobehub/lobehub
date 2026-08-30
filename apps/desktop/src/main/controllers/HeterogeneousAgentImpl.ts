@@ -403,6 +403,22 @@ interface CliTraceSession {
   writeQueue: Promise<void>;
 }
 
+/** Result of cancelling a device-gateway CLI wrapper. */
+export interface LhHeteroExecCancellationResult {
+  /** Whether the wrapper emitted its exit/error terminal signal before the bounded wait elapsed. */
+  exited: boolean;
+  /** Operating-system process id when Node assigned one before cancellation. */
+  pid?: number;
+  /** Initial signal requested by the server cancellation call. */
+  signal: NodeJS.Signals;
+}
+
+interface LhHeteroExecTask {
+  cancellation?: Promise<LhHeteroExecCancellationResult>;
+  exit: Promise<void>;
+  process: ChildProcess;
+}
+
 /**
  * External Agent Controller — manages external agent CLI processes via Electron IPC.
  *
@@ -445,6 +461,8 @@ export default class HeterogeneousAgentCtr {
   }
 
   private sessions = new Map<string, AgentSession>();
+  /** Device-gateway CLI wrappers keyed by their server operation id. */
+  private lhHeteroExecTasks = new Map<string, LhHeteroExecTask>();
   /**
    * Per-operation AskUserQuestion bridge state. Keyed by `operationId` so the
    * `submitIntervention` IPC can route an answer to the right pending MCP
@@ -2656,11 +2674,62 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
-   * Cancel an ongoing session: SIGINT the CC tree, escalate to SIGKILL after
-   * 2s if the CLI hasn't exited (some tool calls swallow SIGINT). The
-   * `exit` handler on the spawned proc broadcasts completion and clears
-   * `session.process`, so the escalation is a no-op when the graceful path
-   * already landed.
+   * Waits for a spawned CLI process to release its OS process handle.
+   *
+   * Use when:
+   * - A cancellation caller must not start another writer until this child exits.
+   * - A graceful signal needs a bounded wait before escalation.
+   *
+   * Expects:
+   * - `proc` is a child owned by the current heterogeneous-agent session.
+   * - `timeoutMs` bounds only this wait and does not signal the process itself.
+   *
+   * Returns:
+   * - `true` after an observed exit, otherwise `false` after the timeout.
+   */
+  private waitForProcessExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+    if (proc.exitCode !== null && proc.exitCode !== undefined) return Promise.resolve(true);
+    if (proc.signalCode !== null && proc.signalCode !== undefined) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (exited: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        proc.off('exit', onExit);
+        resolve(exited);
+      };
+      const onExit = () => finish(true);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+
+      proc.once('exit', onExit);
+    });
+  }
+
+  /**
+   * Cancels an ongoing heterogeneous-agent session and waits for its native
+   * writer to stop before returning.
+   *
+   * Call stack:
+   *
+   * QueueTray.handleSendNow
+   *   -> cancelOperation
+   *     -> renderer onOperationCancel hook
+   *       -> {@link HeterogeneousAgentCtr.cancelSession}
+   *         -> {@link HeterogeneousAgentCtr.killProcessTree}
+   *         -> {@link HeterogeneousAgentCtr.waitForProcessExit}
+   *
+   * Use when:
+   * - The user stops an active local heterogeneous-agent run.
+   * - “Send now” must safely resume the same native Codex thread.
+   *
+   * Expects:
+   * - `params.sessionId` identifies a session owned by this controller.
+   *
+   * Returns:
+   * - Only after the transport accepted interruption and, for CLI processes,
+   *   the process exited or the bounded SIGKILL escalation elapsed.
    */
   async cancelSession(params: CancelSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
@@ -2700,14 +2769,16 @@ export default class HeterogeneousAgentCtr {
       return;
     }
     const proc = session.process;
+    const gracefulExit = this.waitForProcessExit(proc, 2000);
     this.killProcessTree(proc, 'SIGINT');
 
-    setTimeout(() => {
-      if (session.process === proc && !proc.killed) {
-        logger.warn('Session did not exit after SIGINT, escalating to SIGKILL:', params.sessionId);
-        this.killProcessTree(proc, 'SIGKILL');
-      }
-    }, 2000);
+    if (await gracefulExit) return;
+    if (session.process !== proc) return;
+
+    logger.warn('Session did not exit after SIGINT, escalating to SIGKILL:', params.sessionId);
+    const forcedExit = this.waitForProcessExit(proc, 2000);
+    this.killProcessTree(proc, 'SIGKILL');
+    await forcedExit;
   }
 
   /**
@@ -2991,8 +3062,27 @@ export default class HeterogeneousAgentCtr {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
+    // Keep the wrapper reachable by the gateway cancellation tool. The wrapper
+    // owns the inner agent handle and forwards SIGINT/SIGTERM into the native
+    // CLI process group, so signalling this process is the only reliable way
+    // to release a Codex thread writer before a replacement turn starts.
+    const exit = new Promise<void>((resolve) => {
+      child.once('exit', () => resolve());
+      child.once('error', () => resolve());
+    });
+    this.lhHeteroExecTasks.set(operationId, { exit, process: child });
+
     child.on('exit', (code, signal) => {
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
+      if (this.lhHeteroExecTasks.get(operationId)?.process === child) {
+        this.lhHeteroExecTasks.delete(operationId);
+      }
+    });
+
+    child.on('error', () => {
+      if (this.lhHeteroExecTasks.get(operationId)?.process === child) {
+        this.lhHeteroExecTasks.delete(operationId);
+      }
     });
 
     return new Promise((resolve) => {
@@ -3033,5 +3123,66 @@ export default class HeterogeneousAgentCtr {
         settle({ reason: err.message, status: 'rejected' });
       });
     });
+  }
+
+  /**
+   * Cancels a device-gateway `lh hetero exec` wrapper and waits for its native
+   * writer to exit.
+   *
+   * Use when:
+   * - A server operation is interrupted from another client.
+   * - A replacement turn must not resume the same native thread concurrently.
+   *
+   * Expects:
+   * - `operationId` is the id supplied to {@link spawnLhHeteroExec}.
+   *
+   * Returns:
+   * - Process details when a live wrapper was found; otherwise `undefined`.
+   */
+  async cancelLhHeteroExec(params: {
+    operationId: string;
+    signal?: NodeJS.Signals;
+  }): Promise<LhHeteroExecCancellationResult | undefined> {
+    const { operationId, signal = 'SIGINT' } = params;
+    const task = this.lhHeteroExecTasks.get(operationId);
+    if (!task) return;
+    if (task.cancellation) return task.cancellation;
+
+    task.cancellation = (async () => {
+      const waitForExit = async (timeoutMs: number): Promise<boolean> => {
+        // Bound cancellation so an unresponsive wrapper cannot hold the gateway
+        // request forever. The timeout only gates waiting; the second signal below
+        // escalates the inner agent through the wrapper's repeated-SIGINT handler.
+        let timer: NodeJS.Timeout | undefined;
+        const timedOut = new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), timeoutMs);
+        });
+        const exited = await Promise.race([task.exit.then(() => true as const), timedOut]);
+        if (timer) clearTimeout(timer);
+        return exited;
+      };
+
+      task.process.kill(signal);
+      let exited = await waitForExit(2000);
+
+      if (!exited) {
+        // `lh hetero exec` treats a repeated SIGINT as an explicit SIGKILL of the
+        // inner native process group. Give that path a short drain window so its
+        // heteroFinish callback can settle before the replacement starts.
+        task.process.kill(signal === 'SIGINT' ? 'SIGINT' : 'SIGKILL');
+        exited = await waitForExit(2000);
+      }
+
+      if (!exited) {
+        // Last resort: terminate the wrapper itself. This is intentionally after
+        // the cooperative path because a direct SIGKILL cannot run its finish hook.
+        task.process.kill('SIGKILL');
+        exited = await waitForExit(1000);
+      }
+
+      return { exited, pid: task.process.pid, signal };
+    })();
+
+    return task.cancellation;
   }
 }
