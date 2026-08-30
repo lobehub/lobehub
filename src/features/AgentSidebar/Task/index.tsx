@@ -41,7 +41,6 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
       request: {
         assigneeAgentId: agentId,
         groups: SIDEBAR_GROUPS,
-        hasGoal: false,
       },
       signature: projectionSignature,
     },

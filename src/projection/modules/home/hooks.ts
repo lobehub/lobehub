@@ -200,7 +200,6 @@ export const useHomeGoalsRequest = (enabled: boolean): HomeDataRequest => {
     {
       request: {
         groups: [{ key: 'goals', limit: HOME_GOAL_FETCH_LIMIT, statuses: HOME_GOAL_STATUSES }],
-        hasGoal: true,
         parentTaskId: null,
       },
       signature: HOME_GOALS_SIGNATURE,

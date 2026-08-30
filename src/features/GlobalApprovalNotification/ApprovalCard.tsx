@@ -16,9 +16,9 @@ import { type ConversationContext, type MessagesChangeMeta } from '@/features/Co
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useChatTopicDetailProjectionRequest } from '@/projection';
 import { useAgentMeta } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -60,14 +60,11 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   // id when it is still missing. Falling back to the agent name here makes two
   // approvals from the same agent indistinguishable.
   const projectedTitle = useChatTopicById(context.topicId ?? undefined)?.title;
-  const [cachedTitle, useFetchTopicDetail] = useChatStore((s) => [
-    context.topicId ? topicSelectors.getTopicById(context.topicId)(s)?.title : undefined,
-    s.useFetchTopicDetail,
-  ]);
-  useFetchTopicDetail(
-    context.topicId && !projectedTitle && !cachedTitle ? context.topicId : undefined,
+  useChatTopicDetailProjectionRequest(
+    context.topicId ?? undefined,
+    Boolean(context.topicId && !projectedTitle),
   );
-  const topicTitle = projectedTitle ?? cachedTitle;
+  const topicTitle = useChatTopicById(context.topicId ?? undefined)?.title;
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);

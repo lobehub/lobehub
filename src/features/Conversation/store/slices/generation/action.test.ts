@@ -1,4 +1,5 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import type { ChatTopic } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1779,13 +1780,31 @@ describe('Generation Actions', () => {
     });
 
     it('regenerates with the topic-pinned heterogeneous model', async () => {
-      await setupHeteroChatStore({
-        topicDataMap: {
-          test: {
-            items: [{ id: 'topic-1', model: 'opus', provider: 'claude-code' }],
-          },
+      await setupHeteroChatStore();
+      getProjectionStoreState().commitChatTopicsPage(
+        getCacheScope(),
+        {
+          containerKey: 'session-1',
+          context: { agentId: 'session-1' },
+          items: [
+            {
+              createdAt: 100,
+              id: 'topic-1',
+              model: 'opus',
+              provider: 'claude-code',
+              status: 'active',
+              title: 'Pinned',
+              updatedAt: 100,
+            } as ChatTopic,
+          ],
+          page: 0,
+          pageSize: 20,
+          signature: {},
+          surface: 'sidebar',
+          total: 1,
         },
-      });
+        { observedAt: 100, source: 'network' },
+      );
       const context: ConversationContext = {
         agentId: 'session-1',
         threadId: null,
@@ -1816,21 +1835,33 @@ describe('Generation Actions', () => {
           lab: { ...state.preference.lab, enableAgentProviderBinding: true },
         },
       }));
-      await setupHeteroChatStore({
-        topicDataMap: {
-          test: {
-            items: [
-              {
-                id: 'topic-1',
-                metadata: {
-                  heteroSessionId: 'legacy-session',
-                  workingDirectory: '/repo',
-                },
+      await setupHeteroChatStore();
+      getProjectionStoreState().commitChatTopicsPage(
+        getCacheScope(),
+        {
+          containerKey: 'session-1',
+          context: { agentId: 'session-1' },
+          items: [
+            {
+              createdAt: 100,
+              id: 'topic-1',
+              metadata: {
+                heteroSessionId: 'legacy-session',
+                workingDirectory: '/repo',
               },
-            ],
-          },
+              status: 'active',
+              title: 'Legacy',
+              updatedAt: 100,
+            } as ChatTopic,
+          ],
+          page: 0,
+          pageSize: 20,
+          signature: {},
+          surface: 'sidebar',
+          total: 1,
         },
-      });
+        { observedAt: 100, source: 'network' },
+      );
 
       const context: ConversationContext = {
         agentId: 'session-1',

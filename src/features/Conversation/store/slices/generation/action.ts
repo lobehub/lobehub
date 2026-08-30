@@ -39,7 +39,7 @@ import {
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
-import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
+import { getChatTopicById, getChatTopicModelById } from '@/store/chat/slices/topic/projectionRead';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
@@ -111,8 +111,7 @@ const settleGenerationEntry = (
  * agents; a failed fetch falls back to authorship for this run.
  */
 const ensureEffectiveAgencyAccess = async (agentId: string) => {
-  const agentState = getAgentStoreState();
-  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const agent = getAgentProjectionById(agentId);
   await ensureAgentManagementAccess({
     agentId,
     agentUserId: agent?.userId,
@@ -245,9 +244,7 @@ const runHeterogeneousFromExistingMessage = async (
   else if (reason === 'binding_changed')
     toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
 
-  const topicModel = context.topicId
-    ? topicSelectors.getTopicModelById(context.topicId)(chatStore)
-    : undefined;
+  const topicModel = getChatTopicModelById(context.topicId ?? undefined);
   const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
     heterogeneousProvider,
     topicModel,

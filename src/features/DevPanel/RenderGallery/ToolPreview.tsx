@@ -53,9 +53,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
-  fixture: css`
-    padding: 12px;
-  `,
   previewShell: css`
     padding: 12px;
     background: ${cssVar.colorFillQuaternary};

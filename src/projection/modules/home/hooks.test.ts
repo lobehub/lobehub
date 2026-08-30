@@ -115,7 +115,6 @@ describe('Home Projection requests', () => {
     const scope = useProjectionStore.getState().scopes[SCOPE];
     expect(taskService.list).toHaveBeenCalledWith({
       automated: true,
-      hasGoal: false,
       orderBy: 'updatedAt',
     });
     expect(scope.indexes['home.tasks']).toBeUndefined();
@@ -138,7 +137,6 @@ describe('Home Projection requests', () => {
     const scope = useProjectionStore.getState().scopes[SCOPE];
     expect(taskService.list).toHaveBeenCalledWith({
       automated: false,
-      hasGoal: false,
       orderBy: 'updatedAt',
       statuses: HOME_RECENT_TASK_STATUSES,
     });
@@ -168,7 +166,6 @@ describe('Home Projection requests', () => {
       groups: [
         { key: 'goals', limit: 100, statuses: ['backlog', 'running', 'scheduled', 'completed'] },
       ],
-      hasGoal: true,
       parentTaskId: null,
     });
     expect(

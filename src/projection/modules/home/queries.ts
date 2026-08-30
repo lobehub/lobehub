@@ -68,7 +68,6 @@ export const homeTasksProjectionQuery = defineProjectionQuery<EmptyQueryParams, 
   query: () =>
     taskService.list({
       automated: false,
-      hasGoal: false,
       orderBy: 'updatedAt',
       statuses: HOME_RECENT_TASK_STATUSES,
     }),
@@ -86,7 +85,7 @@ export const homeScheduledTasksProjectionQuery = defineProjectionQuery<
       observedAt,
     );
   },
-  query: () => taskService.list({ automated: true, hasGoal: false, orderBy: 'updatedAt' }),
+  query: () => taskService.list({ automated: true, orderBy: 'updatedAt' }),
 });
 
 export const homeBriefsProjectionQuery = defineProjectionQuery<
