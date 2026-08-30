@@ -1,186 +1,121 @@
 import type { RecentItem } from '@lobechat/types';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as swr from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
-import { recentService } from '@/services/recent';
 import { useHomeStore } from '@/store/home';
 import { initialRecentState } from '@/store/home/slices/recent/initialState';
 
-const item = (id: string, title: string): RecentItem => ({ id, title }) as unknown as RecentItem;
-
-/**
- * Render `useFetchRecents` with `useClientDataSWRWithSync` stubbed so we can grab
- * the `onData` sync callback and drive the scope guard directly.
- */
-const captureOnData = (scope: string) => {
-  let onData: ((data: RecentItem[]) => void) | undefined;
-  vi.spyOn(swr, 'useClientDataSWRWithSync').mockImplementation(((
-    _key: unknown,
-    _fetcher: unknown,
-    opts: any,
-  ) => {
-    onData = opts?.onData;
-    return { data: undefined, isValidating: false, mutate: vi.fn() };
-  }) as any);
-
-  renderHook(() => useHomeStore.getState().useFetchRecents(true, 10, scope));
-  return () => onData;
-};
+const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem =>
+  ({ id, title, type }) as RecentItem;
 
 beforeEach(() => {
   useHomeStore.setState({ ...initialRecentState });
+  vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 describe('RecentActionImpl', () => {
-  describe('useFetchRecents onData scope guard', () => {
-    it('fetches only document and task recents without polling', async () => {
-      const swrSpy = vi.spyOn(swr, 'useClientDataSWRWithSync').mockReturnValue({
-        data: undefined,
-        isValidating: false,
-        mutate: vi.fn(),
-      } as any);
-      const getAllSpy = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
-
-      renderHook(() => useHomeStore.getState().useFetchRecents(true, 10, 'user-1:ws-A'));
-
-      expect(swrSpy).toHaveBeenCalledWith(expect.any(Array), expect.any(Function), {
-        onData: expect.any(Function),
-      });
-
-      const fetcher = swrSpy.mock.calls[0][1] as () => Promise<RecentItem[]>;
-      await fetcher();
-
-      expect(getAllSpy).toHaveBeenCalledWith(11, ['document', 'task']);
+  it('normalizes server data into a scoped ordered index and entity map', () => {
+    act(() => {
+      useHomeStore
+        .getState()
+        .ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B')], 10, 100);
     });
 
-    it('applies data for the matching scope and tags recentsScope', () => {
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
-      const getOnData = captureOnData('user-1:ws-A');
-
-      act(() => getOnData()!([item('a', 'A')]));
-
-      const state = useHomeStore.getState();
-      expect(state.recents).toEqual([item('a', 'A')]);
-      expect(state.isRecentsInit).toBe(true);
-      expect(state.recentsScope).toBe('user-1:ws-A');
+    const state = useHomeStore.getState();
+    expect(state.recentIndexesByScope['user-1:ws-A']).toEqual({
+      limit: 10,
+      observedAt: 100,
+      refs: ['task:a', 'task:b'],
     });
-
-    it('ignores data whose scope no longer matches the active cache scope', () => {
-      // active scope moved to ws-A, but this callback belongs to the stale ws-B key
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
-      const getOnData = captureOnData('user-1:ws-B');
-
-      act(() => getOnData()!([item('stale', 'STALE')]));
-
-      const state = useHomeStore.getState();
-      expect(state.recents).toEqual([]);
-      expect(state.isRecentsInit).toBe(false);
-      expect(state.recentsScope).toBeNull();
-    });
-
-    it('keeps data isolated across users in the same workspace', () => {
-      useHomeStore.setState({
-        isRecentsInit: true,
-        recents: [item('u1', 'user1 item')],
-        recentsScope: 'user-1:ws-A',
-      });
-      // now signed in as user-2 in the same workspace
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-2:ws-A');
-      const getOnData = captureOnData('user-2:ws-A');
-
-      act(() => getOnData()!([item('u2', 'user2 item')]));
-
-      const state = useHomeStore.getState();
-      expect(state.recents).toEqual([item('u2', 'user2 item')]);
-      expect(state.recentsScope).toBe('user-2:ws-A');
-    });
-
-    it('skips redundant set when init, same scope and equal data', () => {
-      useHomeStore.setState({
-        isRecentsInit: true,
-        recents: [item('a', 'A')],
-        recentsScope: 'user-1:ws-A',
-      });
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
-      const getOnData = captureOnData('user-1:ws-A');
-
-      // an early return means no set() runs, so the state object keeps its identity
-      const before = useHomeStore.getState();
-      act(() => getOnData()!([item('a', 'A')]));
-
-      expect(useHomeStore.getState()).toBe(before);
-    });
+    expect(state.recentEntitiesByScope['user-1:ws-A']?.['task:a']).toEqual(item('a', 'A'));
   });
 
-  describe('updateRecentTitle', () => {
-    it('renames in the store mirror and patches the scoped SWR caches', () => {
-      useHomeStore.setState({ recents: [item('a', 'old'), item('b', 'keep')] });
-      const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
-
-      act(() => {
-        useHomeStore.getState().updateRecentTitle('a', 'new');
-      });
-
-      expect(useHomeStore.getState().recents).toEqual([item('a', 'new'), item('b', 'keep')]);
-      // both the list and the drawer SWR caches get a non-revalidating patch
-      expect(mutateSpy).toHaveBeenCalledTimes(2);
-      expect(mutateSpy).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
-        revalidate: false,
-      });
+  it('ignores a response after the active cache scope changed', () => {
+    act(() => {
+      useHomeStore.getState().ingestRecents('user-1:ws-B', [item('stale', 'STALE')], 10, 100);
     });
 
-    it('SWR cache updater matches keys by root and renames the target item only', () => {
-      useHomeStore.setState({ recents: [] });
-      let updater: (items?: RecentItem[]) => RecentItem[] | undefined = () => undefined;
-      const matchers: Array<(key: unknown) => boolean> = [];
-      vi.spyOn(swr, 'mutate').mockImplementation(((match: any, fn: any) => {
-        matchers.push(match);
-        updater = fn;
-        return Promise.resolve(undefined);
-      }) as any);
-
-      act(() => {
-        useHomeStore.getState().updateRecentTitle('a', 'new');
-      });
-
-      expect(matchers[0](recentKeys.list(true, 10, 's'))).toBe(true);
-      expect(matchers[0](['other:key'])).toBe(false);
-      expect(updater([item('a', 'old'), item('b', 'keep')])).toEqual([
-        item('a', 'new'),
-        item('b', 'keep'),
-      ]);
-      expect(updater(undefined)).toBeUndefined();
-    });
+    expect(useHomeStore.getState().recentIndexesByScope['user-1:ws-B']).toBeUndefined();
   });
 
-  describe('refreshRecents', () => {
-    it('revalidates both the list and the drawer SWR caches', async () => {
-      const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
-
-      await act(async () => {
-        await useHomeStore.getState().refreshRecents();
-      });
-
-      expect(mutateSpy).toHaveBeenCalledTimes(2);
-      const matcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
-      expect(matcher(recentKeys.list(true, 10, 's'))).toBe(true);
+  it('does not let an older response overwrite a newer index', () => {
+    act(() => {
+      const store = useHomeStore.getState();
+      store.ingestRecents('user-1:ws-A', [item('new', 'New')], 10, 200);
+      store.ingestRecents('user-1:ws-A', [item('old', 'Old')], 10, 100);
     });
+
+    expect(useHomeStore.getState().recentIndexesByScope['user-1:ws-A']?.refs).toEqual(['task:new']);
   });
 
-  describe('drawer visibility', () => {
-    it('opens and closes the all-recents drawer', () => {
-      act(() => useHomeStore.getState().openAllRecentsDrawer());
-      expect(useHomeStore.getState().allRecentsDrawerOpen).toBe(true);
-
-      act(() => useHomeStore.getState().closeAllRecentsDrawer());
-      expect(useHomeStore.getState().allRecentsDrawerOpen).toBe(false);
+  it('preserves the tail when a smaller sidebar response follows a larger drawer response', () => {
+    act(() => {
+      const store = useHomeStore.getState();
+      store.ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B'), item('c', 'C')], 50, 100);
+      store.ingestRecents('user-1:ws-A', [item('a', 'A2')], 1, 200);
     });
+
+    expect(useHomeStore.getState().recentIndexesByScope['user-1:ws-A']?.refs).toEqual([
+      'task:a',
+      'task:b',
+      'task:c',
+    ]);
+  });
+
+  it('keeps optimistic title separate and rolls it back to confirmed data', () => {
+    act(() => {
+      const store = useHomeStore.getState();
+      store.ingestRecents('user-1:ws-A', [item('a', 'Old')], 10, 100);
+      store.setRecentTitleOptimistic('user-1:ws-A', 'task', 'a', 'Draft');
+    });
+
+    const selector = (state: ReturnType<typeof useHomeStore.getState>) => {
+      const ref = 'task:a' as const;
+      const confirmed = state.recentEntitiesByScope['user-1:ws-A']?.[ref];
+      const overlay = state.recentOptimisticTitlesByScope['user-1:ws-A']?.[ref];
+      return overlay === undefined ? confirmed : { ...confirmed, title: overlay };
+    };
+    expect(selector(useHomeStore.getState())?.title).toBe('Draft');
+    expect(useHomeStore.getState().recentEntitiesByScope['user-1:ws-A']?.['task:a']?.title).toBe(
+      'Old',
+    );
+
+    act(() => useHomeStore.getState().rollbackRecentTitle('user-1:ws-A', 'task', 'a'));
+    expect(selector(useHomeStore.getState())?.title).toBe('Old');
+  });
+
+  it('commits only the matching typed entity when ids collide', () => {
+    act(() => {
+      const store = useHomeStore.getState();
+      store.ingestRecents(
+        'user-1:ws-A',
+        [item('same', 'Task', 'task'), item('same', 'Document', 'document')],
+        10,
+        100,
+      );
+      store.commitRecentTitle('user-1:ws-A', 'task', 'same', 'Renamed task');
+    });
+
+    const entities = useHomeStore.getState().recentEntitiesByScope['user-1:ws-A'];
+    expect(entities?.['task:same']?.title).toBe('Renamed task');
+    expect(entities?.['document:same']?.title).toBe('Document');
+  });
+
+  it('revalidates both list surfaces without clearing confirmed data', async () => {
+    const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
+
+    await act(() => useHomeStore.getState().refreshRecents());
+
+    expect(mutateSpy).toHaveBeenCalledTimes(2);
+    const matcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
+    expect(matcher(recentKeys.list(true, 10, 's'))).toBe(true);
   });
 });

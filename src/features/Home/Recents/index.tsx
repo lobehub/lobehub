@@ -18,6 +18,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useInitRecents } from '@/hooks/useInitRecents';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
@@ -34,8 +35,9 @@ interface RecentsProps {
 
 const Recents = memo<RecentsProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
-  const recents = useHomeStore(homeRecentSelectors.recents);
-  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
+  const scope = useCacheScope();
+  const refs = useHomeStore(homeRecentSelectors.refs(scope));
+  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit(scope));
   const isLogin = useUserStore(authSelectors.isLogin);
   // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
   // instead of a permanent skeleton.
@@ -117,19 +119,10 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
         onClick: () => openCustomizeSidebarModal(),
       },
     ] as MenuProps['items'];
-  }, [
-    recentPageSize,
-    updateSystemStatus,
-    t,
-    isFirst,
-    isLast,
-    moveSection,
-    hideSection,
-    visibleItems.length,
-  ]);
+  }, [recentPageSize, updateSystemStatus, t, isFirst, isLast, moveSection, hideSection]);
 
   if (!isLogin) return null;
-  if (isInit && (!recents || recents.length === 0)) return null;
+  if (isInit && refs.length === 0) return null;
 
   return (
     <AccordionItem
@@ -154,7 +147,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
       }
     >
       <Suspense fallback={<SkeletonList rows={3} />}>
-        <RecentsList error={error} onRetry={() => mutate()} />
+        <RecentsList error={error} scope={scope} onRetry={() => mutate()} />
       </Suspense>
     </AccordionItem>
   );

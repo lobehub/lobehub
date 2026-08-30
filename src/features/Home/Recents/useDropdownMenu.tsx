@@ -11,6 +11,7 @@ import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransfer
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
@@ -21,10 +22,14 @@ export const useRecentItemDropdownMenu = (
   toggleEditing: (visible?: boolean) => void,
 ) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
-  const [updateRecentTitle, refreshRecents] = useHomeStore((s) => [
-    s.updateRecentTitle,
-    s.refreshRecents,
-  ]);
+  const scope = useCacheScope();
+  const [setRecentTitleOptimistic, commitRecentTitle, rollbackRecentTitle, refreshRecents] =
+    useHomeStore((s) => [
+      s.setRecentTitleOptimistic,
+      s.commitRecentTitle,
+      s.rollbackRecentTitle,
+      s.refreshRecents,
+    ]);
 
   // Viewer can read recents but cannot rename/delete them — keep the menu
   // items visible-but-disabled so the affordance is clear (per disabled-not-
@@ -42,26 +47,30 @@ export const useRecentItemDropdownMenu = (
 
   const handleRename = useCallback(
     async (newTitle: string) => {
-      // Optimistic update
-      updateRecentTitle(item.id, newTitle);
+      setRecentTitleOptimistic(scope, item.type, item.id, newTitle);
 
-      // Persist to server
-      switch (item.type) {
-        case 'document': {
-          await documentService.updateDocument({ id: item.id, title: newTitle });
-          break;
+      try {
+        switch (item.type) {
+          case 'document': {
+            await documentService.updateDocument({ id: item.id, title: newTitle });
+            break;
+          }
+          case 'task': {
+            await taskService.update(item.id, { name: newTitle });
+            break;
+          }
+          case 'topic': {
+            await topicService.updateTopic(item.id, { title: newTitle });
+            break;
+          }
         }
-        case 'task': {
-          await taskService.update(item.id, { name: newTitle });
-          break;
-        }
-        case 'topic': {
-          await topicService.updateTopic(item.id, { title: newTitle });
-          break;
-        }
+        commitRecentTitle(scope, item.type, item.id, newTitle);
+      } catch (error) {
+        rollbackRecentTitle(scope, item.type, item.id);
+        throw error;
       }
     },
-    [item, updateRecentTitle],
+    [commitRecentTitle, item, rollbackRecentTitle, scope, setRecentTitleOptimistic],
   );
 
   const handleDelete = useCallback(() => {
