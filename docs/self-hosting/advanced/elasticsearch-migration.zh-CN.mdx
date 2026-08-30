@@ -18,13 +18,14 @@ tags:
 
 ## 环境变量
 
-| 变量                     | 是否必需 | 用途                                                             |
-| ---------------------- | ---- | -------------------------------------------------------------- |
-| `DATABASE_URL`         | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                   |
-| `ES_URL`               | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                  |
-| `ES_API_KEY`           | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。         |
-| `ES_INDEX_NAMESPACE`   | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
-| `ES_REINDEX_STATE_DIR` | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。               |
+| 变量                            | 是否必需 | 用途                                                             |
+| ----------------------------- | ---- | -------------------------------------------------------------- |
+| `DATABASE_URL`                | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                   |
+| `ES_URL`                      | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                  |
+| `ES_API_KEY`                  | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。         |
+| `ES_INDEX_NAMESPACE`          | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
+| `ES_INCREMENTAL_SYNC_ENABLED` | 增量同步 | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                |
+| `ES_REINDEX_STATE_DIR`        | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。               |
 
 只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。
 如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
@@ -132,6 +133,28 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
 
 使用 `--rm` 时必须挂载状态目录，否则容器退出后无法续跑。命令使用宿主机当前用户的 ID 运行，使进程可以写入挂载目录，同时不会修改目录所有者。如果 Docker Compose 已提供相同的环境变量和数据库网络，请挂载同一个持久化状态目录，并把镜像作为一次性服务运行，不要再启动一个应用服务实例。
 
+## 启动增量同步
+
+全量回填状态变为 `ready_for_incremental_sync` 后，设置
+`ES_INCREMENTAL_SYNC_ENABLED=true`，再运行有明确上限的增量消费器：
+
+```bash
+bun run search:sync -- --max-steps=8 --yes
+```
+
+每次最多执行 8 轮消费后退出。最终 JSON 中出现 `hasMore: true` 只表示本次达到上限，可以安全再次执行。应使用 cron、容器任务或其他进程管理器持续调度同一条命令，Elasticsearch 承担搜索期间不能停止。消费器会在领取任务前校验 PostgreSQL 采集定义和全部 Elasticsearch 写入别名；采集设施缺失或过期、别名异常、可重试写入失败或死信都会返回非零退出码。消费器不会自动安装触发器，也不会自动删除失败任务。
+
+官方镜像内置 `/app/elasticsearch-sync.cjs`，执行的是同一套有界消费逻辑：
+
+```bash
+docker run --rm --env-file .env \
+  -e ES_INCREMENTAL_SYNC_ENABLED=true \
+  -e MIGRATION_DB=1 \
+  lobehub/lobehub:latest /app/elasticsearch-sync.cjs --max-steps=8 --yes
+```
+
+保持持续调度，并反复运行 `bun run search:reindex -- --status`，直到 `pending`、`ready`、`retrying`、`inFlight`、`dead` 和 `revisionLag` 全部为 0。切换查询前必须再检查一次。确认追平后，把 `+search_backend` 追加到现有 `FEATURE_FLAGS` 值并重新部署。追平前不要打开这个开关。Elasticsearch 出错时会直接暴露给调用方，搜索路径不会静默回退到 PostgreSQL 或 `ilike`。
+
 ## 续跑与验收
 
 - 进程崩溃或 Elasticsearch 临时失败后，使用同一个状态目录重新执行 `--apply --yes`，但不要再传 `--fresh-run`。已完成的数据类型会被跳过，未完成的数据类型从本地游标后继续。只要可选的采集设施仍在，暂停期间的变更就会保留在增量队列中，因此可以安全续跑。
@@ -141,7 +164,7 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
 
 这个修订号只用于观察增量追平进度，不是数据库已经提交的快照边界。增量消费器必须处理队列里的每一条记录，不能仅因修订号小于或等于该值就丢弃记录。
 
-继续下一阶段前，运行 `--status`，确认 14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。增量消费器暂停时，队列中有待处理记录是预期现象；这不代表源数据变更采集已暂停。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
+启动上面说明的增量消费器前，运行 `--status`，确认 14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。增量消费器暂停时，队列中有待处理记录是预期现象；这不代表源数据变更采集已暂停。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
 
 修正被拒绝的源数据或映射后，再执行 `--apply --yes` 即可重试。如果运维人员明确接受某一条不可重试的数据暂时不进入初始 Elasticsearch 快照，可以显式解除阻塞，然后继续回填：
 
@@ -156,5 +179,5 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --
 回填期间如需暂停写入 Elasticsearch，请使用部署环境提供的增量消费器开关。这只会暂停消费增量队列，不会停止已经安装的 PostgreSQL 采集触发器；源数据变更会继续进入增量队列，消费器重新开启后即可追平。回填进行期间不要禁用或删除触发器，也不要清空增量队列。
 
 <Callout type="info">
-  PostgreSQL 到 Elasticsearch 的持续同步需要使用已经包含增量消费器的版本。全量回填命令本身不会宣称应用已经可以切换搜索后端。
+  全量回填命令不会代替持续运行的增量消费器，也不会自行宣称应用已经可以切换搜索后端。只要 Elasticsearch 仍在承担搜索，就必须持续调度 `search:sync`。
 </Callout>

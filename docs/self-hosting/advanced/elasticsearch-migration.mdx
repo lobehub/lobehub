@@ -18,13 +18,14 @@ The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreS
 
 ## Environment variables
 
-| Variable               | Required | Purpose                                                                                                                                    |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`         | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
-| `ES_URL`               | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
-| `ES_API_KEY`           | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
-| `ES_INDEX_NAMESPACE`   | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
-| `ES_REINDEX_STATE_DIR` | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
+| Variable                      | Required | Purpose                                                                                                                                    |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
+| `ES_URL`                      | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
+| `ES_API_KEY`                  | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
+| `ES_INDEX_NAMESPACE`          | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
+| `ES_INCREMENTAL_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
+| `ES_REINDEX_STATE_DIR`        | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
@@ -193,6 +194,38 @@ Compose already supplies the same environment variables and database network, mo
 persistent state directory and run the image as a one-time service instead of starting a second
 application server.
 
+## Start incremental synchronization
+
+After the reindex status is `ready_for_incremental_sync`, set
+`ES_INCREMENTAL_SYNC_ENABLED=true` and run the bounded consumer:
+
+```bash
+bun run search:sync -- --max-steps=8 --yes
+```
+
+One invocation processes at most eight drain steps and then exits. `hasMore: true` in the final JSON
+means the bound was reached safely; run it again. Schedule the same command with cron, a container
+job, or another process supervisor so it continues to run while Elasticsearch search is enabled.
+The consumer validates the PostgreSQL capture definitions and every Elasticsearch write alias before
+claiming work. Missing or stale capture infrastructure, an invalid alias, retryable write failure, or
+dead-letter work produces a non-zero exit code. It never installs triggers and never deletes failed
+work automatically.
+
+The official image includes `/app/elasticsearch-sync.cjs` for the same bounded operation:
+
+```bash
+docker run --rm --env-file .env \
+  -e ES_INCREMENTAL_SYNC_ENABLED=true \
+  -e MIGRATION_DB=1 \
+  lobehub/lobehub:latest /app/elasticsearch-sync.cjs --max-steps=8 --yes
+```
+
+Keep scheduling the consumer and run `bun run search:reindex -- --status` until `pending`, `ready`,
+`retrying`, `inFlight`, `dead`, and `revisionLag` are all zero. Recheck that state immediately before
+switching queries. Then append `+search_backend` to the existing `FEATURE_FLAGS` value and redeploy
+the application. Do not enable the flag before catch-up is complete. Elasticsearch failures remain
+visible to callers; the search path does not silently fall back to PostgreSQL or `ilike`.
+
 ## Resume and verify
 
 - After a process crash or temporary Elasticsearch failure, re-run the `--apply --yes` command with the same state directory but without `--fresh-run`. Completed entities are skipped and the next batch starts after the local cursor. This is safe while the optional capture infrastructure remains installed, because changes made during the pause are retained in the Outbox.
@@ -205,8 +238,8 @@ snapshot. An incremental consumer must process every queued row and must never d
 because their revision is at or below that value.
 
 Run `--status` and confirm all 14 entities show `completed`, every `failedCount` is `0`, and the
-Outbox `dead` count is `0` before proceeding with the release-specific incremental-sync and
-query-cutover steps. A paused incremental consumer may leave queued Outbox work; that is expected
+Outbox `dead` count is `0` before starting the incremental consumer documented above. A paused
+incremental consumer may leave queued Outbox work; that is expected
 while backfill is running and does not mean source-change capture is paused. The status output
 lists unresolved document IDs, retryability, and attempt counts without persisting or printing
 Elasticsearch error reasons that may contain source text.
@@ -232,5 +265,7 @@ is enabled. Do not disable or remove the triggers, or truncate the Outbox, while
 progress.
 
 <Callout type="info">
-  Continuous PostgreSQL-to-Elasticsearch synchronization requires a release that includes the incremental consumer. The full-reindex command deliberately does not claim that the application is ready to switch search backends by itself.
+  The full-reindex command does not run the recurring incremental consumer and does not claim that
+  the application is ready to switch search backends by itself. Keep `search:sync` scheduled for as
+  long as Elasticsearch serves search traffic.
 </Callout>
