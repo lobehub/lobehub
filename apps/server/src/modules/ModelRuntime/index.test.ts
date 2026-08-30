@@ -388,6 +388,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'grok-build': [{ model: 'kimi-k3' }],
       'kimi-code': [{ model: 'kimi-k3' }],
       'pi': [{ model: 'kimi-k3' }],
+      'trae': [{ model: 'kimi-k3' }],
     });
   });
 

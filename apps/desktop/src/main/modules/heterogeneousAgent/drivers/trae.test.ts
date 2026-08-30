@@ -52,7 +52,7 @@ const bindingContext = (): PrepareProviderBindingContext => ({
 });
 
 describe('traeDriver', () => {
-  it('is registered and puts global arguments before the ACP server command', async () => {
+  it('is registered and preserves user ACP Server argument placement', async () => {
     expect(getHeterogeneousAgentDriver('trae')).toBe(traeDriver);
 
     await expect(
@@ -61,7 +61,7 @@ describe('traeDriver', () => {
         helpers: { buildAgentInput: async () => ({ args: [], stdin: '' }) },
         promptInput: 'hello',
       }),
-    ).resolves.toEqual({ args: ['--feature=test', 'acp', 'serve', '--yolo'] });
+    ).resolves.toEqual({ args: ['acp', 'serve', '--yolo', '--feature=test'] });
   });
 
   it('writes a secret-free Responses provider profile and isolates TRAE_HOME', async () => {

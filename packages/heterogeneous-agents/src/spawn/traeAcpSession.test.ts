@@ -135,12 +135,35 @@ afterEach(() => {
 });
 
 describe('TRAE ACP helpers', () => {
-  it('builds global arguments before the fixed ACP server argv', () => {
-    expect(buildTraeAcpArgs(['--feature=test'])).toEqual([
-      '--feature=test',
+  it('keeps existing ACP Server arguments after the subcommand', () => {
+    expect(buildTraeAcpArgs(['--dangerously-bypass-hook-trust'])).toEqual([
       'acp',
       'serve',
       '--yolo',
+      '--dangerously-bypass-hook-trust',
+    ]);
+  });
+
+  it('moves documented global arguments before the ACP subcommand', () => {
+    expect(
+      buildTraeAcpArgs([
+        '--dangerously-bypass-hook-trust',
+        '--profile',
+        'lobehub',
+        '-c',
+        'model_reasoning_effort="high"',
+        '--permission-mode=auto',
+      ]),
+    ).toEqual([
+      '--profile',
+      'lobehub',
+      '-c',
+      'model_reasoning_effort="high"',
+      '--permission-mode=auto',
+      'acp',
+      'serve',
+      '--yolo',
+      '--dangerously-bypass-hook-trust',
     ]);
   });
 
@@ -219,7 +242,7 @@ describe('TraeAcpSession', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'traecli',
-      ['--feature=test', 'acp', 'serve', '--yolo'],
+      ['acp', 'serve', '--yolo', '--feature=test'],
       expect.objectContaining({ cwd: '/workspace', stdio: ['pipe', 'pipe', 'pipe'] }),
     );
     expect(requests[0]).toEqual({
