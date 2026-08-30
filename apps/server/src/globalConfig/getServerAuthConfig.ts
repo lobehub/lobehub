@@ -5,6 +5,8 @@ import { authEnv } from '@/envs/auth';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 
+import { hasUsableAppOrigin } from './parsePasskeyConfig';
+
 const getBetterAuthSSOProviders = () => {
   return parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 };
@@ -19,6 +21,7 @@ export const getServerAuthConfig = (): GlobalServerConfig => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
+    enablePasskey: hasUsableAppOrigin(),
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     telemetry: {},
   };

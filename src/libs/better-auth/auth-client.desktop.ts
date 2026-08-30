@@ -56,3 +56,25 @@ export const signOut = lazyProp('signOut');
 export const signUp = lazyProp('signUp');
 export const unlinkAccount = lazyProp('unlinkAccount');
 export const useSession = lazyProp('useSession');
+
+/**
+ * Passkeys are bound to the rpID derived from the web origin, so the desktop
+ * shell cannot use credentials enrolled in the browser. The UI already hides
+ * itself with `!isDesktop`, but the module is still resolved by the renderer
+ * build, so these have to exist as real exports.
+ */
+export const useListPasskeys = () => ({
+  data: [] as never[],
+  isPending: false,
+  refetch: async () => {},
+});
+
+const passkeyUnavailable = async () => ({
+  error: { message: 'Passkeys are not available in the desktop app.' },
+});
+
+export const passkey = {
+  addPasskey: passkeyUnavailable,
+  deletePasskey: passkeyUnavailable,
+  updatePasskey: passkeyUnavailable,
+};

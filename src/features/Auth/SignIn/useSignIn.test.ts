@@ -11,6 +11,7 @@ const mockSignInSocial = vi.hoisted(() => vi.fn());
 const mockSignInOauth2 = vi.hoisted(() => vi.fn());
 const mockSignInEmail = vi.hoisted(() => vi.fn());
 const mockSignInMagicLink = vi.hoisted(() => vi.fn());
+const mockSignInPasskey = vi.hoisted(() => vi.fn());
 const mockRequestPasswordReset = vi.hoisted(() => vi.fn());
 const mockBusinessSignin = vi.hoisted(() => ({
   getAdditionalData: vi.fn(async () => ({})),
@@ -43,6 +44,7 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
   signIn: {
     email: mockSignInEmail,
     magicLink: mockSignInMagicLink,
+    passkey: mockSignInPasskey,
     oauth2: mockSignInOauth2,
     social: mockSignInSocial,
   },
@@ -679,6 +681,36 @@ describe('useSignIn', () => {
       const { result } = renderHook(() => useSignIn());
 
       expect(result.current.oAuthSSOProviders).toEqual(['saml']);
+    });
+  });
+
+  // The auth SPA is a separate app from the one callbackUrl points at, so a
+  // client-side navigation lands on a blank shell until the user reloads.
+  describe('handlePasskeySignIn', () => {
+    it('performs a full page load to the callback url', async () => {
+      mockSignInPasskey.mockResolvedValue({ data: {} });
+
+      const { result } = renderHook(() => useSignIn());
+      await act(async () => {
+        await result.current.handlePasskeySignIn();
+      });
+
+      expect(window.location.href).toBe('/');
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('stays put when the user dismisses the platform prompt', async () => {
+      const cancelled = new Error('cancelled');
+      cancelled.name = 'NotAllowedError';
+      mockSignInPasskey.mockRejectedValue(cancelled);
+
+      const { result } = renderHook(() => useSignIn());
+      await act(async () => {
+        await result.current.handlePasskeySignIn();
+      });
+
+      expect(window.location.href).toBe('');
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
   });
 });

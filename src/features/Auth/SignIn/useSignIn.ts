@@ -54,6 +54,7 @@ export const useSignIn = () => {
   // slow network can't be double-clicked into multiple emails.
   const [sending, setSending] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
@@ -67,6 +68,9 @@ export const useSignIn = () => {
   });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
+  // Passkeys need APP_URL to derive the rpID; without it the ceremony fails,
+  // so the entry point is hidden rather than shown and broken.
+  const enablePasskey = useAuthServerConfigStore((s) => s.serverConfig.enablePasskey ?? false);
   const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
 
   useEffect(() => {
@@ -294,6 +298,36 @@ export const useSignIn = () => {
     }
   };
 
+  const handlePasskeySignIn = async () => {
+    setPasskeyLoading(true);
+    await trackLoginOrSignupClicked({
+      provider: 'passkey',
+      spm: 'signin.passkey.click',
+    });
+
+    try {
+      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      const result = await signIn.passkey();
+
+      if (result && 'error' in result && result.error) throw result.error;
+
+      // callbackUrl targets the main app, outside this auth SPA — a client-side
+      // navigation leaves the user on a blank shell until they reload, so this
+      // needs a full page load just like the password flow.
+      window.location.href = sanitizeRedirectPath(callbackUrl);
+    } catch (error) {
+      // Dismissing the platform prompt raises NotAllowedError/AbortError.
+      // That is the user changing their mind, not a failure worth reporting.
+      const name = error instanceof Error ? error.name : '';
+      if (name !== 'NotAllowedError' && name !== 'AbortError') {
+        console.error('passkey sign in error:', error);
+        toast.error(t('betterAuth.signin.passkeyError'));
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
   const handleBackToEmail = () => {
     setStep('email');
     setEmail('');
@@ -385,6 +419,8 @@ export const useSignIn = () => {
     handleGoToSignup,
     handleResendEmail,
     handleSignIn,
+    enablePasskey,
+    handlePasskeySignIn,
     handleSocialSignIn,
     isSocialOnly,
     lastAuthProvider,
@@ -394,6 +430,7 @@ export const useSignIn = () => {
     sessionExpired,
     sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
+    passkeyLoading,
     socialLoading,
     step,
   };

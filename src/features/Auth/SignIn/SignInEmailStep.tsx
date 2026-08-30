@@ -4,7 +4,7 @@ import { Alert, Button, Text } from '@lobehub/ui/base-ui';
 import { type FormInstance, type InputRef } from 'antd';
 import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Mail } from 'lucide-react';
+import { KeyRound, Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,6 +38,7 @@ const getProviderName = (provider: string) =>
 
 export interface SignInEmailStepProps {
   disableEmailPassword?: boolean;
+  enablePasskey?: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
   lastAuthProvider?: string | null;
@@ -45,9 +46,11 @@ export interface SignInEmailStepProps {
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
   onGoToSignup: () => void;
+  onPasskeySignIn: () => void;
   onResetEmail: () => void;
   onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
+  passkeyLoading: boolean;
   serverConfigInit: boolean;
   sessionExpired?: boolean;
   socialLoading: string | null;
@@ -55,16 +58,19 @@ export interface SignInEmailStepProps {
 
 export const SignInEmailStep = ({
   disableEmailPassword,
+  enablePasskey,
   form,
   isSocialOnly,
   lastAuthProvider,
   loading,
   oAuthSSOProviders,
+  passkeyLoading,
   serverConfigInit,
   sessionExpired,
   socialLoading,
   onCheckUser,
   onGoToSignup,
+  onPasskeySignIn,
   onResetEmail,
   onSetPassword,
   onSocialSignIn,
@@ -107,7 +113,9 @@ export const SignInEmailStep = ({
           variant="filled"
         />
       )}
-      {serverConfigInit && oAuthSSOProviders.length > 0 && (
+      {/* Passkeys are an independent method: an email/password-only
+          deployment with passkeys enabled still needs this block. */}
+      {serverConfigInit && (oAuthSSOProviders.length > 0 || enablePasskey) && (
         <Flexbox gap={12}>
           {oAuthSSOProviders.map((provider) => {
             const button = (
@@ -145,12 +153,34 @@ export const SignInEmailStep = ({
               button
             );
           })}
+          {enablePasskey && (
+            <Button
+              block
+              icon={<Icon icon={KeyRound} />}
+              loading={passkeyLoading}
+              size="large"
+              styles={{ icon: PROVIDER_ICON_STYLE }}
+              type="fill"
+              onClick={() =>
+                continueWithAgreement(() => {
+                  onPasskeySignIn();
+                })
+              }
+            >
+              {t('betterAuth.signin.passkeyButton')}
+            </Button>
+          )}
           {showEmailForm && divider}
         </Flexbox>
       )}
-      {serverConfigInit && disableEmailPassword && oAuthSSOProviders.length === 0 && (
-        <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
-      )}
+      {/* Passkeys count as a configured method: telling an enrolled user to
+          contact an administrator would contradict the button above. */}
+      {serverConfigInit &&
+        disableEmailPassword &&
+        oAuthSSOProviders.length === 0 &&
+        !enablePasskey && (
+          <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
+        )}
       {showEmailForm && (
         <Form
           form={form}

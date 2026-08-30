@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 interface MockGlobalConfigOptions {
   agentGatewayUrl?: string;
+  appUrl?: string;
   enableAgentGateway?: boolean;
   toolNameMaxLengthEnv?: string;
 }
@@ -39,6 +40,7 @@ const mockGlobalConfigDependencies = (
 
   vi.doMock('@/envs/app', () => ({
     appEnv: {
+      ...(options.appUrl ? { APP_URL: options.appUrl } : {}),
       ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
       ...(options.enableAgentGateway === undefined
         ? {}
@@ -234,5 +236,28 @@ describe('getServerGlobalConfig', () => {
         toolNameMaxLength: expected,
       });
     }
+  });
+});
+
+// The settings page reads this flag from the main global config, not from the
+// auth SPA config — exposing it in only one of the two hides the passkey
+// section even when APP_URL is set.
+describe('getServerGlobalConfig / enablePasskey', () => {
+  const loadConfig = async (appUrl?: string) => {
+    vi.resetModules();
+    if (appUrl) process.env.APP_URL = appUrl;
+    else delete process.env.APP_URL;
+    mockGlobalConfigDependencies(false, appUrl ? { appUrl } : {});
+    const { getServerGlobalConfig } = await import('./index');
+
+    return getServerGlobalConfig();
+  };
+
+  it('disables passkeys when APP_URL is not configured', async () => {
+    expect((await loadConfig()).enablePasskey).toBe(false);
+  });
+
+  it('enables passkeys once APP_URL is set', async () => {
+    expect((await loadConfig('https://chat.example.com')).enablePasskey).toBe(true);
   });
 });

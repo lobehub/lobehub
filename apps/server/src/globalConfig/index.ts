@@ -23,6 +23,7 @@ import {
 import { parseAgentConfig } from './parseDefaultAgent';
 import { parseFilesConfig } from './parseFilesConfig';
 import { getPublicMemoryExtractionConfig } from './parseMemoryExtractionConfig';
+import { hasUsableAppOrigin } from './parsePasskeyConfig';
 
 /**
  * Get Better-Auth SSO providers list
@@ -113,6 +114,7 @@ export const getServerGlobalConfig = async () => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
+    enablePasskey: hasUsableAppOrigin(),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL

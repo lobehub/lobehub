@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     betterAuth: vi.fn((options) => ({ ...options, handler: authHandler })),
     clearMismatchedOIDCSession: vi.fn(),
     EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+    passkeyDeleteGuard: vi.fn(() => ({ id: 'passkey-delete-guard' })),
     serverDB: {},
     setGlobalDispatcher: vi.fn(),
   };
@@ -86,6 +87,10 @@ vi.mock('@/libs/better-auth/plugins/email-whitelist', () => ({
   emailWhitelist: vi.fn(() => ({ id: 'email-whitelist' })),
 }));
 
+vi.mock('@/libs/better-auth/plugins/passkey-delete-guard', () => ({
+  passkeyDeleteGuard: mocks.passkeyDeleteGuard,
+}));
+
 vi.mock('@/libs/better-auth/sso', () => ({
   initBetterAuthSSOProviders: vi.fn(() => ({
     genericOAuthProviders: [],
@@ -153,6 +158,22 @@ describe('defineConfig', () => {
           revokeSessionsOnPasswordReset: true,
         }),
       }),
+    );
+  });
+
+  it('installs the atomic passkey deletion guard with the active sign-in methods', async () => {
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+
+    expect(mocks.passkeyDeleteGuard).toHaveBeenCalledWith({
+      disableEmailPassword: false,
+      enabledSSOProviders: [],
+      enableMagicLink: false,
+    });
+    const [options] = mocks.betterAuth.mock.lastCall!;
+    expect(options.plugins).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'passkey-delete-guard' })]),
     );
   });
 
