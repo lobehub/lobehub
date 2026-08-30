@@ -103,16 +103,6 @@ export class TaskRunnerService {
           await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
         }
         task.assigneeAgentId = inboxAgent.id;
-      } else if (task.assigneeUserId) {
-        // Released clients persisted the inbox fallback before calling run,
-        // even when the task was assigned to a member. Recognize that exact
-        // legacy pair and restore the human assignment before execution. A
-        // non-inbox agent remains an explicit agent assignment and is left
-        // untouched.
-        const inboxAgent = await this.agentModel.getBuiltinAgent(INBOX_SESSION_ID);
-        if (task.assigneeAgentId === inboxAgent?.id) {
-          await this.taskModel.update(task.id, { assigneeAgentId: null });
-        }
       }
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);

@@ -1384,7 +1384,7 @@ describe('Task Router Integration', () => {
       expect(scheduled.data.assigneeUserId).toBe(userId);
     });
 
-    it('should not persist the inbox fallback agent when running a human-assigned task', async () => {
+    it('should keep inbox fallback ephemeral without clearing an explicit inbox assignment', async () => {
       // Seed the builtin inbox agent so the runner's fallback path can resolve it.
       const inboxAgentId = await createTestAgent(serverDB, userId, 'inbox');
 
@@ -1398,19 +1398,19 @@ describe('Task Router Integration', () => {
       expect(afterHumanRun.data.assigneeUserId).toBe(userId);
       expect(afterHumanRun.data.assigneeAgentId).toBeNull();
 
-      // Released clients did not understand assigneeUserId and persisted the
-      // inbox fallback immediately before starting the run. The server must
-      // recognize and remove that legacy fallback without losing the member.
-      const legacyClientTask = await caller.create({
+      // Inbox is also a valid explicit agent assignment. Once a member and an
+      // agent can be selected independently, the persisted pair must survive
+      // execution because it is indistinguishable from any historical fallback.
+      const dualAssignedTask = await caller.create({
         assigneeUserId: userId,
-        instruction: 'Legacy-client human-assigned task',
+        instruction: 'Inbox-and-member-assigned task',
       });
-      await caller.update({ assigneeAgentId: inboxAgentId, id: legacyClientTask.data.id });
-      await caller.run({ id: legacyClientTask.data.id });
+      await caller.update({ assigneeAgentId: inboxAgentId, id: dualAssignedTask.data.id });
+      await caller.run({ id: dualAssignedTask.data.id });
 
-      const afterLegacyClientRun = await caller.find({ id: legacyClientTask.data.id });
-      expect(afterLegacyClientRun.data.assigneeUserId).toBe(userId);
-      expect(afterLegacyClientRun.data.assigneeAgentId).toBeNull();
+      const afterDualAssignedRun = await caller.find({ id: dualAssignedTask.data.id });
+      expect(afterDualAssignedRun.data.assigneeUserId).toBe(userId);
+      expect(afterDualAssignedRun.data.assigneeAgentId).toBe(inboxAgentId);
 
       // Control: a fully unassigned task still gets the fallback persisted.
       const unassignedTask = await caller.create({ instruction: 'Unassigned task' });
