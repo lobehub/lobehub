@@ -149,14 +149,21 @@ class AgentEvalService {
       choices?: string[];
       expected?: string;
       input: string;
+      /**
+       * Conversation replayed into the eval topic before `input` is sent. The
+       * router has always accepted it; this client had not exposed it.
+       */
+      messages?: Array<{
+        content: string;
+        id?: string;
+        parentId?: string;
+        role: 'assistant' | 'system' | 'user';
+      }>;
     };
     datasetId: string;
-    evalConfig?: { judgePrompt?: string };
+    evalConfig?: { criteria?: string; judgePrompt?: string };
     evalMode?: RubricType;
-    metadata?: {
-      difficulty?: 'easy' | 'medium' | 'hard';
-      tags?: string[];
-    };
+    metadata?: Record<string, unknown>;
   }) {
     return lambdaClient.agentEval.createTestCase.mutate(params);
   }

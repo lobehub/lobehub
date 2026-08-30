@@ -699,6 +699,7 @@ export default {
   'messageAction.continueGenerationUnsupported':
     'The current model doesn’t support continuing an assistant message. Try regenerating instead.',
   'messageAction.copyOperationId': 'Copy Operation ID',
+  'messageAction.saveAsEvalCase': 'Save as eval case',
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
   'messageAction.regenerateAlreadyRunning': 'This message is already being regenerated.',
   'messageAction.interrupted': 'Interrupted',

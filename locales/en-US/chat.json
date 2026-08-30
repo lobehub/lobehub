@@ -985,6 +985,7 @@
   "messageAction.reaction": "Add Reaction",
   "messageAction.regenerate": "Regenerate",
   "messageAction.regenerateAlreadyRunning": "This message is already being regenerated.",
+  "messageAction.saveAsEvalCase": "Save as eval case",
   "messageAction.select": "Select",
   "messageForward.bar.cancel": "Cancel",
   "messageForward.bar.delete": "Delete",

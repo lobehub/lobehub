@@ -18,6 +18,7 @@ type LabFeatureI18nKey =
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'evalCapture'
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
@@ -68,6 +69,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
     searchKeywords: ['self-evolving', 'self learning', 'rule base'],
+    stage: 'alpha',
+  },
+  {
+    flag: 'enableEvalCapture',
+    i18nKey: 'evalCapture',
+    searchKeywords: ['eval', 'test case', 'capture', 'regression', 'benchmark'],
     stage: 'alpha',
   },
   {

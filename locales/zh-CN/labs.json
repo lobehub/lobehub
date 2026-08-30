@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codex App Server 运行时",
   "features.desktopSplitView.desc": "在桌面端并排显示两个标签页，支持独立导航和拖拽调整分栏宽度。",
   "features.desktopSplitView.title": "标签页分栏",
+  "features.evalCapture.desc": "在消息动作里增加一项，把一轮对话（前置上下文、本轮输入与它产生的回答）捕获成评测用例。",
+  "features.evalCapture.title": "把对话保存为评测用例",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
   "features.heteroSessionImport.desc": "在话题列表菜单中新增「导入本地 Agent 会话」入口：扫描本地 Claude Code / Codex CLI 的会话记录并导入为话题，重复导入时增量同步新消息。",

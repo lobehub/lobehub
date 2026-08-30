@@ -184,6 +184,32 @@ export default {
   'dataset.import.upload.text': 'Click or drag file here to upload',
   'dataset.import.uploading': 'Uploading...',
   'dataset.detail.backToEval': 'Back to Eval',
+  'capture.actual': 'What it answered',
+  'capture.captured': 'Captured content',
+  'capture.counterExample': 'counter-example',
+  'capture.counterExampleHint':
+    'Kept as a counter-example for the judge. It is not written to "Expected output".',
+  'capture.criteria': 'Criteria',
+  'capture.criteriaHint':
+    'The judge does not see the prior context, so the criteria has to stand on its own.',
+  'capture.criteriaPlaceholder':
+    'What must a good answer do? e.g. it must not treat the user as the author of the quoted message.',
+  'capture.criteriaRequired': 'Write what a good answer must do',
+  'capture.dataset': 'Dataset',
+  'capture.datasetPlaceholder': 'Choose a dataset',
+  'capture.datasetRequired': 'Choose a dataset',
+  'capture.done': 'Done',
+  'capture.error': 'Failed to save the test case',
+  'capture.expected': 'Expected output',
+  'capture.expectedPlaceholder':
+    'Leave empty when you do not know the right answer \u2014 it is scored by the criteria alone',
+  'capture.input': 'Input',
+  'capture.notCapturable':
+    'This answer has no user turn before it, so it cannot be captured as a case.',
+  'capture.save': 'Save',
+  'capture.saved': 'Saved as a test case',
+  'capture.title': 'Save as eval case',
+  'capture.view': 'View now',
   'dataset.detail.backToBenchmark': 'Back to Benchmark',
   'dataset.detail.caseCount': '{{count}} test case{{count, plural, one {} other {s}}}',
   'dataset.detail.addRun': 'New Run',
