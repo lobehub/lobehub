@@ -1,7 +1,7 @@
 import type { RecentItem } from '@lobechat/types';
 import type { SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { documentService } from '@/services/document';
@@ -12,17 +12,24 @@ import type { HomeStore } from '@/store/home/store';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { RecentEntityRef, RecentIndex, RecentScopeState } from './initialState';
+import type { RecentEntityRef, RecentScopeState } from './initialState';
+import { createRecentQueryKey } from './initialState';
+import { recentQueryRepository } from './repository';
 
 const n = setNamespace('recent');
 
-const toRef = (item: Pick<RecentItem, 'id' | 'type'>): RecentEntityRef => `${item.type}:${item.id}`;
-
 const updateRecentTitleInList =
-  (type: RecentItem['type'], id: string, title: string) => (items?: RecentItem[]) =>
-    items?.map((item) => (item.type === type && item.id === id ? { ...item, title } : item));
+  (type: RecentItem['type'], id: string, title: string) => (items: RecentItem[]) => {
+    let changed = false;
+    const nextItems = items.map((item) => {
+      if (item.type !== type || item.id !== id || item.title === title) return item;
+      changed = true;
+      return { ...item, title };
+    });
+    return changed ? nextItems : items;
+  };
 
-const createScopeState = (): RecentScopeState => ({ entities: {}, optimisticTitles: {} });
+const createScopeState = (): RecentScopeState => ({ optimisticTitles: {}, queries: {} });
 
 const matchesScopedRecentKey = (key: unknown, root: string, scope: string) =>
   Array.isArray(key) && key[0] === root && key.at(-1) === scope;
@@ -40,6 +47,7 @@ export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unkn
 
 export class RecentActionImpl {
   readonly #get: () => HomeStore;
+  readonly #hydrationQueue = new Map<string, Promise<void>>();
   readonly #renameQueues = new Map<string, Promise<void>>();
   readonly #set: Setter;
   #mutationId = 0;
@@ -64,11 +72,16 @@ export class RecentActionImpl {
     const ref = `${type}:${id}` as RecentEntityRef;
     const state = this.#get();
     const scopedState = state.recentsByScope[scope];
-    const item = scopedState?.entities[ref];
-    if (!item) return;
+    if (!scopedState) return;
 
     const optimisticTitles = { ...scopedState.optimisticTitles };
     if (optimisticTitles[ref]?.mutationId === mutationId) delete optimisticTitles[ref];
+    const queries = Object.fromEntries(
+      Object.entries(scopedState.queries).map(([queryKey, query]) => {
+        const items = updateRecentTitleInList(type, id, title)(query.items);
+        return [queryKey, items === query.items ? query : { ...query, items }];
+      }),
+    );
 
     this.#set(
       {
@@ -76,25 +89,19 @@ export class RecentActionImpl {
           ...state.recentsByScope,
           [scope]: {
             ...scopedState,
-            entities: { ...scopedState.entities, [ref]: { ...item, title } },
             optimisticTitles,
+            queries,
           },
         },
       },
       false,
       n('commitRecentTitle'),
     );
-    const updater = updateRecentTitleInList(type, id, title);
-    void Promise.all([
-      mutate((key: unknown) => matchesScopedRecentKey(key, recentKeys.list.root, scope), updater, {
-        revalidate: false,
-      }),
-      mutate(
-        (key: unknown) => matchesScopedRecentKey(key, recentKeys.allDrawer.root, scope),
-        updater,
-        { revalidate: false },
+    void Promise.all(
+      Object.entries(queries).map(([queryKey, query]) =>
+        recentQueryRepository.set(scope, queryKey, query.items),
       ),
-    ]);
+    );
   };
 
   #persistRecentTitle = async ({ id, title, type }: RenameRecentParams): Promise<void> => {
@@ -167,35 +174,45 @@ export class RecentActionImpl {
     );
   };
 
-  ingestRecents = (scope: string, items: RecentItem[], limit: number): void => {
+  internal_replaceRecentQuery = (scope: string, queryKey: string, items: RecentItem[]): void => {
     if (getCacheScope() !== scope) return;
 
     const state = this.#get();
     const scopedState = state.recentsByScope[scope] ?? createScopeState();
-    const currentIndex = scopedState.index;
-
-    const incomingRefs = items.map(toRef);
-    const refs =
-      currentIndex && currentIndex.limit > limit
-        ? [...incomingRefs, ...currentIndex.refs.slice(incomingRefs.length)]
-        : incomingRefs;
-    const index: RecentIndex = {
-      limit: Math.max(limit, currentIndex?.limit || 0),
-      refs: [...new Set(refs)],
-    };
-    const entities = { ...scopedState.entities };
-    for (const item of items) entities[toRef(item)] = item;
 
     this.#set(
       {
         recentsByScope: {
           ...state.recentsByScope,
-          [scope]: { ...scopedState, entities, index },
+          [scope]: {
+            ...scopedState,
+            queries: {
+              ...scopedState.queries,
+              [queryKey]: { items, updatedAt: Date.now() },
+            },
+          },
         },
       },
       false,
-      n('ingestRecents'),
+      n('internal_replaceRecentQuery'),
     );
+  };
+
+  hydrateRecentQuery = async (scope: string, queryKey: string): Promise<void> => {
+    if (this.#get().recentsByScope[scope]?.queries[queryKey]) return;
+
+    const hydrationKey = `${scope}:${queryKey}`;
+    const pending = this.#hydrationQueue.get(hydrationKey);
+    if (pending) return pending;
+
+    const hydration = recentQueryRepository
+      .get(scope, queryKey)
+      .then((cached) => {
+        if (cached) this.internal_replaceRecentQuery(scope, queryKey, cached.items);
+      })
+      .finally(() => this.#hydrationQueue.delete(hydrationKey));
+    this.#hydrationQueue.set(hydrationKey, hydration);
+    return hydration;
   };
 
   openAllRecentsDrawer = (): void => {
@@ -231,24 +248,36 @@ export class RecentActionImpl {
     }
   };
 
-  useFetchAllRecents = (open: boolean, scope: string): SWRResponse<RecentItem[]> => {
-    return useClientDataSWRWithSync<RecentItem[]>(
-      open ? recentKeys.allDrawer(open, scope) : null,
-      () => recentService.getAll(50, RECENT_SIDEBAR_TYPES),
-      { onData: (data) => this.ingestRecents(scope, data, 50) },
-    );
+  useFetchAllRecents = (open: boolean, scope: string): SWRResponse<number> => {
+    const limit = 50;
+    const queryKey = createRecentQueryKey(limit);
+    return useClientDataSWR<number>(open ? recentKeys.allDrawer(open, scope) : null, async () => {
+      const request = recentService.getAll(limit, RECENT_SIDEBAR_TYPES);
+      await this.hydrateRecentQuery(scope, queryKey);
+      const items = await request;
+      this.internal_replaceRecentQuery(scope, queryKey, items);
+      void recentQueryRepository.set(scope, queryKey, items);
+      return Date.now();
+    });
   };
 
   useFetchRecents = (
     isLogin: boolean | undefined,
     scope: string,
     limit: number = 10,
-  ): SWRResponse<RecentItem[]> => {
+  ): SWRResponse<number> => {
     const requestLimit = limit + 1;
-    return useClientDataSWRWithSync<RecentItem[]>(
+    const queryKey = createRecentQueryKey(requestLimit);
+    return useClientDataSWR<number>(
       isLogin === true ? recentKeys.list(isLogin, limit, scope) : null,
-      () => recentService.getAll(requestLimit, RECENT_SIDEBAR_TYPES),
-      { onData: (data) => this.ingestRecents(scope, data, requestLimit) },
+      async () => {
+        const request = recentService.getAll(requestLimit, RECENT_SIDEBAR_TYPES);
+        await this.hydrateRecentQuery(scope, queryKey);
+        const items = await request;
+        this.internal_replaceRecentQuery(scope, queryKey, items);
+        void recentQueryRepository.set(scope, queryKey, items);
+        return Date.now();
+      },
     );
   };
 }

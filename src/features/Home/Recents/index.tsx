@@ -24,6 +24,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -36,8 +37,6 @@ interface RecentsProps {
 const Recents = memo<RecentsProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
   const scope = useCacheScope();
-  const refs = useHomeStore(homeRecentSelectors.refs(scope));
-  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit(scope));
   const isLogin = useUserStore(authSelectors.isLogin);
   // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
   // instead of a permanent skeleton.
@@ -45,6 +44,9 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
 
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const query = useHomeStore(
+    homeRecentSelectors.query(scope, createRecentQueryKey(recentPageSize + 1)),
+  );
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
   const hiddenSections = useGlobalStore(
     systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
@@ -122,7 +124,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   }, [recentPageSize, updateSystemStatus, t, isFirst, isLast, moveSection, hideSection]);
 
   if (!isLogin) return null;
-  if (isInit && refs.length === 0) return null;
+  if (query && query.items.length === 0) return null;
 
   return (
     <AccordionItem

@@ -9,12 +9,13 @@ import type { RecentEntityRef } from '@/store/home/slices/recent/initialState';
 import RecentListItem from './Item';
 
 interface ConnectedItemProps {
-  entityRef: RecentEntityRef;
+  itemRef: RecentEntityRef;
+  queryKey: string;
   scope: string;
 }
 
-const ConnectedItem = memo<ConnectedItemProps>(({ entityRef, scope }) => {
-  const item = useHomeStore(homeRecentSelectors.entity(scope, entityRef));
+const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey, scope }) => {
+  const item = useHomeStore(homeRecentSelectors.item(scope, queryKey, itemRef));
   if (!item) return null;
 
   const route =

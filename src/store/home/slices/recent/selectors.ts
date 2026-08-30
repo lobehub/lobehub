@@ -2,18 +2,21 @@ import { type HomeStore } from '@/store/home/store';
 
 import type { RecentEntityRef } from './initialState';
 
-const refs = (scope: string) => (s: HomeStore) => s.recentsByScope[scope]?.index?.refs || [];
-const isRecentsInit = (scope: string) => (s: HomeStore) => !!s.recentsByScope[scope]?.index;
-const entity = (scope: string, ref: RecentEntityRef) => (s: HomeStore) => {
+const query = (scope: string, queryKey: string) => (s: HomeStore) =>
+  s.recentsByScope[scope]?.queries[queryKey];
+const item = (scope: string, queryKey: string, ref: RecentEntityRef) => (s: HomeStore) => {
   const scopedState = s.recentsByScope[scope];
-  const item = scopedState?.entities[ref];
+  const recentItem = scopedState?.queries[queryKey]?.items.find(
+    (item) => `${item.type}:${item.id}` === ref,
+  );
   const optimisticTitle = scopedState?.optimisticTitles[ref]?.title;
 
-  return item && optimisticTitle !== undefined ? { ...item, title: optimisticTitle } : item;
+  return recentItem && optimisticTitle !== undefined
+    ? { ...recentItem, title: optimisticTitle }
+    : recentItem;
 };
 
 export const homeRecentSelectors = {
-  entity,
-  isRecentsInit,
-  refs,
+  item,
+  query,
 };

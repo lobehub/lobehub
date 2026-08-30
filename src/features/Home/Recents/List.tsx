@@ -10,6 +10,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
 
 import AllRecentsDrawer from './AllRecentsDrawer';
 import ConnectedItem from './ConnectedItem';
@@ -23,34 +24,41 @@ interface RecentsListProps {
 
 const RecentsList = memo<RecentsListProps>(({ error, onRetry, scope }) => {
   const { t } = useTranslation('chat');
-  const refs = useHomeStore(homeRecentSelectors.refs(scope));
-  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit(scope));
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const queryKey = createRecentQueryKey(recentPageSize + 1);
+  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
+  const items = query?.items;
   const [drawerOpen, openDrawer, closeDrawer] = useHomeStore((s) => [
     s.allRecentsDrawerOpen,
     s.openAllRecentsDrawer,
     s.closeAllRecentsDrawer,
   ]);
 
-  const displayRefs = useMemo(() => refs.slice(0, recentPageSize), [refs, recentPageSize]);
-  const hasMore = refs.length > recentPageSize;
+  const displayItems = useMemo(
+    () => items?.slice(0, recentPageSize) ?? [],
+    [items, recentPageSize],
+  );
+  const hasMore = (items?.length ?? 0) > recentPageSize;
 
   // Error gated ahead of the skeleton so a failed recents fetch shows Retry
   // instead of a permanent skeleton (`isRecentsInit` only flips on success —
   //
   return (
     <AsyncBoundary
-      data={isInit ? refs : undefined}
-      error={isInit ? undefined : error}
+      data={items}
+      error={query ? undefined : error}
       errorVariant={'inline'}
-      isLoading={!isInit && !error}
+      isLoading={!query && !error}
       loading={<SkeletonList rows={3} />}
       onRetry={onRetry}
     >
       <Flexbox gap={1}>
-        {displayRefs.map((ref) => (
-          <ConnectedItem entityRef={ref} key={ref} scope={scope} />
-        ))}
+        {displayItems.map((item) => {
+          const itemRef = `${item.type}:${item.id}` as const;
+          return (
+            <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} scope={scope} />
+          );
+        })}
         {hasMore && (
           <NavItem icon={MoreHorizontalIcon} title={t('input.more')} onClick={openDrawer} />
         )}

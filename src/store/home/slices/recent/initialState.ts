@@ -2,10 +2,7 @@ import type { RecentItem } from '@lobechat/types';
 
 export type RecentEntityRef = `${RecentItem['type']}:${string}`;
 
-export interface RecentIndex {
-  limit: number;
-  refs: RecentEntityRef[];
-}
+export const createRecentQueryKey = (limit: number): string => `limit:${limit}`;
 
 export interface RecentOptimisticTitle {
   mutationId: number;
@@ -13,9 +10,13 @@ export interface RecentOptimisticTitle {
 }
 
 export interface RecentScopeState {
-  entities: Partial<Record<RecentEntityRef, RecentItem>>;
-  index?: RecentIndex;
   optimisticTitles: Partial<Record<RecentEntityRef, RecentOptimisticTitle>>;
+  queries: Record<string, RecentQueryState>;
+}
+
+export interface RecentQueryState {
+  items: RecentItem[];
+  updatedAt: number;
 }
 
 export interface RecentState {

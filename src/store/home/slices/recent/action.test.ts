@@ -7,7 +7,8 @@ import { recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
-import { initialRecentState } from '@/store/home/slices/recent/initialState';
+import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
+import { recentQueryRepository } from '@/store/home/slices/recent/repository';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
 const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem =>
@@ -16,7 +17,7 @@ const item = (id: string, title: string, type: RecentItem['type'] = 'task'): Rec
 type TaskUpdateResult = Awaited<ReturnType<typeof taskService.update>>;
 const taskUpdateResult = {} as TaskUpdateResult;
 
-const deferred = <T = void>() => {
+const deferred = <T>() => {
   let reject!: (reason?: unknown) => void;
   let resolve!: (value: T | PromiseLike<T>) => void;
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
@@ -25,6 +26,9 @@ const deferred = <T = void>() => {
   });
   return { promise, reject, resolve };
 };
+
+const replaceQuery = (scope: string, queryKey: string, items: RecentItem[]) =>
+  useHomeStore.getState().internal_replaceRecentQuery(scope, queryKey, items);
 
 beforeEach(() => {
   useHomeStore.setState({ ...initialRecentState });
@@ -37,95 +41,106 @@ afterEach(() => {
 });
 
 describe('RecentActionImpl', () => {
-  it('normalizes server data into a scoped ordered index and entity map', () => {
+  it('keeps list projections isolated by scope and query', () => {
+    const compactQuery = createRecentQueryKey(11);
+    const drawerQuery = createRecentQueryKey(50);
+
     act(() => {
-      useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B')], 10);
+      replaceQuery('user-1:ws-A', compactQuery, [item('a', 'Compact')]);
+      replaceQuery('user-1:ws-A', drawerQuery, [item('a', 'Drawer'), item('b', 'B')]);
     });
 
-    const state = useHomeStore.getState();
-    expect(state.recentsByScope['user-1:ws-A']?.index).toEqual({
-      limit: 10,
-      refs: ['task:a', 'task:b'],
-    });
-    expect(state.recentsByScope['user-1:ws-A']?.entities['task:a']).toEqual(item('a', 'A'));
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', compactQuery)(useHomeStore.getState())?.items,
+    ).toEqual([item('a', 'Compact')]);
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', drawerQuery)(useHomeStore.getState())?.items,
+    ).toEqual([item('a', 'Drawer'), item('b', 'B')]);
   });
 
-  it('ignores a response after the active cache scope changed', () => {
-    act(() => {
-      useHomeStore.getState().ingestRecents('user-1:ws-B', [item('stale', 'STALE')], 10);
-    });
-
+  it('ignores a query update after the active cache scope changed', () => {
+    act(() => replaceQuery('user-1:ws-B', createRecentQueryKey(11), [item('stale', 'STALE')]));
     expect(useHomeStore.getState().recentsByScope['user-1:ws-B']).toBeUndefined();
   });
 
-  it('preserves the tail when a smaller sidebar response follows a larger drawer response', () => {
-    act(() => {
-      const store = useHomeStore.getState();
-      store.ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B'), item('c', 'C')], 50);
-      store.ingestRecents('user-1:ws-A', [item('a', 'A2')], 1);
+  it('hydrates only the requested query projection from the local repository', async () => {
+    const queryKey = createRecentQueryKey(11);
+    vi.spyOn(recentQueryRepository, 'get').mockResolvedValue({
+      items: [item('cached', 'Cached')],
+      updatedAt: 1,
+      version: 1,
     });
 
-    expect(useHomeStore.getState().recentsByScope['user-1:ws-A']?.index?.refs).toEqual([
-      'task:a',
-      'task:b',
-      'task:c',
-    ]);
+    await act(() => useHomeStore.getState().hydrateRecentQuery('user-1:ws-A', queryKey));
+
+    expect(recentQueryRepository.get).toHaveBeenCalledWith('user-1:ws-A', queryKey);
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', queryKey)(useHomeStore.getState())?.items,
+    ).toEqual([item('cached', 'Cached')]);
   });
 
   it('shows an optimistic title and rolls it back when persistence fails', async () => {
+    const queryKey = createRecentQueryKey(11);
     const request = deferred<TaskUpdateResult>();
     vi.spyOn(taskService, 'update').mockReturnValue(request.promise);
-
-    act(() => {
-      useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10);
-    });
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Old')]));
 
     const renamePromise = useHomeStore
       .getState()
       .renameRecent({ id: 'a', scope: 'user-1:ws-A', title: 'Draft', type: 'task' });
     expect(
-      homeRecentSelectors.entity('user-1:ws-A', 'task:a')(useHomeStore.getState())?.title,
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
     ).toBe('Draft');
 
     await Promise.resolve();
     request.reject(new Error('failed'));
     await expect(renamePromise).rejects.toThrow('failed');
     expect(
-      homeRecentSelectors.entity('user-1:ws-A', 'task:a')(useHomeStore.getState())?.title,
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
     ).toBe('Old');
   });
 
-  it('commits only the matching typed entity when ids collide', async () => {
+  it('fans a confirmed rename out to every loaded query projection', async () => {
+    const compactQuery = createRecentQueryKey(11);
+    const drawerQuery = createRecentQueryKey(50);
     vi.spyOn(taskService, 'update').mockResolvedValue(taskUpdateResult);
-    vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
-
+    vi.spyOn(recentQueryRepository, 'set').mockResolvedValue();
     act(() => {
-      useHomeStore
-        .getState()
-        .ingestRecents(
-          'user-1:ws-A',
-          [item('same', 'Task', 'task'), item('same', 'Document', 'document')],
-          10,
-        );
+      replaceQuery('user-1:ws-A', compactQuery, [item('same', 'Task', 'task')]);
+      replaceQuery('user-1:ws-A', drawerQuery, [
+        item('same', 'Task', 'task'),
+        item('same', 'Document', 'document'),
+      ]);
     });
+
     await useHomeStore
       .getState()
-      .renameRecent({ id: 'same', scope: 'user-1:ws-A', title: 'Renamed task', type: 'task' });
+      .renameRecent({ id: 'same', scope: 'user-1:ws-A', title: 'Renamed', type: 'task' });
 
-    const entities = useHomeStore.getState().recentsByScope['user-1:ws-A']?.entities;
-    expect(entities?.['task:same']?.title).toBe('Renamed task');
-    expect(entities?.['document:same']?.title).toBe('Document');
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', compactQuery, 'task:same')(useHomeStore.getState())
+        ?.title,
+    ).toBe('Renamed');
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', drawerQuery, 'task:same')(useHomeStore.getState())
+        ?.title,
+    ).toBe('Renamed');
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', drawerQuery, 'document:same')(useHomeStore.getState())
+        ?.title,
+    ).toBe('Document');
   });
 
   it('serializes repeated renames and keeps the latest optimistic title', async () => {
+    const queryKey = createRecentQueryKey(11);
     const firstRequest = deferred<TaskUpdateResult>();
     const secondRequest = deferred<TaskUpdateResult>();
     const updateSpy = vi
       .spyOn(taskService, 'update')
       .mockReturnValueOnce(firstRequest.promise)
       .mockReturnValueOnce(secondRequest.promise);
-    vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
-    useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10);
+    vi.spyOn(recentQueryRepository, 'set').mockResolvedValue();
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Old')]));
 
     const firstRename = useHomeStore
       .getState()
@@ -136,35 +151,21 @@ describe('RecentActionImpl', () => {
 
     await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
     expect(
-      homeRecentSelectors.entity('user-1:ws-A', 'task:a')(useHomeStore.getState())?.title,
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
     ).toBe('Second');
 
     firstRequest.resolve(taskUpdateResult);
     await firstRename;
     await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(2));
     expect(
-      homeRecentSelectors.entity('user-1:ws-A', 'task:a')(useHomeStore.getState())?.title,
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
     ).toBe('Second');
 
     secondRequest.resolve(taskUpdateResult);
     await secondRename;
     expect(
-      homeRecentSelectors.entity('user-1:ws-A', 'task:a')(useHomeStore.getState())?.title,
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
     ).toBe('Second');
-  });
-
-  it('only mutates SWR caches in the renamed scope', async () => {
-    vi.spyOn(taskService, 'update').mockResolvedValue(taskUpdateResult);
-    const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
-    useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10);
-
-    await useHomeStore
-      .getState()
-      .renameRecent({ id: 'a', scope: 'user-1:ws-A', title: 'New', type: 'task' });
-
-    const listMatcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
-    expect(listMatcher(recentKeys.list(true, 10, 'user-1:ws-A'))).toBe(true);
-    expect(listMatcher(recentKeys.list(true, 10, 'user-1:ws-B'))).toBe(false);
   });
 
   it('revalidates both list surfaces only in the requested scope', async () => {

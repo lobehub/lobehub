@@ -10,6 +10,7 @@ import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
 
 import ConnectedItem from './ConnectedItem';
 
@@ -23,17 +24,17 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const scope = useCacheScope();
   const useFetchAllRecents = useHomeStore((s) => s.useFetchAllRecents);
-  const refs = useHomeStore(homeRecentSelectors.refs(scope));
-  const entities = useHomeStore((s) => s.recentsByScope[scope]?.entities);
-  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit(scope));
+  const queryKey = createRecentQueryKey(50);
+  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
+  const items = query?.items;
 
   const { isLoading } = useFetchAllRecents(open, scope);
 
-  const filteredRefs = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
-    if (!keyword) return refs;
-    return refs.filter((ref) => entities?.[ref]?.title.toLowerCase().includes(keyword));
-  }, [entities, refs, searchKeyword]);
+    if (!keyword) return items ?? [];
+    return items?.filter((item) => item.title.toLowerCase().includes(keyword)) ?? [];
+  }, [items, searchKeyword]);
 
   return (
     <SideBarDrawer
@@ -55,16 +56,21 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
       onClose={onClose}
     >
       <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
-        {isLoading && !isInit ? (
+        {isLoading && !query ? (
           <SkeletonList rows={5} />
-        ) : filteredRefs.length === 0 && searchKeyword.trim() ? (
+        ) : filteredItems.length === 0 && searchKeyword.trim() ? (
           <Empty
             description={t('navPanel.searchResultEmpty')}
             icon={SearchIcon}
             style={{ paddingBlock: 24 }}
           />
         ) : (
-          filteredRefs.map((ref) => <ConnectedItem entityRef={ref} key={ref} scope={scope} />)
+          filteredItems.map((item) => {
+            const itemRef = `${item.type}:${item.id}` as const;
+            return (
+              <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} scope={scope} />
+            );
+          })
         )}
       </Flexbox>
     </SideBarDrawer>
