@@ -307,6 +307,23 @@ const isAgentRuntimeVisiblyRunningByContext =
   };
 
 /**
+ * Get all running operations that keep the conversation input in its loading state.
+ *
+ * This deliberately resolves operations through the canonical conversation key rather
+ * than comparing raw context fields. Group operations may be owned by a member agent
+ * while the visible conversation uses the supervisor; the group bucket is still shared.
+ */
+const getRunningInputLoadingOperationIds =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): string[] => {
+    if (!context.agentId && !context.groupId) return [];
+
+    return getOperationsByContext(context)(s)
+      .filter((op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && op.status === 'running')
+      .map((op) => op.id);
+  };
+
+/**
  * All live queue-blocking operation ids in a context (see
  * `isQueueBlockingOperation` — the same predicate the enqueue check uses, so
  * "Send now" cancels exactly what a fresh send would have queued behind and
@@ -932,6 +949,7 @@ export const operationSelectors = {
   getOperationsByMessage,
   getOperationsByType,
   getRunningOperations,
+  getRunningInputLoadingOperationIds,
   getRunningQueueBlockingOperationIds,
   getRunningToolCallStartTime,
   hasAnyRunningOperation,
