@@ -485,6 +485,25 @@ non-negative overflow is a defect regardless of how the screenshot reads. Bound 
 by the space the positioner publishes (`--available-height`, less the popup's own chrome)
 rather than relying on collision flipping.
 
+### L-D12 — Assuming a menu dispatches an item just because it rendered
+
+**Wrong approach:** add an entry to a message/context menu — especially a nested one under a
+submenu — confirm from a screenshot that the label and icon appear where intended, and call
+the entry verified.
+
+**Why it fails:** menu rendering and menu dispatch are separate contracts here. The dropdown
+only invokes an item that carries its own `onClick`, and the group wrapper attaches one to
+top-level items only, so a nested child renders perfectly and does nothing when clicked — the
+menu just closes, with no error, no toast, and no console output. Any routing the consumer
+writes on the parent's side (by `keyPath` or otherwise) never runs, because the click was
+dropped before it. A screenshot of an open submenu therefore proves placement and nothing
+else.
+
+**Correct approach:** for every menu entry you add, click it and assert the effect it is
+supposed to have — a dialog opens, a request fires, a store field changes. Treat "the menu
+closed and nothing happened" as the expected failure signature, not as a missed click. When
+the entry is nested, verify the child's own dispatch wiring, not the parent's.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
