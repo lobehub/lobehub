@@ -391,6 +391,31 @@ describe('SessionModel', () => {
       expect(session?.agent?.model).toEqual('gpt-3.5-turbo');
     });
 
+    it('should derive a heterogeneous runtime projection for a legacy model', async () => {
+      const result = await sessionModel.create({
+        type: 'agent',
+        session: { title: 'Legacy Codex Session' },
+        config: { model: 'codex' },
+      });
+
+      const session = await sessionModel.findByIdOrSlug(result.id);
+      expect(session?.agent?.model).toBe('codex');
+      expect(session?.agent?.runtimeKind).toBe('heterogeneous');
+      expect(session?.agent?.runtimeType).toBe('codex');
+    });
+
+    it('should derive a native runtime projection for a regular model', async () => {
+      const result = await sessionModel.create({
+        type: 'agent',
+        session: { title: 'Native Session' },
+        config: { model: 'gpt-4o' },
+      });
+
+      const session = await sessionModel.findByIdOrSlug(result.id);
+      expect(session?.agent?.runtimeKind).toBe('native');
+      expect(session?.agent?.runtimeType).toBeNull();
+    });
+
     it('should create a new session with custom ID', async () => {
       // Call the create method with a custom ID
       const customId = 'custom-id';
@@ -541,6 +566,26 @@ describe('SessionModel', () => {
       expect(session?.title).toEqual('Duplicated Session');
       expect(session?.pinned).toBe(true);
       expect(session?.agent?.model).toEqual('gpt-3.5-turbo');
+    });
+
+    it('should derive the runtime projection when duplicating a legacy heterogeneous agent', async () => {
+      // An un-backfilled legacy row: heterogeneous `model`, default runtime columns.
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(sessions)
+          .values({ id: 'legacy-1', userId, type: 'agent', title: 'Legacy Codex' });
+        await trx.insert(agents).values({ id: 'agent-legacy-1', userId, model: 'codex' });
+        await trx
+          .insert(agentsToSessions)
+          .values({ agentId: 'agent-legacy-1', sessionId: 'legacy-1', userId });
+      });
+
+      const result = (await sessionModel.duplicate('legacy-1', 'Codex Copy')) as SessionItem;
+
+      const session = await sessionModel.findByIdOrSlug(result.id);
+      expect(session?.agent?.model).toBe('codex');
+      expect(session?.agent?.runtimeKind).toBe('heterogeneous');
+      expect(session?.agent?.runtimeType).toBe('codex');
     });
 
     it('should return undefined if session does not exist', async () => {

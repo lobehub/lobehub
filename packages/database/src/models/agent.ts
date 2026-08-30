@@ -1137,30 +1137,49 @@ export class AgentModel {
       agentId,
       this.stripImmutableFields(apiSafeData),
     );
-    let writeData = sanitizedData;
-    if (sanitizedData.agencyConfig !== undefined || sanitizedData.model !== undefined) {
-      const current = await this.db.query.agents.findFirst({
-        columns: { agencyConfig: true, model: true },
-        where: and(eq(agents.id, agentId), this.ownership()),
-      });
-      if (current) {
-        writeData = {
-          ...sanitizedData,
-          ...deriveAgentRuntimeFields({
-            agencyConfig:
-              sanitizedData.agencyConfig !== undefined
-                ? sanitizedData.agencyConfig
-                : current.agencyConfig,
-            model: sanitizedData.model !== undefined ? sanitizedData.model : current.model,
-          }),
-        };
-      }
+
+    if (sanitizedData.agencyConfig === undefined && sanitizedData.model === undefined) {
+      return this.db
+        .update(agents)
+        .set({ ...sanitizedData, updatedAt: new Date() })
+        .where(and(eq(agents.id, agentId), this.ownership()));
     }
 
-    return this.db
-      .update(agents)
-      .set({ ...writeData, updatedAt: new Date() })
-      .where(and(eq(agents.id, agentId), this.ownership()));
+    // The runtime projection must be derived from the row this UPDATE actually
+    // produces. A patch that carries only one of `model` / `agencyConfig` needs
+    // the other half from the row, and reading it without a lock races with a
+    // concurrent write to that other half: the last committer would derive from
+    // a stale snapshot and could persist a projection violating provider
+    // precedence (e.g. Claude provider on the row, `runtimeType: 'codex'` from
+    // the stale-derived model). `FOR UPDATE` serializes the read with competing
+    // row writes; under READ COMMITTED it waits for and re-reads the latest
+    // committed version, so the derivation inputs are always the final values.
+    return this.db.transaction(async (trx) => {
+      const [current] = await trx
+        .select({ agencyConfig: agents.agencyConfig, model: agents.model })
+        .from(agents)
+        .where(and(eq(agents.id, agentId), this.ownership()))
+        .limit(1)
+        .for('update');
+
+      const writeData = current
+        ? {
+            ...sanitizedData,
+            ...deriveAgentRuntimeFields({
+              agencyConfig:
+                sanitizedData.agencyConfig !== undefined
+                  ? sanitizedData.agencyConfig
+                  : current.agencyConfig,
+              model: sanitizedData.model !== undefined ? sanitizedData.model : current.model,
+            }),
+          }
+        : sanitizedData;
+
+      return trx
+        .update(agents)
+        .set({ ...writeData, updatedAt: new Date() })
+        .where(and(eq(agents.id, agentId), this.ownership()));
+    });
   };
 
   /**

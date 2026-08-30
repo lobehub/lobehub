@@ -246,6 +246,14 @@ export class SessionModel {
         return result[0];
       }
 
+      // This legacy path never persists an `agencyConfig`, but the caller's
+      // `model` may still be a legacy heterogeneous id (e.g. duplicating an
+      // old `model: 'codex'` agent via `cloneSession`), so the runtime
+      // projection must be derived here too — otherwise the column default
+      // silently marks the row `native` and it gets misrouted once dispatch
+      // trusts these columns.
+      const agentModel = typeof model === 'string' ? model : null;
+
       const newAgents = await trx
         .insert(agents)
         .values(
@@ -261,7 +269,8 @@ export class SessionModel {
               fewShots: examples || null, // Map examples to fewShots field
               id: idGenerator('agents'),
               marketIdentifier: identifier || marketIdentifier,
-              model: typeof model === 'string' ? model : null,
+              model: agentModel,
+              ...deriveAgentRuntimeFields({ agencyConfig: null, model: agentModel }),
               openingMessage,
               openingQuestions,
               params: params || {},

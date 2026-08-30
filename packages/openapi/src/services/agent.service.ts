@@ -150,10 +150,17 @@ export class AgentService extends BaseService {
         const permissionWhere = this.buildPermissionWhere(agents, permissionResult.condition);
         if (permissionWhere) whereConditions.push(permissionWhere);
 
-        // Check if the Agent exists
-        const existingAgent = await tx.query.agents.findFirst({
-          where: and(...whereConditions),
-        });
+        // Check if the Agent exists. Locked with FOR UPDATE: the runtime
+        // projection below is derived from `existingAgent` merged with the
+        // request, so a concurrent `model` / `agencyConfig` write committing
+        // between this read and the UPDATE would make the projection derive
+        // from a stale snapshot (see AgentModel.update for the full scenario).
+        const [existingAgent] = await tx
+          .select()
+          .from(agents)
+          .where(and(...whereConditions))
+          .limit(1)
+          .for('update');
 
         if (!existingAgent) {
           throw this.createBusinessError(`Agent ID "${request.id}" not found`);

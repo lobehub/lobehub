@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -863,6 +864,46 @@ describe('AgentModel', () => {
       });
       expect(native?.runtimeKind).toBe('native');
       expect(native?.runtimeType).toBeNull();
+    });
+
+    it('should keep provider precedence when only the model is patched', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+        title: 'Provider Agent',
+      });
+
+      // A model-only patch must derive from the row's persisted provider,
+      // not from the legacy-model fallback.
+      await agentModel.update(agent.id, { model: 'codex' });
+
+      const row = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(row?.model).toBe('codex');
+      expect(row?.runtimeKind).toBe('heterogeneous');
+      expect(row?.runtimeType).toBe('claude-code');
+    });
+
+    it('should keep the runtime projection consistent under concurrent partial updates', async () => {
+      // Regression for the read/derive/write race: a model-only patch and a
+      // provider-only patch racing on the same row must never commit a
+      // projection derived from a stale snapshot (e.g. Claude provider on the
+      // row with `runtimeType: 'codex'`). Only truly concurrent under
+      // TEST_SERVER_DB=1 (node-postgres pool); PGlite serializes, which keeps
+      // this a plain consistency check there.
+      for (let i = 0; i < 5; i++) {
+        const agent = await agentModel.create({ title: `Race Agent ${i}` });
+
+        await Promise.all([
+          agentModel.update(agent.id, { model: 'codex' }),
+          agentModel.update(agent.id, {
+            agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+          }),
+        ]);
+
+        const row = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+        expect({ runtimeKind: row?.runtimeKind, runtimeType: row?.runtimeType }).toEqual(
+          deriveAgentRuntimeFields({ agencyConfig: row?.agencyConfig, model: row?.model }),
+        );
+      }
     });
 
     it('should not update another user agent', async () => {
