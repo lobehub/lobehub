@@ -101,8 +101,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         storeApi.setState({
           ...createEphemeralResetState(),
           context,
-          dbMessages: messages ?? [],
-          displayMessages: [],
           messagesInit: false,
         });
 
@@ -113,6 +111,8 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         if (messages) {
           storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
           storeApi.setState({ messagesInit: true });
+        } else {
+          storeApi.setState({ dbMessages: [], displayMessages: [] });
         }
       }
     }, [contextKey]); // eslint-disable-line react-hooks/exhaustive-deps
