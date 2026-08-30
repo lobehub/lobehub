@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { Ref } from 'react';
+import type { ReactNode as ReactNodeType, Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,83 @@ const gitFilesMock = vi.hoisted(() => ({
 }));
 const openLocalFileMock = vi.hoisted(() => vi.fn());
 const searchProjectFilesMock = vi.hoisted(() => vi.fn());
+const projectFilesMock = vi.hoisted(() => ({
+  data: {
+    entries: [
+      { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
+      { isDirectory: true, name: 'foo', path: '/repo/src/foo', relativePath: 'src/foo/' },
+      {
+        isDirectory: false,
+        name: 'bar.ts',
+        path: '/repo/src/foo/bar.ts',
+        relativePath: 'src/foo/bar.ts',
+      },
+      { isDirectory: false, name: 'root.ts', path: '/repo/root.ts', relativePath: 'root.ts' },
+      {
+        isDirectory: false,
+        name: '__project_root__',
+        path: '/repo/__project_root__',
+        relativePath: '__project_root__',
+      },
+      {
+        gitIgnored: true,
+        isDirectory: false,
+        name: '.env.local',
+        path: '/repo/.env.local',
+        relativePath: '.env.local',
+      },
+      {
+        gitIgnored: true,
+        isDirectory: false,
+        name: '.DS_Store',
+        path: '/repo/.DS_Store',
+        relativePath: '.DS_Store',
+      },
+      { isDirectory: false, name: 'draft.md~', path: '/repo/draft.md~', relativePath: 'draft.md~' },
+      {
+        gitIgnored: true,
+        isDirectory: true,
+        name: '.git',
+        path: '/repo/.git',
+        relativePath: '.git/',
+      },
+      {
+        gitIgnored: true,
+        isDirectory: false,
+        name: 'config',
+        path: '/repo/.git/config',
+        relativePath: '.git/config',
+      },
+      {
+        gitIgnored: true,
+        isDirectory: true,
+        name: 'node_modules',
+        path: '/repo/node_modules',
+        relativePath: 'node_modules/',
+      },
+      {
+        gitIgnored: true,
+        isDirectory: true,
+        name: '.next',
+        path: '/repo/.next',
+        relativePath: '.next/',
+      },
+      {
+        gitIgnored: true,
+        isDirectory: true,
+        name: 'dist',
+        path: '/repo/dist',
+        relativePath: 'dist/',
+      },
+      { isDirectory: true, name: 'build', path: '/repo/build', relativePath: 'build/' },
+      { isDirectory: true, name: '.github', path: '/repo/.github', relativePath: '.github/' },
+      { isDirectory: true, name: '.vscode', path: '/repo/.vscode', relativePath: '.vscode/' },
+    ],
+    indexedAt: '2026-01-01',
+    root: '/repo',
+    source: 'git' as 'git' | 'glob',
+  },
+}));
 
 // ─── mocks ────────────────────────────────────────────────────────────────────
 
@@ -67,100 +144,10 @@ vi.mock('../useGitWorkingTreeFiles', () => ({
 }));
 
 vi.mock('../useProjectFiles', () => ({
-  useProjectFiles: () => ({
+  useProjectFiles: (_deviceId: string | undefined, workingDirectory: string) => ({
     data: {
-      entries: [
-        { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
-        { isDirectory: true, name: 'foo', path: '/repo/src/foo', relativePath: 'src/foo/' },
-        {
-          isDirectory: false,
-          name: 'bar.ts',
-          path: '/repo/src/foo/bar.ts',
-          relativePath: 'src/foo/bar.ts',
-        },
-        {
-          isDirectory: false,
-          name: 'root.ts',
-          path: '/repo/root.ts',
-          relativePath: 'root.ts',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: false,
-          name: '.env.local',
-          path: '/repo/.env.local',
-          relativePath: '.env.local',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: false,
-          name: '.DS_Store',
-          path: '/repo/.DS_Store',
-          relativePath: '.DS_Store',
-        },
-        {
-          isDirectory: false,
-          name: 'draft.md~',
-          path: '/repo/draft.md~',
-          relativePath: 'draft.md~',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: true,
-          name: '.git',
-          path: '/repo/.git',
-          relativePath: '.git/',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: false,
-          name: 'config',
-          path: '/repo/.git/config',
-          relativePath: '.git/config',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: true,
-          name: 'node_modules',
-          path: '/repo/node_modules',
-          relativePath: 'node_modules/',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: true,
-          name: '.next',
-          path: '/repo/.next',
-          relativePath: '.next/',
-        },
-        {
-          gitIgnored: true,
-          isDirectory: true,
-          name: 'dist',
-          path: '/repo/dist',
-          relativePath: 'dist/',
-        },
-        {
-          isDirectory: true,
-          name: 'build',
-          path: '/repo/build',
-          relativePath: 'build/',
-        },
-        {
-          isDirectory: true,
-          name: '.github',
-          path: '/repo/.github',
-          relativePath: '.github/',
-        },
-        {
-          isDirectory: true,
-          name: '.vscode',
-          path: '/repo/.vscode',
-          relativePath: '.vscode/',
-        },
-      ],
-      indexedAt: '2026-01-01',
-      root: '/repo',
-      source: 'git',
+      ...projectFilesMock.data,
+      source: workingDirectory === '/non-git' ? 'glob' : projectFilesMock.data.source,
     },
     isLoading: false,
     isValidating: false,
@@ -201,7 +188,7 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button title={title} type={'button'} onClick={onClick} />
   ),
-  Button: ({ children, title }: { children?: ReactNode; title?: string }) => (
+  Button: ({ children, title }: { children?: ReactNodeType; title?: string }) => (
     <button title={title} type={'button'}>
       {children}
     </button>
@@ -210,8 +197,8 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
     children,
     items,
   }: {
-    children?: ReactNode;
-    items: { key: string; label: ReactNode; onClick?: () => void }[];
+    children?: ReactNodeType;
+    items: { key: string; label: ReactNodeType; onClick?: () => void }[];
   }) => (
     <div>
       {children}
@@ -225,10 +212,10 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Center: ({ children }: { children?: ReactNodeType }) => <div>{children}</div>,
   copyToClipboard: vi.fn(),
-  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Empty: ({ description }: { description?: ReactNodeType }) => <div>{description}</div>,
+  Flexbox: ({ children }: { children?: ReactNodeType }) => <div>{children}</div>,
   Icon: () => <span />,
   stopPropagation: vi.fn(),
 }));
@@ -264,6 +251,7 @@ const expandSearch = () => {
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  projectFilesMock.data.source = 'git';
   explorerTreeProps.current = undefined;
   handleSpies.focus.mockClear();
   handleSpies.select.mockClear();
@@ -324,17 +312,22 @@ describe('Files — reveal request integration', () => {
     }[];
 
     expect(nodes[0]).toMatchObject({
-      id: '__project_root__',
+      id: '\0project-root',
       name: 'repo',
       parentId: null,
     });
     expect(nodes.find((node) => node.id === 'src/')).toMatchObject({
-      parentId: '__project_root__',
+      parentId: '\0project-root',
     });
     expect(nodes.find((node) => node.id === 'root.ts')).toMatchObject({
-      parentId: '__project_root__',
+      parentId: '\0project-root',
     });
-    expect(explorerTreeProps.current?.defaultExpandedIds).toContain('__project_root__');
+    expect(nodes.find((node) => node.id === '__project_root__')).toMatchObject({
+      name: '__project_root__',
+      parentId: '\0project-root',
+    });
+    expect(new Set(nodes.map((node) => node.id)).size).toBe(nodes.length);
+    expect(explorerTreeProps.current?.defaultExpandedIds).toContain('\0project-root');
   });
 
   it('switches from the project view to a Git changes view', () => {
@@ -343,7 +336,7 @@ describe('Files — reveal request integration', () => {
     fireEvent.click(screen.getByText('workingPanel.files.views.changes'));
 
     expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual([
-      '__project_root__',
+      '\0project-root',
       'src/',
       'src/foo/',
       'src/foo/bar.ts',
@@ -351,14 +344,38 @@ describe('Files — reveal request integration', () => {
     ]);
   });
 
+  it('resets the Git changes view when the workspace changes or is not Git-backed', async () => {
+    const { rerender } = render(<Files workingDirectory="/repo" />);
+
+    fireEvent.click(screen.getByText('workingPanel.files.views.changes'));
+    expect(
+      (explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id),
+    ).not.toContain('.env.local');
+
+    rerender(<Files workingDirectory="/another-repo" />);
+    await waitFor(() => {
+      expect(
+        (explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id),
+      ).toContain('.env.local');
+    });
+
+    fireEvent.click(screen.getByText('workingPanel.files.views.changes'));
+    rerender(<Files workingDirectory="/non-git" />);
+    await waitFor(() => {
+      expect(
+        (explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id),
+      ).toContain('.env.local');
+    });
+  });
+
   it('passes git working tree status and per-item context menu items into ExplorerTree', () => {
     render(<Files workingDirectory="/repo" />);
 
     expect(explorerTreeProps.current?.gitStatus).toEqual([
-      { path: '.env.local', status: 'ignored' },
-      { path: 'root.ts', status: 'added' },
-      { path: 'src/foo/bar.ts', status: 'modified' },
-      { path: 'deleted.ts', status: 'deleted' },
+      { path: 'repo/.env.local', status: 'ignored' },
+      { path: 'repo/root.ts', status: 'added' },
+      { path: 'repo/src/foo/bar.ts', status: 'modified' },
+      { path: 'repo/deleted.ts', status: 'deleted' },
     ]);
     expect(explorerTreeProps.current?.unsafeCSS).toContain(
       "[data-item-git-status='ignored'] > :where(",
@@ -488,7 +505,7 @@ describe('Files — reveal request integration', () => {
         scope: '/repo',
       });
       expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
-        ['__project_root__', 'src/', 'src/foo/', 'src/foo/bar.ts'],
+        ['\0project-root', 'src/', 'src/foo/', 'src/foo/bar.ts'],
       );
     });
   });
@@ -524,7 +541,7 @@ describe('Files — reveal request integration', () => {
 
     await waitFor(() => {
       expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
-        ['__project_root__', '.github/', '.github/ci.yml'],
+        ['\0project-root', '.github/', '.github/ci.yml'],
       );
     });
   });

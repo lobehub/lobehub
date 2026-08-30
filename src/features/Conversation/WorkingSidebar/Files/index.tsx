@@ -103,7 +103,8 @@ const FILE_TREE_UNSAFE_CSS = [
 ].join('\n');
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
-const PROJECT_ROOT_NODE_ID = '__project_root__';
+// Relative file paths cannot contain NUL, so this synthetic id cannot collide with an indexed entry.
+const PROJECT_ROOT_NODE_ID = '\0project-root';
 
 type FileViewMode = 'project' | 'changes';
 
@@ -152,6 +153,9 @@ const buildIgnoredGitStatusEntries = (entries: ProjectFileIndexEntry[]): GitStat
   entries
     .filter((entry) => entry.gitIgnored)
     .map((entry) => ({ path: entry.relativePath, status: 'ignored' }));
+
+const prefixGitStatusPaths = (entries: GitStatusEntry[], rootName: string): GitStatusEntry[] =>
+  entries.map((entry) => ({ ...entry, path: `${rootName}/${entry.path}` }));
 
 const getAncestorIds = (filePath: string): string[] => {
   const segments = filePath.split('/');
@@ -224,6 +228,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     workingDirectory,
     data?.source === 'git',
   );
+  const projectSource = data?.source;
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
@@ -233,6 +238,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
   const [isSearching, setIsSearching] = useState(false);
+  const projectRootName = getProjectRootName(projectRoot);
   const normalizedDebouncedQuery = debouncedQuery.trim();
   const isFiltering = normalizedDebouncedQuery.length > 0;
   const changedOnly = viewMode === 'changes';
@@ -253,12 +259,16 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     });
   }, [changedOnly, dirtyFilePaths, entries, hideIgnored, isFiltering, searchEntries]);
   const nodes = useMemo(
-    () => buildTreeNodes(displayEntries, getProjectRootName(projectRoot)),
-    [displayEntries, projectRoot],
+    () => buildTreeNodes(displayEntries, projectRootName),
+    [displayEntries, projectRootName],
   );
   const gitStatus = useMemo(
-    () => [...buildIgnoredGitStatusEntries(displayEntries), ...workingTreeGitStatus],
-    [displayEntries, workingTreeGitStatus],
+    () =>
+      prefixGitStatusPaths(
+        [...buildIgnoredGitStatusEntries(displayEntries), ...workingTreeGitStatus],
+        projectRootName,
+      ),
+    [displayEntries, projectRootName, workingTreeGitStatus],
   );
   // Pre-expand top-level directories so the user sees something useful on first
   // paint without having to click through every folder.
@@ -278,6 +288,14 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   );
 
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setViewMode('project');
+  }, [deviceId, workingDirectory]);
+
+  useEffect(() => {
+    if (projectSource && projectSource !== 'git') setViewMode('project');
+  }, [projectSource]);
 
   useEffect(() => {
     if (!normalizedDebouncedQuery) {
