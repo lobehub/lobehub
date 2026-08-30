@@ -104,6 +104,83 @@ const runAdapter = (recorder: HeteroTraceRecorder) => {
   }
 };
 
+/**
+ * A session where the main agent spawns a subagent via the Task tool. The
+ * subagent's own turns and tool calls carry `parent_tool_use_id`, and the
+ * adapter stamps them with a `subagent` peer field.
+ */
+const SUBAGENT_SESSION: unknown[] = [
+  { model: 'claude-opus-4-8', session_id: 'sess_2', subtype: 'init', type: 'system' },
+  {
+    message: {
+      content: [
+        { id: 'toolu_task', input: { prompt: 'go look' }, name: 'Task', type: 'tool_use' },
+      ],
+      id: 'msg_main_1',
+      model: 'claude-opus-4-8',
+      usage: { input_tokens: 100, output_tokens: 20 },
+    },
+    type: 'assistant',
+  },
+  // ── everything below is the SUBAGENT's own work ────────────────────────
+  {
+    message: {
+      content: [{ text: 'Subagent thinking out loud.', type: 'text' }],
+      id: 'msg_sub_1',
+      model: 'claude-opus-4-8',
+      usage: { input_tokens: 5000, output_tokens: 500 },
+    },
+    parent_tool_use_id: 'toolu_task',
+    type: 'assistant',
+  },
+  {
+    message: {
+      content: [
+        { id: 'toolu_sub', input: { file_path: '/tmp/inner.ts' }, name: 'Read', type: 'tool_use' },
+      ],
+      id: 'msg_sub_2',
+      model: 'claude-opus-4-8',
+      usage: { input_tokens: 5200, output_tokens: 40 },
+    },
+    parent_tool_use_id: 'toolu_task',
+    type: 'assistant',
+  },
+  {
+    message: {
+      content: [
+        { content: 'inner file body', is_error: false, tool_use_id: 'toolu_sub', type: 'tool_result' },
+      ],
+    },
+    parent_tool_use_id: 'toolu_task',
+    type: 'user',
+  },
+  // ── back to the MAIN agent: the Task tool returns ─────────────────────
+  {
+    message: {
+      content: [
+        { content: 'subagent report', is_error: false, tool_use_id: 'toolu_task', type: 'tool_result' },
+      ],
+    },
+    type: 'user',
+  },
+  {
+    message: {
+      content: [{ text: 'Done.', type: 'text' }],
+      id: 'msg_main_2',
+      model: 'claude-opus-4-8',
+      usage: { input_tokens: 300, output_tokens: 10 },
+    },
+    type: 'assistant',
+  },
+  {
+    result: 'ok',
+    subtype: 'success',
+    total_cost_usd: 0.5,
+    type: 'result',
+    usage: { input_tokens: 10600, output_tokens: 570 },
+  },
+];
+
 describe('HeteroTraceRecorder against the real ClaudeCodeAdapter', () => {
   it('segments a session into per-turn LLM steps and per-call tool steps', async () => {
     const store = new MemoryStore();
@@ -156,6 +233,51 @@ describe('HeteroTraceRecorder against the real ClaudeCodeAdapter', () => {
     expect(snapshot.totalTokens).toBe(512);
     expect(snapshot.model).toBe('claude-opus-4-8');
     expect(snapshot.completionReason).toBe('done');
+  });
+
+  it('keeps subagent work out of the main-agent spine', async () => {
+    const store = new MemoryStore();
+    const recorder = new HeteroTraceRecorder({
+      agentType: 'claude-code',
+      operationId: 'op_subagent',
+      store,
+    });
+
+    const adapter = new ClaudeCodeAdapter();
+    let timestamp = 1_000;
+    for (const raw of SUBAGENT_SESSION) {
+      for (const event of adapter.adapt(raw as never)) {
+        recorder.observe({
+          ...event,
+          operationId: 'op_subagent',
+          timestamp: (timestamp += 100),
+        } as AgentStreamEvent);
+      }
+    }
+    await recorder.finalize({ result: 'success' });
+
+    const snapshot = store.saved[0];
+    const llmSteps = snapshot.steps.filter((s) => s.stepType === 'call_llm');
+    const toolSteps = snapshot.steps.filter((s) => s.stepType === 'call_tool');
+
+    // The subagent's inner `Read` must NOT surface as a top-level tool step —
+    // only the main agent's `Task` call did.
+    expect(toolSteps).toHaveLength(1);
+    expect(toolSteps[0].toolsResult?.[0]).toMatchObject({
+      apiName: 'Task',
+      output: 'subagent report',
+    });
+
+    // The subagent's two turns must not become main-agent steps, and its text
+    // must not be appended to a main turn.
+    expect(llmSteps).toHaveLength(2);
+    const allContent = llmSteps.map((s) => s.content ?? '').join('');
+    expect(allContent).not.toContain('Subagent thinking out loud.');
+    expect(llmSteps[1].content).toBe('Done.');
+
+    // The subagent's usage must not be attributed to a main turn: the main
+    // agent spent 100 and 300 input tokens, never the subagent's 5000+.
+    expect(llmSteps.map((s) => s.inputTokens)).toEqual([100, 300]);
   });
 
   it('leaves a resumable partial behind when the process dies mid-session', async () => {

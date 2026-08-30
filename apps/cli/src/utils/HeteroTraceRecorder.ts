@@ -169,6 +169,16 @@ export class HeteroTraceRecorder {
   private handle(event: AgentStreamEvent): void {
     const data = asRecord(event.data);
 
+    // Subagent-scoped events (Claude Code's Task tool) ride the SAME stream as
+    // the main agent's, tagged with a `subagent` peer field. Folding them into
+    // the main spine would append the child's text to the parent's turn, let
+    // the child's usage close that turn early, and surface the child's tools as
+    // top-level calls — corrupting the trace precisely for the runs that use
+    // Agent/Task. The parent's own `Task` tool step still records the result
+    // the child returned, which mirrors how the native runtime keeps a
+    // sub-agent's work in its own child operation rather than the parent's.
+    if (data.subagent) return;
+
     switch (event.type) {
       case 'stream_start': {
         // Session opening for Claude Code (emitted once, on `system.init`);
