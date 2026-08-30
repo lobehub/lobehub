@@ -35,8 +35,9 @@ router/service -> createSearchRepo -> SearchRepo -> selected backend -> existing
 
 ## Provider and Permission Invariants
 
-- `search_backend` is an explicit backend switch. Do not describe it as a rollout system unless a
-  product requirement actually introduces rollout semantics.
+- `SEARCH_BACKEND` is a deployment-level provider selector with current values `pg_search` and
+  `elasticsearch`. It is not a feature flag or a user rollout. Add another enum value only when its
+  provider is implemented end to end.
 - Elasticsearch errors, missing configuration, and unsupported candidate behavior must remain
   visible. Never silently retry through PostgreSQL or add an `ilike` fallback.
 - Deliberate routing of an entity that has not been migrated to Elasticsearch is not an error

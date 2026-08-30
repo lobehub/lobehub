@@ -18,14 +18,15 @@ tags:
 
 ## 环境变量
 
-| 变量                            | 是否必需 | 用途                                                             |
-| ----------------------------- | ---- | -------------------------------------------------------------- |
-| `DATABASE_URL`                | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                   |
-| `ES_URL`                      | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                  |
-| `ES_API_KEY`                  | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。         |
-| `ES_INDEX_NAMESPACE`          | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
-| `ES_INCREMENTAL_SYNC_ENABLED` | 增量同步 | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                |
-| `ES_REINDEX_STATE_DIR`        | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。               |
+| 变量                            | 是否必需 | 用途                                                                 |
+| ----------------------------- | ---- | ------------------------------------------------------------------ |
+| `DATABASE_URL`                | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                       |
+| `ES_URL`                      | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                      |
+| `ES_API_KEY`                  | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。             |
+| `ES_INDEX_NAMESPACE`          | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。     |
+| `ES_INCREMENTAL_SYNC_ENABLED` | 增量同步 | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                    |
+| `ES_REINDEX_STATE_DIR`        | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。                   |
+| `SEARCH_BACKEND`              | 运行时  | 查询后端：`pg_search`（默认）或 `elasticsearch`；完成回填、追平和验收前必须保持 `pg_search`。 |
 
 只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。
 如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
@@ -155,7 +156,7 @@ docker run --rm --env-file .env \
   lobehub/lobehub:latest /app/elasticsearch-sync.cjs --max-steps=8 --yes
 ```
 
-保持持续调度，并反复运行 `bun run search:reindex -- --status`，直到 `pending`、`ready`、`retrying`、`inFlight`、`dead` 和 `revisionLag` 全部为 0。切换查询前必须再检查一次。确认追平后，把 `+search_backend` 追加到现有 `FEATURE_FLAGS` 值并重新部署。追平前不要打开这个开关。Elasticsearch 出错时会直接暴露给调用方，搜索路径不会静默回退到 PostgreSQL 或 `ilike`。
+保持持续调度，并反复运行 `bun run search:reindex -- --status`，直到 `pending`、`ready`、`retrying`、`inFlight`、`dead` 和 `revisionLag` 全部为 0。切换查询前必须再检查一次。确认追平后，把 `SEARCH_BACKEND` 设为 `elasticsearch` 并重新部署。追平前必须保持 `SEARCH_BACKEND=pg_search`。Elasticsearch 出错时会直接暴露给调用方，搜索路径不会静默回退到 PostgreSQL 或 `ilike`。
 
 ## 续跑与验收
 

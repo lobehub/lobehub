@@ -117,10 +117,6 @@ describe('evaluateFeatureFlag', () => {
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
-  it('should keep the candidate search backend disabled by default', () => {
-    expect(DEFAULT_FEATURE_FLAGS.search_backend).toBe(false);
-  });
-
   it('should enable auth captcha by default', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 

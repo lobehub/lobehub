@@ -26,6 +26,7 @@ The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreS
 | `ES_INDEX_NAMESPACE`          | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
 | `ES_INCREMENTAL_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
 | `ES_REINDEX_STATE_DIR`        | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
+| `SEARCH_BACKEND`              | Runtime  | Query provider: `pg_search` (default) or `elasticsearch`. Keep `pg_search` until backfill, catch-up, and validation finish.                |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
@@ -226,9 +227,9 @@ docker run --rm --env-file .env \
 
 Keep scheduling the consumer and run `bun run search:reindex -- --status` until `pending`, `ready`,
 `retrying`, `inFlight`, `dead`, and `revisionLag` are all zero. Recheck that state immediately before
-switching queries. Then append `+search_backend` to the existing `FEATURE_FLAGS` value and redeploy
-the application. Do not enable the flag before catch-up is complete. Elasticsearch failures remain
-visible to callers; the search path does not silently fall back to PostgreSQL or `ilike`.
+switching queries. Then set `SEARCH_BACKEND=elasticsearch` and redeploy the application. Keep
+`SEARCH_BACKEND=pg_search` until catch-up is complete. Elasticsearch failures remain visible to
+callers; the search path does not silently fall back to PostgreSQL or `ilike`.
 
 ## Resume and verify
 

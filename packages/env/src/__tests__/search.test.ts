@@ -13,12 +13,14 @@ describe('getSearchConfig', () => {
     vi.stubEnv('ES_INCREMENTAL_SYNC_ENABLED', 'true');
     vi.stubEnv('ES_INDEX_NAMESPACE', 'lobehub-dev');
     vi.stubEnv('ES_URL', 'https://search.example.com');
+    vi.stubEnv('SEARCH_BACKEND', 'elasticsearch');
 
     expect(getSearchConfig()).toMatchObject({
       ES_API_KEY: 'test-api-key',
       ES_INCREMENTAL_SYNC_ENABLED: 'true',
       ES_INDEX_NAMESPACE: 'lobehub-dev',
       ES_URL: 'https://search.example.com',
+      SEARCH_BACKEND: 'elasticsearch',
     });
   });
 
@@ -27,12 +29,20 @@ describe('getSearchConfig', () => {
     vi.stubEnv('ES_INCREMENTAL_SYNC_ENABLED', undefined);
     vi.stubEnv('ES_INDEX_NAMESPACE', undefined);
     vi.stubEnv('ES_URL', undefined);
+    vi.stubEnv('SEARCH_BACKEND', undefined);
 
     expect(getSearchConfig()).toMatchObject({
       ES_API_KEY: undefined,
       ES_INCREMENTAL_SYNC_ENABLED: undefined,
       ES_INDEX_NAMESPACE: undefined,
       ES_URL: undefined,
+      SEARCH_BACKEND: 'pg_search',
     });
+  });
+
+  it('rejects unsupported search backends', () => {
+    vi.stubEnv('SEARCH_BACKEND', 'opensearch');
+
+    expect(() => getSearchConfig()).toThrow();
   });
 });

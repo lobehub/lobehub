@@ -28,31 +28,20 @@ const agentResult: AgentSearchResult = {
 };
 
 describe('search backend provider selection', () => {
-  it('keeps pg_search as the default provider', async () => {
-    await expect(
-      resolveSearchBackendProvider('user-1', {
-        loadFeatureFlags: async () => ({ search_backend: false }),
+  it('selects pg_search from deployment configuration', () => {
+    expect(
+      resolveSearchBackendProvider({
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.postgres,
       }),
-    ).resolves.toBe(SEARCH_BACKEND_PROVIDERS.default);
+    ).toBe(SEARCH_BACKEND_PROVIDERS.postgres);
   });
 
-  it('selects the candidate for a globally enabled environment', async () => {
-    await expect(
-      resolveSearchBackendProvider('user-1', {
-        loadFeatureFlags: async () => ({ search_backend: true }),
+  it('selects Elasticsearch from deployment configuration', () => {
+    expect(
+      resolveSearchBackendProvider({
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
       }),
-    ).resolves.toBe(SEARCH_BACKEND_PROVIDERS.candidate);
-  });
-
-  it('limits the candidate provider to allowlisted actors', async () => {
-    const loadFeatureFlags = async () => ({ search_backend: ['allowed-user'] });
-
-    await expect(resolveSearchBackendProvider('allowed-user', { loadFeatureFlags })).resolves.toBe(
-      SEARCH_BACKEND_PROVIDERS.candidate,
-    );
-    await expect(resolveSearchBackendProvider('other-user', { loadFeatureFlags })).resolves.toBe(
-      SEARCH_BACKEND_PROVIDERS.default,
-    );
+    ).toBe(SEARCH_BACKEND_PROVIDERS.elasticsearch);
   });
 
   it('routes the stable repository facade through the selected backend', async () => {
@@ -65,7 +54,7 @@ describe('search backend provider selection', () => {
       { db, userId: 'allowed-user' },
       {
         createBackend,
-        loadFeatureFlags: async () => ({ search_backend: ['allowed-user'] }),
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
       },
     );
 
@@ -73,7 +62,7 @@ describe('search backend provider selection', () => {
       agentResult,
     ]);
     expect(createBackend).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: SEARCH_BACKEND_PROVIDERS.candidate }),
+      expect.objectContaining({ provider: SEARCH_BACKEND_PROVIDERS.elasticsearch }),
     );
     expect(repo.candidateSearchEnabled).toBe(true);
   });
@@ -91,7 +80,7 @@ describe('search backend provider selection', () => {
       {
         createElasticsearchClient,
         loadElasticsearchConfig: () => config,
-        loadFeatureFlags: async () => ({ search_backend: true }),
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
       },
     );
 
@@ -100,7 +89,7 @@ describe('search backend provider selection', () => {
     expect(search).toHaveBeenCalledWith(expect.objectContaining({ index: 'lobehub-dev-agents' }));
   });
 
-  it('routes unified memory search to Elasticsearch when the candidate provider is selected', async () => {
+  it('routes unified memory search to Elasticsearch when configured', async () => {
     const elasticsearchSearch = vi.fn().mockResolvedValue({ hits: { hits: [] } });
     const postgresSearch = vi.fn<SearchBackend['search']>().mockResolvedValue({
       candidates: [],
@@ -116,7 +105,7 @@ describe('search backend provider selection', () => {
           indexNamespace: 'lobehub-dev',
           url: 'https://search.example.com',
         }),
-        loadFeatureFlags: async () => ({ search_backend: true }),
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
       },
     );
 
@@ -126,7 +115,7 @@ describe('search backend provider selection', () => {
   });
 
   it('does not fall back to pg_search when a migrated Elasticsearch request fails', async () => {
-    const providerError = new Error('candidate backend unavailable');
+    const providerError = new Error('Elasticsearch backend unavailable');
     const postgresSearch = vi.fn<SearchBackend['search']>().mockResolvedValue({
       candidates: [],
       items: [],
@@ -143,7 +132,7 @@ describe('search backend provider selection', () => {
           indexNamespace: 'lobehub-dev',
           url: 'https://search.example.com',
         }),
-        loadFeatureFlags: async () => ({ search_backend: true }),
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
       },
     );
 
@@ -157,28 +146,28 @@ describe('search backend provider selection', () => {
         { db, userId: 'user-1' },
         {
           loadElasticsearchConfig: () => undefined,
-          loadFeatureFlags: async () => ({ search_backend: true }),
+          loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
         },
       ),
-    ).rejects.toEqual(new SearchBackendUnavailableError(SEARCH_BACKEND_PROVIDERS.candidate));
+    ).rejects.toEqual(new SearchBackendUnavailableError(SEARCH_BACKEND_PROVIDERS.elasticsearch));
   });
 
-  it('surfaces candidate failures without retrying pg_search', async () => {
-    const providerError = new Error('candidate backend unavailable');
+  it('surfaces Elasticsearch failures without retrying pg_search', async () => {
+    const providerError = new Error('Elasticsearch backend unavailable');
     const search = vi.fn<SearchBackend['search']>().mockRejectedValue(providerError);
     const createBackend = vi.fn(({ provider }): SearchBackend => ({ key: provider, search }));
     const repo = await createSearchRepo(
       { db, userId: 'user-1' },
       {
         createBackend,
-        loadFeatureFlags: async () => ({ search_backend: true }),
+        loadSearchBackendProvider: () => SEARCH_BACKEND_PROVIDERS.elasticsearch,
       },
     );
 
     await expect(repo.search({ query: 'failure', type: 'agent' })).rejects.toBe(providerError);
     expect(createBackend).toHaveBeenCalledTimes(1);
     expect(createBackend).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: SEARCH_BACKEND_PROVIDERS.candidate }),
+      expect.objectContaining({ provider: SEARCH_BACKEND_PROVIDERS.elasticsearch }),
     );
   });
 });

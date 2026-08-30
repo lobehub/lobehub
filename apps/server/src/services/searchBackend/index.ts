@@ -1,7 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
-import type { IFeatureFlags } from '@/config/featureFlags';
-import { evaluateFeatureFlag } from '@/config/featureFlags';
 import {
   ElasticsearchSearchBackend,
   type ElasticsearchSearchClient,
@@ -13,7 +11,6 @@ import {
   type SearchRepoOptions,
 } from '@/database/repositories/search';
 import { searchEnv } from '@/envs/search';
-import { getServerFeatureFlagsFromRuntimeConfig } from '@/server/featureFlags';
 
 import { ElasticsearchHttpClient } from './elasticsearch';
 import { createElasticsearchSearchObserver, withSearchBackendObservability } from './observability';
@@ -27,8 +24,8 @@ export interface CreateSearchRepoInput {
 }
 
 export const SEARCH_BACKEND_PROVIDERS = {
-  candidate: 'elasticsearch',
-  default: 'pg_search',
+  elasticsearch: 'elasticsearch',
+  postgres: 'pg_search',
 } as const;
 
 export type SearchBackendProvider =
@@ -45,7 +42,7 @@ interface SearchBackendFactoryDependencies {
   createElasticsearchClient?: (config: SearchElasticsearchConfig) => ElasticsearchSearchClient;
   createPostgresBackend?: (context: SearchBackendFactoryContext) => SearchBackend;
   loadElasticsearchConfig?: () => SearchElasticsearchConfig | undefined;
-  loadFeatureFlags?: (userId: string) => Promise<Pick<IFeatureFlags, 'search_backend'>>;
+  loadSearchBackendProvider?: () => SearchBackendProvider;
 }
 
 export interface SearchElasticsearchConfig {
@@ -77,7 +74,7 @@ export const loadSearchElasticsearchConfig = (): SearchElasticsearchConfig | und
   };
 };
 
-const createDefaultBackend = (
+const createBackendForProvider = (
   { db, provider, scope }: SearchBackendFactoryContext,
   dependencies: SearchBackendFactoryDependencies,
 ): SearchBackend | undefined => {
@@ -87,7 +84,7 @@ const createDefaultBackend = (
       new PostgresSearchBackend(context.db, context.scope));
   const postgresBackend = createPostgresBackend({ db, provider, scope });
 
-  if (provider === SEARCH_BACKEND_PROVIDERS.default) {
+  if (provider === SEARCH_BACKEND_PROVIDERS.postgres) {
     return postgresBackend;
   }
 
@@ -113,22 +110,14 @@ const createDefaultBackend = (
   };
 };
 
-export const resolveSearchBackendProvider = async (
-  userId: string,
+export const resolveSearchBackendProvider = (
   dependencies: SearchBackendFactoryDependencies = {},
-): Promise<SearchBackendProvider> => {
-  const loadFeatureFlags = dependencies.loadFeatureFlags ?? getServerFeatureFlagsFromRuntimeConfig;
-  const flags = await loadFeatureFlags(userId);
-
-  return evaluateFeatureFlag(flags.search_backend, userId) === true
-    ? SEARCH_BACKEND_PROVIDERS.candidate
-    : SEARCH_BACKEND_PROVIDERS.default;
-};
+): SearchBackendProvider => dependencies.loadSearchBackendProvider?.() ?? searchEnv.SEARCH_BACKEND;
 
 /**
- * Resolve the request-scoped provider before constructing the stable repository
- * facade. A missing or failing candidate is surfaced to the caller; this layer
- * never falls back to pg_search.
+ * Resolve the deployment-configured provider before constructing the stable repository facade.
+ * Missing Elasticsearch configuration and provider failures remain visible; this layer never
+ * falls back to pg_search.
  */
 export const createSearchRepo = async (
   input: CreateSearchRepoInput,
@@ -139,7 +128,7 @@ export const createSearchRepo = async (
     userId: input.userId,
     workspaceId: input.workspaceId,
   };
-  const provider = await resolveSearchBackendProvider(input.userId, dependencies);
+  const provider = resolveSearchBackendProvider(dependencies);
   const context = {
     db: input.db,
     provider,
@@ -147,19 +136,20 @@ export const createSearchRepo = async (
   };
   const backend = dependencies.createBackend
     ? dependencies.createBackend(context)
-    : createDefaultBackend(context, dependencies);
+    : createBackendForProvider(context, dependencies);
 
   if (!backend) throw new SearchBackendUnavailableError(provider);
 
   const observedBackend = withSearchBackendObservability(backend, (request) =>
-    provider === SEARCH_BACKEND_PROVIDERS.candidate && !isElasticsearchSearchEntity(request.entity)
-      ? SEARCH_BACKEND_PROVIDERS.default
+    provider === SEARCH_BACKEND_PROVIDERS.elasticsearch &&
+    !isElasticsearchSearchEntity(request.entity)
+      ? SEARCH_BACKEND_PROVIDERS.postgres
       : provider,
   );
 
   return new SearchRepo(input.db, input.userId, input.workspaceId, input.callerAgentVisibility, {
     ...input.options,
     backend: observedBackend,
-    candidateSearchEnabled: provider === SEARCH_BACKEND_PROVIDERS.candidate,
+    candidateSearchEnabled: provider === SEARCH_BACKEND_PROVIDERS.elasticsearch,
   });
 };
