@@ -409,25 +409,26 @@ export class HeterogeneousPersistenceHandler {
   }
 
   /**
-   * Flush trailing accumulators, persist the CLI's native session id (when
-   * present) for next-turn resume, and drop the per-operation state.
+   * Flush trailing accumulators and drop the per-operation state.
    *
    * Resume id source: CC's `--resume <sessionId>` token comes from the
-   * adapter's cached `system:init.session_id`. The CLI surfaces it here as a
-   * `heteroFinish` argument; we write it to `topic.metadata.heteroSessionId`
-   * (the same field the desktop renderer uses), so the next CLI spawn for
-   * this topic can include `--resume <id>`.
+   * adapter's cached `system:init.session_id`. The heterogeneous-agent service
+   * settles topic-level resume ownership after this flush.
+   *
+   * Use when:
+   * - A heterogeneous operation reaches a terminal producer callback.
+   *
+   * Expects:
+   * - The operation state was created by ingest or can be bootstrapped from the topic marker.
+   *
+   * Returns:
+   * - A promise that resolves after final message state is flushed and released.
    */
   async finish(params: {
     assistantMessageId?: string;
     error?: { body?: Record<string, unknown>; message: string; type: string };
     operationId: string;
-    /** Whether this finish still owns the topic-level native session binding. */
-    persistSessionBinding?: boolean;
-    /** True only when the producer proved the requested native session unusable. */
-    resumeSessionInvalidated?: boolean;
     result: 'success' | 'error' | 'cancelled';
-    sessionId?: string;
     /**
      * Needed to bootstrap state for a failed run that never ingested: a
      * process-level failure (spawn ENOENT, auth printed straight to stderr)
@@ -467,49 +468,9 @@ export class HeterogeneousPersistenceHandler {
 
     try {
       await this.flushFinalState(state, params.error, params.result);
-      if (params.persistSessionBinding !== false) {
-        await this.updateResumeSessionBinding({
-          result: params.result,
-          resumeSessionInvalidated: params.resumeSessionInvalidated,
-          sessionId: params.sessionId,
-          topicId: state.topicId,
-        });
-      }
     } finally {
       operationStates.delete(params.operationId);
     }
-  }
-
-  /**
-   * Updates the topic's native resume binding after operation ownership is verified.
-   *
-   * Use when:
-   * - A finish has flushed its operation-scoped message state.
-   * - The caller has confirmed that the operation is not stale.
-   *
-   * Expects:
-   * - `resumeSessionInvalidated` is true only for a proven unusable native token.
-   *
-   * Returns:
-   * - A promise that resolves after the best-effort topic metadata update.
-   */
-  async updateResumeSessionBinding(params: {
-    result: 'success' | 'error' | 'cancelled';
-    resumeSessionInvalidated?: boolean;
-    sessionId?: string;
-    topicId: string;
-  }): Promise<void> {
-    if (params.sessionId) {
-      await this.persistSessionId(params.topicId, params.sessionId);
-      return;
-    }
-    if (params.result !== 'error' || !params.resumeSessionInvalidated) return;
-
-    // Only the producer can distinguish a missing native session from a
-    // transient pre-init error such as Codex's "already has an active writer".
-    // Clearing on every error without a new session id destroys a still-valid
-    // resume token and forks the next turn into an empty thread.
-    await this.clearSessionId(params.topicId);
   }
 
   /**
@@ -523,21 +484,6 @@ export class HeterogeneousPersistenceHandler {
       log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
     } catch (err) {
       log('persistSessionId failed topic=%s err=%O', topicId, err);
-    }
-  }
-
-  /**
-   * Remove a stale `heteroSessionId` from topic metadata. Called when a run
-   * fails without producing a new session id (e.g. `--resume` rejected because
-   * the sandbox was recycled). Prevents the next turn from inheriting a session
-   * id that will never succeed.
-   */
-  private async clearSessionId(topicId: string): Promise<void> {
-    try {
-      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: undefined });
-      log('cleared stale sessionId topic=%s', topicId);
-    } catch (err) {
-      log('clearSessionId failed topic=%s err=%O', topicId, err);
     }
   }
 
@@ -1094,8 +1040,8 @@ export class HeterogeneousPersistenceHandler {
         // produced a valid session id but got killed before finishing would
         // otherwise leave `topic.metadata.heteroSessionId` empty, forcing the
         // next turn to spawn a fresh CC session and drop all `--resume` history.
-        // Writing it here makes resume survive abandon. finish() still overwrites
-        // with its own sessionId (or clears a stale one on a resume failure).
+        // Writing it here makes resume survive abandon. The terminal service
+        // path may still overwrite it after verifying topic ownership.
         await this.persistSessionId(state.topicId, sid);
       }
     }

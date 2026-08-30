@@ -289,10 +289,7 @@ export class HeterogeneousAgentService {
       assistantMessageId: seedAssistantMessageId,
       error,
       operationId,
-      persistSessionBinding: false,
       result,
-      resumeSessionInvalidated,
-      sessionId,
       topicId,
     });
 
@@ -355,12 +352,21 @@ export class HeterogeneousAgentService {
       return;
     }
 
-    await this.persistenceHandler.updateResumeSessionBinding({
-      result,
-      resumeSessionInvalidated,
-      sessionId,
-      topicId,
-    });
+    const resumeBindingUpdate = sessionId
+      ? { heteroSessionId: sessionId }
+      : result === 'error' && resumeSessionInvalidated
+        ? { heteroSessionId: undefined }
+        : undefined;
+    if (resumeBindingUpdate) {
+      try {
+        // Only the producer can distinguish a missing native session from a
+        // transient pre-init error such as Codex's "already has an active writer".
+        // Clearing every error without a new id would fork the next turn empty.
+        await this.topicModel.updateMetadata(topicId, resumeBindingUpdate);
+      } catch (err) {
+        log('heteroFinish: update resume session binding failed (non-fatal): %O', err);
+      }
+    }
 
     // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
     // if the CLI stream missed it. A stale callback that belongs to neither the

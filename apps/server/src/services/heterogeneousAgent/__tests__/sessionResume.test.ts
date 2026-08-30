@@ -70,6 +70,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           findById,
           settleRunningStatus: vi.fn(async () => undefined),
           takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
         } as any,
       });
 
@@ -130,6 +131,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           findById,
           settleRunningStatus: vi.fn(async () => undefined),
           takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
         } as any,
       });
 
@@ -187,6 +189,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           findById,
           settleRunningStatus: vi.fn(async () => undefined),
           takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
         } as any,
       });
 
@@ -254,6 +257,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         topicModel: {
           findById,
           settleRunningOperation: vi.fn(async () => ({ status: 'settled' as const })),
+          updateMetadata,
         } as any,
       });
 
@@ -314,6 +318,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           findById,
           settleRunningStatus: vi.fn(async () => undefined),
           takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
         } as any,
       });
 
@@ -333,7 +338,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
 
     it('topic.metadata.runningOperation is preserved (updateMetadata merges, does not replace)', async () => {
       // This contract is enforced by `TopicModel.updateMetadata` itself
-      // (verified in packages/database tests). We just assert the handler
+      // (verified in packages/database tests). We just assert the service
       // calls it with a partial — not the full metadata object.
       const updateMetadata = vi.fn(async () => undefined);
       const findById = vi.fn(async () => ({
@@ -379,6 +384,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           findById,
           settleRunningStatus: vi.fn(async () => undefined),
           takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
         } as any,
       });
 
@@ -448,6 +454,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           findById,
           settleRunningStatus: vi.fn(async () => undefined),
           takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
         } as any,
       });
 

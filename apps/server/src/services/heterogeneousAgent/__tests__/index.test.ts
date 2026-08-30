@@ -60,7 +60,6 @@ const createFakePersistenceHandler = () => {
     markEventPublished: vi.fn((_operationId: string, event: AgentStreamEvent) => {
       publishedKeys.add(gateKey(event));
     }),
-    updateResumeSessionBinding: vi.fn(async () => {}),
   };
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
@@ -91,6 +90,7 @@ const createService = (
       operationId,
       status: 'settled',
     })),
+    updateMetadata: vi.fn(async () => undefined),
   };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
     agentOperationModel: agentOperationModel as any,
@@ -538,6 +538,7 @@ describe('HeterogeneousAgentService', () => {
           activeOperationId: 'op-new',
           status: 'conflict' as const,
         })),
+        updateMetadata: vi.fn(async () => undefined),
       } as any;
       const completeOperationSpy = vi
         .spyOn(CompletionLifecycle.prototype, 'completeOperation')
@@ -557,10 +558,7 @@ describe('HeterogeneousAgentService', () => {
       });
 
       expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
-      expect(persistenceHandler.finish).toHaveBeenCalledWith(
-        expect.objectContaining({ persistSessionBinding: false }),
-      );
-      expect(persistenceHandler.updateResumeSessionBinding).not.toHaveBeenCalled();
+      expect(topicModel.updateMetadata).not.toHaveBeenCalled();
       expect(settleRunningSpy).toHaveBeenCalledWith('op-old', 'done');
       expect(published).toHaveLength(1);
       expect(published[0].event).toMatchObject({
