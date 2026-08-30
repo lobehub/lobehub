@@ -62,13 +62,21 @@ export class UserPersonaService {
   private readonly preferredLanguage?: string;
   private readonly db: LobeChatDatabase;
   private readonly agentConfig: MemoryAgentConfig;
+  private readonly preferredModels?: string[];
+  private readonly preferredProviders?: string[];
 
   constructor(db: LobeChatDatabase) {
-    const { agentPersonaWriter } = parseMemoryExtractionConfig();
+    const {
+      agentPersonaWriter,
+      agentPersonaWriterPreferredModels,
+      agentPersonaWriterPreferredProviders,
+    } = parseMemoryExtractionConfig();
 
     this.db = db;
     this.preferredLanguage = agentPersonaWriter.language;
     this.agentConfig = agentPersonaWriter;
+    this.preferredModels = agentPersonaWriterPreferredModels;
+    this.preferredProviders = agentPersonaWriterPreferredProviders;
   }
 
   private async resolveAgentConfig(userId: string): Promise<MemoryAgentConfig> {
@@ -110,11 +118,22 @@ export class UserPersonaService {
       fallbackProvider: agentConfig.provider,
       label: 'persona writer',
       modelId: agentConfig.model,
+      preferredModels: this.preferredModels,
+      preferredProviders: this.preferredProviders,
     });
 
-    const keyVaults: ProviderKeyVaultMap = Object.entries(runtimeState.runtimeConfig || {}).reduce(
+    const normalizedRuntimeConfig = Object.fromEntries(
+      Object.entries(runtimeState.runtimeConfig || {}).map(([provider, config]) => [
+        provider.toLowerCase(),
+        config,
+      ]),
+    );
+
+    const keyVaults: ProviderKeyVaultMap = Object.entries(normalizedRuntimeConfig).reduce(
       (acc, [provider, config]) => {
-        acc[provider.toLowerCase()] = config?.keyVaults;
+        if (provider !== providerId) return acc;
+
+        acc[provider] = config?.keyVaults;
         return acc;
       },
       {} as ProviderKeyVaultMap,
