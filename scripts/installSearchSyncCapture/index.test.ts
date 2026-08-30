@@ -61,7 +61,9 @@ describe('runSearchSyncCaptureCli', () => {
   });
 
   it('returns failure and does not report success when capture installation fails', async () => {
-    const error = new Error('capture installation failed');
+    const error = new Error(
+      'capture installation failed at https://operator:private@database.example.com/app?query=private token=private-token',
+    );
     const logError = vi.fn();
     const logSuccess = vi.fn();
     const runWithLockRetry = vi.fn(async (operation: () => Promise<void>) => operation());
@@ -79,7 +81,10 @@ describe('runSearchSyncCaptureCli', () => {
       }),
     ).resolves.toBe(1);
 
-    expect(logError).toHaveBeenCalledWith('❌ Search sync capture installation failed:', error);
+    expect(logError).toHaveBeenCalledWith(
+      '❌ Search sync capture installation failed:',
+      'capture installation failed at [redacted-url] token=[redacted]',
+    );
     expect(logSuccess).not.toHaveBeenCalled();
   });
 });

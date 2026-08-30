@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
+import { summarizeSearchReindexError } from '../../packages/database/src/repositories/searchReindex';
 import { runWithLockRetry as defaultRunWithLockRetry } from '../migrateServerDB/retry';
 
 // Load environment variables in priority order:
@@ -65,7 +66,7 @@ export const runSearchSyncCaptureCli = async ({
     logSuccess('✅ search sync capture infrastructure installed');
     return 0;
   } catch (error) {
-    logError('❌ Search sync capture installation failed:', error);
+    logError('❌ Search sync capture installation failed:', summarizeSearchReindexError(error));
     return 1;
   }
 };

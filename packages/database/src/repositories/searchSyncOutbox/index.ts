@@ -138,9 +138,9 @@ const readCaptureInfrastructureState = async (
     name: string;
   }>(functionResult);
 
-  const triggerTargets = sql.join(
-    SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(
-      ({ name, table }) => sql`(${name}, ${`public.${table}`}::regclass)`,
+  const triggerNames = sql.join(
+    [...new Set(SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ name }) => name))].map(
+      (name) => sql`${name}`,
     ),
     sql`, `,
   );
@@ -152,8 +152,10 @@ const readCaptureInfrastructureState = async (
       source_table.relname AS table_name
     FROM pg_trigger search_trigger
     INNER JOIN pg_class source_table ON source_table.oid = search_trigger.tgrelid
+    INNER JOIN pg_namespace source_namespace ON source_namespace.oid = source_table.relnamespace
     WHERE NOT search_trigger.tgisinternal
-      AND (search_trigger.tgname, search_trigger.tgrelid) IN (${triggerTargets})
+      AND source_namespace.nspname = 'public'
+      AND search_trigger.tgname IN (${triggerNames})
     ORDER BY search_trigger.tgname, source_table.relname
   `);
   const triggers = rowsOf<{

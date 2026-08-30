@@ -304,6 +304,28 @@ describe.sequential('SearchSyncOutboxRepository', () => {
     CAPTURE_INSTALL_TEST_TIMEOUT,
   );
 
+  it(
+    'rejects a managed trigger name installed on an unexpected public table',
+    async () => {
+      await db.execute(sql`
+        CREATE TRIGGER search_sync_agents
+        AFTER INSERT ON users
+        FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change('agents', 'id')
+      `);
+      try {
+        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow('triggers 17/16');
+        await expect(repository.installCaptureInfrastructure()).rejects.toThrow(
+          'Refusing to replace partial or unknown search sync capture infrastructure',
+        );
+      } finally {
+        await db.execute(sql`DROP TRIGGER IF EXISTS search_sync_agents ON users`);
+      }
+
+      await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
+
   it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
     const revision = await repository.reserveRevisionWithWriteFence();
 
