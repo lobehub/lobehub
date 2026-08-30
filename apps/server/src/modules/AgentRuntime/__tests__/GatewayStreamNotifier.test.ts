@@ -4,6 +4,10 @@ import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import type { StreamChunkData } from '../StreamEventManager';
 import type { IStreamEventManager } from '../types';
 
+vi.mock('@/database/models/message', () => {
+  throw new Error('GatewayStreamNotifier must not load the full message database model');
+});
+
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
 vi.stubGlobal('fetch', mockFetch);

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { VISITOR_MESSAGE_CLASSIFIED_KEYS } from '../message';
 
 /**
- * Structural guard for `message.ts`'s visitor DTO field classification.
+ * Structural guard for `messageVisitor.ts`'s visitor DTO field classification.
  *
  * `toVisitorMessage` builds the agent-share visitor DTO from an explicit
  * allowlist (`VISITOR_MESSAGE_ALLOWED_KEYS`) plus a small set of
@@ -22,7 +22,7 @@ import { VISITOR_MESSAGE_CLASSIFIED_KEYS } from '../message';
  *
  * This test parses the `UIChatMessage` interface source directly (no type
  * reflection exists at runtime) and fails if any top-level field is not one
- * of: allowed, denied, or specially-handled in `message.ts`. A newly added
+ * of: allowed, denied, or specially-handled in `messageVisitor.ts`. A newly added
  * field therefore forces a human to explicitly classify it here instead of
  * inheriting a default.
  */

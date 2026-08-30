@@ -7,7 +7,7 @@ import {
   redactCreatorPrivateBlob,
   sanitizeVisitorError,
   toVisitorMessage,
-} from '@/database/models/message';
+} from '@/database/models/messageVisitor';
 
 import {
   getDefaultReasonDetail,
