@@ -1,4 +1,5 @@
 import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
+import debug from 'debug';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { uuid } from '@/utils/uuid';
@@ -7,6 +8,8 @@ import * as EXPORT_TABLES from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { DeprecatedDataImporterRepos } from './deprecated';
+
+const log = debug('lobe-database:data-importer');
 
 interface ImportResult {
   added: number;
@@ -308,7 +311,7 @@ export class DataImporterRepos {
 
           // Use unified import method
           const result = await this.importTableData(trx, config, tableData, conflictStrategy);
-          console.info(`imported table: ${tableName}, records: ${tableData.length}`);
+          log('imported table: %s, records: %d', tableName, tableData.length);
 
           if (Object.values(result).some((value) => value > 0)) {
             results[tableName] = result;
