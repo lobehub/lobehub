@@ -236,7 +236,7 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
           tool_call_id: item.call_id,
         });
       } else if (
-        item.type === 'message' &&
+        (item.type === undefined || item.type === 'message') &&
         ['assistant', 'developer', 'system', 'user'].includes(String(item.role))
       ) {
         messages.push({

@@ -312,6 +312,30 @@ describe('heterogeneous direct invocation protocol', () => {
     });
   });
 
+  it('normalizes Pi Responses messages whose optional type is omitted', () => {
+    const payload = normalizeResponsesRequest(
+      {
+        input: [
+          { content: 'Pi coding assistant', role: 'system' },
+          {
+            content: [{ text: 'LOBEHUB_HETERO_SMOKE_OK', type: 'input_text' }],
+            role: 'user',
+          },
+        ],
+        max_output_tokens: 16_384,
+        model: 'lobehub/glm-5.2',
+        stream: true,
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([
+      { content: 'Pi coding assistant', role: 'system' },
+      { content: 'LOBEHUB_HETERO_SMOKE_OK', role: 'user' },
+    ]);
+    expect(payload.max_tokens).toBe(16_384);
+  });
+
   it('normalizes two-round Responses reasoning and function call continuity', () => {
     const firstReasoning = {
       encrypted_content: 'encrypted-first',
