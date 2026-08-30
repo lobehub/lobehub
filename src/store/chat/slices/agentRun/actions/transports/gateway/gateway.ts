@@ -1093,15 +1093,8 @@ export class GatewayActionImpl {
     threadId?: string | null;
     topicId: string;
   }): Promise<void> => {
-    const {
-      agentShareId,
-      assistantMessageId,
-      heteroType,
-      operationId,
-      topicId,
-      scope,
-      threadId,
-    } = params;
+    const { agentShareId, assistantMessageId, heteroType, operationId, topicId, scope, threadId } =
+      params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;

@@ -42,6 +42,8 @@ describe('GatewayStreamNotifier', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
     inner = createMockInner();
     notifier = new GatewayStreamNotifier(inner, gatewayUrl, serviceToken);
   });
