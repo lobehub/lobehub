@@ -1,15 +1,17 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Select, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Segmented, Select, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider, Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { ChevronRight } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
 
 import { type CaptureDraft } from './buildCaptureDraft';
+import { buildCapturePayload, type CapturedOutputKind } from './buildCapturePayload';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -63,6 +65,32 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
   `,
+  chevron: css`
+    transition: transform 0.15s ease;
+  `,
+  chevronOpen: css`
+    transform: rotate(90deg);
+  `,
+  contextToggle: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    align-self: flex-start;
+
+    padding: 0;
+    border: none;
+
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextTertiary};
+
+    background: transparent;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   right: css`
     overflow-y: auto;
     flex: 1;
@@ -90,6 +118,20 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
   const roleLabel = (role: string) => (ROLE_KEYS[role] ? t(ROLE_KEYS[role] as never) : role);
   const [form] = Form.useForm();
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
+  const [contextOpen, setContextOpen] = useState(false);
+  // A capture is usually a complaint, so the counter-example is the default —
+  // but the same gesture is used to keep an answer that was right.
+  const [kind, setKind] = useState<CapturedOutputKind>('negative');
+
+  // Switching to "good example" fills the expected answer in, so what will be
+  // saved is on screen rather than implied. Switching back only clears it when
+  // it is still that same text — never something typed since.
+  const handleKindChange = (next: CapturedOutputKind) => {
+    setKind(next);
+    const current = form.getFieldValue('expected');
+    if (next === 'positive' && !current?.trim()) form.setFieldValue('expected', draft.actualOutput);
+    if (next === 'negative' && current === draft.actualOutput) form.setFieldValue('expected', '');
+  };
 
   useEffect(() => {
     // Every dataset is a valid destination, benchmark-owned or not — one list,
@@ -103,26 +145,9 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
     try {
-      const created = await agentEvalService.createTestCase({
-        content: {
-          expected: values.expected || undefined,
-          input: draft.input,
-          messages: draft.context.map((message, index) => ({
-            content: message.content,
-            id: `capture-${index}`,
-            role: message.role as 'assistant' | 'user',
-          })),
-        },
-        datasetId: values.datasetId,
-        evalConfig: { criteria: values.criteria },
-        evalMode: 'llm-rubric',
-        metadata: {
-          // The captured answer is the counter-example, not the expectation:
-          // writing it to `expected` would make a wrong answer the target.
-          capturedOutput: draft.actualOutput,
-          source: 'conversation-capture',
-        },
-      });
+      const created = await agentEvalService.createTestCase(
+        buildCapturePayload(draft, values, kind),
+      );
 
       const dataset = datasets.find((d) => d.id === values.datasetId);
       // Hands the modal over to its success phase. Deliberately not followed by
@@ -140,26 +165,49 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
       {/* Left: what is being captured — read-only, just verify it. */}
       <Flexbox className={styles.left} gap={12}>
         <span className={styles.label}>{t('capture.captured')}</span>
-        {draft.context.map((message, index) => (
-          <Flexbox gap={4} key={index}>
-            <span className={styles.msgHead}>{roleLabel(message.role)}</span>
-            <div className={styles.msgBodyMuted}>{message.content}</div>
-          </Flexbox>
-        ))}
+        {/* Collapsed by default: it is what the turn was said into, not what is
+            being judged, and expanded it buries both below the fold. */}
+        {draft.context.length > 0 && (
+          <button
+            className={styles.contextToggle}
+            type="button"
+            onClick={() => setContextOpen((v) => !v)}
+          >
+            <Icon
+              className={contextOpen ? `${styles.chevron} ${styles.chevronOpen}` : styles.chevron}
+              icon={ChevronRight}
+              size={14}
+            />
+            {t('testCaseDetail.context', { count: draft.context.length })}
+          </button>
+        )}
+        {contextOpen &&
+          draft.context.map((message, index) => (
+            <Flexbox gap={4} key={index}>
+              <span className={styles.msgHead}>{roleLabel(message.role)}</span>
+              <div className={styles.msgBodyMuted}>{message.content}</div>
+            </Flexbox>
+          ))}
         <Flexbox gap={4}>
           <span className={styles.msgHead}>{t('capture.input')}</span>
           <div className={styles.msgBody}>{draft.input}</div>
         </Flexbox>
-        <Flexbox gap={4}>
-          <Flexbox horizontal align="center" gap={6}>
+        <Flexbox gap={6}>
+          <Flexbox horizontal align="center" gap={8} justify="space-between">
             <span className={styles.msgHead}>{t('capture.actual')}</span>
-            <Tag color="error" size="small">
-              {t('capture.counterExample')}
-            </Tag>
+            <Segmented
+              size="small"
+              value={kind}
+              options={[
+                { label: t('capture.kind.negative'), value: 'negative' },
+                { label: t('capture.kind.positive'), value: 'positive' },
+              ]}
+              onChange={(value) => handleKindChange(value as CapturedOutputKind)}
+            />
           </Flexbox>
           <div className={styles.msgBody}>{draft.actualOutput}</div>
           <Text style={{ fontSize: 12 }} type="secondary">
-            {t('capture.counterExampleHint')}
+            {kind === 'positive' ? t('capture.positiveHint') : t('capture.counterExampleHint')}
           </Text>
         </Flexbox>
       </Flexbox>

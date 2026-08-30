@@ -189,6 +189,9 @@ export default {
   'capture.counterExample': 'counter-example',
   'capture.counterExampleHint':
     'Kept as a counter-example for the judge. It is not written to "Expected output".',
+  'capture.kind.negative': 'Counter-example',
+  'capture.kind.positive': 'Good example',
+  'capture.positiveHint': 'Kept as the expected output — the answer a good one should match.',
   'capture.criteria': 'Criteria',
   'capture.criteriaHint':
     'The judge does not see the prior context, so the criteria has to stand on its own.',
@@ -501,6 +504,7 @@ export default {
   'testCaseDetail.expected': 'Expected output',
   'testCaseDetail.expected.empty': 'Not set \u2014 scored by the criteria alone.',
   'testCaseDetail.expected.placeholder': 'Leave empty when there is no single right answer.',
+  'testCaseDetail.expectedFromCapture': 'Captured from the conversation as a good example.',
   'testCaseDetail.open': 'Open case',
   'testCaseDetail.notFound': 'This test case no longer exists.',
   'testCaseDetail.saveFailed': 'Could not save this case.',

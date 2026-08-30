@@ -93,13 +93,17 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     typeof testCase.evalConfig?.criteria === 'string' ? testCase.evalConfig.criteria : undefined;
   const caseId =
     typeof testCase.metadata?.caseId === 'string' ? testCase.metadata.caseId : undefined;
-  // The answer this case was captured from. It is the counter-example, which is
-  // why it is stored apart from `expected` — and why it has to be visible here,
-  // or the case reads as if nothing ever went wrong.
+  // The answer this case was captured from, and whether it was kept as the
+  // wrong answer or the right one. A counter-example has to be visible here or
+  // the case reads as if nothing ever went wrong; a positive one already *is*
+  // the expected output, so repeating it as its own block would just say the
+  // same thing twice. Captures made before the distinction existed are
+  // counter-examples.
   const capturedOutput =
     typeof testCase.metadata?.capturedOutput === 'string'
       ? testCase.metadata.capturedOutput
       : undefined;
+  const capturedIsPositive = testCase.metadata?.capturedOutputKind === 'positive';
 
   const initial = useMemo(
     () => ({ criteria: criteria ?? '', expected: expected ?? '', input: content.input ?? '' }),
@@ -197,7 +201,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
         />
       </Flexbox>
 
-      {capturedOutput && (
+      {capturedOutput && !capturedIsPositive && (
         <Flexbox gap={10}>
           <Flexbox horizontal align="center" gap={8}>
             <span className={styles.label}>{t('testCaseDetail.capturedOutput')}</span>
@@ -241,7 +245,14 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
             onChange={(e) => setDraft({ expected: e.target.value })}
           />
         ) : expected ? (
-          <div className={styles.prose}>{expected}</div>
+          <>
+            <div className={styles.prose}>{expected}</div>
+            {capturedIsPositive && (
+              <Text style={{ fontSize: 12 }} type="secondary">
+                {t('testCaseDetail.expectedFromCapture')}
+              </Text>
+            )}
+          </>
         ) : (
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('testCaseDetail.expected.empty')}
