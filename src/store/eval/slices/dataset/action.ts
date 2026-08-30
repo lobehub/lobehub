@@ -67,11 +67,11 @@ export class DatasetActionImpl {
     );
 
   /**
-   * Datasets that belong to no benchmark. Without this they are unreachable:
-   * every other dataset listing is scoped to a benchmark.
+   * Every dataset. Without this a dataset is only reachable through its
+   * benchmark, so one belonging to none could be created but never found.
    */
-  useFetchUnlinkedDatasets = (): SWRResponse =>
-    useClientDataSWR(evalKeys.datasetsUnlinked(), () => agentEvalService.listUnlinkedDatasets());
+  useFetchAllDatasets = (): SWRResponse =>
+    useClientDataSWR(evalKeys.datasetsAll(), () => agentEvalService.listAllDatasets());
 
   internal_dispatchDatasetDetail = (payload: DatasetDetailDispatch): void => {
     const currentMap = this.#get().datasetDetailMap;

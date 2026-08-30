@@ -17,7 +17,9 @@ const Page = memo(() => {
   const { caseId } = useParams<{ caseId: string }>();
 
   const useFetchTestCase = useEvalStore((s) => s.useFetchTestCase);
+  const useFetchDatasetDetail = useEvalStore((s) => s.useFetchDatasetDetail);
   const { data: testCase, error, isLoading, mutate } = useFetchTestCase(caseId);
+  const { data: dataset } = useFetchDatasetDetail(testCase?.datasetId);
 
   // A deleted or mistyped case id is an absent resource, not a failed request:
   // `getTestCase` throws NOT_FOUND, and AsyncBoundary reads `error` before
@@ -39,7 +41,7 @@ const Page = memo(() => {
       }
       onRetry={() => mutate()}
     >
-      {testCase && <TestCaseDetail testCase={testCase} />}
+      {testCase && <TestCaseDetail datasetName={dataset?.name} testCase={testCase} />}
     </AsyncBoundary>
   );
 });

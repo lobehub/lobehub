@@ -394,20 +394,9 @@ export const agentEvalRouter = router({
     }),
 
   listDatasets: agentEvalProcedure
-    .input(
-      z
-        .object({
-          benchmarkId: z.string().optional(),
-          /** Only datasets that belong to no benchmark. */
-          unlinked: z.boolean().optional(),
-        })
-        .optional(),
-    )
+    .input(z.object({ benchmarkId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return ctx.datasetModel.query({
-        benchmarkId: input?.benchmarkId,
-        unlinked: input?.unlinked,
-      });
+      return ctx.datasetModel.query({ benchmarkId: input?.benchmarkId });
     }),
 
   getDataset: agentEvalProcedure

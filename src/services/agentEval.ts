@@ -75,9 +75,9 @@ class AgentEvalService {
     return lambdaClient.agentEval.listDatasets.query({ benchmarkId });
   }
 
-  /** Datasets that belong to no benchmark — accumulated, not yet part of a suite. */
-  async listUnlinkedDatasets() {
-    return lambdaClient.agentEval.listDatasets.query({ unlinked: true });
+  /** Every dataset, whether or not it belongs to a benchmark. */
+  async listAllDatasets() {
+    return lambdaClient.agentEval.listDatasets.query({});
   }
 
   async getDataset(id: string) {

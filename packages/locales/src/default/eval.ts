@@ -267,7 +267,11 @@ export default {
   'overview.createExperiment': 'Create Experiment',
   'overview.importDataset': 'Import Dataset',
   'overview.sections.benchmarks.subtitle': 'Shared evaluation assets and benchmark baselines.',
-  'overview.sections.unlinkedDatasets.title': 'Datasets without a benchmark',
+  'overview.sections.datasets.empty': 'No datasets yet',
+  'overview.sections.datasets.noBenchmark': 'Not part of a benchmark',
+  'overview.sections.datasets.title': 'Datasets',
+  'sidebar.datasets': 'Datasets',
+  'sidebar.datasetsEmpty': 'No datasets yet',
   'overview.sections.benchmarks.title': 'Benchmarks',
   'overview.sections.count': '{{count}} total',
   'overview.sections.experiments.subtitle':
@@ -456,6 +460,12 @@ export default {
   'testCase.search.placeholder': 'Search cases...',
   'testCaseDetail.backToDataset': 'Back to Dataset',
   'testCaseDetail.boundary': 'The case starts here',
+  'testCaseDetail.breadcrumb.dataset': 'Dataset',
+  'testCaseDetail.breadcrumb.eval': 'Eval',
+  'testCaseDetail.capturedOutput': 'Captured answer',
+  'testCaseDetail.capturedOutputHint':
+    'The answer this case was captured from \u2014 kept as a counter-example for the judge, not as the expected output.',
+  'testCaseDetail.counterExample': 'counter-example',
   'testCaseDetail.criteria': 'Criteria',
   'testCaseDetail.criteria.empty':
     'No criteria set \u2014 this case is scored by its expected output alone.',
