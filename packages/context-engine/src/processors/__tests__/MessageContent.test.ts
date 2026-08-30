@@ -393,6 +393,39 @@ describe('MessageContentProcessor', () => {
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
 
+    it('should keep AVIF tool images as media refs for vision models', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const imageUrl = 'https://example.com/f/image-id.avif?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Read AVIF image result',
+          id: 'tool-avif',
+          pluginState: { images: [{ mediaType: 'image/avif', url: imageUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_avif',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-avif', type: 'image' }),
+      );
+      expect(content).toContain('visual-analysis tool');
+      expect(content).not.toContain(imageUrl);
+      expect(result.messages[0].tool_call_id).toBe('call_avif');
+    });
+
     it('should remove uploaded image markdown URLs before adding a media ref', async () => {
       mockIsCanUseVision.mockReturnValue(false);
 

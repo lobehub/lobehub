@@ -32,6 +32,14 @@ export const VISION_DOWNGRADE_PLACEHOLDER =
   '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
 
 /**
+ * AVIF must stay as a media ref even when the active model supports vision.
+ * Model capability flags do not describe per-format support, while Analyze Media
+ * normalizes AVIF at its request boundary.
+ */
+const requiresVisualAnalysis = (mediaType: unknown): boolean =>
+  typeof mediaType === 'string' && mediaType.split(';', 1)[0].trim().toLowerCase() === 'image/avif';
+
+/**
  * Heterogeneous-agent image uploads mirror each persisted image URL into tool
  * text as `![mediaType](url)`. Non-vision models must receive only the opaque
  * media ref, otherwise they can copy the signed URL into a later tool call.
@@ -510,7 +518,9 @@ export class MessageContentProcessor extends BaseProcessor {
     // Fast path: no usable images — plain text tool result passes through unchanged.
     if (images.length === 0) return message;
 
-    const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+    const canUseVision =
+      !!this.config.isCanUseVision?.(this.config.model, this.config.provider) &&
+      !images.some((image) => requiresVisualAnalysis(image.mediaType));
 
     // Normalize text content (historical messages may already be multimodal).
     let textContent = '';
@@ -523,8 +533,8 @@ export class MessageContentProcessor extends BaseProcessor {
         .join('\n\n');
     }
 
-    // Vision not supported: drop the image parts but surface a placeholder so
-    // the model can pass a stable opaque ref to the visual-analysis fallback.
+    // Native vision unavailable or image format unsupported: surface stable
+    // opaque refs so the model can call the visual-analysis fallback.
     // The signed URL stays out of model-visible text, which prevents the model
     // from copying opaque image data between tool calls.
     if (!canUseVision) {
