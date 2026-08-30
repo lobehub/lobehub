@@ -28,7 +28,8 @@ import {
 } from '@lobechat/types';
 import { isCodexServerDefaultCustomModel } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import { type AiFullModelCard, ModelProvider } from 'model-bank';
+import type { AiFullModelCard } from 'model-bank';
+import { isAiModelVisible, ModelProvider } from 'model-bank';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
@@ -559,8 +560,10 @@ export type ServerDefaultHeterogeneousModels = Record<
  */
 const supportsServerDefaultHeterogeneousAgent = (
   agentType: ServerDefaultHeterogeneousAgentType,
-  model: Pick<AiFullModelCard, 'abilities' | 'id'>,
+  model: Pick<AiFullModelCard, 'abilities' | 'id' | 'visible'>,
 ) => {
+  if (!isAiModelVisible(model)) return false;
+
   const { modelPolicy } = SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG[agentType];
   if (modelPolicy === 'tool-capable') {
     return parseClaudeModelId(model.id) !== undefined || model.abilities?.functionCall === true;

@@ -283,6 +283,34 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
   });
 
+  it('does not advertise hidden runtime-only models', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        lobehub: {
+          enabled: true,
+          serverModelLists: [
+            { abilities: { functionCall: true }, enabled: true, id: 'kimi-k2.6', type: 'chat' },
+            {
+              abilities: { functionCall: true },
+              enabled: true,
+              id: 'lobehub-onboarding-v1',
+              type: 'chat',
+              visible: false,
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
+      'claude-code': [{ model: 'kimi-k2.6' }],
+      'codex': [],
+      'grok-build': [{ model: 'kimi-k2.6' }],
+      'kimi-code': [{ model: 'kimi-k2.6' }],
+      'pi': [{ model: 'kimi-k2.6' }],
+    });
+  });
+
   it('keeps Claude ids eligible when the relay catalog declares no abilities', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
@@ -409,6 +437,33 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     );
     await expect(
       resolveServerDefaultHeterogeneousModel('claude-code', 'no-tools-model'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
+  });
+
+  it('keeps hidden runtime aliases resolvable but rejects them for heterogeneous agents', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        lobehub: {
+          enabled: true,
+          serverModelLists: [
+            {
+              abilities: { functionCall: true },
+              enabled: true,
+              id: 'lobehub-onboarding-v1',
+              type: 'chat',
+              visible: false,
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(resolveServerModel('lobehub', 'lobehub-onboarding-v1')).resolves.toEqual({
+      model: 'lobehub-onboarding-v1',
+      provider: 'lobehub',
+    });
+    await expect(
+      resolveServerDefaultHeterogeneousModel('claude-code', 'lobehub-onboarding-v1'),
     ).rejects.toThrow('not compatible with this heterogeneous agent');
   });
 
