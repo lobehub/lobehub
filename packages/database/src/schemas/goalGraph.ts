@@ -67,7 +67,7 @@ export const goalNodes = pgTable(
     index('goal_nodes_goal_id_kind_idx').on(t.goalId, t.kind),
     unique('goal_nodes_goal_id_id_unique').on(t.goalId, t.id),
     uniqueIndex('goal_nodes_task_id_unique').on(t.taskId).where(isNotNull(t.taskId)),
-    check('goal_nodes_task_requires_work_kind', sql`${t.taskId} IS NULL OR ${t.kind} = 'work'`),
+    check('goal_nodes_task_requires_task_kind', sql`${t.taskId} IS NULL OR ${t.kind} = 'task'`),
     check(
       'goal_nodes_confidence_range',
       sql`${t.confidence} IS NULL OR (${t.confidence} >= 0 AND ${t.confidence} <= 1)`,

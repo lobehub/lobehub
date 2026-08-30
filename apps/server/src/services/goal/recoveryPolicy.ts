@@ -8,13 +8,13 @@ const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 export const MIN_OPERATION_LEASE_TIMEOUT_MS = 3 * 60 * 1000;
 
 /** How many attempts one Work gets before the coordinator opens a decision gate. */
-export const resolveWorkAttemptBudget = (goal: GoalItem): number => {
-  const configured = goal.config?.recovery?.maxAttemptsPerWork;
+export const resolveTaskAttemptBudget = (goal: GoalItem): number => {
+  const configured = goal.config?.recovery?.maxAttemptsPerTask;
   if (typeof configured === 'number') return Math.max(1, configured);
   return DEFAULT_MAX_ATTEMPTS_PER_WORK;
 };
 
-export const resolveWorkMaxSteps = (goal: GoalItem): number | undefined => {
+export const resolveTaskMaxSteps = (goal: GoalItem): number | undefined => {
   const configured = goal.config?.recovery?.maxStepsPerRun;
   return typeof configured === 'number' && configured > 0 ? configured : undefined;
 };

@@ -518,7 +518,7 @@
   "goalProcess.kind.decision": "决策",
   "goalProcess.kind.finding": "结论",
   "goalProcess.kind.problem": "问题",
-  "goalProcess.kind.work": "任务",
+  "goalProcess.kind.task": "任务",
   "goalProcess.metrics.findings": "结论",
   "goalProcess.metrics.status": "状态",
   "goalProcess.metrics.tasks": "任务",

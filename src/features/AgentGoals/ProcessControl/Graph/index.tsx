@@ -330,7 +330,7 @@ const Graph = memo<GraphProps>((props) => {
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={12}>
         <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
-          {(['problem', 'work', 'finding', 'decision'] as const).map((kind) => (
+          {(['problem', 'task', 'finding', 'decision'] as const).map((kind) => (
             <Flexbox horizontal align={'center'} gap={4} key={kind}>
               <KindDot kind={kind} />
               <span>{t(`goalProcess.kind.${kind}` as const)}</span>

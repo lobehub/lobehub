@@ -55,7 +55,7 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
         agentId: ctx.agentId,
         createdByAgentId: ctx.agentId,
         config: {
-          recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(params.maxIterations) },
+          recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(params.maxIterations) },
         },
         // `maxIterations` caps attempts on one Work; it is deliberately not
         // passed as `maxRounds`, which counts runs across every Work in the

@@ -6,7 +6,7 @@ import { replayGoalAgainstCurrentCoordinator } from './replayCoordinator';
 const work = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
   createdAt: 1000,
   id,
-  kind: 'work',
+  kind: 'task',
   priority: 0,
   status: 'proposed',
   taskId: null,

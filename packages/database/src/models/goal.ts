@@ -74,7 +74,7 @@ export class GoalModel {
       .select({ goal: goals })
       .from(goalNodes)
       .innerJoin(goals, eq(goalNodes.goalId, goals.id))
-      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.kind, 'work'), this.ownership()))
+      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.kind, 'task'), this.ownership()))
       .limit(1);
     return row?.goal;
   };
@@ -139,7 +139,7 @@ export class GoalModel {
           sql`NOT EXISTS (
             SELECT 1 FROM ${goalNodes}
             WHERE ${goalNodes.goalId} = ${goals.id}
-              AND ${goalNodes.kind} = 'work'
+              AND ${goalNodes.kind} = 'task'
               AND ${goalNodes.status} = 'active'
               AND ${goalNodes.updatedAt} > ${staleBefore}
           )`,
@@ -227,7 +227,7 @@ export class GoalModel {
       const current = stats.get(row.goalId) ?? { findingCount: 0, workDone: 0, workTotal: 0 };
       const count = Number(row.count);
       if (row.kind === 'finding') current.findingCount += count;
-      if (row.kind === 'work') {
+      if (row.kind === 'task') {
         current.workTotal += count;
         if (TERMINAL_NODE_STATUSES.has(row.status)) current.workDone += count;
       }
@@ -271,7 +271,7 @@ export class GoalModel {
         FROM ${goalNodes}
         JOIN ${tasks} ON ${tasks.id} = ${goalNodes.taskId}
         WHERE ${inArray(goalNodes.goalId, goalIds)}
-          AND ${goalNodes.kind} = 'work'
+          AND ${goalNodes.kind} = 'task'
           AND ${this.taskOwnershipSql('tasks')}
         UNION ALL
         SELECT work_tree.goal_id, child.id

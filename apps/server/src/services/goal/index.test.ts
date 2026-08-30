@@ -29,6 +29,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './index';
+import type { GoalTickObservation } from './traceObservation';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'goal-service-test-user';
@@ -66,7 +67,7 @@ describe('GoalService', () => {
 
     expect(results.filter((result) => result.outcome === 'advanced')).toHaveLength(1);
     expect(taskRows).toHaveLength(1);
-    expect(current.nodes.find((node) => node.kind === 'work')?.taskId).toBe(taskRows[0].id);
+    expect(current.nodes.find((node) => node.kind === 'task')?.taskId).toBe(taskRows[0].id);
     expect(current.workVersions).toHaveLength(1);
   });
 
@@ -97,7 +98,7 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
-      config: { recovery: { maxAttemptsPerWork: 3 } },
+      config: { recovery: { maxAttemptsPerTask: 3 } },
       title: 'Raced recovery',
       work: ['Retry me once'],
     });
@@ -277,7 +278,7 @@ describe('GoalService', () => {
     await service.tick(graph.goal.id);
 
     const { events, nodes } = await service.graph(graph.goal.id);
-    const work = nodes.find((node) => node.kind === 'work')!;
+    const work = nodes.find((node) => node.kind === 'task')!;
     const actorsFor = (eventType: string, entityId: string) =>
       events
         .filter((event) => event.eventType === eventType && event.entityId === entityId)
@@ -360,7 +361,7 @@ describe('GoalService', () => {
     expect(created.taskId).toBeDefined();
 
     const waitingGraph = await service.graph(graph.goal.id);
-    expect(waitingGraph.nodes.find((node) => node.kind === 'work')).toMatchObject({
+    expect(waitingGraph.nodes.find((node) => node.kind === 'task')).toMatchObject({
       status: 'active',
       taskId: created.taskId,
     });
@@ -435,7 +436,7 @@ describe('GoalService', () => {
     expect(current.goal.status).not.toBe('achieved');
     expect(current.nodes).toContainEqual(
       expect.objectContaining({
-        kind: 'work',
+        kind: 'task',
         status: 'proposed',
         title: 'Complete full Goal acceptance',
       }),
@@ -488,6 +489,42 @@ describe('GoalService', () => {
     expect(achieved.outcome).toBe('achieved');
   });
 
+  it('reports the effects a tick actually produced, not just its outcome', async () => {
+    // The rollup counts gates and findings from these effects, so a branch that
+    // forgets to report one reads as "no human was ever involved" — silently,
+    // and only in the trace. Driving the real path is the only thing that
+    // catches it; a synthetic observation always agrees with itself.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ title: 'Effect reporting', work: ['Risky task'] });
+
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Verifier rejected output' });
+
+    const observed: GoalTickObservation[] = [];
+    const gated = await service.tick(graph.goal.id, {
+      onDecision: (observation) => observed.push(observation),
+    });
+
+    expect(gated.outcome).toBe('waiting_human');
+    expect(observed.at(-1)!.effects).toContainEqual(
+      expect.objectContaining({ detail: 'Verifier rejected output', type: 'opened_decision' }),
+    );
+
+    // And the other half: a completed task folds into a finding, which is what
+    // `findingsTotal` counts.
+    const decision = (await service.graph(graph.goal.id)).decisions[0];
+    await service.decide(graph.goal.id, decision.id, 'retry');
+    await taskModel.updateStatus(created.taskId!, 'completed');
+
+    const consumed: GoalTickObservation[] = [];
+    await service.tick(graph.goal.id, { onDecision: (o) => consumed.push(o) });
+
+    expect(consumed.at(-1)!.effects).toContainEqual(
+      expect.objectContaining({ detail: 'finding', type: 'created_node' }),
+    );
+  });
+
   it('automatically retries failed Work verification within policy budget', async () => {
     const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({
       agentId: 'agent-recovery',
@@ -507,7 +544,7 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
-      config: { recovery: { maxAttemptsPerWork: 3, maxStepsPerRun: 500 } },
+      config: { recovery: { maxAttemptsPerTask: 3, maxStepsPerRun: 500 } },
       title: 'Recover BW 150 research',
       work: ['Verify Micron BW 150 suppliers'],
     });
@@ -558,7 +595,7 @@ describe('GoalService', () => {
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
       config: {
-        recovery: { maxAttemptsPerWork: 3, operationLeaseTimeoutMs: 60_000 },
+        recovery: { maxAttemptsPerTask: 3, operationLeaseTimeoutMs: 60_000 },
       },
       title: 'Recover interrupted work',
       work: ['Run a durable experiment'],
@@ -600,7 +637,7 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
-      config: { recovery: { maxAttemptsPerWork: 3, operationLeaseTimeoutMs: 60_000 } },
+      config: { recovery: { maxAttemptsPerTask: 3, operationLeaseTimeoutMs: 60_000 } },
       maxTotalCost: 0.5,
       title: 'Respect abandoned Work cost',
       work: ['Run an expensive experiment'],
@@ -704,7 +741,7 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
-      config: { recovery: { maxAttemptsPerWork: 3 } },
+      config: { recovery: { maxAttemptsPerTask: 3 } },
       title: 'Resume abandoned recovery',
       work: ['Run a durable experiment'],
     });
@@ -727,7 +764,7 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
-      config: { recovery: { maxAttemptsPerWork: 1 } },
+      config: { recovery: { maxAttemptsPerTask: 1 } },
       title: 'Bounded recovery',
       work: ['Verify Micron BW 150 suppliers'],
     });
@@ -747,7 +784,7 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
-      config: { recovery: { maxAttemptsPerWork: 1 } },
+      config: { recovery: { maxAttemptsPerTask: 1 } },
       requirement: 'Return three verified supplier quotes.',
       title: 'Bounded terminal acceptance',
       work: ['Complete full Goal acceptance'],
@@ -787,12 +824,12 @@ describe('GoalService', () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Dependency-aware goal' });
     const prerequisite = await service.addNode(graph.goal.id, {
-      kind: 'work',
+      kind: 'task',
       priority: 0,
       title: 'Collect evidence',
     });
     const dependent = await service.addNode(graph.goal.id, {
-      kind: 'work',
+      kind: 'task',
       priority: 10,
       title: 'Train from evidence',
     });

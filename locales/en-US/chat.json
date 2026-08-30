@@ -518,7 +518,7 @@
   "goalProcess.kind.decision": "Decision",
   "goalProcess.kind.finding": "Finding",
   "goalProcess.kind.problem": "Question",
-  "goalProcess.kind.work": "Task",
+  "goalProcess.kind.task": "Task",
   "goalProcess.metrics.findings": "Findings",
   "goalProcess.metrics.status": "Status",
   "goalProcess.metrics.tasks": "Tasks",

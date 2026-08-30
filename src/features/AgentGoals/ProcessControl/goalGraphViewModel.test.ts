@@ -43,7 +43,7 @@ const node = (id: string, overrides: Partial<GoalGraphNode> = {}): GoalGraphNode
   description: null,
   goalId: 'goal-1',
   id,
-  kind: 'work',
+  kind: 'task',
   priority: 0,
   resolvedAt: null,
   status: 'proposed',

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   decideNextMove,
-  GOAL_ACCEPTANCE_WORK_TITLE,
+  GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   needsBudget,
   selectFrontier,
@@ -14,7 +14,7 @@ const node = (id: string, overrides: Partial<GoalGraphNode> = {}): GoalGraphNode
   ({
     createdAt: new Date(1000),
     id,
-    kind: 'work',
+    kind: 'task',
     priority: 0,
     status: 'proposed',
     taskId: null,
@@ -234,7 +234,7 @@ describe('decideNextMove', () => {
         goal: { ...graph().goal, requirement: 'Prove it' },
         nodes: [
           node('a', { status: 'resolved' }),
-          node('acc', { status: 'retired', title: GOAL_ACCEPTANCE_WORK_TITLE }),
+          node('acc', { status: 'retired', title: GOAL_ACCEPTANCE_TASK_TITLE }),
         ],
       });
 
@@ -250,7 +250,7 @@ describe('decideNextMove', () => {
         goal: { ...graph().goal, requirement: 'Prove it' },
         nodes: [
           node('a', { status: 'resolved' }),
-          node('acc', { status: 'resolved', title: GOAL_ACCEPTANCE_WORK_TITLE }),
+          node('acc', { status: 'resolved', title: GOAL_ACCEPTANCE_TASK_TITLE }),
         ],
       });
       expect(decide(withAcceptance).outcome).toBe('achieved');

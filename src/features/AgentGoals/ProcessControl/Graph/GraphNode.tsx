@@ -153,9 +153,9 @@ const useStateChip = (data: GraphNodeData): { color: string; text: string } | nu
   if (isGate) return { color: cssVar.colorWarning, text: t('goalProcess.tag.needsDecision') };
   if (stale) return { color: cssVar.colorError, text: t('goalProcess.tag.lost') };
   if (running) return { color: cssVar.colorInfo, text: t('goalProcess.node.running') };
-  if (node.kind === 'work' && node.status === 'resolved')
+  if (node.kind === 'task' && node.status === 'resolved')
     return { color: cssVar.colorSuccess, text: t('goalProcess.node.done') };
-  if (node.kind === 'work' && (node.status === 'retired' || node.status === 'rejected'))
+  if (node.kind === 'task' && (node.status === 'retired' || node.status === 'rejected'))
     return { color: cssVar.colorTextTertiary, text: t('goalProcess.tag.retired') };
   if (node.kind === 'decision' && node.status === 'resolved')
     return {
@@ -182,7 +182,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
   const { node } = view;
   const chip = useStateChip(nodeData);
   const palette = KIND_COLOR[node.kind];
-  const isWork = node.kind === 'work';
+  const isTask = node.kind === 'task';
   const attempts = view.attempts.length;
 
   return (
@@ -229,7 +229,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
             )}
           </Flexbox>
         </div>
-        {isWork && (
+        {isTask && (
           <div className={styles.metrics}>
             {node.taskId ? (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>

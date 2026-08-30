@@ -277,7 +277,7 @@ export class GoalGraphModel {
           and(
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
-            eq(goalNodes.kind, 'work'),
+            eq(goalNodes.kind, 'task'),
             isNull(goalNodes.taskId),
           ),
         )
@@ -292,7 +292,7 @@ export class GoalGraphModel {
       return node;
     });
 
-  claimWorkNode = async (goalId: string, nodeId: string, staleBefore: Date) =>
+  claimTaskNode = async (goalId: string, nodeId: string, staleBefore: Date) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
       const [node] = await tx
@@ -302,7 +302,7 @@ export class GoalGraphModel {
           and(
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
-            eq(goalNodes.kind, 'work'),
+            eq(goalNodes.kind, 'task'),
             or(
               eq(goalNodes.status, 'proposed'),
               and(eq(goalNodes.status, 'active'), lt(goalNodes.updatedAt, staleBefore)),

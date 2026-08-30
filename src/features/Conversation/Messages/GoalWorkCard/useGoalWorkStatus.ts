@@ -18,7 +18,7 @@ export const useGoalWorkStatus = ({
   useFetchGoalGraph(goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
-  const workNodes = snapshot?.nodes.filter((node) => node.kind === 'work') ?? [];
+  const taskNodes = snapshot?.nodes.filter((node) => node.kind === 'task') ?? [];
 
   return {
     agentId: snapshot?.goal.agentId ?? undefined,
@@ -27,10 +27,10 @@ export const useGoalWorkStatus = ({
       pendingDecisions:
         snapshot?.decisions.filter((decision) => decision.status === 'pending').length ?? 0,
       status: snapshot?.goal.status,
-      workDone: workNodes.filter((node) =>
+      workDone: taskNodes.filter((node) =>
         ['rejected', 'resolved', 'retired'].includes(node.status),
       ).length,
-      workTotal: workNodes.length,
+      workTotal: taskNodes.length,
     }),
     startedAt: snapshot?.goal.startedAt ?? undefined,
     title: snapshot?.goal.title,

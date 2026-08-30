@@ -436,7 +436,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       const graph = await goalService.create({
         agentId,
         config: {
-          recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
+          recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(plan.maxIterations) },
         },
         // `maxIterations` is the per-Work attempt budget above; it is not the
         // graph-wide round cap, which counts runs across every Work and would

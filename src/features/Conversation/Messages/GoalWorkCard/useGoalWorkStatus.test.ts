@@ -57,9 +57,9 @@ describe('useGoalWorkStatus', () => {
   it('counts every terminal Work node as closed', () => {
     mocks.goalGraphById['goal-1'] = snapshot({
       nodes: [
-        node('w1', 'work', 'resolved'),
-        node('w2', 'work', 'retired'),
-        node('w3', 'work', 'active'),
+        node('w1', 'task', 'resolved'),
+        node('w2', 'task', 'retired'),
+        node('w3', 'task', 'active'),
         node('f1', 'finding', 'resolved'),
       ] as never,
     });
@@ -74,7 +74,7 @@ describe('useGoalWorkStatus', () => {
   it('reads a pending gate as waiting on the user', () => {
     mocks.goalGraphById['goal-1'] = snapshot({
       decisions: [{ status: 'pending' }] as never,
-      nodes: [node('w1', 'work', 'active')] as never,
+      nodes: [node('w1', 'task', 'active')] as never,
     });
 
     const { result } = renderHook(() => useGoalWorkStatus({ goalId: 'goal-1' }));

@@ -114,7 +114,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
                 style={{ cursor: 'pointer' }}
                 onClick={() => onSelect(view.producedBy!.id)}
               >
-                <KindDot kind={'work'} />
+                <KindDot kind={'task'} />
                 <Text fontSize={12} type={'secondary'}>
                   {t('goalProcess.findings.from', { title: view.producedBy.title })}
                 </Text>

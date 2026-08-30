@@ -79,7 +79,7 @@ export const goalRouter = router({
     .input(
       idInput.extend({
         description: z.string().optional(),
-        kind: z.enum(['problem', 'work', 'finding', 'decision']),
+        kind: z.enum(['problem', 'task', 'finding', 'decision']),
         priority: z.number().int().optional(),
         status: z
           .enum(['proposed', 'active', 'waiting', 'resolved', 'rejected', 'retired'])
@@ -105,7 +105,7 @@ export const goalRouter = router({
           .object({
             recovery: z
               .object({
-                maxAttemptsPerWork: z.number().int().positive().optional(),
+                maxAttemptsPerTask: z.number().int().positive().optional(),
                 maxStepsPerRun: z.number().int().positive().nullable().optional(),
                 operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
               })

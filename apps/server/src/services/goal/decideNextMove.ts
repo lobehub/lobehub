@@ -6,7 +6,7 @@ import type {
 } from '@lobechat/agent-tracing';
 import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
 
-export const GOAL_ACCEPTANCE_WORK_TITLE = 'Complete full Goal acceptance';
+export const GOAL_ACCEPTANCE_TASK_TITLE = 'Complete full Goal acceptance';
 
 /** Reason strings the recovery paths key off, written by the settle path. */
 export const LEASE_EXPIRED_ERROR = 'Goal Work operation lease expired.';
@@ -33,7 +33,7 @@ export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
   );
 
   const eligible = graph.nodes
-    .filter((node) => node.kind === 'work' && !TERMINAL_NODE_STATUSES.has(node.status))
+    .filter((node) => node.kind === 'task' && !TERMINAL_NODE_STATUSES.has(node.status))
     .map((node) => ({
       blockedBy: graph.edges
         .filter(
@@ -179,9 +179,9 @@ const decideWithoutFrontier = (
   candidates: FrontierCandidate[],
 ): GoalMove => {
   const base = { candidates };
-  const workNodes = graph.nodes.filter((node) => node.kind === 'work');
+  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
   const allWorkTerminal =
-    workNodes.length > 0 && workNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
+    taskNodes.length > 0 && taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
 
   if (!allWorkTerminal) {
     // Nothing here moves without a person: either there is no Work at all, or
@@ -190,14 +190,14 @@ const decideWithoutFrontier = (
       ...base,
       branch: 'no_frontier',
       message:
-        workNodes.length === 0
+        taskNodes.length === 0
           ? 'No work frontier exists; add a work node'
           : 'No work node is ready; resolve its dependencies first',
       outcome: 'no_progress',
     };
   }
 
-  const acceptanceWork = workNodes.find((node) => node.title === GOAL_ACCEPTANCE_WORK_TITLE);
+  const acceptanceWork = taskNodes.find((node) => node.title === GOAL_ACCEPTANCE_TASK_TITLE);
 
   if (graph.goal.requirement && !acceptanceWork) {
     return {

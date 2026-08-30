@@ -60,7 +60,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
     );
 
   const { goal, nodes } = snapshot;
-  const tasks = nodes.filter((node) => node.kind === 'work').length;
+  const tasks = nodes.filter((node) => node.kind === 'task').length;
   const findings = nodes.filter((node) => node.kind === 'finding').length;
 
   return (

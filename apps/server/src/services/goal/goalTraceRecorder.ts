@@ -101,10 +101,9 @@ export class GoalAdvanceRecorder {
       ticksTotal: rollup.ticksTotal,
       traceS3Key: buildGoalTraceKey(this.goalId),
       workOperations: rollup.operationsTotal,
-      // The columns still read `work_*`: a Goal Graph node of kind `work` is
-      // 1:1 with the task it owns, so these count tasks, and the reporting
-      // side says so. Renaming the columns is one change with
-      // `goal_nodes.kind`, not two — until that lands, this is the seam.
+      // Columns kept as shipped. The node kind is now `task`, but renaming
+      // three columns on a live table buys nothing the reporting names above
+      // do not already give — so the mapping lives here, in one place.
       workResolved: rollup.tasksCompleted,
       workRetired: rollup.tasksRetired,
     });

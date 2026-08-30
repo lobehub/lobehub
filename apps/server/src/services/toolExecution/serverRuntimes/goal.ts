@@ -45,7 +45,7 @@ export const goalRuntime: ServerRuntimeRegistration = {
             agentId,
             createdByAgentId: agentId,
             config: {
-              recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(args.maxIterations) },
+              recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(args.maxIterations) },
             },
             // `maxIterations` caps attempts on one Work; it is deliberately not
             // passed as `maxRounds`, which counts runs across every Work in the

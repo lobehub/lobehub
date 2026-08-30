@@ -1838,7 +1838,7 @@ export default {
   'goalProcess.edge.contradicts': 'contradicts',
   'goalProcess.edge.leadsTo': 'leads to',
   'goalProcess.kind.problem': 'Question',
-  'goalProcess.kind.work': 'Task',
+  'goalProcess.kind.task': 'Task',
   'goalProcess.kind.finding': 'Finding',
   'goalProcess.kind.decision': 'Decision',
   'goalProcess.node.running': 'Running',

@@ -31,21 +31,21 @@ import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
 import {
   decideNextMove,
-  GOAL_ACCEPTANCE_WORK_TITLE,
+  GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
   needsBudget,
   selectFrontier,
 } from './decideNextMove';
-import { resolveOperationLeaseTimeout, resolveWorkMaxSteps } from './recoveryPolicy';
+import { resolveOperationLeaseTimeout, resolveTaskMaxSteps } from './recoveryPolicy';
+import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
   type GoalTickOptions,
   toBudgetState,
   toFrontierTaskState,
   toTraceGraphState,
 } from './traceObservation';
-import { WorkRecoveryCoordinator } from './workRecoveryCoordinator';
 
-const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
+const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
 
 export interface CreateGoalWorkInput {
@@ -172,7 +172,7 @@ export class GoalService {
         const work = await authorGraph.createNode(goal.id, {
           createdByAgentId: input.createdByAgentId,
           description,
-          kind: 'work',
+          kind: 'task',
           title,
         });
         if (!work) throw new Error('Failed to seed goal work');
@@ -327,19 +327,19 @@ export class GoalService {
       (edge) => edge.targetNodeId === decision.nodeId && edge.kind === 'leads_to',
     );
     const source = incoming && graph.nodes.find((node) => node.id === incoming.sourceNodeId);
-    if (source?.kind === 'work') {
+    if (source?.kind === 'task') {
       if (optionId === 'retry' && source.taskId) {
         await this.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
         await this.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
       } else if (
         optionId === 'retire' ||
-        (optionId === 'fail' && source.title === GOAL_ACCEPTANCE_WORK_TITLE)
+        (optionId === 'fail' && source.title === GOAL_ACCEPTANCE_TASK_TITLE)
       ) {
         await this.graphModel.updateNodeStatus(goalId, source.id, 'retired', resolution);
       }
     }
     const terminalAcceptanceFailed =
-      source?.title === GOAL_ACCEPTANCE_WORK_TITLE &&
+      source?.title === GOAL_ACCEPTANCE_TASK_TITLE &&
       (optionId === 'retire' || optionId === 'fail');
     await this.goalModel.updateStatus(goalId, terminalAcceptanceFailed ? 'failed' : 'running');
     return resolved;
@@ -451,12 +451,12 @@ export class GoalService {
 
         switch (move.branch) {
           case 'consume_completed': {
-            return observe(await this.consumeCompletedWork(graph, chosen!.id, task.id, effects));
+            return observe(await this.consumeCompletedTask(graph, chosen!.id, task.id, effects));
           }
 
           case 'recover_lease': {
             return observe(
-              await this.resumeAbandonedWorkRecovery(graph, chosen!.id, task, effects),
+              await this.resumeAbandonedTaskRecovery(graph, chosen!.id, task, effects),
             );
           }
 
@@ -482,7 +482,7 @@ export class GoalService {
 
           case 'task_running': {
             if (task.status === 'running') {
-              const recovered = await this.recoverAbandonedWork(graph, chosen!.id, task, effects);
+              const recovered = await this.recoverAbandonedTask(graph, chosen!.id, task, effects);
               if (recovered) return observe(recovered);
             }
             return observe({
@@ -542,9 +542,9 @@ export class GoalService {
         'Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
         'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
       ].join('\n\n'),
-      kind: 'work',
+      kind: 'task',
       priority: -1,
-      title: GOAL_ACCEPTANCE_WORK_TITLE,
+      title: GOAL_ACCEPTANCE_TASK_TITLE,
     });
     if (!result) {
       return {
@@ -577,10 +577,10 @@ export class GoalService {
     effects: GoalAdvanceEffect[],
   ): Promise<GoalTickResult> => {
     const goalId = graph.goal.id;
-    const claim = await this.coordinatorGraph.claimWorkNode(
+    const claim = await this.coordinatorGraph.claimTaskNode(
       goalId,
       frontier.id,
-      new Date(Date.now() - WORK_NODE_CLAIM_TTL_MS),
+      new Date(Date.now() - TASK_NODE_CLAIM_TTL_MS),
     );
     if (!claim) {
       const current = (await this.requireGraph(goalId)).nodes.find(
@@ -605,13 +605,13 @@ export class GoalService {
         assigneeAgentId: graph.goal.agentId ?? undefined,
         config: { checkpoint: { topic: { after: false } } },
         description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
-        instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
+        instruction: this.buildTaskInstruction(graph, frontier.title, frontier.description),
         name: frontier.title,
         projectId: graph.goal.projectId ?? undefined,
       });
       const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
         config: { enabled: true },
-        requirement: this.buildWorkAcceptanceRequirement(
+        requirement: this.buildTaskAcceptanceRequirement(
           graph,
           frontier.title,
           frontier.description,
@@ -681,7 +681,7 @@ export class GoalService {
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
     const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
     const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
-    const recovery = await new WorkRecoveryCoordinator(
+    const recovery = await new TaskRecoveryCoordinator(
       this.db,
       this.userId,
       this.workspaceId,
@@ -750,7 +750,7 @@ export class GoalService {
 
     try {
       const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
-        maxSteps: resolveWorkMaxSteps(graph.goal),
+        maxSteps: resolveTaskMaxSteps(graph.goal),
         taskId: task.id,
         trigger: 'goal',
       });
@@ -804,7 +804,7 @@ export class GoalService {
     }
   };
 
-  private recoverAbandonedWork = async (
+  private recoverAbandonedTask = async (
     graph: GoalGraphSnapshot,
     nodeId: string,
     task: TaskItem,
@@ -854,16 +854,16 @@ export class GoalService {
     });
     if (!reclaimed) return undefined;
 
-    return this.resumeAbandonedWorkRecovery(graph, nodeId, task, effects);
+    return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
   };
 
-  private resumeAbandonedWorkRecovery = async (
+  private resumeAbandonedTaskRecovery = async (
     graph: GoalGraphSnapshot,
     nodeId: string,
     task: TaskItem,
     effects: GoalAdvanceEffect[] = [],
   ): Promise<GoalTickResult> => {
-    const recovery = await new WorkRecoveryCoordinator(
+    const recovery = await new TaskRecoveryCoordinator(
       this.db,
       this.userId,
       this.workspaceId,
@@ -894,7 +894,7 @@ export class GoalService {
     return this.openFailureDecision(graph, nodeId, task.id, reason, effects);
   };
 
-  private buildWorkInstruction = (
+  private buildTaskInstruction = (
     graph: GoalGraphSnapshot,
     title: string,
     description: string | null,
@@ -915,12 +915,12 @@ export class GoalService {
       .filter(Boolean)
       .join('\n\n');
 
-  private buildWorkAcceptanceRequirement = (
+  private buildTaskAcceptanceRequirement = (
     graph: GoalGraphSnapshot,
     title: string,
     description: string | null,
   ) => {
-    if (title === GOAL_ACCEPTANCE_WORK_TITLE) {
+    if (title === GOAL_ACCEPTANCE_TASK_TITLE) {
       return [
         `Terminal Goal acceptance requirement (authoritative): ${graph.goal.requirement ?? graph.goal.title}`,
         description ? `Required delivery: ${description}` : undefined,
@@ -944,7 +944,7 @@ export class GoalService {
       .join('\n\n');
   };
 
-  private consumeCompletedWork = async (
+  private consumeCompletedTask = async (
     graph: GoalGraphSnapshot,
     nodeId: string,
     taskId: string,
@@ -989,8 +989,10 @@ export class GoalService {
           handoff?.summary ??
           `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`,
       });
-      if (finding)
+      if (finding) {
+        effects.push({ detail: 'finding', nodeId, targetId: finding.id, type: 'created_node' });
         await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
+      }
     }
     await this.coordinatorGraph.updateNodeStatus(
       graph.goal.id,
@@ -1023,13 +1025,14 @@ export class GoalService {
         description: reason,
         kind: 'decision',
         status: 'waiting',
-        title: 'Choose how to recover failed work',
+        title: 'Choose how to recover failed task',
       });
       if (node) {
+        effects.push({ detail: reason, nodeId, targetId: node.id, type: 'opened_decision' });
         await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
         const terminalAcceptance =
           graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
-          GOAL_ACCEPTANCE_WORK_TITLE;
+          GOAL_ACCEPTANCE_TASK_TITLE;
         await this.coordinatorGraph.createDecision(graph.goal.id, node.id, {
           authority: 'user',
           options: terminalAcceptance
@@ -1038,12 +1041,12 @@ export class GoalService {
                 { id: 'fail', label: 'Fail goal' },
               ]
             : [
-                { id: 'retry', label: 'Retry work' },
-                { id: 'retire', label: 'Retire work' },
+                { id: 'retry', label: 'Retry task' },
+                { id: 'retire', label: 'Retire task' },
               ],
           question: terminalAcceptance
             ? `${reason}. Retry Goal acceptance or fail this Goal?`
-            : `${reason}. Retry or retire this work node?`,
+            : `${reason}. Retry or retire this task node?`,
           recommendedOptionId: 'retry',
           requestedUserId: this.userId,
         });

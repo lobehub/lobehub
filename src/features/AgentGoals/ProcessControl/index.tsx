@@ -73,7 +73,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   const actions: FrontierActions = useMemo(
     () => ({
       addTask: async (title: string) => {
-        await goalService.addNode({ id: goalId, kind: 'work', title });
+        await goalService.addNode({ id: goalId, kind: 'task', title });
         await refreshGoalGraph(goalId);
       },
       advance: () => void advance(),

@@ -87,11 +87,11 @@ export function registerGoalCommand(program: Command) {
       const result = await client.goal.create.mutate({
         agentId: options.agent,
         config:
-          options.maxAttemptsPerWork || options.maxStepsPerRun || options.operationLeaseTimeoutMs
+          options.maxAttemptsPerTask || options.maxStepsPerRun || options.operationLeaseTimeoutMs
             ? {
                 recovery: {
-                  maxAttemptsPerWork: options.maxAttemptsPerWork
-                    ? Number.parseInt(options.maxAttemptsPerWork, 10)
+                  maxAttemptsPerTask: options.maxAttemptsPerTask
+                    ? Number.parseInt(options.maxAttemptsPerTask, 10)
                     : undefined,
                   maxStepsPerRun: options.maxStepsPerRun
                     ? Number.parseInt(options.maxStepsPerRun, 10)
@@ -289,7 +289,7 @@ export function registerGoalCommand(program: Command) {
     .action(
       async (
         id: string,
-        kind: 'decision' | 'finding' | 'problem' | 'work',
+        kind: 'decision' | 'finding' | 'problem' | 'task',
         title: string,
         options,
       ) => {

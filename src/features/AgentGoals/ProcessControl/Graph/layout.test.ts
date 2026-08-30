@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { layoutGraph } from './layout';
 
-const node = (id: string, kind: GoalGraphNode['kind'] = 'work'): GoalGraphNode => ({
+const node = (id: string, kind: GoalGraphNode['kind'] = 'task'): GoalGraphNode => ({
   confidence: null,
   createdAt: new Date('2026-08-01T00:00:00Z'),
   createdByAgentId: null,

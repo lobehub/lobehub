@@ -6,7 +6,7 @@ import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
-import { resolveWorkAttemptBudget, resolveWorkMaxSteps } from './recoveryPolicy';
+import { resolveTaskAttemptBudget, resolveTaskMaxSteps } from './recoveryPolicy';
 
 const log = debug('lobe-server:goal-work-recovery');
 
@@ -14,7 +14,7 @@ export type WorkRecoveryOutcome =
   'continued' | 'exhausted-cost' | 'exhausted-rounds' | 'spawn-failed';
 
 /** Retry budget and spawn boundary for a Goal Graph Work Task. */
-export class WorkRecoveryCoordinator {
+export class TaskRecoveryCoordinator {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
@@ -28,7 +28,7 @@ export class WorkRecoveryCoordinator {
   }): Promise<WorkRecoveryOutcome> => {
     const { goal, task } = params;
     const attempts = task.totalTopics || 0;
-    const attemptBudget = resolveWorkAttemptBudget(goal);
+    const attemptBudget = resolveTaskAttemptBudget(goal);
     if (attempts >= attemptBudget) return 'exhausted-rounds';
 
     if (typeof goal.maxTotalCost === 'number') {
@@ -66,7 +66,7 @@ export class WorkRecoveryCoordinator {
 
     try {
       await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
-        maxSteps: resolveWorkMaxSteps(goal),
+        maxSteps: resolveTaskMaxSteps(goal),
         taskId: task.id,
         trigger: 'goal',
       });
