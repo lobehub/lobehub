@@ -484,6 +484,30 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(events.at(-1)?.type).toBe('message_stop');
   });
 
+  it('preserves Anthropic signature-only reasoning blocks', async () => {
+    const events = parseSseEvents(
+      await readText(
+        anthropicSse(
+          protocolStream([
+            { data: '', type: 'reasoning' },
+            { data: 'hidden-thinking-signature', type: 'reasoning_signature' },
+          ]),
+        ),
+      ),
+    );
+    const thinkingStart = events.find(({ type }) => type === 'content_block_start');
+    const deltas = events
+      .filter(({ type }) => type === 'content_block_delta')
+      .map(({ data }) => data.delta);
+
+    expect(thinkingStart?.data).toMatchObject({
+      content_block: { signature: '', thinking: '', type: 'thinking' },
+      index: 0,
+    });
+    expect(deltas).toEqual([{ signature: 'hidden-thinking-signature', type: 'signature_delta' }]);
+    expect(events.filter(({ type }) => type === 'content_block_stop')).toHaveLength(1);
+  });
+
   it('does not stringify null Anthropic text and reasoning chunks', async () => {
     const events = parseSseEvents(
       await readText(

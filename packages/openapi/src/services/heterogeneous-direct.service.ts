@@ -449,7 +449,7 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model:
               : typeof part?.content === 'string'
                 ? part.content
                 : undefined;
-          if (content) {
+          if (content !== undefined) {
             const isThinking = event.type === 'reasoning' || event.type === 'reasoning_part';
             let index = isThinking ? thinkingIndex : textIndex;
             if (index === undefined) {
@@ -467,15 +467,17 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model:
               if (isThinking) thinkingIndex = index;
               else textIndex = index;
             }
-            controller.enqueue(
-              sse('content_block_delta', {
-                delta: isThinking
-                  ? { thinking: content, type: 'thinking_delta' }
-                  : { text: content, type: 'text_delta' },
-                index,
-                type: 'content_block_delta',
-              }),
-            );
+            if (content) {
+              controller.enqueue(
+                sse('content_block_delta', {
+                  delta: isThinking
+                    ? { thinking: content, type: 'thinking_delta' }
+                    : { text: content, type: 'text_delta' },
+                  index,
+                  type: 'content_block_delta',
+                }),
+              );
+            }
           } else if (
             event.type === 'reasoning_signature' &&
             thinkingIndex !== undefined &&
