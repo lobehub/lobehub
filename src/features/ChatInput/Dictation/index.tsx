@@ -38,48 +38,34 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   listening: css`
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorPrimary};
-    box-shadow: 0 0 0 3px ${cssVar.colorPrimaryBg};
-
     transition:
       color 160ms ease,
       background 160ms ease,
-      box-shadow 160ms ease,
       transform 120ms ease;
-    animation: dictation-halo-breathe 1.6s ease-in-out infinite;
 
-    &:hover {
+    && {
       color: ${cssVar.colorBgContainer};
-      background: ${cssVar.colorPrimaryHover};
-      box-shadow: 0 0 0 4px ${cssVar.colorPrimaryBgHover};
+      background: ${cssVar.colorPrimary};
     }
 
-    &:active {
+    &&:hover {
+      color: ${cssVar.colorBgContainer};
+      background: ${cssVar.colorPrimaryHover};
+    }
+
+    &&:active {
       transform: scale(0.94);
       background: ${cssVar.colorPrimaryActive};
     }
 
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 3px;
-    }
-
-    @keyframes dictation-halo-breathe {
-      0%,
-      100% {
-        box-shadow: 0 0 0 3px ${cssVar.colorPrimaryBg};
-      }
-
-      50% {
-        box-shadow: 0 0 0 6px ${cssVar.colorPrimaryBgHover};
-      }
+    &&:focus-visible {
+      outline: 2px solid ${cssVar.colorBgContainer};
+      outline-offset: -3px;
+      box-shadow: none;
     }
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
-      animation: none;
     }
   `,
   listeningStatus: css`
