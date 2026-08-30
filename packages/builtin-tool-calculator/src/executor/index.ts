@@ -21,6 +21,17 @@ import {
 // Create a mathjs instance with all functions
 const math = create(all);
 
+// Add ln() as a natural logarithm function (log base e)
+// Uses mathjs's log function to support all mathjs numeric types (complex, units, etc.)
+math.import(
+  {
+    ln: function (x: any) {
+      return math.log(x, math.e);
+    },
+  },
+  { override: true },
+);
+
 /**
  * Calculator Tool Executor
  *

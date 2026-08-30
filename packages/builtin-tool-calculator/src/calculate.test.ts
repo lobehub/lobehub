@@ -340,6 +340,65 @@ describe('Unit Conversion', () => {
     expect(parseFloat(e.content || '0')).toBeCloseTo(2.71828, 5);
   });
 
+  it('should handle ln (natural logarithm) function', async () => {
+    const result = await calculatorExecutor.calculate({ expression: 'ln(2.71828)' });
+    expect(result.success).toBe(true);
+    expect(parseFloat(result.content || '0')).toBeCloseTo(1, 5);
+  });
+
+  it('should handle ln(e) equals 1', async () => {
+    const result = await calculatorExecutor.calculate({ expression: 'ln(e)' });
+    expect(result.success).toBe(true);
+    expect(parseFloat(result.content || '0')).toBeCloseTo(1, 5);
+  });
+
+  it('should handle ln(1) equals 0', async () => {
+    const result = await calculatorExecutor.calculate({ expression: 'ln(1)' });
+    expect(result.success).toBe(true);
+    expect(parseFloat(result.content || '0')).toBeCloseTo(0, 5);
+  });
+
+  it('should handle ln in complex expressions', async () => {
+    const result = await calculatorExecutor.calculate({ expression: 'ln(10) + ln(10)' });
+    expect(result.success).toBe(true);
+    const expected = Math.log(10) + Math.log(10);
+    expect(parseFloat(result.content || '0')).toBeCloseTo(expected, 5);
+  });
+
+  it('should handle ln in evaluate with variables', async () => {
+    const result = await calculatorExecutor.evaluate({
+      expression: 'ln(x)',
+      variables: { x: 2.71828 },
+    });
+    expect(result.success).toBe(true);
+    expect(parseFloat(result.content || '0')).toBeCloseTo(1, 5);
+  });
+
+  it('should handle ln with precision', async () => {
+    const result = await calculatorExecutor.calculate({
+      expression: 'ln(10)',
+      precision: 4,
+    });
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('2.3026');
+  });
+
+  it('should handle ln with complex numbers (ln(-1) = πi)', async () => {
+    const result = await calculatorExecutor.calculate({ expression: 'ln(-1)' });
+    expect(result.success).toBe(true);
+    // ln(-1) = i * π ≈ 3.141592654i
+    expect(result.content).toContain('i');
+    expect(parseFloat(result.content || '0')).not.toBeNaN();
+  });
+
+  it('should handle ln consistent with log(x, e)', async () => {
+    const lnResult = await calculatorExecutor.calculate({ expression: 'ln(5)' });
+    const logResult = await calculatorExecutor.calculate({ expression: 'log(5, e)' });
+    expect(lnResult.success).toBe(true);
+    expect(logResult.success).toBe(true);
+    expect(lnResult.content).toBe(logResult.content);
+  });
+
   it('should handle constants in scientific notation', async () => {
     const result = await calculatorExecutor.calculate({ expression: 'pi * 1e3' });
     expect(result.success).toBe(true);
