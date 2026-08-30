@@ -129,6 +129,27 @@ describe('TaskSubtaskProgressTag', () => {
     await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true'));
   });
 
+  it('closes an open subtask menu without refreshing it again', async () => {
+    const onRequestSubtasks = vi.fn().mockResolvedValue(true);
+
+    render(
+      <TaskSubtaskProgressTag
+        progress={{ completed: 0, total: 1 }}
+        subtasks={[{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
+        onRequestSubtasks={onRequestSubtasks}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('0/1'));
+    await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true'));
+
+    fireEvent.click(screen.getByText('0/1'));
+
+    await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('false'));
+    expect(onRequestSubtasks).toHaveBeenCalledTimes(1);
+  });
+
   it('surfaces lazy-load failures and keeps the progress badge retryable', async () => {
     const onRequestSubtasks = vi
       .fn()

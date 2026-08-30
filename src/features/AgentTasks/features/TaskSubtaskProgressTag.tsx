@@ -139,6 +139,11 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       async (event: MouseEvent<HTMLElement>) => {
         event.stopPropagation();
 
+        if (open) {
+          setOpen(false);
+          return;
+        }
+
         if (!onRequestSubtasks || requesting) return;
 
         setRequesting(true);
@@ -151,7 +156,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           setRequesting(false);
         }
       },
-      [onRequestSubtasks, requesting, t],
+      [onRequestSubtasks, open, requesting, t],
     );
 
     const handleOpenChange = useCallback(

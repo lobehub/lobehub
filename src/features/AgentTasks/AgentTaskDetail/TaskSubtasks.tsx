@@ -29,6 +29,7 @@ import TaskTriggerTag from '../features/TaskTriggerTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { styles } from '../shared/style';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import RunSubtasksPreview from './RunSubtasksPreview';
@@ -110,7 +111,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         </span>
       ) : null}
       <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
-        {activeWorkspaceId && (
+        {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
           <AssigneeMemberSelector
             currentUserId={task.assigneeUserId ?? null}
             disabled={isRunning}

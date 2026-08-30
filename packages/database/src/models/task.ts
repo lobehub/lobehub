@@ -575,7 +575,7 @@ export class TaskModel {
   async groupList(
     options: TaskListFilterOptions & {
       excludeStatuses?: string[];
-      groupBy?: 'assignee' | 'member' | 'priority';
+      groupBy?: 'agent' | 'assignee' | 'member' | 'priority';
       groups?: Array<{
         key: string;
         limit?: number;
@@ -621,11 +621,95 @@ export class TaskModel {
 
     let groupQueries: GroupQuery[];
 
-    if (groupBy === 'assignee' || groupBy === 'member') {
+    if (groupBy === 'assignee') {
       const limit = 50;
-      const groupColumn = groupBy === 'assignee' ? tasks.assigneeAgentId : tasks.assigneeUserId;
-      const groupPrefix = `${groupBy}:`;
-      const unassignedKey = `${groupBy}:unassigned`;
+      const assigneeGroupKey = sql<string>`case
+        when ${tasks.assigneeAgentId} is not null then 'assignee:' || ${tasks.assigneeAgentId}
+        when ${tasks.assigneeUserId} is not null then 'assignee:user:' || ${tasks.assigneeUserId}
+        else 'assignee:unassigned'
+      end`;
+      const rankedTasks = this.db
+        .select({
+          ...getTableColumns(tasks),
+          assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+          groupRank:
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+              'group_rank',
+            ),
+        })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .as('ranked_assignee_tasks');
+      const [countResult, rankedTaskRows] = await Promise.all([
+        this.db
+          .select({
+            assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+            count: sql<number>`count(*)`,
+          })
+          .from(tasks)
+          .where(and(...baseConditions))
+          .groupBy(assigneeGroupKey),
+        this.db
+          .select()
+          .from(rankedTasks)
+          .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+          .orderBy(rankedTasks.assigneeGroupKey, rankedTasks.groupRank),
+      ]);
+      const assigneeCounts = new Map(
+        countResult.map((row) => [row.assigneeGroupKey, Number(row.count)]),
+      );
+      const tasksByAssignee = new Map<string, TaskItem[]>();
+      for (const row of rankedTaskRows) {
+        const { assigneeGroupKey: groupKey, groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(groupKey) ?? [];
+        groupTasks.push(task);
+        tasksByAssignee.set(groupKey, groupTasks);
+      }
+
+      // `assignee` is the released hybrid grouping contract: agents take
+      // precedence, member-only tasks get their own user group, and only tasks
+      // with neither assignee are unassigned. New clients use `agent` for the
+      // agent-only board instead of changing this existing API in place.
+      if (!assigneeAgentId && !assigneeCounts.has('assignee:unassigned')) {
+        assigneeCounts.set('assignee:unassigned', 0);
+      }
+
+      groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
+        const isUnassigned = key === 'assignee:unassigned';
+        const isUser = key.startsWith('assignee:user:');
+        const groupAssigneeAgentId =
+          isUnassigned || isUser
+            ? isUnassigned
+              ? null
+              : undefined
+            : key.slice('assignee:'.length);
+        const groupAssigneeUserId = isUser
+          ? key.slice('assignee:user:'.length)
+          : isUnassigned
+            ? null
+            : undefined;
+        const conditions = isUser
+          ? [and(isNull(tasks.assigneeAgentId), eq(tasks.assigneeUserId, groupAssigneeUserId!))!]
+          : isUnassigned
+            ? [and(isNull(tasks.assigneeAgentId), isNull(tasks.assigneeUserId))!]
+            : [eq(tasks.assigneeAgentId, groupAssigneeAgentId!)];
+
+        return {
+          assigneeAgentId: groupAssigneeAgentId,
+          assigneeUserId: groupAssigneeUserId,
+          conditions,
+          key,
+          limit,
+          offset: 0,
+          prefetchedTasks: tasksByAssignee.get(key) ?? [],
+          total,
+        };
+      });
+    } else if (groupBy === 'agent' || groupBy === 'member') {
+      const limit = 50;
+      const groupColumn = groupBy === 'agent' ? tasks.assigneeAgentId : tasks.assigneeUserId;
+      const groupPrefix = groupBy === 'agent' ? 'assignee:' : 'member:';
+      const unassignedKey = `${groupPrefix}unassigned`;
       const assigneeGroupKey = sql<string>`case
         when ${groupColumn} is not null then ${groupPrefix} || ${groupColumn}
         else ${unassignedKey}
@@ -681,7 +765,7 @@ export class TaskModel {
       groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
         const isUnassigned = key === unassignedKey;
         const assigneeId = isUnassigned ? null : key.slice(groupPrefix.length);
-        const groupAssigneeAgentId = groupBy === 'assignee' ? assigneeId : undefined;
+        const groupAssigneeAgentId = groupBy === 'agent' ? assigneeId : undefined;
         const groupAssigneeUserId = groupBy === 'member' ? assigneeId : undefined;
         const conditions = [isUnassigned ? isNull(groupColumn) : eq(groupColumn, assigneeId!)];
 

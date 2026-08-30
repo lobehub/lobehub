@@ -11,6 +11,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
@@ -144,7 +145,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
 
   const assigneeNode = (
     <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
-      {activeWorkspaceId && (
+      {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
         <AssigneeMemberSelector
           currentUserId={task.assigneeUserId}
           disabled={status === 'running'}

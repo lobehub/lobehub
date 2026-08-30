@@ -462,7 +462,7 @@ describe('TaskModel', () => {
   });
 
   describe('groupList', () => {
-    it('should group tasks by assignee and keep an unassigned column', async () => {
+    it('should keep legacy assignee grouping while supporting agent and member boards', async () => {
       const firstAgentId = await createAgent('group-assignee-first');
       const secondAgentId = await createAgent('group-assignee-second');
       const model = new TaskModel(serverDB, userId);
@@ -484,7 +484,7 @@ describe('TaskModel', () => {
 
       const result = await model.groupList({
         excludeStatuses: ['completed', 'canceled'],
-        groupBy: 'assignee',
+        groupBy: 'agent',
       });
 
       expect(result).toHaveLength(3);
@@ -521,9 +521,23 @@ describe('TaskModel', () => {
         'Unassigned task',
       ]);
 
+      const legacyResult = await model.groupList({
+        excludeStatuses: ['completed', 'canceled'],
+        groupBy: 'assignee',
+      });
+      expect(legacyResult.find((group) => group.key === `assignee:${firstAgentId}`)?.total).toBe(2);
+      expect(legacyResult.find((group) => group.key === `assignee:${secondAgentId}`)?.total).toBe(
+        1,
+      );
+      const legacyMember = legacyResult.find((group) => group.key === `assignee:user:${userId2}`);
+      expect(legacyMember?.assigneeUserId).toBe(userId2);
+      expect(legacyMember?.tasks.map((task) => task.instruction)).toEqual(['Member assigned task']);
+      const legacyUnassigned = legacyResult.find((group) => group.key === 'assignee:unassigned');
+      expect(legacyUnassigned?.tasks.map((task) => task.instruction)).toEqual(['Unassigned task']);
+
       const agentScopedResult = await model.groupList({
         assigneeAgentId: firstAgentId,
-        groupBy: 'assignee',
+        groupBy: 'agent',
       });
       expect(agentScopedResult.map((group) => group.key)).toEqual([`assignee:${firstAgentId}`]);
     });

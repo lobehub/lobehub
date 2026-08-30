@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgentTaskItem from './AgentTaskItem';
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: 'workspace-1' as string | undefined,
   fetchTaskDetail: vi.fn(),
   navigate: vi.fn(),
   taskDetailMap: {} as Record<string, unknown>,
@@ -40,7 +41,7 @@ vi.mock('@/store/task', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  useActiveWorkspaceId: () => 'workspace-1',
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
 vi.mock('./AssigneeAgentSelector', () => ({
@@ -111,6 +112,7 @@ const createTask = (assigneeAgentId?: string | null) =>
 
 describe('AgentTaskItem', () => {
   beforeEach(() => {
+    mocks.activeWorkspaceId = 'workspace-1';
     mocks.fetchTaskDetail.mockReset();
     mocks.navigate.mockClear();
     mocks.taskDetailMap = {};
@@ -152,6 +154,15 @@ describe('AgentTaskItem', () => {
     );
 
     expect(container.querySelector('[data-tooltip="Ryan"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).toBeInTheDocument();
+  });
+
+  it('keeps an existing member assignee visible in personal mode', () => {
+    mocks.activeWorkspaceId = undefined;
+    const { container } = render(
+      <AgentTaskItem task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1' }} />,
+    );
+
     expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).toBeInTheDocument();
   });
 

@@ -146,7 +146,7 @@ const groupListSchema = z
     assigneeAgentId: z.string().optional(),
     automated: z.boolean().optional(),
     excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
-    groupBy: z.enum(['assignee', 'member', 'priority']).optional(),
+    groupBy: z.enum(['agent', 'assignee', 'member', 'priority']).optional(),
     groups: z
       .array(
         z.object({
