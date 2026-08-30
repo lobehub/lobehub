@@ -46,6 +46,7 @@ export enum ModelProvider {
   NewAPI = 'newapi',
   Novita = 'novita',
   Nvidia = 'nvidia',
+  OfoxAI = 'ofoxai',
   Ollama = 'ollama',
   OllamaCloud = 'ollamacloud',
   OpenAI = 'openai',
