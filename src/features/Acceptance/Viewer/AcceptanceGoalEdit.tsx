@@ -10,12 +10,13 @@ import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
+import { canReviewAcceptance } from './visibility';
 
 const AcceptanceGoalEdit = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  if (!data?.isOwner) return null;
+  if (!data || !canReviewAcceptance(data)) return null;
 
   const handleEdit = async () => {
     const { openGoalModal } =

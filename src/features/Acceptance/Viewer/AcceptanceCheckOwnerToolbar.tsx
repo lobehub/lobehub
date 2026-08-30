@@ -14,6 +14,7 @@ import { openAddCheckModal } from './AddCheckModal';
 import { hasVisualEvidence } from './CheckList';
 import { countAwaitingPrediction, summarizePredictRound } from './predictRound';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
+import { canReviewAcceptance } from './visibility';
 
 /** How long to wait between bundle re-fetches while the batch runs. */
 const PREDICT_POLL_INTERVAL_MS = 4000;
@@ -25,7 +26,7 @@ const AcceptanceCheckOwnerToolbar = () => {
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [predicting, setPredicting] = useState(false);
-  if (!data?.isOwner) return null;
+  if (!data || !canReviewAcceptance(data)) return null;
 
   const standing = data.acceptance.config?.checklist ?? [];
   const predictableCount = data.checks.filter(
