@@ -312,6 +312,61 @@ describe('ChatPluginAction', () => {
       });
     });
 
+    it('resolves the effective agent from subAgentId for group member tool calls', async () => {
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);
+
+      const { result } = renderHook(() => useChatStore());
+      const messageId = 'group-tool-message-id';
+
+      act(() => {
+        const rootOperationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: 'supervisor-1',
+            groupId: 'group-1',
+            scope: 'group',
+            subAgentId: 'member-1',
+            topicId: 'topic-1',
+          },
+        }).operationId;
+
+        const toolOperationId = result.current.startOperation({
+          type: 'executeToolCall',
+          context: { messageId },
+          parentOperationId: rootOperationId,
+        }).operationId;
+
+        result.current.associateMessageWithOperation(messageId, toolOperationId);
+      });
+
+      let capturedContext: any;
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        async (_id, _api, _params, ctx) => {
+          capturedContext = ctx;
+          return { success: true };
+        },
+      );
+
+      const payload = {
+        identifier: 'lobe-remote-device',
+        apiName: 'listOnlineDevices',
+        arguments: '{}',
+        type: 'builtin',
+      } as ChatToolPayload;
+
+      await act(async () => {
+        await result.current.invokeBuiltinTool(messageId, payload);
+      });
+
+      // The scope-sensitive executor must resolve the sub-agent (member-1),
+      // not the supervisor, so it lists/activates the member's device pool.
+      expect(capturedContext).toMatchObject({
+        agentId: 'member-1',
+        groupId: 'group-1',
+      });
+    });
+
     it('should pass tool call id and explicit source user message id to Tool Store executor', async () => {
       const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
       vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);

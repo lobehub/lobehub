@@ -78,6 +78,10 @@ export class ClientToolTransport implements ToolTransport {
         groupId: opContext.groupId,
         scope: opContext.scope,
         sourceMessageId,
+        // Thread the member id through so the tool context (and scope-sensitive
+        // executors like lobe-remote-device) resolves the sub-agent, not the
+        // supervisor.
+        subAgentId: opContext.subAgentId,
         threadId: opContext.threadId,
         topicId: opContext.topicId,
         viewedTask: opContext.viewedTask,

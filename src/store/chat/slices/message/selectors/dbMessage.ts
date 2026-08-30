@@ -3,6 +3,7 @@ import {
   extractTodosFromMessages,
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import {
   type StepActivatedSkill,
   type StepContextTodos,
@@ -168,7 +169,8 @@ const inboxActiveTopicDbMessages = (state: ChatStoreState) => {
 
 /**
  * Accumulate activated tool identifiers from all lobe-activator messages.
- *
+ * (lobe-remote-device's activateDevice also reports activations through the
+ * same `state.activatedTools` contract, so its tool messages count too.)
  * Unlike todos (which take the latest snapshot), activated tools are
  * cumulative — once a tool is activated it stays active for the rest
  * of the conversation.
@@ -184,7 +186,8 @@ export const selectActivatedToolIdsFromMessages = (
   for (const msg of messages) {
     if (
       msg.role === 'tool' &&
-      msg.plugin?.identifier === LobeActivatorIdentifier &&
+      (msg.plugin?.identifier === LobeActivatorIdentifier ||
+        msg.plugin?.identifier === RemoteDeviceIdentifier) &&
       msg.pluginState?.activatedTools
     ) {
       const activatedTools = msg.pluginState.activatedTools as Array<{ identifier?: string }>;
@@ -236,9 +239,8 @@ export const selectActivatedSkillsFromMessages = (
  * @param messages - Array of chat messages to search
  * @returns The latest todos state or undefined if not found
  */
-export const selectTodosFromMessages = (
-  messages: UIChatMessage[],
-): StepContextTodos | undefined => extractTodosFromMessages(messages);
+export const selectTodosFromMessages = (messages: UIChatMessage[]): StepContextTodos | undefined =>
+  extractTodosFromMessages(messages);
 
 /**
  * Select todos from the current agent turn only — messages after the last

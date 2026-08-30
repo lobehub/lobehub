@@ -146,3 +146,56 @@ describe('ClientToolTransport', () => {
     expect(failOperation).toHaveBeenCalled();
   });
 });
+
+it('threads the sub-agent id into the tool operation context', async () => {
+  const store = {
+    completeOperation: vi.fn(),
+    dbMessagesMap: {
+      'message-key': [{ id: 'assistant-message', parentId: 'user-message', role: 'assistant' }],
+    },
+    failOperation: vi.fn(),
+    internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({ success: true }),
+    onOperationCancel: vi.fn(),
+    operations: {
+      'root-operation': {
+        context: {
+          agentId: 'supervisor-1',
+          groupId: 'group-1',
+          messageId: 'assistant-message',
+          scope: 'group',
+          subAgentId: 'member-1',
+        },
+      },
+    },
+    optimisticCreateMessage: vi.fn().mockResolvedValue({ id: 'tool-message' }),
+    startOperation: vi.fn(() => ({ operationId: 'child-operation-1' })),
+    updateOperationMetadata: vi.fn(),
+  } as unknown as ChatStore;
+  const createToolMessageForOperation = vi.fn().mockResolvedValue({ id: 'tool-message' });
+  const messages = { createToolMessageForOperation } as unknown as ClientMessageTransport;
+  const transport = new ClientToolTransport(() => store, 'message-key', 'root-operation', messages);
+  const call: ChatToolPayload = {
+    apiName: 'run',
+    arguments: '{}',
+    id: 'tool-call',
+    identifier: 'client-tool',
+    type: 'default',
+  };
+  const context = {
+    callIndex: 1,
+    effectiveManifestMap: {},
+    mode: 'single',
+    operationId: 'root-operation',
+    parentMessageId: 'assistant-message',
+    parsedArgs: {},
+    state: {},
+    stepIndex: 0,
+    toolName: 'client-tool/run',
+  } as ToolRunContext;
+
+  await transport.run(call, context);
+
+  const startContext = vi.mocked(store.startOperation).mock.calls[0]?.[0].context;
+  expect(startContext?.agentId).toBe('supervisor-1');
+  expect(startContext?.subAgentId).toBe('member-1');
+});

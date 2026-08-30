@@ -105,6 +105,14 @@ export class PluginTypesActionImpl {
       let groupId = operation?.context?.groupId ?? rootRuntimeOperationContext?.groupId;
       const documentId = operation?.context?.documentId ?? rootRuntimeOperationContext?.documentId;
       const scope = operation?.context?.scope ?? rootRuntimeOperationContext?.scope;
+      // Group-agent member tool calls carry the supervisor as agentId; the
+      // effective agent is the sub-agent (mirrors ClientToolTransport's
+      // effectiveAgentId). Scope-sensitive executors (lobe-remote-device)
+      // resolve the device pool from this id, so it must be the member's.
+      const subAgentId = operation?.context?.subAgentId ?? rootRuntimeOperationContext?.subAgentId;
+      if (subAgentId && scope !== 'sub_agent') {
+        agentId = subAgentId;
+      }
       const viewedTask = operation?.context?.viewedTask ?? rootRuntimeOperationContext?.viewedTask;
       const taskId = viewedTask?.type === 'detail' ? viewedTask.taskId : undefined;
       const topicId = operation?.context?.topicId ?? rootRuntimeOperationContext?.topicId;

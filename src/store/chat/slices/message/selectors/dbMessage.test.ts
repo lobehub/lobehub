@@ -1,7 +1,11 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { selectCurrentTurnTodosFromMessages, selectTodosFromMessages } from './dbMessage';
+import {
+  selectActivatedToolIdsFromMessages,
+  selectCurrentTurnTodosFromMessages,
+  selectTodosFromMessages,
+} from './dbMessage';
 
 describe('selectTodosFromMessages', () => {
   const createLobeAgentToolMessage = (todos: {
@@ -315,5 +319,64 @@ describe('selectCurrentTurnTodosFromMessages', () => {
     const result = selectCurrentTurnTodosFromMessages(messages);
 
     expect(result?.items[0].text).toBe('greeting task');
+  });
+});
+
+describe('selectActivatedToolIdsFromMessages', () => {
+  const activatorMessage = (activatedTools: Array<{ identifier: string }>): UIChatMessage =>
+    ({
+      id: 'tool-activator',
+      role: 'tool',
+      content: 'activated',
+      plugin: { identifier: 'lobe-activator', name: 'Activator', type: 'builtin' },
+      pluginState: { activatedTools },
+    }) as unknown as UIChatMessage;
+
+  const remoteDeviceMessage = (activatedTools: Array<{ identifier: string }>): UIChatMessage =>
+    ({
+      id: 'tool-remote-device',
+      role: 'tool',
+      content: 'activated',
+      plugin: { identifier: 'lobe-remote-device', name: 'Remote Device', type: 'builtin' },
+      pluginState: { activatedTools },
+    }) as unknown as UIChatMessage;
+
+  it('collects activations from lobe-activator tool messages', () => {
+    const messages: UIChatMessage[] = [activatorMessage([{ identifier: 'lobe-web-browsing' }])];
+
+    expect(selectActivatedToolIdsFromMessages(messages)).toEqual(['lobe-web-browsing']);
+  });
+
+  it('collects activations reported by lobe-remote-device activateDevice', () => {
+    const messages: UIChatMessage[] = [remoteDeviceMessage([{ identifier: 'lobe-local-system' }])];
+
+    expect(selectActivatedToolIdsFromMessages(messages)).toEqual(['lobe-local-system']);
+  });
+
+  it('dedupes activations across both sources', () => {
+    const messages: UIChatMessage[] = [
+      activatorMessage([{ identifier: 'lobe-web-browsing' }]),
+      remoteDeviceMessage([
+        { identifier: 'lobe-local-system' },
+        { identifier: 'lobe-web-browsing' },
+      ]),
+    ];
+
+    const result = selectActivatedToolIdsFromMessages(messages);
+    expect(result).toEqual(expect.arrayContaining(['lobe-web-browsing', 'lobe-local-system']));
+    expect(new Set(result).size).toBe(2);
+  });
+
+  it('ignores tool messages without activatedTools state', () => {
+    const messages: UIChatMessage[] = [
+      {
+        id: 't1',
+        role: 'tool',
+        content: 'x',
+        plugin: { identifier: 'lobe-activator' },
+      } as UIChatMessage,
+    ];
+
+    expect(selectActivatedToolIdsFromMessages(messages)).toBeUndefined();
   });
 });
