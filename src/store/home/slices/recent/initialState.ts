@@ -1,4 +1,4 @@
-import { type RecentItem } from '@/server/routers/lambda/recent';
+import type { RecentItem } from '@lobechat/types';
 
 export interface RecentState {
   allRecentsDrawerOpen: boolean;

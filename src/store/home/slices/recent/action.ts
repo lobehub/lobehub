@@ -1,10 +1,10 @@
+import type { RecentItem } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
-import { type RecentItem } from '@/server/routers/lambda/recent';
 import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
