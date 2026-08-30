@@ -205,7 +205,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         draftStorageKey,
         JSON.stringify({
           assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
-          assigneeUserId: lockAssignee ? undefined : assigneeUserId,
+          // `lockAssignee` locks only the scoped Agent. The responsible
+          // member remains an independent draft field and must survive reloads.
+          assigneeUserId,
           markdown,
           priority,
           visibility,

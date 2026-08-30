@@ -10,6 +10,7 @@ import AgentTaskItem from './AgentTaskItem';
 const mocks = vi.hoisted(() => ({
   fetchTaskDetail: vi.fn(),
   navigate: vi.fn(),
+  taskDetailMap: {} as Record<string, unknown>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -34,7 +35,7 @@ vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) =>
     selector({
       fetchTaskDetail: mocks.fetchTaskDetail,
-      taskDetailMap: {},
+      taskDetailMap: mocks.taskDetailMap,
     }),
 }));
 
@@ -112,6 +113,7 @@ describe('AgentTaskItem', () => {
   beforeEach(() => {
     mocks.fetchTaskDetail.mockReset();
     mocks.navigate.mockClear();
+    mocks.taskDetailMap = {};
   });
 
   afterEach(() => {
@@ -201,6 +203,28 @@ describe('AgentTaskItem', () => {
     );
 
     expect(mocks.fetchTaskDetail).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('subtask-progress'));
+
+    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('T-22'));
+  });
+
+  it('revalidates subtask navigation when an earlier detail is cached', async () => {
+    mocks.taskDetailMap = {
+      'T-22': { subtasks: [{ identifier: 'T-stale', status: 'completed' }] },
+    };
+    mocks.fetchTaskDetail.mockResolvedValue({
+      subtasks: [{ identifier: 'T-current', status: 'backlog' }],
+    });
+
+    render(
+      <AgentTaskItem
+        task={{
+          ...createTask('agt_parent'),
+          subtaskProgress: { completed: 0, total: 1 },
+        }}
+      />,
+    );
 
     fireEvent.click(screen.getByTestId('subtask-progress'));
 

@@ -95,13 +95,17 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
     }, [subtasks]);
 
     const data = useMemo(() => {
-      const total = flattenedSubtasks.length || progress?.total || 0;
+      // The list summary is refreshed with the list query and is therefore
+      // newer than a task detail tree that may have been opened earlier.
+      const total = progress?.total ?? flattenedSubtasks.length;
       if (total === 0) return undefined;
 
       const completed =
-        flattenedSubtasks.length > 0
-          ? flattenedSubtasks.filter((item) => item.task.status === 'completed').length
-          : (progress?.completed ?? 0);
+        progress !== undefined
+          ? progress.completed
+          : flattenedSubtasks.length > 0
+            ? flattenedSubtasks.filter((item) => item.task.status === 'completed').length
+            : 0;
 
       return {
         text: `${completed}/${total}`,
@@ -135,7 +139,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       async (event: MouseEvent<HTMLElement>) => {
         event.stopPropagation();
 
-        if (hasDropdown || !onRequestSubtasks || requesting) return;
+        if (!onRequestSubtasks || requesting) return;
 
         setRequesting(true);
         try {
@@ -147,7 +151,16 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           setRequesting(false);
         }
       },
-      [hasDropdown, onRequestSubtasks, requesting, t],
+      [onRequestSubtasks, requesting, t],
+    );
+
+    const handleOpenChange = useCallback(
+      (nextOpen: boolean) => {
+        // List rows own an async refresh step and open only after it succeeds.
+        // Static detail-only menus can keep the dropdown's native behavior.
+        if (!nextOpen || !onRequestSubtasks) setOpen(nextOpen);
+      },
+      [onRequestSubtasks],
     );
 
     if (!data) return null;
@@ -165,6 +178,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           cursor: hasDropdown || onRequestSubtasks ? 'pointer' : undefined,
         }}
         onClick={hasDropdown || onRequestSubtasks ? handleTagClick : undefined}
+        onContextMenu={onRequestSubtasks ? handleTagClick : undefined}
       >
         <Progress
           percent={data.percent}
@@ -182,7 +196,12 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
     if (!hasDropdown) return tag;
 
     return (
-      <DropdownMenu items={navigationItems} open={open} trigger={'both'} onOpenChange={setOpen}>
+      <DropdownMenu
+        items={navigationItems}
+        open={open}
+        trigger={'both'}
+        onOpenChange={handleOpenChange}
+      >
         {tag}
       </DropdownMenu>
     );

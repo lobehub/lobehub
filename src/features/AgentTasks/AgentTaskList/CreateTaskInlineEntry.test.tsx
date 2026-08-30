@@ -239,6 +239,20 @@ describe('CreateTaskInlineEntry', () => {
     );
   });
 
+  it('persists the responsible member when the scoped agent is locked', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry lockAssignee agentId="agent-locked" variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('select-member'));
+
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:agent-locked') || '{}',
+      );
+      expect(draft).toMatchObject({ assigneeUserId: 'user-1' });
+    });
+  });
+
   it('drops an incompatible restored member when the assigned agent is private', async () => {
     localStorage.setItem(
       'lobehub:task-create-draft:all',

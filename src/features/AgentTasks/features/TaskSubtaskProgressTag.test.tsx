@@ -78,6 +78,23 @@ describe('TaskSubtaskProgressTag', () => {
     expect(screen.getByText('2/3')).toBeInTheDocument();
   });
 
+  it('prefers the refreshed list summary over an older cached detail tree', async () => {
+    const onRequestSubtasks = vi.fn().mockResolvedValue(true);
+
+    render(
+      <TaskSubtaskProgressTag
+        progress={{ completed: 1, total: 2 }}
+        subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
+        onRequestSubtasks={onRequestSubtasks}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('1/2'));
+    await waitFor(() => expect(onRequestSubtasks).toHaveBeenCalledTimes(1));
+  });
+
   it('loads subtask navigation on demand without opening the parent task', async () => {
     const onParentClick = vi.fn();
     const onRequestSubtasks = vi.fn().mockResolvedValue(true);

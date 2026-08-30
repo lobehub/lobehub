@@ -77,11 +77,9 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
   }, [navigate, routeScope, task.assigneeAgentId, task.identifier]);
 
   const handleRequestSubtasks = useCallback(async () => {
-    if (taskDetail?.subtasks?.length) return true;
-
     const detail = await fetchTaskDetail(task.identifier);
     return Boolean(detail.subtasks?.length);
-  }, [fetchTaskDetail, task.identifier, taskDetail?.subtasks]);
+  }, [fetchTaskDetail, task.identifier]);
 
   const handleSubtaskClick = useCallback(
     (identifier: string, assigneeAgentId?: string) => {

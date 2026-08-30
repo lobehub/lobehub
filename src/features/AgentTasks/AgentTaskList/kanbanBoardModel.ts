@@ -121,7 +121,6 @@ export const canDropTaskIntoKanbanColumn = (
 
   const targetAssigneeUserId = column.groupMeta.assigneeUserId;
   if (!targetAssigneeUserId) return true;
-  if (task.automationMode) return false;
 
   return task.visibility !== 'private' || task.createdByUserId === targetAssigneeUserId;
 };

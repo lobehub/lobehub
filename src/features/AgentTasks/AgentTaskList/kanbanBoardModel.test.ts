@@ -148,7 +148,7 @@ describe('kanbanBoardModel', () => {
     ).toBeUndefined();
   });
 
-  it('rejects member-column drops for automated tasks', () => {
+  it('allows automated tasks to move between member columns', () => {
     const columns = buildKanbanColumns(
       [
         group('member:unassigned', [], undefined, null),
@@ -160,7 +160,7 @@ describe('kanbanBoardModel', () => {
     const memberColumn = columns.find((column) => column.key === 'member:user-1')!;
     const automatedTask = task('automated', null, null, { automationMode: 'schedule' });
 
-    expect(canDropTaskIntoKanbanColumn(automatedTask, 'member', memberColumn)).toBe(false);
+    expect(canDropTaskIntoKanbanColumn(automatedTask, 'member', memberColumn)).toBe(true);
     expect(canDropTaskIntoKanbanColumn(automatedTask, 'member', unassignedColumn)).toBe(true);
   });
 
