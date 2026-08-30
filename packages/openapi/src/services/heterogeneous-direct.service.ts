@@ -435,8 +435,22 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model:
         },
         transform(event, controller) {
           if (finalized) return;
-          if (event.type === 'text' || event.type === 'reasoning') {
-            const isThinking = event.type === 'reasoning';
+          const part =
+            (event.type === 'content_part' || event.type === 'reasoning_part') &&
+            isRecord(event.data) &&
+            event.data.partType === 'text'
+              ? event.data
+              : undefined;
+          const content =
+            event.type === 'text' || event.type === 'reasoning'
+              ? typeof event.data === 'string'
+                ? event.data
+                : undefined
+              : typeof part?.content === 'string'
+                ? part.content
+                : undefined;
+          if (content) {
+            const isThinking = event.type === 'reasoning' || event.type === 'reasoning_part';
             let index = isThinking ? thinkingIndex : textIndex;
             if (index === undefined) {
               closeTextBlocks(controller);
@@ -456,16 +470,21 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model:
             controller.enqueue(
               sse('content_block_delta', {
                 delta: isThinking
-                  ? { thinking: String(event.data), type: 'thinking_delta' }
-                  : { text: String(event.data), type: 'text_delta' },
+                  ? { thinking: content, type: 'thinking_delta' }
+                  : { text: content, type: 'text_delta' },
                 index,
                 type: 'content_block_delta',
               }),
             );
-          } else if (event.type === 'reasoning_signature' && thinkingIndex !== undefined) {
+          } else if (
+            event.type === 'reasoning_signature' &&
+            thinkingIndex !== undefined &&
+            typeof event.data === 'string' &&
+            event.data
+          ) {
             controller.enqueue(
               sse('content_block_delta', {
-                delta: { signature: String(event.data), type: 'signature_delta' },
+                delta: { signature: event.data, type: 'signature_delta' },
                 index: thinkingIndex,
                 type: 'content_block_delta',
               }),

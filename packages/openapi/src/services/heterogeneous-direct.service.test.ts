@@ -449,6 +449,61 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(output).toContain('"stop_reason":"tool_use"');
   });
 
+  it('encodes Gemini textual part events through the Anthropic relay', async () => {
+    const events = parseSseEvents(
+      await readText(
+        anthropicSse(
+          protocolStream([
+            {
+              data: { content: 'thinking', inReasoning: true, partType: 'text' },
+              type: 'reasoning_part',
+            },
+            { data: { content: 'answer', partType: 'text' }, type: 'content_part' },
+            {
+              data: { content: 'base64-image', mimeType: 'image/png', partType: 'image' },
+              type: 'content_part',
+            },
+            { data: 'STOP', type: 'stop' },
+            { data: { totalInputTokens: 7, totalOutputTokens: 4 }, type: 'usage' },
+          ]),
+        ),
+      ),
+    );
+    const deltas = events
+      .filter(({ type }) => type === 'content_block_delta')
+      .map(({ data }) => data.delta);
+
+    expect(deltas).toEqual([
+      { thinking: 'thinking', type: 'thinking_delta' },
+      { text: 'answer', type: 'text_delta' },
+    ]);
+    expect(events.at(-2)?.data).toMatchObject({
+      delta: { stop_reason: 'end_turn' },
+      usage: { input_tokens: 7, output_tokens: 4 },
+    });
+    expect(events.at(-1)?.type).toBe('message_stop');
+  });
+
+  it('does not stringify null Anthropic text and reasoning chunks', async () => {
+    const events = parseSseEvents(
+      await readText(
+        anthropicSse(
+          protocolStream([
+            { data: 'answer', type: 'text' },
+            { data: null, type: 'text' },
+            { data: null, type: 'reasoning' },
+            { data: null, type: 'reasoning_signature' },
+          ]),
+        ),
+      ),
+    );
+    const deltas = events
+      .filter(({ type }) => type === 'content_block_delta')
+      .map(({ data }) => data.delta);
+
+    expect(deltas).toEqual([{ text: 'answer', type: 'text_delta' }]);
+  });
+
   it('finalizes Anthropic stop, usage, and message_stop exactly once', async () => {
     const output = await readText(
       anthropicSse(
