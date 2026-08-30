@@ -6,6 +6,7 @@ const mockGetTenantAccessToken = vi.hoisted(() => vi.fn().mockResolvedValue('tok
 
 vi.mock('@lobechat/chat-adapter-feishu', () => ({
   createLarkAdapter: mockCreateLarkAdapter,
+  decodeLarkThreadId: (id: string) => ({ chatId: id.split(':').pop() }),
   downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
   LarkApiClient: vi.fn().mockImplementation(() => ({
     getTenantAccessToken: mockGetTenantAccessToken,
@@ -194,5 +195,37 @@ describe('FeishuWebhookClient.extractFiles', () => {
     expect(result).toEqual([
       { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
     ]);
+  });
+});
+
+describe('FeishuWebhookClient.getMessenger reaction emoji mapping', () => {
+  // Feishu reactions take `emoji_type` identifiers (Get/THINKING/OnIt),
+  // not the Unicode emoji other platforms use — passing 👀 raw makes the API
+  // fail with 231001 on every status swap.
+  const createClient = () =>
+    new FeishuClientFactory().createClient(
+      {
+        applicationId: 'cli_test_app',
+        credentials: { appSecret: 'sec', encryptKey: 'enc' },
+        platform: 'feishu',
+        settings: {},
+      },
+      { appUrl: 'https://example.com' },
+    );
+
+  it('maps status emojis to feishu emoji_type identifiers and skips unknown ones', async () => {
+    const mockAddReaction = vi.fn().mockResolvedValue(undefined);
+    const { LarkApiClient } = await import('@lobechat/chat-adapter-feishu');
+    vi.mocked(LarkApiClient).mockImplementation(() => ({ addReaction: mockAddReaction }) as any);
+
+    const messenger = createClient().getMessenger('feishu:group:oc_g');
+    await messenger.replaceReaction!('om_1', '👀', '🤔');
+    await messenger.replaceReaction!('om_1', '🤔', '⚡');
+    // Unknown emoji (not in the status-const map) — skipped, no API call.
+    await messenger.replaceReaction!('om_1', '⚡', '🎉');
+
+    expect(mockAddReaction).toHaveBeenCalledTimes(2);
+    expect(mockAddReaction).toHaveBeenNthCalledWith(1, 'om_1', 'THINKING');
+    expect(mockAddReaction).toHaveBeenNthCalledWith(2, 'om_1', 'OnIt');
   });
 });
