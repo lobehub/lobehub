@@ -9,6 +9,7 @@ import onboardingTaskRecommendationApp from './onboarding-task-recommendation';
 import onboardingUnderstandingApp from './onboarding-understanding';
 import taskApp from './task';
 import topicAutoSummaryApp from './topic-auto-summary';
+import trashApp from './trash';
 import verifyApp from './verify';
 
 const app = new Hono().basePath('/api/workflows');
@@ -22,6 +23,7 @@ app.route('/onboarding/understanding', onboardingUnderstandingApp);
 app.route('/onboarding/task-recommendations', onboardingTaskRecommendationApp);
 app.route('/task', taskApp);
 app.route('/topic-auto-summary', topicAutoSummaryApp);
+app.route('/trash', trashApp);
 app.route('/verify', verifyApp);
 
 export default app;

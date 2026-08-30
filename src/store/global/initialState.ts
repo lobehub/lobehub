@@ -96,6 +96,7 @@ export enum SettingsTabs {
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
+  Trash = 'trash',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',

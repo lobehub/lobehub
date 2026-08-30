@@ -30,6 +30,7 @@ export * from './theme';
 export * from './threadDrag';
 export * from './topicDrag';
 export * from './trace';
+export * from './trash';
 export * from './url';
 export * from './user';
 export * from './userMemory';
