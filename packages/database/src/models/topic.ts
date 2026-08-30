@@ -1901,6 +1901,7 @@ export class TopicModel {
         ? {
             ...(current?.operationId === params.continuationOperationId ? current : {}),
             assistantMessageId: params.assistantMessageId,
+            heteroType: null,
             operationId: params.continuationOperationId,
             scope: params.scope ?? undefined,
             startedAt: params.startedAt,

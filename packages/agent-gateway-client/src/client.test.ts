@@ -355,6 +355,7 @@ describe('AgentStreamClient', () => {
       ws.simulateMessage({ type: 'session_complete' });
 
       expect(onComplete).toHaveBeenCalledOnce();
+      expect(onComplete).toHaveBeenCalledWith({ source: 'raw_session_complete' });
       expect(client.connectionStatus).toBe('disconnected');
     });
   });
@@ -434,6 +435,7 @@ describe('AgentStreamClient', () => {
       ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
 
       expect(onComplete).toHaveBeenCalledOnce();
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
       expect(client.connectionStatus).toBe('disconnected');
     });
 

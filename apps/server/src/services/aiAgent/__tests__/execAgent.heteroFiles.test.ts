@@ -458,14 +458,21 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       type: 'claude-code',
     } as any;
 
-    await service.execAgent({
+    const result = await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Use the selected Claude Code model',
     });
 
+    expect(result.heteroType).toBe('claude-code');
     expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
         args: ['--model', 'opus', '--effort', 'high'],
+      }),
+    );
+    expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        runningOperation: expect.objectContaining({ heteroType: 'claude-code' }),
       }),
     );
   });

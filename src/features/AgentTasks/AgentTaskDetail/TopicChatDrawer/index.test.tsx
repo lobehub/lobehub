@@ -275,7 +275,11 @@ describe('TopicChatDrawer', () => {
   it('reconnects a running topic against the drawer agent', () => {
     mocks.taskState.taskDetailMap['T-1'].activities[0] = {
       id: 'topic-1',
-      runningOperation: { assistantMessageId: 'ast-1', operationId: 'op-1' },
+      runningOperation: {
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'op-1',
+      },
       status: 'running',
       time: '2026-04-29T00:00:00.000Z',
       title: 'Topic 1',
@@ -286,7 +290,7 @@ describe('TopicChatDrawer', () => {
 
     expect(useGatewayReconnect).toHaveBeenCalledWith(
       'topic-1',
-      expect.objectContaining({ operationId: 'op-1' }),
+      expect.objectContaining({ heteroType: 'claude-code', operationId: 'op-1' }),
       'agt_assignee',
     );
   });
