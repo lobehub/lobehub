@@ -78,10 +78,12 @@ describe('TaskSubtaskProgressTag', () => {
     expect(screen.getByText('2/3')).toBeInTheDocument();
   });
 
-  it('prefers the refreshed list summary over an older cached detail tree', async () => {
-    const onRequestSubtasks = vi.fn().mockResolvedValue(true);
+  it('uses the list summary until detail is refreshed, then yields to a newer list summary', async () => {
+    const onRequestSubtasks = vi
+      .fn()
+      .mockResolvedValue([{ identifier: 'T-current', name: 'Current child', status: 'completed' }]);
 
-    render(
+    const { rerender } = render(
       <TaskSubtaskProgressTag
         progress={{ completed: 1, total: 2 }}
         subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
@@ -92,15 +94,28 @@ describe('TaskSubtaskProgressTag', () => {
 
     expect(screen.getByText('1/2')).toBeInTheDocument();
     fireEvent.click(screen.getByText('1/2'));
-    await waitFor(() => expect(onRequestSubtasks).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('1/1')).toBeInTheDocument());
+
+    rerender(
+      <TaskSubtaskProgressTag
+        progress={{ completed: 2, total: 3 }}
+        subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
+        onRequestSubtasks={onRequestSubtasks}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('2/3')).toBeInTheDocument();
   });
 
   it('loads subtask navigation on demand without opening the parent task', async () => {
     const onParentClick = vi.fn();
-    const onRequestSubtasks = vi.fn().mockResolvedValue(true);
+    const onRequestSubtasks = vi
+      .fn()
+      .mockResolvedValue([{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
     const onSubtaskClick = vi.fn();
 
-    const { rerender } = render(
+    render(
       <div onClick={onParentClick}>
         <TaskSubtaskProgressTag
           progress={{ completed: 0, total: 1 }}
@@ -114,23 +129,13 @@ describe('TaskSubtaskProgressTag', () => {
 
     expect(onParentClick).not.toHaveBeenCalled();
     await waitFor(() => expect(onRequestSubtasks).toHaveBeenCalledTimes(1));
-
-    rerender(
-      <div onClick={onParentClick}>
-        <TaskSubtaskProgressTag
-          progress={{ completed: 0, total: 1 }}
-          subtasks={[{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
-          onRequestSubtasks={onRequestSubtasks}
-          onSubtaskClick={onSubtaskClick}
-        />
-      </div>,
-    );
-
     await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true'));
   });
 
   it('closes an open subtask menu without refreshing it again', async () => {
-    const onRequestSubtasks = vi.fn().mockResolvedValue(true);
+    const onRequestSubtasks = vi
+      .fn()
+      .mockResolvedValue([{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
 
     render(
       <TaskSubtaskProgressTag
@@ -150,11 +155,29 @@ describe('TaskSubtaskProgressTag', () => {
     expect(onRequestSubtasks).toHaveBeenCalledTimes(1);
   });
 
+  it('removes a stale progress badge when the refreshed task has no subtasks', async () => {
+    const onRequestSubtasks = vi.fn().mockResolvedValue([]);
+
+    render(
+      <TaskSubtaskProgressTag
+        progress={{ completed: 0, total: 1 }}
+        subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
+        onRequestSubtasks={onRequestSubtasks}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('0/1'));
+
+    await waitFor(() => expect(screen.queryByText('0/1')).not.toBeInTheDocument());
+    expect(onRequestSubtasks).toHaveBeenCalledTimes(1);
+  });
+
   it('surfaces lazy-load failures and keeps the progress badge retryable', async () => {
     const onRequestSubtasks = vi
       .fn()
       .mockRejectedValueOnce(new Error('network error'))
-      .mockResolvedValueOnce(false);
+      .mockResolvedValueOnce([]);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(

@@ -79,7 +79,7 @@ vi.mock('./TaskSubtaskProgressTag', () => ({
     onRequestSubtasks,
     progress,
   }: {
-    onRequestSubtasks?: () => Promise<boolean>;
+    onRequestSubtasks?: () => Promise<unknown[]>;
     progress?: { completed: number; total: number };
   }) =>
     progress ? (

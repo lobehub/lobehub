@@ -78,7 +78,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
 
 interface TaskSubtaskProgressTagProps {
   currentIdentifier?: string;
-  onRequestSubtasks?: () => Promise<boolean>;
+  onRequestSubtasks?: () => Promise<TaskDetailSubtask[]>;
   onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
   progress?: TaskSubtaskProgress;
   subtasks?: TaskDetailSubtask[];
@@ -88,21 +88,31 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
   ({ subtasks, currentIdentifier, onRequestSubtasks, onSubtaskClick, progress }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
+    const refreshSourceKey = `${currentIdentifier ?? ''}:${progress?.completed ?? ''}:${progress?.total ?? ''}`;
+    const [refreshedResult, setRefreshedResult] = useState<{
+      sourceKey: string;
+      subtasks: TaskDetailSubtask[];
+    }>();
     const [requesting, setRequesting] = useState(false);
+    const refreshedSubtasks =
+      refreshedResult?.sourceKey === refreshSourceKey ? refreshedResult.subtasks : undefined;
     const flattenedSubtasks = useMemo(() => {
-      if (!subtasks || subtasks.length === 0) return [];
-      return flattenSubtasks(subtasks);
-    }, [subtasks]);
+      const effectiveSubtasks = refreshedSubtasks ?? subtasks;
+      if (!effectiveSubtasks || effectiveSubtasks.length === 0) return [];
+      return flattenSubtasks(effectiveSubtasks);
+    }, [refreshedSubtasks, subtasks]);
 
     const data = useMemo(() => {
-      // The list summary is refreshed with the list query and is therefore
-      // newer than a task detail tree that may have been opened earlier.
-      const total = progress?.total ?? flattenedSubtasks.length;
+      // Before interaction, the list summary is newer than a possibly cached
+      // detail tree. After an on-demand refresh, its result is the fresh source
+      // of truth until a later list response changes the summary.
+      const effectiveProgress = refreshedSubtasks === undefined ? progress : undefined;
+      const total = effectiveProgress?.total ?? flattenedSubtasks.length;
       if (total === 0) return undefined;
 
       const completed =
-        progress !== undefined
-          ? progress.completed
+        effectiveProgress !== undefined
+          ? effectiveProgress.completed
           : flattenedSubtasks.length > 0
             ? flattenedSubtasks.filter((item) => item.task.status === 'completed').length
             : 0;
@@ -111,7 +121,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
         text: `${completed}/${total}`,
         percent: (completed / total) * 100,
       };
-    }, [flattenedSubtasks, progress]);
+    }, [flattenedSubtasks, progress, refreshedSubtasks]);
 
     const navigationItems = flattenedSubtasks.map((subtask) => {
       const isActive = subtask.task.identifier === currentIdentifier;
@@ -148,7 +158,9 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
 
         setRequesting(true);
         try {
-          if (await onRequestSubtasks()) setOpen(true);
+          const nextSubtasks = await onRequestSubtasks();
+          setRefreshedResult({ sourceKey: refreshSourceKey, subtasks: nextSubtasks });
+          setOpen(nextSubtasks.length > 0);
         } catch (error) {
           console.error('Failed to load task subtasks:', error);
           toast.error(t('taskList.subtaskProgress.loadFailed'));
@@ -156,7 +168,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           setRequesting(false);
         }
       },
-      [onRequestSubtasks, open, requesting, t],
+      [onRequestSubtasks, open, refreshSourceKey, requesting, t],
     );
 
     const handleOpenChange = useCallback(
