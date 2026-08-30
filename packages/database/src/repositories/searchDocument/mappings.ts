@@ -20,7 +20,6 @@ export interface SearchIndexDefinition<Entity extends SearchDocumentEntity> {
     >;
   };
   queryFields: readonly (keyof SearchDocumentSourceMap[Entity] & string)[];
-  sourceTable: string;
 }
 
 const mixedText = { analyzer: 'lobehub_icu_english', type: 'text' } as const;
@@ -134,7 +133,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'description', 'slug', 'tags', 'system_role'],
-    sourceTable: 'agents',
   } satisfies SearchIndexDefinition<'agents'>,
   chatGroups: {
     indexedOnlyFields: ['content'],
@@ -153,7 +151,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'description', 'content'],
-    sourceTable: 'chat_groups',
   } satisfies SearchIndexDefinition<'chatGroups'>,
   documents: {
     longTextFields: ['content'],
@@ -178,7 +175,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'slug', 'description', 'content'],
-    sourceTable: 'documents',
   } satisfies SearchIndexDefinition<'documents'>,
   files: {
     mappings: {
@@ -197,7 +193,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
     },
     /** Provider-neutral source field; Elasticsearch-only multi-fields are selected by its backend. */
     queryFields: ['name'],
-    sourceTable: 'files',
   } satisfies SearchIndexDefinition<'files'>,
   knowledgeBases: {
     longTextFields: ['description'],
@@ -215,7 +210,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['name', 'description'],
-    sourceTable: 'knowledge_bases',
   } satisfies SearchIndexDefinition<'knowledgeBases'>,
   memoryActivities: {
     longTextFields: ['notes', 'narrative', 'feedback'],
@@ -251,7 +245,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       'notes',
       'feedback',
     ],
-    sourceTable: 'user_memories_activities',
   } satisfies SearchIndexDefinition<'memoryActivities'>,
   memoryContexts: {
     longTextFields: ['description', 'current_status'],
@@ -275,7 +268,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['parent_text', 'title', 'description', 'current_status'],
-    sourceTable: 'user_memories_contexts',
   } satisfies SearchIndexDefinition<'memoryContexts'>,
   memoryExperiences: {
     longTextFields: ['situation', 'reasoning', 'possible_outcome', 'action', 'key_learning'],
@@ -312,7 +304,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       'action',
       'key_learning',
     ],
-    sourceTable: 'user_memories_experiences',
   } satisfies SearchIndexDefinition<'memoryExperiences'>,
   memoryIdentities: {
     longTextFields: ['description', 'role'],
@@ -339,7 +330,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['parent_title', 'parent_summary', 'parent_details', 'description', 'role'],
-    sourceTable: 'user_memories_identities',
   } satisfies SearchIndexDefinition<'memoryIdentities'>,
   memoryPreferences: {
     longTextFields: ['conclusion_directives', 'suggestions'],
@@ -370,7 +360,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       'conclusion_directives',
       'suggestions',
     ],
-    sourceTable: 'user_memories_preferences',
   } satisfies SearchIndexDefinition<'memoryPreferences'>,
   messages: {
     indexedOnlyFields: ['summary'],
@@ -394,7 +383,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['content', 'summary'],
-    sourceTable: 'messages',
   } satisfies SearchIndexDefinition<'messages'>,
   personaDocuments: {
     longTextFields: ['persona'],
@@ -413,7 +401,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['tagline', 'persona'],
-    sourceTable: 'user_memory_persona_documents',
   } satisfies SearchIndexDefinition<'personaDocuments'>,
   topics: {
     longTextFields: ['content'],
@@ -435,7 +422,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'content', 'description'],
-    sourceTable: 'topics',
   } satisfies SearchIndexDefinition<'topics'>,
   userMemories: {
     longTextFields: ['details'],
@@ -457,7 +443,6 @@ export const SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'summary', 'details'],
-    sourceTable: 'user_memories',
   } satisfies SearchIndexDefinition<'userMemories'>,
 } as const satisfies {
   [Entity in SearchDocumentEntity]: SearchIndexDefinition<Entity>;
