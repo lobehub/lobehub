@@ -1,9 +1,9 @@
 import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { HashIcon, MessageSquareDashed, PencilLine } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -230,9 +230,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     </span>
   );
 
-  // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
-  // input. Group drafts live in localStorage keyed by messageMapKey under the
-  // group scope; the default topic (no id) maps to the new-topic draft.
+  // Surface a pencil before the title when this topic holds unsent input. Group
+  // drafts live in localStorage keyed by messageMapKey under the group scope;
+  // the default topic (no id) maps to the new-topic draft.
   const draftKey = useMemo(
     () =>
       activeGroupId
@@ -241,10 +241,16 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     [activeGroupId, id],
   );
   const hasDraft = useHasDraft(draftKey);
-  const draftPrefix = hasDraft ? (
-    <Text fontSize={12} style={{ color: cssVar.colorError, flex: 'none' }}>
-      {t('draft')}
-    </Text>
+  const draftIndicator = hasDraft ? (
+    <Tooltip title={t('draft')}>
+      <Icon
+        aria-label={t('draft')}
+        color={cssVar.colorError}
+        icon={PencilLine}
+        role={'img'}
+        size={'small'}
+      />
+    </Tooltip>
   ) : undefined;
 
   // For default topic (no id)
@@ -252,7 +258,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     return (
       <NavItem
         active={active}
-        slots={{ titlePrefix: draftPrefix }}
+        slots={{ titlePrefix: draftIndicator }}
         titleColor={cssVar.colorText}
         icon={
           isLoading ? (
@@ -343,7 +349,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         }
         slots={{
           iconPostfix: unreadNode,
-          titlePrefix: draftPrefix,
+          titlePrefix: draftIndicator,
         }}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}

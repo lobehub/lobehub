@@ -62,7 +62,7 @@
   "doctor.summary_one": "{{count}} message exists in this topic but is not being shown.",
   "doctor.summary_other": "{{count}} messages exist in this topic but are not being shown.",
   "doctor.title": "Message Chain Check",
-  "draft": "[Draft]",
+  "draft": "Draft",
   "duplicateLoading": "Copying Topic...",
   "duplicateSuccess": "Topic Copied Successfully",
   "failedStatusTip": "This run hit an error — open it to take a look.",
