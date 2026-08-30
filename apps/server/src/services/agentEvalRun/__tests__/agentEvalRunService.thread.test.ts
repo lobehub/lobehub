@@ -25,8 +25,11 @@ beforeEach(cleanupDB);
  */
 async function setupMultiThreadEvalChain(opts: {
   assistantOutputs: string[]; // one per thread
+  datasetEvalMode?: string | null;
   expected?: string;
+  hasBenchmark?: boolean;
   k: number;
+  testCaseEvalMode?: string | null;
 }) {
   const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
   const benchmark = await benchmarkModel.create({
@@ -39,8 +42,8 @@ async function setupMultiThreadEvalChain(opts: {
   const [dataset] = await serverDB
     .insert(agentEvalDatasets)
     .values({
-      benchmarkId: benchmark.id,
-      evalMode: 'contains' as any,
+      benchmarkId: opts.hasBenchmark === false ? null : benchmark.id,
+      evalMode: (opts.datasetEvalMode === undefined ? 'contains' : opts.datasetEvalMode) as any,
       identifier: 'mt-dataset',
       name: 'MT Dataset',
       userId,
@@ -53,6 +56,7 @@ async function setupMultiThreadEvalChain(opts: {
       userId,
       content: { expected: opts.expected ?? '42', input: 'What is 6*7?' },
       datasetId: dataset.id,
+      evalMode: opts.testCaseEvalMode as any,
       sortOrder: 1,
     })
     .returning();
@@ -109,6 +113,41 @@ async function setupMultiThreadEvalChain(opts: {
 
 describe('AgentEvalRunService', () => {
   describe('recordThreadCompletion (K>1)', () => {
+    it('should score threads without a benchmark using the test case evalMode', async () => {
+      const { run, testCase, threadIds, topic } = await setupMultiThreadEvalChain({
+        assistantOutputs: ['The answer is 42.', 'wrong answer'],
+        datasetEvalMode: null,
+        expected: '42',
+        hasBenchmark: false,
+        k: 2,
+        testCaseEvalMode: 'contains',
+      });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+
+      for (const threadId of threadIds) {
+        await service.recordThreadCompletion({
+          runId: run.id,
+          status: 'completed',
+          telemetry: { completionReason: 'stop', duration: 100 },
+          testCaseId: testCase.id,
+          threadId,
+          topicId: topic.id,
+        });
+      }
+
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+
+      expect(runTopic?.status).toBe('passed');
+      expect(runTopic?.evalResult?.passAtK).toBe(true);
+      expect(runTopic?.evalResult?.passAllK).toBe(false);
+      expect(runTopic?.evalResult?.threads).toHaveLength(2);
+      expect(runTopic?.evalResult?.threads?.map(({ score }) => score)).toEqual(
+        expect.arrayContaining([0, 1]),
+      );
+    });
+
     it('should return allThreadsDone=false when not all threads complete', async () => {
       const { run, testCase, threadIds, topic } = await setupMultiThreadEvalChain({
         assistantOutputs: ['42', '42'],

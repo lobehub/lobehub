@@ -48,6 +48,7 @@ async function setupEvalChain(opts: {
   datasetEvalConfig?: any;
   datasetEvalMode?: string | null;
   expected?: string;
+  hasBenchmark?: boolean;
   output: string;
   testCaseEvalConfig?: any;
   testCaseEvalMode?: string | null;
@@ -64,7 +65,7 @@ async function setupEvalChain(opts: {
   const [dataset] = await serverDB
     .insert(agentEvalDatasets)
     .values({
-      benchmarkId: benchmark.id,
+      benchmarkId: opts.hasBenchmark === false ? null : benchmark.id,
       evalConfig: opts.datasetEvalConfig,
       evalMode: opts.datasetEvalMode as any,
       identifier: 'test-dataset',
@@ -114,6 +115,29 @@ async function setupEvalChain(opts: {
 }
 
 describe('evaluateCase - evalMode resolution', () => {
+  it('should score a captured dataset without a benchmark using its evalMode', async () => {
+    const { run, testCase } = await setupEvalChain({
+      datasetEvalMode: 'contains',
+      expected: '42',
+      hasBenchmark: false,
+      output: 'The answer is 42.',
+      testCaseEvalMode: null,
+    });
+
+    const service = new AgentEvalRunService(serverDB, userId);
+    await service.recordTrajectoryCompletion({
+      runId: run.id,
+      testCaseId: testCase.id,
+      telemetry: { completionReason: 'stop', duration: 100 },
+    });
+
+    const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+    const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+
+    expect(runTopic?.status).toBe('passed');
+    expect(runTopic?.score).toBe(1);
+  });
+
   it('should use dataset evalMode when testCase has no evalMode', async () => {
     const { run, testCase, topic } = await setupEvalChain({
       datasetEvalMode: 'contains',
