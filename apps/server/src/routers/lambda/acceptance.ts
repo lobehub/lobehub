@@ -76,6 +76,62 @@ const resolveAcceptance = async (
   return acceptance;
 };
 
+/** Max rows one multi-select sweep may touch — the list itself is capped at 200. */
+const ACCEPTANCE_BATCH_LIMIT = 200;
+
+const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed', 'rejected']);
+
+/**
+ * Apply one user-facing lifecycle override to an already-resolved,
+ * already-authorized aggregate. Shared by the single-row menu action and the
+ * list's multi-select sweep, so both obey exactly the same transition rules.
+ *
+ * accept / reject go through the SERVICE, never a bare status write: the
+ * service applies `requireDecidableAcceptance` (a premature `accepted` is
+ * sticky in recomputeStatus and could never be corrected by a later verifier
+ * result) and stamps the decision on the current round. Reopen is only
+ * meaningful for an already-decided aggregate — a still-running round must
+ * not be forced back to a decision-pending state by hand.
+ */
+const applyAcceptanceStatus = async (
+  ctx: { acceptanceService: AcceptanceService },
+  acceptance: AcceptanceItem,
+  status: z.infer<typeof acceptanceStatusOverrideSchema>,
+) => {
+  if (status === 'accepted') {
+    await ctx.acceptanceService.accept(acceptance.id);
+    return;
+  }
+
+  if (status === 'closed') {
+    await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
+    return;
+  }
+
+  if (status === 'rejected') {
+    await ctx.acceptanceService.reject(
+      acceptance.id,
+      'Rejected from the acceptance list — needs another round.',
+    );
+    return;
+  }
+
+  // Reopen (→ delivered): only a decided aggregate can be re-opened; a live
+  // round recomputes its own status and must not be clobbered.
+  if (
+    acceptance.status !== 'accepted' &&
+    acceptance.status !== 'closed' &&
+    acceptance.status !== 'rejected'
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,
+    });
+  }
+
+  await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'delivered');
+};
+
 export const acceptanceRouter = router({
   /**
    * The user accepts the delivery — the terminal business event that closes
@@ -270,17 +326,27 @@ export const acceptanceRouter = router({
       }
 
       const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
-      let canRead = isOwner || acceptance.visibility === 'public';
-      if (!canRead && ctx.userId && acceptance.workspaceId) {
-        const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
-          acceptance.workspaceId,
-          ctx.userId,
-        );
-        canRead = Boolean(member);
-      }
+      // The viewer's membership in the acceptance's OWN workspace — not their
+      // currently-active one, which may be a different workspace entirely.
+      const member =
+        !isOwner && ctx.userId && acceptance.workspaceId
+          ? await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
+              acceptance.workspaceId,
+              ctx.userId,
+            )
+          : undefined;
+
+      const canRead = isOwner || acceptance.visibility === 'public' || Boolean(member);
       if (!canRead) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
+
+      // Whether this viewer may REVIEW, mirroring exactly what the write path
+      // enforces (`assertWorkspaceRowManageable`): the creator, or an owner of
+      // the workspace the acceptance belongs to. Gating the UI on `isOwner`
+      // instead was stricter than the server — a workspace owner opening a
+      // teammate's delivery got a read-only page they actually had rights on.
+      const canReview = isOwner || member?.role === 'owner';
 
       // Sub-reads (rounds / results / evidence) are ownership-scoped models, so
       // read them AS the aggregate's owner — same pattern as the evidence file
@@ -436,6 +502,7 @@ export const acceptanceRouter = router({
 
       return {
         acceptance,
+        canReview,
         isOwner,
         checks: checks.map((check) => {
           // Projected from the result rows' user_decision(+detail) — the
@@ -506,6 +573,32 @@ export const acceptanceRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input)),
+
+  /**
+   * One keyset page of the same feed — what the list panel scrolls.
+   *
+   * Speaks the same `filter` vocabulary as `list`, applied in the query, so a
+   * page of "in progress" is a full page of in-progress rows. There is no
+   * paged search on purpose: a title search must span the whole owned set,
+   * which `list` already does — the panel asks that one while a query is live.
+   */
+  listPage: acceptanceProcedure
+    .input(
+      z
+        .object({
+          cursor: z.string().optional(),
+          filter: z.enum(['active', 'all', 'completed']).optional(),
+          limit: z.number().int().min(1).max(100).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) =>
+      ctx.acceptanceService.listPageWithSubjects({
+        cursor: input?.cursor,
+        filter: input?.filter,
+        limit: input?.limit,
+      }),
+    ),
 
   /**
    * Fold one acceptance into another: the source's verification rounds (and
@@ -913,50 +1006,15 @@ export const acceptanceRouter = router({
   /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
    * an owner override (mark accepted / closed / rejected, or reopen for another look).
-   *
-   * accept / reject go through the SERVICE, never a bare status write: the
-   * service applies `requireDecidableAcceptance` (a premature `accepted` is
-   * sticky in recomputeStatus and could never be corrected by a later verifier
-   * result) and stamps the decision on the current round. Reopen is only
-   * meaningful for an already-decided aggregate — a still-running round must
-   * not be forced back to a decision-pending state by hand.
    */
   updateStatus: acceptanceWriteProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        status: z.enum(['delivered', 'accepted', 'closed', 'rejected']),
-      }),
-    )
+    .input(z.object({ id: z.string(), status: acceptanceStatusOverrideSchema }))
     .mutation(async ({ ctx, input }) => {
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
       try {
-        if (input.status === 'accepted') {
-          await ctx.acceptanceService.accept(acceptance.id);
-        } else if (input.status === 'closed') {
-          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
-        } else if (input.status === 'rejected') {
-          await ctx.acceptanceService.reject(
-            acceptance.id,
-            'Rejected from the acceptance list — needs another round.',
-          );
-        } else {
-          // Reopen (→ delivered): only a decided aggregate can be re-opened; a
-          // live round recomputes its own status and must not be clobbered.
-          if (
-            acceptance.status !== 'accepted' &&
-            acceptance.status !== 'closed' &&
-            acceptance.status !== 'rejected'
-          ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,
-            });
-          }
-          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'delivered');
-        }
+        await applyAcceptanceStatus(ctx, acceptance, input.status);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -965,6 +1023,43 @@ export const acceptanceRouter = router({
         });
       }
       return { success: true };
+    }),
+
+  /**
+   * The multi-select twin of `updateStatus`: sweep a backlog of deliveries into
+   * accepted / closed in one action.
+   *
+   * A row that cannot take the transition (mid-verification, so undecidable;
+   * or someone else's row in a workspace) is COLLECTED, not thrown: one
+   * ineligible row must not void the other forty the user just swept, and the
+   * caller reports what actually landed. Sequential on purpose — each accept
+   * recomputes the aggregate and stamps its round, and a sweep is a background
+   * chore, not a latency-critical path.
+   */
+  updateStatusBatch: acceptanceWriteProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT),
+        status: acceptanceStatusOverrideSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const failedIds: string[] = [];
+      let updated = 0;
+
+      for (const id of new Set(input.ids)) {
+        try {
+          const acceptance = await resolveAcceptance(ctx, id);
+          assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+          await applyAcceptanceStatus(ctx, acceptance, input.status);
+          updated += 1;
+        } catch (error) {
+          console.error('[acceptance] batch status update failed for %s', id, error);
+          failedIds.push(id);
+        }
+      }
+
+      return { failedIds, updated };
     }),
 
   /**
@@ -980,5 +1075,31 @@ export const acceptanceRouter = router({
 
       await ctx.acceptanceService.acceptanceModel.delete(acceptance.id);
       return { success: true };
+    }),
+
+  /**
+   * The multi-select twin of `remove`. Like the batch status sweep, a row the
+   * caller may not delete is collected rather than thrown, so the rest of the
+   * selection still goes.
+   */
+  removeBatch: acceptanceWriteProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT) }))
+    .mutation(async ({ ctx, input }) => {
+      const failedIds: string[] = [];
+      let deleted = 0;
+
+      for (const id of new Set(input.ids)) {
+        try {
+          const acceptance = await resolveAcceptance(ctx, id);
+          assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+          await ctx.acceptanceService.acceptanceModel.delete(acceptance.id);
+          deleted += 1;
+        } catch (error) {
+          console.error('[acceptance] batch delete failed for %s', id, error);
+          failedIds.push(id);
+        }
+      }
+
+      return { deleted, failedIds };
     }),
 });
