@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "이전 메시지",
   "minimap.senderAssistant": "도우미",
   "minimap.senderUser": "당신",
+  "modelSelector.model": "모델",
   "newAgent": "도우미 만들기",
   "newAmpAgent": "Amp 추가",
   "newClaudeCodeAgent": "Claude Code 추가",

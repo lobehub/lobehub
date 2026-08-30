@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "Tin nhắn trước",
   "minimap.senderAssistant": "Tác nhân",
   "minimap.senderUser": "Bạn",
+  "modelSelector.model": "Mô hình",
   "newAgent": "Tạo tác nhân",
   "newAmpAgent": "Thêm Amp",
   "newClaudeCodeAgent": "Thêm Claude Code",

@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "Mensagem anterior",
   "minimap.senderAssistant": "Agente",
   "minimap.senderUser": "Você",
+  "modelSelector.model": "Modelo",
   "newAgent": "Criar Agente",
   "newAmpAgent": "Adicionar Amp",
   "newClaudeCodeAgent": "Adicionar Claude Code",

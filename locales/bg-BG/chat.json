@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "Предишно съобщение",
   "minimap.senderAssistant": "Агент",
   "minimap.senderUser": "Вие",
+  "modelSelector.model": "Модел",
   "newAgent": "Създай агент",
   "newAmpAgent": "Добавете Amp",
   "newClaudeCodeAgent": "Добавяне на Claude Code",

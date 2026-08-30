@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "前のメッセージ",
   "minimap.senderAssistant": "アシスタント",
   "minimap.senderUser": "あなた",
+  "modelSelector.model": "モデル",
   "newAgent": "アシスタントを作成",
   "newAmpAgent": "Ampを追加",
   "newClaudeCodeAgent": "Claude Code を追加",

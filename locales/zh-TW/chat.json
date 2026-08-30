@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "上一條訊息",
   "minimap.senderAssistant": "Agent",
   "minimap.senderUser": "您",
+  "modelSelector.model": "模型",
   "newAgent": "建立助手",
   "newAmpAgent": "新增 Amp",
   "newClaudeCodeAgent": "新增 Claude Code",

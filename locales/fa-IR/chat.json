@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "پیام قبلی",
   "minimap.senderAssistant": "نماینده",
   "minimap.senderUser": "شما",
+  "modelSelector.model": "مدل",
   "newAgent": "ایجاد نماینده",
   "newAmpAgent": "اضافه کردن Amp",
   "newClaudeCodeAgent": "افزودن Claude Code",

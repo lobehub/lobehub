@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "Önceki mesaj",
   "minimap.senderAssistant": "Ajan",
   "minimap.senderUser": "Sen",
+  "modelSelector.model": "Model",
   "newAgent": "Ajan Oluştur",
   "newAmpAgent": "Amp Ekle",
   "newClaudeCodeAgent": "Claude Code ekle",

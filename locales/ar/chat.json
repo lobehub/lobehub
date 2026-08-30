@@ -1059,6 +1059,7 @@
   "minimap.previousMessage": "الرسالة السابقة",
   "minimap.senderAssistant": "الوكيل",
   "minimap.senderUser": "أنت",
+  "modelSelector.model": "النموذج",
   "newAgent": "إنشاء وكيل",
   "newAmpAgent": "أضف Amp",
   "newClaudeCodeAgent": "إضافة Claude Code",
