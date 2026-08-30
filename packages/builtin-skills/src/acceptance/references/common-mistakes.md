@@ -79,7 +79,7 @@ The task lives in the user's words.
 before course-correcting.
 
 **Correct approach**: when the user references a task you don't have in context, say
-so plainly and RECOVER it before acting — check `.records/reports/` for prior
+so plainly and RECOVER it before acting — check `.acceptances/` for prior
 sessions on this branch, read the live conversation's own messages (the first user
 turn is usually the task), or ask for a pointer. Only translate the ask into
 code/commits after it's grounded.

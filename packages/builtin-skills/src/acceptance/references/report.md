@@ -29,7 +29,8 @@ structured round ingest.** Never mix both for the same delivery round.
 the checks and use one of these first-class paths:
 
 ```bash
-REPORT_DIR=./acceptance-report
+# One directory per round, under the delivery it belongs to.
+REPORT_DIR=.acceptances/topic-tpc_xxx/$(date +%Y%m%d-%H%M%S)-<slug>
 
 # A. first external-project round — creates a standalone acceptance automatically
 lh acceptance run ingest "$REPORT_DIR" \
@@ -73,14 +74,35 @@ lh acceptance view "$ACCEPTANCE_ID" --json
 
 ## Directory layout
 
-Any directory works — no repo convention required:
+Rounds live under `.acceptances/`, grouped by the delivery they belong to:
 
 ```
-<report-dir>/
-├── result.json     # THE report — the page renders from this
-├── report.md       # narrative tail only (verdict notes, follow-ups, score)
-└── assets/         # evidence files referenced from cases[].evidence
+.acceptances/
+├── .gitignore                     # `*` — the whole tree stays out of git
+└── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x | standalone-<id>
+    ├── acceptance.json            # which acceptance these rounds belong to
+    └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
+        ├── result.json            # THE report — the page renders from this
+        ├── report.md              # narrative tail only (verdict, follow-ups, score)
+        └── assets/                # evidence referenced from cases[].evidence
 ```
+
+Three things the shape buys, none of them cosmetic:
+
+- **The subject key mirrors `--subject <type>:<id>`**, so a directory listing
+  answers what the acceptance page answers: which delivery is this, and how many
+  rounds has it had. A flat `./acceptance-report` answers neither.
+- **A round is immutable**, so its directory name carries the timestamp and is
+  written once. Re-verification after a fix creates the NEXT directory; reusing
+  one silently destroys the evidence a reviewer already decided against.
+- **The tree is git-invisible.** `.acceptances/.gitignore` contains `*`, which
+  ignores the whole directory including itself, so evidence binaries never land
+  as untracked noise and the project's own `.gitignore` is never rewritten.
+  `lh acceptance install` and `lh acceptance run ingest` both seed that file, so
+  the guarantee does not depend on which entry point a run came through.
+
+Writing a round somewhere else still works — `ingest` takes an explicit path —
+but then keeping it out of git is on you.
 
 ## Workflow
 
