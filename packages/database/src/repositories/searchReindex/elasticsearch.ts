@@ -262,23 +262,15 @@ export class SearchReindexHttpClient implements SearchReindexElasticsearchClient
         return;
       }
 
-      const updateResponse = await this.request('/_aliases', {
-        body: JSON.stringify({
-          actions: [
-            ...targets.map(([index]) => ({ remove: { alias, index } })),
-            { add: { alias, index: physicalIndex, is_write_index: true } },
-          ],
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      if (!updateResponse.ok) {
-        throw new SearchReindexRequestError(
-          `Elasticsearch alias update failed for ${alias} (${updateResponse.status})`,
-          updateResponse.status,
-        );
-      }
-      return;
+      /**
+       * Incremental sync writes only through the stable alias. Moving that alias while a resumable
+       * backfill is running could acknowledge a change in the old index without replaying it into
+       * the new one. Online schema upgrades therefore require a separate durable dual-write
+       * protocol; this initial migration fails closed instead of pretending the cutover is safe.
+       */
+      throw new SearchReindexRequestError(
+        `Elasticsearch alias ${alias} already points to a different index`,
+      );
     }
     if (response.status !== 404) {
       throw new SearchReindexRequestError(

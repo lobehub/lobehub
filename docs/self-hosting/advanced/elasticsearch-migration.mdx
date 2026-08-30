@@ -94,6 +94,10 @@ host.
 
 The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
 
+If a stable alias already points to another physical index, the command fails instead of moving it.
+Online schema-version upgrades require a separately coordinated dual-write migration and are not
+supported by this initial migration tool.
+
 ## Run from source
 
 Inspect the current state without writing to Elasticsearch:

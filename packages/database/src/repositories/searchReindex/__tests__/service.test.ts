@@ -160,6 +160,21 @@ describe('SearchReindexService', () => {
     expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
   });
 
+  it('does not mark a run ready when an existing alias blocks cutover', async () => {
+    const { builder, client, repository } = createDependencies();
+    vi.mocked(client.ensureAlias).mockRejectedValue(
+      new Error('Elasticsearch alias test-agents already points to a different index'),
+    );
+    const service = new SearchReindexService(builder, repository, client);
+
+    await expect(service.run('test', 1)).rejects.toThrow(
+      'Elasticsearch alias test-agents already points to a different index',
+    );
+
+    expect(client.ensureAlias).toHaveBeenCalledOnce();
+    expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
+  });
+
   it('reuses index preparation when the run already prepared it', async () => {
     const { builder, client, repository, state } = createDependencies();
     const service = new SearchReindexService(builder, repository, client);
