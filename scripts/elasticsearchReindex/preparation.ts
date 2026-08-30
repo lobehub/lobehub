@@ -1,7 +1,7 @@
-export type SearchReindexCommand = 'apply' | 'skip-failure' | 'status';
+export type FtsSearchReindexCommand = 'apply' | 'skip-failure' | 'status';
 
-interface RunSearchReindexCommandOptions<T> {
-  command: SearchReindexCommand;
+interface RunFtsSearchReindexCommandOptions<T> {
+  command: FtsSearchReindexCommand;
   installCaptureInfrastructure: () => Promise<void>;
   run: () => Promise<T>;
   runWithLockRetry: (operation: () => Promise<void>) => Promise<void>;
@@ -13,12 +13,12 @@ interface RunSearchReindexCommandOptions<T> {
  * Status and failure-skipping commands intentionally execute without installing database
  * triggers, so PG-only self-hosted instances do not pay the Elasticsearch capture overhead.
  */
-export const runSearchReindexCommand = async <T>({
+export const runFtsSearchReindexCommand = async <T>({
   command,
   installCaptureInfrastructure,
   run,
   runWithLockRetry,
-}: RunSearchReindexCommandOptions<T>): Promise<T> => {
+}: RunFtsSearchReindexCommandOptions<T>): Promise<T> => {
   if (command === 'apply') {
     await runWithLockRetry(installCaptureInfrastructure);
   }

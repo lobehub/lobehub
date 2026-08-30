@@ -1,18 +1,18 @@
-import type { SearchSyncDrainResult } from '../../apps/server/src/services/searchSync';
-import { summarizeSearchReindexError } from '../../packages/database/src/repositories/searchReindex';
-import { parseElasticsearchSyncCliOptions } from './options';
+import type { FtsSearchSyncDrainResult } from '../../apps/server/src/services/ftsSearchSync';
+import { summarizeFtsSearchReindexError } from '../../packages/database/src/repositories/ftsSearchReindex';
+import { parseElasticsearchFtsSearchSyncCliOptions } from './options';
 
-type SearchSyncService = {
-  drainOnce: () => Promise<SearchSyncDrainResult>;
+type FtsSearchSyncService = {
+  drainOnce: () => Promise<FtsSearchSyncDrainResult>;
   hasDeadLetters: () => Promise<boolean>;
 };
 
-type SearchSyncRuntime = {
-  getSearchSyncService: () => SearchSyncService;
-  verifyIncrementalSearchSyncReadiness: () => Promise<unknown>;
+type FtsSearchSyncRuntime = {
+  getFtsSearchSyncService: () => FtsSearchSyncService;
+  verifyFtsSearchSyncReadiness: () => Promise<unknown>;
 };
 
-export interface ElasticsearchSyncRunSummary {
+export interface ElasticsearchFtsSearchSyncRunSummary {
   acknowledged: number;
   bulkBytes: number;
   bulkItems: number;
@@ -24,28 +24,28 @@ export interface ElasticsearchSyncRunSummary {
   steps: number;
 }
 
-export interface RunElasticsearchSyncOptions {
-  loadRuntime?: () => Promise<SearchSyncRuntime>;
-  logStep?: (summary: ElasticsearchSyncRunSummary) => void;
+export interface RunElasticsearchFtsSearchSyncOptions {
+  loadRuntime?: () => Promise<FtsSearchSyncRuntime>;
+  logStep?: (summary: ElasticsearchFtsSearchSyncRunSummary) => void;
   maxSteps: number;
 }
 
-const loadRuntime = () => import('../../apps/server/src/services/searchSync');
+const loadRuntime = () => import('../../apps/server/src/services/ftsSearchSync');
 
 /** Runs a bounded drain so any cron or process supervisor can schedule it without a daemon. */
-export const runElasticsearchSync = async ({
+export const runElasticsearchFtsSearchSync = async ({
   loadRuntime: load = loadRuntime,
   logStep = () => undefined,
   maxSteps,
-}: RunElasticsearchSyncOptions): Promise<ElasticsearchSyncRunSummary> => {
+}: RunElasticsearchFtsSearchSyncOptions): Promise<ElasticsearchFtsSearchSyncRunSummary> => {
   const runtime = await load();
-  await runtime.verifyIncrementalSearchSyncReadiness();
-  const service = runtime.getSearchSyncService();
+  await runtime.verifyFtsSearchSyncReadiness();
+  const service = runtime.getFtsSearchSyncService();
   if (await service.hasDeadLetters()) {
-    throw new Error('Elasticsearch sync is blocked by existing dead-letter work');
+    throw new Error('Elasticsearch full-text search sync is blocked by existing dead-letter work');
   }
 
-  const summary: ElasticsearchSyncRunSummary = {
+  const summary: ElasticsearchFtsSearchSyncRunSummary = {
     acknowledged: 0,
     bulkBytes: 0,
     bulkItems: 0,
@@ -71,16 +71,16 @@ export const runElasticsearchSync = async ({
     logStep({ ...summary });
 
     if (drained.dead > 0) {
-      throw new Error('Elasticsearch sync created dead-letter work');
+      throw new Error('Elasticsearch full-text search sync created dead-letter work');
     }
     if (drained.failed > 0) {
-      throw new Error('Elasticsearch sync left retryable failed work');
+      throw new Error('Elasticsearch full-text search sync left retryable failed work');
     }
     if (drained.claimed === 0 || !drained.hasMore) break;
   }
 
   if (await service.hasDeadLetters()) {
-    throw new Error('Elasticsearch sync is blocked by dead-letter work');
+    throw new Error('Elasticsearch full-text search sync is blocked by dead-letter work');
   }
 
   return summary;
@@ -88,34 +88,36 @@ export const runElasticsearchSync = async ({
 
 type Logger = (...arguments_: unknown[]) => void;
 
-export interface RunElasticsearchSyncCliOptions {
+export interface RunElasticsearchFtsSearchSyncCliOptions {
   args?: readonly string[];
-  loadRuntime?: () => Promise<SearchSyncRuntime>;
+  loadRuntime?: () => Promise<FtsSearchSyncRuntime>;
   logError?: Logger;
   logSuccess?: Logger;
 }
 
-export const runElasticsearchSyncCli = async ({
+export const runElasticsearchFtsSearchSyncCli = async ({
   args = process.argv.slice(2),
   loadRuntime: load,
   logError = console.error,
   logSuccess = console.log,
-}: RunElasticsearchSyncCliOptions = {}): Promise<number> => {
+}: RunElasticsearchFtsSearchSyncCliOptions = {}): Promise<number> => {
   try {
-    const options = parseElasticsearchSyncCliOptions(args);
+    const options = parseElasticsearchFtsSearchSyncCliOptions(args);
     if (!options.yes) {
-      throw new Error('Elasticsearch sync requires --yes after reviewing its documented effects');
+      throw new Error(
+        'Elasticsearch full-text search sync requires --yes after reviewing its documented effects',
+      );
     }
 
-    const summary = await runElasticsearchSync({
+    const summary = await runElasticsearchFtsSearchSync({
       loadRuntime: load,
-      logStep: (step) => logSuccess(JSON.stringify({ ...step, type: 'search_sync_step' })),
+      logStep: (step) => logSuccess(JSON.stringify({ ...step, type: 'fts_search_sync_step' })),
       maxSteps: options.maxSteps,
     });
-    logSuccess(JSON.stringify({ ...summary, success: true, type: 'search_sync_completed' }));
+    logSuccess(JSON.stringify({ ...summary, success: true, type: 'fts_search_sync_completed' }));
     return 0;
   } catch (error) {
-    logError('Elasticsearch sync failed:', summarizeSearchReindexError(error));
+    logError('Elasticsearch full-text search sync failed:', summarizeFtsSearchReindexError(error));
     return 1;
   }
 };

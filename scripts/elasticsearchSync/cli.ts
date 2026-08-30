@@ -1,5 +1,5 @@
-import { runElasticsearchSyncCli } from './index';
+import { runElasticsearchFtsSearchSyncCli } from './index';
 
-void runElasticsearchSyncCli().then((exitCode) => {
+void runElasticsearchFtsSearchSyncCli().then((exitCode) => {
   process.exit(exitCode);
 });

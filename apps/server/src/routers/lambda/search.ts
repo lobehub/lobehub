@@ -5,7 +5,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { router } from '@/libs/trpc/lambda';
 import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
-import { createSearchRepo } from '@/server/services/searchBackend';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 import { getRestrictedKnowledgeBaseIds } from './_helpers/knowledgeBaseAccess';
 
@@ -128,15 +128,15 @@ export const searchRouter = router({
         // this debounced search-as-you-type path.
         const needsKbExclusion =
           !type || ['file', 'folder', 'knowledgeBase', 'page'].includes(type);
-        const [excludeKnowledgeBaseIds, searchRepo] = await Promise.all([
+        const [excludeKnowledgeBaseIds, ftsSearchRepo] = await Promise.all([
           needsKbExclusion ? getRestrictedKnowledgeBaseIds(ctx) : [],
-          createSearchRepo({
+          createFtsSearchRepo({
             db: ctx.serverDB,
             userId: ctx.userId,
             workspaceId: ctx.workspaceId ?? undefined,
           }),
         ]);
-        searchPromises.push(searchRepo.search({ ...input, excludeKnowledgeBaseIds }));
+        searchPromises.push(ftsSearchRepo.search({ ...input, excludeKnowledgeBaseIds }));
       }
 
       // Marketplace searches: see `includeMarketplace` on the input schema —
@@ -259,7 +259,7 @@ export const searchRouter = router({
       // Execute searches in parallel and merge results
       const results = await Promise.all(searchPromises);
 
-      // Results arrive pre-ordered per type (DB types from SearchRepo with
+      // Results arrive pre-ordered per type (DB types from FtsSearchRepo with
       // topics/messages by recency, marketplace types from the discover service).
       // The command palette groups results by type, so we keep each source's order
       // instead of re-sorting the merged list by relevance.

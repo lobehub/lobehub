@@ -434,7 +434,7 @@ describe('UserMemoryExperienceModel', () => {
     });
 
     it('hydrates external candidates through current user and list filters', async () => {
-      const searchCandidates = vi.fn().mockResolvedValue({
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
         candidates: [
           { id: 'other-list-exp', score: 12 },
           { id: 'deleted-list-exp', score: 10 },
@@ -444,15 +444,15 @@ describe('UserMemoryExperienceModel', () => {
         total: 4,
       });
       const model = new UserMemoryExperienceModel(serverDB, userId, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.queryList({ q: 'candidate', tags: ['tag1'], types: ['lesson'] });
 
       expect(result.items.map(({ id }) => id)).toEqual(['list-exp-1']);
       expect(result.total).toBe(1);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'memoryExperiences',
         filters: {
           memoryTagMatch: 'any',

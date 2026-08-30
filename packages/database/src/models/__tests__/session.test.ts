@@ -395,7 +395,7 @@ describe('SessionModel', () => {
           userId: 'candidate-other-user',
         },
       ]);
-      const searchCandidates = vi.fn().mockResolvedValue({
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
         candidates: [
           { id: 'candidate-agent-other', score: 10 },
           { id: 'candidate-agent-deleted', score: 9 },
@@ -406,8 +406,8 @@ describe('SessionModel', () => {
         total: 5,
       });
       const model = new SessionModel(serverDB, userId, undefined, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.queryByKeyword('candidate');
@@ -427,7 +427,7 @@ describe('SessionModel', () => {
       await expect(
         model.findSessionsByKeywords({ current: 2, keyword: 'candidate', pageSize: 1 }),
       ).resolves.toEqual([]);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'agents',
         filters: {},
         pagination: {},
@@ -435,7 +435,7 @@ describe('SessionModel', () => {
       });
 
       const providerError = new Error('candidate unavailable');
-      searchCandidates.mockRejectedValueOnce(providerError);
+      ftsSearchCandidates.mockRejectedValueOnce(providerError);
       await expect(model.queryByKeyword('failure')).rejects.toBe(providerError);
     });
   });

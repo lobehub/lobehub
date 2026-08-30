@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { runSearchReindexCommand } from '../preparation';
+import { runFtsSearchReindexCommand } from '../preparation';
 
-describe('runSearchReindexCommand', () => {
+describe('runFtsSearchReindexCommand', () => {
   it('does not install capture infrastructure for the status command', async () => {
     const installCaptureInfrastructure = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     const runWithLockRetry = vi.fn<(operation: () => Promise<void>) => Promise<void>>();
     const readStatus = vi.fn<() => Promise<string>>().mockResolvedValue('status');
 
     await expect(
-      runSearchReindexCommand({
+      runFtsSearchReindexCommand({
         command: 'status',
         installCaptureInfrastructure,
         runWithLockRetry,
@@ -38,7 +38,7 @@ describe('runSearchReindexCommand', () => {
     });
 
     await expect(
-      runSearchReindexCommand({
+      runFtsSearchReindexCommand({
         command: 'apply',
         installCaptureInfrastructure,
         runWithLockRetry,
@@ -60,7 +60,7 @@ describe('runSearchReindexCommand', () => {
     const createOrResume = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
     await expect(
-      runSearchReindexCommand({
+      runFtsSearchReindexCommand({
         command: 'apply',
         installCaptureInfrastructure,
         runWithLockRetry,

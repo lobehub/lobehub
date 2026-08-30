@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ToolExecutionContext } from '../../types';
 
 const mocks = vi.hoisted(() => ({
-  createSearchRepo: vi.fn(async () => ({ candidateSearchEnabled: false })),
+  createFtsSearchRepo: vi.fn(async () => ({ ftsSearchCandidateEnabled: false })),
   embeddings: vi.fn(),
   initModelRuntimeFromDB: vi.fn(),
   initModelRuntimeWithUserPayload: vi.fn(),
@@ -41,8 +41,8 @@ vi.mock('@/server/services/agentSignal/store/adapters/redis/policyStateStore', (
   redisPolicyStateStore: {},
 }));
 
-vi.mock('@/server/services/searchBackend', () => ({
-  createSearchRepo: mocks.createSearchRepo,
+vi.mock('@/server/services/ftsSearch', () => ({
+  createFtsSearchRepo: mocks.createFtsSearchRepo,
 }));
 
 const { memoryRuntime } = await import('../memory');

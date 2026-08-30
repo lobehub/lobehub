@@ -13,20 +13,20 @@ tags:
 The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It atomically records the cursor, counters, and item-level failures in a local checkpoint file, so running the same command with the same state directory resumes the existing attempt.
 
 <Callout type="warning">
-  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes. The regular database migration creates the PostgreSQL Outbox schema and the schema-managed Memory fanout GIN index; it does not install search-capture functions or triggers. Capture starts only after you explicitly run `bun run db:install-search-capture` or start `bun run search:reindex -- --apply`, even if the incremental consumer is still paused.
+  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes. The regular database migration creates the PostgreSQL Outbox schema and the schema-managed Memory fanout GIN index; it does not install search-capture functions or triggers. Capture starts only after you explicitly run `bun run db:install-fts-search-capture` or start `bun run fts-search:reindex -- --apply`, even if the incremental consumer is still paused.
 </Callout>
 
 ## Environment variables
 
-| Variable                      | Required | Purpose                                                                                                                                    |
-| ----------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`                | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
-| `ES_URL`                      | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
-| `ES_API_KEY`                  | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
-| `ES_INDEX_NAMESPACE`          | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
-| `ES_INCREMENTAL_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
-| `ES_REINDEX_STATE_DIR`        | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
-| `SEARCH_BACKEND`              | Runtime  | Query provider: `pg_search` (default) or `elasticsearch`. Keep `pg_search` until backfill, catch-up, and validation finish.                |
+| Variable                  | Required | Purpose                                                                                                                                    |
+| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`            | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
+| `ES_URL`                  | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
+| `ES_API_KEY`              | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
+| `ES_INDEX_NAMESPACE`      | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
+| `FTS_SEARCH_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
+| `ES_REINDEX_STATE_DIR`    | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
+| `FTS_SEARCH_PROVIDER`     | Runtime  | Full-text search provider: `pg_search` (default) or `elasticsearch`. Keep `pg_search` until backfill, catch-up, and validation finish.     |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
@@ -79,14 +79,14 @@ host.
 5. Install the optional PostgreSQL change capture before the first backfill:
 
    ```bash
-   bun run db:install-search-capture
+   bun run db:install-fts-search-capture
    ```
 
    The installer first strictly validates the schema-managed GIN index (it does not create it), then
    atomically installs and verifies the capture functions and 16 triggers in one transaction. It is
    safe to rerun when the complete expected infrastructure already exists; partial, disabled, or
    unexpected definitions fail closed instead of being silently repaired. Once it succeeds, source
-   changes are recorded in the Outbox immediately. The `bun run search:reindex -- --apply` command
+   changes are recorded in the Outbox immediately. The `bun run fts-search:reindex -- --apply` command
    also runs this installer automatically; using the explicit command first is useful when you want
    capture active while preparing the Elasticsearch target. If you do not intend to enable
    Elasticsearch, do not run it.
@@ -104,20 +104,20 @@ supported by this initial migration tool.
 Inspect the current state without writing to Elasticsearch:
 
 ```bash
-bun run search:reindex -- --status
+bun run fts-search:reindex -- --status
 ```
 
 Choose a durable local state directory and start a new backfill into an empty Elasticsearch target:
 
 ```bash
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
-  bun run search:reindex -- --apply --fresh-run --yes
+  bun run fts-search:reindex -- --apply --fresh-run --yes
 ```
 
 Only the first invocation uses `--fresh-run`. Resume the same run with the same state directory:
 
 ```bash
-ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --apply --yes
 ```
 
 `--apply` verifies every physical Elasticsearch index and its ICU analysis settings before reading
@@ -146,7 +146,7 @@ batch per non-empty entity with bounded concurrency:
 
 ```bash
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
-  bun run search:reindex -- --apply --yes \
+  bun run fts-search:reindex -- --apply --yes \
   --expected-elasticsearch-host-prefix=search-dev- \
   --entity-concurrency=4 --bulk-concurrency=2 \
   --batch-size=5000 --bulk-max-bytes=10485760 \
@@ -179,18 +179,18 @@ moving or archiving a run.
 
 ## Run from the Docker image
 
-The official image includes `/app/elasticsearch-reindex.cjs`:
+The official image includes `/app/fts-search-elasticsearch-reindex.cjs`:
 
 ```bash
 mkdir -m 700 -p .elasticsearch-reindex
 docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
   -e ES_REINDEX_STATE_DIR=/data/elasticsearch-reindex \
   -v "$PWD/.elasticsearch-reindex:/data/elasticsearch-reindex" \
-  lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --status
+  lobehub/lobehub:latest /app/fts-search-elasticsearch-reindex.cjs --status
 docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
   -e ES_REINDEX_STATE_DIR=/data/elasticsearch-reindex \
   -v "$PWD/.elasticsearch-reindex:/data/elasticsearch-reindex" \
-  lobehub/lobehub:latest /app/elasticsearch-reindex.cjs --apply --fresh-run --yes
+  lobehub/lobehub:latest /app/fts-search-elasticsearch-reindex.cjs --apply --fresh-run --yes
 ```
 
 The bind mount is required for resume after a `--rm` container exits. Running with the host user's
@@ -202,10 +202,10 @@ application server.
 ## Start incremental synchronization
 
 After the reindex status is `ready_for_incremental_sync`, set
-`ES_INCREMENTAL_SYNC_ENABLED=true` and run the bounded consumer:
+`FTS_SEARCH_SYNC_ENABLED=true` and run the bounded consumer:
 
 ```bash
-bun run search:sync -- --max-steps=8 --yes
+bun run fts-search:sync -- --max-steps=8 --yes
 ```
 
 One invocation processes at most eight drain steps and then exits. `hasMore: true` in the final JSON
@@ -216,19 +216,19 @@ claiming work. Missing or stale capture infrastructure, an invalid alias, retrya
 dead-letter work produces a non-zero exit code. It never installs triggers and never deletes failed
 work automatically.
 
-The official image includes `/app/elasticsearch-sync.cjs` for the same bounded operation:
+The official image includes `/app/fts-search-elasticsearch-sync.cjs` for the same bounded operation:
 
 ```bash
 docker run --rm --env-file .env \
-  -e ES_INCREMENTAL_SYNC_ENABLED=true \
+  -e FTS_SEARCH_SYNC_ENABLED=true \
   -e MIGRATION_DB=1 \
-  lobehub/lobehub:latest /app/elasticsearch-sync.cjs --max-steps=8 --yes
+  lobehub/lobehub:latest /app/fts-search-elasticsearch-sync.cjs --max-steps=8 --yes
 ```
 
-Keep scheduling the consumer and run `bun run search:reindex -- --status` until `pending`, `ready`,
+Keep scheduling the consumer and run `bun run fts-search:reindex -- --status` until `pending`, `ready`,
 `retrying`, `inFlight`, `dead`, and `revisionLag` are all zero. Recheck that state immediately before
-switching queries. Then set `SEARCH_BACKEND=elasticsearch` and redeploy the application. Keep
-`SEARCH_BACKEND=pg_search` until catch-up is complete. Elasticsearch failures remain visible to
+switching queries. Then set `FTS_SEARCH_PROVIDER=elasticsearch` and redeploy the application. Keep
+`FTS_SEARCH_PROVIDER=pg_search` until catch-up is complete. Elasticsearch failures remain visible to
 callers; the search path does not silently fall back to PostgreSQL or `ilike`.
 
 ## Resume and verify
@@ -255,8 +255,8 @@ the initial Elasticsearch snapshot, resolve the blocker explicitly and then resu
 
 ```bash
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
-  bun run search:reindex -- --skip-failure=agents:document-id --yes
-ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
+  bun run fts-search:reindex -- --skip-failure=agents:document-id --yes
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --apply --yes
 ```
 
 Only non-retryable failures can be skipped, and skipping does not count the document as indexed. Use
@@ -271,6 +271,6 @@ progress.
 
 <Callout type="info">
   The full-reindex command does not run the recurring incremental consumer and does not claim that
-  the application is ready to switch search backends by itself. Keep `search:sync` scheduled for as
+  the application is ready to switch search backends by itself. Keep `fts-search:sync` scheduled for as
   long as Elasticsearch serves search traffic.
 </Callout>

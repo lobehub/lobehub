@@ -3,7 +3,7 @@ import { RelationshipEnum } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
-import type { SearchCandidateSource } from '../../repositories/search';
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import type { NewUserMemoryIdentity, UserMemoryIdentity } from '../../schemas';
 import { userMemories, userMemoriesIdentities } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -13,12 +13,16 @@ import { inJsonStringArray } from '../../utils/inJsonStringArray';
 export class UserMemoryIdentityModel {
   private userId: string;
   private db: LobeChatDatabase;
-  private searchCandidateSource?: SearchCandidateSource;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string, searchCandidateSource?: SearchCandidateSource) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
-    this.searchCandidateSource = searchCandidateSource;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private memoryWhere(table: { userId: any }) {
@@ -82,8 +86,8 @@ export class UserMemoryIdentityModel {
     const resolvedRelationships =
       relationships && relationships.length > 0 ? relationships : [RelationshipEnum.Self];
     const candidateResult =
-      normalizedQuery && this.searchCandidateSource?.candidateSearchEnabled
-        ? await this.searchCandidateSource.searchCandidates({
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'memoryIdentities',
             filters: {
               memoryRelationships: resolvedRelationships,

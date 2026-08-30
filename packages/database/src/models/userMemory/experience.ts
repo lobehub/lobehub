@@ -2,7 +2,7 @@ import type { ExperienceListParams, ExperienceListResult } from '@lobechat/types
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
-import type { SearchCandidateSource } from '../../repositories/search';
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import type { NewUserMemoryExperience, UserMemoryExperience } from '../../schemas';
 import { userMemories, userMemoriesExperiences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -12,12 +12,16 @@ import { inJsonStringArray } from '../../utils/inJsonStringArray';
 export class UserMemoryExperienceModel {
   private userId: string;
   private db: LobeChatDatabase;
-  private searchCandidateSource?: SearchCandidateSource;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string, searchCandidateSource?: SearchCandidateSource) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
-    this.searchCandidateSource = searchCandidateSource;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private memoryWhere(table: { userId: any }) {
@@ -79,8 +83,8 @@ export class UserMemoryExperienceModel {
       ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
       : '';
     const candidateResult =
-      normalizedQuery && this.searchCandidateSource?.candidateSearchEnabled
-        ? await this.searchCandidateSource.searchCandidates({
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'memoryExperiences',
             filters: {
               ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),

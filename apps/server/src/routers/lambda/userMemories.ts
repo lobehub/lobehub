@@ -32,7 +32,7 @@ import {
   UserMemoryIdentityModel,
   UserMemoryModel,
 } from '@/database/models/userMemory';
-import { SearchCandidateSearchError } from '@/database/repositories/search';
+import { FtsSearchCandidateError } from '@/database/repositories/ftsSearch';
 import { UserMemoryTopicRepository } from '@/database/repositories/userMemory';
 import {
   userMemories,
@@ -47,10 +47,10 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
-import { createSearchRepo } from '@/server/services/searchBackend';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
   activities: [],
@@ -238,7 +238,7 @@ const normalizeEmbeddable = (value?: string | null): string | undefined => {
 
 /** Candidate-provider outages must not be converted into successful empty memory responses. */
 const rethrowCandidateSearchError = (error: unknown) => {
-  if (error instanceof SearchCandidateSearchError) throw error;
+  if (error instanceof FtsSearchCandidateError) throw error;
 };
 
 const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -265,14 +265,14 @@ const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
 });
 const memorySearchProcedure = memoryProcedure.use(async (opts) => {
   const { ctx } = opts;
-  const searchRepo = await createSearchRepo({ db: ctx.serverDB, userId: ctx.userId });
+  const ftsSearchRepo = await createFtsSearchRepo({ db: ctx.serverDB, userId: ctx.userId });
 
   return opts.next({
     ctx: {
-      activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId, searchRepo),
-      experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId, searchRepo),
-      identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId, searchRepo),
-      memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId, searchRepo),
+      activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId, ftsSearchRepo),
+      experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId, ftsSearchRepo),
+      identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId, ftsSearchRepo),
+      memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId, ftsSearchRepo),
     },
   });
 });

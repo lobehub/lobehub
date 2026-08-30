@@ -7,8 +7,8 @@ import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { HomeRepository } from '@/database/repositories/home';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
-import { createSearchRepo } from '@/server/services/searchBackend';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
@@ -29,7 +29,7 @@ const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
 const homeSearchProcedure = homeProcedure.use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
-  const searchRepo = await createSearchRepo({
+  const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
@@ -37,7 +37,7 @@ const homeSearchProcedure = homeProcedure.use(async (opts) => {
 
   return opts.next({
     ctx: {
-      homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId, searchRepo),
+      homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });

@@ -1780,7 +1780,7 @@ describe('MessageModel Query Tests', () => {
           userId: otherUserId,
         },
       ]);
-      const searchCandidates = vi.fn().mockResolvedValue({
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
         candidates: [
           { id: 'candidate-message-other', score: 12 },
           { id: 'candidate-message-deleted', score: 10 },
@@ -1790,8 +1790,8 @@ describe('MessageModel Query Tests', () => {
         total: 4,
       });
       const model = new MessageModel(serverDB, userId, undefined, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.queryByKeyword('candidate');
@@ -1800,7 +1800,7 @@ describe('MessageModel Query Tests', () => {
         'candidate-message-recent',
         'candidate-message-old',
       ]);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'messages',
         filters: {},
         pagination: {},
@@ -1821,8 +1821,8 @@ describe('MessageModel Query Tests', () => {
       }));
       candidates.push({ id: 'candidate-message-match', score: 2 });
       const model = new MessageModel(serverDB, userId, undefined, {
-        candidateSearchEnabled: true,
-        searchCandidates: vi.fn().mockResolvedValue({
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockResolvedValue({
           candidates,
           total: candidates.length,
         }),

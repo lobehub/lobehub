@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SearchSyncDrainResult } from '../../apps/server/src/services/searchSync';
-import { runElasticsearchSync, runElasticsearchSyncCli } from './index';
+import type { FtsSearchSyncDrainResult } from '../../apps/server/src/services/ftsSearchSync';
+import { runElasticsearchFtsSearchSync, runElasticsearchFtsSearchSyncCli } from './index';
 
-const drainResult = (overrides: Partial<SearchSyncDrainResult> = {}): SearchSyncDrainResult => ({
+const drainResult = (
+  overrides: Partial<FtsSearchSyncDrainResult> = {},
+): FtsSearchSyncDrainResult => ({
   acknowledged: 1,
   bulkBytes: 100,
   bulkItems: 1,
@@ -17,17 +19,20 @@ const drainResult = (overrides: Partial<SearchSyncDrainResult> = {}): SearchSync
   ...overrides,
 });
 
-const createRuntime = (results: SearchSyncDrainResult[]) => {
+const createRuntime = (results: FtsSearchSyncDrainResult[]) => {
   const drainOnce = vi.fn();
   for (const result of results) drainOnce.mockResolvedValueOnce(result);
   const runtime = {
-    getSearchSyncService: () => ({ drainOnce, hasDeadLetters: vi.fn().mockResolvedValue(false) }),
-    verifyIncrementalSearchSyncReadiness: vi.fn().mockResolvedValue(undefined),
+    getFtsSearchSyncService: () => ({
+      drainOnce,
+      hasDeadLetters: vi.fn().mockResolvedValue(false),
+    }),
+    verifyFtsSearchSyncReadiness: vi.fn().mockResolvedValue(undefined),
   };
   return { drainOnce, runtime };
 };
 
-describe('runElasticsearchSync', () => {
+describe('runElasticsearchFtsSearchSync', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('drains until the queue is empty within the configured bound', async () => {
@@ -37,9 +42,9 @@ describe('runElasticsearchSync', () => {
     ]);
 
     await expect(
-      runElasticsearchSync({ loadRuntime: async () => runtime, maxSteps: 8 }),
+      runElasticsearchFtsSearchSync({ loadRuntime: async () => runtime, maxSteps: 8 }),
     ).resolves.toMatchObject({ acknowledged: 3, claimed: 3, hasMore: false, steps: 2 });
-    expect(runtime.verifyIncrementalSearchSyncReadiness).toHaveBeenCalledOnce();
+    expect(runtime.verifyFtsSearchSyncReadiness).toHaveBeenCalledOnce();
     expect(drainOnce).toHaveBeenCalledTimes(2);
   });
 
@@ -47,31 +52,31 @@ describe('runElasticsearchSync', () => {
     const { drainOnce, runtime } = createRuntime([drainResult({ hasMore: true })]);
 
     await expect(
-      runElasticsearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
+      runElasticsearchFtsSearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
     ).resolves.toMatchObject({ hasMore: true, steps: 1 });
     expect(drainOnce).toHaveBeenCalledOnce();
   });
 
   it('fails before draining when durable dead letters already exist', async () => {
     const { runtime } = createRuntime([]);
-    const service = runtime.getSearchSyncService();
+    const service = runtime.getFtsSearchSyncService();
     service.hasDeadLetters = vi.fn().mockResolvedValue(true);
-    runtime.getSearchSyncService = () => service;
+    runtime.getFtsSearchSyncService = () => service;
 
     await expect(
-      runElasticsearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
+      runElasticsearchFtsSearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
     ).rejects.toThrow('blocked by existing dead-letter work');
     expect(service.drainOnce).not.toHaveBeenCalled();
   });
 
   it('fails when dead-letter work appears concurrently after draining', async () => {
     const { runtime } = createRuntime([drainResult()]);
-    const service = runtime.getSearchSyncService();
+    const service = runtime.getFtsSearchSyncService();
     service.hasDeadLetters = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    runtime.getSearchSyncService = () => service;
+    runtime.getFtsSearchSyncService = () => service;
 
     await expect(
-      runElasticsearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
+      runElasticsearchFtsSearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
     ).rejects.toThrow('blocked by dead-letter work');
   });
 
@@ -82,21 +87,23 @@ describe('runElasticsearchSync', () => {
     const { runtime } = createRuntime([result]);
 
     await expect(
-      runElasticsearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
+      runElasticsearchFtsSearchSync({ loadRuntime: async () => runtime, maxSteps: 1 }),
     ).rejects.toThrow(message);
   });
 });
 
-describe('runElasticsearchSyncCli', () => {
+describe('runElasticsearchFtsSearchSyncCli', () => {
   it('requires explicit acknowledgement before loading the runtime', async () => {
     const loadRuntime = vi.fn();
     const logError = vi.fn();
 
-    await expect(runElasticsearchSyncCli({ args: [], loadRuntime, logError })).resolves.toBe(1);
+    await expect(
+      runElasticsearchFtsSearchSyncCli({ args: [], loadRuntime, logError }),
+    ).resolves.toBe(1);
     expect(loadRuntime).not.toHaveBeenCalled();
     expect(logError).toHaveBeenCalledWith(
-      'Elasticsearch sync failed:',
-      'Elasticsearch sync requires --yes after reviewing its documented effects',
+      'Elasticsearch full-text search sync failed:',
+      'Elasticsearch full-text search sync requires --yes after reviewing its documented effects',
     );
   });
 
@@ -105,14 +112,14 @@ describe('runElasticsearchSyncCli', () => {
     const logSuccess = vi.fn();
 
     await expect(
-      runElasticsearchSyncCli({
+      runElasticsearchFtsSearchSyncCli({
         args: ['--yes'],
         loadRuntime: async () => runtime,
         logSuccess,
       }),
     ).resolves.toBe(0);
     expect(logSuccess).toHaveBeenLastCalledWith(
-      expect.stringContaining('"type":"search_sync_completed"'),
+      expect.stringContaining('"type":"fts_search_sync_completed"'),
     );
   });
 });

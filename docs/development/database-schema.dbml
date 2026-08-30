@@ -2914,7 +2914,7 @@ table resource_transfer_requests {
   }
 }
 
-table search_sync_outbox {
+table fts_search_sync_outbox {
   attempts integer [not null, default: 0]
   available_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -2925,14 +2925,14 @@ table search_sync_outbox {
   last_error text
   locked_until "timestamp with time zone"
   priority smallint [not null, default: 10]
-  revision bigint [not null, default: `nextval('search_sync_revision_seq')`]
+  revision bigint [not null, default: `nextval('fts_search_sync_revision_seq')`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (entity, document_id) [name: 'search_sync_outbox_entity_document_id_unique', unique]
-    (priority, available_at, revision) [name: 'search_sync_outbox_claim_idx']
-    dead_at [name: 'search_sync_outbox_dead_idx']
-    locked_until [name: 'search_sync_outbox_lease_idx']
+    (entity, document_id) [name: 'fts_search_sync_outbox_entity_document_id_unique', unique]
+    (priority, available_at, revision) [name: 'fts_search_sync_outbox_claim_idx']
+    dead_at [name: 'fts_search_sync_outbox_dead_idx']
+    locked_until [name: 'fts_search_sync_outbox_lease_idx']
   }
 }
 

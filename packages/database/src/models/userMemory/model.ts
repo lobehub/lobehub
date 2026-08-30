@@ -28,7 +28,7 @@ import { and, asc, cosineDistance, desc, eq, inArray, isNotNull, ne, or, sql } f
 
 import { merge } from '@/utils/merge';
 
-import type { SearchCandidateSource } from '../../repositories/search';
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import type {
   UserMemoryActivitiesWithoutVectors,
   UserMemoryActivity,
@@ -552,11 +552,11 @@ export class UserMemoryModel {
   constructor(
     db: LobeChatDatabase,
     userId: string,
-    private readonly searchCandidateSource?: SearchCandidateSource,
+    private readonly ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {
     this.userId = userId;
     this.db = db;
-    this.queryModel = new UserMemoryQueryModel(db, userId, searchCandidateSource);
+    this.queryModel = new UserMemoryQueryModel(db, userId, ftsSearchCandidateSource);
     this.topicModel = new TopicModel(db, userId);
   }
 
@@ -1023,8 +1023,8 @@ export class UserMemoryModel {
       }
     })();
     const candidateResult =
-      normalizedQuery && candidateConfig && this.searchCandidateSource?.candidateSearchEnabled
-        ? await this.searchCandidateSource.searchCandidates({
+      normalizedQuery && candidateConfig && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: candidateConfig.entity,
             filters: {
               ...(categories?.length ? { memoryCategories: categories } : {}),

@@ -1,42 +1,42 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import type { SearchDocumentEntity } from '@lobechat/types';
+import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
 import {
-  SEARCH_DOCUMENT_ENTITIES,
-  SEARCH_INDEX_SCHEMA_VERSION,
-  SearchDocumentBuilder,
-} from '../../packages/database/src/repositories/searchDocument';
+  FTS_SEARCH_DOCUMENT_ENTITIES,
+  FTS_SEARCH_INDEX_SCHEMA_VERSION,
+  FtsSearchDocumentBuilder,
+} from '../../packages/database/src/repositories/ftsSearchDocument';
 import {
-  type SearchReindexAuditValue,
-  SearchReindexEntityError,
-  SearchReindexFileLogger,
-  SearchReindexFileRepository,
-  SearchReindexHttpClient,
-  SearchReindexService,
-  summarizeSearchReindexError,
-} from '../../packages/database/src/repositories/searchReindex';
-import { SearchSyncOutboxRepository } from '../../packages/database/src/repositories/searchSyncOutbox';
+  type FtsSearchReindexAuditValue,
+  FtsSearchReindexEntityError,
+  FtsSearchReindexFileLogger,
+  FtsSearchReindexFileRepository,
+  FtsSearchReindexHttpClient,
+  FtsSearchReindexService,
+  summarizeFtsSearchReindexError,
+} from '../../packages/database/src/repositories/ftsSearchReindex';
+import { FtsSearchSyncOutboxRepository } from '../../packages/database/src/repositories/ftsSearchSyncOutbox';
 import * as schema from '../../packages/database/src/schemas';
 import {
-  observeSearchReindexRun,
-  recordSearchReindexBatch,
-  recordSearchReindexBulkRequest,
-  recordSearchReindexBulkRetry,
-  recordSearchReindexReconciliation,
-} from '../../packages/observability-otel/src/modules/search-reindex';
+  observeFtsSearchReindexRun,
+  recordFtsSearchReindexBatch,
+  recordFtsSearchReindexBulkRequest,
+  recordFtsSearchReindexBulkRetry,
+  recordFtsSearchReindexReconciliation,
+} from '../../packages/observability-otel/src/modules/fts-search-reindex';
 import { DiagLogLevel, register, shutdownSafely } from '../../packages/observability-otel/src/node';
 import { runWithLockRetry } from '../migrateServerDB/retry';
 import {
-  assertSearchReindexElasticsearchHostname,
-  assertSearchReindexTelemetryExportConfigured,
-  resolveSearchReindexElasticsearchEnvironment,
-  resolveSearchReindexTelemetryEnvironment,
+  assertFtsSearchReindexElasticsearchHostname,
+  assertFtsSearchReindexTelemetryExportConfigured,
+  resolveFtsSearchReindexElasticsearchEnvironment,
+  resolveFtsSearchReindexTelemetryEnvironment,
 } from './options';
-import { runSearchReindexCommand } from './preparation';
+import { runFtsSearchReindexCommand } from './preparation';
 
 const { Pool } = pg;
 
@@ -80,7 +80,7 @@ const maxBatchesPerEntity = readPositiveIntegerArgument('--max-batches-per-entit
 const maxRequestRetries = readNonNegativeIntegerArgument('--max-request-retries');
 const requestTimeoutMs = readPositiveIntegerArgument('--request-timeout-ms');
 const retryBaseDelayMs = readNonNegativeIntegerArgument('--retry-base-delay-ms');
-const telemetryEnvironment = resolveSearchReindexTelemetryEnvironment(process.argv.slice(2));
+const telemetryEnvironment = resolveFtsSearchReindexTelemetryEnvironment(process.argv.slice(2));
 
 const knownArguments = new Set(['--apply', '--fresh-run', '--status', '--yes']);
 const unknownArgument = process.argv
@@ -115,7 +115,7 @@ if (mutationModes > 0 && !yes) {
 if (freshRun && !apply) throw new Error('--fresh-run can only be used with --apply');
 
 const readFailureReference = ():
-  { documentId: string; entity: SearchDocumentEntity } | undefined => {
+  { documentId: string; entity: FtsSearchDocumentEntity } | undefined => {
   if (!skipFailureArgument) return;
   const reference = skipFailureArgument.slice('--skip-failure='.length);
   const separator = reference.indexOf(':');
@@ -123,14 +123,14 @@ const readFailureReference = ():
     throw new Error('--skip-failure must use <entity>:<document-id>');
   }
   const entityName = reference.slice(0, separator);
-  const entity = SEARCH_DOCUMENT_ENTITIES.find((item) => item === entityName);
+  const entity = FTS_SEARCH_DOCUMENT_ENTITIES.find((item) => item === entityName);
   if (!entity) throw new Error(`Unknown search entity: ${entityName}`);
   return { documentId: reference.slice(separator + 1), entity };
 };
 
 const failureReference = readFailureReference();
 const { apiKeyEnvironmentName, expectedHostPrefix, urlEnvironmentName } =
-  resolveSearchReindexElasticsearchEnvironment(process.argv.slice(2));
+  resolveFtsSearchReindexElasticsearchEnvironment(process.argv.slice(2));
 
 const databaseUrl = process.env.DATABASE_URL;
 const elasticsearchApiKey = process.env[apiKeyEnvironmentName];
@@ -154,7 +154,7 @@ if (process.env.ENABLE_TELEMETRY && !telemetryEnvironment) {
   throw new Error('--telemetry-environment is required when ENABLE_TELEMETRY is set');
 }
 if (process.env.ENABLE_TELEMETRY) {
-  assertSearchReindexTelemetryExportConfigured(process.env);
+  assertFtsSearchReindexTelemetryExportConfigured(process.env);
 }
 
 const telemetrySdk = process.env.ENABLE_TELEMETRY
@@ -166,32 +166,32 @@ const telemetrySdk = process.env.ENABLE_TELEMETRY
       histogramViews: [
         {
           boundaries: [0, 1, 2, 3, 5, 10],
-          instrumentName: 'search_reindex_bulk_request_attempts',
-          meterName: 'search-reindex',
+          instrumentName: 'fts_search_reindex_bulk_request_attempts',
+          meterName: 'fts-search-reindex',
         },
         {
           boundaries: REINDEX_BYTE_BUCKETS,
-          instrumentName: 'search_reindex_bulk_request_size',
-          meterName: 'search-reindex',
+          instrumentName: 'fts_search_reindex_bulk_request_size',
+          meterName: 'fts-search-reindex',
         },
         {
           boundaries: REINDEX_DURATION_MS_BUCKETS,
-          instrumentName: 'search_reindex_bulk_request_duration',
-          meterName: 'search-reindex',
+          instrumentName: 'fts_search_reindex_bulk_request_duration',
+          meterName: 'fts-search-reindex',
         },
         {
           boundaries: REINDEX_COUNT_BUCKETS,
-          instrumentName: 'search_reindex_bulk_request_items',
-          meterName: 'search-reindex',
+          instrumentName: 'fts_search_reindex_bulk_request_items',
+          meterName: 'fts-search-reindex',
         },
       ],
-      name: 'lobehub-search-reindex',
+      name: 'lobehub-fts-search-reindex',
     })
   : undefined;
 const pool = new Pool({ connectionString: databaseUrl });
 const db = drizzle(pool, { schema });
-const outbox = new SearchSyncOutboxRepository(db);
-const repository = new SearchReindexFileRepository({
+const outbox = new FtsSearchSyncOutboxRepository(db);
+const repository = new FtsSearchReindexFileRepository({
   readCaptureFingerprint: () => outbox.readCaptureFingerprint(),
   readHighWaterRevision: () => outbox.readHighWaterRevision(),
   reserveRevisionWithWriteFence: () => outbox.reserveRevisionWithWriteFence(),
@@ -199,14 +199,14 @@ const repository = new SearchReindexFileRepository({
 });
 
 const logErrorSummary = (message: string, error: unknown) => {
-  console.error(message, summarizeSearchReindexError(error));
+  console.error(message, summarizeFtsSearchReindexError(error));
 };
 
 const readStatus = async () => {
-  const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  const state = await repository.getTargetRun(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
   const unresolvedFailures = state ? await repository.listUnresolvedFailures(state.run.id) : [];
   const outboxStats = await outbox.stats();
-  const entityStats: Record<string, SearchReindexAuditValue> = Object.fromEntries(
+  const entityStats: Record<string, FtsSearchReindexAuditValue> = Object.fromEntries(
     Object.entries(outboxStats.entities).map(([entity, stats]) => [entity, { ...stats }]),
   );
   return {
@@ -245,7 +245,7 @@ const readStatus = async () => {
               attempts,
               documentId,
               entity,
-              errorSummary: summarizeSearchReindexError(error),
+              errorSummary: summarizeFtsSearchReindexError(error),
               retryable,
             }),
           ),
@@ -261,17 +261,17 @@ const printStatus = async () => {
   return currentStatus;
 };
 
-let auditLogger: SearchReindexFileLogger | undefined;
+let auditLogger: FtsSearchReindexFileLogger | undefined;
 const executionStartedAt = Date.now();
 
 const run = async () => {
   if (failureReference) {
-    await runSearchReindexCommand({
+    await runFtsSearchReindexCommand({
       command: 'skip-failure',
       installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
       runWithLockRetry,
       run: async () => {
-        const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+        const state = await repository.getTargetRun(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
         if (!state) throw new Error(`No reindex run exists for namespace ${namespace}`);
         const skipped = await repository.skipFailure(
           state.run.id,
@@ -288,7 +288,7 @@ const run = async () => {
   }
 
   if (!apply) {
-    await runSearchReindexCommand({
+    await runFtsSearchReindexCommand({
       command: 'status',
       installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
       runWithLockRetry,
@@ -298,8 +298,8 @@ const run = async () => {
   }
 
   const endpointHostname = new URL(elasticsearchUrl!).hostname;
-  assertSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
-  const existing = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  assertFtsSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
+  const existing = await repository.getTargetRun(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
   if (!existing && !freshRun) {
     throw new Error(
       `No checkpoint exists in ${stateDirectory}; pass --fresh-run only for a new, empty Elasticsearch target`,
@@ -308,7 +308,7 @@ const run = async () => {
   if (existing && freshRun) {
     throw new Error(`Checkpoint ${existing.run.id} already exists; omit --fresh-run to resume it`);
   }
-  const prepared = await runSearchReindexCommand({
+  const prepared = await runFtsSearchReindexCommand({
     command: 'apply',
     installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
     runWithLockRetry,
@@ -321,13 +321,13 @@ const run = async () => {
           type: 'reindex_target',
         }),
       );
-      return repository.createOrResume(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+      return repository.createOrResume(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
     },
   });
   if (existing && existing.run.status !== 'ready_for_incremental_sync') {
     await outbox.fenceSourceWrites();
   }
-  auditLogger = new SearchReindexFileLogger({
+  auditLogger = new FtsSearchReindexFileLogger({
     runId: prepared.run.id,
     sessionId: randomUUID(),
     stateDirectory,
@@ -360,44 +360,49 @@ const run = async () => {
     }),
   );
 
-  const client = new SearchReindexHttpClient({
+  const client = new FtsSearchReindexHttpClient({
     apiKey: elasticsearchApiKey!,
     requestTimeoutMs,
     url: elasticsearchUrl!,
   });
-  const service = new SearchReindexService(new SearchDocumentBuilder(db), repository, client, {
-    batchSize,
-    bulkConcurrency,
-    bulkMaxBytes,
-    entityConcurrency,
-    maxBatchesPerEntity,
-    maxRequestRetries,
-    onProgress: async (event) => {
-      if (event.type === 'batch') {
-        recordSearchReindexBatch({
-          checkpoint: event.checkpoint,
-          entity: event.entity,
-          failed: event.failed,
-          indexed: event.indexed,
-          scanned: event.processed,
-        });
-      }
-      if (event.type === 'reconciliation') {
-        recordSearchReindexReconciliation(event);
-      }
-      if (event.type === 'bulk_retry') {
-        recordSearchReindexBulkRetry(event.entity);
-      }
-      if (event.type === 'bulk_completed') {
-        recordSearchReindexBulkRequest(event);
-      }
-      console.log(JSON.stringify(event));
-      await auditLogger!.append(event);
+  const service = new FtsSearchReindexService(
+    new FtsSearchDocumentBuilder(db),
+    repository,
+    client,
+    {
+      batchSize,
+      bulkConcurrency,
+      bulkMaxBytes,
+      entityConcurrency,
+      maxBatchesPerEntity,
+      maxRequestRetries,
+      onProgress: async (event) => {
+        if (event.type === 'batch') {
+          recordFtsSearchReindexBatch({
+            checkpoint: event.checkpoint,
+            entity: event.entity,
+            failed: event.failed,
+            indexed: event.indexed,
+            scanned: event.processed,
+          });
+        }
+        if (event.type === 'reconciliation') {
+          recordFtsSearchReindexReconciliation(event);
+        }
+        if (event.type === 'bulk_retry') {
+          recordFtsSearchReindexBulkRetry(event.entity);
+        }
+        if (event.type === 'bulk_completed') {
+          recordFtsSearchReindexBulkRequest(event);
+        }
+        console.log(JSON.stringify(event));
+        await auditLogger!.append(event);
+      },
+      retryBaseDelayMs,
+      validateIncrementalSyncSource: () => outbox.assertCaptureInfrastructure(),
     },
-    retryBaseDelayMs,
-    validateIncrementalSyncSource: () => outbox.assertCaptureInfrastructure(),
-  });
-  const result = await service.run(namespace, SEARCH_INDEX_SCHEMA_VERSION);
+  );
+  const result = await service.run(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
   console.log(JSON.stringify(result));
   const currentStatus = await printStatus();
   await auditLogger.append({
@@ -412,15 +417,15 @@ const run = async () => {
   });
 };
 
-observeSearchReindexRun(run)
+observeFtsSearchReindexRun(run)
   .catch(async (error) => {
-    const rootError = error instanceof SearchReindexEntityError ? error.cause : error;
+    const rootError = error instanceof FtsSearchReindexEntityError ? error.cause : error;
     logErrorSummary('❌ Elasticsearch reindex failed:', rootError);
     if (auditLogger) {
       const failure = {
         elapsedMs: Date.now() - executionStartedAt,
-        entity: error instanceof SearchReindexEntityError ? error.entity : null,
-        errorSummary: summarizeSearchReindexError(rootError),
+        entity: error instanceof FtsSearchReindexEntityError ? error.entity : null,
+        errorSummary: summarizeFtsSearchReindexError(rootError),
         errorType: rootError instanceof Error ? rootError.name.slice(0, 128) : 'UnknownError',
         type: 'session_failed' as const,
       };

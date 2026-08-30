@@ -32,7 +32,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import type { SearchCandidateSource } from '../repositories/search';
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import type { TopicItem } from '../schemas';
 import {
   agentOperations,
@@ -291,19 +291,19 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
-  private searchCandidateSource?: SearchCandidateSource;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
-    searchCandidateSource?: SearchCandidateSource,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
-    this.searchCandidateSource = searchCandidateSource;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -853,15 +853,15 @@ export class TopicModel {
     const scopeCondition = this.matchKeywordScope(scopeOptions);
 
     const bm25Query = sanitizeBm25Query(keyword);
-    const candidateResults = this.searchCandidateSource?.candidateSearchEnabled
+    const candidateResults = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
       ? await Promise.all([
-          this.searchCandidateSource.searchCandidates({
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'topics',
             filters: { topicScope: scopeOptions },
             pagination: {},
             query: { fields: ['title'], text: keyword },
           }),
-          this.searchCandidateSource.searchCandidates({
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'messages',
             filters: { topicScope: scopeOptions },
             pagination: {},

@@ -1,13 +1,13 @@
-export interface ElasticsearchSyncCliOptions {
+export interface ElasticsearchFtsSearchSyncCliOptions {
   maxSteps: number;
   yes: boolean;
 }
 
 const MAX_ALLOWED_STEPS = 100;
 
-export const parseElasticsearchSyncCliOptions = (
+export const parseElasticsearchFtsSearchSyncCliOptions = (
   args: readonly string[],
-): ElasticsearchSyncCliOptions => {
+): ElasticsearchFtsSearchSyncCliOptions => {
   const knownFlags = new Set(['--yes']);
   const unknownArgument = args.find(
     (argument) => !knownFlags.has(argument) && !argument.startsWith('--max-steps='),

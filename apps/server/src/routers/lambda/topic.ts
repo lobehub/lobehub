@@ -34,7 +34,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { createSearchRepo } from '@/server/services/searchBackend';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
@@ -85,7 +85,7 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 const topicSearchProcedure = topicProcedure.use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
-  const searchRepo = await createSearchRepo({
+  const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
@@ -93,7 +93,7 @@ const topicSearchProcedure = topicProcedure.use(async (opts) => {
 
   return opts.next({
     ctx: {
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId, workspaceId, searchRepo),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });

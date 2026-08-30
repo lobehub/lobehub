@@ -8,7 +8,7 @@ import { knowledgeBaseFiles } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-import { createSearchRepo } from '@/server/services/searchBackend';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 import { DocumentService } from '../document';
 import { KnowledgeBaseSearchService } from './index';
@@ -16,7 +16,7 @@ import { KnowledgeBaseSearchService } from './index';
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
-vi.mock('@/server/services/searchBackend', () => ({ createSearchRepo: vi.fn() }));
+vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }));
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
@@ -51,7 +51,7 @@ describe('KnowledgeBaseSearchService', () => {
     vi.mocked(ChunkModel).mockImplementation(() => chunkModelMock);
     vi.mocked(DocumentModel).mockImplementation(() => documentModelMock);
     vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(createSearchRepo).mockResolvedValue(searchRepoMock);
+    vi.mocked(createFtsSearchRepo).mockResolvedValue(searchRepoMock);
     vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
 
     service = new KnowledgeBaseSearchService(serverDB, userId);
@@ -201,7 +201,7 @@ describe('KnowledgeBaseSearchService', () => {
 
       await scopedService.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'hello' });
 
-      expect(createSearchRepo).toHaveBeenCalledWith({
+      expect(createFtsSearchRepo).toHaveBeenCalledWith({
         callerAgentVisibility: 'public',
         db: serverDB,
         userId,

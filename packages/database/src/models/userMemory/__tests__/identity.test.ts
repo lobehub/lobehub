@@ -452,7 +452,7 @@ describe('UserMemoryIdentityModel', () => {
     });
 
     it('hydrates external candidates through the default self relationship filter', async () => {
-      const searchCandidates = vi.fn().mockResolvedValue({
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
         candidates: [
           { id: 'other-list-id', score: 12 },
           { id: 'deleted-list-id', score: 10 },
@@ -462,15 +462,15 @@ describe('UserMemoryIdentityModel', () => {
         total: 4,
       });
       const model = new UserMemoryIdentityModel(serverDB, userId, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.queryList({ q: 'candidate' });
 
       expect(result.items.map(({ id }) => id)).toEqual(['list-id-2']);
       expect(result.total).toBe(1);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'memoryIdentities',
         filters: { memoryRelationships: [RelationshipEnum.Self] },
         pagination: {},

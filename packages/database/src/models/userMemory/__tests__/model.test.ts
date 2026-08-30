@@ -565,7 +565,7 @@ describe('UserMemoryModel', () => {
           currentStatus: 'active',
           user: otherUserId,
         });
-        const searchCandidates = vi.fn().mockResolvedValue({
+        const ftsSearchCandidates = vi.fn().mockResolvedValue({
           candidates: [
             { id: otherUser.id, score: 12 },
             { id: 'deleted-context', score: 10 },
@@ -575,8 +575,8 @@ describe('UserMemoryModel', () => {
           total: 4,
         });
         const model = new UserMemoryModel(serverDB, userId, {
-          candidateSearchEnabled: true,
-          searchCandidates,
+          ftsSearchCandidateEnabled: true,
+          ftsSearchCandidates,
         });
 
         const result = await model.queryMemories({
@@ -589,7 +589,7 @@ describe('UserMemoryModel', () => {
           expect.objectContaining({ context: expect.objectContaining({ id: matching.id }) }),
         ]);
         expect(result.total).toBe(1);
-        expect(searchCandidates).toHaveBeenCalledWith({
+        expect(ftsSearchCandidates).toHaveBeenCalledWith({
           entity: 'memoryContexts',
           filters: { memoryStatus: ['active'] },
           pagination: {},
@@ -612,10 +612,10 @@ describe('UserMemoryModel', () => {
       });
 
       it('preserves parent memory fields and any-tag semantics for external candidates', async () => {
-        const searchCandidates = vi.fn().mockResolvedValue({ candidates: [], total: 0 });
+        const ftsSearchCandidates = vi.fn().mockResolvedValue({ candidates: [], total: 0 });
         const model = new UserMemoryModel(serverDB, userId, {
-          candidateSearchEnabled: true,
-          searchCandidates,
+          ftsSearchCandidateEnabled: true,
+          ftsSearchCandidates,
         });
 
         await model.queryMemories({
@@ -624,7 +624,7 @@ describe('UserMemoryModel', () => {
           tags: ['typescript', 'search'],
         });
 
-        expect(searchCandidates).toHaveBeenCalledWith({
+        expect(ftsSearchCandidates).toHaveBeenCalledWith({
           entity: 'memoryActivities',
           filters: {
             memoryTagMatch: 'any',
@@ -725,7 +725,7 @@ describe('UserMemoryModel', () => {
         memoryIdentities: identity.id,
         memoryPreferences: preference.id,
       };
-      const searchCandidates = vi
+      const ftsSearchCandidates = vi
         .fn()
         .mockImplementation((request: { entity: keyof typeof candidateIds }) =>
           Promise.resolve({
@@ -734,8 +734,8 @@ describe('UserMemoryModel', () => {
           }),
         );
       const model = new UserMemoryModel(serverDB, userId, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.searchMemory({
@@ -755,7 +755,7 @@ describe('UserMemoryModel', () => {
       expect(result.experiences.map(({ id }) => id)).toEqual([experience.id]);
       expect(result.identities.map(({ id }) => id)).toEqual([identity.id]);
       expect(result.preferences.map(({ id }) => id)).toEqual([preference.id]);
-      expect(searchCandidates).toHaveBeenCalledTimes(5);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(5);
     });
 
     it('boosts short-term related memories with matching tags and category during hybrid ranking', async () => {

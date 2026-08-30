@@ -59,7 +59,7 @@ import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 import { today } from '@/utils/time';
 
-import type { SearchCandidateSource } from '../repositories/search';
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import {
   agentsToSessions,
   chunks,
@@ -451,19 +451,19 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
-  private searchCandidateSource?: SearchCandidateSource;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
-    searchCandidateSource?: SearchCandidateSource,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
-    this.searchCandidateSource = searchCandidateSource;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -2064,8 +2064,8 @@ export class MessageModel {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
-    const candidateResult = this.searchCandidateSource?.candidateSearchEnabled
-      ? await this.searchCandidateSource.searchCandidates({
+    const candidateResult = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+      ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
           entity: 'messages',
           filters: {},
           pagination: {},

@@ -12,8 +12,8 @@ import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
-import { createSearchRepo } from '@/server/services/searchBackend';
 import { AgentChatConfigSchema } from '@/types/agent';
 import { LobeMetaDataSchema } from '@/types/meta';
 import { type BatchTaskResult } from '@/types/service';
@@ -69,7 +69,7 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 const sessionSearchProcedure = sessionProcedure.use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
-  const searchRepo = await createSearchRepo({
+  const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
@@ -77,7 +77,7 @@ const sessionSearchProcedure = sessionProcedure.use(async (opts) => {
 
   return opts.next({
     ctx: {
-      sessionModel: new SessionModel(ctx.serverDB, ctx.userId, workspaceId, searchRepo),
+      sessionModel: new SessionModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });

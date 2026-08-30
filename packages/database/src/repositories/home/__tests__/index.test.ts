@@ -670,7 +670,7 @@ describe('HomeRepository', () => {
         { id: 'candidate-group-own', title: 'Own group', userId },
         { id: 'candidate-group-other', title: 'Other group', userId: otherUserId },
       ]);
-      const searchCandidates = vi.fn().mockImplementation(({ entity }) =>
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
         Promise.resolve({
           candidates:
             entity === 'agents'
@@ -689,8 +689,8 @@ describe('HomeRepository', () => {
         }),
       );
       const repo = new HomeRepository(clientDB, userId, undefined, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await repo.searchAgents('candidate');
@@ -699,8 +699,8 @@ describe('HomeRepository', () => {
         'candidate-agent-own',
         'candidate-group-own',
       ]);
-      expect(searchCandidates).toHaveBeenCalledTimes(2);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(2);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'agents',
         filters: { excludeVirtual: true },
         pagination: {},

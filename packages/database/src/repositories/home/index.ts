@@ -23,7 +23,7 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { buildWorkspaceWhere } from '../../utils/workspace';
-import type { SearchCandidateSource } from '../search';
+import type { FtsSearchCandidateSource } from '../ftsSearch';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
@@ -45,18 +45,18 @@ export class HomeRepository {
   private userId: string;
   private workspaceId?: string;
   private db: LobeChatDatabase;
-  private searchCandidateSource?: SearchCandidateSource;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
-    searchCandidateSource?: SearchCandidateSource,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.db = db;
-    this.searchCandidateSource = searchCandidateSource;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private get scope() {
@@ -475,15 +475,15 @@ export class HomeRepository {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
-    const candidateResults = this.searchCandidateSource?.candidateSearchEnabled
+    const candidateResults = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
       ? await Promise.all([
-          this.searchCandidateSource.searchCandidates({
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'agents',
             filters: { excludeVirtual: true },
             pagination: {},
             query: { fields: ['title', 'description'], text: keyword },
           }),
-          this.searchCandidateSource.searchCandidates({
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'chatGroups',
             filters: {},
             pagination: {},

@@ -1858,7 +1858,7 @@ describe('TopicModel - Query', () => {
           userId: userId2,
         },
       ]);
-      const searchCandidates = vi.fn().mockImplementation(({ entity }) =>
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
         Promise.resolve({
           candidates:
             entity === 'topics'
@@ -1877,8 +1877,8 @@ describe('TopicModel - Query', () => {
         }),
       );
       const model = new TopicModel(serverDB, userId, undefined, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.queryByKeyword('candidate', sessionId);
@@ -1887,13 +1887,13 @@ describe('TopicModel - Query', () => {
         'candidate-topic-message',
         'candidate-topic-title',
       ]);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'topics',
         filters: { topicScope: { containerId: sessionId } },
         pagination: {},
         query: { fields: ['title'], text: 'candidate' },
       });
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'messages',
         filters: { topicScope: { containerId: sessionId } },
         pagination: {},

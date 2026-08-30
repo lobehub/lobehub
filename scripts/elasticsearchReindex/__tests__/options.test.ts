@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertSearchReindexElasticsearchHostname,
-  assertSearchReindexTelemetryExportConfigured,
-  resolveSearchReindexElasticsearchEnvironment,
-  resolveSearchReindexTelemetryEnvironment,
+  assertFtsSearchReindexElasticsearchHostname,
+  assertFtsSearchReindexTelemetryExportConfigured,
+  resolveFtsSearchReindexElasticsearchEnvironment,
+  resolveFtsSearchReindexTelemetryEnvironment,
 } from '../options';
 
-describe('resolveSearchReindexElasticsearchEnvironment', () => {
+describe('resolveFtsSearchReindexElasticsearchEnvironment', () => {
   it('uses the canonical pair by default', () => {
-    expect(resolveSearchReindexElasticsearchEnvironment([])).toEqual({
+    expect(resolveFtsSearchReindexElasticsearchEnvironment([])).toEqual({
       apiKeyEnvironmentName: 'ES_API_KEY',
       urlEnvironmentName: 'ES_URL',
     });
@@ -17,7 +17,7 @@ describe('resolveSearchReindexElasticsearchEnvironment', () => {
 
   it('selects an explicit endpoint and credential pair without reading their values', () => {
     expect(
-      resolveSearchReindexElasticsearchEnvironment([
+      resolveFtsSearchReindexElasticsearchEnvironment([
         '--elasticsearch-url-env=DEV_SEARCH_ES_URL',
         '--elasticsearch-api-key-env=DEV_SEARCH_ES_API_KEY',
         '--expected-elasticsearch-host-prefix=dev-search-',
@@ -31,10 +31,12 @@ describe('resolveSearchReindexElasticsearchEnvironment', () => {
 
   it('refuses a partial pair or a non-environment-variable name', () => {
     expect(() =>
-      resolveSearchReindexElasticsearchEnvironment(['--elasticsearch-url-env=DEV_SEARCH_ES_URL']),
+      resolveFtsSearchReindexElasticsearchEnvironment([
+        '--elasticsearch-url-env=DEV_SEARCH_ES_URL',
+      ]),
     ).toThrow('must be provided together');
     expect(() =>
-      resolveSearchReindexElasticsearchEnvironment([
+      resolveFtsSearchReindexElasticsearchEnvironment([
         '--elasticsearch-url-env=../../secret',
         '--elasticsearch-api-key-env=ES_API_KEY',
       ]),
@@ -43,33 +45,33 @@ describe('resolveSearchReindexElasticsearchEnvironment', () => {
 
   it('refuses a hostname outside the explicitly required target prefix', () => {
     expect(() =>
-      assertSearchReindexElasticsearchHostname('production-search.example.com', 'dev-search-'),
+      assertFtsSearchReindexElasticsearchHostname('production-search.example.com', 'dev-search-'),
     ).toThrow('does not match required prefix');
     expect(() =>
-      assertSearchReindexElasticsearchHostname('dev-search-abc.example.com', 'dev-search-'),
+      assertFtsSearchReindexElasticsearchHostname('dev-search-abc.example.com', 'dev-search-'),
     ).not.toThrow();
   });
 });
 
-describe('resolveSearchReindexTelemetryEnvironment', () => {
+describe('resolveFtsSearchReindexTelemetryEnvironment', () => {
   it('requires an explicit, bounded environment label when provided', () => {
-    expect(resolveSearchReindexTelemetryEnvironment([])).toBeUndefined();
-    expect(resolveSearchReindexTelemetryEnvironment(['--telemetry-environment=development'])).toBe(
-      'development',
-    );
+    expect(resolveFtsSearchReindexTelemetryEnvironment([])).toBeUndefined();
+    expect(
+      resolveFtsSearchReindexTelemetryEnvironment(['--telemetry-environment=development']),
+    ).toBe('development');
     expect(() =>
-      resolveSearchReindexTelemetryEnvironment(['--telemetry-environment=Production']),
+      resolveFtsSearchReindexTelemetryEnvironment(['--telemetry-environment=Production']),
     ).toThrow('must be one of development, preview, or production');
     expect(() =>
-      resolveSearchReindexTelemetryEnvironment(['--telemetry-environment=staging']),
+      resolveFtsSearchReindexTelemetryEnvironment(['--telemetry-environment=staging']),
     ).toThrow('must be one of development, preview, or production');
   });
 });
 
-describe('assertSearchReindexTelemetryExportConfigured', () => {
+describe('assertFtsSearchReindexTelemetryExportConfigured', () => {
   it('accepts a shared OTLP endpoint', () => {
     expect(() =>
-      assertSearchReindexTelemetryExportConfigured({
+      assertFtsSearchReindexTelemetryExportConfigured({
         OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector.example.com',
       }),
     ).not.toThrow();
@@ -77,7 +79,7 @@ describe('assertSearchReindexTelemetryExportConfigured', () => {
 
   it('accepts separate metrics and traces endpoints', () => {
     expect(() =>
-      assertSearchReindexTelemetryExportConfigured({
+      assertFtsSearchReindexTelemetryExportConfigured({
         OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: 'https://collector.example.com/v1/metrics',
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'https://collector.example.com/v1/traces',
       }),
@@ -85,16 +87,16 @@ describe('assertSearchReindexTelemetryExportConfigured', () => {
   });
 
   it('refuses telemetry without both export destinations', () => {
-    expect(() => assertSearchReindexTelemetryExportConfigured({})).toThrow(
+    expect(() => assertFtsSearchReindexTelemetryExportConfigured({})).toThrow(
       'OTLP metrics and traces export endpoints are required',
     );
     expect(() =>
-      assertSearchReindexTelemetryExportConfigured({
+      assertFtsSearchReindexTelemetryExportConfigured({
         OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: 'https://collector.example.com/v1/metrics',
       }),
     ).toThrow('OTLP metrics and traces export endpoints are required');
     expect(() =>
-      assertSearchReindexTelemetryExportConfigured({
+      assertFtsSearchReindexTelemetryExportConfigured({
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'https://collector.example.com/v1/traces',
       }),
     ).toThrow('OTLP metrics and traces export endpoints are required');

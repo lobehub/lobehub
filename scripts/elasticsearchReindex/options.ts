@@ -1,10 +1,10 @@
-export interface SearchReindexElasticsearchEnvironment {
+export interface FtsSearchReindexElasticsearchEnvironment {
   apiKeyEnvironmentName: string;
   expectedHostPrefix?: string;
   urlEnvironmentName: string;
 }
 
-export type SearchReindexTelemetryEnvironment = 'development' | 'preview' | 'production';
+export type FtsSearchReindexTelemetryEnvironment = 'development' | 'preview' | 'production';
 
 const readEnvironmentVariableNameArgument = (args: readonly string[], name: string) => {
   const argument = args.find((item) => item.startsWith(`${name}=`));
@@ -27,9 +27,9 @@ const readHostPrefixArgument = (args: readonly string[]) => {
   return value;
 };
 
-export const resolveSearchReindexElasticsearchEnvironment = (
+export const resolveFtsSearchReindexElasticsearchEnvironment = (
   args: readonly string[],
-): SearchReindexElasticsearchEnvironment => {
+): FtsSearchReindexElasticsearchEnvironment => {
   const apiKeyEnvironmentName = readEnvironmentVariableNameArgument(
     args,
     '--elasticsearch-api-key-env',
@@ -47,9 +47,9 @@ export const resolveSearchReindexElasticsearchEnvironment = (
   };
 };
 
-export const resolveSearchReindexTelemetryEnvironment = (
+export const resolveFtsSearchReindexTelemetryEnvironment = (
   args: readonly string[],
-): SearchReindexTelemetryEnvironment | undefined => {
+): FtsSearchReindexTelemetryEnvironment | undefined => {
   const name = '--telemetry-environment';
   const argument = args.find((item) => item.startsWith(`${name}=`));
   if (!argument) return;
@@ -60,7 +60,7 @@ export const resolveSearchReindexTelemetryEnvironment = (
   return value;
 };
 
-export const assertSearchReindexTelemetryExportConfigured = (
+export const assertFtsSearchReindexTelemetryExportConfigured = (
   environment: Readonly<Record<string, string | undefined>>,
 ) => {
   const sharedEndpoint = Boolean(environment.OTEL_EXPORTER_OTLP_ENDPOINT);
@@ -75,7 +75,7 @@ export const assertSearchReindexTelemetryExportConfigured = (
   }
 };
 
-export const assertSearchReindexElasticsearchHostname = (
+export const assertFtsSearchReindexElasticsearchHostname = (
   hostname: string,
   expectedHostPrefix?: string,
 ) => {

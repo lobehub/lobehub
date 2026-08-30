@@ -10,7 +10,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
-import type { SearchCandidateSource } from '../repositories/search';
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
 import { agents, agentsToSessions, sessionGroups, sessions } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -23,19 +23,19 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
-  private searchCandidateSource?: SearchCandidateSource;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
-    searchCandidateSource?: SearchCandidateSource,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
-    this.searchCandidateSource = searchCandidateSource;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -614,8 +614,8 @@ export class SessionModel {
     const { keyword, pageSize = 9999, current = 0 } = params;
     const offset = current * pageSize;
 
-    if (this.searchCandidateSource?.candidateSearchEnabled) {
-      const { candidates } = await this.searchCandidateSource.searchCandidates({
+    if (this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled) {
+      const { candidates } = await this.ftsSearchCandidateSource.ftsSearchCandidates({
         entity: 'agents',
         filters: {},
         pagination: {},

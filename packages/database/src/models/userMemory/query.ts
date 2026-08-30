@@ -21,10 +21,10 @@ import {
 } from 'drizzle-orm';
 
 import type {
-  SearchBackendEntity,
-  SearchBackendFilters,
-  SearchCandidateSource,
-} from '../../repositories/search';
+  FtsSearchBackendEntity,
+  FtsSearchBackendFilters,
+  FtsSearchCandidateSource,
+} from '../../repositories/ftsSearch';
 import type {
   UserMemoryActivitiesWithoutVectors,
   UserMemoryContextsWithoutVectors,
@@ -664,7 +664,7 @@ export class UserMemoryQueryModel {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
-    private readonly searchCandidateSource?: SearchCandidateSource,
+    private readonly ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {}
 
   private memoryWhere(table: { userId: any }) {
@@ -672,9 +672,9 @@ export class UserMemoryQueryModel {
   }
 
   private buildCandidateFilters(
-    entity: SearchBackendEntity,
+    entity: FtsSearchBackendEntity,
     params: SearchMemoryParams,
-  ): SearchBackendFilters {
+  ): FtsSearchBackendFilters {
     const memoryTags = this.toSearchTags(params);
 
     return {
@@ -691,16 +691,16 @@ export class UserMemoryQueryModel {
     };
   }
 
-  private async searchExternalCandidates(params: {
-    entity: SearchBackendEntity;
+  private async fetchFtsSearchCandidates(params: {
+    entity: FtsSearchBackendEntity;
     fields: string[];
     limit: number;
     query: string;
     searchParams: SearchMemoryParams;
   }) {
-    if (!this.searchCandidateSource?.candidateSearchEnabled) return undefined;
+    if (!this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled) return undefined;
 
-    const { candidates } = await this.searchCandidateSource.searchCandidates({
+    const { candidates } = await this.ftsSearchCandidateSource.ftsSearchCandidates({
       entity: params.entity,
       filters: this.buildCandidateFilters(params.entity, params.searchParams),
       pagination: { limit: params.limit },
@@ -2132,7 +2132,7 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const candidateIds = normalizedQuery
-      ? await this.searchExternalCandidates({
+      ? await this.fetchFtsSearchCandidates({
           entity: 'memoryActivities',
           fields: [
             'parent_title',
@@ -2218,7 +2218,7 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const candidateIds = normalizedQuery
-      ? await this.searchExternalCandidates({
+      ? await this.fetchFtsSearchCandidates({
           entity: 'memoryContexts',
           fields: ['parent_text', 'title', 'description', 'current_status'],
           limit,
@@ -2336,7 +2336,7 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const candidateIds = normalizedQuery
-      ? await this.searchExternalCandidates({
+      ? await this.fetchFtsSearchCandidates({
           entity: 'memoryExperiences',
           fields: [
             'parent_title',
@@ -2417,7 +2417,7 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const candidateIds = normalizedQuery
-      ? await this.searchExternalCandidates({
+      ? await this.fetchFtsSearchCandidates({
           entity: 'memoryPreferences',
           fields: [
             'parent_title',
@@ -2492,7 +2492,7 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const candidateIds = normalizedQuery
-      ? await this.searchExternalCandidates({
+      ? await this.fetchFtsSearchCandidates({
           entity: 'memoryIdentities',
           fields: ['parent_title', 'parent_summary', 'parent_details', 'description', 'role'],
           limit,

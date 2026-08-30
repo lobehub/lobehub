@@ -20,8 +20,8 @@ import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
-import { createSearchRepo } from '@/server/services/searchBackend';
 
 import {
   assertCanUseConversationTargets,
@@ -59,7 +59,7 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 const messageSearchProcedure = messageProcedure.use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
-  const searchRepo = await createSearchRepo({
+  const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
@@ -67,7 +67,7 @@ const messageSearchProcedure = messageProcedure.use(async (opts) => {
 
   return opts.next({
     ctx: {
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId, workspaceId, searchRepo),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });

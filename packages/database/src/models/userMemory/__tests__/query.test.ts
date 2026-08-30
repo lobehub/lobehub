@@ -310,7 +310,7 @@ describe('user memory query layer', () => {
   describe('searchMemory', () => {
     it('uses external candidates only for the lexical leg and rechecks PostgreSQL rows', async () => {
       const { activity } = await createActivityPair({ title: 'External lexical activity' });
-      const searchCandidates = vi.fn().mockResolvedValue({
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
         candidates: [
           { id: 'deleted-activity', score: 10 },
           { id: activity.id, score: 8 },
@@ -318,8 +318,8 @@ describe('user memory query layer', () => {
         total: 2,
       });
       const model = new UserMemoryModel(serverDB, userId, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.searchMemory({
@@ -330,7 +330,7 @@ describe('user memory query layer', () => {
       });
 
       expect(result.activities.map(({ id }) => id)).toEqual([activity.id]);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'memoryActivities',
         filters: { memoryStatus: ['completed'] },
         pagination: { limit: 15 },

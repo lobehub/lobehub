@@ -237,7 +237,7 @@ describe('UserMemoryActivityModel', () => {
     });
 
     it('hydrates external keyword candidates through current user and filter constraints', async () => {
-      const searchCandidates = vi.fn().mockResolvedValue({
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
         candidates: [
           { id: 'other-list-activity', score: 12 },
           { id: 'deleted-list-activity', score: 10 },
@@ -247,15 +247,15 @@ describe('UserMemoryActivityModel', () => {
         total: 4,
       });
       const model = new UserMemoryActivityModel(serverDB, userId, {
-        candidateSearchEnabled: true,
-        searchCandidates,
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
       });
 
       const result = await model.queryList({ q: 'candidate', status: ['completed'] });
 
       expect(result.items.map(({ id }) => id)).toEqual(['list-activity-1']);
       expect(result.total).toBe(1);
-      expect(searchCandidates).toHaveBeenCalledWith({
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'memoryActivities',
         filters: { memoryStatus: ['completed'] },
         pagination: {},

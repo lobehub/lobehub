@@ -38,8 +38,8 @@ describe('Node observability resource attributes', () => {
       histogramViews: [
         {
           boundaries: [1000, 3000, 5000],
-          instrumentName: 'search_backend_operation_duration',
-          meterName: 'search-backend',
+          instrumentName: 'fts_search_backend_operation_duration',
+          meterName: 'fts-search-backend',
         },
       ],
     });
@@ -48,8 +48,8 @@ describe('Node observability resource attributes', () => {
       views: [
         {
           aggregation: { options: { boundaries: [1000, 3000, 5000] } },
-          instrumentName: 'search_backend_operation_duration',
-          meterName: 'search-backend',
+          instrumentName: 'fts_search_backend_operation_duration',
+          meterName: 'fts-search-backend',
         },
       ],
     });

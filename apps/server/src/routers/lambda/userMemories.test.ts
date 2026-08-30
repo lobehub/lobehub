@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type * as UserMemoryModule from '@/database/models/userMemory';
 import { UserMemoryModel } from '@/database/models/userMemory';
-import { SearchCandidateSearchError } from '@/database/repositories/search';
+import { FtsSearchCandidateError } from '@/database/repositories/ftsSearch';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { userMemoriesRouter } from './userMemories';
@@ -244,7 +244,7 @@ describe('userMemories.queryMemories', () => {
 
   it('propagates candidate-provider failures instead of returning a successful empty page', async () => {
     const providerError = new Error('Elasticsearch unavailable');
-    const queryMemories = vi.fn().mockRejectedValue(new SearchCandidateSearchError(providerError));
+    const queryMemories = vi.fn().mockRejectedValue(new FtsSearchCandidateError(providerError));
 
     vi.mocked(UserMemoryModel).mockImplementation(() => ({ queryMemories }) as any);
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
@@ -254,7 +254,7 @@ describe('userMemories.queryMemories', () => {
     await expect(caller.queryMemories({ q: 'atlas' })).rejects.toMatchObject({
       cause: {
         cause: providerError,
-        name: SearchCandidateSearchError.name,
+        name: FtsSearchCandidateError.name,
       },
       code: 'INTERNAL_SERVER_ERROR',
     });
