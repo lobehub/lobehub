@@ -50,6 +50,9 @@ export const componentMap = {
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: loading('Settings > Storage'),
   }),
+  [SettingsTabs.Trash]: dynamic(() => import('../trash'), {
+    loading: loading('Settings > Trash'),
+  }),
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
   }),
