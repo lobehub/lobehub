@@ -38,10 +38,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   listening: css`
-    color: ${cssVar.colorWhite};
+    color: ${cssVar.colorBgContainer};
 
-    background: ${cssVar.colorSuccess};
-    box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
+    background: ${cssVar.colorPrimary};
+    box-shadow: 0 0 0 3px ${cssVar.colorPrimaryBg};
 
     transition:
       color 160ms ease,
@@ -51,29 +51,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     animation: dictation-halo-breathe 1.6s ease-in-out infinite;
 
     &:hover {
-      color: ${cssVar.colorWhite};
-      background: ${cssVar.colorSuccessHover};
-      box-shadow: 0 0 0 4px ${cssVar.colorSuccessBgHover};
+      color: ${cssVar.colorBgContainer};
+      background: ${cssVar.colorPrimaryHover};
+      box-shadow: 0 0 0 4px ${cssVar.colorPrimaryBgHover};
     }
 
     &:active {
       transform: scale(0.94);
-      background: ${cssVar.colorSuccessActive};
+      background: ${cssVar.colorPrimaryActive};
     }
 
     &:focus-visible {
-      outline: 2px solid ${cssVar.colorSuccess};
+      outline: 2px solid ${cssVar.colorPrimary};
       outline-offset: 3px;
     }
 
     @keyframes dictation-halo-breathe {
       0%,
       100% {
-        box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
+        box-shadow: 0 0 0 3px ${cssVar.colorPrimaryBg};
       }
 
       50% {
-        box-shadow: 0 0 0 6px ${cssVar.colorSuccessBgHover};
+        box-shadow: 0 0 0 6px ${cssVar.colorPrimaryBgHover};
       }
     }
 
