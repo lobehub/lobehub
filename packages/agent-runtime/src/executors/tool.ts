@@ -722,6 +722,9 @@ export const callTool =
         nextContext: {
           payload: {
             data: executionResult,
+            // Server-observed span vs the device's own — their difference is
+            // the dispatch overhead, which only the trace can show after the fact.
+            deviceExecutionTime: execution.result.deviceExecutionTime,
             executionTime,
             isSuccess,
             parentMessageId: toolMessageId,
