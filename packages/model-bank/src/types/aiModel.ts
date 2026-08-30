@@ -688,7 +688,6 @@ export interface LobeDefaultAiModelListItem extends AiFullModelCard {
 // create
 export const CreateAiModelSchema = z.object({
   abilities: AiModelAbilitiesSchema.optional(),
-  agentCompatibility: AgentCompatibilitySchema.optional(),
   contextWindowTokens: z.number().optional(),
   displayName: z.string().optional(),
   id: z.string(),
@@ -730,7 +729,6 @@ export interface AiProviderModelListItem {
 // Update
 export const UpdateAiModelSchema = z.object({
   abilities: AiModelAbilitiesSchema.optional(),
-  agentCompatibility: AgentCompatibilitySchema.optional(),
   // NOTE: `chatConfig` is deliberately NOT accepted here — model-instance reasoning
   // defaults go through the dedicated updateAiModelReasoningConfig procedure so the
   // generic update path can never carry (and thus never stomp) that namespace.
