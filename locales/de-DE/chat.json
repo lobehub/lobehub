@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Aktualisiert am",
   "taskList.scheduled.empty": "Noch keine geplanten Aufgaben",
   "taskList.scheduled.title": "Geplante Aufgaben",
+  "taskList.subtaskProgress.loadFailed": "Die Unteraufgaben konnten nicht geladen werden. Klicken Sie auf das Fortschrittsabzeichen, um es erneut zu versuchen.",
   "taskList.title": "Aufgaben",
   "taskList.unassigned": "Nicht zugewiesen",
   "taskList.unassignedAgentHint": "Lobe AI wird diese Aufgabe ausführen, wenn kein Agent ausgewählt ist",

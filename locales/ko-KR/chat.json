@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "수정일",
   "taskList.scheduled.empty": "아직 예정된 작업이 없습니다",
   "taskList.scheduled.title": "예정된 작업",
+  "taskList.subtaskProgress.loadFailed": "하위 작업을 불러오지 못했습니다. 진행 배지를 클릭하여 다시 시도하세요.",
   "taskList.title": "작업",
   "taskList.unassigned": "미할당",
   "taskList.unassignedAgentHint": "에이전트가 선택되지 않은 경우 Lobe AI가 이 작업을 실행합니다",

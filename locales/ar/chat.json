@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "تاريخ التحديث",
   "taskList.scheduled.empty": "لا توجد مهام مجدولة حتى الآن",
   "taskList.scheduled.title": "المهام المجدولة",
+  "taskList.subtaskProgress.loadFailed": "تعذر تحميل المهام الفرعية. انقر على شارة التقدم لإعادة المحاولة.",
   "taskList.title": "المهام",
   "taskList.unassigned": "غير مكلّف",
   "taskList.unassignedAgentHint": "سيقوم Lobe AI بتنفيذ هذه المهمة عند عدم اختيار وكيل",

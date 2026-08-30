@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Data aktualizacji",
   "taskList.scheduled.empty": "Brak zaplanowanych zadań",
   "taskList.scheduled.title": "Zaplanowane zadania",
+  "taskList.subtaskProgress.loadFailed": "Nie udało się załadować podzadań. Kliknij odznakę postępu, aby spróbować ponownie.",
   "taskList.title": "Zadania",
   "taskList.unassigned": "Nieprzypisane",
   "taskList.unassignedAgentHint": "Lobe AI wykona to zadanie, gdy żaden agent nie zostanie wybrany",

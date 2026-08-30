@@ -7,6 +7,7 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import Avatar from '@/components/Avatar';
@@ -16,6 +17,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import { hasWorkspaceMemberDirectory } from '../shared/memberAssigneeMode';
 
 interface AssigneeMemberSelectorProps {
   children: ReactNode;
@@ -101,18 +104,24 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     const listRef = useRef<HTMLDivElement>(null);
 
     const updateTask = useTaskStore((state) => state.updateTask);
+    const activeWorkspaceId = useActiveWorkspaceId();
     const { isLoading } = useFetchWorkspaceMembers();
     const allMembers = useWorkspaceMembers();
     const selfUserId = useUserStore(userProfileSelectors.userId);
     const creatorId = taskCreatorId ?? selfUserId;
     const members = useMemo(() => {
+      // Personal mode has no member directory. Keep only the explicit
+      // unassigned option so an existing self-assignment can still be cleared
+      // without leaking a stale workspace member list into this picker.
+      if (!hasWorkspaceMemberDirectory(activeWorkspaceId)) return [];
+
       const assignableMembers = allMembers.filter((member) =>
         canWorkspaceRoleBeTaskAssignee(member.role),
       );
       return taskVisibility === 'private'
         ? assignableMembers.filter((member) => member.userId === creatorId)
         : assignableMembers;
-    }, [allMembers, creatorId, taskVisibility]);
+    }, [activeWorkspaceId, allMembers, creatorId, taskVisibility]);
 
     const query = search.trim().toLowerCase();
     const filteredMembers = useMemo(
@@ -248,15 +257,17 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
         trigger={'click'}
         content={
           <Flexbox onClick={(event) => event.stopPropagation()}>
-            <input
-              autoFocus
-              className={styles.searchInput}
-              placeholder={t('taskList.assigneeSearch.memberPlaceholder')}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={handleSearchKeyDown}
-            />
-            {isLoading ? (
+            {activeWorkspaceId && (
+              <input
+                autoFocus
+                className={styles.searchInput}
+                placeholder={t('taskList.assigneeSearch.memberPlaceholder')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={handleSearchKeyDown}
+              />
+            )}
+            {activeWorkspaceId && isLoading ? (
               <SkeletonList rows={6} />
             ) : flatOptions.length === 0 ? (
               <Flexbox align={'center'} justify={'center'} padding={16}>

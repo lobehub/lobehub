@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "更新时间",
   "taskList.scheduled.empty": "暂无定时任务",
   "taskList.scheduled.title": "定时任务",
+  "taskList.subtaskProgress.loadFailed": "无法加载子任务，请点击进度标签重试。",
   "taskList.title": "任务",
   "taskList.unassigned": "未分配",
   "taskList.unassignedAgentHint": "未选择助理时将由 Lobe AI 执行该任务",

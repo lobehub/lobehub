@@ -1,11 +1,12 @@
 import type { TaskDetailSubtask, TaskSubtaskProgress } from '@lobechat/types';
 import { Block, Flexbox } from '@lobehub/ui';
 import type { DropdownMenuProps } from '@lobehub/ui/base-ui';
-import { DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Text, toast } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import TaskStatusIcon from './TaskStatusIcon';
 
@@ -85,6 +86,7 @@ interface TaskSubtaskProgressTagProps {
 
 const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
   ({ subtasks, currentIdentifier, onRequestSubtasks, onSubtaskClick, progress }) => {
+    const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
     const [requesting, setRequesting] = useState(false);
     const flattenedSubtasks = useMemo(() => {
@@ -140,11 +142,12 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           if (await onRequestSubtasks()) setOpen(true);
         } catch (error) {
           console.error('Failed to load task subtasks:', error);
+          toast.error(t('taskList.subtaskProgress.loadFailed'));
         } finally {
           setRequesting(false);
         }
       },
-      [hasDropdown, onRequestSubtasks, requesting],
+      [hasDropdown, onRequestSubtasks, requesting, t],
     );
 
     if (!data) return null;

@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "تاریخ بروزرسانی",
   "taskList.scheduled.empty": "هنوز هیچ وظیفه‌ای برنامه‌ریزی نشده است",
   "taskList.scheduled.title": "وظایف برنامه‌ریزی شده",
+  "taskList.subtaskProgress.loadFailed": "بارگذاری زیرکارها انجام نشد. برای تلاش مجدد روی نشان پیشرفت کلیک کنید.",
   "taskList.title": "وظایف",
   "taskList.unassigned": "واگذار نشده",
   "taskList.unassignedAgentHint": "Lobe AI این وظیفه را اجرا خواهد کرد وقتی هیچ نماینده‌ای انتخاب نشده باشد",

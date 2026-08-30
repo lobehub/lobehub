@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Updated at",
   "taskList.scheduled.empty": "No scheduled tasks yet",
   "taskList.scheduled.title": "Scheduled tasks",
+  "taskList.subtaskProgress.loadFailed": "Couldn't load sub-tasks. Click the progress badge to retry.",
   "taskList.title": "Tasks",
   "taskList.unassigned": "Unassigned",
   "taskList.unassignedAgentHint": "Lobe AI will run this task when no agent is selected",

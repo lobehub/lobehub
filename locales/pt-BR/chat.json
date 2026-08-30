@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Atualizadas em",
   "taskList.scheduled.empty": "Nenhuma tarefa agendada ainda",
   "taskList.scheduled.title": "Tarefas agendadas",
+  "taskList.subtaskProgress.loadFailed": "Não foi possível carregar as subtarefas. Clique no indicador de progresso para tentar novamente.",
   "taskList.title": "Tarefas",
   "taskList.unassigned": "Sem responsável",
   "taskList.unassignedAgentHint": "O Lobe AI executará esta tarefa quando nenhum agente for selecionado",

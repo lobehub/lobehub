@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Data di aggiornamento",
   "taskList.scheduled.empty": "Nessun compito programmato al momento",
   "taskList.scheduled.title": "Compiti programmati",
+  "taskList.subtaskProgress.loadFailed": "Impossibile caricare le sottoattività. Fai clic sul badge di avanzamento per riprovare.",
   "taskList.title": "Attività",
   "taskList.unassigned": "Non assegnata",
   "taskList.unassignedAgentHint": "Lobe AI eseguirà questa attività quando nessun agente è selezionato",

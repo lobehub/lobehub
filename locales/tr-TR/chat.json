@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Güncellenme zamanı",
   "taskList.scheduled.empty": "Henüz planlanmış görev yok",
   "taskList.scheduled.title": "Planlanmış Görevler",
+  "taskList.subtaskProgress.loadFailed": "Alt görevler yüklenemedi. Yeniden denemek için ilerleme rozetine tıklayın.",
   "taskList.title": "Görevler",
   "taskList.unassigned": "Atanmamış",
   "taskList.unassignedAgentHint": "Hiçbir temsilci seçilmediğinde Lobe AI bu görevi çalıştıracaktır",

@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Ngày cập nhật",
   "taskList.scheduled.empty": "Chưa có nhiệm vụ được lên lịch",
   "taskList.scheduled.title": "Nhiệm vụ đã lên lịch",
+  "taskList.subtaskProgress.loadFailed": "Không thể tải các nhiệm vụ con. Nhấp vào huy hiệu tiến độ để thử lại.",
   "taskList.title": "Công Việc",
   "taskList.unassigned": "Chưa giao",
   "taskList.unassignedAgentHint": "Lobe AI sẽ thực hiện nhiệm vụ này khi không có đại lý nào được chọn",

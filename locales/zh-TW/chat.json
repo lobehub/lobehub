@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "更新時間",
   "taskList.scheduled.empty": "尚無排程任務",
   "taskList.scheduled.title": "排程任務",
+  "taskList.subtaskProgress.loadFailed": "無法載入子任務。點擊進度徽章以重試。",
   "taskList.title": "任務",
   "taskList.unassigned": "未指派",
   "taskList.unassignedAgentHint": "當未選擇代理人時，Lobe AI 將執行此任務",

@@ -15,6 +15,7 @@ import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
 import TaskScheduleConfig from './TaskScheduleConfig';
@@ -102,7 +103,7 @@ const TaskProperties = memo(() => {
         </Block>
       </TaskPriorityTag>
 
-      {activeWorkspaceId && (
+      {shouldShowMemberAssignee(activeWorkspaceId, assigneeUserId) && (
         <AssigneeMemberSelector
           fullWidth
           currentUserId={assigneeUserId}

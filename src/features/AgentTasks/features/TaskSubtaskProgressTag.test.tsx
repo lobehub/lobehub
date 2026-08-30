@@ -7,6 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 
+const mocks = vi.hoisted(() => ({
+  toastError: vi.fn(),
+}));
+
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   DropdownMenu: ({
@@ -33,6 +37,7 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       ))}
     </div>
   ),
+  toast: { error: mocks.toastError },
 }));
 
 vi.mock('./TaskStatusIcon', () => ({
@@ -42,6 +47,7 @@ vi.mock('./TaskStatusIcon', () => ({
 describe('TaskSubtaskProgressTag', () => {
   afterEach(() => {
     cleanup();
+    mocks.toastError.mockClear();
   });
 
   it("passes the clicked subtask's assignee to the navigation callback", () => {
@@ -104,5 +110,31 @@ describe('TaskSubtaskProgressTag', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true'));
+  });
+
+  it('surfaces lazy-load failures and keeps the progress badge retryable', async () => {
+    const onRequestSubtasks = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce(false);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <TaskSubtaskProgressTag
+        progress={{ completed: 0, total: 1 }}
+        onRequestSubtasks={onRequestSubtasks}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('0/1'));
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1));
+    expect(mocks.toastError).toHaveBeenCalledWith('taskList.subtaskProgress.loadFailed');
+
+    fireEvent.click(screen.getByText('0/1'));
+    await waitFor(() => expect(onRequestSubtasks).toHaveBeenCalledTimes(2));
+
+    consoleError.mockRestore();
   });
 });

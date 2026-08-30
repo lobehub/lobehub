@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Bijgewerkt op",
   "taskList.scheduled.empty": "Nog geen geplande taken",
   "taskList.scheduled.title": "Geplande taken",
+  "taskList.subtaskProgress.loadFailed": "Kon sub-taken niet laden. Klik op het voortgangsembleem om het opnieuw te proberen.",
   "taskList.title": "Taken",
   "taskList.unassigned": "Niet toegewezen",
   "taskList.unassignedAgentHint": "Lobe AI voert deze taak uit wanneer geen agent is geselecteerd",

@@ -1653,6 +1653,7 @@
   "taskList.orderBy.updatedAt": "Дата на обновяване",
   "taskList.scheduled.empty": "Все още няма планирани задачи",
   "taskList.scheduled.title": "Планирани задачи",
+  "taskList.subtaskProgress.loadFailed": "Неуспешно зареждане на подзадачите. Кликнете върху значката за напредък, за да опитате отново.",
   "taskList.title": "Задачи",
   "taskList.unassigned": "Без отговорник",
   "taskList.unassignedAgentHint": "Lobe AI ще изпълни тази задача, ако не е избран агент",
