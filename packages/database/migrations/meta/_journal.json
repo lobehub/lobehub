@@ -1071,6 +1071,13 @@
       "when": 1788016606062,
       "tag": "0152_trash_goal_traces_eval_dataset",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1788070190943,
+      "tag": "0153_search_sync_outbox",
+      "breakpoints": true
     }
   ],
   "version": "6"
