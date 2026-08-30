@@ -261,6 +261,7 @@ export const recomputeTopicUsage = async (
     FROM messages
     WHERE topic_id = ${topicId}
       AND ${rowOwnership}
+      AND is_deleted IS NOT TRUE
       AND role = 'assistant'
       AND (usage IS NOT NULL OR metadata ? 'usage')
       AND ${sql.raw(NOT_COPIED_TRANSCRIPT_SQL)}

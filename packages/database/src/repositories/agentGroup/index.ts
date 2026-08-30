@@ -466,6 +466,7 @@ export class AgentGroupRepository {
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             {
+              isDeleted: sessionGroups.isDeleted,
               userId: sessionGroups.userId,
               visibility: sessionGroups.visibility,
               workspaceId: sessionGroups.workspaceId,

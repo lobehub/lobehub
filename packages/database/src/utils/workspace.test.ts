@@ -2,6 +2,8 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
 import { agents } from '../schemas/agent';
+import { agentDocuments } from '../schemas/agentDocuments';
+import { topicComments } from '../schemas/topicComment';
 import { buildWorkspacePayload, buildWorkspaceWhere } from './workspace';
 
 describe('workspace utils', () => {
@@ -9,7 +11,7 @@ describe('workspace utils', () => {
     it('scopes personal reads by user and null workspace (visibility ignored)', () => {
       // Personal mode rows are implicitly owner-private, so the visibility
       // column is intentionally not part of the predicate.
-      const condition = buildWorkspaceWhere({ userId: 'user-1' }, agents);
+      const condition = buildWorkspaceWhere({ includeTrashed: true, userId: 'user-1' }, agents);
       const built = new PgDialect().sqlToQuery(condition);
 
       expect(built.sql).toBe('("agents"."user_id" = $1 and "agents"."workspace_id" is null)');
@@ -17,7 +19,10 @@ describe('workspace utils', () => {
     });
 
     it('scopes workspace reads with visibility filter when the column is present', () => {
-      const condition = buildWorkspaceWhere({ userId: 'user-1', workspaceId: 'ws-1' }, agents);
+      const condition = buildWorkspaceWhere(
+        { includeTrashed: true, userId: 'user-1', workspaceId: 'ws-1' },
+        agents,
+      );
       const built = new PgDialect().sqlToQuery(condition);
 
       // Workspace mode: every member sees public rows; private rows are
@@ -47,6 +52,7 @@ describe('workspace utils', () => {
       const condition = buildWorkspaceWhere(
         {
           callerAgentVisibility: 'public',
+          includeTrashed: true,
           userId: 'user-1',
           workspaceId: 'ws-1',
         },
@@ -66,6 +72,7 @@ describe('workspace utils', () => {
       const condition = buildWorkspaceWhere(
         {
           callerAgentVisibility: 'private',
+          includeTrashed: true,
           userId: 'user-1',
           workspaceId: 'ws-1',
         },
@@ -85,6 +92,7 @@ describe('workspace utils', () => {
       const condition = buildWorkspaceWhere(
         {
           callerAgentVisibility: null,
+          includeTrashed: true,
           userId: 'user-1',
           workspaceId: 'ws-1',
         },
@@ -102,13 +110,76 @@ describe('workspace utils', () => {
       // Personal-mode rows are already owner-private by construction; visibility
       // is unused, so the public-agent gate should be a no-op here.
       const condition = buildWorkspaceWhere(
-        { callerAgentVisibility: 'public', userId: 'user-1' },
+        { callerAgentVisibility: 'public', includeTrashed: true, userId: 'user-1' },
         agents,
       );
       const built = new PgDialect().sqlToQuery(condition);
 
       expect(built.sql).toBe('("agents"."user_id" = $1 and "agents"."workspace_id" is null)');
       expect(built.params).toStrictEqual(['user-1']);
+    });
+  });
+
+  describe('recycle-bin filter', () => {
+    it('adds `is_deleted IS NOT TRUE` when the cols carry the trash-aware flag', () => {
+      // Every ownership-scoped read of a trash-aware table (agents, topics,
+      // files, …) must hide rows sitting in the recycle bin — without the
+      // ~250 call sites opting in one by one.
+      const condition = buildWorkspaceWhere({ userId: 'user-1' }, agents);
+      const built = new PgDialect().sqlToQuery(condition);
+
+      expect(built.sql).toBe(
+        '(("agents"."user_id" = $1 and "agents"."workspace_id" is null) and "agents"."is_deleted" IS NOT TRUE)',
+      );
+      expect(built.params).toStrictEqual(['user-1']);
+    });
+
+    it('is `IS NOT TRUE`, not `= false`, because a live row leaves the flag NULL', () => {
+      // `is_deleted = false` is NULL for an unstamped row — not true — so an
+      // equality filter would hide the entire table instead of its trashed rows.
+      const built = new PgDialect().sqlToQuery(buildWorkspaceWhere({ userId: 'user-1' }, agents));
+
+      expect(built.sql).not.toContain('"is_deleted" = ');
+    });
+
+    it('applies the stamp filter in workspace mode too', () => {
+      const condition = buildWorkspaceWhere({ userId: 'user-1', workspaceId: 'ws-1' }, agents);
+      const built = new PgDialect().sqlToQuery(condition);
+
+      expect(built.sql).toContain('"agents"."is_deleted" IS NOT TRUE');
+      expect(built.sql.startsWith('(("agents"."workspace_id" = $1')).toBe(true);
+    });
+
+    it('skips the filter with `includeTrashed` (restore / purge internals)', () => {
+      const condition = buildWorkspaceWhere({ includeTrashed: true, userId: 'user-1' }, agents);
+      const built = new PgDialect().sqlToQuery(condition);
+
+      expect(built.sql).not.toContain('is_deleted');
+    });
+
+    it('does not filter when the cols object omits isDeleted', () => {
+      const condition = buildWorkspaceWhere(
+        { userId: 'user-1' },
+        { userId: agents.userId, workspaceId: agents.workspaceId },
+      );
+      expect(new PgDialect().sqlToQuery(condition).sql).not.toContain('is_deleted');
+    });
+
+    it('does not filter tables whose deleted_at has other semantics', () => {
+      // agent_documents / topic_comments / workspace_members use `deleted_at`
+      // as a tombstone with their own read rules and carry no `is_deleted` —
+      // never auto-filtered, even if a caller wires their column in.
+      const condition = buildWorkspaceWhere({ userId: 'user-1' }, agentDocuments);
+      expect(new PgDialect().sqlToQuery(condition).sql).not.toContain('deleted');
+      const comments = buildWorkspaceWhere(
+        { userId: 'user-1', workspaceId: 'ws-1' },
+        {
+          isDeleted: topicComments.deletedAt,
+          userId: topicComments.authorUserId,
+          workspaceId: topicComments.workspaceId,
+        },
+      );
+      expect(new PgDialect().sqlToQuery(comments).sql).not.toContain('deleted');
     });
   });
 

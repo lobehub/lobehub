@@ -146,6 +146,7 @@ export class TaskModel {
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
+        isDeleted: tasks.isDeleted,
         userId: tasks.createdByUserId,
         visibility: tasks.visibility,
         workspaceId: tasks.workspaceId,
@@ -187,8 +188,9 @@ export class TaskModel {
     const prefix = alias ? sql.raw(`${alias}.`) : sql.raw('');
     return this.workspaceId
       ? sql`${prefix}workspace_id = ${this.workspaceId}
-            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`
-      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL`;
+            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})
+            AND ${prefix}is_deleted IS NOT TRUE`
+      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL AND ${prefix}is_deleted IS NOT TRUE`;
   };
 
   private buildListConditions = ({
@@ -444,7 +446,7 @@ export class TaskModel {
             inArray(works.resourceId, taskIds),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );

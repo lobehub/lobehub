@@ -1,5 +1,46 @@
-import { and, eq, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, getTableName, isNull, or, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+
+import { notTrashed } from './softDelete';
+
+/**
+ * Tables carrying the recycle-bin columns (`softDeleteColumns()` in
+ * `schemas/_helpers.ts`). For these, `buildWorkspaceWhere` transparently adds
+ * `is_deleted IS NOT TRUE` whenever the caller passes the whole table (or a `cols`
+ * object carrying `isDeleted`), so a trashed row is invisible to every
+ * ownership-scoped read in the codebase — models, repositories and services
+ * alike — without each of the ~250 call sites opting in.
+ *
+ * Tables that use `deleted_at` with *other* semantics (`agent_documents`,
+ * `topic_comments` tombstones, `workspace_members`) never carry `is_deleted`
+ * and are therefore never matched.
+ *
+ * Restore / purge internals pass `includeTrashed: true` to reach stamped rows.
+ */
+export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
+  'agent_cron_jobs',
+  'agent_skills',
+  'agents',
+  'chat_groups',
+  'documents',
+  'files',
+  'generation_batches',
+  'generation_topics',
+  'generations',
+  'goals',
+  'knowledge_bases',
+  'messages',
+  'projects',
+  'session_groups',
+  'tasks',
+  'threads',
+  'topics',
+  'user_memories',
+  'works',
+]);
+
+const isTrashFlag = (col: AnyPgColumn | undefined): col is AnyPgColumn =>
+  !!col && col.name === 'is_deleted' && TRASH_AWARE_TABLES.has(getTableName(col.table));
 
 /**
  * Workspace-aware ownership predicate for content tables.
@@ -53,10 +94,33 @@ export function buildWorkspaceWhere(
      *   content.
      */
     callerAgentVisibility?: 'private' | 'public' | null;
+    /**
+     * Skip the recycle-bin filter — for restore / purge / trash-listing
+     * internals only. Every ordinary read must leave this unset.
+     */
+    includeTrashed?: boolean;
     userId: string;
     workspaceId?: string;
   },
-  cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn; visibility?: AnyPgColumn },
+  cols: {
+    isDeleted?: AnyPgColumn;
+    userId: AnyPgColumn;
+    visibility?: AnyPgColumn;
+    workspaceId: AnyPgColumn;
+  },
+): SQL {
+  const base = buildScopeWhere(ctx, cols);
+  if (ctx.includeTrashed || !isTrashFlag(cols.isDeleted)) return base;
+  return and(base, notTrashed(cols.isDeleted)) as SQL;
+}
+
+function buildScopeWhere(
+  ctx: {
+    callerAgentVisibility?: 'private' | 'public' | null;
+    userId: string;
+    workspaceId?: string;
+  },
+  cols: { userId: AnyPgColumn; visibility?: AnyPgColumn; workspaceId: AnyPgColumn },
 ): SQL {
   if (!ctx.workspaceId) {
     return and(eq(cols.userId, ctx.userId), isNull(cols.workspaceId)) as SQL;

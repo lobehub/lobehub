@@ -58,7 +58,11 @@ export class UsageRecordService {
         genWhere([
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: messages.userId, workspaceId: messages.workspaceId },
+            {
+              isDeleted: messages.isDeleted,
+              userId: messages.userId,
+              workspaceId: messages.workspaceId,
+            },
           ),
           eq(messages.role, 'assistant'),
           notCopiedTranscript(),
@@ -240,7 +244,11 @@ export class UsageRecordService {
         genWhere([
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: messages.userId, workspaceId: messages.workspaceId },
+            {
+              isDeleted: messages.isDeleted,
+              userId: messages.userId,
+              workspaceId: messages.workspaceId,
+            },
           ),
           eq(messages.role, 'assistant'),
           notCopiedTranscript(),
