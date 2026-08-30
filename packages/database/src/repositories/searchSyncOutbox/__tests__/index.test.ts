@@ -1,9 +1,11 @@
 // @vitest-environment node
 import path from 'node:path';
 
+import type { SQL } from 'drizzle-orm';
 import { and, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, searchSyncOutbox, users } from '../../../schemas';
@@ -50,6 +52,25 @@ const sortKeys = (keys: { documentId: string; entity: string }[]) =>
   keys.toSorted((left, right) =>
     `${left.entity}:${left.documentId}`.localeCompare(`${right.entity}:${right.documentId}`),
   );
+
+const normalizeSql = (statement: SQL) =>
+  new PgDialect().sqlToQuery(statement).sql.replaceAll(/\s+/g, ' ').trim();
+
+const createRecordedRepository = (revisionRows: unknown[]) => {
+  const statements: string[] = [];
+  const execute = vi.fn(async (statement: SQL) => {
+    const normalized = normalizeSql(statement);
+    statements.push(normalized);
+    return normalized.includes('FROM search_sync_revision_seq') ? { rows: revisionRows } : [];
+  });
+  const database = {
+    execute,
+    transaction: async (callback: (transaction: { execute: typeof execute }) => Promise<unknown>) =>
+      callback({ execute }),
+  } as unknown as ConstructorParameters<typeof SearchSyncOutboxRepository>[0];
+
+  return { repository: new SearchSyncOutboxRepository(database), statements };
+};
 
 const dropCaptureInfrastructure = async () => {
   for (const { name, table } of SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
@@ -331,6 +352,35 @@ describe.sequential('SearchSyncOutboxRepository', () => {
 
     expect(revision).toBeGreaterThan(0);
     await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
+  });
+
+  it('reads a committed revision boundary without allocating a new revision', async () => {
+    const before = await repository.readHighWaterRevision();
+
+    await expect(repository.readCommittedRevisionBoundary()).resolves.toBe(before);
+    await expect(repository.readHighWaterRevision()).resolves.toBe(before);
+  });
+
+  it('locks capture sources before reading the committed revision boundary', async () => {
+    const { repository: recordedRepository, statements } = createRecordedRepository([
+      { revision: '42' },
+    ]);
+
+    await expect(recordedRepository.readCommittedRevisionBoundary()).resolves.toBe(42);
+    expect(statements).toHaveLength(3);
+    expect(statements[0]).toBe("SET LOCAL lock_timeout = '3s'");
+    expect(statements[1]).toMatch(/^LOCK TABLE .* IN SHARE MODE$/);
+    expect(statements[2]).toBe(
+      'SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision FROM search_sync_revision_seq',
+    );
+  });
+
+  it('rejects an invalid committed revision boundary', async () => {
+    const { repository: recordedRepository } = createRecordedRepository([]);
+
+    await expect(recordedRepository.readCommittedRevisionBoundary()).rejects.toThrow(
+      'Failed to read a valid search sync revision while reading the committed revision boundary',
+    );
   });
 
   it(

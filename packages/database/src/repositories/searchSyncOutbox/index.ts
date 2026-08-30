@@ -233,6 +233,13 @@ const revisionNumber = (value: number | string | undefined, operation: string, m
   return revision;
 };
 
+const lockCaptureSourceWrites = async (transaction: SearchSyncExecutor): Promise<void> => {
+  await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+  await transaction.execute(
+    sql`LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
+  );
+};
+
 /** Durable claim and settlement operations for the PostgreSQL-triggered search outbox. */
 export class SearchSyncOutboxRepository {
   constructor(private readonly db: SearchSyncDatabase) {}
@@ -295,6 +302,26 @@ export class SearchSyncOutboxRepository {
   }
 
   /**
+   * Returns a revision boundary only after every earlier capture-source writer has committed or
+   * rolled back. Sequence allocation is non-transactional, so reading it before taking the SHARE
+   * locks could include a revision whose Outbox row is still invisible and later commits after the
+   * validation snapshot. The locks close that race without allocating a revision or mutating rows.
+   */
+  async readCommittedRevisionBoundary(): Promise<number> {
+    return this.db.transaction(async (transaction) => {
+      await lockCaptureSourceWrites(transaction);
+      const result = await transaction.execute(sql`
+        SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision
+        FROM search_sync_revision_seq
+      `);
+      return revisionNumber(
+        rowsOf<{ revision: number | string }>(result)[0]?.revision,
+        'reading the committed revision boundary',
+      );
+    });
+  }
+
+  /**
    * Reserves the full-reindex version, then waits for writers that allocated an older revision.
    * Without this fence, a long transaction could commit an older Outbox revision after the
    * backfill has already written stale data at the newer base revision.
@@ -309,10 +336,7 @@ export class SearchSyncOutboxRepository {
         'reserving a reindex version',
         1,
       );
-      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
-      await transaction.execute(
-        sql`LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
-      );
+      await lockCaptureSourceWrites(transaction);
       return revision;
     });
   }
@@ -320,10 +344,7 @@ export class SearchSyncOutboxRepository {
   /** Re-establishes the write fence before resuming a checkpoint created by an older process. */
   async fenceSourceWrites(): Promise<void> {
     await this.db.transaction(async (transaction) => {
-      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
-      await transaction.execute(
-        sql`LOCK TABLE ${SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
-      );
+      await lockCaptureSourceWrites(transaction);
     });
   }
 
