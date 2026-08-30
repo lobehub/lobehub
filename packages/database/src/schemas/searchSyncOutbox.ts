@@ -1,3 +1,4 @@
+import type { SearchDocumentEntity } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -24,7 +25,7 @@ export const searchSyncOutbox = pgTable(
     createdAt: createdAt(),
     deadAt: timestamptz('dead_at'),
     documentId: text('document_id').notNull(),
-    entity: text('entity').notNull(),
+    entity: text('entity').$type<SearchDocumentEntity>().notNull(),
     id: uuid('id').primaryKey().defaultRandom(),
     lastError: text('last_error'),
     lockedUntil: timestamptz('locked_until'),
