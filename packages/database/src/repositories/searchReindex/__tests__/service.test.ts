@@ -283,7 +283,10 @@ describe('SearchReindexService', () => {
       vi.useRealTimers();
     }
 
-    const batch = events.find((event) => event.type === 'batch' && event.entity === 'agents');
+    const batch = events.find(
+      (event): event is Extract<SearchReindexProgressEvent, { type: 'batch' }> =>
+        event.type === 'batch' && event.entity === 'agents',
+    );
     expect(batch).toBeDefined();
     expect(batch!.durationMs).toBeGreaterThanOrEqual(scanDelayMs);
   });

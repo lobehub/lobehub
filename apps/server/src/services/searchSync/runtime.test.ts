@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   assertCaptureInfrastructure: vi.fn(),
 }));
 
-vi.mock('@lobechat/env/search', () => ({ searchEnv: mocks.searchEnv }));
+vi.mock('@/envs/search', () => ({ searchEnv: mocks.searchEnv }));
 
 vi.mock('@/database/repositories/searchDocument', () => ({
   getSearchIndexAlias: (namespace: string, entity: string) => `${namespace}-${entity}`,

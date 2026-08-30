@@ -1,5 +1,3 @@
-import { searchEnv } from '@lobechat/env/search';
-
 import {
   getSearchIndexAlias,
   SEARCH_DOCUMENT_ENTITIES,
@@ -7,6 +5,7 @@ import {
 } from '@/database/repositories/searchDocument';
 import { searchSyncOutboxRepository } from '@/database/repositories/searchSyncOutbox/server';
 import { serverDB } from '@/database/server';
+import { searchEnv } from '@/envs/search';
 
 import { loadSearchElasticsearchConfig } from '../searchBackend';
 import { ElasticsearchHttpClient } from '../searchBackend/elasticsearch';

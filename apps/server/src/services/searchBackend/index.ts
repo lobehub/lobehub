@@ -1,5 +1,4 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { searchEnv } from '@lobechat/env/search';
 
 import type { IFeatureFlags } from '@/config/featureFlags';
 import { evaluateFeatureFlag } from '@/config/featureFlags';
@@ -13,6 +12,7 @@ import {
   SearchRepo,
   type SearchRepoOptions,
 } from '@/database/repositories/search';
+import { searchEnv } from '@/envs/search';
 import { getServerFeatureFlagsFromRuntimeConfig } from '@/server/featureFlags';
 
 import { ElasticsearchHttpClient } from './elasticsearch';
