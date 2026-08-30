@@ -820,6 +820,40 @@ describe('fileRouter', () => {
         name: 'Document 1',
       });
     });
+
+    it('should resolve chunk status by backing file id for file-backed documents', async () => {
+      const knowledgeItems = [
+        {
+          ...mockFile,
+          chunkTaskId: 'chunk-1',
+          embeddingTaskId: 'emb-1',
+          fileId: 'file-1',
+          id: 'docs_1',
+          sourceType: 'file' as const,
+        },
+      ];
+
+      mockKnowledgeRepoQuery.mockResolvedValue(knowledgeItems);
+      mockChunkCountByFileIds.mockResolvedValue([{ count: 7, id: 'file-1' }]);
+      mockAsyncTaskFindByIds
+        .mockResolvedValueOnce([{ error: null, id: 'chunk-1', status: AsyncTaskStatus.Success }])
+        .mockResolvedValueOnce([{ error: null, id: 'emb-1', status: AsyncTaskStatus.Success }]);
+      mockFileServiceGetFileAccessUrl.mockResolvedValue('https://lobehub.com/f/file-1');
+
+      const result = await caller.getKnowledgeItems({});
+
+      expect(mockChunkCountByFileIds).toHaveBeenCalledWith(['file-1']);
+      expect(result.items[0]).toMatchObject({
+        chunkCount: 7,
+        chunkingStatus: AsyncTaskStatus.Success,
+        embeddingStatus: AsyncTaskStatus.Success,
+        finishEmbedding: true,
+        fileId: 'file-1',
+        id: 'docs_1',
+        sourceType: 'file',
+        url: 'https://lobehub.com/f/file-1',
+      });
+    });
   });
 
   describe('getKnowledgeItemStatusesByIds', () => {

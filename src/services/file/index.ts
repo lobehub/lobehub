@@ -101,17 +101,17 @@ export class FileService {
 
       // Convert document to FileListItem format
       return {
-        chunkCount: null,
-        chunkingError: null,
-        chunkingStatus: null,
+        chunkCount: backingFile?.chunkCount ?? null,
+        chunkingError: backingFile?.chunkingError ?? null,
+        chunkingStatus: backingFile?.chunkingStatus ?? null,
         content: doc.content,
         createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
         editorData: doc.editorData,
-        embeddingError: null,
-        embeddingStatus: null,
+        embeddingError: backingFile?.embeddingError ?? null,
+        embeddingStatus: backingFile?.embeddingStatus ?? null,
         fileId: doc.fileId,
         fileType: backingFile?.fileType || doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
-        finishEmbedding: false,
+        finishEmbedding: backingFile?.finishEmbedding ?? false,
         id: doc.id,
         metadata: doc.metadata,
         name: backingFile?.name || doc.title || doc.filename || 'Untitled',

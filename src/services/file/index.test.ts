@@ -41,8 +41,12 @@ describe('FileService.getKnowledgeItem', () => {
       updatedAt: new Date('2026-07-22T00:00:00.000Z'),
     });
     mockGetFileItemById.mockResolvedValue({
+      chunkCount: 42,
+      chunkingStatus: 'success',
       createdAt: new Date('2026-07-22T00:00:00.000Z'),
+      embeddingStatus: 'success',
       fileType: 'application/pdf',
+      finishEmbedding: true,
       id: 'file_pdf',
       name: 'original.pdf',
       size: 98_765,
@@ -54,8 +58,12 @@ describe('FileService.getKnowledgeItem', () => {
     const result = await service.getKnowledgeItem('docs_pdf');
 
     expect(result).toMatchObject({
+      chunkCount: 42,
+      chunkingStatus: 'success',
+      embeddingStatus: 'success',
       fileId: 'file_pdf',
       fileType: 'application/pdf',
+      finishEmbedding: true,
       id: 'docs_pdf',
       name: 'original.pdf',
       size: 98_765,

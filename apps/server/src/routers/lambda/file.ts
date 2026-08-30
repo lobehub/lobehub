@@ -70,12 +70,13 @@ const getKnowledgeItemStatusMap = async (
   fileItems: Array<{
     chunkTaskId?: string | null;
     embeddingTaskId?: string | null;
+    fileId?: string | null;
     id: string;
   }>,
 ): Promise<Map<string, KnowledgeItemStatus>> => {
   if (fileItems.length === 0) return new Map();
 
-  const fileIds = fileItems.map((item) => item.id);
+  const fileIds = fileItems.map((item) => item.fileId ?? item.id);
   const chunkTaskIds = [
     ...new Set(fileItems.map((item) => item.chunkTaskId).filter(Boolean)),
   ] as string[];
@@ -109,11 +110,12 @@ const getKnowledgeItemStatusMap = async (
       const embeddingTask = item.embeddingTaskId
         ? embeddingTaskMap.get(item.embeddingTaskId)
         : null;
+      const chunkId = item.fileId ?? item.id;
 
       return [
         item.id,
         {
-          chunkCount: chunkCountMap.get(item.id) ?? null,
+          chunkCount: chunkCountMap.get(chunkId) ?? null,
           chunkingError: (chunkTask?.error as IAsyncTaskError | null | undefined) ?? null,
           chunkingStatus: (chunkTask?.status as AsyncTaskStatus | null | undefined) ?? null,
           embeddingError: (embeddingTask?.error as IAsyncTaskError | null | undefined) ?? null,
@@ -439,6 +441,9 @@ export const fileRouter = router({
     // Process files (add chunk info and async task status)
     const fileItems = filteredItems.filter((item) => item.sourceType === 'file');
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileItems);
+    const statusByFileId = new Map(
+      fileItems.map((item) => [item.fileId ?? item.id, statusMap.get(item.id)]),
+    );
 
     // Resolve file access URLs in parallel: in local dev each call goes through
     // Redis + a possible S3 presign, so a serial loop stacks up N RTTs on
@@ -446,12 +451,26 @@ export const fileRouter = router({
     const resultItems = await Promise.all(
       filteredItems.map(async (item) => {
         if (item.sourceType === 'file') {
-          const status = statusMap.get(item.id)!;
+          const status = statusByFileId.get(item.fileId ?? item.id);
+          if (status) {
+            return {
+              ...item,
+              editorData: null,
+              url: await ctx.fileService.getFileAccessUrl(item),
+              ...status,
+            } as FileListItem;
+          }
+          item.fileId = item.id;
           return {
             ...item,
             editorData: null,
+            chunkCount: null,
+            chunkingError: null,
+            chunkingStatus: null,
+            embeddingError: null,
+            embeddingStatus: null,
+            finishEmbedding: false,
             url: await ctx.fileService.getFileAccessUrl(item),
-            ...status,
           } as FileListItem;
         }
         return {
