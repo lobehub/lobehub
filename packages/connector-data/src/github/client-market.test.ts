@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  createGitHubComposioConnectorClient,
-  createGitHubComposioTransport,
-  type GitHubComposioProxyRequest,
-} from './client-composio';
+  createGitHubMarketConnectorClient,
+  createGitHubMarketTransport,
+  type GitHubMarketProxyRequest,
+} from './client-market';
 
 const createProxy = () =>
-  vi.fn(async (input: GitHubComposioProxyRequest): Promise<unknown> => {
+  vi.fn(async (input: GitHubMarketProxyRequest): Promise<unknown> => {
     if (input.endpoint === '/user') {
       return { data: { id: 98_765, login: 'octocat' }, status: 200 };
     }
@@ -45,18 +45,15 @@ const createProxy = () =>
     throw new Error(`Unexpected endpoint: ${input.endpoint}`);
   });
 
-describe('createGitHubComposioTransport', () => {
+describe('createGitHubMarketTransport', () => {
   /**
    * @example
-   * Composio injects OAuth credentials while the adapter preserves the existing
+   * Market injects OAuth credentials while the adapter preserves the existing
    * GitHub transport response shapes.
    */
   it('maps authenticated REST and GraphQL proxy responses into the shared transport', async () => {
-    const proxyExecute = createProxy();
-    const transport = createGitHubComposioTransport({
-      composio: { tools: { proxyExecute } },
-      connectedAccountId: 'ca-github',
-    });
+    const proxyOAuthRequest = createProxy();
+    const transport = createGitHubMarketTransport({ market: { proxyOAuthRequest } });
 
     /** @example `/user` becomes the minimal authenticated-user identity. */
     await expect(transport.getAuthenticatedUser()).resolves.toEqual({
@@ -79,22 +76,19 @@ describe('createGitHubComposioTransport', () => {
     await expect(
       transport.request({ operation: 'Test', query: 'query { viewer { login } }', variables: {} }),
     ).resolves.toEqual({ viewer: { login: 'octocat' } });
-    /** @example Every request is scoped to the server-resolved connected account. */
-    expect(
-      proxyExecute.mock.calls.every(([input]) => input.connectedAccountId === 'ca-github'),
-    ).toBe(true);
+    /** @example Every request is routed through the GitHub Market provider. */
+    expect(proxyOAuthRequest.mock.calls.every(([input]) => input.provider === 'github')).toBe(true);
   });
 });
 
-describe('createGitHubComposioConnectorClient', () => {
+describe('createGitHubMarketConnectorClient', () => {
   /**
    * @example
    * Callers receive the same `GitHubConnectorClient` profile contract as native OAuth.
    */
-  it('composes the Composio adapter behind the shared client interface', async () => {
-    const client = createGitHubComposioConnectorClient({
-      composio: { tools: { proxyExecute: createProxy() } },
-      connectedAccountId: 'ca-github',
+  it('composes the Market adapter behind the shared client interface', async () => {
+    const client = createGitHubMarketConnectorClient({
+      market: { proxyOAuthRequest: createProxy() },
     });
 
     /** @example The normalized profile contract is independent of the auth provider. */

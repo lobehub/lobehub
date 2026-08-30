@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "Integrieren Sie Dropbox, um auf Ihre Dateien zuzugreifen und sie zu verwalten. Dateien hochladen, herunterladen, teilen, Ordner verwalten, Dateiversionen handhaben und Ihren Cloud-Speicher per Konversation organisieren.",
   "tools.composio.servers.figma.description": "Figma ist ein kollaboratives Design-Tool für Web- und Mobile-Anwendungen.",
   "tools.composio.servers.figma.readme": "Verbinden Sie sich mit Figma, um auf Design-Dateien zuzugreifen und an Projekten zusammenzuarbeiten. Designs anzeigen, Assets exportieren, Komponenten durchsuchen und Ihren Design-Workflow per natürlicher Sprache verwalten.",
-  "tools.composio.servers.github.description": "Erweiterter GitHub-MCP-Server",
-  "tools.composio.servers.github.readme": "Verbinden Sie sich mit GitHub, um Repositories, Issues, Pull Requests und Code zu verwalten. Code durchsuchen, Änderungen überprüfen, Branches erstellen und gemeinsam an Softwareprojekten arbeiten – alles per Konversation.",
   "tools.composio.servers.gmail.description": "Gmail ist ein kostenloser E-Mail-Dienst von Google.",
   "tools.composio.servers.gmail.readme": "Nutzen Sie die Funktionen von Gmail direkt in Ihrem KI-Assistenten. E-Mails lesen, verfassen und senden, das Postfach durchsuchen, Labels verwalten und Ihre Kommunikation per natürlicher Sprache organisieren.",
   "tools.composio.servers.google-calendar.description": "Google Kalender ist ein Dienst zur Zeitplanung und Terminverwaltung.",

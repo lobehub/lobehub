@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "Dropboxと連携してファイルにアクセス・管理します。ファイルのアップロード、ダウンロード、共有、フォルダ管理、バージョン管理、クラウドストレージの整理を会話型AIで行えます。",
   "tools.composio.servers.figma.description": "Figmaは、Webおよびモバイルアプリ向けの共同インターフェースデザインツールです。",
   "tools.composio.servers.figma.readme": "Figmaと接続してデザインファイルにアクセスし、プロジェクトで共同作業を行います。デザインの閲覧、アセットのエクスポート、コンポーネントの閲覧、自然な会話によるデザインワークフローの管理が可能です。",
-  "tools.composio.servers.github.description": "強化されたGitHub MCPサーバー",
-  "tools.composio.servers.github.readme": "GitHubと連携してリポジトリ、イシュー、プルリクエスト、コードを管理します。コードの検索、変更のレビュー、ブランチの作成、会話型AIによるソフトウェア開発の共同作業が可能です。",
   "tools.composio.servers.gmail.description": "GmailはGoogleが提供する無料の電子メールサービスです。",
   "tools.composio.servers.gmail.readme": "Gmailの機能をAIアシスタントに統合します。メールの読み取り、作成、送信、受信トレイの検索、ラベルの管理、自然な会話によるコミュニケーションの整理が可能です。",
   "tools.composio.servers.google-calendar.description": "Google カレンダーは、時間管理とスケジューリングのためのカレンダーサービスです。",

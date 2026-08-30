@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "Tích hợp với Dropbox để truy cập và quản lý tệp của bạn. Tải lên, tải xuống, chia sẻ tệp, quản lý thư mục, xử lý phiên bản tệp và tổ chức lưu trữ đám mây qua AI hội thoại.",
   "tools.composio.servers.figma.description": "Figma là công cụ thiết kế giao diện cộng tác cho ứng dụng web và di động.",
   "tools.composio.servers.figma.readme": "Kết nối với Figma để truy cập tệp thiết kế và cộng tác trong dự án. Xem thiết kế, xuất tài sản, duyệt thành phần và quản lý quy trình thiết kế qua hội thoại tự nhiên.",
-  "tools.composio.servers.github.description": "Máy chủ MCP GitHub nâng cao",
-  "tools.composio.servers.github.readme": "Kết nối với GitHub để quản lý kho lưu trữ, vấn đề, yêu cầu hợp nhất và mã nguồn. Tìm kiếm mã, xem xét thay đổi, tạo nhánh và cộng tác trong dự án phát triển phần mềm qua AI hội thoại.",
   "tools.composio.servers.gmail.description": "Gmail là dịch vụ email miễn phí do Google cung cấp",
   "tools.composio.servers.gmail.readme": "Mang sức mạnh của Gmail vào trợ lý AI của bạn. Đọc, soạn và gửi email, tìm kiếm hộp thư đến, quản lý nhãn và tổ chức liên lạc—tất cả qua hội thoại tự nhiên.",
   "tools.composio.servers.google-calendar.description": "Google Calendar là dịch vụ lịch và quản lý thời gian",

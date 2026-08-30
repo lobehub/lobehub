@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "تكامل مع Dropbox للوصول إلى ملفاتك وإدارتها. حمّل، ونزّل، وشارك الملفات، وأدر المجلدات، وتابع نسخ الملفات، ونظّم تخزينك السحابي من خلال الذكاء الاصطناعي الحواري.",
   "tools.composio.servers.figma.description": "Figma هي أداة تصميم واجهات تعاونية لتطبيقات الويب والجوال.",
   "tools.composio.servers.figma.readme": "اتصل بـ Figma للوصول إلى ملفات التصميم والتعاون في المشاريع. اعرض التصاميم، وصدّر العناصر، وتصفح المكونات، وأدر سير عمل التصميم من خلال المحادثة الطبيعية.",
-  "tools.composio.servers.github.description": "خادم GitHub MCP المحسن",
-  "tools.composio.servers.github.readme": "اتصل بـ GitHub لإدارة المستودعات، والمشكلات، وطلبات السحب، والتعليمات البرمجية. ابحث في الكود، وراجع التغييرات، وأنشئ فروعًا، وتعاون في مشاريع تطوير البرمجيات من خلال الذكاء الاصطناعي الحواري.",
   "tools.composio.servers.gmail.description": "Gmail هي خدمة بريد إلكتروني مجانية مقدمة من Google",
   "tools.composio.servers.gmail.readme": "اجلب قوة Gmail مباشرة إلى مساعدك الذكي. اقرأ، واكتب، وأرسل رسائل البريد الإلكتروني، وابحث في صندوق الوارد، وأدر التصنيفات، ونظّم اتصالاتك — كل ذلك من خلال المحادثة الطبيعية.",
   "tools.composio.servers.google-calendar.description": "تقويم Google هو خدمة تقويم لإدارة الوقت والجدولة",

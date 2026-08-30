@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "Integra con Dropbox para acceder y gestionar tus archivos. Sube, descarga, comparte archivos, organiza carpetas, gestiona versiones y administra tu almacenamiento en la nube mediante IA conversacional.",
   "tools.composio.servers.figma.description": "Figma es una herramienta colaborativa de diseño de interfaces para aplicaciones web y móviles.",
   "tools.composio.servers.figma.readme": "Conéctate con Figma para acceder a archivos de diseño y colaborar en proyectos. Visualiza diseños, exporta recursos, explora componentes y gestiona tu flujo de trabajo de diseño mediante conversación natural.",
-  "tools.composio.servers.github.description": "Servidor MCP de GitHub mejorado",
-  "tools.composio.servers.github.readme": "Conéctate con GitHub para gestionar repositorios, incidencias, pull requests y código. Busca código, revisa cambios, crea ramas y colabora en proyectos de desarrollo de software mediante IA conversacional.",
   "tools.composio.servers.gmail.description": "Gmail es un servicio de correo electrónico gratuito proporcionado por Google",
   "tools.composio.servers.gmail.readme": "Lleva el poder de Gmail directamente a tu asistente de IA. Lee, redacta y envía correos, busca en tu bandeja de entrada, gestiona etiquetas y organiza tus comunicaciones, todo mediante conversación natural.",
   "tools.composio.servers.google-calendar.description": "Google Calendar es un servicio de calendario para la gestión del tiempo y programación de eventos",

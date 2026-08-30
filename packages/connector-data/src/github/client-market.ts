@@ -4,9 +4,9 @@ import { createRecoverableMemo } from '../memo';
 import { createGitHubConnectorClient, type GitHubConnectorClient } from './client';
 import type { GitHubConnectorTransport } from './graphql/client';
 
-/** A query or header parameter accepted by Composio proxy execution. */
-export interface GitHubComposioProxyParameter {
-  /** Where Composio should add the parameter. */
+/** A query or header parameter accepted by Market OAuth proxy execution. */
+export interface GitHubMarketProxyParameter {
+  /** Where Market should add the parameter. */
   in: 'header' | 'query';
   /** HTTP parameter name. */
   name: string;
@@ -14,56 +14,48 @@ export interface GitHubComposioProxyParameter {
   value: number | string;
 }
 
-/** Request shape used to proxy an authenticated GitHub API call through Composio. */
-export interface GitHubComposioProxyRequest {
+/** Request shape used to proxy an authenticated GitHub API call through Market. */
+export interface GitHubMarketProxyRequest {
   /** Optional JSON request body. */
   body?: unknown;
-  /** Server-resolved Composio connected account identifier. */
-  connectedAccountId: string;
   /** Relative GitHub API endpoint. */
   endpoint: string;
-  /** HTTP method supported by Composio proxy execution. */
+  /** HTTP method supported by Market proxy execution. */
   method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
   /** Optional query and header parameters. */
-  parameters?: GitHubComposioProxyParameter[];
+  parameters?: GitHubMarketProxyParameter[];
+  /** Market provider identifier. */
+  provider: 'github';
 }
 
-/** Minimal Composio tools interface required by the GitHub adapter. */
-export interface GitHubComposioTools {
-  /** Proxies one authenticated GitHub HTTP request. */
-  proxyExecute: (input: GitHubComposioProxyRequest) => Promise<unknown>;
+/** Minimal Market client interface required by the GitHub adapter. */
+export interface GitHubMarketClient {
+  /** Proxies one authenticated provider HTTP request. */
+  proxyOAuthRequest: (input: GitHubMarketProxyRequest) => Promise<unknown>;
 }
 
-/** Minimal Composio client interface required by the GitHub adapter. */
-export interface GitHubComposioClient {
-  /** Composio tool execution surface. */
-  tools: GitHubComposioTools;
+/** Configuration shared by the Market transport and connector factories. */
+export interface CreateGitHubMarketConnectorClientOptions {
+  /** Authenticated Market client or compatible test adapter. */
+  market: GitHubMarketClient;
 }
 
-/** Configuration shared by the Composio transport and connector factories. */
-export interface CreateGitHubComposioConnectorClientOptions {
-  /** Composio SDK client or compatible test adapter. */
-  composio: GitHubComposioClient;
-  /** Connected account resolved from the authenticated user's connector row. */
-  connectedAccountId: string;
-}
-
-interface ComposioProxyResponse {
+interface MarketProxyResponse {
   data: unknown;
   status: number;
 }
 
-const parseProxyResponse = (value: unknown): ComposioProxyResponse => {
+const parseProxyResponse = (value: unknown): MarketProxyResponse => {
   if (typeof value !== 'object' || value === null) {
-    throw new Error('GitHub Composio proxy response is invalid');
+    throw new Error('GitHub Market proxy response is invalid');
   }
 
   const response = value as { data?: unknown; status?: unknown };
   if (typeof response.status !== 'number' || !Number.isFinite(response.status)) {
-    throw new Error('GitHub Composio proxy status is invalid');
+    throw new Error('GitHub Market proxy status is invalid');
   }
   if (response.status < 200 || response.status >= 300) {
-    throw Object.assign(new Error('GitHub Composio proxy request failed'), {
+    throw Object.assign(new Error('GitHub Market proxy request failed'), {
       status: response.status,
     });
   }
@@ -72,29 +64,24 @@ const parseProxyResponse = (value: unknown): ComposioProxyResponse => {
 };
 
 /**
- * Creates a GitHub transport that keeps OAuth credentials inside Composio.
+ * Creates a GitHub transport backed by Market's OAuth proxy.
  *
  * Use when:
- * - A connector stores only a Composio connected-account identifier
+ * - Market owns the user's GitHub OAuth connection
  * - Existing GitHub loaders should run unchanged across REST and GraphQL
  *
  * Expects:
- * - The connected account belongs to the authenticated connector scope
- * - Composio resolves relative endpoints against GitHub's API base URL
+ * - The Market client is scoped to the authenticated LobeHub user
+ * - Market resolves relative endpoints against GitHub's API base URL
  *
  * Returns:
  * - A transport compatible with the native OAuth GitHub connector
  */
-export const createGitHubComposioTransport = ({
-  composio,
-  connectedAccountId,
-}: CreateGitHubComposioConnectorClientOptions): GitHubConnectorTransport => {
-  const proxy = async (
-    input: Omit<GitHubComposioProxyRequest, 'connectedAccountId'>,
-  ): Promise<unknown> => {
-    // Composio injects the remote OAuth credential. The adapter sends only a
-    // server-resolved account ID and never receives or logs the credential.
-    const response = await composio.tools.proxyExecute({ ...input, connectedAccountId });
+export const createGitHubMarketTransport = ({
+  market,
+}: CreateGitHubMarketConnectorClientOptions): GitHubConnectorTransport => {
+  const proxy = async (input: Omit<GitHubMarketProxyRequest, 'provider'>): Promise<unknown> => {
+    const response = await market.proxyOAuthRequest({ ...input, provider: 'github' });
     return parseProxyResponse(response).data;
   };
   const getAuthenticatedUser = createRecoverableMemo(async () => {
@@ -102,7 +89,7 @@ export const createGitHubComposioTransport = ({
     const id = user?.id;
     const login = user?.login;
     if ((typeof id !== 'number' && typeof id !== 'string') || typeof login !== 'string') {
-      throw new Error('GitHub Composio authenticated user response is invalid');
+      throw new Error('GitHub Market authenticated user response is invalid');
     }
     return { id, login };
   });
@@ -116,7 +103,7 @@ export const createGitHubComposioTransport = ({
         parameters: [{ in: 'query', name: 'per_page', value: perPage }],
       });
       if (!Array.isArray(data)) {
-        throw new Error('GitHub Composio contributor response is invalid');
+        throw new Error('GitHub Market contributor response is invalid');
       }
       return data.map((item) => {
         const record = toRecord(item);
@@ -134,7 +121,7 @@ export const createGitHubComposioTransport = ({
         parameters: [{ in: 'query', name: 'per_page', value: perPage }],
       });
       if (!Array.isArray(data)) {
-        throw new Error('GitHub Composio organization response is invalid');
+        throw new Error('GitHub Market organization response is invalid');
       }
       return data.map((item) => {
         const record = toRecord(item);
@@ -154,12 +141,12 @@ export const createGitHubComposioTransport = ({
         }),
       );
       if (Array.isArray(envelope?.errors) && envelope.errors.length > 0) {
-        throw Object.assign(new Error('GitHub Composio GraphQL request failed'), {
+        throw Object.assign(new Error('GitHub Market GraphQL request failed'), {
           errors: envelope.errors,
         });
       }
       if (!envelope || !('data' in envelope)) {
-        throw new Error('GitHub Composio GraphQL response is invalid');
+        throw new Error('GitHub Market GraphQL response is invalid');
       }
       return envelope.data;
     },
@@ -167,9 +154,18 @@ export const createGitHubComposioTransport = ({
 };
 
 /**
- * Creates the Composio implementation of the shared GitHub connector interface.
+ * Creates the Market-backed implementation of the shared GitHub connector interface.
+ *
+ * Use when:
+ * - A caller needs structured GitHub data through a LobeHub-managed OAuth connection
+ *
+ * Expects:
+ * - An authenticated Market proxy client
+ *
+ * Returns:
+ * - The stable domain-level GitHub connector interface
  */
-export const createGitHubComposioConnectorClient = (
-  options: CreateGitHubComposioConnectorClientOptions,
+export const createGitHubMarketConnectorClient = (
+  options: CreateGitHubMarketConnectorClientOptions,
 ): GitHubConnectorClient =>
-  createGitHubConnectorClient({ transport: createGitHubComposioTransport(options) });
+  createGitHubConnectorClient({ transport: createGitHubMarketTransport(options) });
