@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  observeSearchReindexRun,
   recordSearchReindexBatch,
   recordSearchReindexBulkRequest,
   recordSearchReindexBulkRetry,
@@ -28,7 +29,8 @@ const mocks = vi.hoisted(() => {
       return histogram;
     },
   }));
-  return { counters, gauges, getMeter, histograms };
+  const startActiveSpan = vi.fn();
+  return { counters, gauges, getMeter, histograms, startActiveSpan };
 });
 
 vi.mock('@opentelemetry/api', () => ({
@@ -39,7 +41,7 @@ vi.mock('@opentelemetry/api', () => ({
   SpanStatusCode: { ERROR: 2, OK: 1 },
   trace: {
     getTracer: () => ({
-      startActiveSpan: vi.fn(),
+      startActiveSpan: mocks.startActiveSpan,
     }),
   },
 }));
@@ -49,6 +51,7 @@ describe('search reindex metrics', () => {
     for (const counter of mocks.counters.values()) counter.add.mockClear();
     for (const gauge of mocks.gauges.values()) gauge.record.mockClear();
     for (const histogram of mocks.histograms.values()) histogram.record.mockClear();
+    mocks.startActiveSpan.mockReset();
   });
 
   it('records batch and durable checkpoint counts with bounded labels', () => {
@@ -142,5 +145,32 @@ describe('search reindex metrics', () => {
     });
 
     expect(() => recordSearchReindexBulkRetry('messages')).not.toThrow();
+  });
+
+  it('adds bounded failure type and stage attributes to failed run spans', async () => {
+    const span = {
+      end: vi.fn(),
+      setAttribute: vi.fn(),
+      setAttributes: vi.fn(),
+      setStatus: vi.fn(),
+    };
+    mocks.startActiveSpan.mockImplementation(async (_name, operation) => operation(span));
+    const requestError = new Error('request body contains document and query details');
+    requestError.name = 'SearchReindexRequestError';
+    const entityError = new Error('entity contains a document identifier', { cause: requestError });
+    entityError.name = 'SearchReindexEntityError';
+
+    await expect(
+      observeSearchReindexRun(async () => {
+        throw entityError;
+      }),
+    ).rejects.toBe(entityError);
+
+    expect(span.setAttribute).toHaveBeenCalledWith('result', 'error');
+    expect(span.setAttributes).toHaveBeenCalledWith({
+      'error.type': 'request_error',
+      'search_reindex.failure.stage': 'entity',
+    });
+    expect(span.setStatus).toHaveBeenCalledWith({ code: 2 });
   });
 });

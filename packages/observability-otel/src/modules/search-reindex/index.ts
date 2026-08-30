@@ -1,3 +1,4 @@
+import { errorCauseFrom, errorNameFrom } from '@lobechat/utils';
 import type { Attributes, Span } from '@opentelemetry/api';
 import { diag, metrics, SpanStatusCode, trace } from '@opentelemetry/api';
 
@@ -90,6 +91,14 @@ export interface SearchReindexBulkRequestMetrics {
   result: 'request_error' | 'response_error' | 'success';
 }
 
+type SearchReindexRunFailureStage = 'entity' | 'request' | 'unknown';
+type SearchReindexRunFailureType = 'entity_error' | 'request_error' | 'unknown_error';
+
+interface SearchReindexRunFailure {
+  stage: SearchReindexRunFailureStage;
+  type: SearchReindexRunFailureType;
+}
+
 const documentAttributes = (entity: string, result: 'failed' | 'indexed' | 'scanned') => ({
   entity,
   result,
@@ -160,11 +169,35 @@ export const recordSearchReindexBulkRequest = (request: SearchReindexBulkRequest
   });
 };
 
-const finishRun = (span: Span, result: 'error' | 'success') => {
+/** Maps known reindex errors to fixed labels so traces never expose error messages or identifiers. */
+const classifySearchReindexRunFailure = (error: unknown): SearchReindexRunFailure => {
+  const errorName = errorNameFrom(error);
+  if (errorName === 'SearchReindexRequestError') {
+    return { stage: 'request', type: 'request_error' };
+  }
+  if (errorName === 'SearchReindexEntityError') {
+    return {
+      stage: 'entity',
+      type:
+        errorNameFrom(errorCauseFrom(error)) === 'SearchReindexRequestError'
+          ? 'request_error'
+          : 'entity_error',
+    };
+  }
+  return { stage: 'unknown', type: 'unknown_error' };
+};
+
+const finishRun = (span: Span, result: 'error' | 'success', failure?: SearchReindexRunFailure) => {
   const attributes: Attributes = { result };
   recordSafely('run result', () => {
     getInstruments().runCounter.add(1, attributes);
     span.setAttribute('result', result);
+    if (failure) {
+      span.setAttributes({
+        'error.type': failure.type,
+        'search_reindex.failure.stage': failure.stage,
+      });
+    }
     span.setStatus({ code: result === 'success' ? SpanStatusCode.OK : SpanStatusCode.ERROR });
   });
   try {
@@ -184,7 +217,7 @@ export const observeSearchReindexRun = async <Result>(
       finishRun(span, 'success');
       return result;
     } catch (error) {
-      finishRun(span, 'error');
+      finishRun(span, 'error', classifySearchReindexRunFailure(error));
       throw error;
     }
   });

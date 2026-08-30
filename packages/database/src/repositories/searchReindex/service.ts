@@ -519,6 +519,7 @@ export class SearchReindexService {
     let processedBatches = 0;
     let sourceExhausted = false;
     while (true) {
+      const batchStartedAt = Date.now();
       const documents = await this.builder.buildBatch(entity, {
         afterId: progress.cursor ?? undefined,
         limit: this.options.batchSize,
@@ -528,7 +529,6 @@ export class SearchReindexService {
         break;
       }
 
-      const batchStartedAt = Date.now();
       const result = await this.indexDocuments(
         documents.map((document) => ({
           id: document.id,

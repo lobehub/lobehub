@@ -3,7 +3,11 @@ import { SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SearchReindexRunState } from '..';
-import type { SearchReindexElasticsearchClient, SearchReindexStateRepository } from '../service';
+import type {
+  SearchReindexElasticsearchClient,
+  SearchReindexProgressEvent,
+  SearchReindexStateRepository,
+} from '../service';
 import { SearchReindexService } from '../service';
 
 const createState = (): SearchReindexRunState => ({
@@ -246,6 +250,42 @@ describe('SearchReindexService', () => {
 
     expect(client.bulk).toHaveBeenCalledTimes(4);
     expect(maxActive).toBe(2);
+  });
+
+  it('includes PostgreSQL batch scan time in the reported batch duration', async () => {
+    const { builder, client, repository } = createDependencies();
+    const events: SearchReindexProgressEvent[] = [];
+    const scanDelayMs = 100;
+    let returnedAgents = false;
+    builder.buildBatch.mockImplementation(async (entity) => {
+      if (entity !== 'agents' || returnedAgents) return [];
+      returnedAgents = true;
+      await new Promise((resolve) => setTimeout(resolve, scanDelayMs));
+      return [{ entity: 'agents', id: 'agent-1', source: { id: 'agent-1' } }];
+    });
+    vi.mocked(client.bulk).mockResolvedValue([{ status: 201 }]);
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 1 : 0,
+    );
+    const service = new SearchReindexService(builder, repository, client, {
+      entityConcurrency: 1,
+      onProgress: (event) => {
+        events.push(event);
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      const run = service.run('test', 1);
+      await vi.advanceTimersByTimeAsync(scanDelayMs);
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const batch = events.find((event) => event.type === 'batch' && event.entity === 'agents');
+    expect(batch).toBeDefined();
+    expect(batch!.durationMs).toBeGreaterThanOrEqual(scanDelayMs);
   });
 
   it('starts byte-bounded requests before encoding the remainder of a large batch', async () => {

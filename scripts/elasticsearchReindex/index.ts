@@ -11,6 +11,7 @@ import {
   SearchDocumentBuilder,
 } from '../../packages/database/src/repositories/searchDocument';
 import {
+  type SearchReindexAuditValue,
   SearchReindexEntityError,
   SearchReindexFileLogger,
   SearchReindexFileRepository,
@@ -197,17 +198,30 @@ const repository = new SearchReindexFileRepository({
   stateDirectory,
 });
 
+const logErrorSummary = (message: string, error: unknown) => {
+  console.error(message, summarizeSearchReindexError(error));
+};
+
 const readStatus = async () => {
   const state = await repository.getTargetRun(namespace, SEARCH_INDEX_SCHEMA_VERSION);
   const unresolvedFailures = state ? await repository.listUnresolvedFailures(state.run.id) : [];
   const outboxStats = await outbox.stats();
+  const entityStats: Record<string, SearchReindexAuditValue> = Object.fromEntries(
+    Object.entries(outboxStats.entities).map(([entity, stats]) => [entity, { ...stats }]),
+  );
   return {
     namespace,
     outbox: {
       dead: outboxStats.dead,
+      entities: entityStats,
+      expiredLeases: outboxStats.expiredLeases,
       highWaterRevision: outboxStats.highWaterRevision,
+      inFlight: outboxStats.inFlight,
       oldestActiveRevision: outboxStats.oldestActiveRevision,
+      oldestReadyAgeSeconds: outboxStats.oldestReadyAgeSeconds,
       pending: outboxStats.pending,
+      ready: outboxStats.ready,
+      revisionLag: outboxStats.revisionLag,
       retrying: outboxStats.retrying,
     },
     run: state
@@ -227,10 +241,11 @@ const readStatus = async () => {
           schemaVersion: state.run.schemaVersion,
           status: state.run.status,
           unresolvedFailures: unresolvedFailures.map(
-            ({ attempts, documentId, entity, retryable }) => ({
+            ({ attempts, documentId, entity, error, retryable }) => ({
               attempts,
               documentId,
               entity,
+              errorSummary: summarizeSearchReindexError(error),
               retryable,
             }),
           ),
@@ -399,9 +414,9 @@ const run = async () => {
 
 observeSearchReindexRun(run)
   .catch(async (error) => {
-    console.error(error);
+    const rootError = error instanceof SearchReindexEntityError ? error.cause : error;
+    logErrorSummary('❌ Elasticsearch reindex failed:', rootError);
     if (auditLogger) {
-      const rootError = error instanceof SearchReindexEntityError ? error.cause : error;
       const failure = {
         elapsedMs: Date.now() - executionStartedAt,
         entity: error instanceof SearchReindexEntityError ? error.entity : null,
@@ -409,14 +424,16 @@ observeSearchReindexRun(run)
         errorType: rootError instanceof Error ? rootError.name.slice(0, 128) : 'UnknownError',
         type: 'session_failed' as const,
       };
-      await auditLogger.append(failure).catch((logError) => console.error(logError));
+      await auditLogger
+        .append(failure)
+        .catch((logError) => logErrorSummary('Failed to append reindex audit event:', logError));
       const currentStatus = await readStatus().catch((statusError) => {
-        console.error(statusError);
+        logErrorSummary('Failed to read reindex status after failure:', statusError);
         return null;
       });
       await auditLogger
         .writeSummary({ failure, status: currentStatus })
-        .catch((logError) => console.error(logError));
+        .catch((logError) => logErrorSummary('Failed to write reindex audit summary:', logError));
     }
     process.exitCode = 1;
   })
