@@ -13,8 +13,7 @@ import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { RecentEntityRef, RecentScopeState } from './initialState';
-import { createRecentQueryKey } from './initialState';
-import { recentQueryRepository } from './repository';
+import { createRecentQueryKey, persistRecentQueries } from './initialState';
 
 const n = setNamespace('recent');
 
@@ -47,7 +46,6 @@ export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unkn
 
 export class RecentActionImpl {
   readonly #get: () => HomeStore;
-  readonly #hydrationQueue = new Map<string, Promise<void>>();
   readonly #renameQueues = new Map<string, Promise<void>>();
   readonly #set: Setter;
   #mutationId = 0;
@@ -83,25 +81,22 @@ export class RecentActionImpl {
       }),
     );
 
+    const recentsByScope = {
+      ...state.recentsByScope,
+      [scope]: {
+        ...scopedState,
+        optimisticTitles,
+        queries,
+      },
+    };
     this.#set(
       {
-        recentsByScope: {
-          ...state.recentsByScope,
-          [scope]: {
-            ...scopedState,
-            optimisticTitles,
-            queries,
-          },
-        },
+        recentsByScope,
       },
       false,
       n('commitRecentTitle'),
     );
-    void Promise.all(
-      Object.entries(queries).map(([queryKey, query]) =>
-        recentQueryRepository.set(scope, queryKey, query.items),
-      ),
-    );
+    persistRecentQueries(recentsByScope);
   };
 
   #persistRecentTitle = async ({ id, title, type }: RenameRecentParams): Promise<void> => {
@@ -180,39 +175,24 @@ export class RecentActionImpl {
     const state = this.#get();
     const scopedState = state.recentsByScope[scope] ?? createScopeState();
 
+    const recentsByScope = {
+      ...state.recentsByScope,
+      [scope]: {
+        ...scopedState,
+        queries: {
+          ...scopedState.queries,
+          [queryKey]: { items, updatedAt: Date.now() },
+        },
+      },
+    };
     this.#set(
       {
-        recentsByScope: {
-          ...state.recentsByScope,
-          [scope]: {
-            ...scopedState,
-            queries: {
-              ...scopedState.queries,
-              [queryKey]: { items, updatedAt: Date.now() },
-            },
-          },
-        },
+        recentsByScope,
       },
       false,
       n('internal_replaceRecentQuery'),
     );
-  };
-
-  hydrateRecentQuery = async (scope: string, queryKey: string): Promise<void> => {
-    if (this.#get().recentsByScope[scope]?.queries[queryKey]) return;
-
-    const hydrationKey = `${scope}:${queryKey}`;
-    const pending = this.#hydrationQueue.get(hydrationKey);
-    if (pending) return pending;
-
-    const hydration = recentQueryRepository
-      .get(scope, queryKey)
-      .then((cached) => {
-        if (cached) this.internal_replaceRecentQuery(scope, queryKey, cached.items);
-      })
-      .finally(() => this.#hydrationQueue.delete(hydrationKey));
-    this.#hydrationQueue.set(hydrationKey, hydration);
-    return hydration;
+    persistRecentQueries(recentsByScope);
   };
 
   openAllRecentsDrawer = (): void => {
@@ -252,11 +232,8 @@ export class RecentActionImpl {
     const limit = 50;
     const queryKey = createRecentQueryKey(limit);
     return useClientDataSWR<number>(open ? recentKeys.allDrawer(open, scope) : null, async () => {
-      const request = recentService.getAll(limit, RECENT_SIDEBAR_TYPES);
-      await this.hydrateRecentQuery(scope, queryKey);
-      const items = await request;
+      const items = await recentService.getAll(limit, RECENT_SIDEBAR_TYPES);
       this.internal_replaceRecentQuery(scope, queryKey, items);
-      void recentQueryRepository.set(scope, queryKey, items);
       return Date.now();
     });
   };
@@ -271,11 +248,8 @@ export class RecentActionImpl {
     return useClientDataSWR<number>(
       isLogin === true ? recentKeys.list(isLogin, limit, scope) : null,
       async () => {
-        const request = recentService.getAll(requestLimit, RECENT_SIDEBAR_TYPES);
-        await this.hydrateRecentQuery(scope, queryKey);
-        const items = await request;
+        const items = await recentService.getAll(requestLimit, RECENT_SIDEBAR_TYPES);
         this.internal_replaceRecentQuery(scope, queryKey, items);
-        void recentQueryRepository.set(scope, queryKey, items);
         return Date.now();
       },
     );

@@ -493,7 +493,7 @@ export const CACHE_TIERS = {
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [
     // Home's chat-mode recents still uses the SWR persistence tier. The mixed
-    // Recent projection is persisted separately by its Zustand query repository.
+    // Recent projection is persisted by its Zustand localStorage snapshot.
     'recent:topicList',
     'fetchRecentTopics',
     'fetchRecentResources',

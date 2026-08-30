@@ -7,12 +7,22 @@ import { recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
-import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
-import { recentQueryRepository } from '@/store/home/slices/recent/repository';
+import {
+  createRecentQueryKey,
+  initialRecentState,
+  loadRecentScopes,
+} from '@/store/home/slices/recent/initialState';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
-const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem =>
-  ({ id, title, type }) as RecentItem;
+const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem => ({
+  icon: type,
+  id,
+  routePath: '/',
+  status: null,
+  title,
+  type,
+  updatedAt: new Date(0),
+});
 
 type TaskUpdateResult = Awaited<ReturnType<typeof taskService.update>>;
 const taskUpdateResult = {} as TaskUpdateResult;
@@ -58,25 +68,18 @@ describe('RecentActionImpl', () => {
     ).toEqual([item('a', 'Drawer'), item('b', 'B')]);
   });
 
+  it('persists and restores query projections synchronously through localStorage', () => {
+    const queryKey = createRecentQueryKey(11);
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Cached')]));
+
+    const persisted = localStorage.getItem('lobechat-home-recents');
+    expect(persisted).toContain('Cached');
+    expect(loadRecentScopes()['user-1:ws-A']?.queries[queryKey]?.items[0]?.title).toBe('Cached');
+  });
+
   it('ignores a query update after the active cache scope changed', () => {
     act(() => replaceQuery('user-1:ws-B', createRecentQueryKey(11), [item('stale', 'STALE')]));
     expect(useHomeStore.getState().recentsByScope['user-1:ws-B']).toBeUndefined();
-  });
-
-  it('hydrates only the requested query projection from the local repository', async () => {
-    const queryKey = createRecentQueryKey(11);
-    vi.spyOn(recentQueryRepository, 'get').mockResolvedValue({
-      items: [item('cached', 'Cached')],
-      updatedAt: 1,
-      version: 1,
-    });
-
-    await act(() => useHomeStore.getState().hydrateRecentQuery('user-1:ws-A', queryKey));
-
-    expect(recentQueryRepository.get).toHaveBeenCalledWith('user-1:ws-A', queryKey);
-    expect(
-      homeRecentSelectors.query('user-1:ws-A', queryKey)(useHomeStore.getState())?.items,
-    ).toEqual([item('cached', 'Cached')]);
   });
 
   it('shows an optimistic title and rolls it back when persistence fails', async () => {
@@ -104,7 +107,6 @@ describe('RecentActionImpl', () => {
     const compactQuery = createRecentQueryKey(11);
     const drawerQuery = createRecentQueryKey(50);
     vi.spyOn(taskService, 'update').mockResolvedValue(taskUpdateResult);
-    vi.spyOn(recentQueryRepository, 'set').mockResolvedValue();
     act(() => {
       replaceQuery('user-1:ws-A', compactQuery, [item('same', 'Task', 'task')]);
       replaceQuery('user-1:ws-A', drawerQuery, [
@@ -139,7 +141,6 @@ describe('RecentActionImpl', () => {
       .spyOn(taskService, 'update')
       .mockReturnValueOnce(firstRequest.promise)
       .mockReturnValueOnce(secondRequest.promise);
-    vi.spyOn(recentQueryRepository, 'set').mockResolvedValue();
     act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Old')]));
 
     const firstRename = useHomeStore
