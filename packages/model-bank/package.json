@@ -36,6 +36,7 @@
     "./githubCopilot": "./src/aiModels/githubCopilot.ts",
     "./google": "./src/aiModels/google.ts",
     "./glmCodingPlan": "./src/aiModels/glmCodingPlan.ts",
+    "./greenpt": "./src/aiModels/greenpt.ts",
     "./groq": "./src/aiModels/groq.ts",
     "./higress": "./src/aiModels/higress.ts",
     "./huggingface": "./src/aiModels/huggingface.ts",
