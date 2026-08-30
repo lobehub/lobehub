@@ -39,15 +39,12 @@ afterEach(() => {
 describe('RecentActionImpl', () => {
   it('normalizes server data into a scoped ordered index and entity map', () => {
     act(() => {
-      useHomeStore
-        .getState()
-        .ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B')], 10, 100);
+      useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B')], 10);
     });
 
     const state = useHomeStore.getState();
     expect(state.recentsByScope['user-1:ws-A']?.index).toEqual({
       limit: 10,
-      observedAt: 100,
       refs: ['task:a', 'task:b'],
     });
     expect(state.recentsByScope['user-1:ws-A']?.entities['task:a']).toEqual(item('a', 'A'));
@@ -55,29 +52,17 @@ describe('RecentActionImpl', () => {
 
   it('ignores a response after the active cache scope changed', () => {
     act(() => {
-      useHomeStore.getState().ingestRecents('user-1:ws-B', [item('stale', 'STALE')], 10, 100);
+      useHomeStore.getState().ingestRecents('user-1:ws-B', [item('stale', 'STALE')], 10);
     });
 
     expect(useHomeStore.getState().recentsByScope['user-1:ws-B']).toBeUndefined();
   });
 
-  it('does not let an older response overwrite a newer index', () => {
-    act(() => {
-      const store = useHomeStore.getState();
-      store.ingestRecents('user-1:ws-A', [item('new', 'New')], 10, 200);
-      store.ingestRecents('user-1:ws-A', [item('old', 'Old')], 10, 100);
-    });
-
-    expect(useHomeStore.getState().recentsByScope['user-1:ws-A']?.index?.refs).toEqual([
-      'task:new',
-    ]);
-  });
-
   it('preserves the tail when a smaller sidebar response follows a larger drawer response', () => {
     act(() => {
       const store = useHomeStore.getState();
-      store.ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B'), item('c', 'C')], 50, 100);
-      store.ingestRecents('user-1:ws-A', [item('a', 'A2')], 1, 200);
+      store.ingestRecents('user-1:ws-A', [item('a', 'A'), item('b', 'B'), item('c', 'C')], 50);
+      store.ingestRecents('user-1:ws-A', [item('a', 'A2')], 1);
     });
 
     expect(useHomeStore.getState().recentsByScope['user-1:ws-A']?.index?.refs).toEqual([
@@ -92,7 +77,7 @@ describe('RecentActionImpl', () => {
     vi.spyOn(taskService, 'update').mockReturnValue(request.promise);
 
     act(() => {
-      useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10, 100);
+      useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10);
     });
 
     const renamePromise = useHomeStore
@@ -121,7 +106,6 @@ describe('RecentActionImpl', () => {
           'user-1:ws-A',
           [item('same', 'Task', 'task'), item('same', 'Document', 'document')],
           10,
-          100,
         );
     });
     await useHomeStore
@@ -141,7 +125,7 @@ describe('RecentActionImpl', () => {
       .mockReturnValueOnce(firstRequest.promise)
       .mockReturnValueOnce(secondRequest.promise);
     vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
-    useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10, 100);
+    useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10);
 
     const firstRename = useHomeStore
       .getState()
@@ -172,7 +156,7 @@ describe('RecentActionImpl', () => {
   it('only mutates SWR caches in the renamed scope', async () => {
     vi.spyOn(taskService, 'update').mockResolvedValue(taskUpdateResult);
     const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
-    useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10, 100);
+    useHomeStore.getState().ingestRecents('user-1:ws-A', [item('a', 'Old')], 10);
 
     await useHomeStore
       .getState()

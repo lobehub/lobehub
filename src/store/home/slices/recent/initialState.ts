@@ -4,7 +4,6 @@ export type RecentEntityRef = `${RecentItem['type']}:${string}`;
 
 export interface RecentIndex {
   limit: number;
-  observedAt: number;
   refs: RecentEntityRef[];
 }
 

@@ -1,8 +1,7 @@
 import type { RecentItem } from '@lobechat/types';
-import { useLayoutEffect } from 'react';
 import type { SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { documentService } from '@/services/document';
@@ -168,13 +167,12 @@ export class RecentActionImpl {
     );
   };
 
-  ingestRecents = (scope: string, items: RecentItem[], limit: number, observedAt: number): void => {
+  ingestRecents = (scope: string, items: RecentItem[], limit: number): void => {
     if (getCacheScope() !== scope) return;
 
     const state = this.#get();
     const scopedState = state.recentsByScope[scope] ?? createScopeState();
     const currentIndex = scopedState.index;
-    if (currentIndex && observedAt < currentIndex.observedAt) return;
 
     const incomingRefs = items.map(toRef);
     const refs =
@@ -183,7 +181,6 @@ export class RecentActionImpl {
         : incomingRefs;
     const index: RecentIndex = {
       limit: Math.max(limit, currentIndex?.limit || 0),
-      observedAt,
       refs: [...new Set(refs)],
     };
     const entities = { ...scopedState.entities };
@@ -235,30 +232,24 @@ export class RecentActionImpl {
   };
 
   useFetchAllRecents = (open: boolean, scope: string): SWRResponse<RecentItem[]> => {
-    const response = useClientDataSWR<RecentItem[]>(
+    return useClientDataSWRWithSync<RecentItem[]>(
       open ? recentKeys.allDrawer(open, scope) : null,
       () => recentService.getAll(50, RECENT_SIDEBAR_TYPES),
+      { onData: (data) => this.ingestRecents(scope, data, 50) },
     );
-    useLayoutEffect(() => {
-      if (response.data) this.ingestRecents(scope, response.data, 50, Date.now());
-    }, [response.data, scope]);
-    return response;
   };
 
   useFetchRecents = (
     isLogin: boolean | undefined,
-    limit: number = 10,
     scope: string,
+    limit: number = 10,
   ): SWRResponse<RecentItem[]> => {
     const requestLimit = limit + 1;
-    const response = useClientDataSWR<RecentItem[]>(
+    return useClientDataSWRWithSync<RecentItem[]>(
       isLogin === true ? recentKeys.list(isLogin, limit, scope) : null,
       () => recentService.getAll(requestLimit, RECENT_SIDEBAR_TYPES),
+      { onData: (data) => this.ingestRecents(scope, data, requestLimit) },
     );
-    useLayoutEffect(() => {
-      if (response.data) this.ingestRecents(scope, response.data, requestLimit, Date.now());
-    }, [requestLimit, response.data, scope]);
-    return response;
   };
 }
 

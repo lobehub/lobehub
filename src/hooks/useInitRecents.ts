@@ -11,7 +11,7 @@ export const useInitRecents = () => {
   const scope = useCacheScope();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
 
-  const { isValidating, data, ...rest } = useFetchRecents(isLogin, recentPageSize, scope);
+  const { isValidating, data, ...rest } = useFetchRecents(isLogin, scope, recentPageSize);
 
   return {
     ...rest,
