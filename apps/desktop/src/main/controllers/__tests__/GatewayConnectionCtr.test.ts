@@ -631,6 +631,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-err',
         result: {
+          executionTimeMs: expect.any(Number),
           content: 'File not found',
           error: 'File not found',
           success: false,
@@ -649,6 +650,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-unknown',
         result: {
+          executionTimeMs: expect.any(Number),
           content: errorMsg,
           error: errorMsg,
           success: false,
@@ -717,8 +719,32 @@ describe('GatewayConnectionCtr', () => {
 
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'mcp-ok',
-        result: { content: 'stock: 100', state: { rows: 1 }, success: true },
+        result: {
+          content: 'stock: 100',
+          executionTimeMs: expect.any(Number),
+          state: { rows: 1 },
+          success: true,
+        },
       });
+    });
+
+    it('reports how long the tool took on this device', async () => {
+      vi.mocked(mockLocalFileCtr.readFile).mockResolvedValueOnce({
+        content: 'ok',
+        success: true,
+      } as never);
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest('readFile', { path: '/x' }, 'req-timed');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The server can only observe the whole dispatch round trip, so this
+      // number is the only way to tell a slow tool from slow transport. Desktop
+      // is where most device tool calls happen — omitting it here would bias
+      // the measurement toward calls made through `lh connect`.
+      const { result } = client.sendToolCallResponse.mock.calls.at(-1)![0];
+      expect(typeof result.executionTimeMs).toBe('number');
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
     });
 
     it('should send error response when the MCP call throws', async () => {
@@ -735,7 +761,12 @@ describe('GatewayConnectionCtr', () => {
 
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'mcp-err',
-        result: { content: 'spawn ENOENT', error: 'spawn ENOENT', success: false },
+        result: {
+          content: 'spawn ENOENT',
+          error: 'spawn ENOENT',
+          executionTimeMs: expect.any(Number),
+          success: false,
+        },
       });
     });
   });
@@ -1595,6 +1626,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-cap',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ available: true, version: '1.2.3' }),
           state: { available: true, version: '1.2.3' },
           success: true,
@@ -1620,6 +1652,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-cap-nover',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ available: true }),
           state: { available: true },
           success: true,
@@ -1643,6 +1676,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-missing',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({
             available: false,
             reason: 'openclaw is not installed on this device',
@@ -1673,6 +1707,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-unknown-plat',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ available: false, reason: 'Unknown platform: unknownBot' }),
           state: { available: false, reason: 'Unknown platform: unknownBot' },
           success: true,
@@ -1693,6 +1728,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-profile',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({}),
           state: {},
           success: true,
@@ -1725,6 +1761,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-openclaw',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ avatar: '🦞', title: 'Clawd' }),
           state: { avatar: '🦞', description: undefined, title: 'Clawd' },
           success: true,
@@ -1753,6 +1790,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-hermes',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ avatar: '⚡', title: 'research' }),
           state: { avatar: '⚡', description: undefined, title: 'research' },
           success: true,
