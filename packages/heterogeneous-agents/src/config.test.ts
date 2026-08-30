@@ -58,7 +58,12 @@ describe('heterogeneous agent config', () => {
     expect(getHeterogeneousAgentConfig('droid')).toMatchObject({
       auth: { signInCommand: 'droid' },
       defaultCommand: 'droid',
-      install: { commands: ['npm install -g droid'] },
+      install: {
+        commands: [
+          'curl -fsSL https://app.factory.ai/cli | sh',
+          'irm https://app.factory.ai/cli/windows | iex',
+        ],
+      },
       title: 'Factory Droid',
       type: 'droid',
     });

@@ -195,7 +195,10 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     defaultTopicGroupMode: 'byProject',
     iconId: 'Droid',
     install: {
-      commands: ['npm install -g droid'],
+      commands: [
+        'curl -fsSL https://app.factory.ai/cli | sh',
+        'irm https://app.factory.ai/cli/windows | iex',
+      ],
       docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
     },
     kind: 'local-cli',
