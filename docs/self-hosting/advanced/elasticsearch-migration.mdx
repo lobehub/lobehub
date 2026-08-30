@@ -13,7 +13,7 @@ tags:
 The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It atomically records the cursor, counters, and item-level failures in a local checkpoint file, so running the same command with the same state directory resumes the existing attempt.
 
 <Callout type="warning">
-  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes. The regular database migration creates only the PostgreSQL Outbox schema; it does not install search-capture triggers. Capture starts only after you explicitly run `bun run db:install-search-capture` or start `bun run search:reindex -- --apply`, even if the incremental consumer is still paused.
+  The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes. The regular database migration creates the PostgreSQL Outbox schema and the schema-managed Memory fanout GIN index; it does not install search-capture functions or triggers. Capture starts only after you explicitly run `bun run db:install-search-capture` or start `bun run search:reindex -- --apply`, even if the incremental consumer is still paused.
 </Callout>
 
 ## Environment variables
@@ -46,22 +46,12 @@ host.
    the provided plugin for the deployment; on self-managed Elasticsearch, install it on every node
    and restart every node before the first `--apply`.
 
-2. Apply the database migrations for the same LobeHub release:
+2. Back up PostgreSQL before enabling Elasticsearch capture.
 
-   ```bash
-   bun run db:migrate
-   ```
-
-   This creates the Outbox sequence, table, and ordinary Outbox indexes. It deliberately does not
-   create the Memory fanout GIN index or the PostgreSQL change-capture functions and triggers. A
-   PostgreSQL-only deployment can stop here without paying the search-capture write overhead.
-
-3. Back up PostgreSQL before enabling Elasticsearch capture.
-
-4. If an existing, write-heavy database is about to enable Elasticsearch, run the following
+3. If an existing, write-heavy database is about to apply the migration, run the following
    statement in the database SQL editor, outside a transaction. It builds the Memory fanout index
-   without blocking writes, so the later installer can reuse it. A new or low-traffic installation
-   can skip this pre-step; the installer creates the same index idempotently.
+   without blocking writes, so the regular migration can reuse it. A new or low-traffic
+   installation can skip this pre-step and let the migration create the index normally:
 
    ```sql
    CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
@@ -69,9 +59,20 @@ host.
    ```
 
    `IF NOT EXISTS` does not verify an existing index definition. If an interrupted build left this
-   index invalid, or `--apply` reports that its table, column, GIN operator class, or predicate is
-   wrong, run `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"` outside a
-   transaction, then retry the create statement.
+   index invalid, or the installer reports that its table, column, GIN operator class, or predicate
+   is wrong, run `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"` outside
+   a transaction, recreate it with the statement above, and then continue.
+
+4. Apply the database migrations for the same LobeHub release:
+
+   ```bash
+   bun run db:migrate
+   ```
+
+   This creates the Outbox sequence, table, ordinary Outbox indexes, and the schema-managed Memory
+   fanout GIN index. It does not create the PostgreSQL change-capture functions or triggers. A
+   PostgreSQL-only deployment can stop here: it still maintains the schema-managed GIN index, but
+   does not pay the trigger or Outbox capture-write overhead.
 
 5. Install the optional PostgreSQL change capture before the first backfill:
 
@@ -79,11 +80,14 @@ host.
    bun run db:install-search-capture
    ```
 
-   This installs the GIN index, capture functions, and triggers. The installer is idempotent, so it
-   is safe to rerun after an interrupted deployment. Once it succeeds, source changes are recorded
-   in the Outbox immediately. The `bun run search:reindex -- --apply` command also runs this installer
-   automatically; using the explicit command first is useful when you want capture active while
-   preparing the Elasticsearch target. If you do not intend to enable Elasticsearch, do not run it.
+   The installer first strictly validates the schema-managed GIN index (it does not create it), then
+   atomically installs and verifies the capture functions and 16 triggers in one transaction. It is
+   safe to rerun when the complete expected infrastructure already exists; partial, disabled, or
+   unexpected definitions fail closed instead of being silently repaired. Once it succeeds, source
+   changes are recorded in the Outbox immediately. The `bun run search:reindex -- --apply` command
+   also runs this installer automatically; using the explicit command first is useful when you want
+   capture active while preparing the Elasticsearch target. If you do not intend to enable
+   Elasticsearch, do not run it.
 
 6. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
@@ -111,9 +115,10 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --
 ```
 
 `--apply` verifies every physical Elasticsearch index and its ICU analysis settings before reading
-source rows. It also idempotently installs the optional PostgreSQL capture infrastructure (unless
-it was installed already), then verifies the Memory fanout GIN index. The read-only `--status`
-command never installs or changes this infrastructure. Before reading source rows, `--apply`
+source rows. It also validates the schema-managed Memory fanout GIN index (it never creates this
+index) and idempotently installs the optional PostgreSQL capture infrastructure (unless it was
+installed already). The read-only `--status` command never installs or changes this infrastructure.
+Before reading source rows, `--apply`
 briefly fences writes to all trigger source tables so transactions holding older Outbox revisions
 finish before the snapshot.
 If the three-second lock timeout expires, let the long transaction finish and rerun the command.

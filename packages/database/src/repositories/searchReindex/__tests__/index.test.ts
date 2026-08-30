@@ -10,12 +10,15 @@ import { SearchReindexFileRepository } from '..';
 
 let stateDirectory: string;
 let repository: SearchReindexFileRepository;
+let captureFingerprint = 'capture-v1';
 let revision = 10;
 
 beforeEach(async () => {
   stateDirectory = await mkdtemp(path.join(tmpdir(), 'search-reindex-test-'));
+  captureFingerprint = 'capture-v1';
   revision = 10;
   repository = new SearchReindexFileRepository({
+    readCaptureFingerprint: vi.fn(async () => captureFingerprint),
     readHighWaterRevision: vi.fn(async () => revision),
     reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
     stateDirectory,
@@ -27,9 +30,10 @@ afterEach(async () => {
 });
 
 describe('SearchReindexFileRepository', () => {
-  it('creates one local v1 checkpoint and resumes it after constructing a new repository', async () => {
+  it('creates one local v2 checkpoint and resumes it after constructing a new repository', async () => {
     const first = await repository.createOrResume('test-search', 1);
     const resumed = await new SearchReindexFileRepository({
+      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
       readHighWaterRevision: vi.fn(async () => revision),
       reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
       stateDirectory,
@@ -41,6 +45,7 @@ describe('SearchReindexFileRepository', () => {
       'test-search-messages-v1',
     );
     expect(resumed.run.id).toBe(first.run.id);
+    expect(resumed.run.captureFingerprint).toBe(captureFingerprint);
 
     const checkpointFiles = await readdir(stateDirectory);
     expect(checkpointFiles).toHaveLength(1);
@@ -48,7 +53,33 @@ describe('SearchReindexFileRepository', () => {
     const checkpoint = JSON.parse(
       await readFile(path.join(stateDirectory, checkpointFiles[0]), 'utf8'),
     );
-    expect(checkpoint).toMatchObject({ formatVersion: 1, run: { namespace: 'test-search' } });
+    expect(checkpoint).toMatchObject({
+      formatVersion: 2,
+      run: { captureFingerprint, namespace: 'test-search' },
+    });
+  });
+
+  it('refuses to resume a checkpoint when capture definitions changed', async () => {
+    const state = await repository.createOrResume('changed-capture-search', 1);
+    await repository.completeEntity(state.run.id, 'agents');
+    captureFingerprint = 'capture-v2';
+
+    const restarted = new SearchReindexFileRepository({
+      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
+      readHighWaterRevision: vi.fn(async () => revision),
+      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
+      stateDirectory,
+    });
+
+    await expect(restarted.createOrResume('changed-capture-search', 1)).rejects.toThrow(
+      'capture definition fingerprint changed',
+    );
+    await expect(restarted.getTargetRun('changed-capture-search', 1)).resolves.toMatchObject({
+      progress: expect.arrayContaining([
+        expect.objectContaining({ entity: 'agents', status: 'completed' }),
+      ]),
+      run: { captureFingerprint: 'capture-v1' },
+    });
   });
 
   it('reports a corrupt checkpoint instead of silently starting over', async () => {
@@ -67,6 +98,7 @@ describe('SearchReindexFileRepository', () => {
     await writeFile(path.join(stateDirectory, 'reindex-unrelated-deadbeef-v1.json'), '{');
 
     const restarted = new SearchReindexFileRepository({
+      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
       readHighWaterRevision: vi.fn(async () => revision),
       reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
       stateDirectory,

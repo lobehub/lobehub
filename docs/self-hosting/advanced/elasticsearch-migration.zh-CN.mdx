@@ -13,7 +13,7 @@ tags:
 3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复制到新的 Elasticsearch 项目。工具会把游标、计数和逐条失败记录原子写入本地 checkpoint 文件，因此中断后使用同一个状态目录重复执行命令即可续跑。
 
 <Callout type="warning">
-  全量回填命令不会把产品搜索请求切到 Elasticsearch。回填和验收期间，应用必须继续使用 PostgreSQL 搜索。常规数据库迁移只创建 PostgreSQL 增量队列的基础结构，不会安装搜索变更采集触发器。只有显式执行 `bun run db:install-search-capture` 或启动 `bun run search:reindex -- --apply` 后才会开始采集，即使增量消费器仍处于暂停状态也是如此。
+  全量回填命令不会把产品搜索请求切到 Elasticsearch。回填和验收期间，应用必须继续使用 PostgreSQL 搜索。常规数据库迁移会创建 PostgreSQL 增量队列的基础结构和由数据库结构管理的 Memory 扇出 GIN 索引，但不会安装搜索变更采集函数和触发器。只有显式执行 `bun run db:install-search-capture` 或启动 `bun run search:reindex -- --apply` 后才会开始采集，即使增量消费器仍处于暂停状态也是如此。
 </Callout>
 
 ## 环境变量
@@ -37,24 +37,24 @@ tags:
    [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
    插件。Elastic Cloud Serverless 已包含核心分析插件；Elastic Cloud Hosted 需要为部署启用官方插件；自行管理的 Elasticsearch 必须在所有节点安装插件并重启所有节点。请在首次执行 `--apply` 前完成。
 
-2. 执行同一 LobeHub 版本自带的数据库迁移：
+2. 在启用 Elasticsearch 采集前备份 PostgreSQL。
 
-   ```bash
-   bun run db:migrate
-   ```
-
-   这一步只创建增量队列的序列、表和普通索引，不会创建 Memory 扇出所需的 GIN 索引，也不会创建 PostgreSQL 变更采集函数和触发器。只使用 PostgreSQL 搜索的部署可以停在这里，不会承担搜索变更采集的写入开销。
-
-3. 在启用 Elasticsearch 采集前备份 PostgreSQL。
-
-4. 如果准备在仍有大量写入的现有数据库上启用 Elasticsearch，请先在数据库 SQL 编辑器中、事务之外执行以下语句。它会在不阻塞写入的情况下创建 Memory 扇出索引，后续安装器可以直接复用。全新或低流量安装可以跳过这一步；安装器会以幂等方式创建同一个索引：
+3. 如果是已有且写入量较大的数据库，请在执行数据库迁移前，在数据库 SQL 编辑器中、事务之外执行以下语句。它会在不阻塞写入的情况下创建 Memory 扇出索引，后续常规迁移可以直接复用。全新或低流量安装可以跳过这一步，交给迁移正常创建索引：
 
    ```sql
    CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
    ON "user_memories_contexts" USING gin ("user_memory_ids");
    ```
 
-   `IF NOT EXISTS` 不会校验同名索引的定义。如果并发创建留下无效索引，或 `--apply` 提示索引的表、列、GIN 操作符类或条件不正确，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，再重新执行上面的创建语句。
+   `IF NOT EXISTS` 不会校验同名索引的定义。如果并发创建留下无效索引，或安装器提示索引的表、列、GIN 操作符类或条件不正确，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，用上面的语句重新创建，然后继续后续步骤。
+
+4. 执行同一 LobeHub 版本自带的数据库迁移：
+
+   ```bash
+   bun run db:migrate
+   ```
+
+   这一步会创建增量队列的序列、表、普通索引，以及由数据库结构管理的 Memory 扇出 GIN 索引，但不会创建 PostgreSQL 变更采集函数和触发器。只使用 PostgreSQL 搜索的部署可以停在这里：它仍会维护这个 GIN 索引，但不会承担触发器和增量队列的采集写入开销。
 
 5. 在首次回填前安装可选的 PostgreSQL 变更采集：
 
@@ -62,7 +62,7 @@ tags:
    bun run db:install-search-capture
    ```
 
-   这一步会安装 GIN 索引、采集函数和触发器。安装器是幂等的，部署中断后可以安全重试；成功后源数据变更会立即写入增量队列。`bun run search:reindex -- --apply` 也会自动执行这一步；如果希望在准备 Elasticsearch 目标期间就开始采集，可以先显式执行安装命令。若不打算启用 Elasticsearch，不要执行这一步。
+   安装器会先严格校验由数据库结构管理的 GIN 索引（不会创建这个索引），再在一个事务中原子安装并验证采集函数和 16 个触发器。完整的预期设施已经存在时可以安全重复执行；如果发现部分对象、被禁用的对象或定义异常，安装器会直接失败，不会静默修复。安装成功后，源数据变更会立即写入增量队列。`bun run search:reindex -- --apply` 也会自动执行这一步；如果希望在准备 Elasticsearch 目标期间就开始采集，可以先显式执行安装命令。若不打算启用 Elasticsearch，不要执行这一步。
 
 6. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
 
@@ -89,7 +89,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
 ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run search:reindex -- --apply --yes
 ```
 
-`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，并以幂等方式安装可选的 PostgreSQL 变更采集设施（如果之前已经安装则复用），然后校验 Memory 扇出所需的 GIN 索引，再读取源数据。只读的 `--status` 不会安装或修改这些设施。读取源数据前，`--apply` 会短暂阻挡所有触发器源表的写入，等待持有较旧 Outbox 版本的事务结束；如果三秒内拿不到锁，应先让长事务结束，再重新运行命令。首次回填期间可以暂停增量消费器；PostgreSQL 仍会把变更追加到增量队列，完整快照准备好后再由消费器追平。必须显式传入 `--yes`，用于确认这个会写入数据的操作；命令不会弹出交互确认。
+`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，校验由数据库结构管理的 Memory 扇出 GIN 索引（不会创建这个索引），并以幂等方式安装可选的 PostgreSQL 变更采集设施（如果之前已经安装则复用），然后读取源数据。只读的 `--status` 不会安装或修改这些设施。读取源数据前，`--apply` 会短暂阻挡所有触发器源表的写入，等待持有较旧 Outbox 版本的事务结束；如果三秒内拿不到锁，应先让长事务结束，再重新运行命令。首次回填期间可以暂停增量消费器；PostgreSQL 仍会把变更追加到增量队列，完整快照准备好后再由消费器追平。必须显式传入 `--yes`，用于确认这个会写入数据的操作；命令不会弹出交互确认。
 
 工具还会把 run ID 写入每个物理索引的 mapping 元数据，使用另一份本地 checkpoint 时无法静默继续写入同一组物理索引。禁止在多台机器上并发运行同一份 checkpoint。
 

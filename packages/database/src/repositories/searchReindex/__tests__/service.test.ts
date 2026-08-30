@@ -19,8 +19,9 @@ const createState = (): SearchReindexRunState => ({
   })),
   run: {
     aliasesCreatedAt: null,
-    baseRevision: 10,
     backfillHighWaterRevision: null,
+    baseRevision: 10,
+    captureFingerprint: 'capture-v1',
     createdAt: '2026-08-28T00:00:00.000Z',
     id: 'run-1',
     namespace: 'test',

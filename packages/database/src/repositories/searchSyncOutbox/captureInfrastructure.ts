@@ -1,5 +1,14 @@
-import type { SQL } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+
 import { sql } from 'drizzle-orm';
+
+interface CaptureFunctionDefinition {
+  body: string;
+  identityArguments: string;
+  name: string;
+  result: 'trigger' | 'void';
+  signature: string;
+}
 
 interface CaptureTriggerDefinition {
   createSql: string;
@@ -10,18 +19,7 @@ interface CaptureTriggerDefinition {
 export const SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX =
   'user_memories_contexts_user_memory_ids_gin_idx';
 
-export const SEARCH_SYNC_CAPTURE_GIN_INDEX_STATEMENT = sql.raw(`
-  CREATE INDEX IF NOT EXISTS "${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}"
-    ON "user_memories_contexts" USING gin ("user_memory_ids")
-`);
-
-export const SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = [
-  sql.raw(`
-    CREATE OR REPLACE FUNCTION enqueue_search_sync_outbox(
-      p_entity text,
-      p_document_ids text[],
-      p_priority smallint DEFAULT 10
-    ) RETURNS void AS $$
+const ENQUEUE_SEARCH_SYNC_OUTBOX_BODY = `
     BEGIN
       INSERT INTO search_sync_outbox (entity, document_id, priority)
       SELECT DISTINCT p_entity, document_id, p_priority
@@ -39,10 +37,9 @@ export const SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = [
         revision = nextval('search_sync_revision_seq'),
         updated_at = now();
     END;
-    $$ LANGUAGE plpgsql
-  `),
-  sql.raw(`
-    CREATE OR REPLACE FUNCTION capture_search_sync_change() RETURNS trigger AS $$
+`;
+
+const CAPTURE_SEARCH_SYNC_CHANGE_BODY = `
     DECLARE
       field_name text;
       old_row jsonb;
@@ -69,10 +66,9 @@ export const SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = [
       PERFORM enqueue_search_sync_outbox(TG_ARGV[0], ARRAY[row_id], priority);
       RETURN COALESCE(NEW, OLD);
     END;
-    $$ LANGUAGE plpgsql
-  `),
-  sql.raw(`
-    CREATE OR REPLACE FUNCTION capture_search_sync_memory_fanout() RETURNS trigger AS $$
+`;
+
+const CAPTURE_SEARCH_SYNC_MEMORY_FANOUT_BODY = `
     -- Keep this fanout aligned with SearchDocumentBuilder.resolveAffectedKeys.
     DECLARE
       memory_id text := COALESCE(NEW.id, OLD.id)::text;
@@ -106,10 +102,9 @@ export const SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = [
 
       RETURN COALESCE(NEW, OLD);
     END;
-    $$ LANGUAGE plpgsql
-  `),
-  sql.raw(`
-    CREATE OR REPLACE FUNCTION capture_search_sync_knowledge_base_files() RETURNS trigger AS $$
+`;
+
+const CAPTURE_SEARCH_SYNC_KNOWLEDGE_BASE_FILES_BODY = `
     -- Keep this fanout aligned with SearchDocumentBuilder.resolveAffectedKeys.
     DECLARE
       file_ids text[] := ARRAY[
@@ -125,14 +120,72 @@ export const SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = [
       );
       RETURN COALESCE(NEW, OLD);
     END;
-    $$ LANGUAGE plpgsql
-  `),
-] as const;
+`;
+
+const CAPTURE_FUNCTION_DEFINITIONS: CaptureFunctionDefinition[] = [
+  {
+    body: ENQUEUE_SEARCH_SYNC_OUTBOX_BODY,
+    identityArguments: 'p_entity text, p_document_ids text[], p_priority smallint',
+    name: 'enqueue_search_sync_outbox',
+    result: 'void',
+    signature: `
+      p_entity text,
+      p_document_ids text[],
+      p_priority smallint DEFAULT 10
+    `,
+  },
+  {
+    body: CAPTURE_SEARCH_SYNC_CHANGE_BODY,
+    identityArguments: '',
+    name: 'capture_search_sync_change',
+    result: 'trigger',
+    signature: '',
+  },
+  {
+    body: CAPTURE_SEARCH_SYNC_MEMORY_FANOUT_BODY,
+    identityArguments: '',
+    name: 'capture_search_sync_memory_fanout',
+    result: 'trigger',
+    signature: '',
+  },
+  {
+    body: CAPTURE_SEARCH_SYNC_KNOWLEDGE_BASE_FILES_BODY,
+    identityArguments: '',
+    name: 'capture_search_sync_knowledge_base_files',
+    result: 'trigger',
+    signature: '',
+  },
+];
+
+const createCaptureFunctionStatement = ({
+  body,
+  name,
+  result,
+  signature,
+}: CaptureFunctionDefinition) =>
+  sql.raw(`
+    CREATE OR REPLACE FUNCTION ${name}(${signature}) RETURNS ${result} AS $search_sync_capture$
+${body}
+    $search_sync_capture$ LANGUAGE plpgsql
+  `);
+
+export const SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = CAPTURE_FUNCTION_DEFINITIONS.map(
+  createCaptureFunctionStatement,
+);
+
+export const SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS = CAPTURE_FUNCTION_DEFINITIONS.map(
+  ({ body, identityArguments, name, result }) => ({
+    body: body.trim(),
+    identityArguments,
+    name,
+    result,
+  }),
+);
 
 const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   {
     createSql: `CREATE TRIGGER search_sync_agents
-      AFTER INSERT OR DELETE OR UPDATE OF description, slug, system_role, tags, title, user_id, virtual, visibility, workspace_id ON agents
+      AFTER INSERT OR DELETE OR UPDATE OF description, slug, system_role, tags, title, updated_at, user_id, virtual, visibility, workspace_id ON public.agents
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'agents', 'user_id', 'visibility', 'workspace_id'
       )`,
@@ -141,7 +194,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_topics
-      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, description, group_id, session_id, status, title, user_id, workspace_id ON topics
+      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, description, group_id, session_id, status, title, updated_at, user_id, workspace_id ON public.topics
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'topics', 'user_id', 'workspace_id'
       )`,
@@ -150,7 +203,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_files
-      AFTER INSERT OR DELETE OR UPDATE OF file_type, name, size, source, user_id, visibility, workspace_id ON files
+      AFTER INSERT OR DELETE OR UPDATE OF file_type, name, size, source, updated_at, user_id, visibility, workspace_id ON public.files
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'files', 'user_id', 'visibility', 'workspace_id'
       )`,
@@ -159,7 +212,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_knowledge_bases
-      AFTER INSERT OR DELETE OR UPDATE OF description, is_public, name, type, user_id, visibility, workspace_id ON knowledge_bases
+      AFTER INSERT OR DELETE OR UPDATE OF description, is_public, name, type, updated_at, user_id, visibility, workspace_id ON public.knowledge_bases
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'knowledgeBases', 'is_public', 'user_id', 'visibility', 'workspace_id'
       )`,
@@ -168,7 +221,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_chat_groups
-      AFTER INSERT OR DELETE OR UPDATE OF content, description, group_id, title, user_id, visibility, workspace_id ON chat_groups
+      AFTER INSERT OR DELETE OR UPDATE OF content, description, group_id, title, updated_at, user_id, visibility, workspace_id ON public.chat_groups
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'chatGroups', 'user_id', 'visibility', 'workspace_id'
       )`,
@@ -177,7 +230,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_documents
-      AFTER INSERT OR DELETE OR UPDATE OF content, description, file_id, file_type, knowledge_base_id, parent_id, slug, source_type, title, total_char_count, user_id, visibility, workspace_id ON documents
+      AFTER INSERT OR DELETE OR UPDATE OF content, description, file_id, file_type, knowledge_base_id, parent_id, slug, source_type, title, total_char_count, updated_at, user_id, visibility, workspace_id ON public.documents
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'documents', 'user_id', 'visibility', 'workspace_id'
       )`,
@@ -186,7 +239,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_messages
-      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, group_id, role, session_id, summary, thread_id, topic_id, user_id, workspace_id ON messages
+      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, group_id, role, session_id, summary, thread_id, topic_id, updated_at, user_id, workspace_id ON public.messages
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'messages', 'user_id', 'workspace_id'
       )`,
@@ -195,7 +248,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_user_memories
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON user_memories
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, updated_at, user_id ON public.user_memories
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'userMemories', 'user_id'
       )`,
@@ -204,14 +257,14 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_user_memories_fanout
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON user_memories
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON public.user_memories
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_memory_fanout()`,
     name: 'search_sync_user_memories_fanout',
     table: 'user_memories',
   },
   {
     createSql: `CREATE TRIGGER search_sync_memory_contexts
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, current_status, description, tags, title, type, user_id, user_memory_ids ON user_memories_contexts
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, current_status, description, tags, title, type, updated_at, user_id, user_memory_ids ON public.user_memories_contexts
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'memoryContexts', 'user_id'
       )`,
@@ -220,7 +273,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_memory_preferences
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, conclusion_directives, suggestions, tags, type, user_id, user_memory_id ON user_memories_preferences
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, conclusion_directives, suggestions, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_preferences
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'memoryPreferences', 'user_id'
       )`,
@@ -229,7 +282,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_memory_activities
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, ends_at, feedback, narrative, notes, starts_at, status, tags, type, user_id, user_memory_id ON user_memories_activities
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, ends_at, feedback, narrative, notes, starts_at, status, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_activities
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'memoryActivities', 'user_id'
       )`,
@@ -238,7 +291,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_memory_identities
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, description, episodic_date, relationship, role, tags, type, user_id, user_memory_id ON user_memories_identities
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, description, episodic_date, relationship, role, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_identities
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'memoryIdentities', 'user_id'
       )`,
@@ -247,7 +300,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_memory_experiences
-      AFTER INSERT OR DELETE OR UPDATE OF action, captured_at, key_learning, possible_outcome, reasoning, situation, tags, type, user_id, user_memory_id ON user_memories_experiences
+      AFTER INSERT OR DELETE OR UPDATE OF action, captured_at, key_learning, possible_outcome, reasoning, situation, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_experiences
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'memoryExperiences', 'user_id'
       )`,
@@ -256,7 +309,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_persona_documents
-      AFTER INSERT OR DELETE OR UPDATE OF captured_at, persona, profile, tagline, user_id, version ON user_memory_persona_documents
+      AFTER INSERT OR DELETE OR UPDATE OF captured_at, persona, profile, tagline, updated_at, user_id, version ON public.user_memory_persona_documents
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
         'personaDocuments', 'user_id'
       )`,
@@ -265,37 +318,52 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER search_sync_knowledge_base_files
-      AFTER INSERT OR DELETE OR UPDATE OF file_id, knowledge_base_id ON knowledge_base_files
+      AFTER INSERT OR DELETE OR UPDATE OF file_id, knowledge_base_id ON public.knowledge_base_files
       FOR EACH ROW EXECUTE FUNCTION capture_search_sync_knowledge_base_files()`,
     name: 'search_sync_knowledge_base_files',
     table: 'knowledge_base_files',
   },
 ];
 
-const createCaptureTriggerStatement = ({ createSql, name, table }: CaptureTriggerDefinition): SQL =>
-  sql.raw(`
-  DO $search_sync_trigger$
-  BEGIN
-    PERFORM set_config('lock_timeout', '3s', true);
-    IF NOT EXISTS (
-      SELECT 1
-      FROM pg_trigger
-      WHERE tgname = '${name}' AND tgrelid = 'public.${table}'::regclass
-    ) THEN
-      BEGIN
-        ${createSql};
-      EXCEPTION
-        WHEN duplicate_object THEN NULL;
-      END;
-    END IF;
-  END;
-  $search_sync_trigger$ LANGUAGE plpgsql
-`);
+export const normalizeSearchSyncCaptureDefinition = (definition: string) => {
+  const compact = definition
+    .trim()
+    .replaceAll(/\s+/g, ' ')
+    .replaceAll(/\(\s+/g, '(')
+    .replaceAll(/\s+\)/g, ')');
+
+  /** PostgreSQL renders UPDATE OF columns in table-column order; their SQL order is immaterial. */
+  return compact.replace(/UPDATE OF ([\w, ]+) ON /, (_, columns: string) => {
+    const normalizedColumns = columns
+      .split(',')
+      .map((column) => column.trim())
+      .toSorted()
+      .join(', ');
+    return `UPDATE OF ${normalizedColumns} ON `;
+  });
+};
+
+const createCaptureTriggerStatement = ({ createSql }: CaptureTriggerDefinition) =>
+  sql.raw(`${createSql};`);
 
 export const SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS = CAPTURE_TRIGGER_DEFINITIONS.map(
-  ({ name, table }) => ({ name, table }),
+  ({ createSql, name, table }) => ({
+    definition: normalizeSearchSyncCaptureDefinition(createSql),
+    name,
+    table,
+  }),
 );
 
 export const SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS = CAPTURE_TRIGGER_DEFINITIONS.map(
   createCaptureTriggerStatement,
 );
+
+/** Changes whenever a function body, trigger definition, or trigger target changes. */
+export const SEARCH_SYNC_CAPTURE_FINGERPRINT = createHash('sha256')
+  .update(
+    JSON.stringify({
+      functions: SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
+      triggers: SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+    }),
+  )
+  .digest('hex');

@@ -57,6 +57,8 @@ export interface SearchReindexRun {
    */
   backfillHighWaterRevision: number | null;
   baseRevision: number;
+  /** Capture function and trigger definitions used while this reindex run was created. */
+  captureFingerprint: string;
   createdAt: string;
   id: string;
   namespace: string;
@@ -71,12 +73,13 @@ export interface SearchReindexRunState {
 }
 
 export interface SearchReindexFileRepositoryOptions {
+  readCaptureFingerprint: () => Promise<string>;
   readHighWaterRevision: () => Promise<number>;
   reserveRevisionWithWriteFence: () => Promise<number>;
   stateDirectory: string;
 }
 
-const CHECKPOINT_FORMAT_VERSION = 1;
+const CHECKPOINT_FORMAT_VERSION = 2;
 const CHECKPOINT_FILE_PREFIX = 'reindex-';
 const LOCK_RETRY_INTERVAL_MS = 50;
 /** Local checkpoint operations are bounded file writes; an older lock is treated as crash residue. */
@@ -113,6 +116,7 @@ const runSchema = z.object({
   aliasesCreatedAt: z.string().datetime().nullable(),
   backfillHighWaterRevision: z.number().int().nonnegative().nullable(),
   baseRevision: z.number().int().positive(),
+  captureFingerprint: z.string().min(1),
   createdAt: z.string().datetime(),
   id: z.string().uuid(),
   namespace: z.string().min(1),
@@ -242,6 +246,24 @@ export class SearchReindexFileRepository {
     const checkpoint = await this.readCheckpointIfExists(checkpointPath);
     if (!checkpoint) throw new Error(`Search reindex checkpoint does not exist: ${checkpointPath}`);
     return checkpoint;
+  }
+
+  private async readCaptureFingerprint(): Promise<string> {
+    const fingerprint = await this.options.readCaptureFingerprint();
+    if (typeof fingerprint !== 'string' || fingerprint.trim().length === 0) {
+      throw new Error('Failed to read a valid search reindex capture definition fingerprint');
+    }
+    return fingerprint;
+  }
+
+  private assertCaptureFingerprint(
+    checkpoint: SearchReindexCheckpointFile,
+    captureFingerprint: string,
+  ): void {
+    if (checkpoint.run.captureFingerprint === captureFingerprint) return;
+    throw new Error(
+      `Search reindex capture definition fingerprint changed; refusing to resume checkpoint ${checkpoint.run.id}`,
+    );
   }
 
   private async writeCheckpoint(
@@ -400,7 +422,10 @@ export class SearchReindexFileRepository {
   async createOrResume(namespace: string, schemaVersion: number): Promise<SearchReindexRunState> {
     const checkpointPath = this.checkpointPath(namespace, schemaVersion);
     const existing = await this.readCheckpointIfExists(checkpointPath);
-    if (existing) return this.stateOf(checkpointPath, existing);
+    if (existing) {
+      this.assertCaptureFingerprint(existing, await this.readCaptureFingerprint());
+      return this.stateOf(checkpointPath, existing);
+    }
 
     /** Reserve outside the file lock so a slow database connection cannot stale the local lock. */
     const baseRevision = await this.options.reserveRevisionWithWriteFence();
@@ -409,7 +434,11 @@ export class SearchReindexFileRepository {
     }
     return this.withCheckpointLock(checkpointPath, async () => {
       const concurrentlyCreated = await this.readCheckpointIfExists(checkpointPath);
-      if (concurrentlyCreated) return this.stateOf(checkpointPath, concurrentlyCreated);
+      const captureFingerprint = await this.readCaptureFingerprint();
+      if (concurrentlyCreated) {
+        this.assertCaptureFingerprint(concurrentlyCreated, captureFingerprint);
+        return this.stateOf(checkpointPath, concurrentlyCreated);
+      }
 
       const timestamp = now();
       const checkpoint: SearchReindexCheckpointFile = {
@@ -429,6 +458,7 @@ export class SearchReindexFileRepository {
           aliasesCreatedAt: null,
           backfillHighWaterRevision: null,
           baseRevision,
+          captureFingerprint,
           createdAt: timestamp,
           id: randomUUID(),
           namespace,

@@ -191,6 +191,7 @@ const pool = new Pool({ connectionString: databaseUrl });
 const db = drizzle(pool, { schema });
 const outbox = new SearchSyncOutboxRepository(db);
 const repository = new SearchReindexFileRepository({
+  readCaptureFingerprint: () => outbox.readCaptureFingerprint(),
   readHighWaterRevision: () => outbox.readHighWaterRevision(),
   reserveRevisionWithWriteFence: () => outbox.reserveRevisionWithWriteFence(),
   stateDirectory,

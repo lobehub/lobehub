@@ -4,8 +4,10 @@ import type { LobeChatDatabase } from '../../type';
 import type { SearchDocumentEntity } from '../searchDocument';
 import { SEARCH_DOCUMENT_ENTITIES } from '../searchDocument';
 import {
+  normalizeSearchSyncCaptureDefinition,
+  SEARCH_SYNC_CAPTURE_FINGERPRINT,
   SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS,
-  SEARCH_SYNC_CAPTURE_GIN_INDEX_STATEMENT,
+  SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
   SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS,
   SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
 } from './captureInfrastructure';
@@ -50,6 +52,7 @@ const SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
   sql`, `,
 );
 
+type SearchSyncExecutor = Pick<LobeChatDatabase, 'execute'>;
 type SearchSyncDatabase = Pick<LobeChatDatabase, 'execute' | 'transaction'>;
 
 interface SearchSyncRow {
@@ -62,6 +65,152 @@ interface SearchSyncRow {
 const rowsOf = <Row>(result: unknown): Row[] => {
   if (Array.isArray(result)) return result as Row[];
   return ((result as { rows?: Row[] }).rows ?? []) as Row[];
+};
+
+interface CaptureInfrastructureState {
+  absent: boolean;
+  mismatches: string[];
+}
+
+const assertCaptureGinIndex = async (db: SearchSyncExecutor): Promise<void> => {
+  const indexResult = await db.execute(sql`
+    SELECT (
+      search_index.indisvalid
+      AND search_index.indisready
+      AND search_index.indislive
+      AND access_method.amname = 'gin'
+      AND table_namespace.nspname = 'public'
+      AND source_table.relname = 'user_memories_contexts'
+      AND search_index.indnkeyatts = 1
+      AND search_index.indnatts = 1
+      AND search_index.indexprs IS NULL
+      AND search_index.indpred IS NULL
+      AND indexed_attribute.attname = 'user_memory_ids'
+      AND indexed_attribute.atttypid = 'jsonb'::regtype
+      AND operator_class.opcintype = 'jsonb'::regtype
+      AND operator_class.opcname IN ('jsonb_ops', 'jsonb_path_ops')
+    ) AS is_valid
+    FROM pg_index search_index
+    INNER JOIN pg_class index_class ON index_class.oid = search_index.indexrelid
+    INNER JOIN pg_am access_method ON access_method.oid = index_class.relam
+    INNER JOIN pg_class source_table ON source_table.oid = search_index.indrelid
+    INNER JOIN pg_namespace table_namespace ON table_namespace.oid = source_table.relnamespace
+    INNER JOIN pg_attribute indexed_attribute
+      ON indexed_attribute.attrelid = source_table.oid
+      AND indexed_attribute.attnum = search_index.indkey[0]
+    INNER JOIN pg_opclass operator_class ON operator_class.oid = search_index.indclass[0]
+    WHERE search_index.indexrelid =
+      to_regclass('public.user_memories_contexts_user_memory_ids_gin_idx')
+  `);
+  const [index] = rowsOf<{ is_valid: boolean }>(indexResult);
+  if (!index?.is_valid) {
+    throw new Error(
+      'Search sync requires a valid, non-partial GIN index on user_memories_contexts.user_memory_ids',
+    );
+  }
+};
+
+const readCaptureInfrastructureState = async (
+  db: SearchSyncExecutor,
+): Promise<CaptureInfrastructureState> => {
+  const functionNames = sql.join(
+    SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.map(({ name }) => sql`${name}`),
+    sql`, `,
+  );
+  const functionResult = await db.execute(sql`
+    SELECT
+      pg_get_function_identity_arguments(search_function.oid) AS identity_arguments,
+      search_language.lanname AS language,
+      search_function.proname AS name,
+      search_function.prosrc AS function_body,
+      pg_get_function_result(search_function.oid) AS function_result
+    FROM pg_proc search_function
+    INNER JOIN pg_language search_language ON search_language.oid = search_function.prolang
+    WHERE search_function.pronamespace = 'public'::regnamespace
+      AND search_function.proname IN (${functionNames})
+    ORDER BY search_function.proname, identity_arguments
+  `);
+  const functions = rowsOf<{
+    function_body: string;
+    function_result: string;
+    identity_arguments: string;
+    language: string;
+    name: string;
+  }>(functionResult);
+
+  const triggerTargets = sql.join(
+    SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(
+      ({ name, table }) => sql`(${name}, ${`public.${table}`}::regclass)`,
+    ),
+    sql`, `,
+  );
+  const triggerResult = await db.execute(sql`
+    SELECT
+      pg_get_triggerdef(search_trigger.oid, false) AS definition,
+      search_trigger.tgenabled AS enabled,
+      search_trigger.tgname AS name,
+      source_table.relname AS table_name
+    FROM pg_trigger search_trigger
+    INNER JOIN pg_class source_table ON source_table.oid = search_trigger.tgrelid
+    WHERE NOT search_trigger.tgisinternal
+      AND (search_trigger.tgname, search_trigger.tgrelid) IN (${triggerTargets})
+    ORDER BY search_trigger.tgname, source_table.relname
+  `);
+  const triggers = rowsOf<{
+    definition: string;
+    enabled: string;
+    name: string;
+    table_name: string;
+  }>(triggerResult);
+
+  const mismatches: string[] = [];
+  if (functions.length !== SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length) {
+    mismatches.push(`functions ${functions.length}/${SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length}`);
+  }
+  for (const expected of SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS) {
+    const actual = functions.find(
+      ({ identity_arguments: identityArguments, name }) =>
+        name === expected.name && identityArguments === expected.identityArguments,
+    );
+    if (
+      !actual ||
+      actual.function_body.trim() !== expected.body ||
+      actual.function_result !== expected.result ||
+      actual.language !== 'plpgsql'
+    ) {
+      mismatches.push(`function ${expected.name}`);
+    }
+  }
+
+  if (triggers.length !== SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length) {
+    mismatches.push(`triggers ${triggers.length}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length}`);
+  }
+  for (const expected of SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
+    const actual = triggers.find(
+      ({ name, table_name: table }) => name === expected.name && table === expected.table,
+    );
+    if (
+      !actual ||
+      !['A', 'O'].includes(actual.enabled) ||
+      normalizeSearchSyncCaptureDefinition(actual.definition) !== expected.definition
+    ) {
+      mismatches.push(`trigger ${expected.name}`);
+    }
+  }
+
+  return {
+    absent: functions.length === 0 && triggers.length === 0,
+    mismatches,
+  };
+};
+
+const assertCaptureDefinitions = async (db: SearchSyncExecutor): Promise<void> => {
+  const state = await readCaptureInfrastructureState(db);
+  if (state.mismatches.length > 0) {
+    throw new Error(
+      `Search sync capture infrastructure does not match the expected definition: ${state.mismatches.join(', ')}`,
+    );
+  }
 };
 
 const toWork = (row: SearchSyncRow): SearchSyncWork => ({
@@ -87,89 +236,48 @@ export class SearchSyncOutboxRepository {
   constructor(private readonly db: SearchSyncDatabase) {}
 
   /**
-   * Installs lock-sensitive capture infrastructure outside automatic deployment migrations.
-   * The GIN index and each trigger use separate short transactions, so lock timeouts can be
-   * retried without holding locks already acquired for other source tables.
-   *
-   * A successful install is only a prerequisite to a full reindex, not proof that earlier writes
-   * were captured. The later full snapshot covers writes committed before installation completed,
-   * while its write fence waits for older in-flight transactions. Callers must not enable
-   * incremental-only synchronization after a partial install or without completing that reindex.
+   * Installs all capture functions and triggers as one definition-checked transaction.
+   * Repeated deployments only validate the existing definition and perform no DDL. A partial,
+   * disabled, or unknown definition fails closed instead of silently repairing a capture gap.
    */
   async installCaptureInfrastructure(): Promise<void> {
     await this.db.transaction(async (transaction) => {
       await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
-      await transaction.execute(SEARCH_SYNC_CAPTURE_GIN_INDEX_STATEMENT);
+      /** Serialize installers before inspecting state so two deployments cannot both create DDL. */
+      await transaction.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('lobehub.search-sync-capture'))`,
+      );
+      await assertCaptureGinIndex(transaction);
+
+      const state = await readCaptureInfrastructureState(transaction);
+      if (state.mismatches.length === 0) return;
+      if (!state.absent) {
+        throw new Error(
+          `Refusing to replace partial or unknown search sync capture infrastructure: ${state.mismatches.join(', ')}`,
+        );
+      }
+
+      for (const statement of SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
+        await transaction.execute(statement);
+      }
+      for (const statement of SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
+        await transaction.execute(statement);
+      }
+
+      await assertCaptureDefinitions(transaction);
     });
-
-    for (const statement of SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
-      await this.db.execute(statement);
-    }
-
-    for (const statement of SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
-      await this.db.execute(statement);
-    }
-
-    await this.assertCaptureInfrastructure();
   }
 
-  /** Fails before a reindex if installer-managed capture infrastructure is incomplete. */
+  /** Fails before a reindex or incremental drain if capture is missing, disabled, or stale. */
   async assertCaptureInfrastructure(): Promise<void> {
-    const indexResult = await this.db.execute(sql`
-      SELECT (
-        search_index.indisvalid
-        AND search_index.indisready
-        AND search_index.indislive
-        AND access_method.amname = 'gin'
-        AND table_namespace.nspname = 'public'
-        AND source_table.relname = 'user_memories_contexts'
-        AND search_index.indnkeyatts = 1
-        AND search_index.indnatts = 1
-        AND search_index.indexprs IS NULL
-        AND search_index.indpred IS NULL
-        AND indexed_attribute.attname = 'user_memory_ids'
-        AND indexed_attribute.atttypid = 'jsonb'::regtype
-        AND operator_class.opcintype = 'jsonb'::regtype
-        AND operator_class.opcname IN ('jsonb_ops', 'jsonb_path_ops')
-      ) AS is_valid
-      FROM pg_index search_index
-      INNER JOIN pg_class index_class ON index_class.oid = search_index.indexrelid
-      INNER JOIN pg_am access_method ON access_method.oid = index_class.relam
-      INNER JOIN pg_class source_table ON source_table.oid = search_index.indrelid
-      INNER JOIN pg_namespace table_namespace ON table_namespace.oid = source_table.relnamespace
-      INNER JOIN pg_attribute indexed_attribute
-        ON indexed_attribute.attrelid = source_table.oid
-        AND indexed_attribute.attnum = search_index.indkey[0]
-      INNER JOIN pg_opclass operator_class ON operator_class.oid = search_index.indclass[0]
-      WHERE search_index.indexrelid =
-        to_regclass('public.user_memories_contexts_user_memory_ids_gin_idx')
-    `);
-    const [index] = rowsOf<{ is_valid: boolean }>(indexResult);
-    if (!index?.is_valid) {
-      throw new Error(
-        'Search sync requires a valid, non-partial GIN index on user_memories_contexts.user_memory_ids',
-      );
-    }
+    await assertCaptureGinIndex(this.db);
+    await assertCaptureDefinitions(this.db);
+  }
 
-    const triggerTargets = sql.join(
-      SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(
-        ({ name, table }) => sql`(${name}, ${`public.${table}`}::regclass)`,
-      ),
-      sql`, `,
-    );
-    const triggerResult = await this.db.execute(sql`
-      SELECT count(*)::integer AS count
-      FROM pg_trigger
-      WHERE NOT tgisinternal
-        AND tgenabled IN ('O', 'A')
-        AND (tgname, tgrelid) IN (${triggerTargets})
-    `);
-    const installed = Number(rowsOf<{ count: number }>(triggerResult)[0]?.count ?? 0);
-    if (installed !== SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length) {
-      throw new Error(
-        `Search sync requires all installer-managed capture triggers (${installed}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length} enabled)`,
-      );
-    }
+  /** Returns the code-derived fingerprint only after the live definitions match it exactly. */
+  async readCaptureFingerprint(): Promise<string> {
+    await this.assertCaptureInfrastructure();
+    return SEARCH_SYNC_CAPTURE_FINGERPRINT;
   }
 
   /** Observes the latest allocated revision without treating it as a committed snapshot boundary. */

@@ -3511,6 +3511,7 @@ table user_memories_contexts {
     description_vector [name: 'user_memories_contexts_description_vector_index']
     type [name: 'user_memories_contexts_type_index']
     user_id [name: 'user_memories_contexts_user_id_index']
+    user_memory_ids [name: 'user_memories_contexts_user_memory_ids_gin_idx']
   }
 }
 

@@ -15,6 +15,7 @@ import {
 } from '../captureInfrastructure';
 
 const USER_ID = 'search-sync-integration-user';
+const CAPTURE_INSTALL_TEST_TIMEOUT = 30_000;
 const SEARCH_SYNC_TRIGGER_TARGETS = [
   { name: 'search_sync_agents', table: 'agents' },
   { name: 'search_sync_chat_groups', table: 'chat_groups' },
@@ -54,8 +55,6 @@ const dropCaptureInfrastructure = async () => {
   for (const { name, table } of SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
     await db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${name}" ON "${table}"`));
   }
-
-  await db.execute(sql.raw(`DROP INDEX IF EXISTS "${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}"`));
 
   for (const functionName of SEARCH_SYNC_CAPTURE_FUNCTION_NAMES) {
     const signature =
@@ -117,7 +116,7 @@ const hasCompleteCaptureInfrastructure = async () => {
 beforeAll(async () => {
   restoreCaptureInfrastructure = await hasCompleteCaptureInfrastructure();
   await dropCaptureInfrastructure();
-});
+}, CAPTURE_INSTALL_TEST_TIMEOUT);
 
 beforeEach(async () => {
   await db.delete(users).where(eq(users.id, USER_ID));
@@ -128,12 +127,11 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.delete(users).where(eq(users.id, USER_ID));
   await db.delete(searchSyncOutbox);
+  await dropCaptureInfrastructure();
   if (restoreCaptureInfrastructure) {
     await repository.installCaptureInfrastructure();
-  } else {
-    await dropCaptureInfrastructure();
   }
-});
+}, CAPTURE_INSTALL_TEST_TIMEOUT);
 
 describe.sequential('SearchSyncOutboxRepository', () => {
   it('keeps optional capture infrastructure out of the deployment migration', () => {
@@ -155,7 +153,7 @@ describe.sequential('SearchSyncOutboxRepository', () => {
     expect(migrationSql).not.toContain('CREATE TRIGGER');
     expect(migrationSql).not.toContain('capture_search_sync_change');
     expect(migrationSql).not.toContain("set_config('lock_timeout', '3s', true)");
-    expect(migrationSql).not.toContain(SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX);
+    expect(migrationSql).toContain(SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX);
     expect(migrationSql).not.toContain('search_sync_settings');
   });
 
@@ -173,7 +171,7 @@ describe.sequential('SearchSyncOutboxRepository', () => {
       SELECT to_regclass(${`public.${SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX}`})::text AS index_name
     `);
     const indexRows = Array.isArray(indexResult) ? indexResult : indexResult.rows;
-    expect(indexRows).toEqual([{ index_name: null }]);
+    expect(indexRows).toEqual([{ index_name: SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX }]);
 
     const functionResult = await db.execute(sql`
       SELECT proname
@@ -222,10 +220,12 @@ describe.sequential('SearchSyncOutboxRepository', () => {
     expect(rows).toEqual([{ index_name: 'search_sync_outbox_dead_idx' }]);
   });
 
-  it('installs a valid GIN index and all exact capture triggers', async () => {
-    await repository.installCaptureInfrastructure();
+  it(
+    'requires the schema-managed GIN index and installs all exact capture triggers',
+    async () => {
+      await repository.installCaptureInfrastructure();
 
-    const result = await db.execute(sql`
+      const result = await db.execute(sql`
       SELECT pg_trigger.tgname, pg_trigger.tgenabled, source_table.relname AS table_name
       FROM pg_trigger
       JOIN pg_class AS source_table ON source_table.oid = pg_trigger.tgrelid
@@ -234,17 +234,17 @@ describe.sequential('SearchSyncOutboxRepository', () => {
         AND source_namespace.nspname = 'public'
       ORDER BY tgname
     `);
-    const rows = Array.isArray(result) ? result : result.rows;
+      const rows = Array.isArray(result) ? result : result.rows;
 
-    expect(rows).toEqual(
-      SEARCH_SYNC_TRIGGER_TARGETS.map(({ name: tgname, table: table_name }) => ({
-        tgname,
-        tgenabled: 'O',
-        table_name,
-      })),
-    );
+      expect(rows).toEqual(
+        SEARCH_SYNC_TRIGGER_TARGETS.map(({ name: tgname, table: table_name }) => ({
+          tgname,
+          tgenabled: 'O',
+          table_name,
+        })),
+      );
 
-    const indexResult = await db.execute(sql`
+      const indexResult = await db.execute(sql`
       SELECT
         access_method.amname AS access_method,
         indexed_attribute.attname AS indexed_column,
@@ -261,31 +261,48 @@ describe.sequential('SearchSyncOutboxRepository', () => {
       WHERE search_index.indexrelid =
         'user_memories_contexts_user_memory_ids_gin_idx'::regclass
     `);
-    const indexRows = Array.isArray(indexResult) ? indexResult : indexResult.rows;
-    expect(indexRows).toEqual([
-      {
-        access_method: 'gin',
-        indexed_column: 'user_memory_ids',
-        is_jsonb: true,
-        is_not_partial: true,
-        is_ready: true,
-        is_valid: true,
-      },
-    ]);
-  });
+      const indexRows = Array.isArray(indexResult) ? indexResult : indexResult.rows;
+      expect(indexRows).toEqual([
+        {
+          access_method: 'gin',
+          indexed_column: 'user_memory_ids',
+          is_jsonb: true,
+          is_not_partial: true,
+          is_ready: true,
+          is_valid: true,
+        },
+      ]);
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
 
-  it('keeps capture installation idempotent', async () => {
-    await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
-    await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
-
-    const result = await db.execute(sql`
-      SELECT count(*)::integer AS count
+  it(
+    'keeps capture installation idempotent',
+    async () => {
+      await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
+      const firstResult = await db.execute(sql`
+      SELECT oid::text, tgname
       FROM pg_trigger
       WHERE NOT tgisinternal AND tgname LIKE 'search_sync_%'
+      ORDER BY tgname
     `);
-    const rows = Array.isArray(result) ? result : result.rows;
-    expect(rows).toEqual([{ count: 16 }]);
-  });
+      const firstRows = Array.isArray(firstResult) ? firstResult : firstResult.rows;
+
+      await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
+
+      const result = await db.execute(sql`
+      SELECT oid::text, tgname
+      FROM pg_trigger
+      WHERE NOT tgisinternal AND tgname LIKE 'search_sync_%'
+      ORDER BY tgname
+    `);
+      const rows = Array.isArray(result) ? result : result.rows;
+      expect(rows).toEqual(firstRows);
+      expect(rows).toHaveLength(16);
+      await expect(repository.readCaptureFingerprint()).resolves.toMatch(/^[a-f\d]{64}$/);
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
 
   it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
     const revision = await repository.reserveRevisionWithWriteFence();
@@ -294,20 +311,78 @@ describe.sequential('SearchSyncOutboxRepository', () => {
     await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
   });
 
-  it('validates capture infrastructure and rejects a disabled trigger', async () => {
-    await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+  it(
+    'validates capture infrastructure and rejects a disabled trigger',
+    async () => {
+      await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
 
-    await db.execute(sql`ALTER TABLE agents DISABLE TRIGGER search_sync_agents`);
-    try {
-      await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
-        'Search sync requires all installer-managed capture triggers (15/16 enabled)',
+      await db.execute(sql`ALTER TABLE agents DISABLE TRIGGER search_sync_agents`);
+      try {
+        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
+          'trigger search_sync_agents',
+        );
+        await expect(repository.installCaptureInfrastructure()).rejects.toThrow(
+          'Refusing to replace partial or unknown search sync capture infrastructure',
+        );
+      } finally {
+        await db.execute(sql`ALTER TABLE agents ENABLE TRIGGER search_sync_agents`);
+      }
+
+      await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
+
+  it(
+    'refuses to continue from a partial trigger installation',
+    async () => {
+      await db.execute(sql`DROP TRIGGER search_sync_agents ON agents`);
+      try {
+        await expect(repository.installCaptureInfrastructure()).rejects.toThrow(
+          'Refusing to replace partial or unknown search sync capture infrastructure',
+        );
+        const result = await db.execute(sql`
+        SELECT to_regclass('public.agents') IS NOT NULL AND EXISTS (
+          SELECT 1 FROM pg_trigger
+          WHERE tgname = 'search_sync_agents' AND tgrelid = 'public.agents'::regclass
+        ) AS restored
+      `);
+        const rows = Array.isArray(result) ? result : result.rows;
+        expect(rows).toEqual([{ restored: false }]);
+      } finally {
+        await dropCaptureInfrastructure();
+        await repository.installCaptureInfrastructure();
+      }
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
+
+  it(
+    'rejects a stale function body instead of treating its name as installed',
+    async () => {
+      await db.execute(
+        sql.raw(`
+      CREATE OR REPLACE FUNCTION capture_search_sync_change() RETURNS trigger AS $$
+      BEGIN
+        RETURN COALESCE(NEW, OLD);
+      END;
+      $$ LANGUAGE plpgsql
+    `),
       );
-    } finally {
-      await db.execute(sql`ALTER TABLE agents ENABLE TRIGGER search_sync_agents`);
-    }
-
-    await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
-  });
+      try {
+        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
+          'function capture_search_sync_change',
+        );
+        await expect(repository.installCaptureInfrastructure()).rejects.toThrow(
+          'Refusing to replace partial or unknown search sync capture infrastructure',
+        );
+      } finally {
+        await dropCaptureInfrastructure();
+        await repository.installCaptureInfrastructure();
+      }
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
 
   it('captures the first mutation immediately after opt-in installation', async () => {
     await db.insert(agents).values({ id: 'immediate-agent', title: 'one', userId: USER_ID });
@@ -356,10 +431,26 @@ describe.sequential('SearchSyncOutboxRepository', () => {
     await db.insert(agents).values({ id: 'unprojected-agent', title: 'one', userId: USER_ID });
     await db.delete(searchSyncOutbox);
 
-    await db.update(agents).set({ pinned: true }).where(eq(agents.id, 'unprojected-agent'));
+    await db.execute(sql`UPDATE agents SET pinned = true WHERE id = 'unprojected-agent'`);
 
     const rows = await db.select().from(searchSyncOutbox);
     expect(rows).toEqual([]);
+  });
+
+  it('enqueues an update that changes only the projected updated_at field', async () => {
+    await db.insert(agents).values({ id: 'updated-at-agent', title: 'one', userId: USER_ID });
+    await db.delete(searchSyncOutbox);
+
+    await db
+      .update(agents)
+      .set({ updatedAt: new Date('2026-08-30T00:00:00.000Z') })
+      .where(eq(agents.id, 'updated-at-agent'));
+
+    await expect(
+      db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'updated-at-agent', entity: 'agents' }]);
   });
 
   it('rolls the outbox entry back with the source transaction', async () => {
