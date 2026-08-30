@@ -3539,6 +3539,60 @@ describe('HeterogeneousAgentCtr', () => {
       });
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
+
+    it('classifies a missing Droid ACP session for resume fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_603,
+        data: { details: 'Session missing-droid-session not found' },
+        message: 'Failed to load session',
+      });
+      droidAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr('Droid ACP diagnostic\n');
+        throw missingSessionError;
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'droid',
+        command: 'droid',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'missing-droid-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-droid-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Factory Droid session could not be found, so a new conversation will start.',
+      );
+
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: {
+          agentType: 'droid',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'droid',
+          details: {
+            code: -32_603,
+            data: { details: 'Session missing-droid-session not found' },
+          },
+          message:
+            'The saved Factory Droid session could not be found, so a new conversation will start.',
+          resumeSessionId: 'missing-droid-session',
+          stderr: missingSessionError.message,
+          workingDirectory: '/Users/fake/projects/repo',
+        },
+        sessionId,
+      });
+      expect(send).not.toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
   });
 
   describe('sendPrompt (trae)', () => {

@@ -6,11 +6,13 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AskUserBridge } from '../askUser/AskUserBridge';
+import { AcpRpcResponseError } from './acpStdioClient';
 import {
   buildDroidAcpArgs,
   buildDroidAcpPrompt,
   DroidAcpSession,
   type DroidAcpSessionOptions,
+  isDroidAcpSessionNotFoundError,
   parseDroidAcpModelCatalog,
 } from './droidAcpSession';
 
@@ -191,6 +193,36 @@ describe('Factory Droid ACP helpers', () => {
       ],
     });
   });
+
+  it('recognizes only Droid session/load errors for missing sessions', () => {
+    expect(
+      isDroidAcpSessionNotFoundError(
+        new AcpRpcResponseError('session/load', {
+          code: -32_603,
+          data: { details: 'Session missing-session not found' },
+          message: 'Failed to load session',
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isDroidAcpSessionNotFoundError(
+        new AcpRpcResponseError('session/load', {
+          code: -32_603,
+          data: { details: 'Authentication required' },
+          message: 'Failed to load session',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isDroidAcpSessionNotFoundError(
+        new AcpRpcResponseError('session/prompt', {
+          code: -32_603,
+          data: { details: 'Session missing-session not found' },
+          message: 'Failed to load session',
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('DroidAcpSession', () => {
@@ -350,36 +382,68 @@ describe('DroidAcpSession', () => {
     ).toEqual(['live']);
   });
 
-  it('round-trips the exact permission option id and normalizes an empty title', async () => {
+  it('keeps the permission intervention separate from the approved tool lifecycle', async () => {
     const bridge = new AskUserBridge('operation-1', {
       identifier: 'droid',
       provider: 'droid',
     });
+    let promptRequestId: number | string | undefined;
     const fake = createAcpProcess({
       onMessage: (message, { send }) => {
-        if (message.method !== 'session/prompt') return;
-        send({
-          id: 'permission-1',
-          method: 'session/request_permission',
-          params: {
-            options: [
-              { kind: 'reject_once', name: 'Reject', optionId: 'reject-once-exact' },
-              { kind: 'allow_once', name: 'Allow once', optionId: 'allow-once-exact' },
-            ],
-            sessionId: 'droid-session-1',
-            toolCall: { title: '', toolCallId: 'tool-1' },
-          },
-        });
-        send({ id: message.id, result: { stopReason: 'end_turn' } });
-        return true;
+        if (message.method === 'session/prompt') {
+          promptRequestId = message.id;
+          send({
+            method: 'session/update',
+            params: {
+              sessionId: 'droid-session-1',
+              update: {
+                rawInput: { path: 'src/index.ts' },
+                sessionUpdate: 'tool_call',
+                title: 'Edit file',
+                toolCallId: 'tool-1',
+              },
+            },
+          });
+          send({
+            id: 'permission-1',
+            method: 'session/request_permission',
+            params: {
+              options: [
+                { kind: 'reject_once', name: 'Reject', optionId: 'reject-once-exact' },
+                { kind: 'allow_once', name: 'Allow once', optionId: 'allow-once-exact' },
+              ],
+              sessionId: 'droid-session-1',
+              toolCall: { title: '', toolCallId: 'tool-1' },
+            },
+          });
+          return true;
+        }
+        if (message.id === 'permission-1' && message.result) {
+          send({
+            method: 'session/update',
+            params: {
+              sessionId: 'droid-session-1',
+              update: {
+                rawOutput: 'file updated',
+                sessionUpdate: 'tool_call_update',
+                status: 'completed',
+                toolCallId: 'tool-1',
+              },
+            },
+          });
+          send({ id: promptRequestId, result: { stopReason: 'end_turn' } });
+          return true;
+        }
       },
     });
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const run = new DroidAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
+    const options = createSessionOptions({ askUserBridge: bridge });
+    const events = collectEvents(options);
+    const run = new DroidAcpSession(options).run();
     await vi.waitFor(() => expect(bridge.pendingCount).toBe(1));
 
-    bridge.resolve('tool-1', {
+    bridge.resolve('droid-permission-permission-1-tool-1', {
       result: { 'Factory Droid requests permission': 'allow-once-exact' },
     });
     await run;
@@ -389,6 +453,12 @@ describe('DroidAcpSession', () => {
       jsonrpc: '2.0',
       result: { outcome: { optionId: 'allow-once-exact', outcome: 'selected' } },
     });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ content: 'file updated', toolCallId: 'tool-1' }),
+        type: 'tool_result',
+      }),
+    );
   });
 
   it('fails closed when no permission bridge is available', async () => {

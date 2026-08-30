@@ -5,7 +5,7 @@ import type { AskUserBridge, InterventionAnswer } from '../askUser/AskUserBridge
 import type { AcpAgentSessionOptions } from './acpAgentSession';
 import { ACP_PROTOCOL_VERSION, AcpAgentSession } from './acpAgentSession';
 import type { AcpRpcMessage } from './acpStdioClient';
-import { AcpServerRequestError } from './acpStdioClient';
+import { AcpRpcResponseError, AcpServerRequestError } from './acpStdioClient';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { normalizeImage } from './input';
 
@@ -205,6 +205,16 @@ export interface DroidAcpSessionOptions extends AcpAgentSessionOptions {
   prompt: AgentPromptInput | DroidAcpPromptBlock[];
 }
 
+/** Droid wraps every load failure alike, so only its nested not-found detail is recoverable. */
+export const isDroidAcpSessionNotFoundError = (error: unknown): error is AcpRpcResponseError =>
+  error instanceof AcpRpcResponseError &&
+  error.method === 'session/load' &&
+  error.rpcError.code === -32_603 &&
+  error.rpcError.message === 'Failed to load session' &&
+  isRecord(error.rpcError.data) &&
+  typeof error.rpcError.data.details === 'string' &&
+  /^Session .+ not found$/.test(error.rpcError.data.details);
+
 /** Factory Droid's native ACP v1 lifecycle, including fail-closed permission requests. */
 export class DroidAcpSession extends AcpAgentSession<
   DroidAcpInitializeResult,
@@ -363,7 +373,11 @@ export class DroidAcpSession extends AcpAgentSession<
 
   protected async handleServerRequest(message: AcpRpcMessage): Promise<unknown> {
     if (message.method === 'session/request_permission') {
-      return this.requestPermission(this.parsePermissionRequest(message.params));
+      const request = this.parsePermissionRequest(message.params);
+      return this.requestPermission(
+        request,
+        this.buildInterventionToolCallId(message, request.toolCall.toolCallId),
+      );
     }
     throw new AcpServerRequestError(-32_601, `Unsupported ACP client request: ${message.method}`);
   }
@@ -483,7 +497,10 @@ export class DroidAcpSession extends AcpAgentSession<
     };
   }
 
-  private async requestPermission(request: DroidAcpPermissionRequest): Promise<unknown> {
+  private async requestPermission(
+    request: DroidAcpPermissionRequest,
+    interventionToolCallId: string,
+  ): Promise<unknown> {
     const bridge = this.options.askUserBridge;
     if (!bridge) return { outcome: { outcome: 'cancelled' } };
 
@@ -507,18 +524,18 @@ export class DroidAcpSession extends AcpAgentSession<
       rawInput: arguments_,
       sessionUpdate: 'tool_call',
       title: 'askUserQuestion',
-      toolCallId: request.toolCall.toolCallId,
+      toolCallId: interventionToolCallId,
     });
     const answer = await bridge.pending({
       arguments: arguments_,
       interactionKind: 'permission',
-      toolCallId: request.toolCall.toolCallId,
+      toolCallId: interventionToolCallId,
     });
     await this.pushToPipeline({
       rawOutput: answer,
       sessionUpdate: 'tool_call_update',
       status: 'completed',
-      toolCallId: request.toolCall.toolCallId,
+      toolCallId: interventionToolCallId,
     });
 
     const selections = this.getAnswerSelections(answer, question);
@@ -526,6 +543,10 @@ export class DroidAcpSession extends AcpAgentSession<
     return selected
       ? { outcome: { optionId: selected.optionId, outcome: 'selected' } }
       : { outcome: { outcome: 'cancelled' } };
+  }
+
+  private buildInterventionToolCallId(message: AcpRpcMessage, sourceToolCallId: string): string {
+    return `droid-permission-${String(message.id)}-${sourceToolCallId}`;
   }
 
   private getAnswerSelections(answer: InterventionAnswer, question: string): string[] {

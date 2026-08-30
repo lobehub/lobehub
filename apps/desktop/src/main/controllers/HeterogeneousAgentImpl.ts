@@ -72,6 +72,7 @@ import {
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
+  isDroidAcpSessionNotFoundError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -611,6 +612,34 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private getDroidResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'droid' ||
+      !session.resumeSessionId ||
+      !isDroidAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'droid',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message:
+        'The saved Factory Droid session could not be found, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getGrokResumeError(
     error: unknown,
     session: AgentSession,
@@ -694,6 +723,7 @@ export default class HeterogeneousAgentCtr {
 
     const resumeError =
       this.getCodexResumeError(error, session) ??
+      this.getDroidResumeError(error, session) ??
       this.getGrokResumeError(error, session) ??
       this.getCursorResumeError(error, session);
     if (resumeError) return resumeError;
@@ -2269,11 +2299,13 @@ export default class HeterogeneousAgentCtr {
         return;
       }
       const stderr = stderrChunks.join('').trim();
-      const errorForClassification = stderr
-        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-            cause: error,
-          })
-        : error;
+      const errorForClassification = isDroidAcpSessionNotFoundError(error)
+        ? error
+        : stderr
+          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+              cause: error,
+            })
+          : error;
       const sessionError = this.getSessionErrorPayload(errorForClassification, session);
       this.broadcast('heteroAgentSessionError', {
         error: sessionError,

@@ -92,6 +92,7 @@ export {
   DroidAcpSession,
   type DroidAcpSessionOptions,
   type DroidAcpTextPromptBlock,
+  isDroidAcpSessionNotFoundError,
   listDroidAcpModels,
   type ListDroidAcpModelsOptions,
   parseDroidAcpModelCatalog,
