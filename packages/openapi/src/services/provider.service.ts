@@ -66,7 +66,7 @@ export class ProviderService extends BaseService {
 
       return undefined;
     } catch (error) {
-      this.log('warn', '解密 Provider KeyVaults 失败', {
+      this.log('warn', 'Failed to decrypt Provider KeyVaults', {
         error,
       });
       return undefined;
@@ -80,7 +80,7 @@ export class ProviderService extends BaseService {
   }
 
   async getProviders(request: ProviderListQuery = {}): ServiceResult<GetProvidersResponse> {
-    this.log('info', '获取 Provider 列表', {
+    this.log('info', 'Get Provider list', {
       request,
       userId: this.userId,
     });
@@ -89,7 +89,7 @@ export class ProviderService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('AI_PROVIDER_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问 Provider 列表');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access Provider list');
       }
 
       const conditions = [] as any[];
@@ -135,14 +135,14 @@ export class ProviderService extends BaseService {
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取 Provider 列表');
+      this.handleServiceError(error, 'Get Provider list');
     }
   }
 
   async getProviderDetail(
     request: GetProviderDetailRequest,
   ): ServiceResult<ProviderDetailResponse> {
-    this.log('info', '获取 Provider 详情', {
+    this.log('info', 'Get Provider detail', {
       id: request.id,
       userId: this.userId,
     });
@@ -153,7 +153,7 @@ export class ProviderService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问 Provider 详情');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to access Provider detail');
       }
 
       const whereConditions = [eq(aiProviders.id, request.id)];
@@ -169,17 +169,17 @@ export class ProviderService extends BaseService {
       });
 
       if (!provider) {
-        throw this.createNotFoundError(`未找到 Provider: ${request.id}`);
+        throw this.createNotFoundError(`Provider not found: ${request.id}`);
       }
 
       return await this.transformProviderRecord(provider);
     } catch (error) {
-      this.handleServiceError(error, '获取 Provider 详情');
+      this.handleServiceError(error, 'Get Provider detail');
     }
   }
 
   async createProvider(request: CreateProviderRequest): ServiceResult<ProviderDetailResponse> {
-    this.log('info', '创建 Provider', {
+    this.log('info', 'Create Provider', {
       id: request.id,
       userId: this.userId,
     });
@@ -192,7 +192,7 @@ export class ProviderService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('AI_PROVIDER_CREATE');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建 Provider');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to create Provider');
       }
 
       const existed = await this.db.query.aiProviders.findFirst({
@@ -200,7 +200,7 @@ export class ProviderService extends BaseService {
       });
 
       if (existed) {
-        throw this.createBusinessError(`Provider "${request.id}" 已存在`);
+        throw this.createBusinessError(`Provider "${request.id}" already exists`);
       }
 
       const encryptedKeyVaults = await this.encryptKeyVaults(request.keyVaults);
@@ -229,12 +229,12 @@ export class ProviderService extends BaseService {
 
       return await this.transformProviderRecord(createdProvider);
     } catch (error) {
-      this.handleServiceError(error, '创建 Provider');
+      this.handleServiceError(error, 'Create Provider');
     }
   }
 
   async updateProvider(request: UpdateProviderRequest): ServiceResult<ProviderDetailResponse> {
-    this.log('info', '更新 Provider', {
+    this.log('info', 'Update Provider', {
       id: request.id,
       userId: this.userId,
     });
@@ -249,7 +249,7 @@ export class ProviderService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权更新 Provider');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to update Provider');
       }
 
       const whereConditions = [eq(aiProviders.id, request.id)];
@@ -265,7 +265,7 @@ export class ProviderService extends BaseService {
       });
 
       if (!existing) {
-        throw this.createNotFoundError(`未找到 Provider: ${request.id}`);
+        throw this.createNotFoundError(`Provider not found: ${request.id}`);
       }
 
       const { id: _id, keyVaults, ...rest } = request;
@@ -294,17 +294,17 @@ export class ProviderService extends BaseService {
         .returning();
 
       if (!updatedProvider) {
-        throw this.createBusinessError('更新 Provider 失败');
+        throw this.createBusinessError('Failed to update Provider');
       }
 
       return await this.transformProviderRecord(updatedProvider);
     } catch (error) {
-      this.handleServiceError(error, '更新 Provider');
+      this.handleServiceError(error, 'Update Provider');
     }
   }
 
   async deleteProvider(request: DeleteProviderRequest): ServiceResult<{ id: string }> {
-    this.log('info', '删除 Provider', {
+    this.log('info', 'Delete Provider', {
       id: request.id,
       userId: this.userId,
     });
@@ -315,7 +315,7 @@ export class ProviderService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权删除 Provider');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to delete Provider');
       }
 
       const whereConditions = [eq(aiProviders.id, request.id)];
@@ -331,7 +331,7 @@ export class ProviderService extends BaseService {
       });
 
       if (!provider) {
-        throw this.createNotFoundError(`未找到 Provider: ${request.id}`);
+        throw this.createNotFoundError(`Provider not found: ${request.id}`);
       }
 
       await this.db.transaction(async (tx) => {
@@ -350,13 +350,13 @@ export class ProviderService extends BaseService {
         await tx.delete(aiProviders).where(providerWhere);
       });
 
-      this.log('info', 'Provider 删除成功', {
+      this.log('info', 'Provider deleted successfully', {
         id: request.id,
       });
 
       return { id: request.id };
     } catch (error) {
-      this.handleServiceError(error, '删除 Provider');
+      this.handleServiceError(error, 'Delete Provider');
     }
   }
 }
