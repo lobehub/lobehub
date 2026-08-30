@@ -24,6 +24,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
+import { openRemoveWorkspaceDeviceModal } from './RemoveDeviceModal';
 import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
 
@@ -125,17 +126,12 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
   const canEdit = useCanEditDevice()(device);
   const currentUserId = useUserStore(userProfileSelectors.userId);
 
-  // Workspace devices are self-or-owner-gated + workspace-scoped on the
-  // server; personal devices stay userId-scoped. Route by the device's own
-  // scope.
-  const onRemoveSuccess = () => refreshDeviceList();
+  // Personal device removal stays a plain confirm; workspace removals go
+  // through `openRemoveWorkspaceDeviceModal`, which also resolves fixed-agent
+  // bindings — see `handleRemove`.
   const removePersonal = lambdaQuery.device.removeDevice.useMutation({
-    onSuccess: onRemoveSuccess,
+    onSuccess: () => refreshDeviceList(),
   });
-  const removeWorkspace = lambdaQuery.device.removeWorkspaceDevice.useMutation({
-    onSuccess: onRemoveSuccess,
-  });
-  const removeDevice = device.scope === 'workspace' ? removeWorkspace : removePersonal;
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
@@ -236,7 +232,16 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
         ]
       : [];
 
-  const handleRemove = () =>
+  const handleRemove = () => {
+    // Workspace removal is refused while a fixed workspace agent pins this
+    // device, so it gets a richer modal that lists those agents and lets the
+    // caller unbind them in the same action instead of dead-ending on the
+    // server's PRECONDITION_FAILED.
+    if (device.scope === 'workspace') {
+      openRemoveWorkspaceDeviceModal(device, isCurrent);
+      return;
+    }
+
     confirmModal({
       content: isCurrent
         ? `${t('devices.remove.confirmDesc')}\n\n${t('devices.remove.currentSessionWarning')}`
@@ -244,10 +249,11 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
       okButtonProps: { danger: true },
       okText: t('devices.actions.remove'),
       onOk: async () => {
-        await removeDevice.mutateAsync({ deviceId: device.deviceId });
+        await removePersonal.mutateAsync({ deviceId: device.deviceId });
       },
       title: t('devices.remove.confirm'),
     });
+  };
 
   return (
     <Flexbox

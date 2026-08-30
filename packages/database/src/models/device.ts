@@ -39,6 +39,30 @@ export interface UpdateDeviceParams {
   workingDirs?: WorkingDirEntry[];
 }
 
+/** One workspace agent that pins a device as its fixed execution target. */
+export interface DeviceFixedAgentBinding {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  title: string | null;
+  /** Enrolling creator — routers use it to compute per-agent edit permission. */
+  userId: string;
+  visibility: string;
+}
+
+export interface DeviceFixedAgentBindings {
+  /**
+   * Bindings the caller may see: public workspace agents plus the caller's own
+   * private ones.
+   */
+  agents: DeviceFixedAgentBinding[];
+  /**
+   * Other members' PRIVATE fixed agents bound to this device — surfaced as a
+   * count only, so device management can never leak private agent metadata.
+   */
+  hiddenCount: number;
+}
+
 /**
  * Two distinct kinds of device live in this table, told apart by `workspace_id`:
  *
@@ -89,6 +113,44 @@ export class DeviceModel {
       .limit(1);
 
     return !!row;
+  };
+
+  /**
+   * The workspace agents behind {@link hasFixedAgentBinding} — the rows a
+   * device removal would strand. Lets the remove-device flow show WHICH agents
+   * pin the device (and offer to unbind them) instead of dead-ending on the
+   * reference guard. Other members' private agents stay unreadable: they are
+   * folded into `hiddenCount` with no metadata, mirroring the boolean guard's
+   * privacy contract.
+   */
+  listFixedAgentBindings = async (deviceId: string): Promise<DeviceFixedAgentBindings> => {
+    if (!this.workspaceId) return { agents: [], hiddenCount: 0 };
+
+    const rows = await this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        title: agents.title,
+        userId: agents.userId,
+        visibility: agents.visibility,
+      })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.workspaceId, this.workspaceId),
+          sql`${agents.agencyConfig}->>'executionTargetSelectionPolicy' = 'fixed'`,
+          sql`${agents.agencyConfig}->>'executionTarget' = 'device'`,
+          sql`${agents.agencyConfig}->>'boundDeviceId' = ${deviceId}`,
+        ),
+      )
+      .orderBy(agents.title);
+
+    const visible = rows.filter(
+      (row) => row.visibility !== 'private' || row.userId === this.userId,
+    );
+
+    return { agents: visible, hiddenCount: rows.length - visible.length };
   };
 
   /**

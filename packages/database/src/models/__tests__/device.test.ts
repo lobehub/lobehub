@@ -1,10 +1,12 @@
 // @vitest-environment node
+import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { agents, devices, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AgentModel } from '../agent';
 import { DeviceModel, WorkspaceDevicePrivateConflictError } from '../device';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -184,6 +186,116 @@ describe('DeviceModel', () => {
 
       const wsModel = new DeviceModel(serverDB, userId, wsId);
       expect(await wsModel.hasFixedAgentBinding('stale-device')).toBe(false);
+    });
+
+    it('lists fixed agent bindings, folding other members private agents into hiddenCount', async () => {
+      await serverDB.insert(devices).values({
+        deviceId: 'bound-device',
+        identitySource: 'machine-id',
+        userId,
+        visibility: 'public',
+        workspaceId: wsId,
+      });
+      const fixedBinding: LobeAgentAgencyConfig = {
+        boundDeviceId: 'bound-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      };
+      await serverDB.insert(agents).values([
+        // visible: public agent of another member
+        {
+          agencyConfig: fixedBinding,
+          avatar: '🤖',
+          id: 'public-bound',
+          title: 'Public bound',
+          userId: otherUserId,
+          visibility: 'public',
+          workspaceId: wsId,
+        },
+        // visible: the caller's own private agent
+        {
+          agencyConfig: fixedBinding,
+          id: 'own-private-bound',
+          title: 'Own private bound',
+          userId,
+          visibility: 'private',
+          workspaceId: wsId,
+        },
+        // hidden: another member's PRIVATE agent — count only, no metadata
+        {
+          agencyConfig: fixedBinding,
+          id: 'other-private-bound',
+          title: 'Other private bound',
+          userId: otherUserId,
+          visibility: 'private',
+          workspaceId: wsId,
+        },
+        // excluded: member policy is not a binding
+        {
+          agencyConfig: { ...fixedBinding, executionTargetSelectionPolicy: 'member' },
+          id: 'member-policy',
+          title: 'Member policy',
+          userId,
+          workspaceId: wsId,
+        },
+      ]);
+
+      const wsModel = new DeviceModel(serverDB, userId, wsId);
+      const result = await wsModel.listFixedAgentBindings('bound-device');
+      expect(result.agents.map((agent) => agent.id).sort()).toEqual([
+        'own-private-bound',
+        'public-bound',
+      ]);
+      expect(result.agents.find((agent) => agent.id === 'public-bound')).toMatchObject({
+        avatar: '🤖',
+        title: 'Public bound',
+        userId: otherUserId,
+        visibility: 'public',
+      });
+      expect(result.hiddenCount).toBe(1);
+
+      // personal scope (no workspace context) never reports bindings
+      expect(await deviceModel.listFixedAgentBindings('bound-device')).toEqual({
+        agents: [],
+        hiddenCount: 0,
+      });
+    });
+
+    it('unlocking the agent policy to member releases the fixed binding guard', async () => {
+      // The removeWorkspaceDevice `unbindBoundAgents` path writes exactly this
+      // patch per agent — verify it releases `hasFixedAgentBinding` so the
+      // removal guard passes afterwards.
+      await serverDB.insert(devices).values({
+        deviceId: 'bound-device',
+        identitySource: 'machine-id',
+        userId,
+        visibility: 'public',
+        workspaceId: wsId,
+      });
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          boundDeviceId: 'bound-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        id: 'bound-agent',
+        title: 'Bound agent',
+        userId,
+        workspaceId: wsId,
+      });
+
+      const wsModel = new DeviceModel(serverDB, userId, wsId);
+      expect(await wsModel.hasFixedAgentBinding('bound-device')).toBe(true);
+
+      await new AgentModel(serverDB, userId, wsId).updateConfig('bound-agent', {
+        agencyConfig: { executionTargetSelectionPolicy: 'member' },
+      });
+
+      expect(await wsModel.hasFixedAgentBinding('bound-device')).toBe(false);
+      expect(await wsModel.listFixedAgentBindings('bound-device')).toEqual({
+        agents: [],
+        hiddenCount: 0,
+      });
     });
 
     it('queryWorkspaceDevices returns every enrolled device (any owner), scoped to the workspace', async () => {

@@ -19,12 +19,19 @@ import {
   wsCompatProcedure,
   wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { DeviceModel, WorkspaceDevicePrivateConflictError } from '@/database/models/device';
 import { UserModel } from '@/database/models/user';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
+import { EditLockService } from '@/server/services/editLock';
+import {
+  assertCanPerformResourceAction,
+  canPerformResourceAction,
+} from '@/server/services/resourcePermission';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
 import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
@@ -1288,13 +1295,73 @@ export const deviceRouter = router({
     }),
 
   /**
+   * List the workspace agents that pin this device as their fixed execution
+   * target — the exact rows {@link assertDeviceNotBoundToFixedAgent} trips
+   * over. The remove-device modal shows them so the caller can unbind (via
+   * `removeWorkspaceDevice.unbindBoundAgents`) instead of dead-ending on
+   * PRECONDITION_FAILED. Each visible binding carries `canUnbind` (the same
+   * edit gate the unbind write enforces); other members' PRIVATE fixed agents
+   * surface only as `hiddenCount` — see `DeviceModel.listFixedAgentBindings`.
+   */
+  getWorkspaceDeviceAgentBindings: wsWritableProcedure
+    .use(serverDatabase)
+    .input(z.object({ deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const row = await model.findWorkspaceDeviceById(input.deviceId);
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
+      }
+
+      const { agents, hiddenCount } = await model.listFixedAgentBindings(input.deviceId);
+      const items = await Promise.all(
+        agents.map(async ({ userId, visibility, ...agent }) => ({
+          ...agent,
+          canUnbind: await canPerformResourceAction({
+            action: 'edit',
+            db: ctx.serverDB,
+            meta: { userId, visibility, workspaceId: ctx.workspaceId },
+            resourceId: agent.id,
+            resourceType: 'agent',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        })),
+      );
+
+      return { agents: items, hiddenCount };
+    }),
+
+  /**
    * Remove a WORKSPACE device. Scoped by `workspace_id` and gated by
    * {@link canEditWorkspaceDevice}: owners may remove any device in the pool;
    * members may remove only devices they enrolled themselves.
+   *
+   * `unbindBoundAgents` lets the caller release the fixed-agent bindings that
+   * would otherwise block removal (the {@link assertDeviceNotBoundToFixedAgent}
+   * guard) in the same call: every caller-visible bound agent — after the same
+   * permission + edit-lock gates as `agent.updateAgentConfig` — is flipped back
+   * to member-choice execution (`executionTargetSelectionPolicy: 'member'`),
+   * the same write the profile editor's unlock action performs. It is a
+   * boolean, not an id list, so removal can't dead-end on a wire-schema cap
+   * however many agents pin the device; the modal still collects per-agent
+   * acknowledgment client-side before sending it.
+   *
+   * Ordering keeps the whole action all-or-nothing: releasability is verified
+   * read-only up front (hidden bindings, permissions, edit locks — nothing
+   * mutated on failure), the live-socket unenroll runs next while the DB is
+   * still untouched, and only then do the unbinds + guard re-check + row
+   * delete commit inside ONE transaction — a binding added mid-flight rolls
+   * everything back, so a failed removal never leaves agents unbound.
    */
   removeWorkspaceDevice: wsWritableProcedure
     .use(serverDatabase)
-    .input(z.object({ deviceId: z.string() }))
+    .input(
+      z.object({
+        deviceId: z.string(),
+        unbindBoundAgents: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
       const row = await model.findWorkspaceDeviceById(input.deviceId);
@@ -1308,7 +1375,45 @@ export const deviceRouter = router({
           message: 'Only the enrolling member or a workspace owner can remove this device.',
         });
       }
-      await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
+
+      // Preflight, all read-only: resolve which bindings to release and prove
+      // the removal can go through BEFORE any side effect (socket unenroll,
+      // agent writes).
+      let unbindTargets: string[] = [];
+      if (input.unbindBoundAgents) {
+        const bindings = await model.listFixedAgentBindings(input.deviceId);
+        // Other members' PRIVATE fixed agents can never be released through
+        // this path — surface the standard guard error while nothing has been
+        // mutated yet.
+        if (bindings.hiddenCount > 0) {
+          await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
+        }
+        unbindTargets = bindings.agents.map((agent) => agent.id);
+
+        const editLockService = new EditLockService(ctx.userId);
+        for (const agentId of unbindTargets) {
+          // Same gates as `agent.updateAgentConfig`: resource edit permission
+          // plus the collaborative edit lock.
+          await assertCanPerformResourceAction({
+            action: 'edit',
+            db: ctx.serverDB,
+            resourceId: agentId,
+            resourceType: 'agent',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          });
+          const blockedBy = await editLockService.getBlockingHolder('agent', agentId);
+          if (blockedBy) {
+            throw new TRPCError({
+              cause: { data: { code: 'DocumentLocked' } },
+              code: 'CONFLICT',
+              message: 'Agent is being edited by another user',
+            });
+          }
+        }
+      } else {
+        await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
+      }
       // Tell a live device to drop its workspace connection and stop
       // auto-reconnecting, so removal doesn't leave an online ghost. For most
       // rows this stays best-effort — an offline device simply stops resolving.
@@ -1335,7 +1440,23 @@ export const deviceRouter = router({
           });
         }
       }
-      await model.deleteWorkspaceDevice(input.deviceId);
+      // Atomic commit: release the bindings, re-run the guard, delete the
+      // row. The guard re-check inside the transaction closes the race with
+      // bindings added after preflight — its failure (or any other) rolls the
+      // unbinds back too, so agent policies only change when the device row
+      // is actually gone.
+      await ctx.serverDB.transaction(async (tx) => {
+        const txDB = tx as LobeChatDatabase;
+        const agentModel = new AgentModel(txDB, ctx.userId, ctx.workspaceId);
+        for (const agentId of unbindTargets) {
+          await agentModel.updateConfig(agentId, {
+            agencyConfig: { executionTargetSelectionPolicy: 'member' },
+          });
+        }
+        const txModel = new DeviceModel(txDB, ctx.userId, ctx.workspaceId);
+        await assertDeviceNotBoundToFixedAgent(txModel, input.deviceId);
+        await txModel.deleteWorkspaceDevice(input.deviceId);
+      });
       return { success: true };
     }),
 

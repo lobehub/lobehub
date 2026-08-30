@@ -624,6 +624,13 @@ export default {
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
   'devices.lastSeen': 'Last connected {{time}}',
+  'devices.remove.boundAgents.desc':
+    'This device is the fixed execution target of the agents below. Check each one to unbind it — those agents will let members pick their own device again — then remove.',
+  'devices.remove.boundAgents.hidden':
+    "{{count}} private agent(s) of other members also lock this device. It can't be removed until their owners change those agent settings.",
+  'devices.remove.boundAgents.noPermission': 'No permission to edit',
+  'devices.remove.boundAgents.unbindAndRemove': 'Unbind & Remove',
+  'devices.remove.boundAgents.untitled': 'Untitled agent',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
