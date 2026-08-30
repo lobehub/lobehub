@@ -110,6 +110,34 @@ export class SkillParser {
   }
 
   /**
+   * Build a parsed skill from already-fetched files (no ZIP on disk).
+   *
+   * Used by the GitHub per-file import path, which fetches SKILL.md and each
+   * resource individually (raw CDN + authenticated Contents API) for large
+   * repositories instead of downloading and decompressing the whole archive.
+   *
+   * Reuses {@link repackSkillZip} so the resulting `skillZipBuffer`/`zipHash`
+   * are byte-identical to the archive path for the same files, keeping
+   * deduplication by `zipHash` consistent across both import paths.
+   */
+  async packSkillFiles(
+    skillMdContent: string,
+    resources: Map<string, Buffer>,
+  ): Promise<ParsedZipSkill> {
+    try {
+      const { content, manifest } = this.parseSkillMd(skillMdContent);
+      const skillZipBuffer = await this.repackSkillZip(skillMdContent, resources);
+      const zipHash = sha256(skillZipBuffer);
+      return { content, manifest, resources, skillZipBuffer, zipHash };
+    } catch (error) {
+      if (error instanceof SkillParseError || error instanceof SkillManifestError) {
+        throw error;
+      }
+      throw new SkillParseError('Failed to pack skill files', error as Error);
+    }
+  }
+
+  /**
    * Validate manifest data
    */
   validateManifest(data: unknown): SkillManifest {

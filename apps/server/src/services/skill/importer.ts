@@ -7,14 +7,23 @@ import {
   type ImportGitHubInput,
   type ImportUrlInput,
   type ImportZipInput,
+  type ParsedZipSkill,
   type SkillImportResult,
   type SkillManifest,
+  type SkillResourceMeta,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
-import { GitHub, GitHubNotFoundError, GitHubParseError } from '@/server/modules/GitHub';
+import {
+  GitHub,
+  GitHubNotFoundError,
+  GitHubParseError,
+  type GitHubRepoInfo,
+  type GitHubTreeFile,
+  stripSlashes,
+} from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
 
 import { SkillImportError, SkillManifestError } from './errors';
@@ -22,6 +31,26 @@ import { SkillParser } from './parser';
 import { SkillResourceService } from './resource';
 
 const log = debug('lobe-chat:service:skill-importer');
+
+/**
+ * Repositories whose working-tree size (in MB) exceeds this threshold skip the
+ * "download the whole archive" path and instead fetch only the skill
+ * subdirectory file-by-file (raw + authenticated Contents API). Downloading +
+ * decompressing an entire monorepo in memory is what previously triggered "ran
+ * out of available memory" (OOM). Override via env for ops tuning.
+ */
+const GITHUB_ARCHIVE_MAX_SIZE_MB = Number(process.env.SKILL_IMPORT_MAX_REPO_SIZE_MB) || 30;
+
+/** Max concurrent per-file fetches when downloading a subdirectory. */
+const RAW_FETCH_CONCURRENCY = Number(process.env.SKILL_IMPORT_FETCH_CONCURRENCY) || 16;
+
+/**
+ * Safety cap on the skill subdirectory's total size for the per-file path. The
+ * subdir is held in memory (Map of file buffers + the repacked ZIP), so this
+ * bounds peak memory. ~58MB skill dirs import fine; anything beyond this is
+ * rejected with a clear error instead of risking OOM. Override via env.
+ */
+const SUBDIR_MAX_SIZE_MB = Number(process.env.SKILL_IMPORT_MAX_SUBDIR_SIZE_MB) || 150;
 
 export class SkillImporter {
   private skillModel: AgentSkillModel;
@@ -43,6 +72,7 @@ export class SkillImporter {
     this.parser = new SkillParser();
     this.resourceService = new SkillResourceService(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
+    // Tokens resolved from GITHUB_TOKENS / GITHUB_TOKEN inside GitHub.
     this.github = new GitHub({ userAgent: 'LobeHub-Skill-Importer' });
     this.userId = userId;
     this.workspaceId = workspaceId;
@@ -161,7 +191,24 @@ export class SkillImporter {
   }
 
   /**
-   * Import skill from GitHub repository
+   * Import skill from GitHub repository.
+   *
+   * Routing (see {@link GITHUB_ARCHIVE_MAX_SIZE_MB}):
+   * - Small repos → download the whole archive once and parse it in memory
+   *   (one request; the original behavior, still the default).
+   * - Large or unknown-size repos with a subdirectory path → fetch ONLY that
+   *   subdirectory file-by-file (raw CDN, with an authenticated Contents-API
+   *   fallback per file) and repack it. This downloads tens of MB instead of a
+   *   multi-hundred-MB archive — the whole-archive buffer is what previously
+   *   OOM-ed. A size cap guards against pathologically large subdirs.
+   * - Large repos imported at the root → cannot be bounded to a subdir, rejected
+   *   with a clear error instead of OOM-ing.
+   *
+   * GITHUB_TOKEN(S) is strongly recommended for large repos: subtree listing and
+   * the per-file Contents-API fallback use the authenticated API (5000/h per
+   * token vs 60/h anonymous), which is what makes fetching a many-file
+   * subdirectory reliable.
+   *
    * @param input - GitHub repository info
    * @returns SkillImportResult with status: 'created' | 'updated' | 'unchanged'
    */
@@ -169,7 +216,7 @@ export class SkillImporter {
     log('importFromGitHub: starting with gitUrl=%s, branch=%s', input.gitUrl, input.branch);
 
     // 1. Parse GitHub URL
-    let repoInfo;
+    let repoInfo: GitHubRepoInfo;
     try {
       repoInfo = this.github.parseRepoUrl(input.gitUrl, input.branch);
       log('importFromGitHub: parsed repoInfo=%o', repoInfo);
@@ -181,11 +228,127 @@ export class SkillImporter {
       throw error;
     }
 
-    // 2. Download repository ZIP
-    let zipBuffer;
+    // 2. Probe repo size to decide between the whole-archive path (small) and the
+    // per-file subdir path (large / unknown). A probe failure (rate-limited or
+    // any API error) is non-fatal — `sizeKb` stays null (treated as unknown).
+    let sizeKb: number | null = null;
+    try {
+      sizeKb = await this.github.getRepoSizeKb(repoInfo);
+    } catch (error) {
+      if (error instanceof GitHubNotFoundError) {
+        throw new SkillImportError(error.message, 'NOT_FOUND');
+      }
+      log('importFromGitHub: repo size probe failed (non-fatal): %s', (error as Error).message);
+    }
+    const thresholdKb = GITHUB_ARCHIVE_MAX_SIZE_MB * 1024;
+    const isLarge = sizeKb != null && sizeKb > thresholdKb;
+    const unknownSize = sizeKb == null;
+    log('importFromGitHub: sizeKb=%o thresholdKb=%d isLarge=%s', sizeKb, thresholdKb, isLarge);
+
+    // 3. Acquire the parsed skill via the appropriate path.
+    let parsed: ParsedZipSkill;
+    if ((isLarge || unknownSize) && repoInfo.path) {
+      parsed = await this.fetchSkillViaRawFiles(repoInfo, stripSlashes(repoInfo.path));
+    } else if (isLarge) {
+      throw new SkillImportError(
+        `Repository is too large (~${Math.round((sizeKb as number) / 1024)}MB) to import at the ` +
+          `root. Import a specific skill subdirectory instead, e.g. ` +
+          `https://github.com/${repoInfo.owner}/${repoInfo.repo}/tree/${repoInfo.branch}/<path>`,
+        'DOWNLOAD_FAILED',
+      );
+    } else {
+      // Known-small repo, or root import with unknown size (best-effort, capped).
+      parsed = await this.fetchSkillViaArchive(repoInfo);
+    }
+
+    return this.persistGitHubSkill(repoInfo, input, parsed);
+  }
+
+  /**
+   * Subdirectory path for large/unknown repos: list the subtree, then fetch
+   * SKILL.md and each resource file individually — raw CDN first, with an
+   * authenticated Contents-API fallback per file (raw.githubusercontent.com
+   * intermittently returns transient 400s under concurrent load even for valid
+   * files; the authenticated API does not). Repacks in memory; only the
+   * subdirectory is downloaded, and a size cap guards peak memory.
+   */
+  private async fetchSkillViaRawFiles(
+    repoInfo: GitHubRepoInfo,
+    basePath: string,
+  ): Promise<ParsedZipSkill> {
+    let files: GitHubTreeFile[];
+    try {
+      files = await this.github.listSubtree(repoInfo, basePath);
+    } catch (error) {
+      if (error instanceof GitHubNotFoundError) {
+        throw new SkillImportError(error.message, 'NOT_FOUND');
+      }
+      throw new SkillImportError(
+        `Failed to list repository subdirectory: ${(error as Error).message}`,
+        'DOWNLOAD_FAILED',
+      );
+    }
+
+    const skillMdPath = `${basePath}/SKILL.md`;
+    if (!files.some((file) => file.path === skillMdPath)) {
+      throw new SkillImportError(`SKILL.md not found at ${basePath}`, 'NOT_FOUND');
+    }
+
+    const resourceFiles = files.filter(
+      (file) => file.path !== skillMdPath && !file.path.includes('__MACOSX'),
+    );
+
+    // Guard peak memory: the subdir is held in memory (file buffers + repacked
+    // ZIP). Reject pathologically large subdirs instead of risking OOM. `size`
+    // is reported by the Tree API; missing sizes are treated as 0 (best-effort).
+    const knownBytes = resourceFiles.reduce((sum, file) => sum + (file.size ?? 0), 0);
+    const knownMb = Math.round(knownBytes / 1024 / 1024);
+    if (knownBytes > SUBDIR_MAX_SIZE_MB * 1024 * 1024) {
+      throw new SkillImportError(
+        `Skill directory is too large (~${knownMb}MB > ${SUBDIR_MAX_SIZE_MB}MB limit). ` +
+          `Set SKILL_IMPORT_MAX_SUBDIR_SIZE_MB to override.`,
+        'DOWNLOAD_FAILED',
+      );
+    }
+
+    const prefixLen = basePath.length + 1; // strip "basePath/"
+    let skillMdContent: string;
+    const resources = new Map<string, Buffer>();
+    try {
+      skillMdContent = await this.github.downloadRawFile({ ...repoInfo, filePath: skillMdPath });
+      const buffers = await this.mapWithConcurrency(resourceFiles, RAW_FETCH_CONCURRENCY, (file) =>
+        this.github.downloadRawFileBuffer({ ...repoInfo, filePath: file.path }),
+      );
+      resourceFiles.forEach((file, index) => {
+        resources.set(file.path.slice(prefixLen), buffers[index]);
+      });
+      log('fetchSkillViaRawFiles: fetched %d files (~%dMB)', resources.size, knownMb);
+    } catch (error) {
+      if (error instanceof GitHubNotFoundError) {
+        throw new SkillImportError(error.message, 'NOT_FOUND');
+      }
+      throw new SkillImportError(
+        `Failed to download skill files: ${(error as Error).message}`,
+        'DOWNLOAD_FAILED',
+      );
+    }
+
+    // Parser errors (invalid manifest etc.) propagate as-is, matching the
+    // whole-archive path.
+    return this.parser.packSkillFiles(skillMdContent, resources);
+  }
+
+  /**
+   * Archive path: download the whole repo ZIP (with a size cap as a backstop)
+   * and parse it, repacking only the skill files.
+   */
+  private async fetchSkillViaArchive(repoInfo: GitHubRepoInfo): Promise<ParsedZipSkill> {
+    let zipBuffer: Buffer;
     try {
       log('importFromGitHub: downloading repository ZIP...');
-      zipBuffer = await this.github.downloadRepoZip(repoInfo);
+      zipBuffer = await this.github.downloadRepoZip(repoInfo, {
+        maxBytes: GITHUB_ARCHIVE_MAX_SIZE_MB * 1024 * 1024,
+      });
       log('importFromGitHub: downloaded ZIP size=%d bytes', zipBuffer.length);
     } catch (error) {
       log('importFromGitHub: download failed, error=%s', (error as Error).message);
@@ -198,79 +361,101 @@ export class SkillImporter {
       );
     }
 
-    // 3. Parse ZIP package (pass basePath for subdirectory imports, repack to save only skill files)
     log('importFromGitHub: parsing ZIP package with basePath=%s', repoInfo.path);
-    const { manifest, content, resources, zipHash, skillZipBuffer } =
-      await this.parser.parseZipPackage(zipBuffer, {
-        basePath: repoInfo.path,
-        repackSkillZip: true,
-      });
+    const parsed = await this.parser.parseZipPackage(zipBuffer, {
+      basePath: repoInfo.path,
+      repackSkillZip: true,
+    });
     log(
       'importFromGitHub: parsed manifest=%o, resources count=%d, zipHash=%s, skillZipSize=%d',
-      manifest,
-      resources.size,
-      zipHash,
-      skillZipBuffer?.length ?? 0,
+      parsed.manifest,
+      parsed.resources.size,
+      parsed.zipHash,
+      parsed.skillZipBuffer?.length ?? 0,
     );
+    return parsed;
+  }
 
-    // 4. Generate identifier (use GitHub info for uniqueness, include path for subdirectory imports)
+  /**
+   * Persist a skill parsed fully in memory (small-repo archive path): dedup,
+   * store resources, upload the repacked skill ZIP, and create/update the record.
+   */
+  private async persistGitHubSkill(
+    repoInfo: GitHubRepoInfo,
+    input: ImportGitHubInput,
+    parsed: ParsedZipSkill,
+  ): Promise<SkillImportResult> {
+    const { manifest, content, resources, zipHash, skillZipBuffer } = parsed;
     const identifier = this.github.generateIdentifier(repoInfo);
-    log('importFromGitHub: identifier=%s', identifier);
 
-    // 5. Check for existing skill with same zipHash (deduplication)
-    // Also re-import if content is missing (e.g. from a previous buggy import)
     const existing = await this.skillModel.findByIdentifier(identifier);
+    // Dedup by zipHash; also re-import if content is missing (prior buggy import).
     if (existing && existing.zipFileHash === zipHash && existing.content != null) {
-      log(
-        'importFromGitHub: skill unchanged (same zipHash=%s), skipping update id=%s',
-        zipHash,
-        existing.id,
-      );
+      log('importFromGitHub: skill unchanged (same zipHash=%s), id=%s', zipHash, existing.id);
       return { skill: existing, status: 'unchanged' };
     }
 
-    // 6. Store resource files (only if skill is new or changed)
     log('importFromGitHub: storing %d resources...', resources.size);
     const resourceIds = zipHash
       ? await this.resourceService.storeResources(zipHash, resources)
       : {};
-    log('importFromGitHub: stored resources=%o', resourceIds);
 
-    // 7. Build manifest with repository info
+    const zipFileHash =
+      zipHash && skillZipBuffer ? await this.uploadSkillZip(zipHash, skillZipBuffer) : undefined;
+
+    return this.finalizeSkillRecord(repoInfo, input, {
+      content,
+      existing,
+      identifier,
+      manifest,
+      resourceIds,
+      zipFileHash,
+    });
+  }
+
+  /**
+   * Upload the repacked skill-only ZIP to S3 and create its globalFiles record
+   * (for the zipFileHash foreign key). Returns the zip hash.
+   */
+  private async uploadSkillZip(zipHash: string, buffer: Buffer): Promise<string> {
+    const zipKey = `skills/zip/${zipHash}.zip`;
+    await this.fileService.uploadBuffer(zipKey, buffer, 'application/zip');
+    // Use createGlobalFile directly - no need to create then delete user file record
+    await this.fileService.createGlobalFile({
+      fileHash: zipHash,
+      fileType: 'application/zip',
+      metadata: { dirname: 'skills/zip', filename: `${zipHash}.zip`, path: zipKey },
+      size: buffer.length,
+      url: zipKey,
+    });
+    log('importFromGitHub: uploaded ZIP file, hash=%s, size=%d bytes', zipHash, buffer.length);
+    return zipHash;
+  }
+
+  /**
+   * Shared tail for both GitHub persistence paths: build the full manifest and
+   * create or update the skill record.
+   */
+  private async finalizeSkillRecord(
+    repoInfo: GitHubRepoInfo,
+    input: ImportGitHubInput,
+    params: {
+      content: string;
+      existing: Awaited<ReturnType<AgentSkillModel['findByIdentifier']>>;
+      identifier: string;
+      manifest: SkillManifest;
+      resourceIds: Record<string, SkillResourceMeta>;
+      zipFileHash: string | undefined;
+    },
+  ): Promise<SkillImportResult> {
+    const { content, existing, identifier, manifest, resourceIds, zipFileHash } = params;
+
     const fullManifest: SkillManifest = {
       ...manifest,
       repository: `https://github.com/${repoInfo.owner}/${repoInfo.repo}`,
       sourceUrl: input.gitUrl,
     };
 
-    // 8. Upload ZIP file to S3 and create globalFiles record (for zipFileHash foreign key)
-    // Use skillZipBuffer (repacked skill-only ZIP) instead of full repo zipBuffer
-    let zipFileHash: string | undefined;
-    const zipToUpload = skillZipBuffer ?? zipBuffer;
-    if (zipHash && zipToUpload) {
-      const zipKey = `skills/zip/${zipHash}.zip`;
-      await this.fileService.uploadBuffer(zipKey, zipToUpload, 'application/zip');
-      // Use createGlobalFile directly - no need to create then delete user file record
-      await this.fileService.createGlobalFile({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        metadata: {
-          dirname: 'skills/zip',
-          filename: `${zipHash}.zip`,
-          path: zipKey,
-        },
-        size: zipToUpload.length,
-        url: zipKey,
-      });
-      zipFileHash = zipHash;
-      log(
-        'importFromGitHub: uploaded ZIP file, hash=%s, size=%d bytes',
-        zipFileHash,
-        zipToUpload.length,
-      );
-    }
-
-    // 9. Update existing skill or create new
     if (existing) {
       this.assertCanOverwrite(existing);
       log('importFromGitHub: skill exists but content changed, updating id=%s', existing.id);
@@ -286,11 +471,10 @@ export class SkillImporter {
       return { skill, status: 'updated' };
     }
 
-    // 10. Create new skill record
     log('importFromGitHub: creating new skill...');
     const skill = await this.skillModel.create({
       content,
-      description: (manifest as any).description,
+      description: manifest.description,
       identifier,
       manifest: fullManifest,
       name: manifest.name,
@@ -300,6 +484,27 @@ export class SkillImporter {
     });
     log('importFromGitHub: created skill id=%s', skill.id);
     return { skill, status: 'created' };
+  }
+
+  /**
+   * Map over items with a bounded number of concurrent async operations,
+   * preserving input order in the result.
+   */
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    limit: number,
+    fn: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const results = Array.from({ length: items.length }) as R[];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < items.length) {
+        const index = cursor++;
+        results[index] = await fn(items[index]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
   }
 
   /**

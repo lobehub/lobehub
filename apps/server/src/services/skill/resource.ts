@@ -14,6 +14,13 @@ import { SkillResourceError } from './errors';
 
 const log = debug('lobe-chat:service:skill-resource');
 
+/**
+ * Max concurrent resource stores (S3 upload + globalFiles insert). Storing
+ * thousands of files sequentially blows the serverless time limit, so they are
+ * uploaded with bounded concurrency. Override via env for ops tuning.
+ */
+const STORE_CONCURRENCY = Number(process.env.SKILL_STORE_CONCURRENCY) || 16;
+
 function isTextMimeType(mimeType: string): boolean {
   if (mimeType.startsWith('text/')) return true;
   const textApplicationTypes = [
@@ -51,15 +58,49 @@ export class SkillResourceService {
     log('storeResources: starting with zipHash=%s, resourceCount=%d', zipHash, resources.size);
     const result: Record<string, SkillResourceMeta> = {};
 
+    // Group by content hash so each unique blob is uploaded/recorded only once.
+    // A large skill can repeat files (globalFiles is content-addressed by hash),
+    // and storing a hash twice would also race on the globalFiles insert.
+    const uniqueByHash = new Map<string, { buffer: Buffer; virtualPath: string }>();
     for (const [virtualPath, buffer] of resources) {
-      log('storeResources: storing resource path=%s, size=%d bytes', virtualPath, buffer.length);
-      const fileHash = await this.storeResource(zipHash, virtualPath, buffer);
+      const fileHash = sha256(buffer);
       result[virtualPath] = { fileHash, size: buffer.length };
-      log('storeResources: stored resource path=%s, fileHash=%s', virtualPath, fileHash);
+      if (!uniqueByHash.has(fileHash)) uniqueByHash.set(fileHash, { buffer, virtualPath });
     }
 
-    log('storeResources: completed, stored %d resources', Object.keys(result).length);
+    // Upload + record unique blobs with bounded concurrency. Sequential
+    // round-trips over thousands of files otherwise exceed the function timeout.
+    await this.mapWithConcurrency(
+      [...uniqueByHash.values()],
+      STORE_CONCURRENCY,
+      ({ buffer, virtualPath }) => this.storeResource(zipHash, virtualPath, buffer),
+    );
+
+    log(
+      'storeResources: completed, %d paths / %d unique blobs',
+      Object.keys(result).length,
+      uniqueByHash.size,
+    );
     return result;
+  }
+
+  /**
+   * Run `fn` over `items` with at most `limit` in flight at once.
+   */
+  private async mapWithConcurrency<T>(
+    items: T[],
+    limit: number,
+    fn: (item: T) => Promise<unknown>,
+  ): Promise<void> {
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        await fn(items[index]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   }
 
   /**

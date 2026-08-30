@@ -204,6 +204,27 @@ describe('SkillResourceService', () => {
 
       expect(result).toEqual({});
     });
+
+    it('should upload identical-content files only once but map every path', async () => {
+      const service = new SkillResourceService({} as any, 'user-1');
+      const dup = Buffer.from('same bytes');
+      const resources = new Map([
+        ['a.txt', dup],
+        ['nested/b.txt', Buffer.from(dup)], // identical content, different path
+        ['c.txt', Buffer.from('different')],
+      ]);
+
+      const result = await service.storeResources('ziphash', resources);
+
+      // Every path is mapped...
+      expect(Object.keys(result).sort()).toEqual(['a.txt', 'c.txt', 'nested/b.txt']);
+      // ...the two identical files share one hash...
+      expect(result['a.txt'].fileHash).toBe(result['nested/b.txt'].fileHash);
+      expect(result['c.txt'].fileHash).not.toBe(result['a.txt'].fileHash);
+      // ...and the duplicate blob is stored only once (2 unique blobs total).
+      expect(mockUploadBuffer).toHaveBeenCalledTimes(2);
+      expect(mockCreateGlobalFile).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('readResource', () => {

@@ -51,6 +51,8 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/^-|-$/g, '');
 
 const mockGitHubInstance = {
+  downloadRawFile: vi.fn(),
+  downloadRawFileBuffer: vi.fn(),
   downloadRepoZip: vi.fn(),
   generateIdentifier: vi
     .fn()
@@ -62,12 +64,23 @@ const mockGitHubInstance = {
       }
       return parts.join('-').toLowerCase();
     }),
+  // Default: small known size -> archive path (matches these tests' expectations).
+  getRepoSizeKb: vi.fn().mockResolvedValue(100),
+  listSubtree: vi.fn(),
+  openRepoZipStream: vi.fn(),
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
   GitHub: vi.fn().mockImplementation(() => mockGitHubInstance),
   GitHubNotFoundError: class extends Error {},
   GitHubParseError: class extends Error {},
+  stripSlashes: (value: string) => {
+    let s = 0;
+    let e = value.length;
+    while (s < e && value[s] === '/') s += 1;
+    while (e > s && value[e - 1] === '/') e -= 1;
+    return value.slice(s, e);
+  },
 }));
 
 // Mock SkillParser

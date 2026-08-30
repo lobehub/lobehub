@@ -18,6 +18,8 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/^-|-$/g, '');
 
 const mockGitHubInstance = {
+  downloadRawFile: vi.fn(),
+  downloadRawFileBuffer: vi.fn(),
   downloadRepoZip: vi.fn(),
   generateIdentifier: vi
     .fn()
@@ -29,6 +31,9 @@ const mockGitHubInstance = {
       }
       return parts.join('-').toLowerCase();
     }),
+  getRepoSizeKb: vi.fn(),
+  listSubtree: vi.fn(),
+  openRepoZipStream: vi.fn(),
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
@@ -45,9 +50,17 @@ vi.mock('@/server/modules/GitHub', () => ({
       this.name = 'GitHubParseError';
     }
   },
+  stripSlashes: (value: string) => {
+    let s = 0;
+    let e = value.length;
+    while (s < e && value[s] === '/') s += 1;
+    while (e > s && value[e - 1] === '/') e -= 1;
+    return value.slice(s, e);
+  },
 }));
 
 const mockParserInstance = {
+  packSkillFiles: vi.fn(),
   parseSkillMd: vi.fn(),
   parseZipPackage: vi.fn(),
 };
@@ -86,7 +99,7 @@ vi.mock('@/server/services/file/impls', () => ({
   })),
 }));
 
-// Mock fs/promises readFile
+// Mock fs/promises readFile (used by importFromZip).
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn().mockResolvedValue(Buffer.from('mock-zip-content')),
 }));
@@ -360,6 +373,12 @@ describe('SkillImporter', () => {
   });
 
   describe('importFromGitHub', () => {
+    beforeEach(() => {
+      // Default: a small, known-size repo -> archive path. Large-repo and
+      // unknown-size routing is covered in the dedicated describe below.
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(100);
+    });
+
     it('should import skill from GitHub repository', async () => {
       mockGitHubInstance.parseRepoUrl.mockReturnValue({
         branch: 'main',
@@ -552,6 +571,7 @@ describe('SkillImporter', () => {
         content: '# Skill Content',
         manifest: { name: 'Global Only Skill', description: 'Test global files' },
         resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip'),
         zipHash,
       });
 
@@ -611,6 +631,7 @@ describe('SkillImporter', () => {
         content: '# Content',
         manifest: { name: 'Path Test Skill', description: 'Test path' },
         resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip'),
         zipHash,
       });
 
@@ -717,6 +738,7 @@ describe('SkillImporter', () => {
           ['readme.md', Buffer.from('# README')],
           ['docs/guide.md', Buffer.from('# Guide')],
         ]),
+        skillZipBuffer: Buffer.from('skill-zip'),
         zipHash,
       });
 
@@ -789,6 +811,7 @@ describe('SkillImporter', () => {
         content: '# Original Content',
         manifest: { name: 'Update Skill', description: 'Version 1' },
         resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip-v1'),
         zipHash: 'hash-v1',
       });
 
@@ -806,6 +829,7 @@ describe('SkillImporter', () => {
         content: '# Updated Content',
         manifest: { name: 'Update Skill', description: 'Version 2' },
         resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip-v2'),
         zipHash: 'hash-v2',
       });
 
@@ -821,6 +845,207 @@ describe('SkillImporter', () => {
 
       // uploadBuffer should be called again for the new ZIP
       expect(mockUploadBuffer.mock.calls.length).toBe(uploadCountAfterFirst + 1);
+    });
+  });
+
+  describe('importFromGitHub (large repos)', () => {
+    const LARGE_SIZE_KB = 200 * 1024; // 200MB > 30MB threshold
+
+    it('should fetch a large-repo subdir file-by-file (no archive download)', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        path: 'skills/small',
+        repo: 'monorepo',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(LARGE_SIZE_KB);
+      mockGitHubInstance.listSubtree.mockResolvedValue([
+        { path: 'skills/small/SKILL.md', size: 20 },
+        { path: 'skills/small/ref.md', size: 3 },
+      ]);
+      mockGitHubInstance.downloadRawFile.mockResolvedValue('# Small Skill');
+      mockGitHubInstance.downloadRawFileBuffer.mockResolvedValue(Buffer.from('ref'));
+      mockParserInstance.packSkillFiles.mockResolvedValue({
+        content: '# Small Skill',
+        manifest: { name: 'Small Skill', description: 'few files' },
+        resources: new Map([['ref.md', Buffer.from('ref')]]),
+        skillZipBuffer: Buffer.from('skill-zip'),
+        zipHash: `small-hash-${Date.now()}`,
+      });
+
+      const result = await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/monorepo/tree/main/skills/small',
+      });
+
+      expect(result.status).toBe('created');
+      expect(result.skill.name).toBe('Small Skill');
+      // Per-file path used; the whole-repo archive is never downloaded.
+      expect(mockGitHubInstance.downloadRawFile).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: 'skills/small/SKILL.md' }),
+      );
+      expect(mockGitHubInstance.downloadRawFileBuffer).toHaveBeenCalledTimes(1);
+      expect(mockParserInstance.packSkillFiles).toHaveBeenCalledWith('# Small Skill', expect.any(Map));
+      expect(mockGitHubInstance.downloadRepoZip).not.toHaveBeenCalled();
+    });
+
+    it('should fetch every file via raw regardless of file count (no archive)', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        path: 'skills/big',
+        repo: 'monorepo',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(LARGE_SIZE_KB);
+      const files = [{ path: 'skills/big/SKILL.md', size: 20 }];
+      for (let i = 0; i < 320; i += 1) files.push({ path: `skills/big/a-${i}.png`, size: 10 });
+      mockGitHubInstance.listSubtree.mockResolvedValue(files);
+      mockGitHubInstance.downloadRawFile.mockResolvedValue('# Big Skill');
+      mockGitHubInstance.downloadRawFileBuffer.mockResolvedValue(Buffer.from('png'));
+      mockParserInstance.packSkillFiles.mockResolvedValue({
+        content: '# Big Skill',
+        manifest: { name: 'Big Skill', description: 'many files' },
+        resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip'),
+        zipHash: `big-hash-${Date.now()}`,
+      });
+
+      const result = await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/monorepo/tree/main/skills/big',
+      });
+
+      expect(result.status).toBe('created');
+      expect(result.skill.name).toBe('Big Skill');
+      // Every resource fetched per-file; archive never downloaded.
+      expect(mockGitHubInstance.downloadRawFileBuffer).toHaveBeenCalledTimes(320);
+      expect(mockGitHubInstance.downloadRepoZip).not.toHaveBeenCalled();
+    });
+
+    it('should reject a large repo imported at the root', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        repo: 'monorepo',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(LARGE_SIZE_KB);
+
+      await expect(
+        importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/monorepo' }),
+      ).rejects.toThrow(/too large/i);
+      expect(mockGitHubInstance.listSubtree).not.toHaveBeenCalled();
+    });
+
+    it('should reject when the skill subdirectory exceeds the size cap', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        path: 'skills/huge',
+        repo: 'monorepo',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(LARGE_SIZE_KB);
+      mockGitHubInstance.listSubtree.mockResolvedValue([
+        { path: 'skills/huge/SKILL.md', size: 100 },
+        { path: 'skills/huge/blob.bin', size: 200 * 1024 * 1024 }, // 200MB > 150MB cap
+      ]);
+
+      await expect(
+        importer.importFromGitHub({
+          gitUrl: 'https://github.com/lobehub/monorepo/tree/main/skills/huge',
+        }),
+      ).rejects.toThrow(/too large/i);
+      expect(mockGitHubInstance.downloadRawFileBuffer).not.toHaveBeenCalled();
+    });
+
+    it('should throw NOT_FOUND when SKILL.md is missing in the subdirectory', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        path: 'skills/none',
+        repo: 'monorepo',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(LARGE_SIZE_KB);
+      mockGitHubInstance.listSubtree.mockResolvedValue([{ path: 'skills/none/readme.md', size: 5 }]);
+
+      await expect(
+        importer.importFromGitHub({
+          gitUrl: 'https://github.com/lobehub/monorepo/tree/main/skills/none',
+        }),
+      ).rejects.toThrow(/SKILL\.md not found/i);
+    });
+
+    it('should fall back to the archive path for a root import when the size probe fails', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        repo: 'probe-fail',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockRejectedValue(new Error('rate limited'));
+      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Fallback',
+        manifest: { name: 'Fallback Skill', description: 'probe failed' },
+        resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip'),
+        zipHash: `fallback-hash-${Date.now()}`,
+      });
+
+      const result = await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/probe-fail',
+      });
+
+      expect(result.status).toBe('created');
+      expect(mockGitHubInstance.downloadRepoZip).toHaveBeenCalled();
+    });
+
+    it('should fetch a subdir via raw when the size probe fails (no token)', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        path: 'skills/x',
+        repo: 'no-token',
+      });
+      // Probe fails (rate-limited / no token) but the subdir can still be listed
+      // and fetched per-file — import succeeds without downloading the archive.
+      mockGitHubInstance.getRepoSizeKb.mockRejectedValue(new Error('rate limited'));
+      mockGitHubInstance.listSubtree.mockResolvedValue([
+        { path: 'skills/x/SKILL.md', size: 10 },
+        { path: 'skills/x/ref.md', size: 3 },
+      ]);
+      mockGitHubInstance.downloadRawFile.mockResolvedValue('# X');
+      mockGitHubInstance.downloadRawFileBuffer.mockResolvedValue(Buffer.from('ref'));
+      mockParserInstance.packSkillFiles.mockResolvedValue({
+        content: '# X',
+        manifest: { name: 'X Skill', description: 'no token' },
+        resources: new Map(),
+        skillZipBuffer: Buffer.from('skill-zip'),
+        zipHash: `x-hash-${Date.now()}`,
+      });
+
+      const result = await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/no-token/tree/main/skills/x',
+      });
+
+      expect(result.status).toBe('created');
+      expect(mockGitHubInstance.downloadRawFile).toHaveBeenCalled();
+      expect(mockGitHubInstance.downloadRepoZip).not.toHaveBeenCalled();
+    });
+
+    it('should throw DOWNLOAD_FAILED when listing the subdirectory fails', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        path: 'skills/y',
+        repo: 'list-fail',
+      });
+      mockGitHubInstance.getRepoSizeKb.mockResolvedValue(LARGE_SIZE_KB);
+      mockGitHubInstance.listSubtree.mockRejectedValue(new Error('rate limited'));
+
+      await expect(
+        importer.importFromGitHub({
+          gitUrl: 'https://github.com/lobehub/list-fail/tree/main/skills/y',
+        }),
+      ).rejects.toThrow(SkillImportError);
+      expect(mockGitHubInstance.downloadRepoZip).not.toHaveBeenCalled();
+      expect(mockGitHubInstance.downloadRawFileBuffer).not.toHaveBeenCalled();
     });
   });
 

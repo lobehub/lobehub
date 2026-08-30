@@ -853,4 +853,66 @@ Content from file`;
       await expect(parser.parseZipFile(invalidZipPath)).rejects.toThrow(SkillParseError);
     });
   });
+
+  describe('packSkillFiles', () => {
+    it('should build a parsed skill from already-fetched files', async () => {
+      const skillMd = `---
+name: packed-skill
+description: Built from files
+---
+Packed content`;
+      const resources = new Map<string, Buffer>([
+        ['ref.md', Buffer.from('reference')],
+        ['assets/logo.png', Buffer.from('png-bytes')],
+      ]);
+
+      const result = await parser.packSkillFiles(skillMd, resources);
+
+      expect(result.manifest.name).toBe('packed-skill');
+      expect(result.content).toBe('Packed content');
+      expect(result.resources.size).toBe(2);
+      expect(result.skillZipBuffer).toBeDefined();
+      expect(result.zipHash).toBe(sha256(result.skillZipBuffer!));
+
+      // The repacked zip round-trips to SKILL.md + the resources.
+      const unzipped = await extractZip(result.skillZipBuffer!);
+      expect(Object.keys(unzipped).sort()).toEqual(['SKILL.md', 'assets/logo.png', 'ref.md']);
+    });
+
+    it('should produce a hash identical to the archive repack for the same files', async () => {
+      const skillMd = `---
+name: stable-skill
+description: Stable content
+---
+Body`;
+      const resourceBytes = new TextEncoder().encode('Resource');
+
+      // Archive path: parse a GitHub-style repo zip with repack.
+      const archive = await parser.parseZipPackage(
+        Buffer.from(
+          await createZip({
+            'repo-main/README.md': new TextEncoder().encode('# Big repo'),
+            'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMd),
+            'repo-main/skills/my-skill/resource.txt': resourceBytes,
+          }),
+        ),
+        { basePath: 'skills/my-skill', repackSkillZip: true },
+      );
+
+      // Per-file path: the same files fed directly.
+      const selective = await parser.packSkillFiles(
+        skillMd,
+        new Map<string, Buffer>([['resource.txt', Buffer.from(resourceBytes)]]),
+      );
+
+      expect(selective.zipHash).toBe(archive.zipHash);
+      expect(selective.content).toBe(archive.content);
+    });
+
+    it('should throw SkillManifestError for invalid manifest', async () => {
+      await expect(parser.packSkillFiles('no frontmatter here', new Map())).rejects.toThrow(
+        SkillManifestError,
+      );
+    });
+  });
 });
