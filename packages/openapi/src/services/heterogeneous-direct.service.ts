@@ -20,7 +20,7 @@ import {
   resolveServerDefaultHeterogeneousModel,
 } from '@/server/modules/ModelRuntime';
 
-import type { BaseStreamEvent } from '../types/responses.type';
+import type { BaseStreamEvent, ResponseUsage } from '../types/responses.type';
 
 export const SERVER_DEFAULT_MODEL_ALIAS = SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS;
 
@@ -540,7 +540,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
   let stopReason: unknown;
   let textOutputIndex: number | undefined;
   let outputText = '';
-  let usage: { input_tokens: number; output_tokens: number; total_tokens: number } | undefined;
+  let usage: ResponseUsage | undefined;
   const toolItems = new Map<
     number,
     { arguments: string; callId: string; id: string; name: string; outputIndex: number }
@@ -717,8 +717,8 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
         },
         transform(event, controller) {
           if (finalized) return;
-          if (event.type === 'text') {
-            outputText += String(event.data);
+          if (event.type === 'text' && typeof event.data === 'string' && event.data) {
+            outputText += event.data;
             if (textOutputIndex === undefined) {
               textOutputIndex = nextOutputIndex++;
               controller.enqueue(
@@ -747,14 +747,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             controller.enqueue(
               responseSse('response.output_text.delta', {
                 content_index: 0,
-                delta: String(event.data),
+                delta: event.data,
                 item_id: `msg_${responseId}`,
                 output_index: textOutputIndex,
                 type: 'response.output_text.delta',
               }),
             );
-          } else if (event.type === 'reasoning') {
-            reasoningText += String(event.data);
+          } else if (event.type === 'reasoning' && typeof event.data === 'string' && event.data) {
+            reasoningText += event.data;
             if (reasoningOutputIndex === undefined) {
               reasoningItemId = event.id || `rs_${responseId}`;
               reasoningOutputIndex = nextOutputIndex++;
@@ -773,7 +773,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             }
             controller.enqueue(
               responseSse('response.reasoning_summary_text.delta', {
-                delta: String(event.data),
+                delta: event.data,
                 item_id: reasoningItemId,
                 output_index: reasoningOutputIndex,
                 summary_index: 0,
@@ -824,11 +824,17 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
               }
             }
           } else if (event.type === 'usage' && isRecord(event.data)) {
-            const inputTokens = Number(event.data.totalInputTokens || 0);
-            const outputTokens = Number(event.data.totalOutputTokens || 0);
+            const inputTokens = nonNegativeNumber(event.data.totalInputTokens) ?? 0;
+            const outputTokens = nonNegativeNumber(event.data.totalOutputTokens) ?? 0;
             usage = {
               input_tokens: inputTokens,
+              input_tokens_details: {
+                cached_tokens: nonNegativeNumber(event.data.inputCachedTokens) ?? 0,
+              },
               output_tokens: outputTokens,
+              output_tokens_details: {
+                reasoning_tokens: nonNegativeNumber(event.data.outputReasoningTokens) ?? 0,
+              },
               total_tokens: inputTokens + outputTokens,
             };
           } else if (event.type === 'stop') {
