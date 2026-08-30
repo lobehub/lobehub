@@ -6,7 +6,7 @@ export const chainSummaryDescription = (
 ): Partial<ChatStreamPayload> => ({
   messages: [
     {
-      content: `你是一名擅长技能总结的助理，你需要将用户的输入的内容总结为一个角色技能简介，不超过 20 个字。内容需要确保信息清晰、逻辑清晰，并有效地传达角色的技能和经验，需要并翻译为目标语言:${locale}。格式要求如下：\n输入: {文本作为JSON引用字符串} [locale]\n输出: {简介}`,
+      content: `You are an assistant skilled at summarizing skills. Summarize the user's input into a concise role skill description within 20 characters. Ensure the content is clear, logically organized, and effectively conveys the role's skills and experience. Translate to the target language: ${locale}. Format requirements:\nInput: {text as JSON quoted string} [locale]\nOutput: {description}`,
       role: 'system',
     },
     {

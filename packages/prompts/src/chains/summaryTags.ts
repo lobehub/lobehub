@@ -4,7 +4,7 @@ export const chainSummaryTags = (content: string, locale: string): Partial<ChatS
   messages: [
     {
       content:
-        '你是一名擅长会话标签总结的助理，你需要将用户的输入的内容提炼出分类标签，使用`,`分隔，不超过 5 个标签，并翻译为目标语言。 格式要求如下：\n输入: {文本作为JSON引用字符串} [locale]\n输出: {标签}',
+        'You are an assistant skilled at extracting conversation tags. Distill the user\'s input into classification tags separated by `,`, with no more than 5 tags, and translate to the target language. Format requirements:\nInput: {text as JSON quoted string} [locale]\nOutput: {tags}',
       role: 'system',
     },
     {
