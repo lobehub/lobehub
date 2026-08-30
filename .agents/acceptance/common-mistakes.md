@@ -595,6 +595,16 @@ agent-browser --cdp 9222 eval "(async()=>{const t=await (await fetch('app://rend
 A wrong-worktree hit means the instance is someone else's session: do not restart or
 reuse it, start a pool instance (`electron-dev.sh start <id>`) or switch surface.
 
+**Same failure, third shape — the pool port is not owned by Electron at all.**
+`electron-dev.sh start <id>` treats a reachable `CDP_BASE + id` as "already running"
+and skips the launch with `CDP already reachable on <port>. Skipping start`, so the
+run then drives whatever owns it. Any other debugger on that port claims the slot —
+`workerd`/`wrangler` defaults to 9229, which is pool id 7. The give-away is that
+`electron-dev.sh list` does not list the instance as up while the port answers.
+Before picking a pool id, read `/json/version` on its port and require an Electron
+`Browser` string (a `wrangler/*` or `node` answer means pick another id), or check
+the port is free at all.
+
 ### L-S6 — Reading or writing the url from a portal'd sidebar on desktop
 
 **Wrong approach:** use `useSearchParams`, `useQueryState`, `useParams`,

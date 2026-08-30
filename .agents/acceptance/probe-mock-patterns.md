@@ -959,6 +959,34 @@ error shapes through a window flag (e.g. plain `Error` vs
 marker before clicking. Snapshot the dirty file first and restore byte-identically
 (cmp), never `git checkout --`.
 
+#### Render Gallery shows "No builtin tool renders registered." after a reload
+
+**Situation:** driving DevDock → Render Gallery to capture builtin-tool
+Inspector/Render evidence, after a renderer reload or an HMR update.
+
+**Doesn't work:** waiting. The gallery reads the builtin registries once through a
+`useMemo` with an empty dependency list, so a panel that mounts before the builtin
+tools finish registering caches an empty list for the lifetime of that mount. It
+renders "No builtin tool renders registered." indefinitely, which reads like the
+registries themselves broke.
+
+**Works:** remount the panel — click the dock's `Render Gallery` button twice
+(close, reopen) and re-select the toolset; the entries appear immediately. To land
+on the gallery straight after a reload, pre-seed the dock instead of clicking
+through it:
+
+```js
+localStorage.setItem(
+  'LOBE_DEV_DOCK_UI',
+  JSON.stringify({
+    ...JSON.parse(localStorage.getItem('LOBE_DEV_DOCK_UI') || '{}'),
+    activePanelId: 'render-gallery',
+    expanded: true,
+    maximized: true,
+  }),
+);
+```
+
 ### Capturing and publishing evidence
 
 #### Reading a transitioned CSS property immediately after focus/hover
