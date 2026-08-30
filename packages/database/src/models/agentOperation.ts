@@ -29,11 +29,7 @@ export interface RecordOperationStartParams {
   appContext?: AgentOperationAppContext;
   chatGroupId?: string | null;
   maxSteps?: number;
-  /**
-   * Durable per-run metadata persisted on the operation row (jsonb). Carries the
-   * Agent Signal run marker so server-side tools can read it back from the row
-   * (`metadata.agentSignal`) at tool-call time.
-   */
+  /** Durable per-run metadata persisted on the operation row (jsonb). */
   metadata?: Record<string, unknown>;
   model?: string;
   modelRuntimeConfig?: Record<string, unknown>;

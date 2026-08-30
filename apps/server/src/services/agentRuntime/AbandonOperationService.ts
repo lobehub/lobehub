@@ -9,15 +9,17 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { agentOperations, messages } from '@/database/schemas';
+import { agentOperations, messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 // Direct file import (not the barrel) to avoid pulling in RuntimeExecutors and
 // its workspace-package transitive deps in the unit-test environment.
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
+import { resolveRunPrincipal } from '@/server/services/executionPrincipal';
 
 import { CompletionLifecycle } from './CompletionLifecycle';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
+import type { OperationCreationParams } from './types';
 
 const log = debug('lobe-server:abandon-operation');
 
@@ -105,6 +107,7 @@ export class AbandonOperationService {
     result.found = true;
 
     const metadata = (state.metadata ?? {}) as {
+      agentShare?: OperationCreationParams['agentShare'];
       assistantMessageId?: string;
       isSubAgent?: boolean;
       orchestrationRole?: 'supervisor' | 'member';
@@ -113,6 +116,10 @@ export class AbandonOperationService {
       userId?: string;
       workspaceId?: string;
     };
+    const conversationUserId = resolveRunPrincipal({
+      agentShare: metadata.agentShare,
+      userId: metadata.userId,
+    }).actorUserId;
     const shouldDispatchAbandonedLifecycle =
       state.status === 'running' ||
       state.status === 'waiting_for_human' ||
@@ -150,19 +157,19 @@ export class AbandonOperationService {
       result.finalized = partial !== null;
     }
 
-    if (metadata.userId && metadata.assistantMessageId) {
+    if (conversationUserId && metadata.assistantMessageId) {
       try {
-        const messageModel = new MessageModel(this.db, metadata.userId, metadata.workspaceId);
-        await messageModel.update(metadata.assistantMessageId, { error });
-        result.assistantMessageUpdated = true;
+        const messageModel = new MessageModel(this.db, conversationUserId, metadata.workspaceId);
+        const updateResult = await messageModel.update(metadata.assistantMessageId, { error });
+        result.assistantMessageUpdated = updateResult.success;
       } catch (e) {
         log('[%s] assistant message update failed (non-fatal): %O', operationId, e);
       }
     }
 
-    if (metadata.topicId && metadata.userId) {
+    if (metadata.topicId && conversationUserId) {
       try {
-        const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
+        const topicModel = new TopicModel(this.db, conversationUserId, metadata.workspaceId);
         await topicModel.settleRunningOperation(metadata.topicId, operationId);
       } catch (e) {
         log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
@@ -171,14 +178,14 @@ export class AbandonOperationService {
 
     if (!metadata.isSubAgent && metadata.userId && shouldDispatchAbandonedLifecycle) {
       try {
-        await new CompletionLifecycle(this.db, metadata.userId, metadata.workspaceId).dispatchHooks(
-          operationId,
-          finalState,
-          'error',
-          {
-            skipErrorMessageWrite: result.assistantMessageUpdated,
-          },
-        );
+        await new CompletionLifecycle(
+          this.db,
+          metadata.userId,
+          metadata.workspaceId,
+          conversationUserId,
+        ).dispatchHooks(operationId, finalState, 'error', {
+          skipErrorMessageWrite: result.assistantMessageUpdated,
+        });
       } catch (e) {
         log('[%s] abandoned op lifecycle dispatch failed (non-fatal): %O', operationId, e);
       }
@@ -209,11 +216,11 @@ export class AbandonOperationService {
         const parentOperationId = opRow?.parentOperationId ?? undefined;
         const threadId = opRow?.threadId ?? metadata.threadId ?? undefined;
         if (parentOperationId && threadId) {
-          const thread = await new ThreadModel(
-            this.db,
-            metadata.userId,
-            metadata.workspaceId,
-          ).findById(threadId);
+          const thread = conversationUserId
+            ? await new ThreadModel(this.db, conversationUserId, metadata.workspaceId).findById(
+                threadId,
+              )
+            : undefined;
           const toolMessageId = thread?.sourceMessageId ?? undefined;
           if (toolMessageId) {
             result.subAgentResume = {
@@ -261,6 +268,7 @@ export class AbandonOperationService {
     }
 
     result.abandoned = true;
+    const conversationUserId = await this.resolveConversationUserIdForOperation(op);
 
     const message = `Operation abandoned: ${reason}`;
     const error: ChatMessageError = {
@@ -289,16 +297,53 @@ export class AbandonOperationService {
       log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
     }
 
-    const assistantMessageId = await this.resolveAssistantMessageIdForOperation(op, operationId);
+    const assistantMessageId = await this.resolveAssistantMessageIdForOperation(
+      op,
+      operationId,
+      conversationUserId,
+    );
     if (!assistantMessageId) return;
 
     try {
-      const messageModel = new MessageModel(this.db, op.userId, op.workspaceId ?? undefined);
-      await messageModel.update(assistantMessageId, { content: '', error });
-      result.assistantMessageUpdated = true;
+      const messageModel = new MessageModel(
+        this.db,
+        conversationUserId,
+        op.workspaceId ?? undefined,
+      );
+      const updateResult = await messageModel.update(assistantMessageId, { content: '', error });
+      result.assistantMessageUpdated = updateResult.success;
     } catch (e) {
       log('[%s] no-state abandon: assistant message update failed (non-fatal): %O', operationId, e);
     }
+  }
+
+  /**
+   * Recover the owner of conversation rows independently from the operation owner.
+   * In a delegated run, operation resources remain scoped to their owner while
+   * the topic and messages belong to the actor. The topic lookup keeps recovery
+   * compatible with operations started before `conversationUserId` was persisted.
+   */
+  private async resolveConversationUserIdForOperation(
+    op: typeof agentOperations.$inferSelect,
+  ): Promise<string> {
+    const persistedConversationUserId = op.metadata?.conversationUserId;
+    if (typeof persistedConversationUserId === 'string' && persistedConversationUserId) {
+      return persistedConversationUserId;
+    }
+
+    if (op.topicId) {
+      try {
+        const topic = await (this.db as any).query?.topics?.findFirst({
+          columns: { userId: true },
+          where: eq(topics.id, op.topicId),
+        });
+        if (topic?.userId) return topic.userId;
+      } catch (e) {
+        log('[%s] no-state abandon: topic owner lookup failed (non-fatal): %O', op.id, e);
+      }
+    }
+
+    return op.userId;
   }
 
   private async findOperationRow(operationId: string) {
@@ -315,12 +360,13 @@ export class AbandonOperationService {
   private async resolveAssistantMessageIdForOperation(
     op: typeof agentOperations.$inferSelect,
     operationId: string,
+    conversationUserId: string,
   ): Promise<string | undefined> {
     let topicModel: TopicModel | undefined;
 
     if (op.topicId) {
       try {
-        topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
+        topicModel = new TopicModel(this.db, conversationUserId, op.workspaceId ?? undefined);
         const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
         if (settled.status !== 'settled') return undefined;
         if (settled.assistantMessageId) return settled.assistantMessageId;
@@ -336,7 +382,7 @@ export class AbandonOperationService {
       const assistant = await (this.db as any).query?.messages?.findFirst({
         orderBy: [desc(messages.createdAt)],
         where: and(
-          eq(messages.userId, op.userId),
+          eq(messages.userId, conversationUserId),
           eq(messages.role, 'assistant'),
           op.topicId ? eq(messages.topicId, op.topicId) : undefined,
           op.agentId ? eq(messages.agentId, op.agentId) : undefined,

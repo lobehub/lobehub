@@ -155,6 +155,45 @@ describe('AgentRuntimeService.executeSync', () => {
       expect(state?.metadata?.agentId).toBe('test-agent');
       expect(state?.metadata?.topicId).toBe('topic-1');
     });
+
+    it('persists conversation ownership for no-state recovery', async () => {
+      const shareService = new AgentRuntimeService(mockDb, 'creator-user', {
+        conversationUserId: 'visitor-user',
+        coordinatorOptions: {
+          stateManager,
+          streamEventManager,
+        },
+        queueService: null,
+        streamEventManager,
+      });
+      const recordStart = vi
+        .spyOn((shareService as any).completionLifecycle, 'recordStart')
+        .mockResolvedValue(true);
+
+      await shareService.createOperation({
+        agentConfig: {},
+        appContext: { agentId: 'test-agent', topicId: 'topic-1' },
+        autoStart: false,
+        initialContext: {
+          payload: {},
+          phase: 'user_input',
+          session: {
+            messageCount: 1,
+            sessionId: 'share-op',
+            status: 'idle',
+            stepCount: 0,
+          },
+        },
+        modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
+        operationId: 'share-op',
+        toolSet: { manifestMap: {}, tools: [] },
+        userId: 'creator-user',
+      });
+
+      expect(recordStart).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { conversationUserId: 'visitor-user' } }),
+      );
+    });
   });
 
   describe('getCoordinator', () => {

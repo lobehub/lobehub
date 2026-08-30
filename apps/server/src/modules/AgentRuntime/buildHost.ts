@@ -27,6 +27,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
   const blob = ctx.principal.resourceOwnerUserId
     ? new ServerBlobStore(ctx.serverDB, ctx.principal.resourceOwnerUserId, ctx.workspaceId)
     : undefined;
+  const conversationUserId = ctx.principal.actorUserId ?? ctx.principal.resourceOwnerUserId;
 
   return {
     // Only present when the operation registered hooks — mirrors the prior
@@ -45,12 +46,8 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
     },
     transports: {
       blob,
-      compression: ctx.principal.resourceOwnerUserId
-        ? new ServerCompressionTransport(
-            ctx.serverDB,
-            ctx.principal.resourceOwnerUserId,
-            ctx.workspaceId,
-          )
+      compression: conversationUserId
+        ? new ServerCompressionTransport(ctx.serverDB, conversationUserId, ctx.workspaceId)
         : undefined,
       context: new ServerContextBuilder(ctx),
       llm: ctx.principal.resourceOwnerUserId ? new ServerLLMTransport(ctx, blob) : undefined,
@@ -59,7 +56,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
       }),
       operationStore: new ServerOperationStore(
         ctx.serverDB,
-        ctx.principal.resourceOwnerUserId,
+        conversationUserId,
         ctx.workspaceId,
         ctx.topicId,
         ctx.operationId,

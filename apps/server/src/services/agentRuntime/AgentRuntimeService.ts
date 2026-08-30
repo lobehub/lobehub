@@ -821,19 +821,16 @@ export class AgentRuntimeService {
       },
       chatGroupId: appContext?.groupId ?? null,
       maxSteps,
-      // Persist the Agent Signal run marker on the operation row so server-side
-      // self-iteration tools can read it back (metadata.agentSignal) at tool-call
-      // time — the trimmed appContext above intentionally drops it.
-      ...(appContext?.agentSignal || interventionResolution
-        ? {
-            metadata: {
-              ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
-              ...(interventionResolution
-                ? { agentInterventionContinuation: interventionResolution }
-                : {}),
-            },
-          }
-        : {}),
+      // Persist conversation ownership separately from the operation owner so a
+      // watchdog can still finalize shared-agent messages after Redis state is lost.
+      metadata: {
+        conversationUserId: this.conversationUserId,
+        // Server-side self-iteration tools read this marker back at tool-call time.
+        ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
+        ...(interventionResolution
+          ? { agentInterventionContinuation: interventionResolution }
+          : {}),
+      },
       model: modelRuntimeConfig?.model,
       modelRuntimeConfig,
       operationId,
