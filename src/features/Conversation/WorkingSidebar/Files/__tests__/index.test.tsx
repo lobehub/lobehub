@@ -190,6 +190,49 @@ vi.mock('antd', async (importOriginal) => ({
   message: messageSpy,
 }));
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+    <button title={title} type={'button'} onClick={onClick} />
+  ),
+  Button: ({ children, title }: { children?: ReactNode; title?: string }) => (
+    <button title={title} type={'button'}>
+      {children}
+    </button>
+  ),
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children?: ReactNode;
+    items: { key: string; label: ReactNode; onClick?: () => void }[];
+  }) => (
+    <div>
+      {children}
+      {items.map((item) => (
+        <button key={item.key} type={'button'} onClick={item.onClick}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
+vi.mock('@lobehub/ui', () => ({
+  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  copyToClipboard: vi.fn(),
+  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
+  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Icon: () => <span />,
+  stopPropagation: vi.fn(),
+}));
+
 vi.mock('antd-style', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
 
@@ -212,6 +255,10 @@ const setReveal = (path: string, nonce: number) => {
       workingSidebarRevealRequest: { nonce, path },
     },
   });
+};
+
+const expandSearch = () => {
+  fireEvent.click(screen.getByTitle('workingPanel.files.search'));
 };
 
 // ─── tests ────────────────────────────────────────────────────────────────────
@@ -265,6 +312,43 @@ describe('Files — reveal request integration', () => {
         'dist/',
       ]),
     );
+  });
+
+  it('wraps every visible entry in a named project root folder', () => {
+    render(<Files workingDirectory="/repo" />);
+
+    const nodes = explorerTreeProps.current?.nodes as {
+      id: string;
+      name: string;
+      parentId: string | null;
+    }[];
+
+    expect(nodes[0]).toMatchObject({
+      id: '__project_root__',
+      name: 'repo',
+      parentId: null,
+    });
+    expect(nodes.find((node) => node.id === 'src/')).toMatchObject({
+      parentId: '__project_root__',
+    });
+    expect(nodes.find((node) => node.id === 'root.ts')).toMatchObject({
+      parentId: '__project_root__',
+    });
+    expect(explorerTreeProps.current?.defaultExpandedIds).toContain('__project_root__');
+  });
+
+  it('switches from the project view to a Git changes view', () => {
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.click(screen.getByText('workingPanel.files.views.changes'));
+
+    expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual([
+      '__project_root__',
+      'src/',
+      'src/foo/',
+      'src/foo/bar.ts',
+      'root.ts',
+    ]);
   });
 
   it('passes git working tree status and per-item context menu items into ExplorerTree', () => {
@@ -391,6 +475,7 @@ describe('Files — reveal request integration', () => {
     });
     render(<Files workingDirectory="/repo" />);
 
+    expandSearch();
     fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
       target: { value: 'bar' },
     });
@@ -403,7 +488,7 @@ describe('Files — reveal request integration', () => {
         scope: '/repo',
       });
       expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
-        ['src/', 'src/foo/', 'src/foo/bar.ts'],
+        ['__project_root__', 'src/', 'src/foo/', 'src/foo/bar.ts'],
       );
     });
   });
@@ -432,13 +517,14 @@ describe('Files — reveal request integration', () => {
     });
     render(<Files workingDirectory="/repo" />);
 
+    expandSearch();
     fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
       target: { value: 'git' },
     });
 
     await waitFor(() => {
       expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
-        ['.github/', '.github/ci.yml'],
+        ['__project_root__', '.github/', '.github/ci.yml'],
       );
     });
   });
@@ -452,6 +538,7 @@ describe('Files — reveal request integration', () => {
     });
     render(<Files workingDirectory="/repo" />);
 
+    expandSearch();
     fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
       target: { value: 'missing' },
     });
