@@ -92,14 +92,11 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
-    // Both benchmark-owned and unlinked datasets are valid destinations.
-    void Promise.all([agentEvalService.listUnlinkedDatasets(), agentEvalService.listBenchmarks()])
-      .then(async ([unlinked, benchmarks]) => {
-        const owned = await Promise.all(
-          (benchmarks ?? []).map((b: { id: string }) => agentEvalService.listDatasets(b.id)),
-        );
-        setDatasets([...(unlinked ?? []), ...owned.flat()] as Array<{ id: string; name: string }>);
-      })
+    // Every dataset is a valid destination, benchmark-owned or not — one list,
+    // rather than fanning out per benchmark and stitching the halves together.
+    void agentEvalService
+      .listAllDatasets()
+      .then((all) => setDatasets((all ?? []) as Array<{ id: string; name: string }>))
       .catch(() => setDatasets([]));
   }, []);
 
