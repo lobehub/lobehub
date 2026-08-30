@@ -40,6 +40,10 @@ vi.mock('@lobechat/electron-client-ipc', async (importOriginal) => ({
   useWatchBroadcast: vi.fn(),
 }));
 
+vi.mock('@/business/client/features/ChatInputCredits', () => ({
+  default: () => <div data-testid="api-credits" />,
+}));
+
 vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
   default: () => <div data-testid="workspace-controls" />,
 }));
@@ -315,6 +319,7 @@ describe('HeteroControlBar', () => {
     expect(
       await screen.findByRole('button', { name: 'heteroAgent.codexQuota.tooltip' }),
     ).toBeTruthy();
+    expect(screen.queryByTestId('api-credits')).toBeNull();
     expect(mockService.getCodexQuota).toHaveBeenCalledWith({ command: 'codex', env: undefined });
   });
 
@@ -332,7 +337,7 @@ describe('HeteroControlBar', () => {
     expect(mockService.getCodexQuota).not.toHaveBeenCalled();
   });
 
-  it('does not show Codex quota in API mode', () => {
+  it('shows platform credits instead of Codex quota in API mode', () => {
     effectiveAgencyConfig.current = {
       boundDeviceId: 'personal-device',
       executionTarget: 'local',
@@ -341,11 +346,12 @@ describe('HeteroControlBar', () => {
 
     render(<HeteroControlBar />);
 
+    expect(screen.getByTestId('api-credits')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
     expect(mockService.getCodexQuota).not.toHaveBeenCalled();
   });
 
-  it('does not show Claude Code quota in API mode', () => {
+  it('shows platform credits instead of Claude Code quota in API mode', () => {
     effectiveAgencyConfig.current = {
       boundDeviceId: 'personal-device',
       executionTarget: 'local',
@@ -354,6 +360,7 @@ describe('HeteroControlBar', () => {
 
     render(<HeteroControlBar />);
 
+    expect(screen.getByTestId('api-credits')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' })).toBeNull();
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
   });

@@ -12,6 +12,7 @@ import { ActivityIcon, CircleAlertIcon, RadioTowerIcon, TimerResetIcon } from 'l
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ChatInputCredits from '@/business/client/features/ChatInputCredits';
 import HeteroDeviceSwitcher from '@/features/ChatInput/ControlBar/HeteroDeviceSwitcher';
 import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
@@ -153,6 +154,7 @@ const HeteroControlBar = memo(() => {
   // a Claude / Codex account. API mode bills the bound provider key instead,
   // so the remaining-quota chip in the corner would be stale or empty.
   const isSubscriptionAuth = (heteroProvider?.authMode ?? 'subscription') === 'subscription';
+  const shouldShowApiCredits = heteroProvider?.authMode === 'api';
   // An explicit bound device (including web's device-upgraded "local" pick)
   // samples quota through the gateway; `auto` has no concrete device to ask
   // and the cloud sandbox has no sampler, so both stay quota-less.
@@ -165,12 +167,13 @@ const HeteroControlBar = memo(() => {
   if (isAccessLoading) return null;
 
   // A can-use collaborator may choose only their execution device; working
-  // directory, git, quota and runtime details remain author/editor config.
+  // directory, git, provider quota and runtime details remain author/editor config.
   if (!canConfigureResource) {
     if (!agentId || isLoading) return null;
     return (
-      <Flexbox horizontal align={'center'} className={styles.bar}>
+      <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
         <HeteroDeviceSwitcher agentId={agentId} />
+        {shouldShowApiCredits && <ChatInputCredits />}
       </Flexbox>
     );
   }
@@ -187,9 +190,12 @@ const HeteroControlBar = memo(() => {
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
-        {shouldShowClaudeQuota && quotaDeviceId && (
+        {(shouldShowApiCredits || (shouldShowClaudeQuota && quotaDeviceId)) && (
           <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
-            <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+            {shouldShowApiCredits && <ChatInputCredits />}
+            {shouldShowClaudeQuota && quotaDeviceId && (
+              <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+            )}
           </Flexbox>
         )}
       </Flexbox>
@@ -261,6 +267,7 @@ const HeteroControlBar = memo(() => {
         <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
       </Flexbox>
       <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
+        {shouldShowApiCredits && <ChatInputCredits />}
         {shouldShowCodexQuota && (
           <CodexQuotaMenu command={heteroProvider?.command} env={heteroProvider?.env} />
         )}
