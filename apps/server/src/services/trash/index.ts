@@ -18,6 +18,8 @@ import { FileService } from '@/server/services/file';
 
 import {
   resolveTrashHandler,
+  softDeleteAgent,
+  softDeleteMessages,
   topicCascades,
   type TrashCascade,
   type TrashHandlerContext,
@@ -184,6 +186,20 @@ export class TrashService {
       );
       return topicCascades(topics);
     }, stamp.deletedAt);
+  };
+
+  trashAgent = async (agentId: string, options?: TrashOptions) => {
+    const stamp = this.stampOptions(options);
+    const [root] = await this.commit(
+      (ctx) => softDeleteAgent(ctx, agentId, stamp),
+      stamp.deletedAt,
+    );
+    return root ?? null;
+  };
+
+  trashMessages = async (ids: string[], options?: TrashOptions) => {
+    const stamp = this.stampOptions(options);
+    return this.commit((ctx) => softDeleteMessages(ctx, ids, stamp), stamp.deletedAt);
   };
 
   // ─────────────────────────── list ───────────────────────────

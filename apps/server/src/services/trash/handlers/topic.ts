@@ -1,4 +1,5 @@
 import { serverDBEnv } from '@/config/db';
+import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { TopicModel } from '@/database/models/topic';
 import type { TrashRegisterEntry } from '@/database/models/trash';
@@ -50,10 +51,14 @@ export const topicHandler: TrashHandler = {
     const [topic] = await topicModel.findTrashedByIds([root.resourceId]);
     if (!topic) throw new TrashRestoreError('notFound');
 
-    // No parent-in-bin check yet: a topic's containers (agent, chat group) are
-    // not trashable in this phase, so they can never be sitting in the bin.
-    // The check goes in with the agent handler — see `TrashRestoreError`'s
-    // `parentTrashed` code, which the client already renders.
+    // A topic that hangs off an agent sitting in the bin would come back into
+    // an invisible container — restore the agent first.
+    if (topic.agentId) {
+      const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
+      const [agent] = await agentModel.findTrashedByIds([topic.agentId]);
+      if (agent) throw new TrashRestoreError('parentTrashed');
+    }
+
     await topicModel.restore([root.resourceId]);
   },
   type: 'topic',

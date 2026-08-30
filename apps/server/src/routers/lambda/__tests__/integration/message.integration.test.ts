@@ -2,7 +2,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { messages, sessions, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageRouter } from '../../message';
@@ -812,13 +812,18 @@ describe('Message Router Integration Tests', () => {
       // Delete messages
       await caller.removeMessages({ ids: [msg1Result.id, msg2Result.id] });
 
-      // Verify messages were deleted
+      // Recycle bin: rows are stamped (hidden from reads), not dropped.
       const remainingMessages = await serverDB
         .select()
         .from(messages)
-        .where(eq(messages.agentId, testAgentId));
-
+        .where(and(eq(messages.agentId, testAgentId), isNull(messages.deletedAt)));
       expect(remainingMessages).toHaveLength(0);
+      const stamped = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.agentId, testAgentId));
+      expect(stamped).toHaveLength(2);
+      expect(await caller.getMessages({ sessionId: testSessionId })).toHaveLength(0);
     });
 
     it('should return message list when sessionId is provided', async () => {
@@ -870,12 +875,13 @@ describe('Message Router Integration Tests', () => {
       await caller.removeMessage({ id: msgResult.id });
 
       // Verify messages were deleted
-      const deletedMessage = await serverDB
+      // Recycle bin: still on disk with a stamp, invisible to reads.
+      const [deletedMessage] = await serverDB
         .select()
         .from(messages)
         .where(eq(messages.id, msgResult.id));
-
-      expect(deletedMessage).toHaveLength(0);
+      expect(deletedMessage.deletedAt).toBeTruthy();
+      expect(await caller.getMessages({ sessionId: testSessionId })).toHaveLength(0);
     });
 
     it('should return message list when sessionId is provided', async () => {
