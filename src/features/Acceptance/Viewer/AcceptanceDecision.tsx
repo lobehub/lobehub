@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
@@ -20,21 +20,16 @@ import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './moda
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from './verdict';
 
-interface AcceptanceDecisionProps {
-  onDraftToComposer?: (text: string) => boolean;
-}
-
-const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
+const AcceptanceDecision = () => {
   const { t } = useTranslation('verify');
   const hydrated = useIsHydrated();
-  const { acceptanceId, embedded } = useAcceptanceScope();
+  const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [pending, setPending] = useState(false);
-  const [rerunPending, setRerunPending] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   if (!data?.isOwner || data.acceptance.status === 'closed') return null;
 
-  const { acceptance, checks, origin, rounds } = data;
+  const { acceptance, checks, rounds } = data;
   const currentRound = rounds.at(-1);
   const acceptedCount = checks.filter((check) => checkFilterState(check) === 'accepted').length;
   const needsFixCount = checks.filter((check) => checkFilterState(check) === 'needsFix').length;
@@ -139,7 +134,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
     try {
       await action();
       await mutate();
-      void globalMutate(verifyKeys.acceptances());
+      void globalMutate(isAcceptanceListKey);
       return true;
     } finally {
       setPending(false);
@@ -152,14 +147,11 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
     <>
       <DecisionBar
         acceptedCount={acceptedCount}
-        embedded={embedded}
         feedbackCount={feedbackEntries.filter((entry) => !entry.stale).length}
         ignoredCount={ignoredCount}
         needsFixCount={needsFixCount}
         pending={pending}
         repairing={acceptance.status === 'repairing'}
-        rerunAvailable={embedded || Boolean(origin?.topic)}
-        rerunPending={rerunPending}
         state={barState}
         statusText={barTexts.statusText}
         subText={barTexts.subText}
@@ -202,39 +194,6 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
               runAction(() => verifyService.rejectDelivery(acceptance.id, comment)),
           })
         }
-        onRerun={async () => {
-          if (embedded) {
-            if (onDraftToComposer?.(repairPrompt)) {
-              toast.success({
-                placement: 'bottom',
-                style: { marginBlockEnd: 88 },
-                title: t('acceptance.bar.rerunDrafted'),
-              });
-            }
-            return;
-          }
-          if (!origin?.topic) return;
-          setRerunPending(true);
-          try {
-            await verifyService.dispatchAcceptanceRepair({
-              agentId: origin.agent?.id,
-              content: repairPrompt,
-              topicId: origin.topic.id,
-            });
-            await verifyService.markAcceptanceRepairing(acceptance.id);
-            await mutate();
-            void globalMutate(verifyKeys.acceptances());
-            toast.success({
-              placement: 'bottom',
-              style: { marginBlockEnd: 88 },
-              title: t('acceptance.bar.rerunSent'),
-            });
-          } catch (cause) {
-            toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
-          } finally {
-            setRerunPending(false);
-          }
-        }}
       />
       <Flexbox style={{ height: 8 }} />
       <FeedbackDrawer

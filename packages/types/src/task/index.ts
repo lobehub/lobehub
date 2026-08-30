@@ -425,6 +425,7 @@ export interface TaskDetailActivity {
    */
   runningOperation?: {
     assistantMessageId: string;
+    heteroType?: string | null;
     operationId: string;
     scope?: string;
     threadId?: string | null;

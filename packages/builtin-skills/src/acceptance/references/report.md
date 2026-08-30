@@ -1,9 +1,9 @@
 # Structured Report Rounds (`lh acceptance run ingest`)
 
 Per-criterion `result submit` (SKILL.md Step 3) assumes a verify plan already
-exists. When it doesn't — a standalone delivery, a task run without
-`$LOBE_OPERATION_ID`, or any run where **you** author the checks — publish a
-**structured report round** instead: a self-contained directory that
+exists. When it doesn't — a standalone delivery, or any run where **you** author
+the checks, which is the usual case — publish a **structured report round**
+instead: a self-contained directory that
 `lh acceptance run ingest` uploads as one immutable verification round. The
 acceptance page renders itself from `result.json`: provenance, the overall
 conclusion, and the check list from `plan[]` paired with `cases[]`, each with
@@ -38,7 +38,7 @@ lh acceptance run ingest "$REPORT_DIR" \
 # Re-verification — append a new immutable round to the same acceptance
 lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
 
-# Existing LobeHub subject — group by a Task, Topic, or Document
+# Attach to a subject you were told to use — a Task, Topic, or Document
 lh acceptance run ingest "$REPORT_DIR" --subject topic:tpc_xxx --json
 
 # B. atomic fallback — create the round first, then submit into it with --run
@@ -122,9 +122,10 @@ supersedes? }`.
    Describe the durable goal of the whole acceptance, not this round's narrower
    implementation scope.
 
-   Inside a LobeHub topic, the command groups the round under the current topic.
-   Outside one, it creates a standalone acceptance automatically; no Task ID is
-   required. To publish a repair into that same history, add
+   Grouping needs nothing from you: the command attaches the round to the
+   conversation it was invoked from when it can, and otherwise creates a
+   standalone acceptance. Pass `--subject` only when you were told which Task,
+   Topic, or Document owns the work. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and prints
    `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form. Include

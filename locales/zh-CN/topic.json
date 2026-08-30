@@ -62,7 +62,7 @@
   "doctor.summary_one": "这个话题里有 {{count}} 条消息存在，但没有显示出来。",
   "doctor.summary_other": "这个话题里有 {{count}} 条消息存在，但没有显示出来。",
   "doctor.title": "消息链路检查",
-  "draft": "[草稿]",
+  "draft": "草稿",
   "duplicateLoading": "话题复制中…",
   "duplicateSuccess": "话题复制成功",
   "failedStatusTip": "当前执行遇到了错误，点击查看详情",

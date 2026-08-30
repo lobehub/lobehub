@@ -26,7 +26,6 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
 // selector's return value through this module-level flag so each case can flip
 // the "Link Icon" setting on/off without a real store.
 let mockShowIcon = true;
-let mockEnableInAppBrowser = false;
 const mockOpenInBrowserTab = vi.fn();
 const mockNavigate = vi.fn();
 const mockOpenAcceptance = vi.fn();
@@ -75,9 +74,6 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableInAppBrowser: () => mockEnableInAppBrowser,
-  },
   userGeneralSettingsSelectors: {
     enableMessageLinkIcon: () => mockShowIcon,
   },
@@ -98,7 +94,6 @@ const renderLink = (properties: Record<string, unknown>) =>
 afterEach(() => {
   mockShowIcon = true;
   mockIsDesktop = false;
-  mockEnableInAppBrowser = false;
   vi.restoreAllMocks();
 });
 
@@ -324,9 +319,8 @@ describe('Link Render — open an external link in the side browser', () => {
       linkLabel: 'http://localhost:3022/observability/context',
     });
 
-  it('offers the side-browser action on desktop when the in-app browser is enabled', () => {
+  it('offers the side-browser action on desktop', () => {
     mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
 
     const { container } = renderExternal();
     const action = container.querySelector('[data-side-browser]')!;
@@ -341,7 +335,6 @@ describe('Link Render — open an external link in the side browser', () => {
 
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
     mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
 
     const { container } = renderExternal();
 
@@ -353,7 +346,6 @@ describe('Link Render — open an external link in the side browser', () => {
 
   it('leaves the anchor itself untouched, so a plain click still opens the system browser', () => {
     mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
 
     const { container } = renderExternal();
     const anchor = container.querySelector('a')!;
@@ -365,22 +357,14 @@ describe('Link Render — open an external link in the side browser', () => {
     expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
   });
 
-  it('hides the action on web, and on desktop with the lab flag off', () => {
+  it('hides the action on web', () => {
     mockIsDesktop = false;
-    mockEnableInAppBrowser = true;
     const web = renderExternal();
     expect(web.container.querySelector('[data-side-browser]')).toBeNull();
-    web.unmount();
-
-    mockIsDesktop = true;
-    mockEnableInAppBrowser = false;
-    const flagOff = renderExternal();
-    expect(flagOff.container.querySelector('[data-side-browser]')).toBeNull();
   });
 
   it('hides the action for non-web links (mailto) and for portal-bound internal links', () => {
     mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
 
     const email = renderLink({
       linkHref: 'mailto:a@b.com',

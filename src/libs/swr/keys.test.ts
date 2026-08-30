@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentBuilderKeys,
   documentCommentKeys,
+  isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
   recentKeys,
   resourceKeys,
@@ -59,6 +60,16 @@ describe('recentKeys', () => {
     );
 
     expect(persisted).toBe(true);
+  });
+});
+
+describe('isAcceptanceListKey', () => {
+  it('matches every Acceptance list variant without matching detail keys', () => {
+    expect(isAcceptanceListKey(['verify:acceptances', '', '', 'active'])).toBe(true);
+    expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
+      true,
+    );
+    expect(isAcceptanceListKey(['verify:acceptanceBundle', 'acceptance-1'])).toBe(false);
   });
 });
 

@@ -7,6 +7,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import {
   getVoiceMessageActionState,
   getVoiceMessageCapability,
+  getVoiceMessageIdleState,
   supportsRawAudioMessage,
   useVoiceMessageCapability,
 } from './useVoiceMessageCapability';
@@ -375,5 +376,46 @@ describe('getVoiceMessageActionState', () => {
       sendDisabled: false,
       showRetry: true,
     });
+  });
+});
+
+describe('getVoiceMessageIdleState', () => {
+  const base = {
+    canRecordVoiceMessage: true,
+    hasSendHandler: true,
+    isGenerating: false,
+    isOtherAudioModeActive: false,
+  };
+
+  it('drops the trigger when the model cannot take audio at all', () => {
+    expect(getVoiceMessageIdleState({ ...base, canRecordVoiceMessage: false })).toEqual({
+      canStart: false,
+      hidden: true,
+    });
+  });
+
+  it('drops the trigger on a composer that has no voice-message handler', () => {
+    expect(getVoiceMessageIdleState({ ...base, hasSendHandler: false })).toEqual({
+      canStart: false,
+      hidden: true,
+    });
+  });
+
+  it('keeps the trigger visible but inert while a reply is generating', () => {
+    expect(getVoiceMessageIdleState({ ...base, isGenerating: true })).toEqual({
+      canStart: false,
+      hidden: false,
+    });
+  });
+
+  it('keeps the trigger visible but inert while another audio mode owns the bar', () => {
+    expect(getVoiceMessageIdleState({ ...base, isOtherAudioModeActive: true })).toEqual({
+      canStart: false,
+      hidden: false,
+    });
+  });
+
+  it('offers the trigger when the model supports audio and nothing else is running', () => {
+    expect(getVoiceMessageIdleState(base)).toEqual({ canStart: true, hidden: false });
   });
 });

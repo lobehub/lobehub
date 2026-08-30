@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Импортирай страница",
   "pageEditor.menu.move": "Премести",
   "pageEditor.menu.pin": "Закачи страница",
+  "pageEditor.saveFailed": "Неуспешно запазване на страницата, моля опитайте отново по-късно",
   "pageEditor.saving": "Запазване...",
   "pageEditor.titlePlaceholder": "Без заглавие",
   "pageEditor.wordCount": "{{wordCount}} думи",

@@ -265,7 +265,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   }, [defaultExpandedIds, isFiltering]);
 
   const revealRequest = useGlobalStore((s) => s.status.workingSidebarRevealRequest);
-  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
+  const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
 
   useEffect(() => {
     if (!revealRequest) return;
@@ -369,7 +369,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
         items.push({
           key: 'show-in-review',
           label: t('workingPanel.files.showInReview'),
-          onClick: () => setWorkingSidebarTab('review'),
+          onClick: () => openWorkingSidebar('review'),
         });
       }
 
@@ -400,7 +400,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
 
       return items;
     },
-    [canOfferFile, dirtyFilePaths, isRemote, openNode, publishFile, setWorkingSidebarTab, t],
+    [canOfferFile, dirtyFilePaths, isRemote, openNode, openWorkingSidebar, publishFile, t],
   );
 
   const isEmpty = nodes.length === 0;

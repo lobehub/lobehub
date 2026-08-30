@@ -30,6 +30,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 
 import type { ToolExecutionContext } from '../types';
+import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
 
@@ -59,7 +60,6 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
 
 const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
 const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
-
 /**
  * Decode inline images before the provider boundary. Protocol and header checks
  * are insufficient because a PNG can retain a valid signature while its pixel
@@ -91,7 +91,10 @@ const findInvalidInlineImageIndexes = async (urls: string[]) => {
 
     try {
       const buffer = Buffer.from(base64, 'base64');
-      await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INLINE_IMAGE_PIXELS }).stats();
+      await sharp(buffer, {
+        failOn: 'error',
+        limitInputPixels: MAX_INLINE_IMAGE_PIXELS,
+      }).stats();
     } catch {
       invalidIndexes.push(index + 1);
     }
@@ -413,13 +416,31 @@ class LobeAgentExecutionRuntime {
       );
     }
 
+    let modelItems = selectedItems;
+    if (hasImages) {
+      try {
+        modelItems = await normalizeMultimodalImageItems(
+          selectedItems,
+          toolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS,
+        );
+      } catch (error) {
+        console.error('Failed to prepare images for multimodal understanding:', {
+          name: error instanceof Error ? error.name : 'UnknownError',
+        });
+        return buildError(
+          'Failed to prepare one or more images for the configured multimodal understanding model.',
+          'MULTIMODAL_IMAGE_PREPARATION_FAILED',
+        );
+      }
+    }
+
     let content = '';
     let usage: unknown;
     const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
     const payload = {
       messages: [
         {
-          content: buildAnalyzeMediaContent(selectedItems, params.question),
+          content: buildAnalyzeMediaContent(modelItems, params.question),
           role: 'user' as const,
         },
       ],

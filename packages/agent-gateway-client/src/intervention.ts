@@ -51,8 +51,10 @@ export const sanitizeAgentInterventionRequestForReview = (
 
   const rawQuestions = asRecord(parsed)?.questions;
   if (!Array.isArray(rawQuestions) || rawQuestions.length < 1 || rawQuestions.length > 4) return;
+  if (request.interactionKind !== 'question' && rawQuestions.length !== 1) return;
 
   const questions: AgentInterventionRenderArguments['questions'] = [];
+  const questionTexts = new Set<string>();
   for (const rawQuestion of rawQuestions) {
     const questionRecord = asRecord(rawQuestion);
     if (!questionRecord) return;
@@ -63,13 +65,17 @@ export const sanitizeAgentInterventionRequestForReview = (
     if (
       question === undefined ||
       header === undefined ||
-      typeof questionRecord.multiSelect !== 'boolean' ||
+      (questionRecord.multiSelect !== undefined &&
+        typeof questionRecord.multiSelect !== 'boolean') ||
+      (request.interactionKind !== 'question' && questionRecord.multiSelect === true) ||
       !Array.isArray(rawOptions) ||
       rawOptions.length < 1 ||
       rawOptions.length > 16
     ) {
       return;
     }
+    if (questionTexts.has(question)) return;
+    questionTexts.add(question);
 
     const options: AgentInterventionRenderOption[] = [];
     const optionIds = new Set<string>();

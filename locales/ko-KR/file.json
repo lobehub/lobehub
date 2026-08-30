@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "문서 가져오기",
   "pageEditor.menu.move": "이동",
   "pageEditor.menu.pin": "문서 상단 고정",
+  "pageEditor.saveFailed": "페이지를 저장하지 못했습니다. 나중에 다시 시도해 주세요.",
   "pageEditor.saving": "저장 중...",
   "pageEditor.titlePlaceholder": "제목 없음",
   "pageEditor.wordCount": "{{wordCount}}자",

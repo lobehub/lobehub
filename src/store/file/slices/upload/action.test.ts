@@ -360,6 +360,7 @@ describe('FileUploadAction', () => {
           id: mockFile.name,
           type: 'updateFile',
           value: {
+            dimensions: mockDimensions,
             fileUrl: mockFileResponse.url,
             id: mockFileResponse.id,
             status: 'success',
@@ -923,15 +924,28 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
         vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue(mockUploadResult);
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
+        const onStatusUpdate = vi.fn();
 
         const uploadResult = await act(async () => {
           return await result.current.uploadWithProgress({
             file: mockFile,
+            onStatusUpdate,
           });
         });
 
         expect(getImageDimensions).toHaveBeenCalledWith(mockFile);
         expect(uploadResult?.dimensions).toEqual(mockDimensions);
+        expect(onStatusUpdate).toHaveBeenLastCalledWith({
+          id: mockFile.name,
+          type: 'updateFile',
+          value: {
+            dimensions: mockDimensions,
+            fileUrl: mockFileResponse.url,
+            id: mockFileResponse.id,
+            status: 'success',
+            uploadState: { progress: 100, restTime: 0, speed: 0 },
+          },
+        });
       });
 
       it('should return undefined dimensions for non-image files', async () => {

@@ -36,11 +36,6 @@ vi.mock('../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 /**
  * Build a Promise resolving to a fake `SpawnAgentHandle`. `spawnAgent` itself
  * is async, so test mocks return the handle wrapped — same iterable contract,

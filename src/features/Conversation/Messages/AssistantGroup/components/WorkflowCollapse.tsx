@@ -2,7 +2,7 @@ import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
+import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -392,30 +392,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           return wrapInBlock(<Icon color={cssVar.colorError} icon={X} />);
         }
         case 'partial': {
-          // Mix of success + failure: show success as the primary state and
-          // surface a small warning badge slightly inset from the bottom-right
-          // so the overall turn still reads as "done" rather than "broken".
-          return (
-            <div style={{ flex: 'none', position: 'relative' }}>
-              {wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />)}
-              <div
-                style={{
-                  alignItems: 'center',
-                  background: cssVar.colorBgContainer,
-                  borderRadius: '50%',
-                  bottom: 2,
-                  display: 'flex',
-                  height: 10,
-                  justifyContent: 'center',
-                  position: 'absolute',
-                  right: 2,
-                  width: 10,
-                }}
-              >
-                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={8} />
-              </div>
-            </div>
-          );
+          return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
         }
         default: {
           return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);

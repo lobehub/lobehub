@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import GitStatus from '../GitStatus';
 
 const globalStoreMock = vi.hoisted(() => ({
-  setWorkingSidebarTab: vi.fn(),
+  openWorkingSidebar: vi.fn(),
   status: {
     showRightPanel: false,
     workingSidebarTab: 'resources',
@@ -152,8 +152,7 @@ describe('GitStatus', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    expect(globalStoreMock.setWorkingSidebarTab).toHaveBeenCalledWith('review');
-    expect(globalStoreMock.toggleRightPanel).toHaveBeenCalledWith(true);
+    expect(globalStoreMock.openWorkingSidebar).toHaveBeenCalledWith('review');
   });
 
   it('renders the linked GitHub PR number as a live display (no topic write)', async () => {

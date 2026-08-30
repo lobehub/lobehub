@@ -189,12 +189,19 @@ export class AcceptanceModel {
     return (await this.findBySubject(subjectType, subjectId))!;
   };
 
-  /** Recent acceptances for the current user/workspace, newest first. */
-  query = async (limit = 50) => {
+  /** Acceptances for the current user/workspace, newest first. */
+  query = async (
+    options: { limit?: number; statuses?: AcceptanceStatus[]; unbounded?: boolean } = {},
+  ) => {
+    const { statuses, unbounded } = options;
+    const limit = unbounded ? undefined : (options.limit ?? 50);
     return this.db.query.acceptances.findMany({
       limit,
       orderBy: [desc(acceptances.createdAt)],
-      where: this.ownership(),
+      where:
+        statuses && statuses.length > 0
+          ? and(this.ownership(), inArray(acceptances.status, statuses))
+          : this.ownership(),
     });
   };
 

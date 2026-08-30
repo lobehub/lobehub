@@ -75,7 +75,7 @@ export default {
   'doctor.summary_other': '{{count}} messages exist in this topic but are not being shown.',
   'doctor.title': 'Message Chain Check',
   'displayItems': 'Display Items',
-  'draft': '[Draft]',
+  'draft': 'Draft',
   'duplicateLoading': 'Copying Topic...',
   'duplicateSuccess': 'Topic Copied Successfully',
   'failedStatusTip': 'This run hit an error — open it to take a look.',

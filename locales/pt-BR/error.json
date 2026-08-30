@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "A conexão com o servidor expirou. Isso geralmente indica um problema na rede local — verifique a qualidade da sua rede, proxy ou configurações de VPN e tente novamente.",
   "response.RemoteServerUnreachable": "Não foi possível alcançar o servidor. Isso geralmente indica um problema na rede local — verifique sua conexão com a internet, proxy ou configurações de VPN e tente novamente.",
   "response.ServerAgentRuntimeError": "Desculpe, o serviço Agent está indisponível. Tente novamente mais tarde ou entre em contato por e-mail.",
-  "response.SubscriptionKeyMismatch": "Pedimos desculpas. Devido a uma falha temporária, sua assinatura está inativa. Clique no botão abaixo para restaurar ou entre em contato por e-mail.",
   "response.SubscriptionPlanLimit": "Seus pontos de assinatura acabaram. Faça upgrade para um plano superior ou configure uma API personalizada.",
   "response.SubscriptionPlanLimitUltimate": "Seus pontos de assinatura acabaram. Recarregue créditos ou configure uma API personalizada.",
   "response.SystemTimeNotMatchError": "Desculpe, o horário do seu sistema não corresponde ao do servidor. Verifique e tente novamente.",

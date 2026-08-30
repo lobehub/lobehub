@@ -507,6 +507,8 @@ export interface VerifyInteractionCostOperators {
 export interface VerifyInteractionCostPhase {
   actionCount?: number;
   activeSeconds?: number;
+  /** Wall-clock the agent actually spent here — not the user-equivalent price. */
+  actualAgentSeconds?: number;
   checkItemId?: string;
   id: string;
   label?: string;

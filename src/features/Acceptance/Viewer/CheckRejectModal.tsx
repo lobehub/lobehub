@@ -185,6 +185,12 @@ const readDraft = (key: string | undefined): RejectDraft | null => {
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
 export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
+export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
+
+export const checkRejectModalSize = (evidenceCount: number) =>
+  evidenceCount > 0
+    ? CHECK_REJECT_MODAL_SIZE
+    : ({ height: 'auto', width: TEXT_REJECT_MODAL_WIDTH } as const);
 
 export const rejectModalTitle = (title: string, description?: string) => ({
   description: description?.trim() || undefined,
@@ -449,8 +455,8 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
 
     return (
       <div className={styles.modalBody}>
-        <Flexbox flex={1} gap={12} padding={hasEvidence ? 16 : 20} style={{ minHeight: 0 }}>
-          {activeEvidence ? (
+        {activeEvidence && (
+          <Flexbox flex={1} gap={12} padding={16} style={{ minHeight: 0 }}>
             <Flexbox gap={12} height={'100%'} style={{ minHeight: 0 }}>
               {thumbnails}
               <div className={styles.fullscreenBody} style={{ position: 'relative' }}>
@@ -499,12 +505,8 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
                 </div>
               </div>
             </Flexbox>
-          ) : (
-            <Text fontSize={13} type={'secondary'}>
-              {translate('acceptance.review.rejectDescription', { title: checkTitle })}
-            </Text>
-          )}
-        </Flexbox>
+          </Flexbox>
+        )}
         <div className={styles.modalFooter}>{footer}</div>
       </div>
     );
@@ -516,6 +518,7 @@ CheckRejectModalContent.displayName = 'AcceptanceCheckRejectModalContent';
 /** Per-check reject modal — media gets a near-fullscreen annotation surface without losing context. */
 export const openCheckRejectModal = (options: CheckRejectModalProps) => {
   const modalTitle = rejectModalTitle(options.checkTitle, options.checkDescription);
+  const modalSize = checkRejectModalSize(options.evidence.length);
 
   return createModal({
     classNames: { popup: styles.modalPopup },
@@ -528,8 +531,8 @@ export const openCheckRejectModal = (options: CheckRejectModalProps) => {
       popup: {
         display: 'flex',
         flexDirection: 'column',
-        height: CHECK_REJECT_MODAL_SIZE.height,
-        maxWidth: CHECK_REJECT_MODAL_SIZE.width,
+        height: modalSize.height,
+        maxWidth: modalSize.width,
       },
     },
     title: (
@@ -542,6 +545,6 @@ export const openCheckRejectModal = (options: CheckRejectModalProps) => {
         )}
       </Flexbox>
     ),
-    width: CHECK_REJECT_MODAL_SIZE.width,
+    width: modalSize.width,
   });
 };

@@ -13,7 +13,11 @@ import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
 import { useIntentionalHover } from './useIntentionalHover';
-import { getVoiceMessageActionState, useVoiceMessageCapability } from './useVoiceMessageCapability';
+import {
+  getVoiceMessageActionState,
+  getVoiceMessageIdleState,
+  useVoiceMessageCapability,
+} from './useVoiceMessageCapability';
 import { useVoiceMessageRecorder } from './useVoiceMessageRecorder';
 
 const VoiceMessageIcon = ({
@@ -591,7 +595,13 @@ const VoiceMessage = memo(() => {
   const isActive = activeAudioInputMode === 'voiceMessage' || hasRecorderActivity;
   const isOtherAudioModeActive =
     activeAudioInputMode !== undefined && activeAudioInputMode !== 'voiceMessage';
-  const canStart = canUseVoiceMessage && Boolean(onVoiceMessageSend) && !isOtherAudioModeActive;
+  const idleState = getVoiceMessageIdleState({
+    canRecordVoiceMessage,
+    hasSendHandler: Boolean(onVoiceMessageSend),
+    isGenerating,
+    isOtherAudioModeActive,
+  });
+  const canStart = idleState.canStart;
 
   useEffect(() => {
     if (hasRecorderActivity && activeAudioInputMode !== 'voiceMessage') {
@@ -660,11 +670,11 @@ const VoiceMessage = memo(() => {
   }, [recorder]);
 
   if (!isActive) {
+    if (idleState.hidden) return null;
+
     const disabledReason = isOtherAudioModeActive
       ? t('voiceMessage.otherAudioModeActive')
-      : isGenerating
-        ? t('voiceMessage.replyInProgress')
-        : t('voiceMessage.unsupported');
+      : t('voiceMessage.replyInProgress');
 
     return canStart ? (
       <ChatInputAction

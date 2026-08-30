@@ -9,8 +9,6 @@ import { useChatStore } from '@/store/chat';
 import { useSendMenuItems } from './useSendMenuItems';
 
 const leftActions: ActionKeys[] = [
-  'model',
-  'effort',
   'search',
   'memory',
   'fileUpload',
@@ -20,7 +18,7 @@ const leftActions: ActionKeys[] = [
   ['typo', 'params', 'clear'],
 ];
 
-const rightActions: ActionKeys[] = ['voiceMessage', 'contextWindow'];
+const rightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
 
 /**
  * MainChatInput

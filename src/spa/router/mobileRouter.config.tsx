@@ -9,6 +9,7 @@ import {
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
+import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
@@ -484,6 +485,25 @@ export const mobileRoutes: RouteObject[] = [
                   'Mobile > Workspace > Settings > Labels',
                 ),
                 path: 'labels',
+              },
+              {
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/[workspaceSlug]/settings/provider').then(
+                      (m) => m.WorkspaceProviderSettingMobile,
+                    ),
+                  'Mobile > Workspace > Settings > Provider',
+                ),
+                path: 'provider',
+              },
+              // Path-shaped provider deep-links (`/:slug/settings/provider/:id`)
+              // redirect to the query form the workspace provider page uses, so
+              // they don't fall through to the catch-all and leave the workspace.
+              // Static element: the redirect is tiny and lazy-loading it would
+              // flash the generic brand loader before redirecting.
+              {
+                element: <WorkspaceProviderRedirect />,
+                path: 'provider/:providerId',
               },
               {
                 element: dynamicElement(

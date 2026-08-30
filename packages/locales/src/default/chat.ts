@@ -789,6 +789,7 @@ export default {
   'minimap.previousMessage': 'Previous message',
   'minimap.senderAssistant': 'Agent',
   'minimap.senderUser': 'You',
+  'modelSelector.model': 'Model',
   'createModal.createBlank': 'Start Blank',
   'createModal.groupPlaceholder': 'Describe what this Group should do...',
   'createModal.groupTitle': 'What should this Group do?',
@@ -2162,6 +2163,8 @@ export default {
   'upload.preview.status.error': 'Upload failed',
   'upload.preview.status.pending': 'Preparing to upload...',
   'upload.preview.status.processing': 'Processing file...',
+  'upload.validation.mediaNotSupported':
+    'The current model cannot read these media files, so they were not added: {{files}}. Switch to a model that supports them, or upload a different file type.',
   'upload.validation.unsupportedFileType':
     'Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.',
   'upload.validation.videoSizeExceeded':

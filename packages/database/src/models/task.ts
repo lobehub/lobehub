@@ -307,6 +307,20 @@ export class TaskModel {
       .where(and(inArray(tasks.id, ids), this.ownership()));
   }
 
+  async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
+    if (idsOrIdentifiers.length === 0) return [];
+    const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());
+    return this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          or(inArray(tasks.id, idsOrIdentifiers), inArray(tasks.identifier, identifiers)),
+          this.ownership(),
+        ),
+      );
+  }
+
   // Resolve id or identifier (e.g. 'T-1') to a task
   async resolve(idOrIdentifier: string): Promise<TaskItem | null> {
     if (idOrIdentifier.startsWith('task_')) return this.findById(idOrIdentifier);

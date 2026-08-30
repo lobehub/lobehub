@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "وارد کردن صفحه",
   "pageEditor.menu.move": "انتقال",
   "pageEditor.menu.pin": "سنجاق کردن صفحه",
+  "pageEditor.saveFailed": "ذخیره صفحه انجام نشد، لطفاً بعداً دوباره تلاش کنید",
   "pageEditor.saving": "در حال ذخیره...",
   "pageEditor.titlePlaceholder": "بدون عنوان",
   "pageEditor.wordCount": "{{wordCount}} کلمه",

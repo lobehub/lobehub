@@ -28,6 +28,10 @@ import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
 import {
+  ensureAgentManagementAccess,
+  getRuntimeCanManageAgent,
+} from '@/helpers/agentManagementAccess';
+import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
   resolveTargetDeviceId,
@@ -407,10 +411,31 @@ export class ConversationLifecycleActionImpl {
     }
     const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
-    const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+    // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and
+    // the server (`isResourceAuthorOrAdmin`) — an admin's own override must
+    // survive a `fixed` selection policy just like the author's does. On a
+    // cold load or a direct mention the picker's hook may never have run, so
+    // resolve access from the server first (no-op for authors and members
+    // whose answer is already cached).
+    await ensureAgentManagementAccess({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    });
+    const canManage = getRuntimeCanManageAgent({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
+    });
     const usesWorkspaceMemberSelection =
-      !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
-    const deviceOverride = usesWorkspaceMemberSelection
+      !!agent?.workspaceId && agent.visibility !== 'private' && !canManage;
+    // Every workspace caller's override matters — a manager's / private owner's
+    // `local` pick also lives in `agentDeviceOverrides` (the shared row must
+    // never reference a personal device); `resolveAgentAgencyConfig` decides
+    // how it applies per role.
+    const deviceOverride = agent?.workspaceId
       ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
     const workspaceScoped = resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride);
@@ -418,7 +443,7 @@ export class ConversationLifecycleActionImpl {
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop.
     const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage: isAuthor,
+      canManage,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     });
@@ -924,6 +949,7 @@ export class ConversationLifecycleActionImpl {
     const tempImages: ChatImageItem[] = filesForPreview
       .filter((f) => f.file?.type?.startsWith('image'))
       .map((f) => ({
+        ...f.dimensions,
         id: f.id,
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
         alt: f.file?.name || f.id,

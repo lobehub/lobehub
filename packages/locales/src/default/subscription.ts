@@ -83,6 +83,12 @@ export default {
   'compare.title': 'Plan Comparison',
   'creditUsageReminder.title':
     '{{percent}} of the subscription credits included in this billing cycle have been used',
+  'creditsChip.available': 'available',
+  'creditsChip.balance': 'Balance {{amount}}',
+  'creditsChip.percent': '{{percent}}%',
+  'creditsChip.title': 'Credits Left',
+  'creditsChip.tooltip': 'Credits left in the current billing cycle',
+  'creditsChip.viewUsage': 'View Usage',
   'compareAllPlans': 'View All Plans',
   'comparePlans': 'View Plans',
   'createSubscriptionError': 'Failed to create subscription',

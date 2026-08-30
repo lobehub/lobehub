@@ -39,15 +39,6 @@ vi.mock('get-port-please', () => ({
   getPort: getPortMock,
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 const config = {
   applicationId: 'home-mac-mini',
   blueBubblesPassword: 'local-password',

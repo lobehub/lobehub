@@ -496,8 +496,16 @@ export const acceptanceRouter = router({
    * cannot merge into.
    */
   list: acceptanceProcedure
-    .input(z.object({ limit: z.number().int().min(1).max(200) }).optional())
-    .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input?.limit)),
+    .input(
+      z
+        .object({
+          filter: z.enum(['active', 'all', 'completed']).optional(),
+          limit: z.number().int().min(1).max(200).optional(),
+          q: z.string().max(200).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input)),
 
   /**
    * Fold one acceptance into another: the source's verification rounds (and

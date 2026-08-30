@@ -16,15 +16,6 @@ vi.mock('../settings', () => ({
     (process.env.LOBEHUB_SERVER || 'https://app.lobehub.com').replace(/\/$/, ''),
   ),
 }));
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 // Helper to create a valid JWT with sub claim
 function makeJwt(sub: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');

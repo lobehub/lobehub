@@ -79,6 +79,121 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     expect(sanitizeAgentInterventionRequestForReview(duplicateIds)).toBeUndefined();
   });
 
+  it('defaults an omitted multiSelect to false but rejects explicit non-boolean values', () => {
+    const omittedMultiSelect = request({
+      arguments: JSON.stringify({
+        questions: [
+          {
+            header: 'Question',
+            options: [{ label: 'Continue' }, { label: 'Stop' }],
+            question: 'Proceed?',
+          },
+        ],
+      }),
+      interactionKind: 'question',
+    });
+    expect(
+      JSON.parse(sanitizeAgentInterventionRequestForReview(omittedMultiSelect)!.arguments),
+    ).toMatchObject({ questions: [{ multiSelect: false }] });
+
+    for (const invalidMultiSelect of ['false', null]) {
+      const invalidRequest = request({
+        arguments: JSON.stringify({
+          questions: [
+            {
+              header: 'Question',
+              multiSelect: invalidMultiSelect,
+              options: [{ label: 'Continue' }, { label: 'Stop' }],
+              question: 'Proceed?',
+            },
+          ],
+        }),
+        interactionKind: 'question',
+      });
+
+      expect(sanitizeAgentInterventionRequestForReview(invalidRequest)).toBeUndefined();
+    }
+  });
+
+  it('fails closed when permission or plan requests are ambiguous', () => {
+    for (const interactionKind of ['permission', 'plan'] as const) {
+      const questions = [
+        {
+          header: 'Review',
+          multiSelect: false,
+          options: [{ id: 'allow', label: 'Allow' }],
+          question: 'Proceed?',
+        },
+        {
+          header: 'Review again',
+          multiSelect: false,
+          options: [{ id: 'allow', label: 'Allow' }],
+          question: 'Proceed again?',
+        },
+      ];
+
+      const omittedMultiSelect = sanitizeAgentInterventionRequestForReview(
+        request({
+          arguments: JSON.stringify({ questions: [{ ...questions[0], multiSelect: undefined }] }),
+          interactionKind,
+        }),
+      );
+
+      expect(JSON.parse(omittedMultiSelect!.arguments)).toMatchObject({
+        questions: [{ multiSelect: false }],
+      });
+      expect(
+        sanitizeAgentInterventionRequestForReview(
+          request({ arguments: JSON.stringify({ questions }), interactionKind }),
+        ),
+      ).toBeUndefined();
+      expect(
+        sanitizeAgentInterventionRequestForReview(
+          request({
+            arguments: JSON.stringify({
+              questions: [{ ...questions[0], multiSelect: true }],
+            }),
+            interactionKind,
+          }),
+        ),
+      ).toBeUndefined();
+    }
+  });
+
+  it('keeps distinct multi-select questions but rejects duplicate question text', () => {
+    const questions = [
+      {
+        header: 'First',
+        multiSelect: true,
+        options: [{ label: 'One' }, { label: 'Two' }],
+        question: 'Choose values?',
+      },
+      {
+        header: 'Second',
+        multiSelect: false,
+        options: [{ label: 'Continue' }],
+        question: 'Continue?',
+      },
+    ];
+    const sanitized = sanitizeAgentInterventionRequestForReview(
+      request({ arguments: JSON.stringify({ questions }), interactionKind: 'question' }),
+    );
+
+    expect(JSON.parse(sanitized!.arguments)).toMatchObject({
+      questions: [{ multiSelect: true }, { multiSelect: false }],
+    });
+    expect(
+      sanitizeAgentInterventionRequestForReview(
+        request({
+          arguments: JSON.stringify({
+            questions: [questions[0], { ...questions[1], question: questions[0].question }],
+          }),
+          interactionKind: 'question',
+        }),
+      ),
+    ).toBeUndefined();
+  });
+
   it('requires explicit provider and interaction kind for durable review', () => {
     expect(
       sanitizeAgentInterventionRequestForReview(request({ provider: undefined })),

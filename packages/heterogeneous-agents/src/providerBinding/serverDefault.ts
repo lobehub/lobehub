@@ -2,15 +2,71 @@ import type { LocalHeterogeneousAgentType } from '../config';
 
 export type ServerDefaultHeterogeneousIngress = 'anthropic-messages' | 'openai-responses';
 
-export type ServerDefaultHeterogeneousModelPolicy = 'codex' | 'tool-capable';
+export type ServerDefaultHeterogeneousCompatibilityProfile = 'kimi-code/anthropic-v1';
+
+export type ServerDefaultHeterogeneousModelPolicy = 'codex' | 'profile-attested' | 'tool-capable';
 
 export type ServerDefaultHeterogeneousTokenHeader = 'bearer' | 'x-api-key';
 
-interface ServerDefaultHeterogeneousAgentConfig {
+interface ServerDefaultHeterogeneousAgentConfigBase {
   ingress: ServerDefaultHeterogeneousIngress;
-  modelPolicy: ServerDefaultHeterogeneousModelPolicy;
   tokenHeader: ServerDefaultHeterogeneousTokenHeader;
 }
+
+type ServerDefaultHeterogeneousAgentConfig = ServerDefaultHeterogeneousAgentConfigBase &
+  (
+    | {
+        compatibilityProfile: ServerDefaultHeterogeneousCompatibilityProfile;
+        modelPolicy: 'profile-attested';
+      }
+    | {
+        compatibilityProfile?: never;
+        modelPolicy: Exclude<ServerDefaultHeterogeneousModelPolicy, 'profile-attested'>;
+      }
+  );
+
+/**
+ * Bootstrap attestations from the real server-default compatibility matrix.
+ * Deployment model cards may replace these defaults with their own explicit
+ * `serverDefaultHeterogeneousProfiles` metadata. New models therefore remain
+ * unavailable until either the deployment or this certified baseline opts in.
+ */
+export const SERVER_DEFAULT_HETEROGENEOUS_PROFILE_DEFAULT_MODELS = {
+  'kimi-code/anthropic-v1': [
+    'deepseek-v4-flash-vision-exp',
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'claude-fable-5',
+    'claude-opus-5',
+    'claude-sonnet-5',
+    'claude-sonnet-4-6',
+    'claude-opus-4-8',
+    'claude-haiku-4-5-20251001',
+    'grok-4.6',
+    'grok-4.5',
+    'glm-5.3-flash',
+    'glm-5.3',
+    'glm-5.2',
+    'lobehub-glm-5.2-fast',
+    'kimi-k3',
+    'lobehub-kimi-k3-fast',
+    'kimi-k2.7-code',
+    'qwen3.8-max',
+    'qwen3.8-max-preview',
+    'MiniMax-M3',
+    'mimo-v2.5-pro',
+    'mimo-v2.5',
+    'lobehub-onboarding-v1',
+  ],
+} as const satisfies Record<ServerDefaultHeterogeneousCompatibilityProfile, readonly string[]>;
+
+export const isServerDefaultHeterogeneousProfileModel = (
+  profile: ServerDefaultHeterogeneousCompatibilityProfile,
+  model: string,
+) =>
+  (SERVER_DEFAULT_HETEROGENEOUS_PROFILE_DEFAULT_MODELS[profile] as readonly string[]).includes(
+    model,
+  );
 
 export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG = {
   'claude-code': {
@@ -29,8 +85,9 @@ export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG = {
     tokenHeader: 'bearer',
   },
   'kimi-code': {
+    compatibilityProfile: 'kimi-code/anthropic-v1',
     ingress: 'anthropic-messages',
-    modelPolicy: 'tool-capable',
+    modelPolicy: 'profile-attested',
     tokenHeader: 'x-api-key',
   },
   'pi': {

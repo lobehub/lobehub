@@ -1324,6 +1324,20 @@ export class HeterogeneousPersistenceHandler {
 
     const summary = interventionSummary(intent.request);
     const reviewRequest = sanitizeAgentInterventionRequestForReview(intent.request);
+    const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
+    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}:pending`;
+    const requiresPendingReviewNotification =
+      !!this.deps.userId &&
+      !state.notifiedInterventionTransitions.has(transitionKey) &&
+      !state.notifiedInterventionTransitions.has(pendingTransitionKey);
+    if (
+      requiresPendingReviewNotification &&
+      (!reviewRequest?.interactionKind || !reviewRequest.provider)
+    ) {
+      throw new Error(
+        `Unsafe heterogeneous intervention review payload toolCallId=${intent.toolCallId}`,
+      );
+    }
     const durableState: StoredHeterogeneousIntervention = {
       deadline: intent.request?.deadline,
       interactionKind: intent.request?.interactionKind,
@@ -1342,10 +1356,8 @@ export class HeterogeneousPersistenceHandler {
       [HETEROGENEOUS_INTERVENTION_STATE_KEY]: durableState,
     });
 
-    const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
     if (!this.deps.userId || state.notifiedInterventionTransitions.has(transitionKey)) return;
 
-    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}:pending`;
     if (!state.notifiedInterventionTransitions.has(pendingTransitionKey)) {
       if (!reviewRequest?.interactionKind || !reviewRequest.provider) {
         throw new Error(

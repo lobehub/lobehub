@@ -1028,10 +1028,12 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  /** `limit` is part of the key: the merge picker asks for a wider window than the panel. */
-  acceptances: def('verify:acceptances', (limit?: number) => [
+  /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
+  acceptances: def('verify:acceptances', (limit?: number, q?: string, filter?: string) => [
     'verify:acceptances',
     String(limit ?? ''),
+    q ?? '',
+    filter ?? '',
   ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
@@ -1061,6 +1063,10 @@ export const verifyKeys = {
   state: def('verify:state', (operationId: string) => ['verify:state', operationId]),
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
+
+/** Match every parameterized Acceptance list key (filter / limit / search variants). */
+export const isAcceptanceListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === verifyKeys.acceptances.root;
 
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {

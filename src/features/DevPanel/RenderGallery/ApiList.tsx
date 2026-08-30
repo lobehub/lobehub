@@ -5,6 +5,8 @@ import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useEffect, useRef } from 'react';
 
+import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
+
 import type { ApiEntry } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -31,12 +33,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   dotActive: css`
     background: ${cssVar.colorPrimary};
   `,
-  header: css`
-    flex-shrink: 0;
-    padding-block: 14px 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
   item: css`
     cursor: pointer;
 
@@ -46,8 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     height: 30px;
-    padding-inline: 10px;
-    border-radius: 6px;
+    padding-inline: 12px;
 
     color: ${cssVar.colorTextSecondary};
 
@@ -99,8 +94,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 2px;
 
     min-height: 0;
-    padding-block: 8px;
-    padding-inline: 8px;
+    padding-block: 4px;
   `,
 }));
 
@@ -142,7 +136,7 @@ const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
 
   return (
     <aside className={styles.column}>
-      <div className={styles.header}>
+      <div className={devDockPanelStyles.paneHeader}>
         <Text fontSize={12} type={'secondary'} weight={600}>
           APIs · {apis.length}
         </Text>

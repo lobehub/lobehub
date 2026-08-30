@@ -12,6 +12,7 @@ export type {
   AgentStreamClientOptions,
   AgentStreamEvent,
   AgentStreamEventType,
+  AgentStreamSessionCompletion,
   ConnectionStatus,
   StepCompleteData,
   StreamChunkData,

@@ -142,6 +142,7 @@ export default {
   'updater.downloadingUpdate': 'Downloading update',
   'updater.downloadingUpdateDesc': 'The update is downloading, please wait...',
   'updater.installLater': 'Update on next launch',
+  'updater.ignore': 'Ignore',
   'updater.isLatestVersion': 'You are using the latest version',
   'updater.isLatestVersionDesc':
     'Great! The version {{version}} you are using is the latest available.',
@@ -149,8 +150,6 @@ export default {
   'updater.newVersionAvailable': 'New version available',
   'updater.newVersionAvailableDesc':
     'A new version {{version}} has been found, would you like to download it now?',
-  'updater.refreshToApply': 'Refresh now',
-  'updater.rendererUpdateReady': 'A new version is ready — refresh to apply',
   'updater.restartAndInstall': 'Install updates and restart',
   'updater.updateError': 'Update error',
   'updater.updateReady': 'A new version is available',

@@ -15,8 +15,10 @@ import {
 import {
   canDismissRejectModal,
   CHECK_REJECT_MODAL_SIZE,
+  checkRejectModalSize,
   mergeRejectComments,
   rejectModalTitle,
+  TEXT_REJECT_MODAL_WIDTH,
 } from './CheckRejectModal';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
@@ -142,6 +144,11 @@ describe('mergeRejectComments', () => {
 describe('check reject modal presentation', () => {
   it('keeps 1% viewport breathing room around the annotation surface', () => {
     expect(CHECK_REJECT_MODAL_SIZE).toEqual({ height: '98dvh', width: '98vw' });
+  });
+
+  it('keeps a text-only rejection compact', () => {
+    expect(checkRejectModalSize(0)).toEqual({ height: 'auto', width: TEXT_REJECT_MODAL_WIDTH });
+    expect(checkRejectModalSize(1)).toEqual(CHECK_REJECT_MODAL_SIZE);
   });
 
   it('shows the acceptance item description below its title', () => {

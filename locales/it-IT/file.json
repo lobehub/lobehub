@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Importa pagina",
   "pageEditor.menu.move": "Sposta",
   "pageEditor.menu.pin": "Fissa pagina",
+  "pageEditor.saveFailed": "Impossibile salvare la pagina, riprova più tardi",
   "pageEditor.saving": "Salvataggio in corso...",
   "pageEditor.titlePlaceholder": "Senza titolo",
   "pageEditor.wordCount": "{{wordCount}} parole",

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolExecutionContext } from '../../types';
 
 const mockToolsEnv = vi.hoisted(() => ({
+  MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS: ['image/png', 'image/jpeg'],
   MULTIMODAL_UNDERSTANDING_MODEL: undefined as string | undefined,
   MULTIMODAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
 }));
@@ -14,6 +15,7 @@ const mockMessageModelQuery = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
+const mockImageUrlToBase64 = vi.hoisted(() => vi.fn());
 const mockSharpOptions = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
@@ -70,6 +72,11 @@ vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: (...args: any[]) => mockConsumeStreamUntilDone(...args),
 }));
 
+vi.mock('@lobechat/utils', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  imageUrlToBase64: (...args: unknown[]) => mockImageUrlToBase64(...args),
+}));
+
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels: vi.fn().mockResolvedValue(mockBuiltinModels),
 }));
@@ -119,6 +126,7 @@ describe('lobeAgentRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageModelQuery.mockResolvedValue([]);
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS = ['image/png', 'image/jpeg'];
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER = 'test-provider';
     mockChat.mockImplementation(async (_payload, options) => {
@@ -128,6 +136,116 @@ describe('lobeAgentRuntime', () => {
     });
     mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
     mockConsumeStreamUntilDone.mockResolvedValue(undefined);
+    mockImageUrlToBase64.mockResolvedValue({
+      base64: VALID_PNG_BASE64,
+      mimeType: 'image/png',
+    });
+  });
+
+  it('should transcode unsupported images before calling the multimodal model', async () => {
+    const { default: sharp } = await import('sharp');
+    const avifBuffer = await sharp({
+      create: {
+        background: { alpha: 1, b: 0, g: 0, r: 255 },
+        channels: 4,
+        height: 1,
+        width: 1,
+      },
+    })
+      .avif()
+      .toBuffer();
+    mockImageUrlToBase64.mockResolvedValueOnce({
+      base64: avifBuffer.toString('base64'),
+      mimeType: 'image/avif',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+    const imageUrl = 'https://example.com/image.avif?signature=example';
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: [imageUrl],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith(imageUrl);
+    const [payload] = mockChat.mock.calls[0];
+    const imagePart = payload.messages[0].content.find(
+      (part: { type: string }) => part.type === 'image_url',
+    );
+    expect(imagePart.image_url.url).toMatch(/^data:image\/png;base64,/);
+
+    const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
+    await expect(sharp(convertedBuffer).metadata()).resolves.toMatchObject({ format: 'png' });
+  });
+
+  it('should flatten transparent images onto white when transcoding to JPEG', async () => {
+    const { default: sharp } = await import('sharp');
+    const transparentWebp = await sharp({
+      create: {
+        background: { alpha: 0, b: 0, g: 0, r: 0 },
+        channels: 4,
+        height: 1,
+        width: 1,
+      },
+    })
+      .webp({ lossless: true })
+      .toBuffer();
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS = ['image/jpeg', 'image/png'];
+    mockImageUrlToBase64.mockResolvedValueOnce({
+      base64: transparentWebp.toString('base64'),
+      mimeType: 'image/webp',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/transparent.webp'],
+    });
+
+    expect(result.success).toBe(true);
+    const [payload] = mockChat.mock.calls[0];
+    const imagePart = payload.messages[0].content.find(
+      (part: { type: string }) => part.type === 'image_url',
+    );
+    expect(imagePart.image_url.url).toMatch(/^data:image\/jpeg;base64,/);
+
+    const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
+    const pixel = await sharp(convertedBuffer).raw().toBuffer();
+    expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
+  });
+
+  it('should detect suffixless images after downloading without transcoding supported formats', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockImageUrlToBase64).toHaveBeenCalledWith('https://example.com/image');
+    expect(mockSharpOptions).not.toHaveBeenCalled();
+    const [payload] = mockChat.mock.calls[0];
+    const imagePart = payload.messages[0].content.find(
+      (part: { type: string }) => part.type === 'image_url',
+    );
+    expect(imagePart.image_url.url).toBe(VALID_PNG_DATA_URL);
+  });
+
+  it('should fail before calling the multimodal model when image preparation fails', async () => {
+    mockImageUrlToBase64.mockRejectedValueOnce(new Error('download failed'));
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.avif'],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_IMAGE_PREPARATION_FAILED' },
+      success: false,
+    });
+    expect(mockChat).not.toHaveBeenCalled();
   });
 
   it('should have the correct identifier', () => {
@@ -249,6 +367,7 @@ describe('lobeAgentRuntime', () => {
         }),
       }),
     );
+    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
   });
 
   it('should pass workspaceId when initializing multimodal model runtime', async () => {
@@ -346,9 +465,6 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mockSharpOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ failOn: 'error', limitInputPixels: 25_000_000 }),
-    );
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).toHaveBeenCalledWith(
       expect.objectContaining({

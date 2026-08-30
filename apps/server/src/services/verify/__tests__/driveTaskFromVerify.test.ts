@@ -17,12 +17,14 @@ const {
   opFindById,
   taskFindById,
   taskUpdateStatus,
+  briefModelConstruct,
   briefCreate,
   serviceUpdateStatus,
   statusRecompute,
   deliverMock,
 } = vi.hoisted(() => ({
   briefCreate: vi.fn(),
+  briefModelConstruct: vi.fn(),
   deliverMock: vi.fn(),
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
@@ -55,7 +57,7 @@ vi.mock('@/database/models/task', () => ({
   })),
 }));
 vi.mock('@/database/models/brief', () => ({
-  BriefModel: vi.fn(() => ({ create: briefCreate })),
+  BriefModel: briefModelConstruct,
 }));
 // Resolved via dynamic import inside driveTaskFromVerify (cycle break).
 vi.mock('@/server/services/task', () => ({
@@ -77,6 +79,7 @@ describe('driveTaskFromVerify', () => {
       opFindById,
       taskFindById,
       taskUpdateStatus,
+      briefModelConstruct,
       briefCreate,
       serviceUpdateStatus,
       statusRecompute,
@@ -85,6 +88,7 @@ describe('driveTaskFromVerify', () => {
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
     runClaimTaskDrive.mockResolvedValue(true);
+    briefModelConstruct.mockImplementation(() => ({ create: briefCreate }));
     opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
     taskFindById.mockResolvedValue({
       assigneeAgentId: 'a1',
@@ -165,13 +169,10 @@ describe('driveTaskFromVerify', () => {
     expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
-  it('failed → urgent brief + pauses with the reason on the task row', async () => {
+  it('failed → pauses with the reason on the task row without creating an inbox brief', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
-    expect(briefCreate).toHaveBeenCalled();
-    // The reason must live on the task row, not only in a brief: the task
-    // detail feed deliberately excludes briefs, so a brief-only explanation is
-    // unreachable from the task page.
+    expect(briefModelConstruct).not.toHaveBeenCalled();
     expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
       error: 'Delivery did not pass verification.',
     });
@@ -180,7 +181,7 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
-  it('errored → pauses with a non-accusatory brief; never claims the delivery "did not pass"', async () => {
+  it('errored → pauses without an inbox brief; never claims the delivery "did not pass"', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
 
@@ -192,10 +193,7 @@ describe('driveTaskFromVerify', () => {
     );
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
 
-    // The brief frames it as an internal verification error, not a rejected delivery.
-    const briefArg = briefCreate.mock.calls[0][0];
-    expect(briefArg.summary).not.toContain('did not pass');
-    expect(briefArg.summary.toLowerCase()).toContain('could not run');
+    expect(briefModelConstruct).not.toHaveBeenCalled();
 
     // The creator callback is an error, but the message must NOT accuse the
     // delivery of failing verification.

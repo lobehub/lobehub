@@ -2405,6 +2405,7 @@ export class AiAgentService {
           assistantMessageId: continuationAssistantId,
           autoStarted: true,
           createdAt: now,
+          heteroType: null,
           message: 'Agent intervention continuation already created',
           operationId: continuationOperationId,
           status: 'created',
@@ -2976,6 +2977,7 @@ export class AiAgentService {
       // boundary in queue mode.
       const childOperation = {
         assistantMessageId: assistantMessageRecord.id,
+        heteroType,
         hooks: serializedHooks,
         startedAt: new Date().toISOString(),
         ...(isRemoteHetero && remoteDeviceId
@@ -2983,7 +2985,6 @@ export class AiAgentService {
               deviceId: remoteDeviceId,
               deviceUserId: remoteDeviceUserId,
               deviceWorkspaceId: remoteDeviceWorkspaceId,
-              heteroType,
             }
           : {}),
         operationId,
@@ -3495,6 +3496,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: true,
         createdAt: new Date().toISOString(),
+        heteroType,
         message: 'Hetero agent dispatched successfully',
         operationId,
         status: 'created',
@@ -5399,6 +5401,7 @@ export class AiAgentService {
         await this.topicModel.updateMetadata(topicId, {
           runningOperation: {
             assistantMessageId: assistantMessageRecord.id,
+            heteroType: null,
             operationId,
             scope: appContext?.scope ?? undefined,
             // Liveness stamp — without it this marker can never be proven dead
@@ -5424,6 +5427,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: result.autoStarted,
         createdAt: new Date().toISOString(),
+        heteroType: null,
         message: 'Agent operation created successfully',
         messageId: result.messageId,
         operationId,

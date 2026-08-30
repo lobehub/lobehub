@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "Sayfa İçe Aktar",
   "pageEditor.menu.move": "Taşı",
   "pageEditor.menu.pin": "Sayfayı Sabitle",
+  "pageEditor.saveFailed": "Sayfa kaydedilemedi, lütfen daha sonra tekrar deneyin",
   "pageEditor.saving": "Kaydediliyor...",
   "pageEditor.titlePlaceholder": "Başlıksız",
   "pageEditor.wordCount": "{{wordCount}} kelime",

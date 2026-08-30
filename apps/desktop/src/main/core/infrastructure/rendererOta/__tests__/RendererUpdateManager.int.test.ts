@@ -46,10 +46,6 @@ vi.mock('@/modules/updater/configs', () => ({
   UPDATE_SERVER_URL: 'https://updates.test/stable',
   coerceStoredUpdateChannel: (channel?: string) => (channel === 'canary' ? 'canary' : 'stable'),
 }));
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 const makeApp = () => ({
   browserManager: { broadcastToAllWindows: vi.fn(), browsers: new Map() },
   rendererUrlManager: { setActiveRendererDir: vi.fn() },
@@ -203,9 +199,9 @@ describe('RendererUpdateManager V2 lifecycle', () => {
 
     const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBe('r1');
-    expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('rendererUpdateReady', {
-      appVersion: APP_VERSION,
-      version: 'r1',
+    expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
+      kind: 'renderer',
+      version: APP_VERSION,
     });
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
     expect(fetchedUrls).toEqual([

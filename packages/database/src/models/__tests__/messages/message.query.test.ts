@@ -303,7 +303,15 @@ describe('MessageModel Query Tests', () => {
           },
         ]);
         await trx.insert(files).values([
-          { id: 'f-0', url: 'abc', name: 'file-1', userId, fileType: 'image/png', size: 1000 },
+          {
+            id: 'f-0',
+            url: 'abc',
+            name: 'file-1',
+            userId,
+            fileType: 'image/png',
+            metadata: { height: 600, ratio: 1.3333, width: 800 },
+            size: 1000,
+          },
           { id: 'f-1', url: 'abc', name: 'file-1', userId, fileType: 'image/png', size: 100 },
           { id: 'f-3', url: 'abc', name: 'file-3', userId, fileType: 'image/png', size: 400 },
         ]);
@@ -329,7 +337,14 @@ describe('MessageModel Query Tests', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('1');
       expect(result[0].imageList).toEqual([
-        { alt: 'file-1', id: 'f-0', url: `${domain}/f-0/abc` },
+        {
+          alt: 'file-1',
+          height: 600,
+          id: 'f-0',
+          ratio: 1.3333,
+          url: `${domain}/f-0/abc`,
+          width: 800,
+        },
         { alt: 'file-3', id: 'f-3', url: `${domain}/f-3/abc` },
       ]);
       expect(postProcessUrl).toHaveBeenCalledWith(
@@ -360,6 +375,7 @@ describe('MessageModel Query Tests', () => {
           name: 'query-by-id.png',
           userId,
           fileType: 'image/png',
+          metadata: { height: 720, ratio: 1.7778, width: 1280 },
           size: 1000,
         });
         await trx.insert(messagesFiles).values({
@@ -378,8 +394,11 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].imageList).toEqual([
         {
           alt: 'query-by-id.png',
+          height: 720,
           id: 'query-by-id-file',
+          ratio: 1.7778,
           url: '/f/query-by-id-file/files/query-by-id.png',
+          width: 1280,
         },
       ]);
       expect(postProcessUrl).toHaveBeenCalledWith(

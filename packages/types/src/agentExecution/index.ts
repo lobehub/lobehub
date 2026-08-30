@@ -313,6 +313,12 @@ export interface ExecAgentResult {
   createdThreadId?: string;
   /** Error message if operation failed to start */
   error?: string;
+  /**
+   * External heterogeneous producer for this run. `null` explicitly denotes
+   * the normal AgentRuntime path; `undefined` is reserved for rolling clients
+   * talking to an older server that did not yet return this discriminator.
+   */
+  heteroType?: string | null;
   /** Status message */
   message: string;
   /** Queue message ID if auto-started */

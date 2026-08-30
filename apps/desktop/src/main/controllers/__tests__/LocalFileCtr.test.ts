@@ -21,16 +21,6 @@ vi.mock('execa', () => ({
   execa: execaMock,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock file-loaders
 vi.mock('@lobechat/file-loaders', () => ({
   loadFile: vi.fn(),

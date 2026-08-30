@@ -11,9 +11,10 @@ import { useSearchParams } from 'react-router';
 
 import { useSingleton } from '@/hooks/useSingleton';
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
+import AcceptanceInteractionCost from './AcceptanceInteractionCost';
 import { useAcceptanceScope } from './AcceptanceScope';
 import CheckList, {
   type CheckFilter,
@@ -252,7 +253,7 @@ const AcceptanceCheckInventory = ({
                   predictionId: input.predictionId,
                 });
                 await mutate();
-                void globalMutate(verifyKeys.acceptances());
+                void globalMutate(isAcceptanceListKey);
               }
             : undefined
         }
@@ -265,14 +266,14 @@ const AcceptanceCheckInventory = ({
             id: data.acceptance.id,
           });
           await mutate();
-          void globalMutate(verifyKeys.acceptances());
+          void globalMutate(isAcceptanceListKey);
           return true;
         }}
         onReview={async (input) => {
           if (!canReview) return false;
           await verifyService.reviewChecks({ id: data.acceptance.id, ...input });
           await mutate();
-          void globalMutate(verifyKeys.acceptances());
+          void globalMutate(isAcceptanceListKey);
           return true;
         }}
         onToggleGroup={(key) =>
@@ -302,6 +303,9 @@ const AcceptanceCheckInventory = ({
           })
         }
       />
+      {/* After the list, never inside it: the checks are the decision surface,
+          and a row sitting among them reads as one more thing to review. */}
+      <AcceptanceInteractionCost data={data} />
     </>
   );
 };
