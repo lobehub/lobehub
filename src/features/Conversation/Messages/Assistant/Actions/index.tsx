@@ -33,6 +33,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'divider',
   'share',
   'select',
+  'divider',
   ADVANCED_GROUP,
   'divider',
   'regenerate',

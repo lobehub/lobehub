@@ -60,6 +60,16 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  kind: css`
+    /* Sized down to sit with the label it qualifies rather than compete with it. */
+    font-size: ${cssVar.fontSizeSM};
+
+    [role='tab'],
+    button {
+      padding-block: 1px;
+      padding-inline: 8px;
+    }
+  `,
   msgHead: css`
     font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
@@ -193,9 +203,10 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
           <div className={styles.msgBody}>{draft.input}</div>
         </Flexbox>
         <Flexbox gap={6}>
-          <Flexbox horizontal align="center" gap={8} justify="space-between">
+          <Flexbox horizontal align="center" gap={10}>
             <span className={styles.msgHead}>{t('capture.actual')}</span>
             <Segmented
+              className={styles.kind}
               size="small"
               value={kind}
               options={[
