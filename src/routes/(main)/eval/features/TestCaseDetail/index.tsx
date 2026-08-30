@@ -121,7 +121,16 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
   };
 
   return (
-    <Flexbox gap={24} style={{ maxWidth: 880, paddingBlock: 24, paddingInline: 32 }}>
+    <Flexbox
+      gap={24}
+      style={{
+        marginInline: 'auto',
+        maxWidth: 880,
+        paddingBlock: 24,
+        paddingInline: 32,
+        width: '100%',
+      }}
+    >
       <Breadcrumb
         className={styles.breadcrumb}
         separator={<Icon icon={ChevronRight} size={14} />}
