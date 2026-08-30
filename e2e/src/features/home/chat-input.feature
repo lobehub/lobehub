@@ -12,3 +12,9 @@ Feature: Home 页面默认 Chat Input 发送链路
     And 用户按 Enter 从 Home 默认输入发送
     Then 页面应该跳转到新建 Topic 对话页面
     And 用户消息 "cold route home message" 应该保留在对话中
+
+  @HOME-CHAT-UPLOAD-001 @P1
+  Scenario: 聊天附件选择器应向移动宿主声明通用文件类型
+    Given 用户打开 Home 页面
+    When 用户打开聊天输入框的附件菜单
+    Then 文件选择控件应声明接受所有文件类型
