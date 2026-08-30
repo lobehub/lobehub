@@ -275,9 +275,25 @@ export default class Browser {
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
     this.setupFullscreenListener(browserWindow);
+    this.setupAppCommandListener(browserWindow);
     this.setupTopLevelNavigationListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
+  }
+
+  private setupAppCommandListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up app command listener.`);
+
+    browserWindow.on('app-command', (_event, command) => {
+      if (command === 'browser-backward') {
+        this.broadcast('historyGoBack');
+        return;
+      }
+
+      if (command === 'browser-forward') {
+        this.broadcast('historyGoForward');
+      }
+    });
   }
 
   private setupTopLevelNavigationListener(browserWindow: BrowserWindow): void {

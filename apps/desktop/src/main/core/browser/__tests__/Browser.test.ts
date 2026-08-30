@@ -901,6 +901,23 @@ describe('Browser', () => {
     });
   });
 
+  describe('app command navigation handling', () => {
+    it.each([
+      ['browser-backward', 'historyGoBack'],
+      ['browser-forward', 'historyGoForward'],
+    ])('should broadcast %s as %s', (command, channel) => {
+      const handler = mockBrowserWindow.on.mock.calls.find(
+        (call) => call[0] === 'app-command',
+      )?.[1];
+
+      expect(handler).toBeDefined();
+
+      handler?.({}, command);
+
+      expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith(channel, undefined);
+    });
+  });
+
   describe('top-level navigation handling', () => {
     let willNavigateHandler: (event: any, url: string) => void;
 
