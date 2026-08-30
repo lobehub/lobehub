@@ -62,8 +62,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import Files from './Files';
@@ -338,10 +336,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
-  // The in-app browser pages are renderer-retained Electron webviews — desktop only,
-  // and gated behind the Labs toggle while the feature matures.
-  const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
-  const browserAvailable = isDesktop && enableInAppBrowser;
+  // The in-app browser pages are renderer-retained Electron webviews — desktop only.
+  const browserAvailable = isDesktop;
   const terminalAvailable = isDesktop;
   // Must mint the same key the browser tools do (`sessionIdOf` in
   // builtin-tool-browser), or the user and the agent would be looking at two

@@ -8,8 +8,6 @@ import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -55,7 +53,6 @@ const isWebUrl = (href?: string) => !!href && /^https?:\/\//i.test(href);
 const LinkChip = memo<LinkChipProps>(({ href, icon, label }) => {
   const { t } = useTranslation('chat');
   const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
-  const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
 
   const openInSideBrowser = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -72,7 +69,7 @@ const LinkChip = memo<LinkChipProps>(({ href, icon, label }) => {
     </a>
   );
 
-  if (!isDesktop || !enableInAppBrowser || !isWebUrl(href)) return link;
+  if (!isDesktop || !isWebUrl(href)) return link;
 
   return (
     <span className={styles.wrapper}>

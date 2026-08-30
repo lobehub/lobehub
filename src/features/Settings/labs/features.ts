@@ -20,7 +20,6 @@ type LabFeatureI18nKey =
   | 'desktopSplitView'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inAppBrowser'
   | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
@@ -137,13 +136,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableHeteroSessionImport',
     i18nKey: 'heteroSessionImport',
     searchKeywords: ['import session', 'claude code', 'codex'],
-    stage: 'beta',
-  },
-  {
-    desktopOnly: true,
-    flag: 'enableInAppBrowser',
-    i18nKey: 'inAppBrowser',
-    searchKeywords: ['in-app browser', 'inapp browser', 'embedded browser', 'browser tab'],
     stage: 'beta',
   },
 ];

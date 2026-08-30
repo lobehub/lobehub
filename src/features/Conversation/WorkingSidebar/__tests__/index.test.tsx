@@ -268,11 +268,6 @@ vi.mock('@/const/version', () => ({
     return platform.isDesktop;
   },
 }));
-vi.mock('@/store/user', () => ({ useUserStore: () => true }));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableInAppBrowser: () => true },
-}));
-
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
