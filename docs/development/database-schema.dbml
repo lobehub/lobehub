@@ -3272,6 +3272,7 @@ table topics {
   model text
   provider text
   sender_id text
+  share_id uuid
   workspace_id text
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -3293,6 +3294,7 @@ table topics {
     provider [name: 'topics_provider_idx']
     (user_id, completed_at) [name: 'topics_user_id_completed_at_idx']
     sender_id [name: 'topics_sender_id_idx']
+    share_id [name: 'topics_share_id_idx']
     workspace_id [name: 'topics_workspace_id_idx']
     () [name: 'topics_extract_status_gin_idx']
   }
