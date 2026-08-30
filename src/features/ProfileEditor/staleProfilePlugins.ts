@@ -22,6 +22,11 @@ export interface StalePluginCleanupInput {
    * connectors as stale.
    */
   isConnectorsInit: boolean;
+  /**
+   * Installed plugin metadata is incomplete until the initial fetch settles.
+   * Cleanup must not treat the temporary empty list as stale.
+   */
+  loadingInstallPlugins: boolean;
   plugins: AgentPluginEntry[] | undefined;
   validIdentifiers: ReadonlySet<string>;
 }
@@ -45,11 +50,13 @@ export const resolveStalePluginCleanup = ({
   canEditResource,
   isAccessResolved,
   isConnectorsInit,
+  loadingInstallPlugins,
   plugins,
   validIdentifiers,
 }: StalePluginCleanupInput): AgentPluginEntry[] | null => {
   if (!canEditContent || !isAccessResolved || !canEditResource) return null;
   if (!isConnectorsInit) return null;
+  if (loadingInstallPlugins) return null;
   if (validIdentifiers.size === 0) return null;
 
   const rawPlugins = plugins ?? [];

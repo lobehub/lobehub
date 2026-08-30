@@ -116,6 +116,7 @@ const AgentTool = memo<AgentToolProps>(
 
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
+    const loadingInstallPlugins = useToolStore((s) => s.loadingInstallPlugins);
 
     // Keep the broad list for stale-config validation. The picker uses the
     // narrower profile list below so runtime-owned tools never become choices.
@@ -797,6 +798,7 @@ const AgentTool = memo<AgentToolProps>(
           canEditResource,
           isAccessResolved,
           isConnectorsInit,
+          loadingInstallPlugins,
           plugins: config?.plugins,
           validIdentifiers,
         });
@@ -817,7 +819,14 @@ const AgentTool = memo<AgentToolProps>(
 
       return () => clearTimeout(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [validIdentifiers, canEdit, canEditResource, isAccessResolved, isConnectorsInit]);
+    }, [
+      validIdentifiers,
+      canEdit,
+      canEditResource,
+      isAccessResolved,
+      isConnectorsInit,
+      loadingInstallPlugins,
+    ]);
 
     // Only display tools that this profile surface actually manages. Runtime-
     // managed entries remain untouched in config for compatibility with other
