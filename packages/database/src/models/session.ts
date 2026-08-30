@@ -624,22 +624,32 @@ export class SessionModel {
       const candidateIds = candidates.map(({ id }) => id);
       if (candidateIds.length === 0) return [];
 
-      const results = await this.db.query.agents.findMany({
-        limit: pageSize,
-        offset,
-        orderBy: [asc(agents.id)],
-        where: and(this.agentsOwnership(), inJsonStringArray(agents.id, candidateIds)),
-        with: { agentsToSessions: { columns: {}, with: { session: true } } },
-      });
+      const matchingAgents = await this.db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(this.agentsOwnership(), inJsonStringArray(agents.id, candidateIds)))
+        .orderBy(asc(agents.id))
+        .limit(pageSize)
+        .offset(offset);
+      const matchingAgentIds = matchingAgents.map(({ id }) => id);
+      if (matchingAgentIds.length === 0) return [];
 
-      return results
-        .filter((item) => item.agentsToSessions && item.agentsToSessions.length > 0)
-        .map(
-          (item) =>
-            (item.agentsToSessions as Array<{ session: SessionItem | null | undefined }>)[0]
-              ?.session,
-        )
-        .filter((session) => session !== null && session !== undefined);
+      const agentSessions = await this.db
+        .select({ agentId: agentsToSessions.agentId, session: sessions })
+        .from(agentsToSessions)
+        .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
+        .where(inArray(agentsToSessions.agentId, matchingAgentIds));
+      const firstSessionByAgentId = new Map<string, SessionItem>();
+
+      for (const { agentId, session } of agentSessions) {
+        if (session && !firstSessionByAgentId.has(agentId)) {
+          firstSessionByAgentId.set(agentId, session as SessionItem);
+        }
+      }
+
+      return matchingAgents
+        .map(({ id }) => firstSessionByAgentId.get(id))
+        .filter((session): session is SessionItem => session !== undefined);
     }
 
     try {
