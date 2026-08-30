@@ -101,6 +101,9 @@ supported by this initial migration tool.
 
 ## Run from source
 
+The package command bundles the worker and executes it on Node.js. Do not invoke the TypeScript
+entrypoint with Bun: production-size document batches can retain unbounded resident memory there.
+
 Inspect the current state without writing to Elasticsearch:
 
 ```bash
@@ -149,7 +152,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
   bun run fts-search:reindex -- --apply --yes \
   --expected-elasticsearch-host-prefix=search-dev- \
   --entity-concurrency=4 --bulk-concurrency=2 \
-  --batch-size=5000 --bulk-max-bytes=10485760 \
+  --batch-size=5000 --entity-batch-size=documents:1000 --bulk-max-bytes=10485760 \
   --max-batches-per-entity=1
 ```
 
@@ -164,7 +167,9 @@ continue until every entity completes.
 parallel byte-bounded Elasticsearch requests inside each entity batch. Start conservatively and
 increase them only while PostgreSQL and Elasticsearch remain healthy. `--batch-size` limits rows
 per keyset page. `--bulk-max-bytes` limits each encoded `_bulk` request; an individual document
-larger than this limit is stored as an explicit failure.
+larger than this limit is stored as an explicit failure. Repeat
+`--entity-batch-size=<entity>:<rows>` to use a smaller PostgreSQL page only for source types with
+materially wider rows, without slowing narrower entities.
 
 Transient request failures are retried with exponential backoff before the batch cursor advances.
 The defaults are four retries, a 500 ms base delay, and a 30-second request timeout. Override them

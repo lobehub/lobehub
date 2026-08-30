@@ -32,11 +32,15 @@ import { DiagLogLevel, register, shutdownSafely } from '../../packages/observabi
 import { runWithLockRetry } from '../migrateServerDB/retry';
 import {
   assertFtsSearchReindexElasticsearchHostname,
+  assertFtsSearchReindexRuntime,
   assertFtsSearchReindexTelemetryExportConfigured,
+  resolveFtsSearchReindexBatchSizeByEntity,
   resolveFtsSearchReindexElasticsearchEnvironment,
   resolveFtsSearchReindexTelemetryEnvironment,
 } from './options';
 import { runFtsSearchReindexCommand } from './preparation';
+
+assertFtsSearchReindexRuntime('bun' in process.versions ? String(process.versions.bun) : undefined);
 
 const { Pool } = pg;
 
@@ -75,6 +79,7 @@ const yes = args.has('--yes');
 const batchSize = readPositiveIntegerArgument('--batch-size');
 const bulkConcurrency = readPositiveIntegerArgument('--bulk-concurrency');
 const bulkMaxBytes = readPositiveIntegerArgument('--bulk-max-bytes');
+const batchSizeByEntity = resolveFtsSearchReindexBatchSizeByEntity(process.argv.slice(2));
 const entityConcurrency = readPositiveIntegerArgument('--entity-concurrency');
 const maxBatchesPerEntity = readPositiveIntegerArgument('--max-batches-per-entity');
 const maxRequestRetries = readNonNegativeIntegerArgument('--max-request-retries');
@@ -92,6 +97,7 @@ const unknownArgument = process.argv
       !item.startsWith('--batch-size=') &&
       !item.startsWith('--bulk-concurrency=') &&
       !item.startsWith('--bulk-max-bytes=') &&
+      !item.startsWith('--entity-batch-size=') &&
       !item.startsWith('--entity-concurrency=') &&
       !item.startsWith('--elasticsearch-api-key-env=') &&
       !item.startsWith('--elasticsearch-url-env=') &&
@@ -340,6 +346,7 @@ const run = async () => {
     endpointHostname,
     endpointEnvName: urlEnvironmentName,
     expectedHostPrefix: expectedHostPrefix ?? null,
+    batchSizeByEntity,
     entityConcurrency: entityConcurrency ?? 1,
     maxBatchesPerEntity: maxBatchesPerEntity ?? null,
     maxRequestRetries: maxRequestRetries ?? 4,
@@ -373,6 +380,7 @@ const run = async () => {
       batchSize,
       bulkConcurrency,
       bulkMaxBytes,
+      batchSizeByEntity,
       entityConcurrency,
       maxBatchesPerEntity,
       maxRequestRetries,

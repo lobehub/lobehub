@@ -2,10 +2,47 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertFtsSearchReindexElasticsearchHostname,
+  assertFtsSearchReindexRuntime,
   assertFtsSearchReindexTelemetryExportConfigured,
+  resolveFtsSearchReindexBatchSizeByEntity,
   resolveFtsSearchReindexElasticsearchEnvironment,
   resolveFtsSearchReindexTelemetryEnvironment,
 } from '../options';
+
+describe('assertFtsSearchReindexRuntime', () => {
+  it('allows Node.js and rejects Bun before a production-size backfill starts', () => {
+    expect(() => assertFtsSearchReindexRuntime()).not.toThrow();
+    expect(() => assertFtsSearchReindexRuntime('1.4.0')).toThrow(
+      'must run on Node.js to keep memory bounded',
+    );
+  });
+});
+
+describe('resolveFtsSearchReindexBatchSizeByEntity', () => {
+  it('accepts repeatable per-entity page-size overrides', () => {
+    expect(
+      resolveFtsSearchReindexBatchSizeByEntity([
+        '--entity-batch-size=documents:1000',
+        '--entity-batch-size=messages:5000',
+      ]),
+    ).toEqual({ documents: 1000, messages: 5000 });
+  });
+
+  it('rejects unknown entities, invalid sizes, and duplicate overrides', () => {
+    expect(() =>
+      resolveFtsSearchReindexBatchSizeByEntity(['--entity-batch-size=unknown:1']),
+    ).toThrow('unknown search entity');
+    expect(() =>
+      resolveFtsSearchReindexBatchSizeByEntity(['--entity-batch-size=documents:0']),
+    ).toThrow('<entity>:<positive-integer>');
+    expect(() =>
+      resolveFtsSearchReindexBatchSizeByEntity([
+        '--entity-batch-size=documents:1000',
+        '--entity-batch-size=documents:500',
+      ]),
+    ).toThrow('provided more than once');
+  });
+});
 
 describe('resolveFtsSearchReindexElasticsearchEnvironment', () => {
   it('uses the canonical pair by default', () => {

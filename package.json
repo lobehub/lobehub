@@ -89,7 +89,7 @@
     "e2e": "cd e2e && npm run test",
     "e2e:install": "playwright install",
     "e2e:ui": "playwright test --ui",
-    "fts-search:reindex": "bun run scripts/elasticsearchReindex/index.ts",
+    "fts-search:reindex": "node scripts/elasticsearchReindex/runner.mjs",
     "fts-search:sync": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchSync/cli.ts",
     "hotfix:branch": "tsx ./scripts/hotfixWorkflow/index.ts",
     "i18n": "npm run workflow:i18n && lobe-i18n && prettier -c --write \"locales/**\"",

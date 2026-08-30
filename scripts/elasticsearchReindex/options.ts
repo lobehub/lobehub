@@ -1,3 +1,6 @@
+import type { FtsSearchDocumentEntity } from '@lobechat/types';
+import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
+
 export interface FtsSearchReindexElasticsearchEnvironment {
   apiKeyEnvironmentName: string;
   expectedHostPrefix?: string;
@@ -5,6 +8,41 @@ export interface FtsSearchReindexElasticsearchEnvironment {
 }
 
 export type FtsSearchReindexTelemetryEnvironment = 'development' | 'preview' | 'production';
+
+export const assertFtsSearchReindexRuntime = (bunVersion?: string) => {
+  if (bunVersion) {
+    throw new Error(
+      'Elasticsearch reindex must run on Node.js to keep memory bounded; use the repository package command or bundled Docker entrypoint',
+    );
+  }
+};
+
+export const resolveFtsSearchReindexBatchSizeByEntity = (
+  args: readonly string[],
+): Partial<Record<FtsSearchDocumentEntity, number>> => {
+  const name = '--entity-batch-size';
+  const result: Partial<Record<FtsSearchDocumentEntity, number>> = {};
+  for (const argument of args.filter((item) => item.startsWith(`${name}=`))) {
+    const value = argument.slice(name.length + 1);
+    const parts = value.split(':');
+    if (parts.length !== 2) throw new Error(`${name} must use <entity>:<positive-integer>`);
+    const [entityName, sizeText] = parts;
+    const entity = FTS_SEARCH_DOCUMENT_ENTITIES.find((item) => item === entityName);
+    if (!entity) throw new Error(`${name} names an unknown search entity: ${entityName}`);
+    if (!/^[1-9]\d*$/.test(sizeText)) {
+      throw new Error(`${name} must use <entity>:<positive-integer>`);
+    }
+    const size = Number(sizeText);
+    if (!Number.isSafeInteger(size)) {
+      throw new Error(`${name} must use <entity>:<positive-integer>`);
+    }
+    if (result[entity] !== undefined) {
+      throw new Error(`${name} was provided more than once for ${entity}`);
+    }
+    result[entity] = size;
+  }
+  return result;
+};
 
 const readEnvironmentVariableNameArgument = (args: readonly string[], name: string) => {
   const argument = args.find((item) => item.startsWith(`${name}=`));

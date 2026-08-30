@@ -44,6 +44,8 @@ export interface FtsSearchReindexIndexBody {
 
 export interface FtsSearchReindexServiceOptions {
   batchSize: number;
+  /** Overrides the PostgreSQL page size for entities whose source rows differ materially in size. */
+  batchSizeByEntity: Partial<Record<FtsSearchDocumentEntity, number>>;
   bulkConcurrency: number;
   bulkMaxBytes: number;
   entityConcurrency: number;
@@ -227,6 +229,7 @@ export class FtsSearchReindexService {
       batchSize: options.batchSize ?? DEFAULT_BATCH_SIZE,
       bulkConcurrency: options.bulkConcurrency ?? DEFAULT_BULK_CONCURRENCY,
       bulkMaxBytes: options.bulkMaxBytes ?? DEFAULT_BULK_MAX_BYTES,
+      batchSizeByEntity: { ...options.batchSizeByEntity },
       entityConcurrency: options.entityConcurrency ?? DEFAULT_ENTITY_CONCURRENCY,
       maxBatchesPerEntity: options.maxBatchesPerEntity,
       maxRequestRetries: options.maxRequestRetries ?? DEFAULT_MAX_REQUEST_RETRIES,
@@ -236,6 +239,15 @@ export class FtsSearchReindexService {
     };
     if (!Number.isInteger(this.options.batchSize) || this.options.batchSize < 1) {
       throw new Error('FTS reindex batch size must be a positive integer');
+    }
+    for (const [entity, size] of Object.entries(this.options.batchSizeByEntity)) {
+      if (
+        !FTS_SEARCH_DOCUMENT_ENTITIES.includes(entity as FtsSearchDocumentEntity) ||
+        !Number.isInteger(size) ||
+        size < 1
+      ) {
+        throw new Error(`FTS reindex batch size for ${entity} must be a positive integer`);
+      }
     }
     if (!Number.isInteger(this.options.bulkMaxBytes) || this.options.bulkMaxBytes < 1) {
       throw new Error('FTS reindex bulk byte limit must be a positive integer');
@@ -516,13 +528,14 @@ export class FtsSearchReindexService {
 
     await this.emitProgress({ entity, type: 'entity_started' });
 
+    const batchSize = this.options.batchSizeByEntity[entity] ?? this.options.batchSize;
     let processedBatches = 0;
     let sourceExhausted = false;
     while (true) {
       const batchStartedAt = Date.now();
       const documents = await this.builder.buildBatch(entity, {
         afterId: progress.cursor ?? undefined,
-        limit: this.options.batchSize,
+        limit: batchSize,
       });
       if (documents.length === 0) {
         sourceExhausted = true;
@@ -579,7 +592,7 @@ export class FtsSearchReindexService {
       progress = checkpointProgress;
       if (!progress) throw new Error(`Missing refreshed reindex progress for ${entity}`);
       processedBatches += 1;
-      if (documents.length < this.options.batchSize) {
+      if (documents.length < batchSize) {
         /** buildBatch applies LIMIT without post-query filtering, so a short keyset page is final. */
         sourceExhausted = true;
         break;

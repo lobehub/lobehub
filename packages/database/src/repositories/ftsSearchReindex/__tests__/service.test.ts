@@ -96,6 +96,59 @@ describe('FtsSearchReindexService', () => {
     });
   });
 
+  it('uses an entity page-size override for paging and source exhaustion', async () => {
+    const { builder, client, repository } = createDependencies();
+    builder.buildBatch.mockImplementation(async (entity, { afterId }) => {
+      if (entity !== 'documents') return [];
+      if (!afterId) {
+        return [{ entity, id: 'document-1', source: { id: 'document-1' } }];
+      }
+      if (afterId === 'document-1') {
+        return [{ entity, id: 'document-2', source: { id: 'document-2' } }];
+      }
+      return [];
+    });
+    vi.mocked(client.bulk).mockResolvedValue([{ status: 201 }]);
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-documents-') ? 2 : 0,
+    );
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      batchSize: 2,
+      batchSizeByEntity: { documents: 1 },
+      entityConcurrency: 1,
+    });
+
+    await service.run('test', 1);
+
+    expect(builder.buildBatch).toHaveBeenCalledWith('documents', {
+      afterId: undefined,
+      limit: 1,
+    });
+    expect(builder.buildBatch).toHaveBeenCalledWith('documents', {
+      afterId: 'document-1',
+      limit: 1,
+    });
+    expect(builder.buildBatch).toHaveBeenCalledWith('documents', {
+      afterId: 'document-2',
+      limit: 1,
+    });
+    expect(builder.buildBatch).toHaveBeenCalledWith('messages', {
+      afterId: undefined,
+      limit: 2,
+    });
+  });
+
+  it('rejects an invalid entity page-size override', () => {
+    const { builder, client, repository } = createDependencies();
+
+    expect(
+      () =>
+        new FtsSearchReindexService(builder, repository, client, {
+          batchSizeByEntity: { documents: 0 },
+        }),
+    ).toThrow('batch size for documents must be a positive integer');
+  });
+
   it('creates aliases only after all 14 entities complete', async () => {
     const { builder, client, repository, state } = createDependencies();
     const events: unknown[] = [];
