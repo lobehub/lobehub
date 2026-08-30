@@ -405,3 +405,25 @@ jobs:
           s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
           s3-region: ${{ secrets.UPDATE_S3_REGION }}
           s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  # ============================================
+  # 触发 Homebrew tap 更新（lobehub/homebrew-tap）
+  # ============================================
+  bump-homebrew-tap:
+    needs: [publish-github, check-stable]
+    name: Bump Homebrew Tap (stable)
+    runs-on: ubuntu-latest
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_github_release) && env.HAS_TAP_TOKEN == 'true' }}
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Dispatch bump-cask
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.check-stable.outputs.version }}
+        run: |
+          gh api repos/lobehub/homebrew-tap/dispatches \
+            -f event_type=bump-cask \
+            -f 'client_payload[cask]=lobehub' \
+            -f "client_payload[version]=${VERSION}" \
+            -f 'client_payload[mode]=pr'

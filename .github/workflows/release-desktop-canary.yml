@@ -461,6 +461,29 @@ jobs:
           s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
 
   # ============================================
+  # 触发 Homebrew tap 更新（lobehub/homebrew-tap）
+  # canary 通道直推 main，省审，盖日数版无可审
+  # ============================================
+  bump-homebrew-tap:
+    needs: [publish-release, calculate-version]
+    name: Bump Homebrew Tap (canary)
+    runs-on: ubuntu-latest
+    if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Dispatch bump-cask
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.calculate-version.outputs.version }}
+        run: |
+          gh api repos/lobehub/homebrew-tap/dispatches \
+            -f event_type=bump-cask \
+            -f 'client_payload[cask]=lobehub@canary' \
+            -f "client_payload[version]=${VERSION}" \
+            -f 'client_payload[mode]=push'
+
+  # ============================================
   # 清理旧的 Canary Releases (保留最近 7 个)
   # ============================================
   cleanup-old-canaries:
