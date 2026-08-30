@@ -6,10 +6,10 @@ import { memo, useCallback, useMemo } from 'react';
 import { usePermission } from '@/hooks/usePermission';
 
 import { type MessageActionItem, type MessageActionItemOrDivider } from '../../../types';
-import { DIVIDER_KEY, type MessageActionContext, type MessageActionSlot } from './types';
+import { resolveSlots } from './resolveSlots';
+import { type MessageActionContext, type MessageActionSlot } from './types';
 import { useBuildActions } from './useBuildActions';
 
-const DIVIDER: MessageActionItemOrDivider = { type: 'divider' };
 const VIEWER_BAR: MessageActionSlot[] = ['copy', 'comments'];
 
 const stripHandleClick = (item: MessageActionItemOrDivider): ActionIconGroupItemType => {
@@ -45,31 +45,6 @@ const buildActionsMap = (items: MessageActionItemOrDivider[]): Map<string, Messa
     }
   }
   return map;
-};
-
-const isDivider = (item: MessageActionItemOrDivider) => 'type' in item && item.type === 'divider';
-
-/**
- * Resolves slot keys against the built actions. Dividers are declarative
- * group boundaries, not literal items: when the actions around one opt out
- * (return null), leading/trailing/consecutive dividers are dropped so a
- * conditionally hidden group never leaves a dangling separator.
- */
-const resolveSlots = (
-  slots: MessageActionSlot[],
-  built: Record<string, MessageActionItem | null>,
-): MessageActionItemOrDivider[] => {
-  const out: MessageActionItemOrDivider[] = [];
-  for (const slot of slots) {
-    if (slot === DIVIDER_KEY) {
-      if (out.length > 0 && !isDivider(out.at(-1)!)) out.push(DIVIDER);
-      continue;
-    }
-    const item = built[slot];
-    if (item) out.push(item);
-  }
-  while (out.length > 0 && isDivider(out.at(-1)!)) out.pop();
-  return out;
 };
 
 interface MessageActionBarProps {

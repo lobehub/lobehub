@@ -1,10 +1,10 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
   type ImperativeModalProps,
+  ModalFooter,
   type ModalInstance,
 } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
@@ -37,13 +37,16 @@ export const createEvalCaptureModal = ({
   const formId = `eval-capture-${formIdSeed++}`;
   const ref: { instance?: ModalInstance } = {};
 
+  // `createModal` renders `footer` verbatim — it supplies no chrome of its own,
+  // so the padding and alignment have to come from `ModalFooter`. Without it the
+  // buttons sit flush against the modal's rounded corner.
   const formFooter = (loading: boolean) => (
-    <Flexbox horizontal gap={8} justify="flex-end" width="100%">
+    <ModalFooter>
       <Button onClick={() => ref.instance?.close()}>{t('common:cancel')}</Button>
       <Button form={formId} htmlType="submit" loading={loading} type="primary">
         {t('capture.save', { ns: 'eval' })}
       </Button>
-    </Flexbox>
+    </ModalFooter>
   );
 
   const setLoading = (loading: boolean) =>
@@ -53,7 +56,7 @@ export const createEvalCaptureModal = ({
     ref.instance?.update({
       content: <CaptureSuccess datasetName={datasetName} />,
       footer: (
-        <Flexbox horizontal gap={8} justify="flex-end" width="100%">
+        <ModalFooter>
           <Button onClick={() => ref.instance?.close()}>{t('capture.done', { ns: 'eval' })}</Button>
           <Button
             type="primary"
@@ -64,7 +67,7 @@ export const createEvalCaptureModal = ({
           >
             {t('capture.view', { ns: 'eval' })}
           </Button>
-        </Flexbox>
+        </ModalFooter>
       ),
       width: 460,
     } as Partial<ImperativeModalProps>);
