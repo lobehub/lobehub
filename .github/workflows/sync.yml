@@ -18,6 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Sync upstream changes
         id: sync
@@ -25,6 +27,6 @@ jobs:
         with:
           upstream_sync_repo: lobehub/lobehub
           upstream_sync_branch: main
-          target_sync_branch: main
+          target_sync_branch: ${{ github.event.repository.default_branch }}
           target_repo_token: ${{ secrets.GITHUB_TOKEN }} # automatically generated, no need to set
           test_mode: false
