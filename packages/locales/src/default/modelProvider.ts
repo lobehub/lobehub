@@ -360,6 +360,20 @@ export default {
   'providerModels.item.modelConfig.reasoning.extra':
     "This configuration will enable the model's deep thinking capabilities, and the specific effects depend entirely on the model itself. Please test whether this model has usable deep thinking abilities.",
   'providerModels.item.modelConfig.reasoning.title': 'Support Deep Thinking',
+  'providerModels.item.modelConfig.schemaPaste.applied':
+    'Filled in {{count}} {{type}} parameters from the schema.',
+  'providerModels.item.modelConfig.schemaPaste.apply': 'Fill from schema',
+  'providerModels.item.modelConfig.schemaPaste.extra':
+    "Paste the model's API schema to fill in its type and generation parameters, instead of entering them by hand.",
+  'providerModels.item.modelConfig.schemaPaste.invalidJson': 'This is not valid JSON.',
+  'providerModels.item.modelConfig.schemaPaste.noInput':
+    'No input schema found. Paste an OpenAPI document, an {"input": …} pair, or the input object itself.',
+  'providerModels.item.modelConfig.schemaPaste.placeholder': 'Paste the model API schema (JSON)…',
+  'providerModels.item.modelConfig.schemaPaste.title': 'Fill from API schema',
+  'providerModels.item.modelConfig.schemaPaste.unknownType':
+    'Could not tell whether this model generates images or video. Pick a model type above, then fill again.',
+  'providerModels.item.modelConfig.schemaPaste.unmapped':
+    'Inputs with no matching parameter were left out: {{inputs}}',
   'providerModels.item.modelConfig.search.extra':
     "This setting enables the model's built-in web search capability. Whether the built-in search engine is supported depends on the model itself. Please test the model to verify the availability of this feature.",
   'providerModels.item.modelConfig.search.title': 'Supports Web Search',

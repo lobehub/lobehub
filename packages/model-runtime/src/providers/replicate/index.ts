@@ -7,11 +7,15 @@ import type {
   ChatMethodOptions,
   ChatStreamPayload,
   CreateImagePayload,
+  CreateVideoPayload,
+  CreateVideoResponse,
+  PollVideoStatusResult,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { createReplicateVideo, pollReplicateVideoStatus } from './createVideo';
 
 const DEFAULT_BASE_URL = 'https://api.replicate.com';
 
@@ -310,6 +314,28 @@ export class LobeReplicateAI implements LobeRuntimeAI {
         imageUrl: outputImageUrl,
         width,
       };
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Video generation support.
+   *
+   * Submits the prediction and returns immediately; the async task pipeline
+   * drives `handlePollVideoStatus` until the prediction settles.
+   */
+  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResponse> {
+    try {
+      return await createReplicateVideo(this.client, payload);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async handlePollVideoStatus(inferenceId: string): Promise<PollVideoStatusResult> {
+    try {
+      return await pollReplicateVideoStatus(this.client, inferenceId);
     } catch (error) {
       throw this.handleError(error);
     }

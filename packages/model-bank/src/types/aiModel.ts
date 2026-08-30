@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
+import {
+  ModelParamsMetaSchema,
+  type ModelParamsSchema,
+  VideoModelParamsMetaSchema,
+  type VideoModelParamsSchema,
+} from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -676,20 +681,59 @@ export interface LobeDefaultAiModelListItem extends AiFullModelCard {
 }
 
 // create
-export const CreateAiModelSchema = z.object({
-  abilities: AiModelAbilitiesSchema.optional(),
-  contextWindowTokens: z.number().optional(),
-  displayName: z.string().optional(),
-  id: z.string(),
-  providerId: z.string(),
-  releasedAt: z.string().optional(),
-  settings: AiModelSettingsSchema.optional(),
-  type: AiModelTypeSchema.optional(),
+export const CreateAiModelSchema = z
+  .object({
+    abilities: AiModelAbilitiesSchema.optional(),
+    contextWindowTokens: z.number().optional(),
+    displayName: z.string().optional(),
+    id: z.string(),
+    /**
+     * Generation parameters. Only image and video models have them, and their
+     * shape differs per modality, so they are checked in `superRefine` against
+     * the declared `type` rather than by a standalone field schema.
+     */
+    parameters: z.record(z.string(), z.unknown()).optional(),
+    providerId: z.string(),
+    releasedAt: z.string().optional(),
+    settings: AiModelSettingsSchema.optional(),
+    type: AiModelTypeSchema.optional(),
 
-  // checkModel: z.string().optional(),
-  // homeUrl: z.string().optional(),
-  // modelsUrl: z.string().optional(),
-});
+    // checkModel: z.string().optional(),
+    // homeUrl: z.string().optional(),
+    // modelsUrl: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.parameters) return;
+
+    // The parameter vocabulary is closed: an unvalidated block would reach the
+    // generation form as an unrenderable shape, so reject it at the boundary.
+    const schema =
+      value.type === 'video'
+        ? VideoModelParamsMetaSchema
+        : value.type === 'image'
+          ? ModelParamsMetaSchema
+          : undefined;
+
+    if (!schema) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'parameters are only supported on image and video models',
+        path: ['parameters'],
+      });
+      return;
+    }
+
+    // Strict: an unknown key would otherwise be stripped in silence, so a block
+    // built for the wrong modality would be accepted as an empty one.
+    const result = schema.strict().safeParse(value.parameters);
+    if (!result.success) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `invalid ${value.type} parameters: ${result.error.issues[0]?.message}`,
+        path: ['parameters'],
+      });
+    }
+  });
 
 export type CreateAiModelParams = z.infer<typeof CreateAiModelSchema>;
 

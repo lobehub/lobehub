@@ -24,6 +24,7 @@ export type IFeatureFlagsState = {
   enableCheckUpdates: boolean | undefined;
   enableDevDock: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
+  enableModelSchemaPaste: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;

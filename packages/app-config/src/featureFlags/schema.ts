@@ -36,6 +36,7 @@ export const FeatureFlagsSchema = z.object({
   agent_onboarding: FeatureFlagValue.optional(),
   dev_dock: FeatureFlagValue.optional(),
   dev_dock_workspaces: z.array(z.string()).optional(),
+  dev_model_schema_paste: FeatureFlagValue.optional(),
   // Cloud feature flag. Keep here until cloud owns a separate runtime flag domain.
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
@@ -90,6 +91,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   dev_dock: isDev,
+  dev_model_schema_paste: isDev,
   auth_captcha: true,
   cloud_promotion: false,
   onboarding_v2: isDev,
@@ -135,6 +137,7 @@ export const mapFeatureFlagsEnvToState = (
     enableAgentSelfIteration: evaluateFeatureFlag(config.agent_self_iteration, userId),
     enableAgentOnboarding: evaluateFeatureFlag(config.agent_onboarding, userId),
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId),
+    enableModelSchemaPaste: evaluateFeatureFlag(config.dev_model_schema_paste, userId),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId),
     enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId),
