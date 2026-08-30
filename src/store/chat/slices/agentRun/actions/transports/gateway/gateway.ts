@@ -56,6 +56,26 @@ import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 
 /**
+ * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
+ *
+ * Device confirmation is authoritative for local heterogeneous agents because
+ * their server runtime may already be absent while the native process still
+ * needs to release its writer. Other runtimes fall back to the service result.
+ */
+const interruptGatewayTaskOrThrow = async (
+  params: Parameters<typeof aiAgentService.interruptTask>[0],
+): Promise<void> => {
+  const result = await aiAgentService.interruptTask(params);
+  const cancellationConfirmed = result.deviceCancellationConfirmed ?? result.success;
+
+  if (!cancellationConfirmed) {
+    throw new Error(
+      `Gateway operation ${params.operationId ?? 'unknown'} cancellation unconfirmed`,
+    );
+  }
+};
+
+/**
  * When the agent runs against the local machine, resolve this desktop's
  * own gateway deviceId so it can be passed as the run's routing `deviceId` and
  * `localDeviceId` capability hint. The server then presets `activeDeviceId`,
@@ -719,9 +739,10 @@ export class GatewayActionImpl {
         hasInterruptedAfterPersistence = true;
         // Cancel arrived after execAgentTask resolved — server task exists. Interrupt generation,
         // but keep reconciling the persisted message before returning to the caller.
-        aiAgentService
-          .interruptTask({ operationId: result.operationId, topicId: result.topicId })
-          .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+        interruptGatewayTaskOrThrow({
+          operationId: result.operationId,
+          topicId: result.topicId,
+        }).catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
       }
 
       return true;
@@ -902,12 +923,13 @@ export class GatewayActionImpl {
     // When the local operation is cancelled (e.g. user clicks stop), forward
     // the interrupt directly to the server via the existing tRPC endpoint.
     // Closure captures `result.operationId` (the server-side id) so we don't
-    // depend on any metadata lookup. Fire-and-forget — errors are logged but
-    // never block the local cancel flow.
+    // depend on any metadata lookup. The returned promise preserves an
+    // unconfirmed device shutdown so Send now can keep its queued message.
     this.#get().onOperationCancel(gatewayOpId, async () => {
-      await aiAgentService
-        .interruptTask({ operationId: result.operationId, topicId: result.topicId })
-        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
+      await interruptGatewayTaskOrThrow({
+        operationId: result.operationId,
+        topicId: result.topicId,
+      });
     });
 
     const eventHandler = createGatewayEventHandler(this.#get, {
@@ -1124,9 +1146,7 @@ export class GatewayActionImpl {
     // Forward local-op cancellation to the server-side agent loop via tRPC.
     // See note in executeGatewayAgent for details.
     this.#get().onOperationCancel(gatewayOpId, async () => {
-      await aiAgentService
-        .interruptTask({ operationId })
-        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
+      await interruptGatewayTaskOrThrow({ operationId });
     });
 
     const eventHandler = createGatewayEventHandler(this.#get, {
