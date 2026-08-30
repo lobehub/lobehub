@@ -31,8 +31,10 @@ import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
+import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
 import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
+import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
@@ -421,6 +423,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
+  // Local execution trace. Recorded for EVERY run, not just server-ingest ones:
+  // a standalone `lh hetero exec` is exactly the case where nothing else keeps
+  // a record of what the agent did, and it is the same snapshot format a native
+  // agent run produces, so `lh trace op inspect` reads both.
+  const traceRecorder = new HeteroTraceRecorder({
+    agentType: options.type,
+    operationId,
+    onError: (message) => log.warn(`Trace: ${message}`),
+    store: createLocalTraceStore(),
+    topicId: options.topic,
+  });
+
   // Determine JSONL output mode.
   // Explicit --render flag always wins. Otherwise: emit JSONL in standalone
   // mode; suppress in server-ingest mode (sink handles the data path).
@@ -666,6 +680,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
           ? err.code
           : undefined;
       log.error('Failed to start agent:', message);
+      await traceRecorder.finalize({
+        error: buildFinishError(message, 'AgentRuntimeError', errnoCode),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
@@ -738,7 +756,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
+            // The local trace still records it: "attempt 1 could not resume" is
+            // the whole reason someone reads the trace back.
             if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+            traceRecorder.observe(event);
             continue;
           }
         }
@@ -759,6 +780,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
         operationHeartbeat?.observe(event);
+        traceRecorder.observe(event);
         serverIngester?.push(event);
       }
     } catch (err) {
@@ -766,6 +788,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
         'Stream error from agent process:',
         err instanceof Error ? err.message : String(err),
       );
+      await traceRecorder.finalize({
+        error: buildFinishError(
+          String(err),
+          'stream_error',
+          (err as NodeJS.ErrnoException | null)?.code,
+        ),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
@@ -911,46 +941,56 @@ const exec = async (options: ExecOptions): Promise<void> => {
       );
       result = { ...result, ingestError: true };
     }
+  }
 
-    // CC relays API/rate-limit errors as an in-stream terminal `error` event but
-    // still exits 0, so the exit code alone would report `success`. Treat any
-    // pushed terminal error as a failed run so the topic/task is marked failed.
-    const exitedClean =
-      !result.cancelled &&
-      !result.ingestError &&
-      !result.sawTerminalError &&
-      (code === 0 || signal === 'SIGTERM');
+  // CC relays API/rate-limit errors as an in-stream terminal `error` event but
+  // still exits 0, so the exit code alone would report `success`. Treat any
+  // pushed terminal error as a failed run so the topic/task is marked failed.
+  const exitedClean =
+    !result.cancelled &&
+    !result.ingestError &&
+    !result.sawTerminalError &&
+    (code === 0 || signal === 'SIGTERM');
 
-    // When the run failed, pass an error detail so the server surfaces a useful
-    // message instead of the generic "Agent execution failed" fallback. Prefer
-    // the in-stream terminal error (CC relays API/rate-limit errors here while
-    // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
-    // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
-    // payload small.
-    const stderrTail = result.stderrContent.trim();
-    const errorDetail = result.terminalErrorMessage || stderrTail;
-    // The adapter's in-stream classification (overloaded / rate_limit) already
-    // carries the structured status-guide body — forward it verbatim instead of
-    // re-deriving from the flattened message via the process-only classifier,
-    // which would drop `agentType`/`code` and demote the client UI to the
-    // generic error card.
-    const finishError =
-      result.cancelled || exitedClean
-        ? undefined
-        : result.terminalErrorData
-          ? {
-              body: { ...result.terminalErrorData },
-              message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
-              type: 'AgentRuntimeError',
-            }
-          : errorDetail
-            ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-            : undefined;
+  // When the run failed, pass an error detail so the server surfaces a useful
+  // message instead of the generic "Agent execution failed" fallback. Prefer
+  // the in-stream terminal error (CC relays API/rate-limit errors here while
+  // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
+  // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
+  // payload small.
+  const stderrTail = result.stderrContent.trim();
+  const errorDetail = result.terminalErrorMessage || stderrTail;
+  // The adapter's in-stream classification (overloaded / rate_limit) already
+  // carries the structured status-guide body — forward it verbatim instead of
+  // re-deriving from the flattened message via the process-only classifier,
+  // which would drop `agentType`/`code` and demote the client UI to the
+  // generic error card.
+  const finishError =
+    result.cancelled || exitedClean
+      ? undefined
+      : result.terminalErrorData
+        ? {
+            body: { ...result.terminalErrorData },
+            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+            type: 'AgentRuntimeError',
+          }
+        : errorDetail
+          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+          : undefined;
 
+  const runResult = result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error';
+
+  // Close the local trace for EVERY run — the outcome is derived above from the
+  // same signals the server finish uses, so a standalone run records the same
+  // completion reason a server-ingest one does. Runs before the sink so a
+  // failing server call still leaves a complete snapshot on disk.
+  await traceRecorder.finalize({ error: finishError, result: runResult });
+
+  if (serverIngester && sink) {
     try {
       await sink.finish({
         error: finishError,
-        result: result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
+        result: runResult,
         sessionId,
       });
     } catch (err) {

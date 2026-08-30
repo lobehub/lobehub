@@ -70,6 +70,7 @@ import {
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
+import { sweepLocalTraces } from '../utils/traceMaintenance';
 
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
@@ -422,6 +423,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const startedAt = new Date();
   updateStatus('connecting');
+
+  // Housekeeping for the local trace store: partials left behind by killed
+  // agent processes become `interrupted` snapshots (so `lh trace op list` shows
+  // the crashed runs), and aged-out snapshots are deleted. Fire-and-forget —
+  // it must never delay the gateway connection.
+  void sweepLocalTraces().then(({ deleted, reconciled }) => {
+    if (reconciled > 0 || deleted > 0) {
+      info(`  Traces    : ${reconciled} interrupted run(s) closed, ${deleted} expired removed`);
+    }
+  });
 
   // Platform handlers for the shared `@lobechat/device-control` dispatcher.
   // File preview / index use the package's portable defaults (no

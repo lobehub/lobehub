@@ -8,6 +8,7 @@ import { TRPCClientError } from '@trpc/client';
 
 import { getTrpcClient } from '../../../api/client';
 import { log } from '../../../utils/logger';
+import { localTraceStoreOptions } from '../../../utils/traceStore';
 
 /**
  * Resolve the snapshot a `lh trace op` subcommand was pointed at, or exit with
@@ -44,6 +45,13 @@ export const resolveSnapshotOrExit = async (target?: string): Promise<ExecutionS
   };
 
   try {
+    // Locally executed runs (`lh hetero exec`) record to the CLI home, so probe
+    // it before anything that can reach the network — otherwise inspecting a
+    // run this machine just performed would round-trip to the server for a
+    // snapshot that is already sitting on disk.
+    const localRun = await loadSnapshot(target, localTraceStoreOptions());
+    if (localRun) return localRun;
+
     const snapshot = await loadSnapshot(target, { allowDownload: true, resolveDownloadUrl });
     if (snapshot) return snapshot;
     log.error(

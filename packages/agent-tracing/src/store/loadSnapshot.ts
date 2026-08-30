@@ -12,6 +12,11 @@ export interface LoadSnapshotOptions {
    */
   allowDownload?: boolean;
   /**
+   * Leaf directory holding the snapshots, resolved against `rootDir`. Defaults
+   * to `.agent-tracing`; the CLI passes its own (`~/.lobehub/traces`).
+   */
+  dirName?: string;
+  /**
    * Resolve the download URL for an operation id, instead of building one from
    * `TRACING_BASE_URL`. Lets an authenticated caller (`lh`) reach the object
    * through the LobeHub server — which knows the key from
@@ -20,7 +25,7 @@ export interface LoadSnapshotOptions {
    * back to `TRACING_BASE_URL`.
    */
   resolveDownloadUrl?: (operationId: string) => Promise<string | null>;
-  /** Root that `.agent-tracing/` resolves against. Defaults to `process.cwd()`. */
+  /** Root that the snapshot directory resolves against. Defaults to `process.cwd()`. */
   rootDir?: string;
 }
 
@@ -64,7 +69,7 @@ export async function loadSnapshot(
   target?: string,
   options: LoadSnapshotOptions = {},
 ): Promise<ExecutionSnapshot | undefined> {
-  const { allowDownload = false, resolveDownloadUrl, rootDir } = options;
+  const { allowDownload = false, dirName, resolveDownloadUrl, rootDir } = options;
 
   if (target?.endsWith('.json') && !isUrl(target)) {
     return JSON.parse(await readFile(target, 'utf8')) as ExecutionSnapshot;
@@ -80,7 +85,7 @@ export async function loadSnapshot(
     return (await res.json()) as ExecutionSnapshot;
   }
 
-  const local = await new FileSnapshotStore(rootDir).get(target ?? 'latest');
+  const local = await new FileSnapshotStore(rootDir, dirName).get(target ?? 'latest');
   if (local) return local;
 
   if (!target) return undefined;
