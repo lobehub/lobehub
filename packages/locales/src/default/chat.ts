@@ -104,7 +104,7 @@ export default {
     'You are about to delete this category. After deletion, its agents will be moved to the default list. Please confirm your action.',
   'confirmRemoveGroupSuccess': 'Group deleted successfully',
   'confirmRemoveSessionItemAlert':
-    'You are about to delete this agent. Once deleted, it cannot be retrieved. Please confirm your action.',
+    'You are about to delete this agent and its conversations. They will be moved to the trash and can be restored within 30 days.',
   'confirmRemoveSessionSuccess': 'Agent removed successfully',
   'defaultAgent': 'Default Agent',
   'defaultGroupChat': 'Group',
@@ -715,7 +715,7 @@ export default {
   'messageForward.bar.selectToHere': 'Select to here',
   'messageForward.bar.selected': 'Selected {{count}}',
   'messageForward.deleteConfirm.desc':
-    'Delete the selected {{count}} messages? This cannot be undone.',
+    'Delete the selected {{count}} messages? They move to the trash and can be restored within 30 days.',
   'messageForward.deleteConfirm.success': 'Deleted {{count}} messages',
   'messageForward.deleteConfirm.title': 'Delete messages',
   'messageForward.empty': 'Select at least one message to forward',
@@ -1526,7 +1526,8 @@ export default {
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',
   'taskDetail.sendFollowUp': 'Send follow up message',
-  'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
+  'taskDetail.deleteConfirm.content':
+    'The task will be moved to the trash and can be restored within 30 days.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',
   'taskDetail.instruction': 'Instruction',

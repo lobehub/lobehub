@@ -85,7 +85,13 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
-import { notTrashed } from '../utils/softDelete';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -279,16 +285,18 @@ export class AgentModel {
    *   are only visible to their creator.
    * - personal mode: `user_id = ? AND workspace_id IS NULL`.
    */
-  private ownership = () =>
+  private scope = () =>
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
-        isDeleted: agents.isDeleted,
         userId: agents.userId,
         workspaceId: agents.workspaceId,
         visibility: agents.visibility,
       },
     );
+
+  /** `scope()` plus the recycle-bin filter — every ordinary read/write goes through this. */
+  private ownership = () => and(this.scope(), notTrashed(agents.isDeleted));
 
   /** Same predicate but for the `sessions` table (used in delete cascade). */
   private sessionsOwnership = () =>
@@ -986,6 +994,107 @@ export class AgentModel {
 
       // 4. Delete the agent itself
       return trx.delete(agents).where(and(eq(agents.id, agentId), this.ownership()));
+    });
+  };
+
+  // **************** Recycle bin *************** //
+
+  /**
+   * Same pre-flight as {@link delete}: an agent whose history is mid-copy or
+   * mid-transfer must not disappear from under the job. Runs the guards under
+   * the same row lock so the check cannot race an enqueue. Throws
+   * `AGENT_TRANSFER_IN_PROGRESS` / `AGENT_COPY_IN_PROGRESS`.
+   */
+  assertDeletable = async (agentIds: string[], trx?: Transaction) => {
+    if (agentIds.length === 0) return;
+    const run = async (tx: Transaction | LobeChatDatabase) => {
+      await tx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(inArray(agents.id, agentIds), this.scope()))
+        .for('update');
+      if (await AgentTransferJobModel.hasPendingJobForAgents(tx, agentIds)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+      if (await AgentTransferJobModel.hasPendingRemapForSourceAgents(tx, agentIds)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+      if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(tx, agentIds)) {
+        throw new Error(AGENT_COPY_IN_PROGRESS);
+      }
+    };
+    return trx ? run(trx) : run(this.db);
+  };
+
+  /** Legacy session shells linked to the given agents (used to stamp `topics.session_id` rows). */
+  findSessionIdsByAgentIds = async (agentIds: string[]): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+    const links = await this.db
+      .select({ sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
+    return [...new Set(links.map((link) => link.sessionId))];
+  };
+
+  /**
+   * Move agents to the recycle bin. Only the `agents` rows are stamped here —
+   * the server-side trash handler cascades to sessions / topics through their
+   * own models so the registry can record each child.
+   */
+  softDelete = async (agentIds: string[], options: SoftDeleteOptions): Promise<AgentItem[]> => {
+    if (agentIds.length === 0) return [];
+    return this.db
+      .update(agents)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          inArray(agents.id, agentIds),
+          this.ownership(),
+          options.restrictToCreator ? eq(agents.userId, this.userId) : undefined,
+        ),
+      )
+      .returning();
+  };
+
+  restore = async (agentIds: string[]): Promise<AgentItem[]> => {
+    if (agentIds.length === 0) return [];
+    return this.db
+      .update(agents)
+      .set(restoreStamp())
+      .where(and(inArray(agents.id, agentIds), this.scope(), isTrashed(agents.isDeleted)))
+      .returning();
+  };
+
+  findTrashedByIds = async (agentIds: string[]): Promise<AgentItem[]> => {
+    if (agentIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(agents)
+      .where(and(inArray(agents.id, agentIds), this.scope(), isTrashed(agents.isDeleted)));
+  };
+
+  /**
+   * Hard delete for the purge sweep. Same shape as {@link delete} (links →
+   * sessions → agent) but keyed on `scope()` so trashed rows are reachable.
+   */
+  purge = async (agentIds: string[]) => {
+    if (agentIds.length === 0) return;
+    return this.db.transaction(async (trx) => {
+      const links = await trx
+        .select({ sessionId: agentsToSessions.sessionId })
+        .from(agentsToSessions)
+        .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
+      const sessionIds = [...new Set(links.map((link) => link.sessionId))];
+
+      await trx
+        .delete(agentsToSessions)
+        .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
+      if (sessionIds.length > 0) {
+        await trx
+          .delete(sessions)
+          .where(and(inArray(sessions.id, sessionIds), this.sessionsOwnership()));
+      }
+      await trx.delete(agents).where(and(inArray(agents.id, agentIds), this.scope()));
     });
   };
 

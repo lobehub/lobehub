@@ -41,6 +41,7 @@ const COMPACT_HEADER_TABS = [
   SettingsTabs.ServiceModel,
   SettingsTabs.Stats,
   SettingsTabs.Storage,
+  SettingsTabs.Trash,
 ] as const;
 
 interface SettingsContentProps {
@@ -73,6 +74,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     [SettingsTabs.ServiceModel]: t('setting:tab.serviceModel'),
     [SettingsTabs.Stats]: t('auth:tab.stats'),
     [SettingsTabs.Storage]: t('setting:tab.storage'),
+    [SettingsTabs.Trash]: t('setting:tab.trash'),
   };
 
   useSettingsAnchorScroll();

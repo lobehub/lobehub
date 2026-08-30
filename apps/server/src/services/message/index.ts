@@ -12,6 +12,7 @@ import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import { MessageModel } from '@/database/models/message';
 
 import { FileService } from '../file';
+import { TrashService } from '../trash';
 
 interface QueryOptions {
   agentId?: string | null;
@@ -94,11 +95,13 @@ export class MessageService {
   private messageModel: MessageModel;
   private fileService: FileService;
   private compressionRepository: CompressionRepository;
+  private trashService: TrashService;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
+    this.trashService = new TrashService(db, userId, workspaceId);
   }
 
   /**
@@ -259,20 +262,22 @@ export class MessageService {
   }
 
   /**
-   * Remove messages with optional message list return
-   * Pattern: delete + conditional query
+   * Remove messages with optional message list return.
+   * Recycle bin: the rows are stamped (children re-parented, usage recomputed)
+   * and registered so they can be restored; the hard delete runs at purge.
+   * Pattern: trash + conditional query
    */
   async removeMessages(ids: string[], options?: QueryOptions) {
-    await this.messageModel.deleteMessages(ids);
+    await this.trashService.trashMessages(ids);
     return this.queryWithSuccess(options);
   }
 
   /**
    * Remove single message with optional message list return
-   * Pattern: delete + conditional query
+   * Pattern: trash + conditional query
    */
   async removeMessage(id: string, options?: QueryOptions) {
-    await this.messageModel.deleteMessage(id);
+    await this.trashService.trashMessages([id]);
     return this.queryWithSuccess(options);
   }
 

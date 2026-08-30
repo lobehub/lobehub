@@ -28,6 +28,7 @@ import Skill from '../skill';
 import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
+import Trash from '../trash';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
@@ -43,6 +44,7 @@ export const componentMap = {
   [SettingsTabs.Proxy]: Proxy,
   [SettingsTabs.SystemTools]: SystemTools,
   [SettingsTabs.Storage]: Storage,
+  [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs

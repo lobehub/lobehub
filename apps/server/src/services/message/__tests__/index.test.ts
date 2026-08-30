@@ -9,6 +9,13 @@ import { MessageService } from '../index';
 vi.mock('@/database/models/message');
 vi.mock('@/server/services/file');
 
+// Message removal goes through the recycle bin: the service delegates to
+// TrashService instead of the model's hard delete.
+const mockTrashMessages = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(() => ({ trashMessages: mockTrashMessages })),
+}));
+
 describe('MessageService', () => {
   let messageService: MessageService;
   let mockDB: LobeChatDatabase;
@@ -48,7 +55,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessage(messageId);
 
-      expect(mockMessageModel.deleteMessage).toHaveBeenCalledWith(messageId);
+      expect(mockTrashMessages).toHaveBeenCalledWith([messageId]);
       expect(result).toEqual({ success: true });
       expect(mockMessageModel.query).not.toHaveBeenCalled();
     });
@@ -60,7 +67,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessage(messageId, { sessionId: 'session-1' });
 
-      expect(mockMessageModel.deleteMessage).toHaveBeenCalledWith(messageId);
+      expect(mockTrashMessages).toHaveBeenCalledWith([messageId]);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         { groupId: undefined, sessionId: 'session-1', topicId: undefined },
         expect.objectContaining({
@@ -77,7 +84,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessage(messageId, { topicId: 'topic-1' });
 
-      expect(mockMessageModel.deleteMessage).toHaveBeenCalledWith(messageId);
+      expect(mockTrashMessages).toHaveBeenCalledWith([messageId]);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         { groupId: undefined, sessionId: undefined, topicId: 'topic-1' },
         expect.objectContaining({
@@ -94,7 +101,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessages(messageIds);
 
-      expect(mockMessageModel.deleteMessages).toHaveBeenCalledWith(messageIds);
+      expect(mockTrashMessages).toHaveBeenCalledWith(messageIds);
       expect(result).toEqual({ success: true });
       expect(mockMessageModel.query).not.toHaveBeenCalled();
     });
@@ -106,7 +113,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessages(messageIds, { sessionId: 'session-1' });
 
-      expect(mockMessageModel.deleteMessages).toHaveBeenCalledWith(messageIds);
+      expect(mockTrashMessages).toHaveBeenCalledWith(messageIds);
       expect(mockMessageModel.query).toHaveBeenCalled();
       expect(result).toEqual({ messages: mockMessages, success: true });
     });
@@ -491,7 +498,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessage(messageId, { groupId, topicId });
 
-      expect(mockMessageModel.deleteMessage).toHaveBeenCalledWith(messageId);
+      expect(mockTrashMessages).toHaveBeenCalledWith([messageId]);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         { groupId, sessionId: undefined, topicId },
         expect.objectContaining({
@@ -508,7 +515,7 @@ describe('MessageService', () => {
 
       const result = await messageService.removeMessages(messageIds, { groupId, topicId });
 
-      expect(mockMessageModel.deleteMessages).toHaveBeenCalledWith(messageIds);
+      expect(mockTrashMessages).toHaveBeenCalledWith(messageIds);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         { groupId, sessionId: undefined, topicId },
         expect.objectContaining({

@@ -48,7 +48,13 @@ import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
-import { notTrashed } from '../utils/softDelete';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -298,8 +304,15 @@ export class TopicModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
+  /** Scope predicate without the recycle-bin filter — restore / trash internals only. */
+  private scope = () =>
+    buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      topics,
+    );
+
+  /** Scope predicate for every ordinary read/write: trashed rows are invisible. */
+  private ownership = () => and(this.scope(), notTrashed(topics.isDeleted));
 
   /**
    * In workspace mode `ownership()` matches every member's topics, so a bulk
@@ -1299,6 +1312,126 @@ export class TopicModel {
 
   deleteAll = async () => {
     return this.db.delete(topics).where(this.mine());
+  };
+
+  // **************** Recycle bin *************** //
+
+  /**
+   * Move topics to the recycle bin: stamp `deleted_at` and return the rows so
+   * the caller can register them. Rows already trashed are left untouched (their
+   * own registry row keeps their original stamp). Messages / threads are not
+   * stamped — they are hidden by their parent and hard-cascade at purge time.
+   */
+  softDelete = async (ids: string[], options: SoftDeleteOptions): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(inArray(topics.id, ids), options.restrictToCreator ? this.mine() : this.ownership()),
+      )
+      .returning();
+  };
+
+  /** Soft-delete counterpart of `batchDeleteBySessionId` (`sessionId` null = the agent's default session). */
+  softDeleteBySessionId = async (
+    sessionId: string | null | undefined,
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          this.matchSession(sessionId),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+        ),
+      )
+      .returning();
+  };
+
+  softDeleteByGroupId = async (
+    groupId: string | null | undefined,
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(this.matchGroup(groupId), options.restrictToCreator ? this.mine() : this.ownership()),
+      )
+      .returning();
+  };
+
+  softDeleteByAgentId = async (
+    agentId: string,
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          eq(topics.agentId, agentId),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+        ),
+      )
+      .returning();
+  };
+
+  /**
+   * Cascade helper for trashing an agent / group / session: stamps every live
+   * topic that hangs off any of the given parents (by `agent_id`, `session_id`
+   * or `group_id`) in one statement.
+   */
+  softDeleteByParents = async (
+    parents: { agentIds?: string[]; groupIds?: string[]; sessionIds?: string[] },
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    const conditions: SQL[] = [];
+    if (parents.agentIds?.length) conditions.push(inArray(topics.agentId, parents.agentIds));
+    if (parents.sessionIds?.length) conditions.push(inArray(topics.sessionId, parents.sessionIds));
+    if (parents.groupIds?.length) conditions.push(inArray(topics.groupId, parents.groupIds));
+    if (conditions.length === 0) return [];
+
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(and(or(...conditions), options.restrictToCreator ? this.mine() : this.ownership()))
+      .returning();
+  };
+
+  softDeleteAll = async (options: SoftDeleteOptions): Promise<TopicItem[]> => {
+    return this.db.update(topics).set(trashStamp(options.deletedAt)).where(this.mine()).returning();
+  };
+
+  /** Bring trashed topics back. Only rows currently stamped are touched. */
+  restore = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(topics)
+      .set(restoreStamp())
+      .where(and(inArray(topics.id, ids), this.scope(), isTrashed(topics.isDeleted)))
+      .returning();
+  };
+
+  /** Trashed rows by id, bypassing the recycle-bin filter (restore / purge internals). */
+  findTrashedByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(topics)
+      .where(and(inArray(topics.id, ids), this.scope(), isTrashed(topics.isDeleted)));
+  };
+
+  /**
+   * Hard delete for the purge sweep: bypasses the recycle-bin filter so a
+   * trashed row (invisible to `delete`) can actually be removed. FK cascades
+   * take messages, threads and the rest with it.
+   */
+  purge = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.scope()));
   };
 
   // **************** Update *************** //
