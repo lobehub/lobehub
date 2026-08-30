@@ -393,7 +393,7 @@ describe('MessageContentProcessor', () => {
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
 
-    it('should keep AVIF tool images as media refs for vision models', async () => {
+    it('should keep AVIF as a media ref while forwarding supported tool images', async () => {
       mockIsCanUseVision.mockReturnValue(true);
 
       const processor = new MessageContentProcessor({
@@ -402,12 +402,18 @@ describe('MessageContentProcessor', () => {
         isCanUseVision: mockIsCanUseVision,
         fileContext: { enabled: false },
       });
-      const imageUrl = 'https://example.com/f/image-id.avif?signature=secret';
+      const avifUrl = 'https://example.com/f/image-id.avif?signature=secret';
+      const pngUrl = 'https://example.com/f/image-id.png?signature=secret';
       const messages: UIChatMessage[] = [
         {
-          content: 'Read AVIF image result',
+          content: 'Read image results',
           id: 'tool-avif',
-          pluginState: { images: [{ mediaType: 'image/avif', url: imageUrl }] },
+          pluginState: {
+            images: [
+              { mediaType: 'image/avif', url: avifUrl },
+              { mediaType: 'image/png', url: pngUrl },
+            ],
+          },
           role: 'tool',
           tool_call_id: 'call_avif',
           createdAt: Date.now(),
@@ -416,13 +422,25 @@ describe('MessageContentProcessor', () => {
       ];
 
       const result = await processor.process(createContext(messages));
-      const content = result.messages[0].content as string;
+      const content = result.messages[0].content;
 
-      expect(content).toContain(
+      expect(content).toBeInstanceOf(Array);
+      const contentParts = content as Array<{
+        image_url?: { detail: string; url: string };
+        text?: string;
+        type: string;
+      }>;
+      const textContent = contentParts.find((part) => part.type === 'text')?.text;
+
+      expect(textContent).toContain(
         createMediaFileRef({ index: 0, messageId: 'tool-avif', type: 'image' }),
       );
-      expect(content).toContain('visual-analysis tool');
-      expect(content).not.toContain(imageUrl);
+      expect(textContent).toContain('visual-analysis tool');
+      expect(textContent).not.toContain(avifUrl);
+      expect(contentParts).toContainEqual({
+        image_url: { detail: 'auto', url: pngUrl },
+        type: 'image_url',
+      });
       expect(result.messages[0].tool_call_id).toBe('call_avif');
     });
 

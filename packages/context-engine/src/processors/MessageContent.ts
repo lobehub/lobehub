@@ -518,9 +518,13 @@ export class MessageContentProcessor extends BaseProcessor {
     // Fast path: no usable images — plain text tool result passes through unchanged.
     if (images.length === 0) return message;
 
-    const canUseVision =
-      !!this.config.isCanUseVision?.(this.config.model, this.config.provider) &&
-      !images.some((image) => requiresVisualAnalysis(image.mediaType));
+    const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+    const fallbackImages = canUseVision
+      ? images.filter((image) => requiresVisualAnalysis(image.mediaType))
+      : images;
+    const visionImages = canUseVision
+      ? images.filter((image) => !requiresVisualAnalysis(image.mediaType))
+      : [];
 
     // Normalize text content (historical messages may already be multimodal).
     let textContent = '';
@@ -537,9 +541,10 @@ export class MessageContentProcessor extends BaseProcessor {
     // opaque refs so the model can call the visual-analysis fallback.
     // The signed URL stays out of model-visible text, which prevents the model
     // from copying opaque image data between tool calls.
-    if (!canUseVision) {
-      const fallbackTextContent = stripUploadedImageMarkdown(textContent, images);
-      const placeholders = images
+    let processedTextContent = textContent;
+    if (fallbackImages.length > 0) {
+      const fallbackTextContent = stripUploadedImageMarkdown(textContent, fallbackImages);
+      const placeholders = fallbackImages
         .map(({ sourceIndex, url }) => {
           // Inline image data is safe to send as a structured vision input but
           // must never be copied into text or exposed as a reusable media ref.
@@ -554,20 +559,20 @@ export class MessageContentProcessor extends BaseProcessor {
           return `[image omitted: native vision is not supported. Media ref: ${ref}. Do not infer or describe the image. Use an available visual-analysis tool with this ref before answering.]`;
         })
         .join('\n');
-      const content = fallbackTextContent
+      processedTextContent = fallbackTextContent
         ? `${fallbackTextContent}\n\n${placeholders}`
         : placeholders;
-
-      return { ...message, content };
     }
+
+    if (visionImages.length === 0) return { ...message, content: processedTextContent };
 
     const contentParts: UserMessageContentPart[] = [];
 
-    if (textContent) {
-      contentParts.push({ text: textContent, type: 'text' });
+    if (processedTextContent) {
+      contentParts.push({ text: processedTextContent, type: 'text' });
     }
 
-    contentParts.push(...(await this.processImageList(images)));
+    contentParts.push(...(await this.processImageList(visionImages)));
 
     return { ...message, content: contentParts };
   }
