@@ -21,6 +21,8 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
 
@@ -139,6 +141,7 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
+  const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   // Effective config = shared row + this member's device override,
   // so the quota badges gate on where THIS member's run actually executes.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
@@ -154,7 +157,7 @@ const HeteroControlBar = memo(() => {
   // a Claude / Codex account. API mode bills the bound provider key instead,
   // so the remaining-quota chip in the corner would be stale or empty.
   const isSubscriptionAuth = (heteroProvider?.authMode ?? 'subscription') === 'subscription';
-  const shouldShowApiCredits = heteroProvider?.authMode === 'api';
+  const shouldShowApiCredits = enableAgentProviderBinding && heteroProvider?.authMode === 'api';
   // An explicit bound device (including web's device-upgraded "local" pick)
   // samples quota through the gateway; `auto` has no concrete device to ask
   // and the cloud sandbox has no sampler, so both stay quota-less.

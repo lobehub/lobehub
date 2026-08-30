@@ -29,6 +29,7 @@ const effectiveAgencyConfig = vi.hoisted(() => ({
   },
   workspaceScoped: false,
 }));
+const labPreferences = vi.hoisted(() => ({ enableAgentProviderBinding: true }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<typeof LobechatConstModule>()),
@@ -84,6 +85,19 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     isAgentConfigLoadingById: () => () => false,
     isWorkspaceAgentById: () => () => true,
+  },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ preference: { lab: labPreferences } }),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableAgentProviderBinding: (state: {
+      preference: { lab: { enableAgentProviderBinding: boolean } };
+    }) => state.preference.lab.enableAgentProviderBinding,
   },
 }));
 
@@ -296,6 +310,7 @@ beforeEach(() => {
     heterogeneousProvider: { command: 'codex', type: 'codex' },
   };
   effectiveAgencyConfig.workspaceScoped = false;
+  labPreferences.enableAgentProviderBinding = true;
   confirmModalMock.mockReset();
   mockService.consumeCodexRateLimitResetCredit.mockReset();
   mockService.getClaudeCodeQuota.mockReset();
@@ -363,6 +378,21 @@ describe('HeteroControlBar', () => {
     expect(screen.getByTestId('api-credits')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' })).toBeNull();
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+  });
+
+  it('hides platform credits when API mode is disabled in Labs', () => {
+    labPreferences.enableAgentProviderBinding = false;
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', command: 'codex', type: 'codex' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByTestId('api-credits')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
+    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
   });
 });
 
