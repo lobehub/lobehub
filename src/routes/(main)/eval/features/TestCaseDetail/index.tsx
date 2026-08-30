@@ -1,16 +1,18 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { Breadcrumb } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, FileText } from 'lucide-react';
-import { memo } from 'react';
+import { ChevronRight, FileText, Pencil } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useEvalStore } from '@/store/eval';
 
 import Transcript from './Transcript';
+import { useCaseDraft } from './useCaseDraft';
 
 const styles = createStaticStyles(({ css }) => ({
   breadcrumb: css`
@@ -41,6 +43,10 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
+  `,
+  editor: css`
+    font-size: ${cssVar.fontSize};
+    line-height: 1.75;
   `,
   prose: css`
     padding-block: 10px;
@@ -78,6 +84,8 @@ export interface TestCaseDetailProps {
  */
 const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => {
   const { t } = useTranslation('eval');
+  const updateTestCase = useEvalStore((s) => s.updateTestCase);
+  const [saving, setSaving] = useState(false);
 
   const content = testCase.content ?? {};
   const expected = typeof content.expected === 'string' ? content.expected : undefined;
@@ -92,6 +100,25 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     typeof testCase.metadata?.capturedOutput === 'string'
       ? testCase.metadata.capturedOutput
       : undefined;
+
+  const initial = useMemo(
+    () => ({ criteria: criteria ?? '', expected: expected ?? '', input: content.input ?? '' }),
+    [criteria, expected, content.input],
+  );
+  const { cancel, draft, editing, patch, setDraft, start, stop } = useCaseDraft(initial);
+
+  const handleSave = async () => {
+    if (!patch) return stop();
+    setSaving(true);
+    try {
+      await updateTestCase(testCase.id, testCase.datasetId, patch);
+      stop();
+    } catch (error) {
+      toast.error((error as Error)?.message ?? t('testCaseDetail.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Flexbox gap={24} style={{ maxWidth: 880, paddingBlock: 24, paddingInline: 32 }}>
@@ -113,23 +140,52 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
         ]}
       />
 
-      <Flexbox horizontal align="center" gap={12}>
-        <div className={styles.icon}>
-          <FileText size={18} style={{ color: cssVar.colorTextSecondary }} />
-        </div>
-        <Flexbox gap={6}>
-          <Text as="h4" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
-            {caseId ?? t('testCaseDetail.title')}
-          </Text>
-          <Flexbox horizontal gap={6}>
-            {testCase.evalMode && <Tag size="small">{testCase.evalMode}</Tag>}
+      <Flexbox horizontal align="center" gap={12} justify="space-between">
+        <Flexbox horizontal align="center" gap={12}>
+          <div className={styles.icon}>
+            <FileText size={18} style={{ color: cssVar.colorTextSecondary }} />
+          </div>
+          <Flexbox gap={6}>
+            <Text as="h4" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
+              {caseId ?? t('testCaseDetail.title')}
+            </Text>
+            <Flexbox horizontal gap={6}>
+              {testCase.evalMode && <Tag size="small">{testCase.evalMode}</Tag>}
+            </Flexbox>
           </Flexbox>
         </Flexbox>
+        {editing ? (
+          <Flexbox horizontal gap={8}>
+            <Button disabled={saving} size="small" onClick={cancel}>
+              {t('common.cancel')}
+            </Button>
+            <Button loading={saving} size="small" type="primary" onClick={handleSave}>
+              {t('common.save')}
+            </Button>
+          </Flexbox>
+        ) : (
+          <Button icon={Pencil} size="small" onClick={start}>
+            {t('common.edit')}
+          </Button>
+        )}
       </Flexbox>
 
       <Flexbox gap={10}>
         <span className={styles.label}>{t('testCaseDetail.definition')}</span>
-        <Transcript input={content.input ?? ''} messages={content.messages} />
+        <Transcript
+          input={content.input ?? ''}
+          messages={content.messages}
+          inputSlot={
+            editing ? (
+              <TextArea
+                autoSize={{ maxRows: 12, minRows: 3 }}
+                className={styles.editor}
+                value={draft.input}
+                onChange={(e) => setDraft({ input: e.target.value })}
+              />
+            ) : undefined
+          }
+        />
       </Flexbox>
 
       {capturedOutput && (
@@ -149,7 +205,14 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
 
       <Flexbox gap={10}>
         <span className={styles.label}>{t('testCaseDetail.criteria')}</span>
-        {criteria ? (
+        {editing ? (
+          <TextArea
+            autoSize={{ maxRows: 12, minRows: 3 }}
+            className={styles.editor}
+            value={draft.criteria}
+            onChange={(e) => setDraft({ criteria: e.target.value })}
+          />
+        ) : criteria ? (
           <div className={styles.prose}>{criteria}</div>
         ) : (
           <Text style={{ fontSize: 12 }} type="secondary">
@@ -160,7 +223,15 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
 
       <Flexbox gap={10}>
         <span className={styles.label}>{t('testCaseDetail.expected')}</span>
-        {expected ? (
+        {editing ? (
+          <TextArea
+            autoSize={{ maxRows: 12, minRows: 3 }}
+            className={styles.editor}
+            placeholder={t('testCaseDetail.expected.placeholder')}
+            value={draft.expected}
+            onChange={(e) => setDraft({ expected: e.target.value })}
+          />
+        ) : expected ? (
           <div className={styles.prose}>{expected}</div>
         ) : (
           <Text style={{ fontSize: 12 }} type="secondary">

@@ -76,6 +76,7 @@ export default {
   'common.edit': 'Edit',
   'common.later': 'Later',
   'common.next': 'Next',
+  'common.save': 'Save',
   'common.unknown': 'Unknown',
   'common.update': 'Update',
 
@@ -465,6 +466,8 @@ export default {
   'testCaseDetail.capturedOutput': 'Captured answer',
   'testCaseDetail.capturedOutputHint':
     'The answer this case was captured from \u2014 kept as a counter-example for the judge, not as the expected output.',
+  'testCaseDetail.context_one': 'Prior context · {{count}} turn',
+  'testCaseDetail.context_other': 'Prior context · {{count}} turns',
   'testCaseDetail.counterExample': 'counter-example',
   'testCaseDetail.criteria': 'Criteria',
   'testCaseDetail.criteria.empty':
@@ -472,8 +475,10 @@ export default {
   'testCaseDetail.definition': 'Case definition',
   'testCaseDetail.expected': 'Expected output',
   'testCaseDetail.expected.empty': 'Not set \u2014 scored by the criteria alone.',
+  'testCaseDetail.expected.placeholder': 'Leave empty when there is no single right answer.',
   'testCaseDetail.open': 'Open case',
   'testCaseDetail.notFound': 'This test case no longer exists.',
+  'testCaseDetail.saveFailed': 'Could not save this case.',
   'testCaseDetail.role.assistant': 'Assistant',
   'testCaseDetail.role.system': 'System',
   'testCaseDetail.role.tool': 'Tool',

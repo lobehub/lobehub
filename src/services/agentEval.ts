@@ -166,9 +166,9 @@ class AgentEvalService {
     content?: {
       category?: string;
       expected?: string;
-      input: string;
+      input?: string;
     };
-    evalConfig?: { judgePrompt?: string } | null;
+    evalConfig?: { criteria?: string; judgePrompt?: string } | null;
     evalMode?: RubricType | null;
     metadata?: Record<string, unknown>;
     sortOrder?: number;
