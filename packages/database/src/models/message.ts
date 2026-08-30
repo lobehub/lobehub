@@ -103,6 +103,7 @@ import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { searchableMessage } from '../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopicRef } from '../utils/shareVisitor';
+import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -1062,6 +1063,18 @@ export const toVisitorMessage = (
   } as UIChatMessage;
 };
 
+export interface SoftDeletedMessage {
+  /** Live children that were re-parented away from this message at trash time. */
+  childIds: string[];
+  content: string | null;
+  id: string;
+  /** Pulled in as a tool companion of a requested message (never a root of its own). */
+  isCompanion: boolean;
+  parentId: string | null;
+  role: string;
+  topicId: string | null;
+}
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -1152,6 +1165,20 @@ export class MessageModel {
     if (rows.length === 0) return 'visitor';
     return rows[0].senderId === null ? 'creator' : 'visitor';
   };
+
+  /**
+   * Scope predicate without the recycle-bin filter — restore / purge internals
+   * only. Keeps the visitor exclusion of {@link ownership} so a creator-facing
+   * restore or purge can never reach an agent-share visitor row.
+   */
+  private trashScope = () =>
+    and(
+      buildWorkspaceWhere(
+        { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+        messages,
+      ),
+      this.notShareVisitor(),
+    );
 
   private pluginsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
@@ -5316,6 +5343,209 @@ export class MessageModel {
           ),
         ),
       );
+
+  // **************** Recycle bin *************** //
+
+  /**
+   * Move messages to the recycle bin. Mirrors {@link deleteMessages} step for
+   * step — tool companions are pulled in, live children are re-parented onto
+   * the nearest surviving ancestor, the active-branch pointer is reconciled and
+   * the topic usage rollup recomputed — but the rows are stamped instead of
+   * dropped. Returns one entry per stamped row with the tree data a restore
+   * needs to splice it back (`parentId` + the child ids that were re-parented
+   * away from it), and whether the row was an explicitly requested root or a
+   * tool companion pulled in with it.
+   */
+  softDeleteMessages = async (
+    ids: string[],
+    options: SoftDeleteOptions,
+  ): Promise<SoftDeletedMessage[]> => {
+    if (ids.length === 0) return [];
+
+    return this.db.transaction(async (tx) => {
+      const requested = await tx
+        .select({
+          content: messages.content,
+          id: messages.id,
+          parentId: messages.parentId,
+          role: messages.role,
+          tools: messages.tools,
+          topicId: messages.topicId,
+        })
+        .from(messages)
+        .where(and(this.ownership(), inArray(messages.id, ids)));
+      if (requested.length === 0) return [];
+
+      // Tool companions: the tool-result rows of a trashed assistant turn go
+      // with it (same rule as the hard delete).
+      const toolCallIds = requested
+        .flatMap((row) => ((row.tools as ChatToolPayload[]) ?? []).map((tool) => tool.id))
+        .filter(Boolean);
+      const requestedIds = new Set(requested.map((row) => row.id));
+      let companions: typeof requested = [];
+      if (toolCallIds.length > 0) {
+        const companionRows = await tx
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .where(inArray(messagePlugins.toolCallId, toolCallIds));
+        const companionIds = companionRows
+          .map((row) => row.id)
+          .filter((id) => !requestedIds.has(id));
+        if (companionIds.length > 0) {
+          companions = await tx
+            .select({
+              content: messages.content,
+              id: messages.id,
+              parentId: messages.parentId,
+              role: messages.role,
+              tools: messages.tools,
+              topicId: messages.topicId,
+            })
+            .from(messages)
+            .where(and(this.ownership(), inArray(messages.id, companionIds)));
+        }
+      }
+
+      const toDelete = [...requested, ...companions];
+      const deleteIds = toDelete.map((row) => row.id);
+      const deleteSet = new Set(deleteIds);
+      const parentMap = new Map(toDelete.map((row) => [row.id, row.parentId] as const));
+
+      const finalAncestorMap = new Map<string, string | null>();
+      const findFinalAncestor = (id: string): string | null => {
+        if (finalAncestorMap.has(id)) return finalAncestorMap.get(id)!;
+        const parentId = parentMap.get(id);
+        if (parentId === null || parentId === undefined) {
+          finalAncestorMap.set(id, null);
+          return null;
+        }
+        if (!deleteSet.has(parentId)) {
+          finalAncestorMap.set(id, parentId);
+          return parentId;
+        }
+        const ancestor = findFinalAncestor(parentId);
+        finalAncestorMap.set(id, ancestor);
+        return ancestor;
+      };
+      for (const id of deleteSet) findFinalAncestor(id);
+
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        [...new Set(finalAncestorMap.values())].filter((id): id is string => id !== null),
+      );
+
+      // Live children re-parented onto the nearest surviving ancestor —
+      // remembered per message so a restore can hand them back.
+      const children = await tx
+        .select({ id: messages.id, parentId: messages.parentId })
+        .from(messages)
+        .where(
+          and(
+            this.ownership(),
+            inArray(messages.parentId, deleteIds),
+            not(inArray(messages.id, deleteIds)),
+          ),
+        );
+      const childIdsByParent = new Map<string, string[]>();
+      for (const child of children) {
+        const list = childIdsByParent.get(child.parentId!) ?? [];
+        list.push(child.id);
+        childIdsByParent.set(child.parentId!, list);
+        await tx
+          .update(messages)
+          .set({ parentId: finalAncestorMap.get(child.parentId!) ?? null })
+          .where(and(eq(messages.id, child.id), this.ownership()));
+      }
+
+      await tx
+        .update(messages)
+        .set(trashStamp(options.deletedAt))
+        .where(and(this.ownership(), inArray(messages.id, deleteIds)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
+
+      const affectedTopicIds = [
+        ...new Set(toDelete.map((m) => m.topicId).filter(Boolean) as string[]),
+      ];
+      for (const topicId of affectedTopicIds) {
+        await recomputeTopicUsage(tx, this.userId, topicId, this.workspaceId);
+      }
+
+      return toDelete.map((row) => ({
+        childIds: childIdsByParent.get(row.id) ?? [],
+        content: row.content,
+        id: row.id,
+        isCompanion: !requestedIds.has(row.id),
+        parentId: row.parentId,
+        role: row.role,
+        topicId: row.topicId,
+      }));
+    });
+  };
+
+  /**
+   * Bring trashed messages back and splice them into their branch: the stamp
+   * is cleared and the children recorded at trash time are re-parented onto
+   * the message again (best effort — a child that has since moved or gone is
+   * left alone). The active-branch pointer of the parent keeps pointing at
+   * whatever branch is active today.
+   */
+  restoreMessages = async (
+    entries: { childIds?: string[]; id: string; parentId?: string | null }[],
+  ): Promise<string[]> => {
+    if (entries.length === 0) return [];
+    return this.db.transaction(async (tx) => {
+      const ids = entries.map((entry) => entry.id);
+      const rows = await tx
+        .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
+        .from(messages)
+        .where(and(this.trashScope(), inArray(messages.id, ids), isTrashed(messages.isDeleted)));
+      if (rows.length === 0) return [];
+      const restoredIds = new Set(rows.map((row) => row.id));
+
+      const parentIds = rows.map((row) => row.parentId).filter((id): id is string => !!id);
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(tx, parentIds);
+
+      await tx
+        .update(messages)
+        .set(restoreStamp())
+        .where(and(this.trashScope(), inArray(messages.id, [...restoredIds])));
+
+      for (const entry of entries) {
+        if (!restoredIds.has(entry.id) || !entry.childIds?.length) continue;
+        await tx
+          .update(messages)
+          .set({ parentId: entry.id })
+          .where(and(inArray(messages.id, entry.childIds), this.trashScope()));
+      }
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
+
+      const affectedTopicIds = [...new Set(rows.map((m) => m.topicId).filter(Boolean) as string[])];
+      for (const topicId of affectedTopicIds) {
+        await recomputeTopicUsage(tx, this.userId, topicId, this.workspaceId);
+      }
+      return [...restoredIds];
+    });
+  };
+
+  findTrashedByIds = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
+      .from(messages)
+      .where(and(this.trashScope(), inArray(messages.id, ids), isTrashed(messages.isDeleted)));
+  };
+
+  /**
+   * Hard delete for the purge sweep. Children were already re-parented at trash
+   * time and usage already excludes stamped rows, so this is a plain delete
+   * keyed on `scope()`.
+   */
+  purgeMessages = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    return this.db.delete(messages).where(and(this.trashScope(), inArray(messages.id, ids)));
+  };
 
   /**
    * Creator-facing "clear this session/topic/group" sweep.
