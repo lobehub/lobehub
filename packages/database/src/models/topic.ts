@@ -59,7 +59,13 @@ import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { searchableMessage } from '../utils/searchableMessage';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
-import { notTrashed } from '../utils/softDelete';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -457,6 +463,19 @@ export class TopicModel {
    */
   private workspaceScope = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
+
+  /**
+   * {@link workspaceScope} without the recycle-bin filter, still excluding
+   * share-visitor topics — restore / trash lookups / purge internals only.
+   */
+  private trashScope = () =>
+    and(
+      buildWorkspaceWhere(
+        { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+        topics,
+      ),
+      this.notShareVisitor(),
+    );
 
   private ownership = () => and(this.workspaceScope(), this.notShareVisitor());
 
@@ -1790,6 +1809,146 @@ export class TopicModel {
    */
   deleteAll = async () => {
     return this.db.delete(topics).where(and(this.mine(), this.notShareVisitor()));
+  };
+
+  // **************** Recycle bin *************** //
+
+  /**
+   * Move topics to the recycle bin: stamp `deleted_at` and return the rows so
+   * the caller can register them. Rows already trashed are left untouched (their
+   * own registry row keeps their original stamp). Messages / threads are not
+   * stamped — they are hidden by their parent and hard-cascade at purge time.
+   */
+  softDelete = async (ids: string[], options: SoftDeleteOptions): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          inArray(topics.id, ids),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
+      )
+      .returning();
+  };
+
+  /** Soft-delete counterpart of `batchDeleteBySessionId` (`sessionId` null = the agent's default session). */
+  softDeleteBySessionId = async (
+    sessionId: string | null | undefined,
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          this.matchSession(sessionId),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
+      )
+      .returning();
+  };
+
+  softDeleteByGroupId = async (
+    groupId: string | null | undefined,
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          this.matchGroup(groupId),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
+      )
+      .returning();
+  };
+
+  softDeleteByAgentId = async (
+    agentId: string,
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          eq(topics.agentId, agentId),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
+      )
+      .returning();
+  };
+
+  /**
+   * Cascade helper for trashing an agent / group / session: stamps every live
+   * topic that hangs off any of the given parents (by `agent_id`, `session_id`
+   * or `group_id`) in one statement.
+   */
+  softDeleteByParents = async (
+    parents: { agentIds?: string[]; groupIds?: string[]; sessionIds?: string[] },
+    options: SoftDeleteOptions,
+  ): Promise<TopicItem[]> => {
+    const conditions: SQL[] = [];
+    if (parents.agentIds?.length) conditions.push(inArray(topics.agentId, parents.agentIds));
+    if (parents.sessionIds?.length) conditions.push(inArray(topics.sessionId, parents.sessionIds));
+    if (parents.groupIds?.length) conditions.push(inArray(topics.groupId, parents.groupIds));
+    if (conditions.length === 0) return [];
+
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          or(...conditions),
+          options.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
+      )
+      .returning();
+  };
+
+  softDeleteAll = async (options: SoftDeleteOptions): Promise<TopicItem[]> => {
+    return this.db
+      .update(topics)
+      .set(trashStamp(options.deletedAt))
+      .where(and(this.mine(), this.notShareVisitor()))
+      .returning();
+  };
+
+  /** Bring trashed topics back. Only rows currently stamped are touched. */
+  restore = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(topics)
+      .set(restoreStamp())
+      .where(and(inArray(topics.id, ids), this.trashScope(), isTrashed(topics.isDeleted)))
+      .returning();
+  };
+
+  /** Trashed rows by id, bypassing the recycle-bin filter (restore / purge internals). */
+  findTrashedByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(topics)
+      .where(and(inArray(topics.id, ids), this.trashScope(), isTrashed(topics.isDeleted)));
+  };
+
+  /**
+   * Hard delete for the purge sweep: bypasses the recycle-bin filter so a
+   * trashed row (invisible to `delete`) can actually be removed. FK cascades
+   * take messages, threads and the rest with it.
+   */
+  purge = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.trashScope()));
   };
 
   // **************** Update *************** //

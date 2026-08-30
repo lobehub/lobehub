@@ -19,19 +19,30 @@ The one-line contract:
 
 ## 0. Phasing
 
-The mechanism is generic, but it lands in two steps so the pattern can prove itself on the
-highest-traffic domain before it touches every content table:
+The mechanism is generic, but it lands one layer — and then one entity — at a time, so each step is
+small enough to verify on its own:
 
-| Phase | Scope                                                                                              | Status                                                                                    |
-| ----- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 1     | Chat domain: **topics**, **agents**, **messages**; the bin UI; purge sweep                         | this branch (`feat/soft-delete-mvp`)                                                      |
-| 2     | chat groups, Pages / documents, files, knowledge bases, projects, tasks + goals, generation topics | already implemented end-to-end on `feat/soft-delete-recycle-bin`, held back until 1 ships |
+| Step | Scope                                                                                              | Where                            |
+| ---- | -------------------------------------------------------------------------------------------------- | -------------------------------- |
+| 1    | Schema: `trash_items` + `is_deleted` / `deleted_at` on 19 content tables                           | merged (`0152`)                  |
+| 2    | Read side: every ownership-scoped read hides stamped rows                                          | `feat/soft-delete-schema`        |
+| 3    | **Topics** end to end — stamp, register, restore, purge, sweep — plus the recycle-bin UI           | `feat/trash-topic` (this branch) |
+| 4    | Agents (cascading to their topics) and messages (tree rewrite)                                     | `feat/soft-delete-mvp`           |
+| 5    | Chat groups, Pages / documents, files, knowledge bases, projects, tasks + goals, generation topics | `feat/soft-delete-recycle-bin`   |
 
-Phase 1 deliberately keeps a few phase-2 edges simple: `removeTopic({ removeFiles })` no longer
-deletes attachments at delete time — the flag is remembered on the registry row and the
-still-exclusive attachments are removed when the topic is **purged** (files stay live and visible in
-the meantime, since `files` has no stamp yet); and bulk "clear conversation" sweeps
-(`removeMessagesByAssistant/ByGroup`) remain hard deletes.
+Step 3 is the smallest slice that is useful on its own: deleting a conversation is the most frequent
+destructive action in the product, and a topic's cascade is the simplest one (messages and threads
+are hidden by their parent and hard-cascade at purge, so nothing below the topic needs a stamp).
+
+While only topics are trashable, a few edges stay deliberately simple:
+
+- `removeTopic({ removeFiles })` no longer deletes attachments at delete time — the flag is
+  remembered on the registry row and the still-exclusive attachments are removed when the topic is
+  **purged**. Files have no stamp yet, so they stay visible in the meantime.
+- The restore path has no parent-in-bin check: a topic's containers (agent, chat group) cannot be
+  trashed yet, so they can never be sitting in the bin. The check arrives with the agent handler.
+- Bulk "clear conversation" sweeps (`removeMessagesByAssistant/ByGroup`) and every non-topic delete
+  remain hard deletes.
 
 ## 1. Audit — what deletion looked like before
 

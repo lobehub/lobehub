@@ -28,6 +28,7 @@ import {
   Sparkles,
   TagIcon,
   TerminalSquare,
+  Trash2,
   Wrench,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -255,6 +256,11 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      {
+        icon: Trash2,
+        key: SettingsTabs.Trash,
+        label: t('tab.trash'),
       },
       !hideDocs && {
         icon: Info,
