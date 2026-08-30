@@ -29,11 +29,7 @@ import {
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import {
-  isHeterogeneousAgentModelId,
-  LOADING_FLAT,
-  resolveSubAgentChatConfig,
-} from '@lobechat/const';
+import { LOADING_FLAT, resolveSubAgentChatConfig } from '@lobechat/const';
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
@@ -88,6 +84,7 @@ import {
   getActivePluginIds,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
+  isHeterogeneousAgentModelId,
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,

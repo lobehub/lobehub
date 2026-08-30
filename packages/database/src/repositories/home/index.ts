@@ -4,6 +4,7 @@ import {
   type SidebarAgentListResponse,
   type SidebarGroup,
 } from '@lobechat/types';
+import { isHeterogeneousAgentModelId } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, asc, count, desc, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
@@ -78,15 +79,19 @@ export class HomeRepository {
     //    private rows via the workspace-aware predicate.
     const agentList = await this.db
       .select({
-        agencyConfig: agents.agencyConfig,
         agentSessionGroupId: agents.sessionGroupId,
         agentUserId: agents.userId,
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        legacyRuntimeType: sql<
+          string | null
+        >`${agents.agencyConfig}->'heterogeneousProvider'->>'type'`,
+        model: agents.model,
         name: agents.name,
         pinned: agents.pinned,
+        runtimeType: agents.runtimeType,
         sessionGroupId: sessions.groupId,
         sessionId: sessions.id,
         sessionPinned: sessions.pinned,
@@ -273,15 +278,17 @@ export class HomeRepository {
 
   private processAgentList(
     agentItems: Array<{
-      agencyConfig: { heterogeneousProvider?: { type?: string } } | null;
       agentSessionGroupId: string | null;
       agentUserId: string;
       avatar: string | null;
       backgroundColor: string | null;
       description: string | null;
       id: string;
+      legacyRuntimeType: string | null;
+      model: string | null;
       name: string | null;
       pinned: boolean | null;
+      runtimeType: string | null;
       sessionGroupId: string | null;
       sessionId: string | null;
       sessionPinned: boolean | null;
@@ -348,7 +355,12 @@ export class HomeRepository {
           groupId: this.workspaceId
             ? a.agentSessionGroupId
             : (a.agentSessionGroupId ?? a.sessionGroupId),
-          heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
+          // Keep compact legacy fallbacks until the asynchronous runtime-column
+          // backfill has converged for every existing agent.
+          heterogeneousType:
+            a.runtimeType ??
+            a.legacyRuntimeType ??
+            (isHeterogeneousAgentModelId(a.model) ? a.model : null),
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),

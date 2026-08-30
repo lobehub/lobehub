@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
@@ -961,7 +962,12 @@ export class ChatGroupModel {
       // recipient's group runs unroutable. Same sanitation as the member
       // agent handover.
       const ownedRows = await trx
-        .select({ agencyConfig: agents.agencyConfig, id: agents.id, visibility: agents.visibility })
+        .select({
+          agencyConfig: agents.agencyConfig,
+          id: agents.id,
+          model: agents.model,
+          visibility: agents.visibility,
+        })
         .from(agents)
         .where(inArray(agents.id, ownedAgentIds));
       const cleanedConfigs = await sanitizeAgencyConfigsForWorkspace(
@@ -979,6 +985,10 @@ export class ChatGroupModel {
           .set({
             agencyConfig: cleanedConfigs[index],
             clientId: null,
+            ...deriveAgentRuntimeFields({
+              agencyConfig: cleanedConfigs[index],
+              model: row.model,
+            }),
             updatedAt: agents.updatedAt,
             userId: toUserId,
           })

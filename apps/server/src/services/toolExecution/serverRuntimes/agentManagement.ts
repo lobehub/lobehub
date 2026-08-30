@@ -11,12 +11,7 @@ import {
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
-import {
-  getPluginMode,
-  type HeterogeneousProviderConfig,
-  parsePluginEntry,
-  upsertPluginMode,
-} from '@lobechat/types';
+import { getPluginMode, parsePluginEntry, upsertPluginMode } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
@@ -278,7 +273,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             avatar?: string | null;
             backgroundColor?: string | null;
             description?: string | null;
-            heteroType?: HeterogeneousProviderConfig['type'];
+            heteroType?: string;
             id: string;
             isMarket?: boolean;
             title?: string | null;

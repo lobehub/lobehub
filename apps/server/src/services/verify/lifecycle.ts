@@ -1,4 +1,4 @@
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isHeterogeneousAgentModelId } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';

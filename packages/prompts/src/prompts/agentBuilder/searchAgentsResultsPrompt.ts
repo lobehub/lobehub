@@ -1,5 +1,3 @@
-import type { HeterogeneousProviderConfig } from '@lobechat/types';
-
 import { escapeXmlAttr, escapeXmlContent } from '../search/xmlEscape';
 
 export type SearchAgentSource = 'user' | 'market' | 'all';
@@ -12,7 +10,7 @@ export interface SearchAgentResultItem {
    * execution to an external CLI/device runtime (e.g. `claude-code`, `codex`).
    * Absent for normal model-runtime agents.
    */
-  heteroType?: HeterogeneousProviderConfig['type'];
+  heteroType?: string;
   id: string;
   /** Whether the agent comes from the marketplace (vs. the user's workspace). */
   isMarket?: boolean;

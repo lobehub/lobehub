@@ -1,5 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, asc, count, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
@@ -160,6 +161,7 @@ export class AgentGroupRepository {
     targetVisibility?: 'private' | 'public',
   ): NewAgent => ({
     agencyConfig: source?.agencyConfig,
+    ...deriveAgentRuntimeFields({ agencyConfig: source?.agencyConfig, model: source?.model }),
     avatar: source?.avatar,
     backgroundColor: source?.backgroundColor,
     chatConfig: source?.chatConfig,

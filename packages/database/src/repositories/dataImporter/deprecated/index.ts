@@ -1,4 +1,5 @@
 import type { ImporterEntryData } from '@lobechat/types';
+import { deriveAgentRuntimeFields } from '@lobechat/types';
 import { and, inArray, sql } from 'drizzle-orm';
 
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
@@ -153,6 +154,10 @@ export class DeprecatedDataImporterRepos {
                 // anyway.
                 plugins: config.plugins as unknown as string[] | undefined,
                 ...meta,
+                ...deriveAgentRuntimeFields({
+                  agencyConfig: config.agencyConfig,
+                  model: config.model,
+                }),
                 userId: this.userId,
                 workspaceId: this.workspaceId ?? null,
               })),

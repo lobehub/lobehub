@@ -823,6 +823,48 @@ describe('AgentModel', () => {
       expect(result?.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
     });
 
+    it('should synchronize runtime identity when agencyConfig changes', async () => {
+      const agent = await agentModel.create({ title: 'Runtime Agent' });
+
+      await agentModel.update(agent.id, {
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      });
+
+      const heterogeneous = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(heterogeneous?.runtimeKind).toBe('heterogeneous');
+      expect(heterogeneous?.runtimeType).toBe('codex');
+
+      await agentModel.update(agent.id, { agencyConfig: null });
+
+      const native = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(native?.runtimeKind).toBe('native');
+      expect(native?.runtimeType).toBeNull();
+    });
+
+    it('should synchronize runtime identity when a legacy model changes', async () => {
+      const agent = await agentModel.create({ model: 'gpt-4o', title: 'Legacy Runtime Agent' });
+
+      await agentModel.update(agent.id, { model: 'codex' });
+
+      const heterogeneous = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(heterogeneous?.runtimeKind).toBe('heterogeneous');
+      expect(heterogeneous?.runtimeType).toBe('codex');
+
+      await agentModel.update(agent.id, { model: null });
+
+      const native = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(native?.runtimeKind).toBe('native');
+      expect(native?.runtimeType).toBeNull();
+    });
+
     it('should not update another user agent', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1232,6 +1274,22 @@ describe('AgentModel', () => {
       expect(result?.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
     });
 
+    it('should synchronize runtime identity after partially merging agencyConfig', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(result?.runtimeKind).toBe('heterogeneous');
+      expect(result?.runtimeType).toBe('codex');
+    });
+
     it('should persist only reference fields in an API binding and clear fast model with null', async () => {
       const agent = await agentModel.create({
         agencyConfig: {
@@ -1550,10 +1608,61 @@ describe('AgentModel', () => {
       });
 
       expect(result?.model).toBe('claude-code');
+      expect(result?.runtimeKind).toBe('heterogeneous');
+      expect(result?.runtimeType).toBe('claude-code');
+    });
+
+    it('should preserve an unknown runtime type during unrelated config updates', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({
+          agencyConfig: { heterogeneousProvider: { type: 'future-agent' } } as any,
+          runtimeKind: 'heterogeneous',
+          runtimeType: 'future-agent',
+          title: 'Forward-compatible Agent',
+          userId,
+        })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { title: 'Renamed Agent' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(result?.title).toBe('Renamed Agent');
+      expect(result?.runtimeKind).toBe('heterogeneous');
+      expect(result?.runtimeType).toBe('future-agent');
     });
   });
 
   describe('create', () => {
+    it('should derive runtime identity instead of accepting caller-provided values', async () => {
+      const native = await agentModel.create({
+        runtimeKind: 'heterogeneous',
+        runtimeType: 'codex',
+        title: 'Native Agent',
+      });
+      const heterogeneous = await agentModel.create({
+        agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+        runtimeKind: 'native',
+        runtimeType: null,
+        title: 'Connected Agent',
+      });
+
+      expect(native.runtimeKind).toBe('native');
+      expect(native.runtimeType).toBeNull();
+      expect(heterogeneous.runtimeKind).toBe('heterogeneous');
+      expect(heterogeneous.runtimeType).toBe('openclaw');
+    });
+
+    it('should derive heterogeneous runtime identity from a legacy model', async () => {
+      const agent = await agentModel.create({ model: 'codex', title: 'Legacy Codex Agent' });
+
+      expect(agent.runtimeKind).toBe('heterogeneous');
+      expect(agent.runtimeType).toBe('codex');
+    });
+
     it('should strip secrets and unknown fields from an API binding', async () => {
       const agent = await agentModel.create({
         agencyConfig: {
@@ -1642,6 +1751,8 @@ describe('AgentModel', () => {
       const agent = await agentModel.create({ slug: 'ordinary-slug', title: 'Renamer' });
 
       await agentModel.update(agent.id, {
+        runtimeKind: 'heterogeneous',
+        runtimeType: 'codex',
         slug: 'agent-builder',
         title: 'Renamed',
         userId: userId2,
@@ -1653,10 +1764,14 @@ describe('AgentModel', () => {
       expect(afterUpdate?.slug).toBe('ordinary-slug');
       expect(afterUpdate?.userId).toBe(userId);
       expect(afterUpdate?.virtual).toBe(false);
+      expect(afterUpdate?.runtimeKind).toBe('native');
+      expect(afterUpdate?.runtimeType).toBeNull();
       // the mutable field in the same patch still lands
       expect(afterUpdate?.title).toBe('Renamed');
 
       await agentModel.updateConfig(agent.id, {
+        runtimeKind: 'heterogeneous',
+        runtimeType: 'codex',
         slug: 'inbox',
         virtual: true,
         visibility: 'private',
@@ -1667,6 +1782,8 @@ describe('AgentModel', () => {
       });
       expect(afterUpdateConfig?.slug).toBe('ordinary-slug');
       expect(afterUpdateConfig?.virtual).toBe(false);
+      expect(afterUpdateConfig?.runtimeKind).toBe('native');
+      expect(afterUpdateConfig?.runtimeType).toBeNull();
       // `visibility` has its own creator/owner-gated endpoints — a config patch
       // must not be able to hide a shared row from everyone else.
       expect(afterUpdateConfig?.visibility).toBe('public');
@@ -2418,11 +2535,18 @@ describe('AgentModel', () => {
       expect(result[0]).toHaveProperty('backgroundColor');
     });
 
-    it('should derive heteroType from agencyConfig.heterogeneousProvider', async () => {
+    it('should derive heteroType from compact legacy fallbacks', async () => {
       await serverDB.insert(agents).values({
         agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
         id: 'hetero-agent',
         title: 'CC 2号机',
+        userId,
+        virtual: false,
+      });
+      await serverDB.insert(agents).values({
+        id: 'legacy-model-agent',
+        model: 'codex',
+        title: 'Legacy Codex',
         userId,
         virtual: false,
       });
@@ -2431,11 +2555,14 @@ describe('AgentModel', () => {
       const result = await agentModel.queryAgents();
 
       const hetero = result.find((a) => a.id === 'hetero-agent');
+      const legacyModel = result.find((a) => a.id === 'legacy-model-agent');
       const normal = result.find((a) => a.title === 'Normal Agent');
       expect(hetero?.heteroType).toBe('claude-code');
+      expect(legacyModel?.heteroType).toBe('codex');
       expect(normal?.heteroType).toBeUndefined();
       // raw agencyConfig must not leak into the result payload
       expect(hetero).not.toHaveProperty('agencyConfig');
+      expect(legacyModel).not.toHaveProperty('model');
     });
 
     it('should exclude virtual agents', async () => {

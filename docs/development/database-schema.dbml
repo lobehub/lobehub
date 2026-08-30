@@ -17,6 +17,8 @@ table agents {
   user_id text [not null]
   workspace_id text
   agency_config jsonb
+  runtime_kind text [not null, default: 'native']
+  runtime_type text
   chat_config jsonb
   few_shots jsonb
   model text
