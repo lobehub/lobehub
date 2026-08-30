@@ -1,4 +1,4 @@
-import type { BuiltinToolContext } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import type {
