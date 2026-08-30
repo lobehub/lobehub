@@ -35,7 +35,7 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 | -------- | --------------------------- | ------------------------------- |
 | Webapp   | `src/**/*.test.ts(x)`       | `vitest.config.ts`              |
 | Packages | `packages/*/**/*.test.ts`   | `packages/*/vitest.config.ts`   |
-| Desktop  | `apps/desktop/**/*.test.ts` | `apps/desktop/vitest.config.ts` |
+| Desktop  | `apps/desktop/**/*.test.ts` | `apps/desktop/vitest.config.mts` |
 
 ## Core Principles
 
