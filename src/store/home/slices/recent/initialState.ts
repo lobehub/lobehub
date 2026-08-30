@@ -8,16 +8,23 @@ export interface RecentIndex {
   refs: RecentEntityRef[];
 }
 
+export interface RecentOptimisticTitle {
+  mutationId: number;
+  title: string;
+}
+
+export interface RecentScopeState {
+  entities: Partial<Record<RecentEntityRef, RecentItem>>;
+  index?: RecentIndex;
+  optimisticTitles: Partial<Record<RecentEntityRef, RecentOptimisticTitle>>;
+}
+
 export interface RecentState {
   allRecentsDrawerOpen: boolean;
-  recentEntitiesByScope: Record<string, Partial<Record<RecentEntityRef, RecentItem>>>;
-  recentIndexesByScope: Record<string, RecentIndex>;
-  recentOptimisticTitlesByScope: Record<string, Partial<Record<RecentEntityRef, string>>>;
+  recentsByScope: Record<string, RecentScopeState>;
 }
 
 export const initialRecentState: RecentState = {
   allRecentsDrawerOpen: false,
-  recentEntitiesByScope: {},
-  recentIndexesByScope: {},
-  recentOptimisticTitlesByScope: {},
+  recentsByScope: {},
 };

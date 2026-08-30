@@ -24,7 +24,7 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const scope = useCacheScope();
   const useFetchAllRecents = useHomeStore((s) => s.useFetchAllRecents);
   const refs = useHomeStore(homeRecentSelectors.refs(scope));
-  const entities = useHomeStore((s) => s.recentEntitiesByScope[scope]);
+  const entities = useHomeStore((s) => s.recentsByScope[scope]?.entities);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit(scope));
 
   const { isLoading } = useFetchAllRecents(open, scope);

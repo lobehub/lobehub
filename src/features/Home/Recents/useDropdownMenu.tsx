@@ -23,13 +23,7 @@ export const useRecentItemDropdownMenu = (
 ) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
   const scope = useCacheScope();
-  const [setRecentTitleOptimistic, commitRecentTitle, rollbackRecentTitle, refreshRecents] =
-    useHomeStore((s) => [
-      s.setRecentTitleOptimistic,
-      s.commitRecentTitle,
-      s.rollbackRecentTitle,
-      s.refreshRecents,
-    ]);
+  const [renameRecent, refreshRecents] = useHomeStore((s) => [s.renameRecent, s.refreshRecents]);
 
   // Viewer can read recents but cannot rename/delete them — keep the menu
   // items visible-but-disabled so the affordance is clear (per disabled-not-
@@ -46,31 +40,8 @@ export const useRecentItemDropdownMenu = (
   const transferMenuItems = documentTransferItems ?? taskTransferItems;
 
   const handleRename = useCallback(
-    async (newTitle: string) => {
-      setRecentTitleOptimistic(scope, item.type, item.id, newTitle);
-
-      try {
-        switch (item.type) {
-          case 'document': {
-            await documentService.updateDocument({ id: item.id, title: newTitle });
-            break;
-          }
-          case 'task': {
-            await taskService.update(item.id, { name: newTitle });
-            break;
-          }
-          case 'topic': {
-            await topicService.updateTopic(item.id, { title: newTitle });
-            break;
-          }
-        }
-        commitRecentTitle(scope, item.type, item.id, newTitle);
-      } catch (error) {
-        rollbackRecentTitle(scope, item.type, item.id);
-        throw error;
-      }
-    },
-    [commitRecentTitle, item, rollbackRecentTitle, scope, setRecentTitleOptimistic],
+    (newTitle: string) => renameRecent({ id: item.id, scope, title: newTitle, type: item.type }),
+    [item.id, item.type, renameRecent, scope],
   );
 
   const handleDelete = useCallback(() => {
@@ -79,7 +50,7 @@ export const useRecentItemDropdownMenu = (
         onConfirm: async (removeFiles) => {
           // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
           await topicService.removeTopic(item.id, removeFiles);
-          await refreshRecents();
+          await refreshRecents(scope);
         },
         topicIds: [item.id],
       });
@@ -106,11 +77,11 @@ export const useRecentItemDropdownMenu = (
             break;
           }
         }
-        await refreshRecents();
+        await refreshRecents(scope);
       },
       title: t('delete', { ns: 'common' }),
     });
-  }, [item, t, refreshRecents]);
+  }, [item, refreshRecents, scope, t]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
     const items: NativeContextMenuItem[] = [
