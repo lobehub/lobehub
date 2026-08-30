@@ -177,6 +177,17 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
+  it('refuses to bind a task to a node that is not a task node', async () => {
+    // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
+    // so the rule needs a test on the write path or nothing enforces it.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Wrong kind' });
+    const finding = await graphModel.createNode(goal.id, { kind: 'finding', title: 'A finding' });
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Should not bind' });
+
+    expect(await graphModel.bindTask(goal.id, finding!.id, task.id)).toBeUndefined();
+    expect((await graphModel.getGraph(goal.id))?.nodes[0].taskId).toBeNull();
+  });
+
   it('allows an abandoned work claim to be recovered after its lease expires', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Recover claim' });
     const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Recoverable work' });

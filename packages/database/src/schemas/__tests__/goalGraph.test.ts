@@ -168,7 +168,7 @@ describe('Goal Graph schema', () => {
     ).resolves.toHaveLength(1);
   });
 
-  it('enforces the Work node to responsible Task one-to-one invariant', async () => {
+  it('enforces that one task belongs to at most one node', async () => {
     const goal = await createGoal();
     const [task] = await serverDB
       .insert(tasks)
@@ -180,15 +180,9 @@ describe('Goal Graph schema', () => {
       })
       .returning();
 
-    await expect(
-      serverDB.insert(goalNodes).values({
-        goalId: goal.id,
-        kind: 'problem',
-        taskId: task.id,
-        title: 'Invalid task binding',
-      }),
-    ).rejects.toThrow();
-
+    // Which kinds may own a task is `bindTask`'s job, not the database's — see
+    // the model test. The uniqueness below is the part no single write can
+    // check for itself, so it stays here.
     await serverDB.insert(goalNodes).values({
       goalId: goal.id,
       kind: 'task',
