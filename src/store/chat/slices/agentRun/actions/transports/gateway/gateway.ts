@@ -2,6 +2,7 @@ import {
   AgentStreamClient,
   type AgentStreamClientOptions,
   type AgentStreamEvent,
+  type AgentStreamSessionCompletion,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
@@ -180,6 +181,10 @@ export interface ConnectGatewayParams {
    * completion's `markTopicUnread` and this terminal `active` write
    * partition the cases by `succeeded && !viewing`).
    *
+   * `completion` identifies a raw session close versus an authoritative terminal
+   * resume status. It is absent when auth failure or a terminal agent event drove
+   * cleanup.
+   *
    * `terminalReceived` is true when a terminal agent event (`agent_runtime_end` /
    * `error`) was processed — meaning the gateway event handler already completed
    * the op via the shared run lifecycle, so `onSessionComplete` is pure transport
@@ -196,6 +201,7 @@ export interface ConnectGatewayParams {
    */
   onSessionComplete?: (info: {
     authFailed: boolean;
+    completion?: AgentStreamSessionCompletion;
     succeeded: boolean;
     terminalReceived: boolean;
   }) => void;
@@ -218,6 +224,16 @@ export interface ConnectGatewayParams {
    */
   topicId: string;
 }
+
+const isSuccessfulGatewayCompletion = (params: {
+  authFailed: boolean;
+  completion?: AgentStreamSessionCompletion;
+  succeeded: boolean;
+}): boolean =>
+  params.succeeded ||
+  (!params.authFailed &&
+    params.completion?.source === 'resume_status' &&
+    params.completion.status === 'completed');
 
 // ─── Action Implementation ───
 
@@ -282,12 +298,16 @@ export class GatewayActionImpl {
     let terminalSucceeded = false;
     let sessionCompleted = false;
     const eventBuffer = createGatewayEventBuffer((event) => onEvent?.(event));
-    const fireSessionComplete = (opts?: { authFailed?: boolean }) => {
+    const fireSessionComplete = (opts?: {
+      authFailed?: boolean;
+      completion?: AgentStreamSessionCompletion;
+    }) => {
       if (sessionCompleted) return;
       sessionCompleted = true;
       eventBuffer.flush();
       onSessionComplete?.({
         authFailed: opts?.authFailed ?? false,
+        completion: opts?.completion,
         succeeded: terminalSucceeded,
         terminalReceived: receivedTerminalEvent,
       });
@@ -320,9 +340,9 @@ export class GatewayActionImpl {
     });
 
     // Handle session completion
-    client.on('session_complete', () => {
+    client.on('session_complete', (completion) => {
       this.internal_cleanupGatewayConnection(operationId);
-      fireSessionComplete();
+      fireSessionComplete({ completion });
     });
 
     // Handle disconnection — only fire session complete if a terminal agent event
@@ -869,6 +889,7 @@ export class GatewayActionImpl {
               ...existingTopic?.metadata,
               runningOperation: {
                 assistantMessageId: result.assistantMessageId,
+                heteroType: result.heteroType,
                 operationId: result.operationId,
               },
             },
@@ -926,11 +947,31 @@ export class GatewayActionImpl {
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventRouter,
-      onSessionComplete: ({ succeeded, terminalReceived }) => {
+      onSessionComplete: ({ authFailed, completion, succeeded, terminalReceived }) => {
         // The gateway event handler already completed the op via the shared run
         // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
+
+        // A terminal resume status is ambiguous only for an external hetero
+        // producer: an older or degraded Gateway may have no initialized DO
+        // session while the CLI is still alive and streaming via heteroIngest.
+        // Preserve unknown (`undefined`) during rolling deploys; new normal
+        // runtimes explicitly return `heteroType: null`. A raw session_complete,
+        // real terminal event, or auth failure remains authoritative.
+        const preserveExternalProducer =
+          !terminalReceived &&
+          !authFailed &&
+          completion?.source === 'resume_status' &&
+          result.heteroType !== null;
+        if (preserveExternalProducer) return;
+
+        const effectiveSucceeded = isSuccessfulGatewayCompletion({
+          authFailed,
+          completion,
+          succeeded,
+        });
+
         if (result.topicId) {
           // The server already settled this topic: the runtime's `finish`
           // executor settles to 'unread' before it publishes the terminal event
@@ -947,7 +988,7 @@ export class GatewayActionImpl {
             .settleRunningOperation(
               result.topicId,
               result.operationId,
-              viewing || !succeeded ? 'active' : 'unread',
+              viewing || !effectiveSucceeded ? 'active' : 'unread',
             )
             .catch(console.error);
           // Also clear the local store copy — the server settle above does NOT
@@ -960,7 +1001,7 @@ export class GatewayActionImpl {
             agentId: resolvedMessageContext.agentId,
             groupId: resolvedMessageContext.groupId,
             operationId: result.operationId,
-            status: viewing || !succeeded ? 'active' : undefined,
+            status: viewing || !effectiveSucceeded ? 'active' : undefined,
             topicId: result.topicId,
           });
         }
@@ -989,12 +1030,13 @@ export class GatewayActionImpl {
      */
     agentId?: string;
     assistantMessageId: string;
+    heteroType?: string | null;
     operationId: string;
     scope?: string;
     threadId?: string | null;
     topicId: string;
   }): Promise<void> => {
-    const { assistantMessageId, operationId, topicId, scope, threadId } = params;
+    const { assistantMessageId, heteroType, operationId, topicId, scope, threadId } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
@@ -1116,27 +1158,33 @@ export class GatewayActionImpl {
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventRouter,
-      onSessionComplete: ({ succeeded, terminalReceived, authFailed }) => {
-        // A reconnect is a passive re-subscribe — it must not END a run it merely
-        // re-subscribed to. Only finalize when the close PROVES the op is over:
-        //   - terminalReceived: a real agent_runtime_end / error streamed in, or
-        //   - authFailed: the gateway rejected the op's token (GC'd / gone).
-        // A bare `resume_complete` terminal *status* with neither is ambiguous —
-        // it also fires for a still-running op the gateway DO has no live session
-        // for (typically a heterogeneous CC run streaming via heteroIngest).
-        // Clearing runningOperation there would black-hole every subsequent
-        // heteroIngest batch (StaleHeteroOperationError) and silently kill the
-        // live agent, so leave the marker to the real terminal sites (heteroFinish
-        // / the inactivity watchdog) and just drop our local connection op.
-        if (!terminalReceived && !authFailed) {
-          this.#get().completeOperation(gatewayOpId);
+      onSessionComplete: ({ authFailed, completion, succeeded, terminalReceived }) => {
+        // A reconnect-local operation has no remaining work once the session
+        // completion callback fires. Real streamed terminals are completed by
+        // the shared run lifecycle; every terminal-missing fallback (including
+        // the preserved external producer case below) must close it here.
+        if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
+
+        // A reconnect is passive. Preserve only an external/rolling-unknown
+        // producer whose terminal resume status may mean "Gateway session was
+        // never initialized" rather than "producer ended". New normal runtime
+        // markers carry `heteroType: null`; old markers omit the field, so the
+        // rolling-deploy fallback is deliberately fail-safe. Raw session_complete,
+        // terminal events and auth failures are authoritative and settle below.
+        const preserveExternalProducer =
+          !terminalReceived &&
+          !authFailed &&
+          completion?.source === 'resume_status' &&
+          heteroType !== null;
+        if (preserveExternalProducer) {
           return;
         }
 
-        // The run lifecycle already completed the op when a terminal event
-        // arrived; an auth failure carries no such event, so finalize it here so
-        // the local op never sticks `running`.
-        if (authFailed) this.#get().completeOperation(gatewayOpId);
+        const effectiveSucceeded = isSuccessfulGatewayCompletion({
+          authFailed,
+          completion,
+          succeeded,
+        });
 
         // Same supersede guard as executeGatewayAgent's onSessionComplete: a
         // newer run may own this topic by now, and the settle below would
@@ -1173,7 +1221,7 @@ export class GatewayActionImpl {
             .settleRunningOperation(
               topicId,
               operationId,
-              viewing || !succeeded ? 'active' : 'unread',
+              viewing || !effectiveSucceeded ? 'active' : 'unread',
             )
             .catch(console.error);
         }
@@ -1184,7 +1232,7 @@ export class GatewayActionImpl {
         this.clearLocalRunningOperation({
           agentId: context.agentId,
           operationId,
-          status: viewing || !succeeded ? 'active' : undefined,
+          status: viewing || !effectiveSucceeded ? 'active' : undefined,
           topicId,
         });
       },

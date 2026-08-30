@@ -1,7 +1,7 @@
 import { bigint, index, jsonb, numeric, pgTable, real, text, vector } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../../utils/idGenerator';
-import { timestamps, timestamptz, varchar255 } from '../_helpers';
+import { softDeleteColumns, timestamps, timestamptz, varchar255 } from '../_helpers';
 import { users } from '../user';
 
 export const userMemories = pgTable(
@@ -30,6 +30,8 @@ export const userMemories = pgTable(
     lastAccessedAt: timestamptz('last_accessed_at').notNull(),
     capturedAt: timestamptz('captured_at').notNull().defaultNow(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (table) => [

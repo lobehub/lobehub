@@ -402,6 +402,16 @@ export interface SessionCompleteMessage {
 export type SessionStatus =
   'running' | 'waiting_input' | 'waiting_confirmation' | 'completed' | 'error' | 'interrupted';
 
+/** Provenance for a terminal session signal emitted by AgentStreamClient. */
+export type AgentStreamSessionCompletion =
+  | {
+      source: 'raw_session_complete';
+    }
+  | {
+      source: 'resume_status';
+      status: Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+    };
+
 /**
  * Server → Client: sent right after a `resume` replay, carrying the DO's
  * authoritative `status` from storage. Because the DO's in-memory event buffer
@@ -444,7 +454,7 @@ export interface AgentStreamClientEvents {
   disconnected: () => void;
   error: (error: Error) => void;
   reconnecting: (delay: number) => void;
-  session_complete: () => void;
+  session_complete: (completion: AgentStreamSessionCompletion) => void;
   status_changed: (status: ConnectionStatus) => void;
 }
 

@@ -614,6 +614,7 @@ describe('TopicModel - Update', () => {
       const topic = await topicModel.findById(topicId);
       expect(topic?.metadata?.runningOperation).toMatchObject({
         assistantMessageId: 'assistant-continuation',
+        heteroType: null,
         operationId: 'operation-continuation',
         scope: 'main',
       });

@@ -541,7 +541,7 @@
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.4.0",
     "glob": "^13.0.6",
-    "happy-dom": "^20.11.2",
+    "happy-dom": "~20.11.15",
     "import-in-the-middle": "^2.0.6",
     "just-diff": "^6.0.2",
     "knip": "^5.88.1",

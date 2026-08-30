@@ -393,6 +393,57 @@ describe('MessageContentProcessor', () => {
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
 
+    it('should keep AVIF as a media ref while forwarding supported tool images', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const avifUrl = 'https://example.com/f/image-id.avif?signature=secret';
+      const pngUrl = 'https://example.com/f/image-id.png?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Read image results',
+          id: 'tool-avif',
+          pluginState: {
+            images: [
+              { mediaType: 'image/avif', url: avifUrl },
+              { mediaType: 'image/png', url: pngUrl },
+            ],
+          },
+          role: 'tool',
+          tool_call_id: 'call_avif',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content;
+
+      expect(content).toBeInstanceOf(Array);
+      const contentParts = content as Array<{
+        image_url?: { detail: string; url: string };
+        text?: string;
+        type: string;
+      }>;
+      const textContent = contentParts.find((part) => part.type === 'text')?.text;
+
+      expect(textContent).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-avif', type: 'image' }),
+      );
+      expect(textContent).toContain('visual-analysis tool');
+      expect(textContent).not.toContain(avifUrl);
+      expect(contentParts).toContainEqual({
+        image_url: { detail: 'auto', url: pngUrl },
+        type: 'image_url',
+      });
+      expect(result.messages[0].tool_call_id).toBe('call_avif');
+    });
+
     it('should remove uploaded image markdown URLs before adding a media ref', async () => {
       mockIsCanUseVision.mockReturnValue(false);
 

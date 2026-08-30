@@ -32,6 +32,14 @@ export const VISION_DOWNGRADE_PLACEHOLDER =
   '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
 
 /**
+ * AVIF must stay as a media ref even when the active model supports vision.
+ * Model capability flags do not describe per-format support, while Analyze Media
+ * normalizes AVIF at its request boundary.
+ */
+const requiresVisualAnalysis = (mediaType: unknown): boolean =>
+  typeof mediaType === 'string' && mediaType.split(';', 1)[0].trim().toLowerCase() === 'image/avif';
+
+/**
  * Heterogeneous-agent image uploads mirror each persisted image URL into tool
  * text as `![mediaType](url)`. Non-vision models must receive only the opaque
  * media ref, otherwise they can copy the signed URL into a later tool call.
@@ -511,6 +519,12 @@ export class MessageContentProcessor extends BaseProcessor {
     if (images.length === 0) return message;
 
     const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+    const fallbackImages = canUseVision
+      ? images.filter((image) => requiresVisualAnalysis(image.mediaType))
+      : images;
+    const visionImages = canUseVision
+      ? images.filter((image) => !requiresVisualAnalysis(image.mediaType))
+      : [];
 
     // Normalize text content (historical messages may already be multimodal).
     let textContent = '';
@@ -523,13 +537,14 @@ export class MessageContentProcessor extends BaseProcessor {
         .join('\n\n');
     }
 
-    // Vision not supported: drop the image parts but surface a placeholder so
-    // the model can pass a stable opaque ref to the visual-analysis fallback.
+    // Native vision unavailable or image format unsupported: surface stable
+    // opaque refs so the model can call the visual-analysis fallback.
     // The signed URL stays out of model-visible text, which prevents the model
     // from copying opaque image data between tool calls.
-    if (!canUseVision) {
-      const fallbackTextContent = stripUploadedImageMarkdown(textContent, images);
-      const placeholders = images
+    let processedTextContent = textContent;
+    if (fallbackImages.length > 0) {
+      const fallbackTextContent = stripUploadedImageMarkdown(textContent, fallbackImages);
+      const placeholders = fallbackImages
         .map(({ sourceIndex, url }) => {
           // Inline image data is safe to send as a structured vision input but
           // must never be copied into text or exposed as a reusable media ref.
@@ -544,20 +559,20 @@ export class MessageContentProcessor extends BaseProcessor {
           return `[image omitted: native vision is not supported. Media ref: ${ref}. Do not infer or describe the image. Use an available visual-analysis tool with this ref before answering.]`;
         })
         .join('\n');
-      const content = fallbackTextContent
+      processedTextContent = fallbackTextContent
         ? `${fallbackTextContent}\n\n${placeholders}`
         : placeholders;
-
-      return { ...message, content };
     }
+
+    if (visionImages.length === 0) return { ...message, content: processedTextContent };
 
     const contentParts: UserMessageContentPart[] = [];
 
-    if (textContent) {
-      contentParts.push({ text: textContent, type: 'text' });
+    if (processedTextContent) {
+      contentParts.push({ text: processedTextContent, type: 'text' });
     }
 
-    contentParts.push(...(await this.processImageList(images)));
+    contentParts.push(...(await this.processImageList(visionImages)));
 
     return { ...message, content: contentParts };
   }

@@ -154,6 +154,24 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.content).toBe('[Image: cat.png]');
     });
 
+    it('should upload AVIF as an image for downstream media analysis', async () => {
+      mockUploadService.uploadLocalFile.mockResolvedValue({
+        id: 'file-avif',
+        url: 'https://files.example.com/sample.avif',
+      });
+      const filePath = path.join(tmpDir, 'sample.avif');
+      await writeFile(filePath, Buffer.from('avif'));
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(mockUploadService.uploadLocalFile).toHaveBeenCalledWith(filePath);
+      expect(result.isImage).toBe(true);
+      expect(result.fileType).toBe('image/avif');
+      expect(result.imageFileId).toBe('file-avif');
+      expect(result.imageUrl).toBe('https://files.example.com/sample.avif');
+      expect(result.content).toBe('[Image: sample.avif]');
+    });
+
     it('should resolve a relative image path against cwd', async () => {
       mockUploadService.uploadLocalFile.mockResolvedValue({
         id: 'file-2',

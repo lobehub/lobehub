@@ -185,6 +185,7 @@
   "pageEditor.menu.importDocument": "ドキュメントをインポート",
   "pageEditor.menu.move": "移動",
   "pageEditor.menu.pin": "ドキュメントをピン留め",
+  "pageEditor.saveFailed": "ページの保存に失敗しました。後でもう一度お試しください。",
   "pageEditor.saving": "保存中...",
   "pageEditor.titlePlaceholder": "無題",
   "pageEditor.wordCount": "{{wordCount}} 文字",

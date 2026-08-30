@@ -302,9 +302,15 @@ describe('GatewayActionImpl', () => {
         topicId: TEST_TOPIC_ID,
       });
 
-      mockClient.emitEvent('session_complete');
+      mockClient.emitEvent('session_complete', { source: 'raw_session_complete' });
       expect(state.gatewayConnections['op-1']).toBeUndefined();
       expect(onComplete).toHaveBeenCalledOnce();
+      expect(onComplete).toHaveBeenCalledWith({
+        authFailed: false,
+        completion: { source: 'raw_session_complete' },
+        succeeded: false,
+        terminalReceived: false,
+      });
     });
 
     it('should cleanup on disconnected', () => {
@@ -1423,6 +1429,7 @@ describe('GatewayActionImpl', () => {
         assistantMessageId: 'ast-1',
         autoStarted: true,
         createdAt: new Date().toISOString(),
+        heteroType: null,
         message: 'ok',
         operationId: 'server-op-1',
         status: 'created',
@@ -1437,6 +1444,20 @@ describe('GatewayActionImpl', () => {
         context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
         message: 'Hello',
       });
+
+      expect(internalDispatchTopic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: expect.objectContaining({
+            metadata: expect.objectContaining({
+              runningOperation: {
+                assistantMessageId: 'ast-1',
+                heteroType: null,
+                operationId: 'server-op-1',
+              },
+            }),
+          }),
+        }),
+      );
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       // Ignore any dispatches / writes from the optimistic-update path during setup.
@@ -1454,6 +1475,149 @@ describe('GatewayActionImpl', () => {
         'active',
       );
       expect(updateTopicStatus).not.toHaveBeenCalled();
+    });
+
+    it('preserves only external-producer resume status without a terminal event', async () => {
+      const runCompletion = async ({
+        activeTopicId = 'topic-1',
+        authFailed = false,
+        completion,
+        heteroType,
+      }: {
+        activeTopicId?: string | null;
+        authFailed?: boolean;
+        completion:
+          { source: 'raw_session_complete' } | { source: 'resume_status'; status: 'completed' };
+        heteroType: string | null | undefined;
+      }) => {
+        const connectToGateway = vi.fn();
+        const completeOperation = vi.fn();
+        const internalDispatchTopic = vi.fn();
+        const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
+        const state: Record<string, any> = {
+          activeAgentId: 'agent-1',
+          activeTopicId,
+          gatewayConnections: {},
+          topicDataMap: {
+            'agent_agent-1': {
+              items: [
+                {
+                  id: 'topic-1',
+                  metadata: {
+                    runningOperation: { assistantMessageId: 'ast-1', operationId: 'server-op-1' },
+                  },
+                  status: 'running',
+                },
+              ],
+            },
+          },
+        };
+        const set = vi.fn((updater: any) => {
+          if (typeof updater === 'function') Object.assign(state, updater(state));
+          else Object.assign(state, updater);
+        });
+        const get = vi.fn(() => ({
+          ...state,
+          associateMessageWithOperation: vi.fn(),
+          completeOperation,
+          connectToGateway,
+          internal_dispatchTopic: internalDispatchTopic,
+          moveQueuedMessages: vi.fn(),
+          moveVoiceMessages: vi.fn(),
+          onOperationCancel: vi.fn(),
+          startOperation,
+          updateTopicStatus: vi.fn(),
+        })) as any;
+
+        (globalThis as any).window = {
+          global_serverConfigStore: {
+            getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+          },
+        };
+
+        const action = new GatewayActionImpl(set as any, get, undefined);
+        action.createClient = vi.fn(() => createMockClient());
+
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          heteroType,
+          message: 'ok',
+          operationId: 'server-op-1',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'test-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        });
+
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Hello',
+        });
+
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        completeOperation.mockClear();
+        internalDispatchTopic.mockClear();
+        vi.mocked(topicService.settleRunningOperation).mockClear();
+
+        onSessionComplete({ authFailed, completion, succeeded: false, terminalReceived: false });
+
+        return { completeOperation, internalDispatchTopic };
+      };
+
+      const heteroResume = await runCompletion({
+        completion: { source: 'resume_status', status: 'completed' },
+        heteroType: 'claude-code',
+      });
+      expect(heteroResume.completeOperation).toHaveBeenCalledWith('gw-op-1');
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      expect(heteroResume.internalDispatchTopic).not.toHaveBeenCalled();
+
+      const rollingUnknown = await runCompletion({
+        completion: { source: 'resume_status', status: 'completed' },
+        heteroType: undefined,
+      });
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      expect(rollingUnknown.internalDispatchTopic).not.toHaveBeenCalled();
+
+      const normalResume = await runCompletion({
+        completion: { source: 'resume_status', status: 'completed' },
+        heteroType: null,
+      });
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
+      expect(normalResume.internalDispatchTopic).toHaveBeenCalled();
+
+      await runCompletion({
+        activeTopicId: 'some-other-topic',
+        completion: { source: 'resume_status', status: 'completed' },
+        heteroType: null,
+      });
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'unread',
+      );
+
+      await runCompletion({
+        completion: { source: 'raw_session_complete' },
+        heteroType: 'claude-code',
+      });
+      expect(topicService.settleRunningOperation).toHaveBeenCalled();
+
+      await runCompletion({
+        authFailed: true,
+        completion: { source: 'resume_status', status: 'completed' },
+        heteroType: 'claude-code',
+      });
+      expect(topicService.settleRunningOperation).toHaveBeenCalled();
     });
 
     // Regression guard: a successful run the user is watching must reset the
@@ -2024,12 +2188,13 @@ describe('GatewayActionImpl', () => {
     // heterogeneous CC op it has no live session for) must NOT clear
     // runningOperation — otherwise the still-running agent's next heteroIngest
     // batch is dropped as stale and it silently stops.
-    it('does NOT clear runningOperation on a non-terminal reconnect close', async () => {
+    it('does NOT clear runningOperation on a heterogeneous terminal resume status', async () => {
       const { action, captured, completeOperation, updateTopicStatus } =
         createOnSessionCompleteHarness();
 
       await action.reconnectToGatewayOperation({
         assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
         operationId: 'server-op-1',
         topicId: 'topic-1',
       });
@@ -2037,11 +2202,83 @@ describe('GatewayActionImpl', () => {
       vi.mocked(topicService.updateTopicMetadata)
         .mockClear()
         .mockResolvedValue(undefined as never);
-      captured.onSessionComplete!({ authFailed: false, succeeded: false, terminalReceived: false });
+      captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: false,
+        terminalReceived: false,
+      });
 
       expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
       expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
       expect(updateTopicStatus).not.toHaveBeenCalled();
+    });
+
+    it('preserves an unknown rolling marker on terminal resume status', async () => {
+      const { action, captured, completeOperation } = createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: false,
+        terminalReceived: false,
+      });
+
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+    });
+
+    it('settles normal runtime and raw heterogeneous session completions', async () => {
+      const normal = createOnSessionCompleteHarness();
+      await normal.action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        heteroType: null,
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      normal.captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: false,
+        terminalReceived: false,
+      });
+      expect(normal.completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
+
+      const rawHetero = createOnSessionCompleteHarness();
+      await rawHetero.action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      rawHetero.captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'raw_session_complete' },
+        succeeded: false,
+        terminalReceived: false,
+      });
+      expect(rawHetero.completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
     });
 
     // A genuine terminal event (agent_runtime_end / error) still finalizes the
@@ -2140,6 +2377,35 @@ describe('GatewayActionImpl', () => {
       );
       // ...and never the unguarded two-step that dropped the status.
       expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
+    });
+
+    it('settles a completed normal resume status to unread when off-topic', async () => {
+      const { action, captured } = createOnSessionCompleteHarness({
+        activeTopicId: 'some-other-topic',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        heteroType: null,
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.settleRunningOperation)
+        .mockClear()
+        .mockResolvedValue(undefined as never);
+      captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: false,
+        terminalReceived: false,
+      });
+
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'unread',
+      );
     });
 
     // Seeds a topic whose local metadata still carries a runningOperation, wires up
@@ -2273,19 +2539,25 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // An ambiguous close (no terminal event, no auth failure) must NOT clear the
-    // local marker — same black-hole guard as the server-side clear.
-    it('does NOT clear the local marker on an ambiguous reconnect close', async () => {
+    // A heterogeneous terminal resume status must NOT clear the local marker —
+    // same black-hole guard as the server-side clear.
+    it('does NOT clear the local marker on a heterogeneous resume status', async () => {
       const { action, captured, internalDispatchTopic } = createSeededReconnectHarness();
 
       await action.reconnectToGatewayOperation({
         assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
         operationId: 'server-op-1',
         topicId: 'topic-1',
       });
 
       internalDispatchTopic.mockClear();
-      captured.onSessionComplete!({ authFailed: false, succeeded: true, terminalReceived: false });
+      captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: true,
+        terminalReceived: false,
+      });
 
       expect(internalDispatchTopic).not.toHaveBeenCalled();
     });

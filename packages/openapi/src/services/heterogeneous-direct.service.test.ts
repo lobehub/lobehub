@@ -312,6 +312,30 @@ describe('heterogeneous direct invocation protocol', () => {
     });
   });
 
+  it('normalizes Pi Responses messages whose optional type is omitted', () => {
+    const payload = normalizeResponsesRequest(
+      {
+        input: [
+          { content: 'Pi coding assistant', role: 'system' },
+          {
+            content: [{ text: 'LOBEHUB_HETERO_SMOKE_OK', type: 'input_text' }],
+            role: 'user',
+          },
+        ],
+        max_output_tokens: 16_384,
+        model: 'lobehub/glm-5.2',
+        stream: true,
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([
+      { content: 'Pi coding assistant', role: 'system' },
+      { content: 'LOBEHUB_HETERO_SMOKE_OK', role: 'user' },
+    ]);
+    expect(payload.max_tokens).toBe(16_384);
+  });
+
   it('normalizes two-round Responses reasoning and function call continuity', () => {
     const firstReasoning = {
       encrypted_content: 'encrypted-first',
@@ -541,7 +565,15 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(terminalEvents).toHaveLength(1);
     expect(terminalEvents[0]).toMatchObject({
       data: {
-        response: { usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 } },
+        response: {
+          usage: {
+            input_tokens: 2,
+            input_tokens_details: { cached_tokens: 0 },
+            output_tokens: 1,
+            output_tokens_details: { reasoning_tokens: 0 },
+            total_tokens: 3,
+          },
+        },
         type: 'response.completed',
       },
       type: 'response.completed',
@@ -552,6 +584,47 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(events.slice(events.indexOf(terminalEvents[0]) + 1)).toEqual([
       { data: '[DONE]', type: undefined },
     ]);
+  });
+
+  it('encodes complete Responses usage details without stringifying null chunks', async () => {
+    const events = parseSseEvents(
+      await readText(
+        responsesSse(
+          protocolStream([
+            { data: 'answer', type: 'text' },
+            { data: null, type: 'text' },
+            { data: null, type: 'reasoning' },
+            {
+              data: {
+                inputCachedTokens: 3,
+                outputReasoningTokens: 2,
+                totalInputTokens: 7,
+                totalOutputTokens: 4,
+              },
+              type: 'usage',
+            },
+          ]),
+        ),
+      ),
+    );
+    const textDeltas = events
+      .filter(({ type }) => type === 'response.output_text.delta')
+      .map(({ data }) => data.delta);
+    const reasoningDeltas = events.filter(
+      ({ type }) => type === 'response.reasoning_summary_text.delta',
+    );
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(textDeltas).toEqual(['answer']);
+    expect(reasoningDeltas).toHaveLength(0);
+    expect(completed?.data.response.output[0].content[0].text).toBe('answer');
+    expect(completed?.data.response.usage).toEqual({
+      input_tokens: 7,
+      input_tokens_details: { cached_tokens: 3 },
+      output_tokens: 4,
+      output_tokens_details: { reasoning_tokens: 2 },
+      total_tokens: 11,
+    });
   });
 
   it('encodes Responses incomplete and failed terminal lifecycle events', async () => {
