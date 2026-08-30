@@ -96,6 +96,7 @@ import {
   ThreadType,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
@@ -1425,7 +1426,13 @@ export class AiAgentService {
     // Settle that physical run before reserving and dispatching the replacement;
     // otherwise two `lh hetero exec` wrappers can resume the same thread.
     if (params.replacesOperationId && !isInterventionThreadStart) {
-      await this.interruptTask({ operationId: params.replacesOperationId, topicId });
+      const interruption = await this.interruptTask({
+        operationId: params.replacesOperationId,
+        topicId,
+      });
+      if (interruption.deviceCancellationConfirmed === false) {
+        throw new Error('Replaced heterogeneous agent process did not confirm termination');
+      }
     }
     const reserved = await acquireTopicStartReservation({
       allowSameReservationReentry: !params.approvalResolutionRequestId,
@@ -6414,16 +6421,35 @@ export class AiAgentService {
   }
 
   /**
-   * Interrupt a running task
+   * Interrupts a running task and coordinates any device-hosted process shutdown.
    *
-   * This method interrupts a SubAgent task by threadId or operationId.
-   * It updates both operation status and Thread status to cancelled state.
+   * Call stack:
+   *
+   * execAgent (replacement path)
+   *   -> {@link AiAgentService.interruptTask}
+   *     -> deviceGateway.executeToolCall(cancelHeteroTask)
+   *       -> HeterogeneousAgentCtr.cancelLhHeteroExec
+   *
+   * Use when:
+   * - A user stops an agent runtime by thread or operation id.
+   * - A replacement run must wait for a device-hosted native writer to exit.
+   *
+   * Expects:
+   * - At least one of `threadId` or `operationId` resolves to an owned operation.
+   *
+   * Returns:
+   * - Runtime cancellation status and, for local device agents, whether process exit was confirmed.
    */
   async interruptTask(params: {
     operationId?: string;
     threadId?: string;
     topicId?: string;
-  }): Promise<{ operationId?: string; success: boolean; threadId?: string }> {
+  }): Promise<{
+    deviceCancellationConfirmed?: boolean;
+    operationId?: string;
+    success: boolean;
+    threadId?: string;
+  }> {
     const { threadId, operationId, topicId } = params;
 
     log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
@@ -6431,6 +6457,7 @@ export class AiAgentService {
     // 1. Get operationId and thread
     let resolvedOperationId = operationId;
     let thread;
+    let deviceCancellationConfirmed: boolean | undefined;
 
     if (threadId) {
       thread = await this.threadModel.findById(threadId);
@@ -6496,23 +6523,38 @@ export class AiAgentService {
         const cancelWorkspaceId =
           targetOperation.deviceWorkspaceId ??
           (await this.resolveDeviceWorkspaceId(targetOperation.deviceId));
-        await deviceGateway
-          .executeToolCall(
-            {
-              deviceId: targetOperation.deviceId,
-              userId: targetOperation.deviceUserId ?? this.userId,
-              workspaceId: cancelWorkspaceId,
-            },
-            {
-              apiName: 'cancelHeteroTask',
-              arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
-              identifier: 'cancelHeteroTask',
-            },
-            // The device first gives the wrapper/native CLI 2s to stop
-            // cooperatively, then escalates and drains its terminal callback.
-            10_000,
-          )
-          .catch((err) => log('interruptTask: cancelHeteroTask dispatch failed: %O', err));
+        const cancelResult = await deviceGateway.executeToolCall(
+          {
+            deviceId: targetOperation.deviceId,
+            userId: targetOperation.deviceUserId ?? this.userId,
+            workspaceId: cancelWorkspaceId,
+          },
+          {
+            apiName: 'cancelHeteroTask',
+            arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
+            identifier: 'cancelHeteroTask',
+          },
+          // The device first gives the wrapper/native CLI 2s to stop
+          // cooperatively, then escalates and drains its terminal callback.
+          10_000,
+        );
+
+        if (isLocalHeterogeneousType(targetOperation.heteroType)) {
+          deviceCancellationConfirmed =
+            cancelResult.success &&
+            isRecord(cancelResult.state) &&
+            cancelResult.state.exited === true;
+        }
+
+        if (!cancelResult.success || deviceCancellationConfirmed === false) {
+          log(
+            'interruptTask: device cancellation unconfirmed taskId=%s success=%s state=%O error=%s',
+            taskId,
+            cancelResult.success,
+            cancelResult.state,
+            cancelResult.error,
+          );
+        }
       }
     }
 
@@ -6529,6 +6571,7 @@ export class AiAgentService {
       const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
 
       return {
+        deviceCancellationConfirmed,
         operationId: resolvedOperationId,
         success: alreadyCancelled,
         threadId: thread?.id,
@@ -6547,6 +6590,7 @@ export class AiAgentService {
     }
 
     return {
+      deviceCancellationConfirmed,
       operationId: resolvedOperationId,
       success: true,
       threadId: thread?.id,

@@ -8,6 +8,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { useSingleton } from '@/hooks/useSingleton';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import {
@@ -164,6 +165,7 @@ const QueueTray = memo(() => {
   const removeQueuedMessage = useChatStore((s) => s.removeQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
+  const sendNowInFlightIds = useSingleton(() => new Set<string>());
 
   // Edit: restore both the text content AND the attached files back to the
   // input area, so the user can tweak the message and re-send. Without the
@@ -189,6 +191,12 @@ const QueueTray = memo(() => {
   // re-subscribe the whole tray to the operations map.
   const handleSendNow = useCallback(
     async (msg: QueuedMessage) => {
+      // The first click marks the blocker cancelled before its native process
+      // exits. Guard the queued item itself so a second click cannot observe no
+      // blocker and dispatch the same payload while the first click is waiting.
+      if (sendNowInFlightIds.has(msg.id)) return;
+      sendNowInFlightIds.add(msg.id);
+
       const chat = useChatStore.getState();
       // Cancel EVERY running blocker the item could be queued behind, not just the
       // first: matching one op would miss an interim blocker or the second of the
@@ -197,18 +205,18 @@ const QueueTray = memo(() => {
       // blocker running would make the sendMessage below re-enqueue the item, so
       // "Send now" becomes a no-op. The selector shares the queue-blocking
       // predicate with the enqueue check.
-      const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
-      await Promise.all(runningOpIds.map((id) => chat.cancelOperation(id, 'send_now')));
-      removeQueuedMessage(contextKey, msg.id);
-
-      // Reconstruct UploadFileItem-shaped objects so the optimistic temp message
-      // can rebuild imageList/videoList from the snapshotted preview metadata.
-      const filesArray = msg.filesPreview?.length
-        ? reconstructUploadFilesFromQueue(msg.filesPreview)
-        : msg.files?.length
-          ? (msg.files.map((id) => ({ id })) as any)
-          : undefined;
       try {
+        const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
+        await Promise.all(runningOpIds.map((id) => chat.cancelOperation(id, 'send_now')));
+        removeQueuedMessage(contextKey, msg.id);
+
+        // Reconstruct UploadFileItem-shaped objects so the optimistic temp message
+        // can rebuild imageList/videoList from the snapshotted preview metadata.
+        const filesArray = msg.filesPreview?.length
+          ? reconstructUploadFilesFromQueue(msg.filesPreview)
+          : msg.files?.length
+            ? (msg.files.map((id) => ({ id })) as any)
+            : undefined;
         await chat.sendMessage({
           context,
           editorData: msg.editorData,
@@ -217,9 +225,11 @@ const QueueTray = memo(() => {
         });
       } catch (error) {
         console.error('[QueueTray] sendNow failed:', error);
+      } finally {
+        sendNowInFlightIds.delete(msg.id);
       }
     },
-    [context, contextKey, removeQueuedMessage],
+    [context, contextKey, removeQueuedMessage, sendNowInFlightIds],
   );
 
   if (queuedMessages.length === 0) return null;

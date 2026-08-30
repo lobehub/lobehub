@@ -530,7 +530,9 @@ describe('HeterogeneousAgentService', () => {
       // row and terminal stream settle independently of the new topic owner.
       const { manager, published } = createFakeStreamManager();
       const persistenceHandler = createFakePersistenceHandler();
-      const agentOperationModel = { settleRunning: vi.fn(async () => true) };
+      const settleRunningSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'settleRunning')
+        .mockResolvedValue(true);
       const topicModel = {
         settleRunningOperation: vi.fn(async () => ({
           activeOperationId: 'op-new',
@@ -542,7 +544,6 @@ describe('HeterogeneousAgentService', () => {
         .mockResolvedValue();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
         persistenceHandler,
-        agentOperationModel,
         snapshotStore: null,
         streamEventManager: manager,
         topicModel,
@@ -560,7 +561,7 @@ describe('HeterogeneousAgentService', () => {
         expect.objectContaining({ persistSessionBinding: false }),
       );
       expect(persistenceHandler.updateResumeSessionBinding).not.toHaveBeenCalled();
-      expect(agentOperationModel.settleRunning).toHaveBeenCalledWith('op-old', 'done');
+      expect(settleRunningSpy).toHaveBeenCalledWith('op-old', 'done');
       expect(published).toHaveLength(1);
       expect(published[0].event).toMatchObject({
         data: { operationId: 'op-old', reason: 'success' },

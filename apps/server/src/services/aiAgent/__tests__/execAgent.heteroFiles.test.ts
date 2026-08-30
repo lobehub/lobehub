@@ -304,16 +304,42 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     releaseInterrupt?.();
     await replacement;
 
-    expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith(
-      'topic-1',
-      expect.any(String),
-      {
-        allowRunningOperationId: undefined,
-        allowSameReservationReentry: true,
-        ignoreRunningOperation: undefined,
+    expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', expect.any(String), {
+      allowRunningOperationId: undefined,
+      allowSameReservationReentry: true,
+      ignoreRunningOperation: undefined,
+      replacesOperationId: 'op-old',
+    });
+  });
+
+  /**
+   * @example Operation B is rejected when operation A's device process remains alive.
+   */
+  it('does not reserve a replacement when device cancellation is unconfirmed', async () => {
+    // ROOT CAUSE:
+    //
+    // Device Gateway reports transport success separately from the cancellation
+    // payload. Ignoring `state.exited` allowed a replacement to resume while the
+    // previous native process could still own the Codex thread writer.
+    //
+    // Before: every resolved interrupt allowed topic reservation.
+    // After: an explicitly unconfirmed device cancellation rejects replacement.
+    vi.spyOn(service, 'interruptTask').mockResolvedValue({
+      deviceCancellationConfirmed: false,
+      operationId: 'op-old',
+      success: true,
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        prompt: 'replacement turn',
         replacesOperationId: 'op-old',
-      },
-    );
+      } as any),
+    ).rejects.toThrow('Replaced heterogeneous agent process did not confirm termination');
+
+    expect(topicMock.tryReserveTaskCallback).not.toHaveBeenCalled();
   });
 
   it('should attach fileIds to the user message (SPA gateway device/sandbox mode)', async () => {
@@ -1478,6 +1504,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
      * @example Stopping a device Codex run sends `cancelHeteroTask` to that device.
      */
     it('cancels a device local hetero run before releasing its topic', async () => {
+      mockExecuteToolCall.mockResolvedValueOnce({ success: true, state: { exited: true } });
       topicMock.findById.mockResolvedValue({
         metadata: {
           runningOperation: {
@@ -1490,7 +1517,10 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         },
       });
 
-      await service.interruptTask({ operationId: 'operation-codex', topicId: 'topic-1' });
+      const result = await service.interruptTask({
+        operationId: 'operation-codex',
+        topicId: 'topic-1',
+      });
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
         {
@@ -1504,6 +1534,43 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         }),
         10_000,
       );
+      expect(result.deviceCancellationConfirmed).toBe(true);
+    });
+
+    /**
+     * @example A device response with `exited: false` remains an unsafe cancellation result.
+     */
+    it('reports an unconfirmed device local hetero cancellation', async () => {
+      // ROOT CAUSE:
+      //
+      // A successful Gateway envelope only proves that the device handled the
+      // tool call. The nested cancellation state is authoritative for whether
+      // the native writer actually exited.
+      //
+      // Before: `{ success: true, state: { exited: false } }` was ignored.
+      // After: interruptTask surfaces `deviceCancellationConfirmed: false`.
+      mockExecuteToolCall.mockResolvedValueOnce({ success: true, state: { exited: false } });
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            deviceId: 'author-desktop',
+            deviceUserId: 'author-user',
+            heteroType: 'codex',
+            operationId: 'operation-codex',
+          },
+        },
+      });
+
+      const result = await service.interruptTask({
+        operationId: 'operation-codex',
+        topicId: 'topic-1',
+      });
+
+      expect(result).toMatchObject({
+        deviceCancellationConfirmed: false,
+        operationId: 'operation-codex',
+        success: true,
+      });
     });
 
     it('cancels a remote child operation without touching the supervisor device', async () => {
