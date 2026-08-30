@@ -2729,7 +2729,10 @@ export default class HeterogeneousAgentCtr {
    *
    * Returns:
    * - Only after the transport accepted interruption and, for CLI processes,
-   *   the process exited or the bounded SIGKILL escalation elapsed.
+   *   the process exit was observed.
+   *
+   * Throws:
+   * - When a CLI process remains active after the bounded SIGKILL escalation.
    */
   async cancelSession(params: CancelSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
@@ -2778,7 +2781,9 @@ export default class HeterogeneousAgentCtr {
     logger.warn('Session did not exit after SIGINT, escalating to SIGKILL:', params.sessionId);
     const forcedExit = this.waitForProcessExit(proc, 2000);
     this.killProcessTree(proc, 'SIGKILL');
-    await forcedExit;
+    if (!(await forcedExit)) {
+      throw new Error(`Session ${params.sessionId} did not exit after SIGKILL`);
+    }
   }
 
   /**

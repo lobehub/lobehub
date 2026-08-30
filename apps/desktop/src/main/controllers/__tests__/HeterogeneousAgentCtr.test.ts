@@ -671,6 +671,65 @@ describe('HeterogeneousAgentCtr', () => {
       await cancellation;
       await prompt;
     });
+
+    /**
+     * @example A wedged native process ignores both graceful and forced termination.
+     */
+    it('rejects cancellation when process exit is not observed after SIGKILL', async () => {
+      // ROOT CAUSE:
+      //
+      // cancelSession awaited the post-SIGKILL timeout but discarded its false
+      // result. Callers therefore started replacement turns even though the old
+      // process could still own the native Codex thread writer.
+      //
+      // Before: await forcedExit; return undefined.
+      // After: throw when forcedExit resolves false.
+      const processKill = vi.spyOn(process, 'kill').mockReturnValue(true);
+
+      try {
+        const { proc } = createFakeProc();
+        proc.__start = vi.fn();
+        proc.exitCode = null;
+        proc.pid = 4242;
+        proc.signalCode = null;
+        nextFakeProc = proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as unknown as ConstructorParameters<typeof HeterogeneousAgentCtr>[0]);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'codex',
+          command: 'codex',
+        });
+        const spawnCount = spawnCalls.length;
+        const prompt = ctr.sendPrompt({
+          operationId: 'op-cancel-timeout',
+          prompt: 'ignore termination',
+          sessionId,
+        });
+        await vi.waitFor(() => expect(spawnCalls).toHaveLength(spawnCount + 1));
+
+        vi.useFakeTimers();
+        const cancellation = expect(ctr.cancelSession({ sessionId })).rejects.toThrow(
+          `Session ${sessionId} did not exit after SIGKILL`,
+        );
+        await vi.advanceTimersByTimeAsync(4000);
+        await cancellation;
+
+        expect(processKill).toHaveBeenNthCalledWith(1, -4242, 'SIGINT');
+        expect(processKill).toHaveBeenNthCalledWith(2, -4242, 'SIGKILL');
+
+        vi.useRealTimers();
+        proc.stdout.end();
+        proc.stderr.end();
+        proc.signalCode = 'SIGKILL';
+        proc.emit('exit', null, 'SIGKILL');
+        await prompt;
+      } finally {
+        processKill.mockRestore();
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('image cache (delegates to shared `normalizeImage`)', () => {

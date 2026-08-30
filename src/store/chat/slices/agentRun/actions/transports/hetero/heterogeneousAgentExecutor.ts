@@ -1994,9 +1994,10 @@ export const executeHeterogeneousAgent = async (
       try {
         await heterogeneousAgentService.cancelSession(sidForCancel);
       } catch (error) {
-        // Cancellation is best-effort for an already-closed IPC session, but the
-        // returned promise must still represent the main-process shutdown attempt.
+        // Let the operation layer report an unconfirmed cancellation so a
+        // replacement turn cannot start while the native writer may still live.
         console.error('[HeterogeneousAgent] IPC session cancellation failed:', error);
+        throw error;
       }
     });
 

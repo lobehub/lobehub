@@ -712,6 +712,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       resolvePrompt();
       await executor;
     });
+
+    /**
+     * @example Desktop cannot confirm that the native process exited after interruption.
+     */
+    it('rejects the operation cancel hook when desktop cancellation fails', async () => {
+      // ROOT CAUSE:
+      //
+      // The renderer logged cancelSession failures but resolved its operation
+      // hook. The operation layer then treated a still-live native writer as a
+      // successful cancellation.
+      //
+      // Before: catch(error) logged and returned undefined.
+      // After: catch(error) logs and rethrows to the operation confirmation layer.
+      let cancelHandler: (() => Promise<void>) | undefined;
+      let resolvePrompt!: () => void;
+      const cancellationError = new Error('process did not exit after SIGKILL');
+      mockCancelSession.mockRejectedValue(cancellationError);
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+      );
+      const store = createMockStore({
+        onOperationCancel: vi.fn(
+          (_operationId: string, handler: () => Promise<void>) => (cancelHandler = handler),
+        ),
+      });
+      const get = vi.fn(() => store);
+      const executor = executeHeterogeneousAgent(get, defaultParams);
+
+      await vi.waitFor(() => expect(cancelHandler).toBeDefined());
+      await expect(cancelHandler!()).rejects.toBe(cancellationError);
+
+      ipc.emitComplete('ipc-sess-1');
+      resolvePrompt();
+      await executor;
+    });
   });
 
   describe('Claude Code Desktop-local API binding', () => {

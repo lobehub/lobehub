@@ -386,20 +386,34 @@ export class OperationActionsImpl {
     );
   };
 
+  /**
+   * Cancels an operation and reports whether its transport shutdown was confirmed.
+   *
+   * Use when:
+   * - A caller needs to stop an operation and its child operations.
+   * - A replacement task must not start after a failed transport cancellation.
+   *
+   * Expects:
+   * - `operationId` may already be absent or terminal; those states are safe no-ops.
+   * - Registered cancel handlers reject when their underlying transport remains active.
+   *
+   * Returns:
+   * - `true` when every cancellation handler settled successfully, otherwise `false`.
+   */
   cancelOperation = async (
     operationId: string,
     reason: string = 'User cancelled',
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const operation = this.#get().operations[operationId];
     if (!operation) {
       log('[cancelOperation] operation not found: %s', operationId);
-      return;
+      return true;
     }
 
     // Skip if already cancelled or completed
     if (operation.status === 'cancelled' || operation.status === 'completed') {
       log('[cancelOperation] operation %s already %s, skipping', operationId, operation.status);
-      return;
+      return true;
     }
 
     log(
@@ -427,7 +441,7 @@ export class OperationActionsImpl {
     // 3. Call cancel handler if registered. The local state transition below
     // remains synchronous, while callers such as Send now can await the returned
     // promise before starting a replacement native writer.
-    let cancelHandler: Promise<void> = Promise.resolve();
+    let cancelHandler = Promise.resolve(true);
     if (operation.onCancelHandler) {
       log('[cancelOperation] calling cancel handler for %s (type=%s)', operationId, operation.type);
 
@@ -442,12 +456,17 @@ export class OperationActionsImpl {
       // The returned cancellation promise still waits for this work so replacement
       // operations can coordinate with the underlying transport shutdown.
       try {
-        cancelHandler = Promise.resolve(operation.onCancelHandler(cancelContext)).catch((err) => {
-          log('[cancelOperation] cancel handler error for %s: %O', operationId, err);
-        });
+        cancelHandler = Promise.resolve(operation.onCancelHandler(cancelContext)).then(
+          () => true,
+          (err) => {
+            log('[cancelOperation] cancel handler error for %s: %O', operationId, err);
+            return false;
+          },
+        );
       } catch (err) {
         // Handle synchronous errors from handler
         log('[cancelOperation] cancel handler synchronous error for %s: %O', operationId, err);
+        cancelHandler = Promise.resolve(false);
       }
     }
 
@@ -468,7 +487,7 @@ export class OperationActionsImpl {
     );
 
     // 5. Cancel all child operations recursively
-    let childCancellations: Promise<void>[] = [];
+    let childCancellations: Promise<boolean>[] = [];
     if (operation.childOperationIds && operation.childOperationIds.length > 0) {
       log('[cancelOperation] cancelling %d child operations', operation.childOperationIds.length);
       childCancellations = operation.childOperationIds.map((childId) =>
@@ -476,7 +495,28 @@ export class OperationActionsImpl {
       );
     }
 
-    await Promise.all([cancelHandler, ...childCancellations]);
+    const confirmations = await Promise.all([cancelHandler, ...childCancellations]);
+    const cancellationConfirmed = confirmations.every(Boolean);
+    if (cancellationConfirmed) return true;
+
+    // The native transport may still own resources even though the optimistic
+    // UI transition above marked the operation cancelled. Restore the blocker
+    // so another send cannot mistake an unconfirmed shutdown for an idle chat.
+    this.#set(
+      produce((state: ChatStore) => {
+        const op = state.operations[operationId];
+        if (!op || op.status !== 'cancelled' || op.metadata.cancelReason !== reason) return;
+
+        op.status = 'running';
+        delete op.metadata.cancelReason;
+        delete op.metadata.duration;
+        delete op.metadata.endTime;
+      }),
+      false,
+      n(`cancelOperationFailed/${operationId}`),
+    );
+
+    return false;
   };
 
   failOperation = (
