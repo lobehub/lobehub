@@ -1,6 +1,6 @@
 ---
 name: deep-review
-description: 'Multi-dimensional code review. Use when the user asks to review, evaluate, or audit a PR, diff, branch, or pasted change — including informal review asks like "look at this change for problems" — via light mode: inline review against the dimension quick checklists. Not for explain-only questions about what a change does or why. Deep mode runs only on explicit invocation (/deep-review): independent dimension coverage, adversarial verification, and global duplicate consolidation before reporting.'
+description: 'Multi-dimensional code review. Use when the user asks to review, evaluate, or audit a PR, diff, branch, or pasted change — including informal review asks like "look at this change for problems" — via light mode: inline review against the dimension quick checklists. Not for explain-only questions about what a change does or why. Deep mode runs only on explicit invocation (/deep-review), and normally at most once per logical requirement.'
 ---
 
 # Deep Review
@@ -27,6 +27,17 @@ Every design choice below serves one of these. When unsure how to execute a step
 | **Deep**            | Explicit only: `/deep-review`, "run deep review", "full multi-agent review"                                                                                         | Full orchestration: dimension review agents → pipelined verification → global consolidation → structured report → interactive fix flow. |
 
 Do not auto-escalate light to deep. Do not run deep mode for a casual "看看这个改动" — that is light mode.
+
+### Deep-mode budget
+
+Within one logical requirement (the same requirement, PR, or branch), run Deep mode at most once by
+default. Follow-up reviews after fixes, CI work, rebases, cleanup, context compaction, or a resumed
+session use Light mode, even when they review the whole diff again. These events do not reset the
+budget, and the review/verify/consolidate waves inside one Deep run all count as that single run.
+
+Run Deep again only when the user explicitly requests another Deep pass, or when a genuinely new
+logical requirement begins. A casual follow-up such as "review again", "复核一下", or "再看看" is a
+Light request, not implicit authorization for another Deep run.
 
 ## Dimensions
 
@@ -97,6 +108,9 @@ A wrapping repository (e.g. a private deployment that vendors this repo as a sub
 5. Output in your environment's normal review format (light mode does NOT use the deep report template). When `release-risk` produced pre-deploy confirmation items, list them as a short checklist separate from the findings — they are questions about production state, not defects. Mention that deep mode exists if findings suggest the diff deserves a full pass.
 
 ## Deep mode procedure
+
+Before entering this procedure, check the logical requirement's Deep-mode budget above. If Deep has
+already run and the user did not explicitly request another Deep pass, use the Light procedure.
 
 Pick the manual for the current environment and follow it end to end:
 
