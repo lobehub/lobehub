@@ -8,10 +8,10 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useCommandMenuAnalytics } from '@/business/client/commandMenuAnalytics';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
 
+import { useCommandMenuAnalytics } from './analytics';
 import AskAgentCommands from './AskAgentCommands';
 import AskAIMenu from './AskAIMenu';
 import { CommandMenuProvider, useCommandMenuContext } from './CommandMenuContext';

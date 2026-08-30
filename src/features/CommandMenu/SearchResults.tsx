@@ -25,7 +25,6 @@ import {
 import { memo, type ReactNode, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CommandMenuResultClick } from '@/business/client/commandMenuAnalytics';
 import Avatar from '@/components/Avatar';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
@@ -36,6 +35,7 @@ import { useVideoStore } from '@/store/video';
 import { generationTopicSelectors as videoGenerationTopicSelectors } from '@/store/video/slices/generationTopic/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import type { CommandMenuResultClick } from './analytics';
 import { CommandItem } from './components';
 import { styles } from './styles';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
