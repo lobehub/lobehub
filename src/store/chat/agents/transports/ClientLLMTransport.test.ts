@@ -1,5 +1,8 @@
 import { ModelEmptyError } from '@lobechat/model-runtime';
+import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { chatService } from '@/services/chat';
 
 import type { ChatStore } from '../../store';
 import { ClientLLMTransport } from './ClientLLMTransport';
@@ -128,6 +131,43 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
       expect(result.error).toBeInstanceOf(ModelEmptyError);
       expect((result.error as ModelEmptyError).diagnostics).toMatchObject({ cost: 5.980_015 });
       expect(transport.retryPolicy.classifyError(result.error).kind).toBe('stop');
+    }
+  });
+});
+
+describe('ClientLLMTransport.runAttempt · stream failures', () => {
+  it('returns a failed attempt when the request rejects', async () => {
+    vi.mocked(chatService.getChatCompletion).mockRejectedValueOnce(
+      new TypeError('Failed to fetch'),
+    );
+
+    const result = await createTransport().transport.runAttempt(input);
+
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toBeInstanceOf(TypeError);
+      expect((result.error as Error).message).toBe('Failed to fetch');
+    }
+  });
+
+  it('returns a failed attempt when the stream reports an error without rejecting', async () => {
+    vi.mocked(chatService.getChatCompletion).mockImplementationOnce(async (_params, options) => {
+      await options?.onErrorHandle?.({
+        message: 'Network connection lost',
+        type: ChatErrorType.UnknownChatFetchError,
+      });
+
+      return new Response();
+    });
+
+    const result = await createTransport().transport.runAttempt(input);
+
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toMatchObject({
+        message: 'Network connection lost',
+        type: ChatErrorType.UnknownChatFetchError,
+      });
     }
   });
 });
