@@ -105,26 +105,32 @@ describe('createElectronProjectionPersistence', () => {
     expect(mocks.commit).toHaveBeenCalledTimes(2);
   });
 
-  it('measures IPC, main-process database read, and renderer decode separately', async () => {
+  it('attributes a slow round trip to the process that was actually busy', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(1500);
     vi.spyOn(performance, 'now')
       .mockReturnValueOnce(100)
-      .mockReturnValueOnce(150)
-      .mockReturnValueOnce(152)
-      .mockReturnValueOnce(158);
+      .mockReturnValueOnce(600)
+      .mockReturnValueOnce(602)
+      .mockReturnValueOnce(608);
     mocks.hydrate.mockResolvedValue({
       indexes: [],
       records: [],
       snapshots: [],
-      timing: { databaseReadMs: 18 },
+      // Main took 20ms of the 500ms round trip; the renderer sat on the reply
+      // for 460ms after main had already answered.
+      timing: { completedAt: 1040, databaseReadMs: 18, receivedAt: 1020 },
     });
     const persistence = createElectronProjectionPersistence();
 
     await persistence.hydrate(scope, { indexes: ['home.sidebar'] });
 
     expect(bootTiming.snapshot().spans).toEqual([
-      { durMs: 50, name: projectionBootSpanNames.ipcRoundtrip, startMs: 100 },
-      { durMs: 18, name: projectionBootSpanNames.databaseRead, startMs: 132 },
-      { durMs: 6, name: projectionBootSpanNames.decode, startMs: 152 },
+      { durMs: 500, name: projectionBootSpanNames.ipcRoundtrip, startMs: 100 },
+      { durMs: 20, name: projectionBootSpanNames.ipcInbound, startMs: 100 },
+      { durMs: 20, name: projectionBootSpanNames.mainWork, startMs: 120 },
+      { durMs: 460, name: projectionBootSpanNames.ipcDelivery, startMs: 140 },
+      { durMs: 18, name: projectionBootSpanNames.databaseRead, startMs: 122 },
+      { durMs: 6, name: projectionBootSpanNames.decode, startMs: 602 },
     ]);
   });
 

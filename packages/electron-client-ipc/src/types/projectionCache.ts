@@ -70,8 +70,16 @@ export interface DesktopProjectionHydration {
 }
 
 export interface DesktopProjectionHydrationTiming {
+  /**
+   * Wall-clock (`Date.now`) anchors, not `performance.now`: the two processes
+   * have different time origins, so only a shared clock lets the renderer split
+   * the round trip into inbound transport, main-process work, and its own
+   * delivery lag.
+   */
+  completedAt: number;
   /** Main-process SQLite read and row-materialization duration. */
   databaseReadMs: number;
+  receivedAt: number;
 }
 
 export type DesktopProjectionRecordHydrationRequest = {

@@ -371,6 +371,7 @@ export default class ProjectionCacheService extends ServiceModule {
   }
 
   async hydrate(request: DesktopProjectionHydrationRequest): Promise<DesktopProjectionHydration> {
+    const receivedAt = Date.now();
     assertHydrationRequest(request);
     const database = this.runtime.db;
     const recordsByKind = new Map<DesktopProjectionKind, Map<string, Set<string>>>();
@@ -451,7 +452,11 @@ export default class ProjectionCacheService extends ServiceModule {
       snapshots: snapshotRows
         .map(readSnapshotRow)
         .filter((snapshot): snapshot is DesktopProjectionSnapshot => snapshot !== undefined),
-      timing: { databaseReadMs: performance.now() - databaseReadStartedAt },
+      timing: {
+        completedAt: Date.now(),
+        databaseReadMs: performance.now() - databaseReadStartedAt,
+        receivedAt,
+      },
     };
   }
 

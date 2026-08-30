@@ -125,7 +125,11 @@ describe('ProjectionCacheService', () => {
       indexes: commit.indexes,
       records: commit.records,
       snapshots: commit.snapshots,
-      timing: { databaseReadMs: expect.any(Number) },
+      timing: {
+        completedAt: expect.any(Number),
+        databaseReadMs: expect.any(Number),
+        receivedAt: expect.any(Number),
+      },
     });
     await expect(projectionCache.listCollections()).resolves.toEqual(
       expect.arrayContaining([
@@ -439,7 +443,11 @@ describe('ProjectionCacheService', () => {
       indexes: [],
       records: [],
       snapshots: [],
-      timing: { databaseReadMs: expect.any(Number) },
+      timing: {
+        completedAt: expect.any(Number),
+        databaseReadMs: expect.any(Number),
+        receivedAt: expect.any(Number),
+      },
     });
   });
 
@@ -503,7 +511,11 @@ describe('ProjectionCacheService', () => {
       indexes: [],
       records: [],
       snapshots: [],
-      timing: { databaseReadMs: expect.any(Number) },
+      timing: {
+        completedAt: expect.any(Number),
+        databaseReadMs: expect.any(Number),
+        receivedAt: expect.any(Number),
+      },
     });
     await expect(
       projectionCache.hydrate({
