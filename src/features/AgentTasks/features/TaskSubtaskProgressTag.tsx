@@ -88,14 +88,18 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
   ({ subtasks, currentIdentifier, onRequestSubtasks, onSubtaskClick, progress }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
-    const refreshSourceKey = `${currentIdentifier ?? ''}:${progress?.completed ?? ''}:${progress?.total ?? ''}`;
     const [refreshedResult, setRefreshedResult] = useState<{
-      sourceKey: string;
+      sourceIdentifier: string | undefined;
+      sourceProgress: TaskSubtaskProgress | undefined;
       subtasks: TaskDetailSubtask[];
     }>();
     const [requesting, setRequesting] = useState(false);
     const refreshedSubtasks =
-      refreshedResult?.sourceKey === refreshSourceKey ? refreshedResult.subtasks : undefined;
+      refreshedResult &&
+      refreshedResult.sourceIdentifier === currentIdentifier &&
+      refreshedResult.sourceProgress === progress
+        ? refreshedResult.subtasks
+        : undefined;
     const flattenedSubtasks = useMemo(() => {
       const effectiveSubtasks = refreshedSubtasks ?? subtasks;
       if (!effectiveSubtasks || effectiveSubtasks.length === 0) return [];
@@ -159,7 +163,11 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
         setRequesting(true);
         try {
           const nextSubtasks = await onRequestSubtasks();
-          setRefreshedResult({ sourceKey: refreshSourceKey, subtasks: nextSubtasks });
+          setRefreshedResult({
+            sourceIdentifier: currentIdentifier,
+            sourceProgress: progress,
+            subtasks: nextSubtasks,
+          });
           setOpen(nextSubtasks.length > 0);
         } catch (error) {
           console.error('Failed to load task subtasks:', error);
@@ -168,7 +176,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           setRequesting(false);
         }
       },
-      [onRequestSubtasks, open, refreshSourceKey, requesting, t],
+      [currentIdentifier, onRequestSubtasks, open, progress, requesting, t],
     );
 
     const handleOpenChange = useCallback(

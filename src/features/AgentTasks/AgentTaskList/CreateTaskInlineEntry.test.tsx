@@ -18,6 +18,10 @@ const editorMarkdownMock = vi.hoisted(() => ({ value: '' }));
 const activeWorkspaceMock = vi.hoisted(() => ({
   id: 'workspace-1' as string | undefined,
 }));
+const workspaceMembersMock = vi.hoisted(() => ({
+  isLoading: false,
+  members: [{ role: 'member', userId: 'user-1' }],
+}));
 
 vi.mock('@lobehub/editor/react', () => ({
   useEditor: () => ({
@@ -55,6 +59,14 @@ vi.mock('@/hooks/usePermission', () => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => activeWorkspaceMock.id,
+}));
+
+vi.mock('@/business/client/hooks/useFetchWorkspaceMembers', () => ({
+  useFetchWorkspaceMembers: () => ({ isLoading: workspaceMembersMock.isLoading }),
+}));
+
+vi.mock('@/business/client/hooks/useWorkspaceMembers', () => ({
+  useWorkspaceMembers: () => workspaceMembersMock.members,
 }));
 
 vi.mock('@/store/task', () => ({
@@ -161,6 +173,8 @@ describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
     activeWorkspaceMock.id = 'workspace-1';
+    workspaceMembersMock.isLoading = false;
+    workspaceMembersMock.members = [{ role: 'member', userId: 'user-1' }];
     focusMock.mockReset();
     createTaskMock.mockReset();
     createTaskMock.mockResolvedValue({ identifier: 'task-1' });
@@ -305,5 +319,23 @@ describe('CreateTaskInlineEntry', () => {
         'private',
       );
     });
+  });
+
+  it('drops a restored member who is no longer assignable in the workspace', async () => {
+    workspaceMembersMock.members = [{ role: 'viewer', userId: 'user-1' }];
+    localStorage.setItem(
+      'lobehub:task-create-draft:workspace-1:all',
+      JSON.stringify({
+        assigneeUserId: 'user-1',
+        markdown: 'Coordinate a workspace task',
+        visibility: 'public',
+      }),
+    );
+
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', ''),
+    );
   });
 });

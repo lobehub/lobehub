@@ -158,7 +158,7 @@ describe('TaskSubtaskProgressTag', () => {
   it('removes a stale progress badge when the refreshed task has no subtasks', async () => {
     const onRequestSubtasks = vi.fn().mockResolvedValue([]);
 
-    render(
+    const { rerender } = render(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
         subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
@@ -171,6 +171,17 @@ describe('TaskSubtaskProgressTag', () => {
 
     await waitFor(() => expect(screen.queryByText('0/1')).not.toBeInTheDocument());
     expect(onRequestSubtasks).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <TaskSubtaskProgressTag
+        progress={{ completed: 0, total: 1 }}
+        subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
+        onRequestSubtasks={onRequestSubtasks}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('0/1')).toBeInTheDocument();
   });
 
   it('surfaces lazy-load failures and keeps the progress badge retryable', async () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import { useEditor } from '@lobehub/editor/react';
 import { Block, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
@@ -10,6 +11,8 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
+import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -82,6 +85,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const activeWorkspaceId = useActiveWorkspaceId();
+  const { isLoading: isMembersLoading } = useFetchWorkspaceMembers();
+  const workspaceMembers = useWorkspaceMembers();
+  const assignableMemberIds = useMemo(
+    () =>
+      new Set(
+        workspaceMembers
+          .filter((member) => canWorkspaceRoleBeTaskAssignee(member.role))
+          .map((member) => member.userId),
+      ),
+    [workspaceMembers],
+  );
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
@@ -161,6 +175,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // the new key's draft. The editor's onContentChange syncs `instruction`.
   useEffect(() => {
     if (!draftStorageKey || !editor) return;
+    // Workspace drafts depend on the member directory. Wait for its first
+    // response so a removed or downgraded member is never restored into a
+    // composer state that the create API will reject.
+    if (activeWorkspaceId && isMembersLoading) return;
     if (draftHydratedKey === draftStorageKey) return;
     setDraftHydratedKey(draftStorageKey);
 
@@ -189,12 +207,27 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
-      if (draft.assigneeUserId) setAssigneeUserId(draft.assigneeUserId);
+      if (
+        draft.assigneeUserId &&
+        (!activeWorkspaceId || assignableMemberIds.has(draft.assigneeUserId))
+      ) {
+        setAssigneeUserId(draft.assigneeUserId);
+      }
       if (draft.visibility) setVisibility(draft.visibility);
     } catch {
       /* ignore a malformed draft */
     }
-  }, [agentId, defaultVisibility, draftHydratedKey, draftStorageKey, editor, lockAssignee]);
+  }, [
+    activeWorkspaceId,
+    agentId,
+    assignableMemberIds,
+    defaultVisibility,
+    draftHydratedKey,
+    draftStorageKey,
+    editor,
+    isMembersLoading,
+    lockAssignee,
+  ]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Write-only on non-empty:
