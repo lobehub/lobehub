@@ -1,6 +1,7 @@
 import { type GoogleGenAIOptions } from '@google/genai';
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
+  isServerDefaultHeterogeneousProfileModel,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from '@lobechat/heterogeneous-agents';
@@ -551,22 +552,30 @@ export type ServerDefaultHeterogeneousModels = Record<
  * `lobehub/${catalogId}`. The operation token remains the source of truth and
  * the request must match that selection.
  *
- * Most agents can use any tool-capable chat model in the relay catalog; the
+ * Legacy agent policies accept any tool-capable chat model; the
  * `parseClaudeModelId` arm keeps Claude ids eligible in deployments whose
- * catalog omits `abilities`. Codex retains a narrower policy: it accepts native
- * Responses models plus an explicit set of tool-capable relay models configured
- * through its custom model-catalog path because its reasoning and continuation
- * behavior also depends on model metadata.
+ * catalog omits `abilities`. Profile-attested agents instead require a tested
+ * client payload/continuation contract. Codex retains its narrower policy: it
+ * accepts native Responses models plus an explicit set of tool-capable relay
+ * models configured through its custom model-catalog path.
  */
 const supportsServerDefaultHeterogeneousAgent = (
   agentType: ServerDefaultHeterogeneousAgentType,
-  model: Pick<AiFullModelCard, 'abilities' | 'id' | 'visible'>,
+  model: Pick<AiFullModelCard, 'abilities' | 'agentCompatibility' | 'id' | 'visible'>,
 ) => {
   if (!isAiModelVisible(model)) return false;
 
-  const { modelPolicy } = SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG[agentType];
+  const config = SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG[agentType];
+  const { modelPolicy } = config;
   if (modelPolicy === 'tool-capable') {
     return parseClaudeModelId(model.id) !== undefined || model.abilities?.functionCall === true;
+  }
+  if (modelPolicy === 'profile-attested') {
+    if (model.abilities?.functionCall === false) return false;
+    const deploymentProfiles = model.agentCompatibility?.serverDefaultHeterogeneousProfiles;
+    return deploymentProfiles
+      ? deploymentProfiles.includes(config.compatibilityProfile)
+      : isServerDefaultHeterogeneousProfileModel(config.compatibilityProfile, model.id);
   }
 
   return (

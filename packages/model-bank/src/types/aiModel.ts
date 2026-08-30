@@ -25,6 +25,14 @@ export const AiModelTypeSchema = z.enum([
 
 export type AiModelType = z.infer<typeof AiModelTypeSchema>;
 
+export const AgentCompatibilitySchema = z
+  .object({
+    serverDefaultHeterogeneousProfiles: z.array(z.string().min(1)).optional(),
+  })
+  .passthrough();
+
+export type AgentCompatibility = z.infer<typeof AgentCompatibilitySchema>;
+
 /**
  * The speech-to-text model type was renamed from the legacy `stt` to the
  * standard `asr`. Instead of a bulk DB data migration, persisted rows and
@@ -593,6 +601,7 @@ export const AiModelSettingsSchema = z.object({
 
 export interface AIChatModelCard extends AIBaseModelCard {
   abilities?: ModelAbilities;
+  agentCompatibility?: AgentCompatibility;
   config?: AiModelConfig;
   maxOutput?: number;
   pricing?: Pricing;
@@ -659,6 +668,7 @@ export interface AIRealtimeModelCard extends AIBaseModelCard {
 
 export interface AiFullModelCard extends AIBaseModelCard {
   abilities?: ModelAbilities;
+  agentCompatibility?: AgentCompatibility;
   config?: AiModelConfig;
   contextWindowTokens?: number;
   displayName?: string;
@@ -678,6 +688,7 @@ export interface LobeDefaultAiModelListItem extends AiFullModelCard {
 // create
 export const CreateAiModelSchema = z.object({
   abilities: AiModelAbilitiesSchema.optional(),
+  agentCompatibility: AgentCompatibilitySchema.optional(),
   contextWindowTokens: z.number().optional(),
   displayName: z.string().optional(),
   id: z.string(),
@@ -697,6 +708,7 @@ export type CreateAiModelParams = z.infer<typeof CreateAiModelSchema>;
 
 export interface AiProviderModelListItem {
   abilities?: ModelAbilities;
+  agentCompatibility?: AgentCompatibility;
   config?: AiModelConfig;
   contextWindowTokens?: number;
   description?: string;
@@ -718,6 +730,7 @@ export interface AiProviderModelListItem {
 // Update
 export const UpdateAiModelSchema = z.object({
   abilities: AiModelAbilitiesSchema.optional(),
+  agentCompatibility: AgentCompatibilitySchema.optional(),
   // NOTE: `chatConfig` is deliberately NOT accepted here — model-instance reasoning
   // defaults go through the dedicated updateAiModelReasoningConfig procedure so the
   // generic update path can never carry (and thus never stomp) that namespace.
