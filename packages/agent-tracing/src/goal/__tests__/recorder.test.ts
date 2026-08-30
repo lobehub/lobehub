@@ -129,7 +129,11 @@ describe('appendAdvanceToPartial', () => {
       })
     )?.advances.at(-1);
 
-    expect(advance?.ticks[0].graphShape).toMatchObject({ findings: 1, nodesTotal: 2, workOpen: 1 });
+    expect(advance?.ticks[0].graphShape).toMatchObject({
+      findings: 1,
+      nodesTotal: 2,
+      tasksOpen: 1,
+    });
   });
 });
 

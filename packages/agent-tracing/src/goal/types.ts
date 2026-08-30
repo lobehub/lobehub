@@ -41,8 +41,8 @@ export type GoalTickBranch =
   /** Recovery is exhausted or the failure is not recoverable; open a gate. */
   | 'failure_decision'
   /** Task is parked or already in flight. */
-  | 'work_paused'
-  | 'work_running'
+  | 'task_paused'
+  | 'task_running'
   /** Budget stopped the goal before this work could be dispatched. */
   | 'budget_exhausted'
   /** Start a run for the chosen work. */
@@ -151,10 +151,10 @@ export interface GoalGraphShape {
   findings: number;
   gatesPending: number;
   nodesTotal: number;
-  workBlocked: number;
-  workOpen: number;
-  workReady: number;
-  workResolved: number;
+  tasksBlocked: number;
+  tasksCompleted: number;
+  tasksOpen: number;
+  tasksReady: number;
 }
 
 // ==================== Snapshots ====================

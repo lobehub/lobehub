@@ -64,9 +64,9 @@ export const renderGoalTrajectory = (trajectory: GoalTrajectory): string => {
     `Status    ${trajectory.completionReason ?? 'in flight'}   ${duration(end - trajectory.startedAt)}`,
     `Advances  ${rollup.advancesTotal} (${rollup.ticksTotal} ticks)   by trigger: ${bucket(rollup.advancesByTrigger)}`,
     `Outcomes  ${bucket(rollup.advancesByOutcome)}`,
-    `Graph     ${rollup.nodesTotal} nodes · ${rollup.workResolved} work resolved · ${rollup.findingsTotal} findings`,
+    `Graph     ${rollup.nodesTotal} nodes · ${rollup.tasksCompleted} tasks done · ${rollup.findingsTotal} findings`,
     `Human     ${rollup.gatesOpened} gate(s), ${duration(rollup.humanWaitingMs)} waiting`,
-    `Ops       ${rollup.workOperations} operation(s) — inspect <opId> to go deeper`,
+    `Ops       ${rollup.operationsTotal} operation(s) — lh trace op inspect <opId> to go deeper`,
   ].join('\n');
 
   return [header, '', ...trajectory.advances.map((advance) => renderAdvance(advance))].join('\n');
@@ -91,7 +91,7 @@ export const renderGoalAdvanceDetail = (trajectory: GoalTrajectory, seq: number)
       '',
       `  tick ${tick.index}  ${tick.branch} → ${tick.outcome}`,
       `    ${tick.message}`,
-      `    graph: ${tick.graphShape.nodesTotal} nodes, work ${tick.graphShape.workReady} ready / ${tick.graphShape.workBlocked} blocked / ${tick.graphShape.workResolved} resolved, ${tick.graphShape.gatesPending} gate(s) pending`,
+      `    graph: ${tick.graphShape.nodesTotal} nodes, tasks ${tick.graphShape.tasksReady} ready / ${tick.graphShape.tasksBlocked} blocked / ${tick.graphShape.tasksCompleted} done, ${tick.graphShape.gatesPending} gate(s) pending`,
     );
 
     if (tick.budget) {

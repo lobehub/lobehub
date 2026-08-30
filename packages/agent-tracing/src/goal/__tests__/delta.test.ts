@@ -62,10 +62,10 @@ const tick = (index: number, overrides: Partial<GoalTickSnapshot> = {}): GoalTic
     findings: 0,
     gatesPending: 0,
     nodesTotal: 0,
-    workBlocked: 0,
-    workOpen: 0,
-    workReady: 0,
-    workResolved: 0,
+    tasksBlocked: 0,
+    tasksOpen: 0,
+    tasksReady: 0,
+    tasksCompleted: 0,
   },
   index,
   message: '',
@@ -126,10 +126,10 @@ describe('buildGraphShape', () => {
     expect(buildGraphShape(state)).toMatchObject({
       findings: 1,
       nodesTotal: 3,
-      workBlocked: 1,
-      workOpen: 2,
-      workReady: 1,
-      workResolved: 0,
+      tasksBlocked: 1,
+      tasksOpen: 2,
+      tasksReady: 1,
+      tasksCompleted: 0,
     });
   });
 
@@ -139,6 +139,10 @@ describe('buildGraphShape', () => {
       nodes: [node('a', { status: 'resolved' }), node('b')],
     });
 
-    expect(buildGraphShape(state)).toMatchObject({ workBlocked: 0, workReady: 1, workResolved: 1 });
+    expect(buildGraphShape(state)).toMatchObject({
+      tasksBlocked: 0,
+      tasksReady: 1,
+      tasksCompleted: 1,
+    });
   });
 });

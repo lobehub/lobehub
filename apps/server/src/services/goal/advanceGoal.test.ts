@@ -175,6 +175,8 @@ describe('advanceGoal trajectory recording', () => {
         goalId: 'goal-1',
         ticksTotal: 1,
         traceS3Key: 'goal-traces/goal-1.json.zst',
+        // Still the landed column name; the rollup calls it `operationsTotal`.
+        // Pinned so the seam cannot drift silently before the columns are renamed.
         workOperations: 1,
       }),
     );

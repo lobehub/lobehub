@@ -20,10 +20,10 @@ const tick = (overrides: Partial<GoalTickSnapshot> = {}): GoalTickSnapshot => ({
     findings: 0,
     gatesPending: 0,
     nodesTotal: 0,
-    workBlocked: 0,
-    workOpen: 0,
-    workReady: 0,
-    workResolved: 0,
+    tasksBlocked: 0,
+    tasksOpen: 0,
+    tasksReady: 0,
+    tasksCompleted: 0,
   },
   index: 0,
   message: '',
@@ -85,7 +85,7 @@ describe('buildGoalTraceRollup', () => {
       ]),
     );
 
-    expect(rollup).toMatchObject({ gatesOpened: 1, gatesResolved: 1, workOperations: 2 });
+    expect(rollup).toMatchObject({ gatesOpened: 1, gatesResolved: 1, operationsTotal: 2 });
   });
 
   it('measures the wall time a goal sat parked on a person', () => {
@@ -114,6 +114,6 @@ describe('buildGoalTraceRollup', () => {
       ]),
     );
 
-    expect(rollup).toMatchObject({ findingsTotal: 1, nodesTotal: 2, workResolved: 1 });
+    expect(rollup).toMatchObject({ findingsTotal: 1, nodesTotal: 2, tasksCompleted: 1 });
   });
 });

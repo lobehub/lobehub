@@ -22,13 +22,13 @@ export interface GoalTraceRollup {
   /** Wall time a goal spent parked on a human, summed across gates. */
   humanWaitingMs: number;
   nodesTotal: number;
+  /** Operations this goal put in flight — the join key count into `agent_operations`. */
+  operationsTotal: number;
   startedAt: number;
+  tasksCompleted: number;
+  tasksRetired: number;
   ticksByBranch: Record<string, number>;
   ticksTotal: number;
-  /** Operations this goal put in flight — the join key count into `agent_operations`. */
-  workOperations: number;
-  workResolved: number;
-  workRetired: number;
 }
 
 const increment = (counter: Record<string, number>, key: string): void => {
@@ -103,9 +103,9 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
     startedAt: trajectory.startedAt,
     ticksByBranch,
     ticksTotal,
-    workOperations: operationIds.size,
-    workResolved: shape.workResolved,
-    workRetired: finalGraph.nodes.filter(
+    operationsTotal: operationIds.size,
+    tasksCompleted: shape.tasksCompleted,
+    tasksRetired: finalGraph.nodes.filter(
       (node) => node.kind === 'work' && node.status === 'retired',
     ).length,
   };

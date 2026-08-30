@@ -271,7 +271,7 @@ const decideForTask = (
   if (task.status === 'paused') {
     return {
       ...base,
-      branch: 'work_paused',
+      branch: 'task_paused',
       message: `Task ${task.identifier} is paused`,
       outcome: 'waiting_human',
     };
@@ -280,7 +280,7 @@ const decideForTask = (
   if (task.status === 'running' || task.status === 'scheduled') {
     return {
       ...base,
-      branch: 'work_running',
+      branch: 'task_running',
       message: `Task ${task.identifier} is ${task.status}`,
       outcome: 'waiting_external',
     };

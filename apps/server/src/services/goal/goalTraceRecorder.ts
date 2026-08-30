@@ -100,9 +100,13 @@ export class GoalAdvanceRecorder {
       ticksByBranch: rollup.ticksByBranch,
       ticksTotal: rollup.ticksTotal,
       traceS3Key: buildGoalTraceKey(this.goalId),
-      workOperations: rollup.workOperations,
-      workResolved: rollup.workResolved,
-      workRetired: rollup.workRetired,
+      workOperations: rollup.operationsTotal,
+      // The columns still read `work_*`: a Goal Graph node of kind `work` is
+      // 1:1 with the task it owns, so these count tasks, and the reporting
+      // side says so. Renaming the columns is one change with
+      // `goal_nodes.kind`, not two — until that lands, this is the seam.
+      workResolved: rollup.tasksCompleted,
+      workRetired: rollup.tasksRetired,
     });
   }
 

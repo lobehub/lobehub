@@ -455,7 +455,9 @@ export class GoalService {
           }
 
           case 'recover_lease': {
-            return observe(await this.resumeAbandonedWorkRecovery(graph, chosen!.id, task, effects));
+            return observe(
+              await this.resumeAbandonedWorkRecovery(graph, chosen!.id, task, effects),
+            );
           }
 
           case 'recover_verification': {
@@ -468,7 +470,7 @@ export class GoalService {
             );
           }
 
-          case 'work_paused': {
+          case 'task_paused': {
             return observe({
               goalId,
               message: move.message,
@@ -478,7 +480,7 @@ export class GoalService {
             });
           }
 
-          case 'work_running': {
+          case 'task_running': {
             if (task.status === 'running') {
               const recovered = await this.recoverAbandonedWork(graph, chosen!.id, task, effects);
               if (recovered) return observe(recovered);
@@ -693,7 +695,12 @@ export class GoalService {
         'Automatically started the next Work attempt after verification feedback',
       );
       await this.goalModel.updateStatus(goalId, 'running');
-      effects.push({ nodeId, targetId: task.id, type: 'started_run', detail: 'verification retry' });
+      effects.push({
+        nodeId,
+        targetId: task.id,
+        type: 'started_run',
+        detail: 'verification retry',
+      });
       return {
         goalId,
         message: `Automatically retried task ${task.identifier}`,

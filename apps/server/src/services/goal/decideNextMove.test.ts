@@ -161,11 +161,11 @@ describe('decideNextMove', () => {
 
     it('treats a plain pause as waiting on a person and a run as waiting on the world', () => {
       expect(decide(snapshot, { frontierTask: task({ status: 'paused' }) })).toMatchObject({
-        branch: 'work_paused',
+        branch: 'task_paused',
         outcome: 'waiting_human',
       });
       expect(decide(snapshot, { frontierTask: task({ status: 'running' }) })).toMatchObject({
-        branch: 'work_running',
+        branch: 'task_running',
         outcome: 'waiting_external',
       });
     });

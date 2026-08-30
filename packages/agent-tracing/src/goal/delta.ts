@@ -168,9 +168,9 @@ export const buildGraphShape = (state: GoalGraphState): GoalGraphShape => {
     findings: state.nodes.filter((node) => node.kind === 'finding').length,
     gatesPending: state.decisions.filter((decision) => decision.status === 'pending').length,
     nodesTotal: state.nodes.length,
-    workBlocked: open.length - ready.length,
-    workOpen: open.length,
-    workReady: ready.length,
-    workResolved: work.filter((node) => node.status === 'resolved').length,
+    tasksBlocked: open.length - ready.length,
+    tasksOpen: open.length,
+    tasksReady: ready.length,
+    tasksCompleted: work.filter((node) => node.status === 'resolved').length,
   };
 };
