@@ -32,10 +32,16 @@ jobs:
         run: pnpm install
 
       - name: Update i18n
-        run: bun run i18n
+        run: bun run workflow:i18n 2>&1 | tee i18n_update.log
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_PROXY_URL: ${{ secrets.OPENAI_PROXY_URL }}
+
+      - name: Read i18n log
+        run: |
+          echo 'I18N_LOG<<EOF' >> $GITHUB_ENV
+          cat i18n_update.log >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
 
       - name: create pull request
         id: cpr
@@ -44,6 +50,7 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
           add-paths: |
             locales/**/*.json
+            apps/desktop/resources/locales/**/*.json
           labels: |
             i18n
             automated
@@ -63,7 +70,8 @@ jobs:
 
             <details>
             <summary>i18n Update Log</summary>
-            ```bash
-            $(cat i18n_update.log)
+
+            ```
+            ${{ env.I18N_LOG }}
             ```
             </details>
