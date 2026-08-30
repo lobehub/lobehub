@@ -1,24 +1,28 @@
 export interface KagiSearchParameters {
   limit?: number;
-  q: string;
+  query: string;
 }
 
-interface KagiThumbnail {
+interface KagiSearchImage {
   height?: number | null;
-  url: string;
+  url?: string;
   width?: number | null;
 }
 
-interface KagiData {
-  published?: number;
+interface KagiSearchResult {
+  image?: KagiSearchImage;
+  props?: Record<string, unknown>;
   snippet?: string;
-  t: number;
-  thumbnail?: KagiThumbnail;
+  time?: string;
   title: string;
   url: string;
 }
 
+interface KagiData {
+  infobox?: unknown;
+  search: KagiSearchResult[];
+}
+
 export interface KagiResponse {
-  data: KagiData[];
-  meta?: any;
+  data: KagiData;
 }
