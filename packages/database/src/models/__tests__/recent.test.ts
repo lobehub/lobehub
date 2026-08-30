@@ -101,6 +101,7 @@ describe('RecentModel', () => {
         const result = await recentModel.queryRecent();
         expect(result.map((r) => r.id)).toEqual(['topic-group', 'topic-inbox']);
         expect(result[0]).toMatchObject({
+          groupId: 'group-1',
           id: 'topic-group',
           type: 'topic',
           routeId: null,

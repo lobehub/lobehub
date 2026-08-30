@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
@@ -35,6 +36,13 @@ export const useAgentDisplayMeta = (
   const meta = useAgentStore((s) =>
     agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
   );
+  const groupBySupervisorId = useAgentGroupStore((s) =>
+    agentId
+      ? Object.values(s.groupMap).find(
+          (group) => group.supervisorAgentId === agentId && !!group.avatar,
+        )
+      : undefined,
+  );
   const sidebarAgent = useHomeStore(homeAgentListSelectors.getAgentById(agentId ?? ''));
 
   if (!agentId) return undefined;
@@ -43,6 +51,7 @@ export const useAgentDisplayMeta = (
   const sidebarAvatar = typeof sidebarAgent?.avatar === 'string' ? sidebarAgent.avatar : undefined;
   const hasResolvedMeta =
     isInbox ||
+    !!groupBySupervisorId?.avatar ||
     !!meta?.avatar ||
     !!meta?.backgroundColor ||
     !!agentDisplayName(meta) ||
@@ -51,10 +60,18 @@ export const useAgentDisplayMeta = (
   if (!fallbackToDefault && !hasResolvedMeta) return undefined;
 
   return {
-    avatar: meta?.avatar || sidebarAvatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
+    avatar:
+      groupBySupervisorId?.avatar ||
+      meta?.avatar ||
+      sidebarAvatar ||
+      (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
     backgroundColor:
-      meta?.backgroundColor || sidebarAgent?.backgroundColor || cssVar.colorBgContainer,
+      groupBySupervisorId?.backgroundColor ||
+      meta?.backgroundColor ||
+      sidebarAgent?.backgroundColor ||
+      cssVar.colorBgContainer,
     title:
+      groupBySupervisorId?.title ||
       agentDisplayName(meta) ||
       agentDisplayName(sidebarAgent) ||
       (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' })),

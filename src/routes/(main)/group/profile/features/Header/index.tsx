@@ -56,6 +56,7 @@ const Header = memo(() => {
 
   const { gid } = useParams<{ gid: string }>();
   const members = useAgentGroupStore((s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s));
+  const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
   const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
   const createAgentInGroup = useAgentGroupStore((s) => s.createAgentInGroup);
@@ -81,8 +82,8 @@ const Header = memo(() => {
     // Add agent tabs
     for (const agent of members) {
       items.push({
-        avatar: agent.isSupervisor ? undefined : agent.avatar || undefined,
-        icon: agent.isSupervisor ? <Crown size={16} /> : undefined,
+        avatar: agent.isSupervisor ? groupMeta.avatar : agent.avatar || undefined,
+        icon: agent.isSupervisor && !groupMeta.avatar ? <Crown size={16} /> : undefined,
         id: agent.id,
         isExternal: !agent.isSupervisor && !agent.virtual,
         title: agent.isSupervisor ? t('group.profile.supervisor') : agent.title || 'Untitled Agent',
@@ -90,7 +91,7 @@ const Header = memo(() => {
     }
 
     return items;
-  }, [members, t]);
+  }, [groupMeta.avatar, members, t]);
 
   const handleAddMembers = async (agentIds: string[]) => {
     if (!activeGroupId) return;

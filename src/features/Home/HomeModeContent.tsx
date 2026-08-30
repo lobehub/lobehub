@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
+import { type SidebarAgentItem } from '@/database/repositories/home';
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import TaskTriggerTag from '@/features/AgentTasks/features/TaskTriggerTag';
@@ -23,6 +25,7 @@ import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
@@ -32,6 +35,8 @@ import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/slices/agentList/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -140,6 +145,17 @@ const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
 export const resolveRecentsBadgeCount = (fetched: number, shown: number): number | undefined =>
   Math.min(fetched, shown) || undefined;
 
+export const resolveRecentGroupAvatar = (avatar: SidebarAgentItem['avatar']) => {
+  const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+  const memberAvatars = Array.isArray(avatar) ? avatar : [];
+
+  return {
+    customAvatar,
+    hasAvatar: Boolean(customAvatar || memberAvatars.length > 0),
+    memberAvatars,
+  };
+};
+
 /**
  * The one line a task row shows under its name. `instruction` is what the task
  * was actually asked to do, so it is the line worth reading; `description` is
@@ -200,6 +216,14 @@ const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, traili
 const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
   ({ showAuthor, topic }) => {
     const agent = useAgentDisplayMeta(topic.agentId);
+    const group = useHomeStore(homeAgentListSelectors.getAgentById(topic.groupId ?? ''));
+    const {
+      customAvatar: groupAvatar,
+      hasAvatar: hasGroupAvatar,
+      memberAvatars: groupMemberAvatars,
+    } = resolveRecentGroupAvatar(group?.avatar);
+    const avatar = agent?.avatar;
+    const backgroundColor = agent?.backgroundColor;
     const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
     // The snippet is raw markdown (a user note or the last assistant reply);
     // rendered as one plain line, its syntax markers are just noise.
@@ -214,10 +238,17 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         href={topic.routePath}
         title={topic.title}
         icon={
-          agent ? (
+          hasGroupAvatar ? (
+            <AgentGroupAvatar
+              avatar={groupAvatar}
+              backgroundColor={group?.backgroundColor || undefined}
+              memberAvatars={groupMemberAvatars}
+              size={22}
+            />
+          ) : avatar ? (
             <Avatar
-              avatar={agent.avatar}
-              background={agent.backgroundColor}
+              avatar={avatar}
+              background={backgroundColor}
               className={styles.topicAvatar}
               shape={'circle'}
               size={22}
@@ -476,6 +507,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const tasksHidden = hiddenWidgets.includes('tasks');
   const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
   const cacheScope = useCacheScope();
+  useFetchAgentList();
 
   // One page-level mine/team scope, shared by the inbox sections and Recent
   // topics. In personal mode the member map is empty, `isTeam` stays false and

@@ -20,9 +20,13 @@ const Header = memo(() => {
     clearPortalStack();
   };
   const activeThreadAgentId = useAgentGroupStore((s) => s.activeThreadAgentId);
+  const groupMeta = useAgentGroupStore((s) =>
+    s.activeGroupId ? s.groupMap[s.activeGroupId] : undefined,
+  );
 
   const agents = useSessionStore(sessionSelectors.currentGroupAgents);
   const currentAgent = agents?.find((agent) => agent.id === activeThreadAgentId);
+  const isSupervisor = groupMeta?.supervisorAgentId === currentAgent?.id;
 
   return (
     <NavHeader
@@ -32,10 +36,18 @@ const Header = memo(() => {
       left={
         <Flexbox horizontal align={'center'} gap={8}>
           <Avatar
-            avatar={currentAgent?.avatar || DEFAULT_AVATAR}
-            background={currentAgent?.backgroundColor ?? undefined}
             shape={'square'}
             size={20}
+            avatar={
+              isSupervisor
+                ? groupMeta?.avatar || DEFAULT_AVATAR
+                : currentAgent?.avatar || DEFAULT_AVATAR
+            }
+            background={
+              isSupervisor
+                ? (groupMeta?.backgroundColor ?? undefined)
+                : (currentAgent?.backgroundColor ?? undefined)
+            }
           />
           <div style={{ fontWeight: 600 }}>
             {agentDisplayName(currentAgent, t('defaultSession', { ns: 'common' }))}

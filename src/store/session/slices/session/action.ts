@@ -228,8 +228,8 @@ export class SessionActionImpl {
             const chatGroupStore = getChatGroupStoreState();
             const chatGroups = groupSessions.map((session) => ({
               accessedAt: session.updatedAt,
-              avatar: null,
-              backgroundColor: null,
+              avatar: session.meta?.avatar ?? null,
+              backgroundColor: session.meta?.backgroundColor ?? null,
               clientId: null,
               config: null,
               content: null,

@@ -9,6 +9,7 @@ import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
   description?: string | null;
+  groupId: string | null;
   id: string;
   lastAssistantMessage?: string | null;
   metadata?: any;
@@ -84,6 +85,7 @@ export class RecentModel {
         description: withTopicPreview
           ? topics.description
           : sql<string | null>`NULL`.as('description'),
+        groupId: sql<string | null>`${topics.groupId}`.as('group_id'),
         id: topics.id,
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
@@ -115,6 +117,7 @@ export class RecentModel {
     const documentArm = this.db
       .select({
         description: sql<string | null>`NULL`.as('description'),
+        groupId: sql<string | null>`NULL`.as('group_id'),
         id: documents.id,
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
@@ -144,6 +147,7 @@ export class RecentModel {
     const taskArm = this.db
       .select({
         description: sql<string | null>`NULL`.as('description'),
+        groupId: sql<string | null>`NULL`.as('group_id'),
         id: tasks.id,
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
@@ -180,6 +184,7 @@ export class RecentModel {
       const preview = previewByTopicId.get(row.id) ?? null;
       return {
         description: row.description,
+        groupId: row.groupId,
         id: row.id,
         lastAssistantMessage:
           preview && preview.length > LAST_MESSAGE_PREVIEW_LENGTH
