@@ -6,7 +6,6 @@ import {
   Copy,
   DownloadIcon,
   Edit,
-  FlaskConical,
   LanguagesIcon,
   ListChevronsDownUp,
   ListChevronsUpDown,
@@ -43,7 +42,6 @@ interface ChatListActionsBar {
   expand: ActionBarItem;
   export: ActionBarItem;
   regenerate: ActionBarItem;
-  saveAsEvalCase: ActionBarItem;
   share: ActionBarItem;
   translate: ActionBarItem;
   tts: ActionBarItem;
@@ -120,11 +118,6 @@ export const useChatListActionsBar = ({
         key: 'export',
         label: 'Export as PDF',
         sfSymbol: 'square.and.arrow.up',
-      },
-      saveAsEvalCase: {
-        icon: FlaskConical,
-        key: 'saveAsEvalCase',
-        label: t('messageAction.saveAsEvalCase', { ns: 'chat' }),
       },
       regenerate: {
         disabled: isRegenerating,

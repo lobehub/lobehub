@@ -12,15 +12,13 @@ import { useTranslation } from 'react-i18next';
 
 import { MSG_CONTENT_CLASSNAME } from '@/features/Conversation/ChatItem/components/MessageContent';
 import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/heterogeneous';
-import { buildCaptureDraft, createEvalCaptureModal } from '@/features/EvalCapture';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { openShareMessageModal } from '../components/ShareMessageModal';
 import {
@@ -85,8 +83,6 @@ export const useChatItemContextMenu = ({
   const isThreadMode = useConversationStore(messageStateSelectors.isThreadMode);
   const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const canCaptureEvalCase = useUserStore(labPreferSelectors.enableEvalCapture);
-  const navigate = useWorkspaceAwareNavigate();
   const actionsBar = useChatListActionsBar({ hasThread, isRegenerating });
   const inThread = isThreadMode || inPortalThread;
 
@@ -138,7 +134,6 @@ export const useChatItemContextMenu = ({
       edit,
       expand,
       regenerate,
-      saveAsEvalCase,
       share,
       translate,
       tts,
@@ -172,14 +167,17 @@ export const useChatItemContextMenu = ({
 
       if (!inThread && !isGroupSession && isDevMode) list.push(branching);
 
-      list.push(divider, tts, translate, divider, share);
-
-      // Sits next to regenerate: both re-ask this turn, one for another sample
-      // and one for another model, recorded. Developer-facing, so it is behind
-      // the Labs toggle rather than shown to everyone.
-      if (canCaptureEvalCase) list.push(divider, saveAsEvalCase);
-
-      list.push(divider, regenerate, delAndRegenerate, del);
+      list.push(
+        divider,
+        tts,
+        translate,
+        divider,
+        share,
+        divider,
+        regenerate,
+        delAndRegenerate,
+        del,
+      );
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -227,7 +225,6 @@ export const useChatItemContextMenu = ({
     isDevMode,
     isGroupSession,
     role,
-    canCaptureEvalCase,
   ]);
 
   const handleShare = useCallback(() => {
@@ -266,20 +263,6 @@ export const useChatItemContextMenu = ({
           toggleMessageCollapsed(id);
           break;
         }
-        case 'saveAsEvalCase': {
-          const messages = dataSelectors.displayMessages(storeApi.getState());
-          const draft = buildCaptureDraft(messages as never, id);
-          if (!draft) {
-            toast.error(t('capture.notCapturable', { ns: 'eval' }));
-            return;
-          }
-          createEvalCaptureModal({
-            draft,
-            onView: (testCaseId) => navigate(`/eval/cases/${testCaseId}`),
-          });
-          return;
-        }
-
         case 'branching': {
           if (!canCreate) break;
           if (!topic) {
@@ -361,8 +344,6 @@ export const useChatItemContextMenu = ({
       topic,
       translateMessage,
       startMessageTTS,
-      navigate,
-      storeApi,
     ],
   );
 
