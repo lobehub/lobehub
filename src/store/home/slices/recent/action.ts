@@ -12,23 +12,11 @@ import type { HomeStore } from '@/store/home/store';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { RecentEntityRef, RecentScopeState } from './initialState';
 import { createRecentQueryKey, persistRecentQueries } from './initialState';
+import type { RecentDispatchAction } from './reducer';
+import { recentReducer } from './reducer';
 
 const n = setNamespace('recent');
-
-const updateRecentTitleInList =
-  (type: RecentItem['type'], id: string, title: string) => (items: RecentItem[]) => {
-    let changed = false;
-    const nextItems = items.map((item) => {
-      if (item.type !== type || item.id !== id || item.title === title) return item;
-      changed = true;
-      return { ...item, title };
-    });
-    return changed ? nextItems : items;
-  };
-
-const createScopeState = (): RecentScopeState => ({ optimisticTitles: {}, queries: {} });
 
 const matchesScopedRecentKey = (key: unknown, root: string, scope: string) =>
   Array.isArray(key) && key[0] === root && key.at(-1) === scope;
@@ -60,45 +48,6 @@ export class RecentActionImpl {
     this.#set({ allRecentsDrawerOpen: false }, false, n('closeAllRecentsDrawer'));
   };
 
-  #commitRecentTitle = (
-    scope: string,
-    type: RecentItem['type'],
-    id: string,
-    title: string,
-    mutationId: number,
-  ): void => {
-    const ref = `${type}:${id}` as RecentEntityRef;
-    const state = this.#get();
-    const scopedState = state.recentsByScope[scope];
-    if (!scopedState) return;
-
-    const optimisticTitles = { ...scopedState.optimisticTitles };
-    if (optimisticTitles[ref]?.mutationId === mutationId) delete optimisticTitles[ref];
-    const queries = Object.fromEntries(
-      Object.entries(scopedState.queries).map(([queryKey, query]) => {
-        const items = updateRecentTitleInList(type, id, title)(query.items);
-        return [queryKey, items === query.items ? query : { ...query, items }];
-      }),
-    );
-
-    const recentsByScope = {
-      ...state.recentsByScope,
-      [scope]: {
-        ...scopedState,
-        optimisticTitles,
-        queries,
-      },
-    };
-    this.#set(
-      {
-        recentsByScope,
-      },
-      false,
-      n('commitRecentTitle'),
-    );
-    persistRecentQueries(recentsByScope);
-  };
-
   #persistRecentTitle = async ({ id, title, type }: RenameRecentParams): Promise<void> => {
     switch (type) {
       case 'document': {
@@ -116,83 +65,21 @@ export class RecentActionImpl {
     }
   };
 
-  #rollbackRecentTitle = (
-    scope: string,
-    type: RecentItem['type'],
-    id: string,
-    mutationId: number,
-  ): void => {
-    const ref = `${type}:${id}` as RecentEntityRef;
-    const state = this.#get();
-    const scopedState = state.recentsByScope[scope];
-    if (!scopedState || scopedState.optimisticTitles[ref]?.mutationId !== mutationId) return;
-
-    const optimisticTitles = { ...scopedState.optimisticTitles };
-    delete optimisticTitles[ref];
-    this.#set(
-      {
-        recentsByScope: {
-          ...state.recentsByScope,
-          [scope]: { ...scopedState, optimisticTitles },
-        },
-      },
-      false,
-      n('rollbackRecentTitle'),
-    );
-  };
-
-  #setRecentTitleOptimistic = (
-    scope: string,
-    type: RecentItem['type'],
-    id: string,
-    title: string,
-    mutationId: number,
-  ): void => {
-    const ref = `${type}:${id}` as RecentEntityRef;
-    const state = this.#get();
-    const scopedState = state.recentsByScope[scope] ?? createScopeState();
-    this.#set(
-      {
-        recentsByScope: {
-          ...state.recentsByScope,
-          [scope]: {
-            ...scopedState,
-            optimisticTitles: {
-              ...scopedState.optimisticTitles,
-              [ref]: { mutationId, title },
-            },
-          },
-        },
-      },
-      false,
-      n('setRecentTitleOptimistic'),
-    );
+  internal_dispatchRecent = (action: RecentDispatchAction): void => {
+    this.#set((state) => recentReducer(state, action), false, n(action.type));
   };
 
   internal_replaceRecentQuery = (scope: string, queryKey: string, items: RecentItem[]): void => {
     if (getCacheScope() !== scope) return;
 
-    const state = this.#get();
-    const scopedState = state.recentsByScope[scope] ?? createScopeState();
-
-    const recentsByScope = {
-      ...state.recentsByScope,
-      [scope]: {
-        ...scopedState,
-        queries: {
-          ...scopedState.queries,
-          [queryKey]: { items, updatedAt: Date.now() },
-        },
-      },
-    };
-    this.#set(
-      {
-        recentsByScope,
-      },
-      false,
-      n('internal_replaceRecentQuery'),
-    );
-    persistRecentQueries(recentsByScope);
+    this.internal_dispatchRecent({
+      items,
+      queryKey,
+      scope,
+      type: 'replaceQuery',
+      updatedAt: Date.now(),
+    });
+    persistRecentQueries(this.#get().recentsByScope);
   };
 
   openAllRecentsDrawer = (): void => {
@@ -208,10 +95,16 @@ export class RecentActionImpl {
 
   renameRecent = async (params: RenameRecentParams): Promise<void> => {
     const { id, scope, title, type } = params;
-    const ref = `${type}:${id}` as RecentEntityRef;
     const mutationId = ++this.#mutationId;
-    const queueKey = `${scope}:${ref}`;
-    this.#setRecentTitleOptimistic(scope, type, id, title, mutationId);
+    const queueKey = `${scope}:${type}:${id}`;
+    this.internal_dispatchRecent({
+      entityType: type,
+      id,
+      mutationId,
+      scope,
+      title,
+      type: 'setOptimisticTitle',
+    });
 
     const previous = this.#renameQueues.get(queueKey) ?? Promise.resolve();
     const operation = previous.catch(() => undefined).then(() => this.#persistRecentTitle(params));
@@ -219,9 +112,23 @@ export class RecentActionImpl {
 
     try {
       await operation;
-      this.#commitRecentTitle(scope, type, id, title, mutationId);
+      this.internal_dispatchRecent({
+        entityType: type,
+        id,
+        mutationId,
+        scope,
+        title,
+        type: 'commitTitle',
+      });
+      persistRecentQueries(this.#get().recentsByScope);
     } catch (error) {
-      this.#rollbackRecentTitle(scope, type, id, mutationId);
+      this.internal_dispatchRecent({
+        entityType: type,
+        id,
+        mutationId,
+        scope,
+        type: 'rollbackTitle',
+      });
       throw error;
     } finally {
       if (this.#renameQueues.get(queueKey) === operation) this.#renameQueues.delete(queueKey);
