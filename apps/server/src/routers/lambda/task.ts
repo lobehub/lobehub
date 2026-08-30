@@ -1181,14 +1181,6 @@ export const taskRouter = router({
         resolved.createdByUserId,
       );
 
-      // Automation and a human assignee are mutually exclusive. Judge the
-      // POST-update effective pair so both directions are caught: assigning a
-      // member to an automated task, and scheduling a member-assigned task.
-      ctx.taskService.assertAutomationAssigneeCompat(
-        data.automationMode !== undefined ? data.automationMode : resolved.automationMode,
-        data.assigneeUserId !== undefined ? data.assigneeUserId : resolved.assigneeUserId,
-      );
-
       const resolvedParentTaskId =
         parentTaskId === undefined
           ? undefined

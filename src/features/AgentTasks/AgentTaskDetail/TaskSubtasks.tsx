@@ -4,7 +4,7 @@ import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
-import { ChevronDown, ListTodoIcon, PlayCircle, Plus, UserCircle2 } from 'lucide-react';
+import { ChevronDown, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
 import type { Key, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
@@ -109,7 +110,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         </span>
       ) : null}
       <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
-        {activeWorkspaceId && !task.automationMode && (
+        {activeWorkspaceId && (
           <AssigneeMemberSelector
             currentUserId={task.assigneeUserId ?? null}
             disabled={isRunning}
@@ -128,7 +129,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
               {task.assigneeUserId ? (
                 <AssigneeUserAvatar size={18} userId={task.assigneeUserId} />
               ) : (
-                <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
+                <UnassignedAssigneeIcon kind={'human'} />
               )}
             </span>
           </AssigneeMemberSelector>

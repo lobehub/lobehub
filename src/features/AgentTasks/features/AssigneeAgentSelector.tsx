@@ -293,7 +293,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                 {flatOptions.length === 0 ? (
                   <Flexbox align={'center'} justify={'center'} padding={16}>
                     <Text fontSize={12} type={'secondary'}>
-                      {t('taskList.assigneeSearch.empty', { ns: 'chat' })}
+                      {t('taskList.assigneeSearch.agentEmpty', { ns: 'chat' })}
                     </Text>
                   </Flexbox>
                 ) : (

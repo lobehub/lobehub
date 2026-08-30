@@ -223,6 +223,22 @@ describe('TaskSubtasks', () => {
     expect(mocks.installKeyboardHandlers).toHaveBeenCalledWith(expectedTarget);
   });
 
+  it('shows the responsible assignee on an automated subtask', () => {
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assigneeUserId: 'member-1',
+        automationMode: 'schedule',
+        identifier: 'T-child',
+        name: 'Scheduled child task',
+        status: 'scheduled',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    expect(screen.getByText('member assignee')).toBeInTheDocument();
+  });
+
   it('falls back to the global task route when the selected subtask has no assignee', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {

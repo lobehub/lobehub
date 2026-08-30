@@ -1,10 +1,10 @@
 'use client';
 
 import { useEditor } from '@lobehub/editor/react';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Minimize2, Paperclip, UserCircle2, X } from 'lucide-react';
+import { Minimize2, Paperclip, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,6 +27,7 @@ import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
@@ -270,7 +271,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                     </>
                   ) : (
                     <>
-                      <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                      <UnassignedAssigneeIcon kind={'human'} size={14} />
                       <Text color={cssVar.colorTextDescription} fontSize={12}>
                         {t('createTask.member')}
                       </Text>
@@ -314,7 +315,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                     </>
                   ) : (
                     <>
-                      <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                      <UnassignedAssigneeIcon kind={'agent'} size={14} />
                       <Text color={cssVar.colorTextDescription} fontSize={12}>
                         {t('createTask.assignee')}
                       </Text>

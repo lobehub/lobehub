@@ -2,7 +2,7 @@ import type { TaskStatus } from '@lobechat/types';
 import { Block, ContextMenuTrigger, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { LockIcon, UserCircle2 } from 'lucide-react';
+import { LockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +21,7 @@ import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
+import { UnassignedAssigneeIcon } from './UnassignedAssigneeIcon';
 import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
 export type TaskItemRouteScope = 'agent' | 'global';
@@ -145,7 +146,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
 
   const assigneeNode = (
     <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
-      {activeWorkspaceId && !task.automationMode && (
+      {activeWorkspaceId && (
         <AssigneeMemberSelector
           currentUserId={task.assigneeUserId}
           disabled={status === 'running'}
@@ -153,13 +154,13 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
           taskIdentifier={task.identifier}
           taskVisibility={task.visibility}
         >
-          <Tooltip title={tChat('createTask.member')}>
-            {task.assigneeUserId ? (
-              <AssigneeUserAvatar userId={task.assigneeUserId} />
-            ) : (
-              <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
-            )}
-          </Tooltip>
+          {task.assigneeUserId ? (
+            <AssigneeUserAvatar tooltip={status !== 'running'} userId={task.assigneeUserId} />
+          ) : (
+            <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
+              <UnassignedAssigneeIcon kind={'human'} />
+            </Tooltip>
+          )}
         </AssigneeMemberSelector>
       )}
       <AssigneeAgentSelector
@@ -168,7 +169,13 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
         taskIdentifier={task.identifier}
         taskVisibility={task.visibility}
       >
-        <AssigneeAvatar agentId={task.assigneeAgentId} />
+        {task.assigneeAgentId ? (
+          <AssigneeAvatar agentId={task.assigneeAgentId} tooltip={status !== 'running'} />
+        ) : (
+          <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
+            <AssigneeAvatar agentId={task.assigneeAgentId} />
+          </Tooltip>
+        )}
       </AssigneeAgentSelector>
     </Flexbox>
   );

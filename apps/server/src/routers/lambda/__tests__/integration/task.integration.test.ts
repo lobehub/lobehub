@@ -1349,49 +1349,39 @@ describe('Task Router Integration', () => {
       expect(demoted.data.visibility).toBe('private');
     });
 
-    it('should keep automation and a human assignee mutually exclusive', async () => {
-      // Creating an automated task with a human assignee is rejected.
-      await expect(
-        caller.create({
-          assigneeUserId: userId,
-          automationMode: 'schedule',
-          instruction: 'Automated cross-assign',
-          schedulePattern: '0 9 * * *',
-        }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
+    it('should preserve the responsible assignee independently of automation', async () => {
+      const createdScheduled = await caller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Automated assigned task',
+        schedulePattern: '0 9 * * *',
+      });
+      expect(createdScheduled.data.assigneeUserId).toBe(userId);
+      expect(createdScheduled.data.automationMode).toBe('schedule');
 
-      // Assigning a member to an existing automated task is rejected.
       const automated = await caller.create({
         automationMode: 'schedule',
         instruction: 'Automated task',
         schedulePattern: '0 9 * * *',
       });
-      await expect(
-        caller.update({ assigneeUserId: userId, id: automated.data.id }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
+      const assignedAutomated = await caller.update({
+        assigneeUserId: userId,
+        id: automated.data.id,
+      });
+      expect(assignedAutomated.data.assigneeUserId).toBe(userId);
+      expect(assignedAutomated.data.automationMode).toBe('schedule');
 
-      // Scheduling a member-assigned task is rejected until unassigned.
       const humanTask = await caller.create({
         assigneeUserId: userId,
         instruction: 'Human task',
       });
-      await expect(
-        caller.update({
-          automationMode: 'schedule',
-          id: humanTask.data.id,
-          schedulePattern: '0 9 * * *',
-        }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
-
-      // Clearing the human assignee in the same update makes scheduling legal.
       const scheduled = await caller.update({
-        assigneeUserId: null,
         automationMode: 'schedule',
         id: humanTask.data.id,
         schedulePattern: '0 9 * * *',
       });
       expect(scheduled.data.automationMode).toBe('schedule');
-      expect(scheduled.data.assigneeUserId).toBeNull();
+      expect(scheduled.data.assigneeUserId).toBe(userId);
     });
 
     it('should not persist the inbox fallback agent when running a human-assigned task', async () => {

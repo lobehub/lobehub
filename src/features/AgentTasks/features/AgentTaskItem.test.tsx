@@ -23,6 +23,13 @@ vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
 }));
 
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
+    <span data-tooltip={String(title ?? '')}>{children}</span>
+  ),
+}));
+
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: any) =>
     selector({
@@ -43,12 +50,14 @@ vi.mock('./AssigneeMemberSelector', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('./AssigneeAvatar', () => ({
-  default: () => <span>assignee</span>,
+vi.mock('../shared/useAgentDisplayMeta', () => ({
+  useAgentDisplayMeta: (agentId?: string | null) =>
+    agentId ? { avatar: 'agent-avatar', backgroundColor: '#fff', title: 'Ryan' } : undefined,
 }));
 
-vi.mock('./AssigneeUserAvatar', () => ({
-  default: () => <span>member</span>,
+vi.mock('../shared/useUserDisplayMeta', () => ({
+  useUserDisplayMeta: (userId?: string | null) =>
+    userId ? { avatar: 'member-avatar', title: 'Shadow Arvin' } : undefined,
 }));
 
 vi.mock('./formatTaskItemDate', () => ({
@@ -133,15 +142,31 @@ describe('AgentTaskItem', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
   });
 
-  it('shows the agent and member assignees together', () => {
-    render(
+  it('shows the assigned agent and member names in tooltips', () => {
+    const { container } = render(
+      <AgentTaskItem
+        task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1', automationMode: 'schedule' }}
+      />,
+    );
+
+    expect(container.querySelector('[data-tooltip="Ryan"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).toBeInTheDocument();
+  });
+
+  it('uses an action label when an assignment is empty', () => {
+    const { container, rerender } = render(
+      <AgentTaskItem task={{ ...createTask(null), automationMode: null }} />,
+    );
+
+    expect(container.querySelectorAll('[data-tooltip="taskList.assignTo"]')).toHaveLength(2);
+
+    rerender(
       <AgentTaskItem
         task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1', automationMode: null }}
       />,
     );
 
-    expect(screen.getAllByText('assignee').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('member').length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-tooltip="taskList.assignTo"]')).not.toBeInTheDocument();
   });
 
   it('uses list summaries without fetching task detail', () => {

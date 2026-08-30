@@ -21,6 +21,7 @@ interface AssigneeMemberSelectorProps {
   children: ReactNode;
   currentUserId?: string | null;
   disabled?: boolean;
+  fullWidth?: boolean;
   onChange?: (userId: string | null) => void;
   taskCreatorId?: string | null;
   taskIdentifier?: string;
@@ -86,6 +87,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     children,
     currentUserId,
     disabled,
+    fullWidth,
     onChange,
     taskCreatorId,
     taskIdentifier,
@@ -221,17 +223,18 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     };
 
     const blocked = disabled || !canEditTask;
+    const currentTriggerStyle = fullWidth ? { ...triggerStyle, width: '100%' } : triggerStyle;
     const trigger = blocked ? (
       <Tooltip title={disabled ? t('taskDetail.reassignDisabled') : reason}>
         <div
-          style={{ ...triggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
+          style={{ ...currentTriggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
           onClick={(event) => event.stopPropagation()}
         >
           <span style={{ pointerEvents: 'none' }}>{children}</span>
         </div>
       </Tooltip>
     ) : (
-      <div style={triggerStyle} onClick={(event) => event.stopPropagation()}>
+      <div style={currentTriggerStyle} onClick={(event) => event.stopPropagation()}>
         {children}
       </div>
     );
@@ -258,7 +261,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
             ) : flatOptions.length === 0 ? (
               <Flexbox align={'center'} justify={'center'} padding={16}>
                 <Text fontSize={12} type={'secondary'}>
-                  {t('taskList.assigneeSearch.empty')}
+                  {t('taskList.assigneeSearch.memberEmpty')}
                 </Text>
               </Flexbox>
             ) : (
