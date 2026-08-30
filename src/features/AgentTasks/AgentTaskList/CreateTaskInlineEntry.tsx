@@ -114,13 +114,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // Persist the in-progress draft per scope so a reload / accidental close
   // doesn't eat a long prompt. Skipped for the transient subtask composer.
   const draftStorageKey = useMemo(
-    () => (parentTaskId ? null : `lobehub:task-create-draft:${projectId ?? agentId ?? 'all'}`),
-    [agentId, parentTaskId, projectId],
+    () =>
+      parentTaskId
+        ? null
+        : `lobehub:task-create-draft:${activeWorkspaceId ?? 'personal'}:${projectId ?? agentId ?? 'all'}`,
+    [activeWorkspaceId, agentId, parentTaskId, projectId],
   );
   // Tracks which scope key the editor is currently hydrated for. The component
-  // is reused across /agent/A/tasks -> /agent/B/tasks -> /tasks without
-  // unmounting, so a boolean would strand the new scope on the old draft.
-  const draftRestoredKeyRef = useRef<string | null>(null);
+  // is reused across workspace and task-scope route switches without unmounting.
+  // State (instead of a ref) keeps the persistence effect from writing the old
+  // scope's member into the new key during the same effect flush as the reset.
+  const [draftHydratedKey, setDraftHydratedKey] = useState<string | null>(null);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   const memberMeta = useUserDisplayMeta(assigneeUserId);
@@ -157,8 +161,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // the new key's draft. The editor's onContentChange syncs `instruction`.
   useEffect(() => {
     if (!draftStorageKey || !editor) return;
-    if (draftRestoredKeyRef.current === draftStorageKey) return;
-    draftRestoredKeyRef.current = draftStorageKey;
+    if (draftHydratedKey === draftStorageKey) return;
+    setDraftHydratedKey(draftStorageKey);
 
     // Reset to baseline for the new scope before hydrating.
     editor.cleanDocument?.();
@@ -190,14 +194,14 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } catch {
       /* ignore a malformed draft */
     }
-  }, [agentId, defaultVisibility, draftStorageKey, editor, lockAssignee]);
+  }, [agentId, defaultVisibility, draftHydratedKey, draftStorageKey, editor, lockAssignee]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Write-only on non-empty:
   // the key is cleared only on a successful submit (below), never here — so a
   // `setDocument`-timing gap right after restore can't wipe a valid draft.
   useEffect(() => {
-    if (!draftStorageKey || draftRestoredKeyRef.current !== draftStorageKey || !editor) return;
+    if (!draftStorageKey || draftHydratedKey !== draftStorageKey || !editor) return;
     const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
     if (!markdown) return;
     try {
@@ -219,6 +223,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   }, [
     assigneeAgentId,
     assigneeUserId,
+    draftHydratedKey,
     draftStorageKey,
     editor,
     instruction,

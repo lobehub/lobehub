@@ -247,15 +247,43 @@ describe('CreateTaskInlineEntry', () => {
 
     await waitFor(() => {
       const draft = JSON.parse(
-        localStorage.getItem('lobehub:task-create-draft:agent-locked') || '{}',
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:agent-locked') || '{}',
       );
       expect(draft).toMatchObject({ assigneeUserId: 'user-1' });
     });
   });
 
+  it('resets member assignment and draft persistence when the workspace changes', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('select-member'));
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft).toMatchObject({ assigneeUserId: 'user-1' });
+    });
+
+    activeWorkspaceMock.id = 'workspace-2';
+    // The real workspace hook publishes a store update. Change one prop here
+    // as well so the memoized test component observes the mocked hook value.
+    rerender(<CreateTaskInlineEntry placeholder="New workspace" variant="hero" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', ''),
+    );
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-2:all') || '{}',
+      );
+      expect(draft.assigneeUserId).toBeUndefined();
+    });
+  });
+
   it('drops an incompatible restored member when the assigned agent is private', async () => {
     localStorage.setItem(
-      'lobehub:task-create-draft:all',
+      'lobehub:task-create-draft:workspace-1:all',
       JSON.stringify({
         assigneeAgentId: 'agent-private',
         assigneeUserId: 'user-1',
