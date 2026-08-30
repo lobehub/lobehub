@@ -8,6 +8,7 @@ import type {
   ElasticsearchSearchInput,
   ElasticsearchSearchResponse,
 } from '@/database/repositories/search';
+import { parseElasticsearchUrl } from '@/database/repositories/search/elasticsearch/url';
 
 import type { ElasticsearchSearchRequestResult } from './observability';
 import { recordElasticsearchSearchRequest } from './observability';
@@ -150,7 +151,7 @@ export class ElasticsearchHttpClient implements ElasticsearchSearchClient {
   constructor({ apiKey, requestTimeoutMs = 10_000, url }: ElasticsearchHttpClientOptions) {
     this.apiKey = apiKey;
     this.requestTimeoutMs = requestTimeoutMs;
-    this.url = new URL(url);
+    this.url = parseElasticsearchUrl(url);
   }
 
   /** Fails closed unless every incremental destination is a writable alias with tombstone support. */

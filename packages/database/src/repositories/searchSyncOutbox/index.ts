@@ -70,6 +70,7 @@ const rowsOf = <Row>(result: unknown): Row[] => {
 interface CaptureInfrastructureState {
   absent: boolean;
   mismatches: string[];
+  upgradeable: boolean;
 }
 
 const assertCaptureGinIndex = async (db: SearchSyncExecutor): Promise<void> => {
@@ -166,7 +167,8 @@ const readCaptureInfrastructureState = async (
   }>(triggerResult);
 
   const mismatches: string[] = [];
-  if (functions.length !== SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length) {
+  let functionsMatch = functions.length === SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length;
+  if (!functionsMatch) {
     mismatches.push(`functions ${functions.length}/${SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length}`);
   }
   for (const expected of SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS) {
@@ -180,29 +182,38 @@ const readCaptureInfrastructureState = async (
       actual.function_result !== expected.result ||
       actual.language !== 'plpgsql'
     ) {
+      functionsMatch = false;
       mismatches.push(`function ${expected.name}`);
     }
   }
 
-  if (triggers.length !== SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length) {
+  let triggersMatchKnownVersion = triggers.length === SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length;
+  if (!triggersMatchKnownVersion) {
     mismatches.push(`triggers ${triggers.length}/${SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length}`);
   }
   for (const expected of SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
     const actual = triggers.find(
       ({ name, table_name: table }) => name === expected.name && table === expected.table,
     );
-    if (
-      !actual ||
-      !['A', 'O'].includes(actual.enabled) ||
-      normalizeSearchSyncCaptureDefinition(actual.definition) !== expected.definition
-    ) {
+    const actualDefinition = actual
+      ? normalizeSearchSyncCaptureDefinition(actual.definition)
+      : undefined;
+    const enabled = actual ? ['A', 'O'].includes(actual.enabled) : false;
+    const current = enabled && actualDefinition === expected.definition;
+    const previous =
+      enabled &&
+      actualDefinition !== undefined &&
+      expected.previousDefinitions.includes(actualDefinition);
+    if (!current) {
       mismatches.push(`trigger ${expected.name}`);
     }
+    if (!current && !previous) triggersMatchKnownVersion = false;
   }
 
   return {
     absent: functions.length === 0 && triggers.length === 0,
     mismatches,
+    upgradeable: functionsMatch && triggersMatchKnownVersion && mismatches.length > 0,
   };
 };
 
@@ -260,6 +271,17 @@ export class SearchSyncOutboxRepository {
 
       const state = await readCaptureInfrastructureState(transaction);
       if (state.mismatches.length === 0) return;
+      if (state.upgradeable) {
+        /** The transaction keeps writers from observing a capture gap during the known upgrade. */
+        for (const { name, table } of SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
+          await transaction.execute(sql.raw(`DROP TRIGGER "${name}" ON public."${table}"`));
+        }
+        for (const statement of SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
+          await transaction.execute(statement);
+        }
+        await assertCaptureDefinitions(transaction);
+        return;
+      }
       if (!state.absent) {
         throw new Error(
           `Refusing to replace partial or unknown search sync capture infrastructure: ${state.mismatches.join(', ')}`,
@@ -378,22 +400,31 @@ export class SearchSyncOutboxRepository {
   /** Keeps PostgreSQL's microsecond precision in the token instead of truncating through JS Date. */
   async claim(limit = 100, leaseSeconds = 300): Promise<SearchSyncWork[]> {
     const result = await this.db.execute(sql`
-      WITH expired AS MATERIALIZED (
-        UPDATE search_sync_outbox
-        SET attempts = attempts + 1,
+      WITH expired_candidates AS MATERIALIZED (
+        SELECT entity, document_id
+        FROM search_sync_outbox
+        WHERE locked_until <= now()
+          AND dead_at IS NULL
+        ORDER BY locked_until, revision
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      ), expired AS MATERIALIZED (
+        UPDATE search_sync_outbox AS outbox
+        SET attempts = outbox.attempts + 1,
             available_at = now() + make_interval(
-              secs => GREATEST(30, LEAST(POWER(2, attempts)::double precision, 3600))
+              secs => GREATEST(30, LEAST(POWER(2, outbox.attempts)::double precision, 3600))
             ),
             dead_at = CASE
-              WHEN attempts + 1 >= ${SEARCH_SYNC_MAX_ATTEMPTS} THEN now()
-              ELSE dead_at
+              WHEN outbox.attempts + 1 >= ${SEARCH_SYNC_MAX_ATTEMPTS} THEN now()
+              ELSE outbox.dead_at
             END,
             last_error = 'Search sync lease expired before settlement',
             locked_until = NULL,
             updated_at = now()
-        WHERE locked_until <= now()
-          AND dead_at IS NULL
-        RETURNING entity, document_id
+        FROM expired_candidates
+        WHERE outbox.entity = expired_candidates.entity
+          AND outbox.document_id = expired_candidates.document_id
+        RETURNING outbox.entity, outbox.document_id
       ), candidates AS (
         SELECT entity, document_id, revision
         FROM search_sync_outbox

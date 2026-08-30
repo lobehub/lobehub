@@ -2,7 +2,7 @@
 import path from 'node:path';
 
 import type { SQL } from 'drizzle-orm';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -321,6 +321,38 @@ describe.sequential('SearchSyncOutboxRepository', () => {
       expect(rows).toEqual(firstRows);
       expect(rows).toHaveLength(16);
       await expect(repository.readCaptureFingerprint()).resolves.toMatch(/^[a-f\d]{64}$/);
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
+
+  it(
+    'atomically upgrades the known predecessor trigger definition',
+    async () => {
+      await db.execute(sql`DROP TRIGGER search_sync_agents ON public.agents`);
+      await db.execute(sql`
+        CREATE TRIGGER search_sync_agents
+        AFTER INSERT OR DELETE OR UPDATE OF
+          description, slug, system_role, tags, title, user_id, virtual, visibility, workspace_id
+        ON public.agents
+        FOR EACH ROW EXECUTE FUNCTION capture_search_sync_change(
+          'agents', 'user_id', 'visibility', 'workspace_id'
+        )
+      `);
+
+      try {
+        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
+          'trigger search_sync_agents',
+        );
+        await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
+        await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+      } finally {
+        try {
+          await repository.assertCaptureInfrastructure();
+        } catch {
+          await dropCaptureInfrastructure();
+          await repository.installCaptureInfrastructure();
+        }
+      }
     },
     CAPTURE_INSTALL_TEST_TIMEOUT,
   );
@@ -670,125 +702,159 @@ describe.sequential('SearchSyncOutboxRepository', () => {
     expect(retried.availableAt.getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('fans knowledge-base relation changes out to files and linked documents', async () => {
-    await db.execute(sql`
+  it('bounds expired lease recovery to the requested claim limit', async () => {
+    const documentIds = ['expired-agent-a', 'expired-agent-b', 'expired-agent-c'];
+    await db.insert(agents).values(
+      documentIds.map((id) => ({
+        id,
+        title: id,
+        userId: USER_ID,
+      })),
+    );
+    const claimed = await repository.claim(documentIds.length);
+    expect(claimed).toHaveLength(documentIds.length);
+    await db
+      .update(searchSyncOutbox)
+      .set({ lockedUntil: new Date(0) })
+      .where(inArray(searchSyncOutbox.documentId, documentIds));
+
+    await expect(repository.claim(1)).resolves.toEqual([]);
+    const rows = await db
+      .select({ attempts: searchSyncOutbox.attempts, lockedUntil: searchSyncOutbox.lockedUntil })
+      .from(searchSyncOutbox)
+      .where(inArray(searchSyncOutbox.documentId, documentIds));
+
+    expect(rows.filter(({ lockedUntil }) => lockedUntil === null)).toHaveLength(1);
+    expect(rows.map(({ attempts }) => attempts).toSorted()).toEqual([0, 0, 1]);
+  });
+
+  it(
+    'fans knowledge-base relation changes out to files and linked documents',
+    async () => {
+      await db.execute(sql`
       INSERT INTO knowledge_bases (id, name, user_id)
       VALUES ('sync-kb', 'KB', ${USER_ID})
     `);
-    await db.execute(sql`
+      await db.execute(sql`
       INSERT INTO files (id, user_id, file_type, name, size, url)
       VALUES ('sync-file', ${USER_ID}, 'text/plain', 'file.txt', 10, 'https://example.com/file')
     `);
-    await db.execute(sql`
+      await db.execute(sql`
       INSERT INTO documents (
         id, file_type, total_char_count, total_line_count, source_type, source, file_id, user_id
       ) VALUES (
         'sync-document', 'text/plain', 10, 1, 'file', 'file.txt', 'sync-file', ${USER_ID}
       )
     `);
-    await db.delete(searchSyncOutbox);
+      await db.delete(searchSyncOutbox);
 
-    await db.execute(sql`
+      await db.execute(sql`
       INSERT INTO knowledge_base_files (knowledge_base_id, file_id, user_id)
       VALUES ('sync-kb', 'sync-file', ${USER_ID})
     `);
 
-    const rows = await db
-      .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
-      .from(searchSyncOutbox);
-    const expectedKeys = await builder.resolveAffectedKeys({
-      fileIds: ['sync-file'],
-      relation: 'knowledgeBaseFiles',
-    });
-    expect(sortKeys(rows)).toEqual(
-      sortKeys(expectedKeys.map(({ entity, id }) => ({ documentId: id, entity }))),
-    );
-    expect(rows).toEqual(
-      expect.arrayContaining([
-        { documentId: 'sync-file', entity: 'files' },
-        { documentId: 'sync-document', entity: 'documents' },
-      ]),
-    );
-    expect(rows.every((row) => ['documents', 'files'].includes(row.entity))).toBe(true);
+      const rows = await db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox);
+      const expectedKeys = await builder.resolveAffectedKeys({
+        fileIds: ['sync-file'],
+        relation: 'knowledgeBaseFiles',
+      });
+      expect(sortKeys(rows)).toEqual(
+        sortKeys(expectedKeys.map(({ entity, id }) => ({ documentId: id, entity }))),
+      );
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          { documentId: 'sync-file', entity: 'files' },
+          { documentId: 'sync-document', entity: 'documents' },
+        ]),
+      );
+      expect(rows.every((row) => ['documents', 'files'].includes(row.entity))).toBe(true);
 
-    await db.delete(searchSyncOutbox);
-    await db.execute(sql`
+      await db.delete(searchSyncOutbox);
+      await db.execute(sql`
       INSERT INTO knowledge_bases (id, name, user_id)
       VALUES ('sync-kb-next', 'Next KB', ${USER_ID})
     `);
-    await db.execute(sql`
+      await db.execute(sql`
       UPDATE knowledge_base_files
       SET knowledge_base_id = 'sync-kb-next'
       WHERE knowledge_base_id = 'sync-kb' AND file_id = 'sync-file'
     `);
-    const updatedRows = await db
-      .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
-      .from(searchSyncOutbox);
-    expect(updatedRows).toEqual(
-      expect.arrayContaining([
-        { documentId: 'sync-file', entity: 'files' },
-        { documentId: 'sync-document', entity: 'documents' },
-      ]),
-    );
+      const updatedRows = await db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox);
+      expect(updatedRows).toEqual(
+        expect.arrayContaining([
+          { documentId: 'sync-file', entity: 'files' },
+          { documentId: 'sync-document', entity: 'documents' },
+        ]),
+      );
 
-    await db.delete(searchSyncOutbox);
-    await db.execute(sql`
+      await db.delete(searchSyncOutbox);
+      await db.execute(sql`
       DELETE FROM knowledge_base_files
       WHERE knowledge_base_id = 'sync-kb-next' AND file_id = 'sync-file'
     `);
-    const removedRows = await db
-      .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
-      .from(searchSyncOutbox);
-    expect(removedRows).toEqual(
-      expect.arrayContaining([
-        { documentId: 'sync-file', entity: 'files' },
-        { documentId: 'sync-document', entity: 'documents' },
-      ]),
-    );
-  });
+      const removedRows = await db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox);
+      expect(removedRows).toEqual(
+        expect.arrayContaining([
+          { documentId: 'sync-file', entity: 'files' },
+          { documentId: 'sync-document', entity: 'documents' },
+        ]),
+      );
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
 
-  it('fans parent memory text changes out to derived memory projections', async () => {
-    await db.execute(sql`
+  it(
+    'fans parent memory text changes out to derived memory projections',
+    async () => {
+      await db.execute(sql`
       INSERT INTO user_memories (id, user_id, title, last_accessed_at)
       VALUES ('sync-memory', ${USER_ID}, 'before', now())
     `);
-    await db.execute(sql`
+      await db.execute(sql`
       INSERT INTO user_memories_contexts (id, user_id, user_memory_ids)
       VALUES ('sync-context', ${USER_ID}, '["sync-memory"]'::jsonb)
     `);
-    await db.delete(searchSyncOutbox);
+      await db.delete(searchSyncOutbox);
 
-    await db.execute(sql`
+      await db.execute(sql`
       UPDATE user_memories SET title = 'after' WHERE id = 'sync-memory'
     `);
 
-    const rows = await db
-      .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
-      .from(searchSyncOutbox);
-    const expectedKeys = await builder.resolveAffectedKeys({
-      memoryIds: ['sync-memory'],
-      relation: 'userMemoryReferences',
-    });
-    expect(sortKeys(rows)).toEqual(
-      sortKeys(expectedKeys.map(({ entity, id }) => ({ documentId: id, entity }))),
-    );
-    expect(rows).toEqual(
-      expect.arrayContaining([
-        { documentId: 'sync-memory', entity: 'userMemories' },
-        { documentId: 'sync-context', entity: 'memoryContexts' },
-      ]),
-    );
+      const rows = await db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox);
+      const expectedKeys = await builder.resolveAffectedKeys({
+        memoryIds: ['sync-memory'],
+        relation: 'userMemoryReferences',
+      });
+      expect(sortKeys(rows)).toEqual(
+        sortKeys(expectedKeys.map(({ entity, id }) => ({ documentId: id, entity }))),
+      );
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          { documentId: 'sync-memory', entity: 'userMemories' },
+          { documentId: 'sync-context', entity: 'memoryContexts' },
+        ]),
+      );
 
-    await db.delete(searchSyncOutbox);
-    await db.execute(sql`DELETE FROM user_memories WHERE id = 'sync-memory'`);
-    const deletedRows = await db
-      .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
-      .from(searchSyncOutbox);
-    expect(deletedRows).toEqual(
-      expect.arrayContaining([
-        { documentId: 'sync-memory', entity: 'userMemories' },
-        { documentId: 'sync-context', entity: 'memoryContexts' },
-      ]),
-    );
-  });
+      await db.delete(searchSyncOutbox);
+      await db.execute(sql`DELETE FROM user_memories WHERE id = 'sync-memory'`);
+      const deletedRows = await db
+        .select({ documentId: searchSyncOutbox.documentId, entity: searchSyncOutbox.entity })
+        .from(searchSyncOutbox);
+      expect(deletedRows).toEqual(
+        expect.arrayContaining([
+          { documentId: 'sync-memory', entity: 'userMemories' },
+          { documentId: 'sync-context', entity: 'memoryContexts' },
+        ]),
+      );
+    },
+    CAPTURE_INSTALL_TEST_TIMEOUT,
+  );
 });

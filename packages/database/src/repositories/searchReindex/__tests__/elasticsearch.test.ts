@@ -214,24 +214,39 @@ describe('SearchReindexHttpClient', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it('refuses to overwrite an alias that targets another index', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
+  it('atomically advances an alias that targets an older schema version', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
         response({
-          'lobehub-messages-v2': {
+          'lobehub-messages-v1': {
             aliases: { 'lobehub-messages': { is_write_index: true } },
           },
         }),
-      ),
-    );
+      )
+      .mockResolvedValueOnce(response({ acknowledged: true }));
+    vi.stubGlobal('fetch', fetchMock);
     const client = new SearchReindexHttpClient({
       apiKey: 'secret-key',
       url: 'https://search.example.com',
     });
 
-    await expect(client.ensureAlias('lobehub-messages', 'lobehub-messages-v1')).rejects.toThrow(
-      'already points to a different index',
-    );
+    await expect(
+      client.ensureAlias('lobehub-messages', 'lobehub-messages-v2'),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://search.example.com/_aliases');
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      actions: [
+        { remove: { alias: 'lobehub-messages', index: 'lobehub-messages-v1' } },
+        {
+          add: {
+            alias: 'lobehub-messages',
+            index: 'lobehub-messages-v2',
+            is_write_index: true,
+          },
+        },
+      ],
+    });
   });
 });

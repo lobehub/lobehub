@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { z } from 'zod';
 
+import { parseElasticsearchUrl } from '../search/elasticsearch/url';
 import type {
   SearchReindexBulkItemResult,
   SearchReindexElasticsearchClient,
@@ -85,31 +86,6 @@ export class SearchReindexRequestError extends Error {
     this.status = status;
   }
 }
-
-const parseElasticsearchUrl = (value: string) => {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('Elasticsearch URL must be a valid absolute URL');
-  }
-
-  if (url.username || url.password) {
-    throw new Error('Elasticsearch URL must not contain embedded credentials');
-  }
-
-  const isLoopback =
-    url.hostname === '127.0.0.1' ||
-    url.hostname === '[::1]' ||
-    url.hostname === 'localhost' ||
-    url.hostname.endsWith('.localhost');
-  /** Local development may use HTTP, but remote API keys must only cross an encrypted transport. */
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
-    throw new Error('Elasticsearch URL must use HTTPS unless it targets loopback');
-  }
-
-  return url;
-};
 
 /** Minimal credential-safe Elasticsearch transport for the self-host reindex command. */
 export class SearchReindexHttpClient implements SearchReindexElasticsearchClient {
@@ -285,9 +261,24 @@ export class SearchReindexHttpClient implements SearchReindexElasticsearchClient
       ) {
         return;
       }
-      throw new SearchReindexRequestError(
-        `Elasticsearch alias ${alias} already points to a different index`,
-      );
+
+      const updateResponse = await this.request('/_aliases', {
+        body: JSON.stringify({
+          actions: [
+            ...targets.map(([index]) => ({ remove: { alias, index } })),
+            { add: { alias, index: physicalIndex, is_write_index: true } },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+      if (!updateResponse.ok) {
+        throw new SearchReindexRequestError(
+          `Elasticsearch alias update failed for ${alias} (${updateResponse.status})`,
+          updateResponse.status,
+        );
+      }
+      return;
     }
     if (response.status !== 404) {
       throw new SearchReindexRequestError(

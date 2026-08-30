@@ -17,6 +17,26 @@ afterEach(() => {
 });
 
 describe('ElasticsearchHttpClient', () => {
+  it('rejects remote HTTP endpoints before exposing the API key', () => {
+    expect(
+      () =>
+        new ElasticsearchHttpClient({
+          apiKey: 'test-api-key',
+          url: 'http://search.example.com',
+        }),
+    ).toThrow('must use HTTPS unless it targets loopback');
+  });
+
+  it('allows loopback HTTP endpoints for local development', () => {
+    expect(
+      () =>
+        new ElasticsearchHttpClient({
+          apiKey: 'test-api-key',
+          url: 'http://localhost:9200',
+        }),
+    ).not.toThrow();
+  });
+
   it('returns no write targets without making requests when no aliases are provided', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

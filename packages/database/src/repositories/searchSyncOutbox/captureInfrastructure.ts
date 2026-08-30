@@ -343,15 +343,34 @@ export const normalizeSearchSyncCaptureDefinition = (definition: string) => {
   });
 };
 
+/** Reconstructs the only earlier trigger revision installed before this feature ships. */
+const toPreviousCaptureTriggerDefinition = (definition: string) =>
+  definition.replace(/UPDATE OF ([\w, ]+) ON /, (_, columns: string) => {
+    const previousColumns = columns
+      .split(',')
+      .map((column) => column.trim())
+      .filter((column) => column !== 'updated_at')
+      .join(', ');
+    return `UPDATE OF ${previousColumns} ON `;
+  });
+
 const createCaptureTriggerStatement = ({ createSql }: CaptureTriggerDefinition) =>
   sql.raw(`${createSql};`);
 
 export const SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS = CAPTURE_TRIGGER_DEFINITIONS.map(
-  ({ createSql, name, table }) => ({
-    definition: normalizeSearchSyncCaptureDefinition(createSql),
-    name,
-    table,
-  }),
+  ({ createSql, name, table }) => {
+    const definition = normalizeSearchSyncCaptureDefinition(createSql);
+    const previousDefinition = normalizeSearchSyncCaptureDefinition(
+      toPreviousCaptureTriggerDefinition(createSql),
+    );
+
+    return {
+      definition,
+      name,
+      previousDefinitions: previousDefinition === definition ? [] : [previousDefinition],
+      table,
+    };
+  },
 );
 
 export const SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS = CAPTURE_TRIGGER_DEFINITIONS.map(
