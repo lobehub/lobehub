@@ -69,6 +69,7 @@ interface LatestInput {
 
 interface SearchSession {
   active?: ActiveQuery;
+  cleared: boolean;
   clicked: boolean;
   id: string;
   lastCompleted?: CompletedQuery;
@@ -145,6 +146,7 @@ export const useCommandMenuAnalytics = ({
   const sessionId = useSingleton(() => uuid());
   const sessionRef = useRef<SearchSession>({
     clicked: false,
+    cleared: false,
     id: sessionId,
     queryCount: 0,
   });
@@ -178,13 +180,21 @@ export const useCommandMenuAnalytics = ({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !queryKey) {
+    if (!enabled) {
       sessionRef.current.active = undefined;
       return;
     }
 
+    // Clearing the input does not start a new search, but abandonment still needs the last
+    // issued query rather than an earlier completed result. Once the debounced query is empty,
+    // typing the same query again is a distinct request and must get a new sequence.
+    if (!queryKey) {
+      sessionRef.current.cleared = true;
+      return;
+    }
+
     const session = sessionRef.current;
-    if (session.active?.key === queryKey) return;
+    if (session.active?.key === queryKey && !session.cleared) return;
 
     const previous = session.active;
     if (previous && !previous.clicked) {
@@ -203,6 +213,7 @@ export const useCommandMenuAnalytics = ({
     }
 
     session.queryCount += 1;
+    session.cleared = false;
     session.active = {
       clicked: false,
       inputRevision: latestInputRef.current.revision,
@@ -299,7 +310,7 @@ export const useCommandMenuAnalytics = ({
       const session = sessionRef.current;
       if (session.clicked || session.queryCount === 0) return;
 
-      const last = session.active?.completed ?? session.lastCompleted;
+      const last = session.active ? session.active.completed : session.lastCompleted;
       trackProductUsageEvent({
         name: GLOBAL_SEARCH_EVENTS.ABANDONED,
         properties: {
@@ -324,7 +335,7 @@ export const useCommandMenuAnalytics = ({
 
       // Whitespace-only edits and quick edits reverted before the debounce fires do not issue a
       // new request. Keep the active revision so the eventual response is still observable.
-      if (active?.key === nextKey) {
+      if (active?.key === nextKey && !sessionRef.current.cleared) {
         latestInputRef.current = {
           length: normalizedQuery.length,
           refinementType: 'query',

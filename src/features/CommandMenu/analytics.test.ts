@@ -206,6 +206,53 @@ describe('Command menu search analytics', () => {
     expect(eventsByName(GLOBAL_SEARCH_EVENTS.QUERY_SETTLED)).toHaveLength(0);
   });
 
+  it('keeps the latest pending query when a completed search is cleared before closing', () => {
+    const { rerender, result, unmount } = renderHook((input) => useCommandMenuAnalytics(input), {
+      initialProps: baseInput,
+    });
+
+    act(() => result.current.trackInputChange('completed query'));
+    rerender({ ...baseInput, hasResponse: true, resultCount: 8, searchQuery: 'completed query' });
+    flushAnimationFrame();
+
+    currentTime = 1000;
+    act(() => result.current.trackInputChange('pending query'));
+    rerender({ ...baseInput, isValidating: true, searchQuery: 'pending query' });
+
+    act(() => result.current.trackInputChange(''));
+    rerender(baseInput);
+    unmount();
+
+    expect(eventsByName(GLOBAL_SEARCH_EVENTS.ABANDONED)[0].properties).toMatchObject({
+      last_result_count_bucket: '0',
+      last_status: 'pending',
+      query_count: 2,
+    });
+  });
+
+  it('counts the same query again after the cleared query reaches the search state', () => {
+    const { rerender, result } = renderHook((input) => useCommandMenuAnalytics(input), {
+      initialProps: baseInput,
+    });
+
+    act(() => result.current.trackInputChange('same query'));
+    rerender({ ...baseInput, hasResponse: true, resultCount: 3, searchQuery: 'same query' });
+    flushAnimationFrame();
+
+    act(() => result.current.trackInputChange(''));
+    rerender(baseInput);
+
+    currentTime = 1000;
+    act(() => result.current.trackInputChange('same query'));
+    rerender({ ...baseInput, isValidating: true, searchQuery: 'same query' });
+
+    expect(eventsByName(GLOBAL_SEARCH_EVENTS.QUERY_SETTLED)).toHaveLength(2);
+    expect(eventsByName(GLOBAL_SEARCH_EVENTS.QUERY_SETTLED)[1].properties).toMatchObject({
+      is_refinement: true,
+      sequence: 2,
+    });
+  });
+
   it('keeps observing an active request after a whitespace-only edit', () => {
     const { rerender, result } = renderHook((input) => useCommandMenuAnalytics(input), {
       initialProps: baseInput,
