@@ -44,22 +44,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       transform 120ms ease;
 
     && {
-      color: ${cssVar.colorBgContainer};
+      color: contrast-color(${cssVar.colorPrimary});
       background: ${cssVar.colorPrimary};
     }
 
     &&:hover {
-      color: ${cssVar.colorBgContainer};
+      color: contrast-color(${cssVar.colorPrimaryHover});
       background: ${cssVar.colorPrimaryHover};
     }
 
     &&:active {
       transform: scale(0.94);
+      color: contrast-color(${cssVar.colorPrimaryActive});
       background: ${cssVar.colorPrimaryActive};
     }
 
     &&:focus-visible {
-      outline: 2px solid ${cssVar.colorBgContainer};
+      outline: 2px solid currentcolor;
       outline-offset: -3px;
       box-shadow: none;
     }
