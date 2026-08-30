@@ -17,7 +17,7 @@ import {
   useConversationStore,
 } from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { usePageLockedByOther } from '../usePageLockedByOther';
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
@@ -38,10 +38,8 @@ const Conversation = memo(() => {
 
   useFetchAgentConfig(true, currentAgentId);
 
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
-  );
+  const model = useAgentValue(currentAgentId, agentProjectionSelectors.model);
+  const provider = useAgentValue(currentAgentId, agentProjectionSelectors.provider);
   const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
 
   const handleAgentChange = useCallback(

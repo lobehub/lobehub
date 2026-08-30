@@ -16,8 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useSelectedTaskListProjection, useTaskStore } from '@/store/task';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -126,17 +125,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         ? { agentId, automated: false }
         : { allAgents: true, automated: false },
   );
-  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
-  // per-key `data`. On a scope (agent ↔ all) or visibility switch the store
-  // resets `tasks` + `isTaskListInit` together (`scopeChangeResetState`), but
-  // SWR still holds cached `data` for the target key — so keying `hasSettled`
-  // off SWR `data` made it `true` while `tasks` was empty and flashed the "no
-  // tasks" empty during the refetch. `isTaskListInit` flips true only on the
-  // current scope's success and resets in lockstep with `tasks`, so the settled
-  // signal never disagrees with the emptiness signal. Still resets to false on a
-  // failed first load, so we surface loading only while there's no error (below).
-  const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
-  const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
+  const taskListView = useSelectedTaskListProjection();
+  const isTaskListInit = taskListView !== undefined;
+  const isEmptyHero = isTaskListInit && taskListView.items.length === 0;
   const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
   const scheduledSWR = useFetchScheduledTaskList({
     agentId,

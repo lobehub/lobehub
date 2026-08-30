@@ -10,13 +10,12 @@ import type { ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
 
-import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { getAgentMeta } from '@/store/agent/projection';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import type { ChatStore } from '@/store/chat/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { renderAvatarToDataUrl } from './notificationAvatar';
-import { topicMapKey } from './topicMapKey';
 
 export interface DesktopNotificationContext {
   agentId?: ConversationContext['agentId'];
@@ -74,15 +73,13 @@ export const resolveNotificationTitle = (
   fallbackTitle: string,
 ): string => {
   if (context.topicId && context.agentId) {
-    const key = topicMapKey({ agentId: context.agentId, groupId: context.groupId });
-    const topicData = get().topicDataMap?.[key];
-    const topic = topicData?.items?.find((item) => item.id === context.topicId);
+    const topic = getChatTopicById(context.topicId);
 
     if (topic?.title) return topic.title;
   }
 
   if (context.agentId) {
-    const agentMeta = agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState());
+    const agentMeta = getAgentMeta(context.agentId);
 
     const agentName = agentDisplayName(agentMeta);
     if (agentName) return agentName;
@@ -101,7 +98,7 @@ export const buildNotificationSender = async (
 ): Promise<DesktopNotificationSender | undefined> => {
   if (!context.agentId) return undefined;
 
-  const agentMeta = agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState());
+  const agentMeta = getAgentMeta(context.agentId);
   const name = agentDisplayName(agentMeta);
   if (!name) return undefined;
 

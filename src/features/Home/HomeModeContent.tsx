@@ -1,5 +1,3 @@
-import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
@@ -18,23 +16,27 @@ import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import HomeInbox from '@/features/HomeInbox';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
-import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
-import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useClientDataSWR } from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { type RecentItem } from '@/server/routers/lambda/recent';
-import { recentService } from '@/services/recent';
-import { useBriefStore } from '@/store/brief';
-import { briefListSelectors } from '@/store/brief/selectors';
+import {
+  HOME_RECENT_TASK_STATUSES,
+  useHomeBriefIds,
+  useHomeBriefsRequest,
+  useHomeInboxTopicIds,
+  useHomeRecentTopic,
+  useHomeRecentTopicIds,
+  useHomeRecentTopicsRequest,
+  useHomeScheduledTaskIds,
+  useHomeScheduledTasksIndex,
+  useHomeScheduledTasksRequest,
+  useHomeTask,
+  useHomeTaskIds,
+  useHomeTasksIndex,
+  useHomeTasksRequest,
+} from '@/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
-import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -122,17 +124,12 @@ interface RowProps {
   trailing?: ReactNode;
 }
 
-const TASK_STATUS_SET = new Set<TaskStatus>(TASK_STATUSES);
-
 /**
  * What the recent block lists: everything that is not finished work. Derived
  * from the canonical status set (not hand-listed) so a status added later shows
  * up here by default instead of silently vanishing from Home.
  */
-export const RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
-  (status) => status !== 'completed',
-);
-
+export const RECENT_TASK_STATUSES = HOME_RECENT_TASK_STATUSES;
 export const HOME_TOPIC_RECENT_LIMIT = 15;
 
 const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
@@ -162,9 +159,6 @@ export const resolveTaskSummaryLine = (
   return !line || line === title.trim() ? undefined : line;
 };
 
-const normalizeTaskStatus = (status: string): TaskStatus =>
-  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
-
 /**
  * Reserved width for the trailing timestamp. Relative and absolute forms differ
  * in width ("4 分钟前" vs "8月13日"), and without a shared column each row's
@@ -172,7 +166,6 @@ const normalizeTaskStatus = (status: string): TaskStatus =>
  * the list reads as ragged instead of as a column.
  */
 const TIME_COLUMN_WIDTH = 56;
-
 const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
   <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
     <Flexbox horizontal align={'flex-start'} gap={12}>
@@ -197,16 +190,19 @@ const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, traili
   </WorkspaceLink>
 ));
 
-const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
-  ({ showAuthor, topic }) => {
-    const agent = useAgentDisplayMeta(topic.agentId);
-    const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
+const RecentTopicRow = memo<{ showAuthor?: boolean; topicId: string }>(
+  ({ showAuthor, topicId }) => {
+    const topic = useHomeRecentTopic(topicId);
+    const agent = useAgentDisplayMeta(topic?.agentId);
+    const raw = topic?.description?.trim() || topic?.lastAssistantMessage?.trim();
     // The snippet is raw markdown (a user note or the last assistant reply);
     // rendered as one plain line, its syntax markers are just noise.
     const description = useMemo(
       () => (raw ? markdownToTxt(raw).replaceAll(/\s+/g, ' ').trim() : undefined),
       [raw],
     );
+
+    if (!topic) return null;
 
     return (
       <Row
@@ -305,25 +301,27 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
  * that slip through are terminal leftovers whose schedule no longer fires, so
  * printing it would claim an automation that is not there.
  */
-const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
-  ({ showTrigger = true, task }) => {
-    const title = task.name?.trim() || task.identifier;
-    const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
-    const status = normalizeTaskStatus(task.status);
+const TaskRow = memo<{ showTrigger?: boolean; taskId: string }>(
+  ({ showTrigger = true, taskId }) => {
+    const task = useHomeTask(taskId);
+    const title = task?.name?.trim() || task?.identifier || '';
+    const description = useMemo(
+      () => (task ? resolveTaskSummaryLine(task, title) : undefined),
+      [task, title],
+    );
+
+    if (!task) return null;
 
     return (
       <Row
         description={description}
         href={taskDetailPath(task.identifier)}
         title={title}
-        // A row that is executing right now wears the shared animated running
-        // mark instead of the static glyph — the same liveness signal running
-        // topics and the home rail cards already use.
         icon={
-          status === 'running' ? (
+          task.status === 'running' ? (
             <RunningGlyph size={16} />
           ) : (
-            <TaskStatusIcon size={16} status={status} />
+            <TaskStatusIcon size={16} status={task.status} />
           )
         }
         // The identifier is how the task is referred to everywhere else, so it
@@ -354,53 +352,40 @@ const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
 
 const TaskContent = memo(() => {
   const { t } = useTranslation('home');
-  const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  // Home is an overview, not a continuation of the Task page's last-used
-  // filter. It must always show the ongoing task set — ordered by activity,
-  // because this block calls itself "recent" and prints the same timestamp —
-  // minus live schedules and heartbeats (`automated: false`), which belong to
-  // the scheduled block below and would otherwise print twice on one page,
-  // and minus completed tasks: finished work is history for the Tasks page,
-  // not part of "what is going on".
-  const tasksSWR = useFetchTaskList({
-    allAgents: true,
-    automated: false,
-    orderBy: 'updatedAt',
-    statuses: RECENT_TASK_STATUSES,
-    visibility: 'all',
-  });
-  const tasks = useTaskStore(taskListSelectors.taskList);
-  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
-  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const tasksQuery = useHomeTasksRequest(isLogin);
+  const taskIds = useHomeTaskIds();
+  const tasksIndex = useHomeTasksIndex();
+  const tasksInit = tasksQuery.isInitialized;
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
-  const shown = tasks.slice(0, taskCount);
+  const shown = taskIds.slice(0, taskCount);
 
   return (
     <GroupBlock
       actionAlwaysVisible
-      count={resolveRecentsBadgeCount(tasks.length, taskCount)}
+      count={resolveRecentsBadgeCount(taskIds.length, taskCount)}
       title={t('dashboard.task.title')}
       // The block shows the most recent slice, so the rest needs somewhere to
       // be: the badge counts what is on screen and this carries the remainder
       // to the full list, instead of a badge claiming a total you cannot reach.
       action={
-        tasksTotal > shown.length ? (
+        (tasksIndex?.total ?? taskIds.length) > shown.length ? (
           <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
         ) : undefined
       }
     >
-      {tasksSWR.error && !tasksInit ? (
-        <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
+      {tasksQuery.error && !tasksInit ? (
+        <AsyncError error={tasksQuery.error} variant={'inline'} onRetry={tasksQuery.mutate} />
       ) : !tasksInit ? (
         <LoadingRows withTime avatarSize={16} />
-      ) : tasks.length === 0 ? (
+      ) : taskIds.length === 0 ? (
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
-          {shown.map((task) => (
-            <TaskRow key={task.identifier} showTrigger={false} task={task} />
+          {shown.map((taskId) => (
+            <TaskRow key={taskId} showTrigger={false} taskId={taskId} />
           ))}
         </Flexbox>
       )}
@@ -416,12 +401,12 @@ const TaskContent = memo(() => {
  */
 const ScheduledTaskContent = memo(() => {
   const { t } = useTranslation('home');
-  const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const scheduledQuery = useHomeScheduledTasksRequest(isLogin);
+  const scheduledIds = useHomeScheduledTaskIds();
+  const scheduledIndex = useHomeScheduledTasksIndex();
+  const scheduledInit = scheduledQuery.isInitialized;
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
-  const scheduledSWR = useFetchScheduledTaskList({ limit: taskCount });
-  const scheduled = scheduledSWR.data?.data ?? [];
-  const scheduledTotal = scheduledSWR.data?.total ?? 0;
-  const scheduledInit = scheduledSWR.data !== undefined;
 
   // Automation is opt-in and most accounts have none. An empty block would be a
   // permanent reminder of a feature you did not ask for, so the section only
@@ -432,18 +417,18 @@ const ScheduledTaskContent = memo(() => {
   // list look exactly like an account with no schedules, and someone whose
   // automations are running would read a confidently incomplete page. The block
   // stays and says so, with a retry.
-  const failedFirstLoad = Boolean(scheduledSWR.error) && !scheduledInit;
-  if (scheduledInit && scheduled.length === 0) return null;
+  const failedFirstLoad = Boolean(scheduledQuery.error) && !scheduledInit;
+  if (scheduledInit && scheduledIds.length === 0) return null;
 
-  const shown = scheduled.slice(0, taskCount);
+  const shown = scheduledIds.slice(0, taskCount);
 
   return (
     <GroupBlock
       actionAlwaysVisible
-      count={failedFirstLoad ? undefined : resolveRecentsBadgeCount(scheduled.length, taskCount)}
+      count={failedFirstLoad ? undefined : resolveRecentsBadgeCount(scheduledIds.length, taskCount)}
       title={t('dashboard.scheduledTask.title')}
       action={
-        !failedFirstLoad && scheduledTotal > shown.length ? (
+        !failedFirstLoad && (scheduledIndex?.total ?? scheduledIds.length) > shown.length ? (
           <WorkspaceLink className={styles.blockAction} to={'/tasks?collection=scheduled'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
@@ -451,11 +436,15 @@ const ScheduledTaskContent = memo(() => {
       }
     >
       {failedFirstLoad ? (
-        <AsyncError error={scheduledSWR.error} variant={'inline'} onRetry={scheduledSWR.mutate} />
+        <AsyncError
+          error={scheduledQuery.error}
+          variant={'inline'}
+          onRetry={scheduledQuery.mutate}
+        />
       ) : scheduledInit ? (
         <Flexbox gap={4}>
-          {shown.map((task) => (
-            <TaskRow key={task.identifier} task={task} />
+          {shown.map((taskId) => (
+            <TaskRow key={taskId} taskId={taskId} />
           ))}
         </Flexbox>
       ) : (
@@ -475,7 +464,6 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const recentsHidden = hiddenWidgets.includes('recents');
   const tasksHidden = hiddenWidgets.includes('tasks');
   const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
-  const cacheScope = useCacheScope();
 
   // One page-level mine/team scope, shared by the inbox sections and Recent
   // topics. In personal mode the member map is empty, `isTeam` stays false and
@@ -484,49 +472,38 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const isTeam = memberProfiles.size > 1;
   const [scope, setScope] = useState<'mine' | 'team'>('mine');
   const teamView = isTeam && scope === 'team';
+  const recentsView = teamView ? 'team' : 'mine';
 
-  // Workspace topics are shared, so "mine" must be narrowed server-side —
-  // client-filtering the top N of a team-wide feed could starve out the
-  // viewer's own topics entirely.
-  const recentsSWR = useClientDataSWR(
-    isLogin && !recentsHidden
-      ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, teamView ? 'team' : 'mine')
-      : null,
-    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView),
-    { revalidateOnFocus: false },
+  const recentsQuery = useHomeRecentTopicsRequest(
+    isLogin && !recentsHidden,
+    HOME_TOPIC_RECENT_LIMIT,
+    recentsView,
   );
+  const topicRecentIds = useHomeRecentTopicIds(HOME_TOPIC_RECENT_LIMIT, recentsView);
 
   const inboxTopics = useHomeInboxTopics(isLogin);
-  const mineUnreadCount = useMemo(
-    () => filterTopicsForInboxScope(inboxTopics.unread, myId, false).length,
-    [inboxTopics.unread, myId],
-  );
-  const mineRunningCount = useMemo(
-    () => filterTopicsForInboxScope(inboxTopics.running, myId, false).length,
-    [inboxTopics.running, myId],
-  );
-  const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
-  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
-  const briefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
-  const needsYouCount = useMemo(() => splitBriefs(briefs).needsYou.length, [briefs]);
-  const topicRecents = recentsSWR.data ?? [];
+  const mineUnreadIds = useHomeInboxTopicIds('unread', myId);
+  const mineRunningIds = useHomeInboxTopicIds('running', myId);
+
+  const briefsQuery = useHomeBriefsRequest(isLogin);
+  const briefsInit = briefsQuery.isInitialized;
+  const needsYouCount = useHomeBriefIds('needsYou').length;
 
   if (mode === 'chat') {
     // With the recents section switched off nothing is fetched, so it reports as
     // settled-and-empty rather than perpetually loading, and the remaining
     // activity alone decides what this column is.
     const state = resolveHomeChatContentState({
-      authLoaded: !!authLoaded,
-      hasError: !recentsHidden && !!recentsSWR.error,
-      isLogin: !!isLogin,
-      recentsCount: topicRecents.length,
-      recentsInit: recentsHidden || recentsSWR.data !== undefined,
-      activityCount: mineRunningCount + mineUnreadCount + needsYouCount,
-      activityError: Boolean(inboxTopics.error || briefsSWR.error),
+      activityCount: mineRunningIds.length + mineUnreadIds.length + needsYouCount,
+      activityError: Boolean(inboxTopics.error || briefsQuery.error),
       activityResolved:
         (inboxTopics.isInit || Boolean(inboxTopics.error)) &&
-        (briefsInit || Boolean(briefsSWR.error)),
+        (briefsInit || Boolean(briefsQuery.error)),
+      authLoaded: !!authLoaded,
+      hasError: !recentsHidden && !!recentsQuery.error,
+      isLogin: !!isLogin,
+      recentsCount: topicRecentIds.length,
+      recentsInit: recentsHidden || recentsQuery.isInitialized,
     });
 
     // The empty short-circuit predates the fold-in: with the rail open it only
@@ -558,10 +535,10 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
           variant={'main'}
           onScopeChange={setScope}
         />
-        {!recentsHidden && (state !== 'ready' || topicRecents.length > 0) && (
+        {!recentsHidden && (state !== 'ready' || topicRecentIds.length > 0) && (
           <GroupBlock
             actionAlwaysVisible
-            count={resolveRecentsBadgeCount(topicRecents.length, recentsCount)}
+            count={resolveRecentsBadgeCount(topicRecentIds.length, recentsCount)}
             title={t('dashboard.chat.recents')}
             action={
               isTeam ? (
@@ -578,13 +555,17 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
             }
           >
             {state === 'error' ? (
-              <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
+              <AsyncError
+                error={recentsQuery.error}
+                variant={'inline'}
+                onRetry={recentsQuery.mutate}
+              />
             ) : state === 'loading' ? (
               <LoadingRows withTime />
             ) : (
               <Flexbox gap={4}>
-                {topicRecents.slice(0, recentsCount).map((item) => (
-                  <RecentTopicRow key={item.id} showAuthor={teamView} topic={item} />
+                {topicRecentIds.slice(0, recentsCount).map((topicId) => (
+                  <RecentTopicRow key={topicId} showAuthor={teamView} topicId={topicId} />
                 ))}
               </Flexbox>
             )}

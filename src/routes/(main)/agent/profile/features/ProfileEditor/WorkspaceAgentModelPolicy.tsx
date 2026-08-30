@@ -1,6 +1,5 @@
 'use client';
 
-import isEqual from 'fast-deep-equal';
 import { Bot } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { useAgentConfig, useAgentData } from '@/store/agent/projection';
 
 import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
@@ -19,8 +18,8 @@ interface WorkspaceAgentModelPolicyProps {
 export const WorkspaceAgentModelPolicy = memo<WorkspaceAgentModelPolicyProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
+  const config = useAgentConfig(agentId);
+  const agent = useAgentData(agentId);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   if (!agent?.workspaceId || !config) return null;
 

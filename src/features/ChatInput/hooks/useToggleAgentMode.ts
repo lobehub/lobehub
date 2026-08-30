@@ -4,8 +4,7 @@ import { useCallback } from 'react';
 
 import { useBusinessCanEnableAgentMode } from '@/business/client/hooks/useBusinessAgentMode';
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 
 import { useAgentId } from './useAgentId';
@@ -22,7 +21,7 @@ export const useToggleAgentMode = () => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const canEnableBusinessAgentMode = useBusinessCanEnableAgentMode(agentId);
-  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
+  const agent = useAgentData(agentId);
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
   const usesWorkspaceMemberMode =
     !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;

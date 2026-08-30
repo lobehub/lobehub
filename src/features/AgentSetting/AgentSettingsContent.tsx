@@ -1,8 +1,7 @@
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useCurrentAgentConfigStatus } from '@/store/agent/projection';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -19,7 +18,7 @@ export interface AgentSettingsContentProps {
 }
 
 const AgentSettingsContent = memo<AgentSettingsContentProps>(({ tab, loadingSkeleton }) => {
-  const loading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const loading = useCurrentAgentConfigStatus().isLoading;
   const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
   const enableAgentGraphConfigLab = useUserStore(labPreferSelectors.enableAgentGraphConfig);
 

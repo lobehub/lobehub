@@ -12,7 +12,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
-import { useTaskStore } from '@/store/task';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -28,9 +29,15 @@ const TaskDetailHeaderActions = memo(() => {
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
-  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
+  const taskAgentId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAgentId,
+  );
+  const visibility = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskVisibility,
+  );
+  const createdByUserId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskCreatedByUserId,
+  );
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const updateTaskVisibility = useTaskStore((s) => s.updateTaskVisibility);

@@ -22,6 +22,7 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import {
   aiAgentService,
   type ResumeApprovalParam,
@@ -31,12 +32,11 @@ import { gatewayConnectionService } from '@/services/electron/gatewayConnection'
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
-import { topicSelectors } from '@/store/chat/selectors';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getFileStoreState } from '@/store/file/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
@@ -79,14 +79,13 @@ const resolveDesktopDeviceHints = async (
 ): Promise<{ deviceId?: string; localDeviceId?: string }> => {
   if (!isDesktop || !agentId) return {};
 
-  const agentState = getAgentStoreState();
   // Chat mode means "no execution environment" — never resolve a device, even
   // when the target is `local`. The server enforces this too (it auto-activates
   // a single online device), but skipping the deviceId round-trip here avoids
   // sending an id the server would only discard.
-  if (chatConfigByIdSelectors.isChatModeById(agentId)(agentState)) return {};
+  if (agentProjectionSelectors.toolMode(getAgentProjectionById(agentId)) === 'chat') return {};
 
-  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const agent = getAgentProjectionById(agentId);
   const userState = useUserStore.getState();
   const currentUserId = userProfileSelectors.userId(userState);
   // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
@@ -116,7 +115,7 @@ const resolveDesktopDeviceHints = async (
     ? userState.workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
   const agencyConfig = resolveAgentAgencyConfig(
-    agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
+    getAgentProjectionById(agentId)?.agencyConfig,
     deviceOverride,
     {
       canManage,
@@ -432,7 +431,8 @@ export class GatewayActionImpl {
     const agentState = getAgentStoreState();
     const resolvedAgentId = agentId ?? agentState.activeAgentId;
     const agentDisableGatewayMode = resolvedAgentId
-      ? chatConfigByIdSelectors.getChatConfigById(resolvedAgentId)(agentState).disableGatewayMode
+      ? agentProjectionSelectors.chatConfig(getAgentProjectionById(resolvedAgentId))
+          .disableGatewayMode
       : undefined;
     const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
       .chatConfig?.disableGatewayMode;
@@ -810,7 +810,7 @@ export class GatewayActionImpl {
         skipRefreshMessage: true,
       });
 
-      // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
+      // Refresh the topic list so the new topic appears in the sidebar Projection index.
       // Unlike the direct-API sendMessage path (which receives topics[] in the
       // response and calls internal_updateTopics), the gateway path only gets a
       // topicId — we must explicitly refetch so the sidebar shows the new topic.
@@ -878,7 +878,7 @@ export class GatewayActionImpl {
     // gateway connection is being established. Also disconnect any live reconnect
     // connection that was already established for the old operation.
     if (result.topicId) {
-      const existingTopic = topicSelectors.getTopicById(result.topicId)(this.#get());
+      const existingTopic = getChatTopicById(result.topicId);
       const staleOpId = existingTopic?.metadata?.runningOperation?.operationId;
       if (staleOpId && staleOpId !== result.operationId) {
         this.#get().internal_dispatchTopic({
@@ -1057,8 +1057,7 @@ export class GatewayActionImpl {
     // happens when executeGatewayAgent was called (creating a new op) while this
     // stale reconnect was still queued — connecting to the old op would produce
     // duplicate streaming events alongside the new connection.
-    const topicCurrentOpId = topicSelectors.getTopicById(topicId)(this.#get())?.metadata
-      ?.runningOperation?.operationId;
+    const topicCurrentOpId = getChatTopicById(topicId)?.metadata?.runningOperation?.operationId;
     if (topicCurrentOpId && topicCurrentOpId !== operationId) return;
 
     // Get a fresh JWT token (original expired after 5 min). The server throws
@@ -1080,8 +1079,8 @@ export class GatewayActionImpl {
     // Re-check after the async token refresh: a newer executeGatewayAgent call may have
     // taken over for this topic while we were waiting. If so, bail to avoid a duplicate stream.
     // (disconnectFromGateway on the stale op is a no-op here because we haven't connected yet.)
-    const topicOpIdAfterRefresh = topicSelectors.getTopicById(topicId)(this.#get())?.metadata
-      ?.runningOperation?.operationId;
+    const topicOpIdAfterRefresh =
+      getChatTopicById(topicId)?.metadata?.runningOperation?.operationId;
     if (topicOpIdAfterRefresh && topicOpIdAfterRefresh !== operationId) return;
 
     const agentId = params.agentId ?? this.#get().activeAgentId;
@@ -1190,7 +1189,6 @@ export class GatewayActionImpl {
         // newer run may own this topic by now, and the settle below would
         // retire it mid-flight.
         const superseded = this.#isSupersededRunningOperation({
-          agentId: context.agentId,
           operationId,
           topicId,
         });
@@ -1302,28 +1300,19 @@ export class GatewayActionImpl {
   /**
    * Whether a DIFFERENT run has since claimed this topic's `runningOperation`.
    *
-   * Read from the local topic map, which every run's start writes optimistically
+   * Read from the topic Projection, which every run's start writes optimistically
    * — so a session closing after a newer run began can tell "my run ended" from
-   * "the topic is idle" and keep its hands off the newer run's markers.
+   * "the topic is idle" and keep its hands off the newer run's markers. The
+   * Projection is keyed by topic id alone, so a background completion landing
+   * after an agent/group switch still finds its own topic.
    *
-   * Deliberately false when the topic carries no marker at all (not loaded into
-   * `topicDataMap`, or already cleared): there is nothing to protect, and the
-   * caller's clear must still run so a dead marker never survives.
+   * Deliberately false when the topic carries no marker at all (not projected
+   * yet, or already cleared): there is nothing to protect, and the caller's
+   * clear must still run so a dead marker never survives.
    */
-  #isSupersededRunningOperation = (params: {
-    agentId?: string;
-    groupId?: string;
-    operationId: string;
-    topicId: string;
-  }): boolean => {
-    const { agentId, groupId, operationId, topicId } = params;
-    const state = this.#get();
-    const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
-    });
-    const owner = state.topicDataMap[key]?.items?.find((t) => t.id === topicId)?.metadata
-      ?.runningOperation?.operationId;
+  #isSupersededRunningOperation = (params: { operationId: string; topicId: string }): boolean => {
+    const { operationId, topicId } = params;
+    const owner = getChatTopicById(topicId)?.metadata?.runningOperation?.operationId;
 
     return !!owner && owner !== operationId;
   };
@@ -1342,15 +1331,7 @@ export class GatewayActionImpl {
   }): void => {
     const { topicId, operationId, agentId, groupId, status } = params;
     const state = this.#get();
-    const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
-    });
-    const existingTopic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
-    // Same ownership guard the removed client-side `superseded` check used to
-    // provide: if a newer run already overwrote this topic's local marker with
-    // its own operationId, this stale session's completion must not clobber it
-    // (neither the metadata clear nor, now, the status write).
+    const existingTopic = getChatTopicById(topicId);
     if (existingTopic?.metadata?.runningOperation?.operationId !== operationId) return;
 
     state.internal_dispatchTopic({

@@ -767,6 +767,7 @@ export const taskRouter = router({
               avatar: agent.avatar,
               backgroundColor: agent.backgroundColor,
               id: agent.id,
+              name: agent.name,
               title: agent.title ?? '',
               type: 'agent',
             });

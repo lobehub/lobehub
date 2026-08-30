@@ -114,6 +114,14 @@ vi.mock('@/store/home/selectors', () => ({
   },
 }));
 
+vi.mock('@/projection/modules/home/sidebarHooks', () => ({
+  homeSidebarSelectors: {
+    agentGroups: () => [],
+    privateAgentGroups: () => [],
+  },
+  useHomeSidebarProjection: (selector: (sidebar: undefined) => unknown) => selector(undefined),
+}));
+
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: { userId: string }) => unknown) =>
     selector({ userId: 'member-1' }),

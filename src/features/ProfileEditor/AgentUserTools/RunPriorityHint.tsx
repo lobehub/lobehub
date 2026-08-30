@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 interface RunPriorityHintProps {
   agentId?: string;
@@ -23,7 +23,10 @@ const RunPriorityHint = memo<RunPriorityHintProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const effectiveAgentId = agentId || activeAgentId || '';
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(effectiveAgentId));
+  const isWorkspaceAgent = useAgentValue(
+    effectiveAgentId,
+    agentProjectionSelectors.workspaceScoped,
+  );
 
   return (
     <Tooltip

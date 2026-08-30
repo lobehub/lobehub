@@ -37,10 +37,14 @@ import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { agentLabelSelectors, homeAgentListSelectors } from '@/store/home/selectors';
+import { agentLabelSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
@@ -96,10 +100,10 @@ export const useAgentDropdownMenu = ({
   // "Move to group" picker only offers same-scope targets — moving a private
   // agent into a public group (or vice versa) would orphan it from the view
   // it currently lives in.
-  const sessionCustomGroups = useHomeStore(
+  const sessionCustomGroups = useHomeSidebarProjection(
     visibility === 'private'
-      ? homeAgentListSelectors.privateAgentGroups
-      : homeAgentListSelectors.agentGroups,
+      ? homeSidebarSelectors.privateAgentGroups
+      : homeSidebarSelectors.agentGroups,
     isEqual,
   );
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);

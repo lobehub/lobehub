@@ -1,4 +1,6 @@
-import { useHomeStore } from '@/store/home';
+'use client';
+
+import { useHomeSidebarRequest } from '@/projection';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -10,14 +12,13 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
  */
 export const useFetchAgentList = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const useFetchAgentListHook = useHomeStore((s) => s.useFetchAgentList);
-
-  const { isValidating, data, error, mutate } = useFetchAgentListHook(isLogin);
+  const { isInitialized, isValidating, error, mutate } = useHomeSidebarRequest(isLogin);
 
   return {
     error,
-    // isRevalidating: has cached data, updating in background
-    isRevalidating: isValidating && !!data,
+    isInitialized,
+    // isRevalidating: a complete EntityView exists while SWR schedules a refresh
+    isRevalidating: isValidating && isInitialized,
     mutate,
   };
 };

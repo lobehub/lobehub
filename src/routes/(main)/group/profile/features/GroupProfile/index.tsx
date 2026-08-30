@@ -21,8 +21,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { lambdaClient } from '@/libs/trpc/client';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import { openGroupAgentSettingsModal } from '../AgentSettings';
@@ -46,9 +46,9 @@ const GroupProfile = memo(() => {
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const theme = useTheme();
   const { gid } = useParams<{ gid: string }>();
-  const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const groupId = useAgentGroupStore((s) => s.activeGroupId);
   const hasActiveWorkspace = useHasActiveWorkspace();
-  const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
+  const currentGroup = useChatGroupProjection(chatGroupProjectionSelectors.getGroupById(gid ?? ''));
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
   // The profile page keeps its active tab in `?tab=`; the permission page has no

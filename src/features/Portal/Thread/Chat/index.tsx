@@ -19,8 +19,7 @@ import { type ComposerTarget, resolveThreadComposerTarget } from '@/features/Con
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
 import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
@@ -163,8 +162,9 @@ const ThreadChat = memo(() => {
   const threadMetadataResolved = !portalThreadId || !!portalThread;
   const isSubagentThread = !!portalThread?.metadata?.sourceToolCallId;
   const threadAgentId = portalThread?.agentId || activeAgentId;
-  const isHeterogeneousAgent = useAgentStore(
-    agentByIdSelectors.isAgentHeterogeneousById(threadAgentId || ''),
+  const isHeterogeneousAgent = useAgentValue(
+    threadAgentId || '',
+    agentProjectionSelectors.heterogeneous,
   );
 
   // Get thread-specific actionsBar config
@@ -231,9 +231,7 @@ const ThreadChat = memo(() => {
   // Get operation state for reactive updates
   const operationState = useOperationState(context);
 
-  const agentChatConfig = useAgentStore(
-    chatConfigByIdSelectors.getChatConfigById(threadAgentId || ''),
-  );
+  const agentChatConfig = useAgentValue(threadAgentId || '', agentProjectionSelectors.chatConfig);
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
     conversationKey: chatKey,

@@ -1,6 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  chatGroupProjectionSelectors,
+  getChatGroupProjection,
+  useProjectionStore,
+} from '@/projection';
 import { chatGroupService } from '@/services/chatGroup';
 
 import { useAgentGroupStore } from '../store';
@@ -10,7 +15,7 @@ vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
     addAgentsToGroup: vi.fn(),
     createGroup: vi.fn(),
-    getGroupDetail: vi.fn(),
+    getGroupDetailWithAccess: vi.fn(),
     getGroups: vi.fn(),
   },
 }));
@@ -24,7 +29,7 @@ vi.mock('@/store/home', () => ({
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: vi.fn(() => ({
-    internal_dispatchAgentMap: vi.fn(),
+    internal_dispatchAgentProjection: vi.fn(),
     setActiveAgentId: vi.fn(),
   })),
 }));
@@ -38,12 +43,11 @@ vi.mock('@/store/chat', () => ({
 describe('ChatGroupLifecycleSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useProjectionStore.setState({ scopes: {} });
     // Reset store state
     act(() => {
       useAgentGroupStore.setState({
-        groupMap: {},
-        groups: [],
-        groupsInit: false,
+        activeGroupId: undefined,
       });
     });
   });
@@ -69,7 +73,11 @@ describe('ChatGroupLifecycleSlice', () => {
         group: mockGroup as any,
         supervisorAgentId: 'supervisor-1',
       });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -99,7 +107,11 @@ describe('ChatGroupLifecycleSlice', () => {
         supervisorAgentId: 'supervisor-1',
       });
       vi.mocked(chatGroupService.addAgentsToGroup).mockResolvedValue({ added: [], existing: [] });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -130,7 +142,11 @@ describe('ChatGroupLifecycleSlice', () => {
         group: mockGroup as any,
         supervisorAgentId: mockSupervisorAgentId,
       });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 
@@ -138,13 +154,15 @@ describe('ChatGroupLifecycleSlice', () => {
         await result.current.createGroup({ title: 'Test Group' });
       });
 
-      // Verify getGroupDetail was called to fetch full group info
-      expect(chatGroupService.getGroupDetail).toHaveBeenCalledWith('new-group-id');
+      // Verify getGroupDetailWithAccess was called to fetch full group info
+      expect(chatGroupService.getGroupDetailWithAccess).toHaveBeenCalledWith('new-group-id');
 
-      // Verify supervisorAgentId is stored in groupMap for tools injection
-      const groupDetail = result.current.groupMap['new-group-id'];
+      // Verify the canonical Projection stores the supervisor for tool injection.
+      const groupDetail = getChatGroupProjection(
+        chatGroupProjectionSelectors.getGroupById('new-group-id'),
+      );
       expect(groupDetail).toBeDefined();
-      expect(groupDetail.supervisorAgentId).toBe(mockSupervisorAgentId);
+      expect(groupDetail?.supervisorAgentId).toBe(mockSupervisorAgentId);
     });
 
     it('should not switch to group when silent is true', async () => {
@@ -170,7 +188,11 @@ describe('ChatGroupLifecycleSlice', () => {
         group: mockGroup as any,
         supervisorAgentId: 'supervisor-1',
       });
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(mockGroupDetail as any);
+      vi.mocked(chatGroupService.getGroupDetailWithAccess).mockResolvedValue({
+        access: 'full',
+        data: mockGroupDetail,
+        memberAccess: {},
+      } as any);
 
       const { result } = renderHook(() => useAgentGroupStore());
 

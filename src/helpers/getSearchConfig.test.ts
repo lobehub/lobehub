@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { getAgentProjectionById } from '@/projection';
 import * as aiInfraSelectors from '@/store/aiInfra/selectors';
 
 import { getSearchConfig } from './getSearchConfig';
@@ -10,11 +10,7 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  chatConfigByIdSelectors: {
-    getChatConfigById: vi.fn(),
-  },
-}));
+vi.mock('@/projection', () => ({ getAgentProjectionById: vi.fn() }));
 
 vi.mock('@/store/aiInfra', () => ({
   getAiInfraStoreState: () => ({}),
@@ -32,6 +28,8 @@ vi.mock('@/store/aiInfra/selectors', () => ({
 describe('getSearchConfig', () => {
   const model = 'gpt-4';
   const provider = 'openai';
+  const mockChatConfig = (chatConfig: Record<string, unknown>) =>
+    vi.mocked(getAgentProjectionById).mockReturnValue({ chatConfig } as any);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,13 +42,7 @@ describe('getSearchConfig', () => {
   });
 
   it('should return correct config when search is enabled and no builtin search', () => {
-    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
-      () =>
-        ({
-          searchMode: 'on',
-          useModelBuiltinSearch: false,
-        }) as any,
-    );
+    mockChatConfig({ searchMode: 'on', useModelBuiltinSearch: false });
 
     const result = getSearchConfig(model, provider);
 
@@ -64,13 +56,7 @@ describe('getSearchConfig', () => {
   });
 
   it('should return correct config when search is disabled', () => {
-    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
-      () =>
-        ({
-          searchMode: 'off',
-          useModelBuiltinSearch: false,
-        }) as any,
-    );
+    mockChatConfig({ searchMode: 'off', useModelBuiltinSearch: false });
 
     const result = getSearchConfig(model, provider);
 
@@ -80,13 +66,7 @@ describe('getSearchConfig', () => {
   });
 
   it('should prefer model search when available and enabled', () => {
-    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
-      () =>
-        ({
-          searchMode: 'on',
-          useModelBuiltinSearch: true,
-        }) as any,
-    );
+    mockChatConfig({ searchMode: 'on', useModelBuiltinSearch: true });
 
     vi.mocked(aiInfraSelectors.aiProviderSelectors.providerConfigById).mockReturnValue(
       () => ({ settings: { searchMode: 'params' } }) as any,
@@ -104,13 +84,7 @@ describe('getSearchConfig', () => {
   });
 
   it('should use model search when model has builtin search and it is enabled', () => {
-    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
-      () =>
-        ({
-          searchMode: 'on',
-          useModelBuiltinSearch: true,
-        }) as any,
-    );
+    mockChatConfig({ searchMode: 'on', useModelBuiltinSearch: true });
 
     vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
       () => 'params',
@@ -128,13 +102,7 @@ describe('getSearchConfig', () => {
   });
 
   it('should not use model search when model has builtin search but preference is disabled', () => {
-    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
-      () =>
-        ({
-          searchMode: 'on',
-          useModelBuiltinSearch: false,
-        }) as any,
-    );
+    mockChatConfig({ searchMode: 'on', useModelBuiltinSearch: false });
 
     vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
       () => 'params',
@@ -152,13 +120,7 @@ describe('getSearchConfig', () => {
   });
 
   it('should force use model search when searchImpl is internal', () => {
-    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
-      () =>
-        ({
-          searchMode: 'on',
-          useModelBuiltinSearch: false,
-        }) as any,
-    );
+    mockChatConfig({ searchMode: 'on', useModelBuiltinSearch: false });
 
     vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
       () => 'internal',

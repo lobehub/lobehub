@@ -4,8 +4,8 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+
+import { useHomeAgentRows } from './useHomeAgentRows';
 
 interface ResolvedHomeAgent {
   agentId: string | undefined;
@@ -19,16 +19,18 @@ interface ResolvedHomeAgent {
 export const useResolvedHomeAgentId = (): ResolvedHomeAgent => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const selectedAgentId = useGlobalStore(systemStatusSelectors.homeSelectedAgentId);
-  const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  const selectedAgent = useHomeStore(homeAgentListSelectors.getAgentById(selectedAgentId ?? ''));
+  const { isInitialized, privateRows, workspaceRows } = useHomeAgentRows();
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const hasSelectedAgent = [...privateRows, ...workspaceRows].some(
+    (agent) => agent.id === selectedAgentId,
+  );
 
   const isStale =
     !!selectedAgentId &&
     !!inboxAgentId &&
-    isAgentListInit &&
+    isInitialized &&
     selectedAgentId !== inboxAgentId &&
-    !selectedAgent;
+    !hasSelectedAgent;
 
   useEffect(() => {
     if (!isStale || !inboxAgentId) return;

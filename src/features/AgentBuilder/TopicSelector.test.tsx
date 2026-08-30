@@ -52,10 +52,14 @@ vi.mock('@/store/chat', () => ({
     }),
 }));
 
-vi.mock('@/store/chat/slices/topic/selectors', () => ({
-  topicSelectors: {
-    getTopicsByAgentId: () => (s: any) => s.topics,
-  },
+vi.mock('@/hooks/useFetchAgentTopics', () => ({
+  useFetchAgentTopics: () => undefined,
+}));
+
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  useChatTopicsByAgentId: () => ({
+    items: [{ id: 'topic-1', title: 'First topic', updatedAt: new Date() }],
+  }),
 }));
 
 describe('AgentBuilder TopicSelector', () => {

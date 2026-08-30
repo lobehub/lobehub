@@ -5,9 +5,9 @@ import debug from 'debug';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { getChatGroupProjection } from '@/projection/modules/chatGroup/read';
+import { chatGroupProjectionSelectors } from '@/projection/modules/chatGroup/selectors';
 import { aiAgentService } from '@/services/aiAgent';
-import { getChatGroupStoreState } from '@/store/agentGroup';
-import { agentGroupByIdSelectors } from '@/store/agentGroup/selectors';
 import { createGroupOrchestrationExecutors } from '@/store/chat/agents/GroupOrchestration';
 import { type ChatStore } from '@/store/chat/store';
 import { type GroupOrchestrationCallbacks } from '@/store/tool/slices/builtin/types';
@@ -61,8 +61,8 @@ export class GroupOrchestrationActionImpl {
   #resolveGroupId = (supervisorAgentId: string): string | undefined => {
     const activeGroupId = this.#get().activeGroupId;
     if (activeGroupId) return activeGroupId;
-    return agentGroupByIdSelectors.groupBySupervisorAgentId(supervisorAgentId)(
-      getChatGroupStoreState(),
+    return getChatGroupProjection(
+      chatGroupProjectionSelectors.getGroupBySupervisorAgentId(supervisorAgentId),
     )?.id;
   };
 

@@ -4,7 +4,6 @@ import { DEFAULT_AVATAR, EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { debounce } from 'es-toolkit/compat';
-import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +13,7 @@ import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwat
 import { usePermission } from '@/hooks/usePermission';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -40,7 +39,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
   const agentId = useGroupProfileStore((s) => s.activeTabId);
 
   // Get agent meta by agentId
-  const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const agentMeta = useAgentMeta(agentId);
   const updateAgentMetaById = useAgentStore((s) => s.updateAgentMetaById);
 
   // File upload

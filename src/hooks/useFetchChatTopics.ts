@@ -10,10 +10,9 @@ const EXCLUDE_STATUSES_COMPLETED = ['completed'];
 /**
  * Canonical topic fetch for chat sidebars (agent + group). Reads every
  * filter from a single source so all call sites in the same route mount
- * the same SWR key — otherwise two sibling `useFetchTopics()` calls with
- * different args both write to `topicDataMap[containerKey]` and whichever
- * response lands last wins, which is how completed topics used to leak
- * into the list despite the `excludeStatuses` filter.
+ * the same SWR key and Projection index signature. This prevents sibling
+ * requests with different filters from competing for one visible sidebar
+ * membership set, which previously leaked completed topics into the list.
  *
  * Extend this hook when adding more preference-driven topic params; don't
  * spread them across individual components.

@@ -6,7 +6,7 @@ import { useParams } from 'react-router';
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
 import { useTopicCommentDeepLink } from '@/features/TopicComment/useTopicCommentDeepLink';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 
 import { useChatRouteSync } from './useChatRouteSync';
 
@@ -20,9 +20,7 @@ const ChatHydration: FC<ChatHydrationProps> = memo(({ getConversationPath, getTo
   const params = useParams<{ aid?: string; topicId?: string }>();
   const routeTopicId = params.topicId;
   const activeAgentId = useChatStore((s) => s.activeAgentId);
-  const topicMetadata = useChatStore((s) =>
-    routeTopicId ? topicSelectors.getTopicById(routeTopicId)(s)?.metadata : undefined,
-  );
+  const topicMetadata = useChatTopicById(routeTopicId)?.metadata;
   const useFetchTopicLinkedPullRequest = useChatStore((s) => s.useFetchTopicLinkedPullRequest);
 
   useClearActiveTopicUnread();

@@ -3,8 +3,7 @@
 import { useMemo } from 'react';
 
 import { type ActionsBarConfig, type MessageActionSlot } from '@/features/Conversation/types';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 
 /**
  * Hetero-agent (Claude Code / Codex) sessions keep the menu minimal — copy +
@@ -29,7 +28,7 @@ const HETERO_ASSISTANT: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } 
 };
 
 export const useActionsBarConfig = (): ActionsBarConfig => {
-  const isHeteroAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHeteroAgent = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
 
   return useMemo<ActionsBarConfig>(() => {
     if (isHeteroAgent) {

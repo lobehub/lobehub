@@ -4,8 +4,8 @@ import { AccordionItem, Block } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { memo, useMemo, useState } from 'react';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -53,10 +53,10 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   const agentId = itemAgentId && itemAgentId !== 'supervisor' ? itemAgentId : activeAgentId;
 
   // Get agent info from store for displaying
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const agent = useAgentGroupStore((s) =>
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const agent = useChatGroupProjection((scope) =>
     activeGroupId && itemAgentId
-      ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, itemAgentId)(s)
+      ? chatGroupProjectionSelectors.getAgentByIdFromGroup(activeGroupId, itemAgentId)(scope)
       : null,
   );
 

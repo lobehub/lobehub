@@ -10,7 +10,7 @@ import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -31,7 +31,7 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
   const isDarkMode = useIsDark();
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
 
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(id));
+  const meta = useAgentMeta(id);
 
   const [newTitle, setNewTitle] = useState(title);
   const [newAvatar, setNewAvatar] = useState<string | null | undefined>(avatar);

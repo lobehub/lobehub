@@ -122,15 +122,19 @@ vi.mock('@/store/global', () => ({
 }));
 
 vi.mock('@/store/task', () => {
+  const taskDetail = { id: 'task-database-231', identifier: 'T-231' };
   const useTaskStore = (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       activeTaskId: 'T-231',
-      taskDetailMap: { 'T-231': { id: 'task-database-231', identifier: 'T-231' } },
     });
   useTaskStore.getState = () => ({
     updateVerifyConfig: mocks.updateVerifyConfig,
   });
-  return { useTaskStore };
+  return {
+    useActiveTaskDetailProjection: (selector: (detail: typeof taskDetail) => unknown) =>
+      selector(taskDetail),
+    useTaskStore,
+  };
 });
 
 vi.mock('../shared/AccordionArrowIcon', () => ({ default: () => <span>arrow</span> }));

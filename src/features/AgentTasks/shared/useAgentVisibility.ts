@@ -1,5 +1,7 @@
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 
 /**
  * Reads an agent's visibility from the sidebar-agent list (loaded eagerly on
@@ -10,7 +12,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 export const useAgentVisibility = (
   agentId: string | null | undefined,
 ): 'private' | 'public' | undefined => {
-  return useHomeStore((s) =>
-    agentId ? homeAgentListSelectors.getAgentById(agentId)(s)?.visibility : undefined,
+  return useHomeSidebarProjection((sidebar) =>
+    agentId ? homeSidebarSelectors.getAgentById(agentId)(sidebar)?.visibility : undefined,
   );
 };

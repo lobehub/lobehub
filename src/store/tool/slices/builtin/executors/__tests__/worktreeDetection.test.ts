@@ -29,10 +29,8 @@ vi.mock('@/store/chat/store', () => ({
   getChatStoreState: () => chatMocks,
 }));
 
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: {
-    getTopicById: (id: string) => (state: typeof chatMocks) => state.topics[id],
-  },
+vi.mock('@/store/chat/slices/topic/projection', () => ({
+  getChatTopicById: (id: string) => chatMocks.topics[id],
 }));
 
 vi.mock('@/services/git', () => ({

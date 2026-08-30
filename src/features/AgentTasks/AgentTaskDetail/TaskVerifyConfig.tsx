@@ -39,10 +39,11 @@ import {
 import { useRubrics } from '@/features/Acceptance/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { useTaskStore } from '@/store/task';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { resolveTaskAcceptanceGoal } from './resolveTaskAcceptanceGoal';
@@ -134,26 +135,30 @@ const TaskVerifyConfig = memo(() => {
   const { allowed: canEditTask } = usePermission('create_content');
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const taskDescription = useTaskStore(taskDetailSelectors.activeTaskDescription);
-  const taskInstruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
-  const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
-  const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
-  const taskModel = useTaskStore(taskDetailSelectors.activeTaskModel);
-  const taskProvider = useTaskStore(taskDetailSelectors.activeTaskProvider);
-  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const taskDescription = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskDescription,
+  );
+  const taskInstruction = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskInstruction,
+  );
+  const taskName = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskName);
+  const verify = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskVerifyConfig,
+  );
+  const taskModel = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskModel);
+  const taskProvider = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskProvider,
+  );
+  const assigneeAgentId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAgentId,
+  );
 
   // Resolve model/provider the same way TaskModelConfig does: task override first,
   // then the assignee agent's model, then the active agent for unassigned tasks.
-  const agentModel = useAgentStore((s) =>
-    assigneeAgentId
-      ? agentByIdSelectors.getAgentModelById(assigneeAgentId)(s)
-      : agentSelectors.currentAgentModel(s),
-  );
-  const agentProvider = useAgentStore((s) =>
-    assigneeAgentId
-      ? agentByIdSelectors.getAgentModelProviderById(assigneeAgentId)(s)
-      : agentSelectors.currentAgentModelProvider(s),
-  );
+  const activeAgentId = useAgentStore((state) => state.activeAgentId);
+  const modelAgentId = assigneeAgentId ?? activeAgentId;
+  const agentModel = useAgentValue(modelAgentId, agentProjectionSelectors.model);
+  const agentProvider = useAgentValue(modelAgentId, agentProjectionSelectors.provider);
   const model = taskModel || agentModel || '';
   const provider = taskProvider || agentProvider || '';
   const taskAcceptanceGoal = resolveTaskAcceptanceGoal({

@@ -217,6 +217,8 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 vi.mock('@/store/task', () => ({
+  useActiveTaskDetailProjection: (selector: (detail: unknown) => unknown) =>
+    selector(mocks.taskState.taskDetailMap['T-1']),
   useTaskStore: (selector: (state: typeof mocks.taskState) => unknown) => selector(mocks.taskState),
 }));
 

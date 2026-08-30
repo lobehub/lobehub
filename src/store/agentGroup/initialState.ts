@@ -10,14 +10,8 @@ export interface QueryRouter {
 export interface ChatGroupState {
   activeGroupId?: string;
   activeThreadAgentId: string;
+  /** Temporary downstream compatibility projection. Projection remains canonical. */
   groupMap: Record<string, AgentGroupDetail>;
-  /**
-   * Groups whose detail fetch succeeded but resolved to nothing — the group
-   * doesn't exist or the caller lost access (e.g. a workspace group's owner
-   * switched it back to private). Settled and non-retryable: render a 404
-   * card, not a loading skeleton or an empty conversation shell. Cleared when
-   * a later fetch succeeds.
-   */
   groupNotFoundMap: Record<string, boolean>;
   groups: ChatGroupItem[];
   groupsInit: boolean;

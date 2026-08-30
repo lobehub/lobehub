@@ -1,13 +1,20 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
-import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import {
+  DEFAULT_MODEL,
+  isDesktop,
+  isHeterogeneousAgentModelId,
+  LOADING_FLAT,
+} from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
   ChatImageItem,
+  ChatTopic,
   ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
@@ -41,8 +48,20 @@ import {
   resolveToolMode,
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
+import { getAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
-import { agentService } from '@/services/agent';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  activeProjectionRecord,
+  getAgentProjectionById,
+  getProjectionStoreState,
+  nextProjectionObservedAt,
+  selectChatTopicListItem,
+  selectChatTopicsIndex,
+} from '@/projection';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
+import { getChatGroupProjection } from '@/projection/modules/chatGroup/read';
+import { chatGroupProjectionSelectors } from '@/projection/modules/chatGroup/selectors';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -51,18 +70,9 @@ import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPrelo
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
-import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { getAgentMeta } from '@/store/agent/projection';
 import { getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
-import {
-  dbMessageSelectors,
-  displayMessageSelectors,
-  topicSelectors,
-} from '@/store/chat/selectors';
+import { dbMessageSelectors, displayMessageSelectors } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
@@ -80,6 +90,7 @@ import {
 } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore } from '@/store/chat/store';
 import {
   mergeAgentRuntimeInitialContexts,
@@ -168,6 +179,13 @@ type SendMessageServerResponseMeta = SendMessageServerResponse & {
   __isPartialMessages?: boolean;
 };
 
+const toTopicTimestamp = (value: Date | number | string | undefined, fallback: number): number => {
+  if (typeof value === 'number') return value;
+  if (value === undefined) return fallback;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? fallback : timestamp;
+};
+
 interface OptimisticTopicPlaceholder {
   id: string;
   metadata?: ChatTopicMetadata;
@@ -254,7 +272,7 @@ export class ConversationLifecycleActionImpl {
   }
 
   /**
-   * Read the active topic-list filter from `topicDataMap` so it can be
+   * Read the active filter from the canonical sidebar topic index so it can be
    * forwarded to `sendMessageInServer`. Without this, the server returns
    * an unfiltered list which `internal_updateTopics` then writes back over
    * the filtered sidebar — completed/cron topics reappear until the next
@@ -267,9 +285,13 @@ export class ConversationLifecycleActionImpl {
     | { excludeStatuses?: string[]; excludeTriggers?: string[]; includeTriggers?: string[] }
     | undefined => {
     if (!agentId && !groupId) return undefined;
-    const data = this.#get().topicDataMap[topicMapKey({ agentId, groupId })];
+    const data = selectChatTopicsIndex(
+      getProjectionStoreState().scopes[getCacheScope()],
+      'sidebar',
+      topicMapKey({ agentId, groupId }),
+    );
     if (!data) return undefined;
-    const { excludeStatuses, excludeTriggers } = data;
+    const { excludeStatuses, excludeTriggers } = data.signature;
     if (!excludeStatuses?.length && !excludeTriggers?.length) return undefined;
     return {
       ...(excludeStatuses?.length ? { excludeStatuses } : {}),
@@ -400,16 +422,14 @@ export class ConversationLifecycleActionImpl {
     const agentId = directMentionRoute?.agent.id ?? ownerAgentId;
 
     let agentState = getAgentStoreState();
-    let agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    let agentConfig = getAgentProjectionById(agentId);
     if (directMentionRoute && !agentConfig) {
-      const targetAgentConfig = await agentService.getAgentConfigById(agentId);
-      if (!targetAgentConfig) throw new Error(`Mentioned agent not found: ${agentId}`);
-
-      agentState.internal_dispatchAgentMap(agentId, targetAgentConfig);
+      const canonical = await loadAgentConfigProjection(agentId, getCacheScope());
+      if (!canonical) throw new Error(`Mentioned agent not found: ${agentId}`);
       agentState = getAgentStoreState();
-      agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+      agentConfig = getAgentProjectionById(agentId);
     }
-    const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+    const agent = getAgentProjectionById(agentId);
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
     // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and
     // the server (`isResourceAuthorOrAdmin`) — an admin's own override must
@@ -506,7 +526,7 @@ export class ConversationLifecycleActionImpl {
       }
 
       if (context.topicId) {
-        const originalTopic = topicSelectors.getTopicById(context.topicId)(this.#get());
+        const originalTopic = getChatTopicById(context.topicId);
         const topicTitle = originalTopic?.title || '';
         // Inject referTopic into content for LLM context
         const referTag = `<refer_topic name="${topicTitle}" id="${context.topicId}" />`;
@@ -522,7 +542,9 @@ export class ConversationLifecycleActionImpl {
     // Check if current agentId is the supervisor agent of the group
     let isGroupSupervisor = false;
     if (context.groupId) {
-      const group = agentGroupByIdSelectors.groupById(context.groupId)(getChatGroupStoreState());
+      const group = getChatGroupProjection(
+        chatGroupProjectionSelectors.getGroupById(context.groupId),
+      );
       isGroupSupervisor = group?.supervisorAgentId === agentId;
     }
     // In non-group context, @agent mentions make the current agent act as supervisor
@@ -584,8 +606,7 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
-    const isLocalSystemEnabled =
-      chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
+    const isLocalSystemEnabled = getAgentRuntimeMode(agentId) === 'local';
     const canMaterializeLocalFiles =
       isDesktop &&
       localFileReferences.length > 0 &&
@@ -830,8 +851,8 @@ export class ConversationLifecycleActionImpl {
       messages.findLast((message) => message.role !== 'taskCallback') ?? messages.at(-1);
 
     useUserMemoryStore.getState().setActiveMemoryContext({
-      agent: agentSelectors.getAgentMetaById(agentId)(getAgentStoreState()),
-      topic: topicSelectors.currentActiveTopic(this.#get()),
+      agent: getAgentMeta(agentId),
+      topic: getChatTopicById(this.#get().activeTopicId),
       latestUserMessage: lastMessage?.content,
       sendingMessage: message,
     });
@@ -1095,11 +1116,39 @@ export class ConversationLifecycleActionImpl {
     // lost, no error) — fall back to the server row. A topic this send is
     // about to create has no server row, so the lookup is skipped entirely.
     const existingTopic = await resolveExistingTopicForRun({
-      fetchTopicDetail: (id) => topicService.getTopicDetail(id),
+      fetchTopicDetail: async (id) => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const topic = await topicService.getTopicDetail(id);
+        if (topic) {
+          getProjectionStoreState().commitChatTopicRecords(scope, [topic], {
+            observedAt,
+            source: 'network',
+          });
+        } else {
+          getProjectionStoreState().deleteChatTopicProjections(scope, [id], observedAt);
+        }
+        const projectionScope = getProjectionStoreState().scopes[scope];
+        const record = projectionScope?.records.topic[id];
+        if (record && !activeProjectionRecord(record)) return null;
+        const canonical = projectionScope
+          ? selectChatTopicListItem(projectionScope, id)
+          : undefined;
+        return canonical
+          ? ({
+              ...canonical,
+              createdAt: toTopicTimestamp(canonical.createdAt, topic?.createdAt ?? 0),
+              historySummary: canonical.historySummary ?? undefined,
+              metadata: canonical.metadata ?? undefined,
+              sessionId: canonical.sessionId ?? undefined,
+              updatedAt: toTopicTimestamp(canonical.updatedAt, topic?.updatedAt ?? 0),
+            } satisfies ChatTopic)
+          : topic;
+      },
       isHetero: !!heterogeneousProvider,
       storeTopic:
         operationContext.topicId && !willCreateNewTopic
-          ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+          ? getChatTopicById(operationContext.topicId)
           : undefined,
       topicId: willCreateNewTopic ? undefined : operationContext.topicId,
     });
@@ -1596,9 +1645,8 @@ export class ConversationLifecycleActionImpl {
         // older topics, and a miss here silently dropped `--resume` even when
         // the cwd resolution already used the topic's bound workingDirectory.
         const topic =
-          (heteroContext.topicId
-            ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
-            : undefined) ?? existingTopic;
+          (heteroContext.topicId ? getChatTopicById(heteroContext.topicId) : undefined) ??
+          existingTopic;
         const providerBinding = heterogeneousProvider.authMode === 'api';
         const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
           topic?.metadata,
@@ -1824,7 +1872,8 @@ export class ConversationLifecycleActionImpl {
 
     try {
       throwIfSendAborted(signal);
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const { model = DEFAULT_MODEL, provider = DEFAULT_PROVIDER } =
+        getAgentProjectionById(agentId) ?? {};
 
       const topicId = operationContext.topicId;
 
@@ -1923,7 +1972,7 @@ export class ConversationLifecycleActionImpl {
       if (data?.topics) {
         finalTopicId = data.topicId;
 
-        // Skip writing the returned topic list into the main chat's topicDataMap
+        // Skip ingesting the returned topic list into the main chat's Projection index
         // when the caller owns an isolated topic scope (e.g. Task Manager panel).
         // Otherwise the newly created isolated-trigger topic would flash in the
         // main sidebar until the next SWR revalidation filters it out.
@@ -2290,7 +2339,8 @@ export class ConversationLifecycleActionImpl {
       this.#get().associateMessageWithOperation(messageGroupId, operationId);
 
       // 2. Generate summary via LLM
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const { model = DEFAULT_MODEL, provider = DEFAULT_PROVIDER } =
+        getAgentProjectionById(agentId) ?? {};
       const compressionPayload = chainCompressContext(messagesToSummarize);
       let summaryContent = '';
 

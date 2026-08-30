@@ -4,8 +4,7 @@ import type {
   UIChatMessage,
 } from '@lobechat/types';
 
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { chatTopicSummary, getCurrentChatTopic } from '@/store/chat/slices/topic/projection';
 
 import { type State } from '../../initialState';
 import { getPendingInterventions } from './pendingInterventions';
@@ -150,8 +149,7 @@ const getGroupLatestMessageWithoutTools = (id: string) => (s: State) => {
  * This is a bridge selector that reads from global ChatStore
  */
 const currentTopicSummary = () => {
-  const chatState = useChatStore.getState();
-  return topicSelectors.currentActiveTopicSummary(chatState);
+  return chatTopicSummary(getCurrentChatTopic());
 };
 
 const pendingInterventions = (s: State) => getPendingInterventions(s.displayMessages);

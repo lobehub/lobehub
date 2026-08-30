@@ -21,8 +21,8 @@ const PopupAgentQuickPage = memo(() => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   // The inbox slug is not a real agent id. Resolve it through
-  // `builtinAgentIdMap` so `activeAgentId` points at the actual entity in
-  // `agentMap` and `isAgentConfigLoading` can flip to false.
+  // `builtinAgentIdMap` so `activeAgentId` points at the actual Projection
+  // entity and `isAgentConfigLoading` can flip to false.
   const isInboxSlug = aid === INBOX_SESSION_ID;
   const effectiveAgentId = isInboxSlug ? inboxAgentId : aid;
 

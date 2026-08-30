@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useCurrentAgentConfigStatus } from '@/store/agent/projection';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -23,7 +22,7 @@ const ForwardMessageDispatcher = () => {
   const [sendMessage, context] = useConversationStore((s) => [s.sendMessage, s.context]);
   const agentId = context.agentId;
   const location = useLocation();
-  const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const isAgentConfigLoading = useCurrentAgentConfigStatus().isLoading;
   const [pendingForward, clearPendingForward] = useForwardDispatchStore((s) => [
     s.pendingForward,
     s.clearPendingForward,

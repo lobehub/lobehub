@@ -27,9 +27,7 @@ describe('ChatGroupMemberSlice', () => {
     // Reset store state
     act(() => {
       useAgentGroupStore.setState({
-        groupMap: {},
-        groups: [],
-        groupsInit: false,
+        activeGroupId: undefined,
       });
     });
   });

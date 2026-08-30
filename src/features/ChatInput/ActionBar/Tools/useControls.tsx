@@ -33,7 +33,7 @@ import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -458,18 +458,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     s.uninstallBuiltinTool,
     s.deleteConnector,
   ]);
-  const [checked, togglePlugin, setPluginMode] = useAgentStore((s) => [
-    // Pinned identifiers only (getAgentPluginsById already excludes disabled).
-    agentByIdSelectors.getAgentPluginsById(agentId)(s),
-    s.togglePlugin,
-    s.setPluginMode,
-  ]);
+  // Pinned identifiers only; disabled entries are excluded by the Projection selector.
+  const checked = useAgentValue(agentId, agentProjectionSelectors.plugins);
+  const [togglePlugin, setPluginMode] = useAgentStore((s) => [s.togglePlugin, s.setPluginMode]);
   const checkedSet = useMemo(() => new Set(checked), [checked]);
   // Disabled identifiers, read from the raw (unfiltered) plugins config —
   // needed to render the dedicated Disabled group and policy-menu state.
-  const rawPlugins = useAgentStore(
-    (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
-  );
+  const rawPlugins = useAgentValue(agentId, (agent) => agent?.plugins);
   const disabledIds = useMemo(() => getDisabledPluginIds(rawPlugins), [rawPlugins]);
   const disabledIdSet = useMemo(() => new Set(disabledIds), [disabledIds]);
   // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
@@ -477,9 +472,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // In auto mode the activator handles those tools transparently, so they remain hidden.
   // NOTE: must read by `agentId` (not via the activeAgentId-based selector) so that
   // embedded / group-member chat inputs render the right agent's mode.
-  const isManualSkillMode = useAgentStore(
-    (s) => chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s) === 'manual',
-  );
+  const isManualSkillMode =
+    useAgentValue(agentId, agentProjectionSelectors.skillActivateMode) === 'manual';
   const isAutoSkillMode = !isManualSkillMode;
   const builtinList = useToolStore(
     isManualSkillMode
@@ -495,7 +489,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     builtinToolSelectors.fixedDisplayMetaList({ isManualMode: isManualSkillMode }),
     isEqual,
   );
-  const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
+  const plugins = useAgentValue(agentId, agentProjectionSelectors.plugins);
 
   const updateSkillPolicy = useCallback(
     async (id: string, mode: SkillPolicyMode) => {

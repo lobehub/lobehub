@@ -9,11 +9,12 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type SuggestMode } from '@/features/SuggestQuestions';
-import { useAgentStore } from '@/store/agent';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
+import { useAgentData } from '@/store/agent/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 
-/** Loose, structural view of the fields we read off the agentMap entry. */
+/** Loose, structural view of the Agent Projection fields consumed here. */
 interface AgentLike {
   description?: string | null;
   model?: string | null;
@@ -82,13 +83,14 @@ export const useBuilderContext = (mode: SuggestMode): BuilderContext => {
   const isGroup = mode === 'groupBuilder';
 
   const activeAgentId = useChatStore((s) => s.activeAgentId);
-  const agentItem = useAgentStore((s) =>
-    !isGroup && activeAgentId ? s.agentMap[activeAgentId] : undefined,
-  );
+  const projectedAgent = useAgentData(activeAgentId);
+  const agentItem = isGroup ? undefined : projectedAgent;
 
   const activeGroupId = useAgentGroupStore((s) => (isGroup ? s.activeGroupId : undefined));
-  const group = useAgentGroupStore((s) =>
-    isGroup && activeGroupId ? s.groupMap[activeGroupId] : undefined,
+  const group = useChatGroupProjection((scope) =>
+    isGroup && activeGroupId
+      ? chatGroupProjectionSelectors.getGroupById(activeGroupId)(scope)
+      : undefined,
   );
 
   const contextSummary = useMemo(

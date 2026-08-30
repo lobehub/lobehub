@@ -3,8 +3,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfigStatus,
+  useAgentValue,
+} from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -14,19 +17,13 @@ import Controls from './Controls';
 const History = memo(() => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [isLoading, chatConfig] = useAgentStore((s) => [
-    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s),
-  ]);
+  const isLoading = useAgentConfigStatus(agentId).isLoading;
+  const chatConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
   const { t } = useTranslation('setting');
   const isMobile = useIsMobile();
 
-  const [historyCount, enableHistoryCount] = useAgentStore((s) => {
-    return [
-      chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
-      chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
-    ];
-  });
+  const historyCount = useAgentValue(agentId, agentProjectionSelectors.historyCount);
+  const enableHistoryCount = useAgentValue(agentId, agentProjectionSelectors.enableHistoryCount);
 
   if (isLoading) return <ChatInputAction disabled icon={TimerOff} />;
 

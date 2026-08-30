@@ -30,8 +30,7 @@ import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -308,7 +307,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   );
 
   const { model, provider } = useEffectiveModel(agentId);
-  const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
+  const isAgentModeEnabled = useAgentValue(agentId, agentProjectionSelectors.enableMode);
   const [showRightPanel, workingSidebarTab, openWorkingSidebar, toggleRightPanel] = useGlobalStore(
     (s) => [
       systemStatusSelectors.showRightPanel(s),
@@ -318,14 +317,11 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     ],
   );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
-  const skillActivateMode = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
-  );
-  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getSearchModeById(agentId)(s),
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
-  ]);
+  const skillActivateMode = useAgentValue(agentId, agentProjectionSelectors.skillActivateMode);
+  const agentChatConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
+  const searchMode = agentChatConfig.searchMode || 'auto';
+  const useModelBuiltinSearch = agentChatConfig.useModelBuiltinSearch;
+  const disableGatewayMode = agentChatConfig.disableGatewayMode;
   const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
   const isMemoryEnabled = useMemoryEnabled(agentId);

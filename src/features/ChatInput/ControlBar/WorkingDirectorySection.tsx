@@ -10,8 +10,7 @@ import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getConfigRepoType, getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopicMetadata } from '@/store/chat/slices/topic/projection';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
@@ -56,9 +55,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // also feeds GitStatus's `fallbackGit`, which covers the harder case: the
   // recorded worktree directory was DELETED, so the live branch probe reads
   // nothing and the chips would vanish even with repoType resolved.
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
-  );
+  const topicWorkingDirectoryConfig = useCurrentChatTopicMetadata()?.workingDirectoryConfig;
   // Only trust the persisted config when it actually describes the directory we
   // resolved — the topic override wins in `useEffectiveWorkingDirectory`, so this
   // holds whenever the config is what produced `effectiveWorkingDirectory`.

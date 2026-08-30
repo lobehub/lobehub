@@ -50,11 +50,18 @@ vi.mock('@/store/agent', () => ({
   }),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    isAgentHeterogeneousById: (agentId: string) => (state: AgentState) =>
-      !!state.heterogeneousAgentIds?.includes(agentId),
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    heterogeneous: (agent?: { heterogeneous?: boolean }) => !!agent?.heterogeneous,
   },
+  useAgentValue: (
+    agentId: string | undefined,
+    selector: (agent?: { heterogeneous?: boolean }) => unknown,
+  ) =>
+    selector({ heterogeneous: !!agentId && agentState.heterogeneousAgentIds?.includes(agentId) }),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
   builtinAgentSelectors: {
     pageAgentId: (state: AgentState) => state.pageAgentId,
   },

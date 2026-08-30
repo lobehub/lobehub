@@ -3,8 +3,8 @@
 import { type ConversationContext } from '@lobechat/types';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
 
 /**
@@ -20,8 +20,9 @@ export function useGroupContext(): ConversationContext {
     s.activeThreadId ?? null,
   ]);
 
-  const currentGroup = useAgentGroupStore((s) =>
-    s.activeGroupId ? agentGroupSelectors.getGroupById(s.activeGroupId)(s) : undefined,
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const currentGroup = useChatGroupProjection((scope) =>
+    activeGroupId ? chatGroupProjectionSelectors.getGroupById(activeGroupId)(scope) : undefined,
   );
   const supervisorAgentId = currentGroup?.supervisorAgentId;
   // Derive groupId from the resolved group — the same source as supervisorAgentId —

@@ -64,13 +64,13 @@ import {
 } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
-import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
   mergeQueuedMessages,
   reconstructUploadFilesFromQueue,
   type StreamRetryMetadata,
 } from '@/store/chat/slices/operation/types';
+import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -256,16 +256,9 @@ const buildLocalHeterogeneousSystemContext = ({
 };
 
 const getTopicMetadataById = (
-  store: ChatStore,
+  _store: ChatStore,
   topicId: string | undefined,
-): ChatTopicMetadata | undefined => {
-  if (!topicId) return;
-
-  for (const topicData of Object.values(store.topicDataMap ?? {})) {
-    const topic = topicData?.items?.find((item) => item.id === topicId);
-    if (topic) return topic.metadata;
-  }
-};
+): ChatTopicMetadata | undefined => getChatTopicById(topicId)?.metadata;
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -2632,8 +2625,7 @@ export const executeHeterogeneousAgent = async (
       // Best-effort: a finally must never throw (it would mask the real flow),
       // and the topic map may be absent in edge/test states.
       try {
-        const stuckRunning =
-          topicSelectors.getTopicById(context.topicId)(get())?.status === 'running';
+        const stuckRunning = getChatTopicById(context.topicId)?.status === 'running';
         if (stuckRunning) {
           // Cast: TS narrows the closure-mutated `deferredTerminalEvent` back to
           // `null` in this linear-flow scope (it can't see the async IPC writes).

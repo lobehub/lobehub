@@ -23,11 +23,10 @@ import {
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import {
   parseMentionedAgentsFromEditorData,
@@ -40,6 +39,7 @@ import {
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { getChatTopicById, getChatTopicModelById } from '@/store/chat/slices/topic/projectionRead';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
@@ -111,8 +111,7 @@ const settleGenerationEntry = (
  * agents; a failed fetch falls back to authorship for this run.
  */
 const ensureEffectiveAgencyAccess = async (agentId: string) => {
-  const agentState = getAgentStoreState();
-  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const agent = getAgentProjectionById(agentId);
   await ensureAgentManagementAccess({
     agentId,
     agentUserId: agent?.userId,
@@ -123,9 +122,8 @@ const ensureEffectiveAgencyAccess = async (agentId: string) => {
 };
 
 const getEffectiveAgencyConfig = (agentId: string) => {
-  const agentState = getAgentStoreState();
-  const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
-  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const sharedAgencyConfig = getAgentProjectionById(agentId)?.agencyConfig;
+  const agent = getAgentProjectionById(agentId);
   const currentUserId = userProfileSelectors.userId(getUserStoreState());
   // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
   // server (`isResourceAuthorOrAdmin`) — an admin's own override must survive
@@ -179,9 +177,7 @@ const resolveHeteroRunContext = (
   context: ConversationContext,
   agentId: string,
 ) => {
-  const topic = context.topicId
-    ? topicSelectors.getTopicById(context.topicId)(chatStore)
-    : undefined;
+  const topic = context.topicId ? getChatTopicById(context.topicId) : undefined;
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
   const agentState = getAgentStoreState();
   const desktopContext = globalAgentContextManager.getContext();
@@ -248,9 +244,7 @@ const runHeterogeneousFromExistingMessage = async (
   else if (reason === 'binding_changed')
     toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
 
-  const topicModel = context.topicId
-    ? topicSelectors.getTopicModelById(context.topicId)(chatStore)
-    : undefined;
+  const topicModel = getChatTopicModelById(context.topicId ?? undefined);
   const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
     heterogeneousProvider,
     topicModel,
@@ -702,7 +696,7 @@ export const generationSlice: StateCreator<
     if (!topicId) return;
 
     const chatStore = useChatStore.getState();
-    const topic = topicSelectors.getTopicById(topicId)(chatStore);
+    const topic = getChatTopicById(topicId);
     const scheduledRun = topic?.metadata?.scheduledRun;
     const userMessageId =
       scheduledRun?.kind === 'delayed_start' ? scheduledRun.userMessageId : undefined;
@@ -996,7 +990,7 @@ export const generationSlice: StateCreator<
     if (!userMessageId) return;
 
     const chatStore = useChatStore.getState();
-    const topic = topicSelectors.getTopicById(topicId)(chatStore);
+    const topic = getChatTopicById(topicId);
     const nowDate = new Date();
     const now = nowDate.toISOString();
     // The rate-limit reset is the "not before" gate. Absent (some providers don't

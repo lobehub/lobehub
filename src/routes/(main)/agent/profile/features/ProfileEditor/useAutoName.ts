@@ -3,11 +3,14 @@ import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  getHomeSidebarProjection,
+  homeSidebarSelectors,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 /**
  * One-click naming for an agent that never got a personal name — agents created
@@ -31,8 +34,8 @@ export const useAutoName = (agentId: string) => {
   const autoName = useCallback(async () => {
     setNaming(true);
     try {
-      const takenNames = homeAgentListSelectors
-        .allAgents(useHomeStore.getState())
+      const takenNames = homeSidebarSelectors
+        .allAgents(getHomeSidebarProjection())
         .filter((agent) => agent.id !== agentId)
         .map((agent) => agent.name)
         .filter((name): name is string => !!name);

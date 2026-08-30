@@ -3,10 +3,11 @@ import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import type { ContextSelection, PageSelection } from '@lobechat/types';
 
 import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
 import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
@@ -38,7 +39,7 @@ interface SendMessageWithEditorParams {
 
 /**
  * Make sure a builtin agent (agent-builder / group-agent-builder / page-agent)
- * is hydrated into both `builtinAgentIdMap` and `agentMap` before we read its
+ * is hydrated into both `builtinAgentIdMap` and Projection before we read its
  * id and call sendMessage. Without this, the create-Agent / create-Group /
  * create-Page flows can race against the host page's `useInitBuiltinAgent`:
  * `builtinAgentIdMap[slug]` is still undefined, so sendMessage gets
@@ -48,7 +49,7 @@ interface SendMessageWithEditorParams {
 const ensureBuiltinAgentHydrated = async (slug: string): Promise<string | undefined> => {
   const state = getAgentStoreState();
   const cachedId = state.builtinAgentIdMap[slug];
-  if (cachedId && state.agentMap[cachedId]) return cachedId;
+  if (cachedId && getAgentProjectionById(cachedId)) return cachedId;
 
   await state.refreshBuiltinAgent(slug);
   return getAgentStoreState().builtinAgentIdMap[slug];
@@ -81,7 +82,7 @@ const syncBuiltinAgentModel = async (
   if (!model || !provider) return;
 
   const state = getAgentStoreState();
-  const builtin = agentByIdSelectors.getAgentById(builtinAgentId)(state);
+  const builtin = getAgentProjectionById(builtinAgentId);
 
   if (builtin?.workspaceId) {
     // The shared row keeps whatever model the workspace configured — unless that
@@ -95,7 +96,7 @@ const syncBuiltinAgentModel = async (
     // workspace's model with this member's pick on a mere race. Unknown ≠ invalid.
     if (!aiProviderSelectors.isInitAiProviderRuntimeState(aiInfraState)) return;
 
-    const builtinConfig = agentSelectors.getAgentConfigById(builtinAgentId)(state);
+    const builtinConfig = getAgentProjectionById(builtinAgentId);
     const currentModel = builtinConfig?.model;
     const currentProvider = builtinConfig?.provider;
     const isUsable =
@@ -143,9 +144,7 @@ export class HomeInputActionImpl {
 
       // 1. Get model/provider config from inbox agent
       const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
-      const inboxConfig = inboxAgentId
-        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
-        : null;
+      const inboxConfig = inboxAgentId ? getAgentProjectionById(inboxAgentId) : null;
       const model = inboxConfig?.model;
       const provider = inboxConfig?.provider;
 
@@ -236,9 +235,7 @@ export class HomeInputActionImpl {
 
       // 1. Get model/provider config from inbox agent
       const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
-      const inboxConfig = inboxAgentId
-        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
-        : null;
+      const inboxConfig = inboxAgentId ? getAgentProjectionById(inboxAgentId) : null;
       const model = inboxConfig?.model;
       const provider = inboxConfig?.provider;
 
@@ -326,9 +323,7 @@ export class HomeInputActionImpl {
 
       // 1. Get model/provider config from inbox agent
       const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
-      const inboxConfig = inboxAgentId
-        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
-        : null;
+      const inboxConfig = inboxAgentId ? getAgentProjectionById(inboxAgentId) : null;
       const model = inboxConfig?.model;
       const provider = inboxConfig?.provider;
 

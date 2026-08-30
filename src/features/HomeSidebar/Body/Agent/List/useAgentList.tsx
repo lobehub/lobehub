@@ -3,10 +3,12 @@
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useSidebarGroupVisibility } from '../useSidebarGroupVisibility';
 import { useSidebarItemVisibility } from '../useSidebarItemVisibility';
@@ -51,12 +53,15 @@ export const useKeepSidebarGroupsListed = () => {
 // on every accordion expand and flash spinners across the sidebar.
 export const useAgentList = (limitDefault = true) => {
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
-  const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-  const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-  const privateUngroupedAgents = useHomeStore(
-    homeAgentListSelectors.privateUngroupedAgents,
+  const ungroupedAgents = useHomeSidebarProjection(homeSidebarSelectors.ungroupedAgents, isEqual);
+  const agentGroups = useHomeSidebarProjection(homeSidebarSelectors.agentGroups, isEqual);
+  const pinnedAgents = useHomeSidebarProjection(homeSidebarSelectors.pinnedAgents, isEqual);
+  const privateAgentGroups = useHomeSidebarProjection(
+    homeSidebarSelectors.privateAgentGroups,
+    isEqual,
+  );
+  const privateUngroupedAgents = useHomeSidebarProjection(
+    homeSidebarSelectors.privateUngroupedAgents,
     isEqual,
   );
   const keep = useKeepSidebarListed();

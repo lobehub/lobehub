@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useAgentStore } from '@/store/agent';
+import { useAgentData } from '@/store/agent/projection';
 import { useGlobalStore } from '@/store/global';
 
 import Item from './Item';
@@ -21,13 +22,13 @@ import VisibilityTabs, { type PickerVisibility } from './VisibilityTabs';
 export const List = memo(() => {
   const { t } = useTranslation(['file', 'chat']);
 
-  const [useFetchFilesAndKnowledgeBases, activeAgentId, agentVisibility, agentWorkspaceId] =
-    useAgentStore((s) => [
-      s.useFetchFilesAndKnowledgeBases,
-      s.activeAgentId,
-      s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
-      s.activeAgentId ? s.agentMap[s.activeAgentId]?.workspaceId : undefined,
-    ]);
+  const [useFetchFilesAndKnowledgeBases, activeAgentId] = useAgentStore((s) => [
+    s.useFetchFilesAndKnowledgeBases,
+    s.activeAgentId,
+  ]);
+  const agent = useAgentData(activeAgentId);
+  const agentVisibility = agent?.visibility;
+  const agentWorkspaceId = agent?.workspaceId;
 
   const [mode, setMode] = useState<PickerVisibility>('public');
   const { effectiveVisibility, showPublicAgentHint, showVisibilityTabs } = resolvePickerScope({

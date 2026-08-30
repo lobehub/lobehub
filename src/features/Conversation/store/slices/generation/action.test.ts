@@ -1,9 +1,11 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import type { ChatTopic } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { messageService } from '@/services/message';
-import { agentSelectors } from '@/store/agent/selectors';
 import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
@@ -66,6 +68,7 @@ vi.mock('@/store/chat', () => ({
 describe('Generation Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useProjectionStore.setState({ scopes: {} });
   });
 
   afterEach(() => {
@@ -1705,8 +1708,11 @@ describe('Generation Actions', () => {
       // Force the hetero routing decision.
       vi.spyOn(agentDispatcher, 'selectRuntimeType').mockReturnValue('hetero');
       // Supply a config that carries the hetero provider used by the branch.
-      vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
-        () => ({ agencyConfig: { heterogeneousProvider } }) as any,
+      getProjectionStoreState().commitAgentConfig(
+        getCacheScope(),
+        { agencyConfig: { heterogeneousProvider }, id: 'session-1' } as any,
+        'full',
+        'mutation',
       );
 
       createMessageSpy = vi
@@ -1774,13 +1780,31 @@ describe('Generation Actions', () => {
     });
 
     it('regenerates with the topic-pinned heterogeneous model', async () => {
-      await setupHeteroChatStore({
-        topicDataMap: {
-          test: {
-            items: [{ id: 'topic-1', model: 'opus', provider: 'claude-code' }],
-          },
+      await setupHeteroChatStore();
+      getProjectionStoreState().commitChatTopicsPage(
+        getCacheScope(),
+        {
+          containerKey: 'session-1',
+          context: { agentId: 'session-1' },
+          items: [
+            {
+              createdAt: 100,
+              id: 'topic-1',
+              model: 'opus',
+              provider: 'claude-code',
+              status: 'active',
+              title: 'Pinned',
+              updatedAt: 100,
+            } as ChatTopic,
+          ],
+          page: 0,
+          pageSize: 20,
+          signature: {},
+          surface: 'sidebar',
+          total: 1,
         },
-      });
+        { observedAt: 100, source: 'network' },
+      );
       const context: ConversationContext = {
         agentId: 'session-1',
         threadId: null,
@@ -1811,21 +1835,33 @@ describe('Generation Actions', () => {
           lab: { ...state.preference.lab, enableAgentProviderBinding: true },
         },
       }));
-      await setupHeteroChatStore({
-        topicDataMap: {
-          test: {
-            items: [
-              {
-                id: 'topic-1',
-                metadata: {
-                  heteroSessionId: 'legacy-session',
-                  workingDirectory: '/repo',
-                },
+      await setupHeteroChatStore();
+      getProjectionStoreState().commitChatTopicsPage(
+        getCacheScope(),
+        {
+          containerKey: 'session-1',
+          context: { agentId: 'session-1' },
+          items: [
+            {
+              createdAt: 100,
+              id: 'topic-1',
+              metadata: {
+                heteroSessionId: 'legacy-session',
+                workingDirectory: '/repo',
               },
-            ],
-          },
+              status: 'active',
+              title: 'Legacy',
+              updatedAt: 100,
+            } as ChatTopic,
+          ],
+          page: 0,
+          pageSize: 20,
+          signature: {},
+          surface: 'sidebar',
+          total: 1,
         },
-      });
+        { observedAt: 100, source: 'network' },
+      );
 
       const context: ConversationContext = {
         agentId: 'session-1',
@@ -1942,11 +1978,14 @@ describe('Generation Actions', () => {
     // button is a documented no-op. Lock that no runtime is dispatched.
     beforeEach(() => {
       vi.spyOn(agentDispatcher, 'selectRuntimeType').mockReturnValue('hetero');
-      vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
-        () =>
-          ({
-            agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
-          }) as any,
+      getProjectionStoreState().commitAgentConfig(
+        getCacheScope(),
+        {
+          agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+          id: 'session-1',
+        } as any,
+        'full',
+        'mutation',
       );
     });
 

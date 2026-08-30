@@ -20,8 +20,7 @@ import CopilotToolbar from '@/features/PageEditor/Copilot/Toolbar';
 import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -205,7 +204,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
       [collapse],
     );
 
-    const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
+    const agentChatConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
     const chatFollowUpHooks = useChatFollowUp({
       agentChatConfig,
       conversationKey: chatKey,

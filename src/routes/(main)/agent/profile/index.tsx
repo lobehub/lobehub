@@ -12,7 +12,11 @@ import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConf
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useCurrentAgentConfigStatus,
+  useCurrentAgentValue,
+} from '@/store/agent/projection';
 import { StyleSheet } from '@/utils/styles';
 
 import EditLockDriver from './features/EditLockDriver';
@@ -37,12 +41,11 @@ const styles = StyleSheet.create({
 
 const ProfileArea = memo(() => {
   const editor = useProfileStore((s) => s.editor);
-  const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const { error: configError, isLoading: isAgentConfigLoading } = useCurrentAgentConfigStatus();
   // `isAgentConfigLoading` is data-presence ("no config in the map yet"), so a
   // *failed* config fetch keeps the map empty and would spin forever. The store
   // records the fetch error in `agentConfigErrorMap` — read it so failure shows a
   // reload state (via `retryAgentConfigFetch`) instead of a permanent skeleton.
-  const configError = useAgentStore(agentSelectors.currentAgentConfigError);
   const retryAgentConfigFetch = useAgentStore((s) => s.retryAgentConfigFetch);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const handleContentClick = useClickToFocusEditor(editor, canEdit);
@@ -92,7 +95,7 @@ const ProfileArea = memo(() => {
 // updateAgentConfig, which the server rejects under the lock) and while the lock
 // is still resolving — so it doesn't flash in then vanish once a lock is found.
 const AgentBuilderSlot = memo(() => {
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHeterogeneous = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
   const lockPending = useProfileStore(profileSelectors.lockPending);
   if (isHeterogeneous || lockedByOther || lockPending) return null;

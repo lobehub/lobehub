@@ -39,6 +39,7 @@ export const createElectronLocalDatabaseAdapter = (): LocalDatabaseAdapter => ({
   initialize: async () => {
     await ensureElectronIpc().localDatabase.initialize();
   },
+  listCollections: async () => ensureElectronIpc().localDatabase.listCollections(),
   set: async (collection, key, value) => {
     await ensureElectronIpc().localDatabase.set({
       collection,

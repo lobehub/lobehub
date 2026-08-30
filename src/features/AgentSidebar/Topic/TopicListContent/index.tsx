@@ -10,7 +10,7 @@ import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { topicsWithoutCron, useCurrentChatTopics } from '@/store/chat/slices/topic/projection';
 
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import ByProjectMode from './ByProjectMode';
@@ -23,12 +23,10 @@ const TopicListContent = memo(() => {
   const { t } = useTranslation('topic');
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
-  const topicLength = useChatStore((s) => topicSelectors.currentTopicLength(s));
-  const [agentId, isUndefinedTopics, isInSearchMode] = useChatStore((s) => [
-    s.activeAgentId,
-    topicSelectors.isUndefinedTopics(s),
-    topicSelectors.isInSearchMode(s),
-  ]);
+  const topicView = useCurrentChatTopics();
+  const topicLength = topicsWithoutCron(topicView?.items)?.length ?? 0;
+  const [agentId, isInSearchMode] = useChatStore((s) => [s.activeAgentId, s.inSearchingMode]);
+  const isUndefinedTopics = !topicView;
 
   const { topicGroupMode } = useAgentTopicGroupMode();
 

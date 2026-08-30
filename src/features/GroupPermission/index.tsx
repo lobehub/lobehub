@@ -8,8 +8,8 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { StyleSheet } from '@/utils/styles';
 
 import GroupBreadcrumb from './GroupBreadcrumb';
@@ -25,11 +25,13 @@ const styles = StyleSheet.create({
 
 const GroupPermission = memo(() => {
   const { t } = useTranslation('setting');
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   // The group row itself is what the form reads (visibility / workspace); until
   // it lands the page would otherwise render the personal-group empty state,
   // which is a different fact.
-  const isGroupLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
+  const isGroupLoading = !useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupById(activeGroupId ?? ''),
+  );
 
   return (
     <Flexbox height={'100%'} width={'100%'}>

@@ -2,7 +2,7 @@ import useSWR from 'swr';
 
 import { topicKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 
 /** Poll cadence once the run is due — the cron dispatcher ticks every ~10 min. */
 const POLL_INTERVAL_MS = 30_000;
@@ -34,12 +34,9 @@ export const useScheduledRunWatch = (topicId: string | null | undefined) => {
   // `null` = scheduled but no runAt recorded — treat as due now rather than
   // never (mirrors the dispatcher, whose due query requires runAt <= now but
   // whose writers always stamp one).
-  const scheduledRunAt = useChatStore((s): string | null | undefined => {
-    if (!topicId) return undefined;
-    const topic = topicSelectors.getTopicById(topicId)(s);
-    if (topic?.status !== 'scheduled') return undefined;
-    return topic.metadata?.scheduledRun?.runAt ?? null;
-  });
+  const topic = useChatTopicById(topicId ?? undefined);
+  const scheduledRunAt: string | null | undefined =
+    topic?.status === 'scheduled' ? (topic.metadata?.scheduledRun?.runAt ?? null) : undefined;
 
   useSWR(
     topicId && scheduledRunAt !== undefined ? topicKeys.scheduledRunWatch(topicId) : null,

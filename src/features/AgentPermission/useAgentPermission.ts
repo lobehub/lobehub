@@ -5,8 +5,7 @@ import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat
 import { useAgentSelectionPolicies } from '@/features/ResourcePermission/useAgentSelectionPolicies';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import type { ResourceAccessLevel } from '@/services/resourcePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 
 export interface AgentPermissionState {
   accessError: unknown;
@@ -46,7 +45,7 @@ export interface AgentPermissionState {
  * about what happens once it reaches the workspace.
  */
 export const useAgentPermission = (agentId: string): AgentPermissionState => {
-  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
+  const agent = useAgentData(agentId);
 
   const isWorkspaceAgent = !!agent?.workspaceId;
   const isPrivate = agent?.visibility === 'private';

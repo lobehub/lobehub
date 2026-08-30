@@ -11,7 +11,12 @@ import Avatar from '@/components/Avatar';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { AgentNotFound } from '@/features/AgentNotFound';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfigStatus,
+  useAgentMeta,
+  useAgentValue,
+} from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -20,11 +25,9 @@ const Body = memo(() => {
   const agentId = useChatStore(chatPortalSelectors.agentDetailId) || '';
   const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
   const { error, isLoading, mutate } = useFetchAgentConfig(true, agentId);
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
-  const openingMessage = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage,
-  );
-  const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(agentId));
+  const meta = useAgentMeta(agentId);
+  const openingMessage = useAgentValue(agentId, agentProjectionSelectors.openingMessage);
+  const isNotFound = useAgentConfigStatus(agentId).isNotFound;
   const displayName = agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
   if (!agentId) return null;

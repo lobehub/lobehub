@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { type VListHandle } from 'virtua';
 import { VList } from 'virtua';
@@ -9,8 +8,11 @@ import { VList } from 'virtua';
 import AsyncError from '@/components/AsyncError';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import TopicEmpty from '@/features/TopicEmpty';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
+import { useChatTopicSearchProjection } from '@/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { topicsWithoutCron, useCurrentChatTopics } from '@/store/chat/slices/topic/projection';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import TopicItem from '../List/Item';
 
@@ -26,47 +28,29 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   const fetchedCountRef = useRef(-1);
   const initializedRef = useRef(false);
 
-  const [
-    hasMore,
-    isLoadingMore,
-    loadMoreError,
-    isExpandingPageSize,
-    loadMoreTopics,
-    activeAgentId,
-    useSearchTopics,
-  ] = useChatStore((s) => [
-    topicSelectors.hasMoreTopics(s),
-    topicSelectors.isLoadingMoreTopics(s),
-    topicSelectors.loadMoreTopicsError(s),
-    topicSelectors.isExpandingPageSize(s),
+  const [loadMoreTopics, activeAgentId, activeGroupId] = useChatStore((s) => [
     s.loadMoreTopics,
     s.activeAgentId,
-    s.useSearchTopics,
+    s.activeGroupId,
   ]);
+  const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+  const topicView = useCurrentChatTopics();
+  const requestState = useChatStore((state) => state.topicLoadMoreStateMap[containerKey]);
+  const hasMore = topicView?.hasMore ?? false;
+  const isLoadingMore = requestState?.isLoadingMore ?? false;
+  const loadMoreError = requestState?.loadMoreError;
+  const { isExpandingPageSize } = useFetchChatTopics();
 
   // Use server-side search if there's a keyword
   const trimmedKeyword = searchKeyword.trim();
   const isSearching = trimmedKeyword.length > 0;
 
-  // Set searching state and trigger search
-  useEffect(() => {
-    if (isSearching) {
-      useChatStore.setState({ isSearchingTopic: true });
-    } else {
-      // Reset search results when clearing search
-      useChatStore.setState({ isSearchingTopic: false, searchTopics: [] });
-    }
-  }, [isSearching]);
-
-  // Only search when there's a keyword (pass undefined to disable SWR)
-  useSearchTopics(isSearching ? trimmedKeyword : undefined, {
+  const searchRequest = useChatTopicSearchProjection(isSearching ? trimmedKeyword : undefined, {
     agentId: activeAgentId,
     groupId: undefined,
   });
-
-  const searchResults = useChatStore(topicSelectors.searchTopics, isEqual);
-  const allTopicList = useChatStore(topicSelectors.displayTopics, isEqual);
-  const isSearchingTopic = useChatStore(topicSelectors.isSearchingTopic);
+  const searchResults = searchRequest.data ?? [];
+  const allTopicList = topicsWithoutCron(topicView?.items);
 
   // Use search results if searching, otherwise use regular list
   const activeTopicList = isSearching ? searchResults : allTopicList;
@@ -139,7 +123,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   }, [hasMore, loadMoreTopics, count, isSearching, loadMoreError]);
 
   const showLoading = (isLoadingMore || isExpandingPageSize) && !isSearching;
-  const showSearchLoading = isSearching && isSearchingTopic;
+  const showSearchLoading = isSearching && searchRequest.isLoading;
   const showLoadMoreError = !isSearching && !!loadMoreError && !isLoadingMore;
 
   // Show empty state when no topics

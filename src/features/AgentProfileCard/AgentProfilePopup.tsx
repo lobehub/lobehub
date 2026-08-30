@@ -9,14 +9,12 @@ import { createStaticStyles } from 'antd-style';
 import { BookOpen, FileText, Settings } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import ModelSelect from '@/features/ModelSelect';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { agentProfileKeys } from '@/libs/swr/keys';
-import { agentService } from '@/services/agent';
+import { useAgentConfigProjection } from '@/projection/modules/agent/hooks';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
 import AgentProfileCard from '.';
@@ -91,11 +89,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
 
-    const { data: fetched, isLoading } = useSWR(
-      open && canConfigure ? agentProfileKeys.detail(agentId) : null,
-      () => agentService.getAgentConfigById(agentId) as Promise<FetchedAgent | null>,
+    const { data: fetchedProjection, isLoading } = useAgentConfigProjection(
+      open && canConfigure ? agentId : undefined,
       { revalidateOnFocus: false },
     );
+    const fetched = fetchedProjection as FetchedAgent | undefined;
 
     const merged: Partial<AgentPreview> = {
       avatar: fetched?.avatar ?? agent?.avatar,

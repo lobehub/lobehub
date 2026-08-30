@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useActiveChatTopicModel } from '@/store/chat/slices/topic/projection';
 
 import SelectorTrigger from '../../components/SelectorTrigger';
 import { useAgentId } from '../../hooks/useAgentId';
@@ -32,7 +32,7 @@ const ModelSwitch = memo(() => {
   // default; a switch pins to the active topic, otherwise updates the agent
   // (via selectModel, which honors workspace member overrides).
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useActiveChatTopicModel();
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
   const model = topicModel?.model ?? agentModel;
   const provider = topicModel?.model ? topicModel.provider : agentProvider;

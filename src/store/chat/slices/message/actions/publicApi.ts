@@ -2,6 +2,8 @@ import { type MessageMetadata, TraceEventType } from '@lobechat/types';
 import { copyToClipboard } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, nextProjectionObservedAt } from '@/projection';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat/store';
@@ -184,6 +186,8 @@ export class MessagePublicApiActionImpl {
 
   clearMessage = async (): Promise<void> => {
     const { activeAgentId, activeTopicId, activeGroupId, refreshTopic, switchTopic } = this.#get();
+    const projectionScope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
 
     // For group sessions, we need to clear group messages using groupId
     // For regular sessions, we clear session messages using agentId
@@ -197,6 +201,11 @@ export class MessagePublicApiActionImpl {
 
     if (activeTopicId) {
       await topicService.removeTopic(activeTopicId);
+      getProjectionStoreState().deleteChatTopicProjections(
+        projectionScope,
+        [activeTopicId],
+        observedAt,
+      );
     }
     await refreshTopic();
 

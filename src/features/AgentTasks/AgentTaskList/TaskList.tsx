@@ -7,8 +7,7 @@ import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useSelectedTaskListProjection } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
@@ -28,9 +27,7 @@ import TaskRowIndent from './TaskRowIndent';
 interface TaskListProps {
   /**
    * Settled signal — truthy once the current scope's list has loaded into the
-   * store, `undefined` while unsettled. Derived from the store's
-   * `isTaskListInit` (not raw SWR `data`) so it resets in lockstep with `tasks`
-   * on a scope/visibility switch and never disagrees with the empty signal.
+   * Projection, `undefined` while unsettled.
    */
   data?: unknown;
   emptyDescription?: string;
@@ -47,6 +44,7 @@ interface TaskListProps {
 }
 
 const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
+const EMPTY_TASK_LIST: TaskListItem[] = [];
 
 const renderTaskRows = (rows: TaskRow[], sub?: boolean, routeScope?: TaskItemRouteScope) =>
   rows.map((row, index) => {
@@ -101,8 +99,8 @@ const TaskList = memo<TaskListProps>((props) => {
   const { data, error, isLoading, items, onRetry, onShowHiddenCompleted, options, routeScope } =
     props;
   const { t } = useTranslation('chat');
-  const storeTasks = useTaskStore(taskListSelectors.taskList);
-  const tasks = items ?? storeTasks;
+  const projectedTaskList = useSelectedTaskListProjection();
+  const tasks = items ?? projectedTaskList?.items ?? EMPTY_TASK_LIST;
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -258,7 +256,7 @@ const TaskList = memo<TaskListProps>((props) => {
 
   // Error is gated ahead of empty by AsyncBoundary, so a failed fetch shows a
   // Retry block instead of the "no tasks" empty. `data` is the
-  // store-derived settled signal — see the `data` prop doc above.
+  // Projection-derived settled signal — see the `data` prop doc above.
   return (
     <AsyncBoundary
       data={data}

@@ -4,13 +4,11 @@ import { agentDisplayName } from '@lobechat/types';
 import { Block, Flexbox } from '@lobehub/ui';
 import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, responsive, useTheme } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
 import { type ChannelPlatformDefinition, getPlatformIcon } from './const';
@@ -121,7 +119,7 @@ const PlatformGrid = memo<PlatformGridProps>(
   ({ agentId, platforms, onSelect, runtimeStatuses }) => {
     const { t } = useTranslation(['agent', 'common']);
     const theme = useTheme();
-    const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+    const meta = useAgentMeta(agentId);
     const agentName = agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
     const getPlatformDescription = (id: string, name: string) => {

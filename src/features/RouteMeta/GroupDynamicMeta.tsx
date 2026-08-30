@@ -3,8 +3,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/slices/sessionGroup/selectors';
 
@@ -18,15 +17,10 @@ const useTopicTitle = (
   groupId: string | undefined,
   topicId: string | undefined,
   routeWorkspaceId: string | null | undefined,
-): string | undefined =>
-  useChatStore((state) => {
-    if (!groupId || !topicId || routeWorkspaceId === undefined) return undefined;
-
-    const topic = state.topicDataMap[topicMapKey({ groupId })]?.items?.find(
-      (item) => item.id === topicId,
-    );
-    return topic?.title || undefined;
-  });
+): string | undefined => {
+  const topic = useChatTopicById(groupId && routeWorkspaceId !== undefined ? topicId : undefined);
+  return topic?.title || undefined;
+};
 
 const GroupDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);

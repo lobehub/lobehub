@@ -1,9 +1,9 @@
 import type { UIChatMessage } from '@lobechat/types';
 
-import { agentService } from '@/services/agent';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getAgentProjectionById } from '@/projection';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
 import { messageService } from '@/services/message';
-import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 
@@ -64,11 +64,9 @@ export class ChatForwardActionImpl {
     const settled = await Promise.allSettled(
       targets.map(async (target) => {
         const { id } = target;
-        if (!agentSelectors.getAgentConfigById(id)(getAgentStoreState())) {
-          const config = await agentService.getAgentConfigById(id);
-          if (!config) throw new Error(`Forwarding target agent not found: ${id}`);
-
-          getAgentStoreState().internal_dispatchAgentMap(id, config);
+        if (!getAgentProjectionById(id)) {
+          const canonical = await loadAgentConfigProjection(id, getCacheScope());
+          if (!canonical) throw new Error(`Forwarding target agent not found: ${id}`);
         }
 
         const result = await this.#get().sendMessage({

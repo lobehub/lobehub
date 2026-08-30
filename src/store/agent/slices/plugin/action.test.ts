@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { agentService } from '@/services/agent';
 
 import { useAgentStore } from '../../store';
@@ -22,11 +24,23 @@ vi.mock('@/store/session', () => ({
   },
 }));
 
+const seedAgent = (config: Record<string, unknown>) => {
+  act(() => {
+    useAgentStore.setState({ activeAgentId: 'agent-1' });
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { ...config, id: 'agent-1' } as any,
+      'full',
+      'mutation',
+    );
+  });
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  useProjectionStore.setState({ scopes: {} });
   useAgentStore.setState({
     activeAgentId: undefined,
-    agentMap: {},
     builtinAgentIdMap: {},
     updateAgentConfigSignal: undefined,
     updateAgentMetaSignal: undefined,
@@ -47,12 +61,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: [] } as any },
-        });
-      });
+      seedAgent({ plugins: [] });
 
       await act(async () => {
         await result.current.togglePlugin('plugin-1');
@@ -75,12 +84,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: ['plugin-1'] } as any },
-        });
-      });
+      seedAgent({ plugins: ['plugin-1'] });
 
       await act(async () => {
         await result.current.togglePlugin('plugin-1');
@@ -103,12 +107,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: [] } as any },
-        });
-      });
+      seedAgent({ plugins: [] });
 
       await act(async () => {
         await result.current.togglePlugin('plugin-1', true);
@@ -131,12 +130,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: ['plugin-1'] } as any },
-        });
-      });
+      seedAgent({ plugins: ['plugin-1'] });
 
       await act(async () => {
         await result.current.togglePlugin('plugin-1', false);
@@ -159,12 +153,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: ['plugin-1'] } as any },
-        });
-      });
+      seedAgent({ plugins: ['plugin-1'] });
 
       await act(async () => {
         await result.current.togglePlugin('plugin-1', true);
@@ -188,12 +177,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': {} as any }, // No plugins field
-        });
-      });
+      seedAgent({});
 
       await act(async () => {
         await result.current.togglePlugin('plugin-1');
@@ -218,12 +202,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: ['plugin-1'] } as any },
-        });
-      });
+      seedAgent({ plugins: ['plugin-1'] });
 
       await act(async () => {
         await result.current.removePlugin('plugin-1');
@@ -246,12 +225,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: ['existing-plugin'] } as any },
-        });
-      });
+      seedAgent({ plugins: ['existing-plugin'] });
 
       await act(async () => {
         await result.current.removePlugin('non-existent');
@@ -277,12 +251,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: { 'agent-1': { plugins: ['plugin-1', 'plugin-2'] } as any },
-        });
-      });
+      seedAgent({ plugins: ['plugin-1', 'plugin-2'] });
 
       await act(async () => {
         await result.current.setPluginMode('plugin-1', 'disabled');
@@ -306,14 +275,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: {
-            'agent-1': { plugins: [{ identifier: 'plugin-1', mode: 'disabled' }] } as any,
-          },
-        });
-      });
+      seedAgent({ plugins: [{ identifier: 'plugin-1', mode: 'disabled' }] });
 
       await act(async () => {
         await result.current.setPluginMode('plugin-1', 'pinned');
@@ -336,16 +298,7 @@ describe('PluginSlice Actions', () => {
         success: true,
       });
 
-      act(() => {
-        useAgentStore.setState({
-          activeAgentId: 'agent-1',
-          agentMap: {
-            'agent-1': {
-              plugins: [{ identifier: 'plugin-1', mode: 'disabled' }, 'plugin-2'],
-            } as any,
-          },
-        });
-      });
+      seedAgent({ plugins: [{ identifier: 'plugin-1', mode: 'disabled' }, 'plugin-2'] });
 
       await act(async () => {
         await result.current.setPluginMode('plugin-1', 'auto');

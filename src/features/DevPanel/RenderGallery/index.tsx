@@ -4,7 +4,8 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { useEffect, useState } from 'react';
 
-import { useAgentStore } from '@/store/agent';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
 import {
@@ -49,29 +50,35 @@ const RenderGallery = () => {
   const toolset = identifier ? toolsetMap.get(identifier) : undefined;
 
   useEffect(() => {
-    const previousGroupState = useAgentGroupStore.getState();
+    const previousActiveGroupId = useAgentGroupStore.getState().activeGroupId;
+    const scope = getCacheScope();
 
-    useAgentGroupStore.setState({
-      activeGroupId: DEVTOOLS_GROUP_ID,
-      groupMap: {
-        ...previousGroupState.groupMap,
-        [DEVTOOLS_GROUP_ID]: DEVTOOLS_GROUP_DETAIL as any,
+    useAgentGroupStore.setState({ activeGroupId: DEVTOOLS_GROUP_ID });
+    getProjectionStoreState().commitChatGroupDetail(
+      scope,
+      DEVTOOLS_GROUP_DETAIL as any,
+      {
+        group: 'full',
+        members: Object.fromEntries(
+          DEVTOOLS_GROUP_DETAIL.agents.map((agent) => [agent.id, 'profile' as const]),
+        ),
       },
-    });
+      'mutation',
+    );
 
     // Seed the Aggregate-preview agent meta so its turns read as "Lobe AI"
     // (avatar + name) instead of the unresolved-agent fallback.
-    const previousAgentMap = useAgentStore.getState().agentMap;
-    useAgentStore.setState({
-      agentMap: { ...previousAgentMap, [DEVTOOLS_AGENT_ID]: DEVTOOLS_AGENT_META as any },
-    });
+    getProjectionStoreState().commitAgentConfig(
+      scope,
+      { ...DEVTOOLS_AGENT_META, id: DEVTOOLS_AGENT_ID },
+      'full',
+      'mutation',
+    );
 
     return () => {
-      useAgentGroupStore.setState({
-        activeGroupId: previousGroupState.activeGroupId,
-        groupMap: previousGroupState.groupMap,
-      });
-      useAgentStore.setState({ agentMap: previousAgentMap });
+      useAgentGroupStore.setState({ activeGroupId: previousActiveGroupId });
+      getProjectionStoreState().deleteChatGroupProjection(scope, DEVTOOLS_GROUP_ID);
+      getProjectionStoreState().deleteAgentProjection(scope, DEVTOOLS_AGENT_ID);
     };
   }, []);
 

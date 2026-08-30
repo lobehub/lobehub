@@ -8,9 +8,8 @@ import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
-import { taskService } from '@/services/task';
+import { useTaskGroupListProjectionRequest } from '@/projection/modules/task/hooks';
 import { useAgentStore } from '@/store/agent';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
@@ -31,18 +30,27 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const agentId = useAgentStore((s) => s.activeAgentId);
-
-  const enabled = !!agentId;
-  const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
-    enabled ? taskKeys.sidebarGroups(agentId) : null,
-    async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
-    {
-      fallbackData: { data: [], success: true },
-      revalidateOnFocus: false,
-    },
+  const projectionSignature = useMemo(
+    () => ({ agentKey: agentId ? `${agentId}:sidebar` : undefined, visibility: 'all' as const }),
+    [agentId],
   );
-  const taskGroups = useMemo(() => data?.data ?? [], [data?.data]);
+  const enabled = !!agentId;
+  const { data: projectionGroups, isLoading } = useTaskGroupListProjectionRequest(
+    taskKeys.sidebarGroups(agentId ?? ''),
+    {
+      request: {
+        assigneeAgentId: agentId,
+        groups: SIDEBAR_GROUPS,
+      },
+      signature: projectionSignature,
+    },
+    enabled,
+    { revalidateOnFocus: false },
+  );
+  const taskGroups = useMemo(
+    () => (projectionGroups as TaskGroupItem[] | undefined) ?? [],
+    [projectionGroups],
+  );
 
   const orderedGroups = useMemo(() => {
     const map = new Map(taskGroups.map((g) => [g.key, g]));

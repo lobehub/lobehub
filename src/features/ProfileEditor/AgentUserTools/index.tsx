@@ -6,8 +6,8 @@ import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 
 import { type AgentToolProps } from '@/features/ProfileEditor/AgentTool';
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
@@ -64,9 +64,7 @@ const AgentUserTools = memo<AgentToolProps>((props) => {
       }
       // Pin the copied tools for the agent so the runtime resolves them.
       if (identifiers.length > 0) {
-        const config = agentSelectors.getAgentConfigById(effectiveAgentId)(
-          useAgentStore.getState(),
-        );
+        const config = getAgentProjectionById(effectiveAgentId);
         let plugins = config?.plugins;
         for (const identifier of identifiers)
           plugins = upsertPluginMode(plugins, identifier, 'pinned');

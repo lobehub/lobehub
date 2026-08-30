@@ -17,11 +17,9 @@ import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
-// Direct module import, not the feature barrel: home must not pull the whole
-// acceptance workspace into its chunk for one hook.
 import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { useHomeBriefIds, useHomeBriefsRequest } from '@/projection';
 import { useBriefStore } from '@/store/brief';
-import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
@@ -40,8 +38,7 @@ import { resolveShownNewsOffset } from './newsDayOffset';
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
-import { filterTopicsForInboxScope, resolveInboxScopeToggleSection } from './scopeTogglePlacement';
-import { splitBriefs } from './splitBriefs';
+import { resolveInboxScopeToggleSection } from './scopeTogglePlacement';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
@@ -138,14 +135,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
-  // Briefs are per-user AND per-workspace rows, so the feed is read through the
-  // active cache scope — a list left over from the previous workspace holds ids
-  // this one cannot resolve, and every action on it would fail silently.
   const cacheScope = useCacheScope();
-  const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
-  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
+  const briefsQuery = useHomeBriefsRequest(isLogin);
+  const needsYouIds = useHomeBriefIds('needsYou');
+  const isBriefsInit = briefsQuery.isInitialized;
 
   // The news digest is day-scoped: it fetches only briefs *created* on the
   // viewed local day (today by default), resolved or not, with ‹ › paging into
@@ -177,8 +170,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
   const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
   const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
-  // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
-  // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
     () => (showGoals ? buildHomeGoalEntries(goals) : []),
     [goals, showGoals],
@@ -187,7 +178,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const goalsCollapsed = useGlobalStore(systemStatusSelectors.homeGoalsCollapsed);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
 
@@ -209,28 +199,19 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const setScope = onScopeChange ?? setInternalScope;
   const teamView = isTeam && scope === 'team';
 
-  const { needsYou } = useMemo(() => splitBriefs(briefs), [briefs]);
-
   // Topics are already workspace-wide from the server; "mine" is the viewer's
-  // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
-  // filter is a no-op there.
-  const unreadTopics = useMemo(
-    () => filterTopicsForInboxScope(topics.unread, myId, teamView),
-    [teamView, topics.unread, myId],
-  );
-  const runningTopics = useMemo(
-    () => filterTopicsForInboxScope(topics.running, myId, teamView),
-    [teamView, topics.running, myId],
-  );
+  // own runs, "team" is everyone's. The selector returns only IDs and performs
+  // the mine/team filter without assembling a collection of Topic views here.
+  const topics = useHomeInboxTopics(isLogin, teamView ? null : myId);
 
   if (!isLogin) return null;
 
   const blockState = resolveInboxBlockState({
-    hasError: Boolean(briefsSWR.error),
+    hasError: Boolean(briefsQuery.error),
     hiddenWidgets,
     hideNeedsYou,
     isBriefsInit,
-    isLoading: Boolean(briefsSWR.isLoading),
+    isLoading: Boolean(briefsQuery.isLoading),
     isMain,
   });
 
@@ -239,10 +220,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (blockState === 'error') {
     return (
       <AsyncError
-        error={briefsSWR.error}
+        error={briefsQuery.error}
         variant={'block'}
         onRetry={() => {
-          void briefsSWR.mutate();
+          void briefsQuery.mutate();
         }}
       />
     );
@@ -279,10 +260,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         hiddenWidgets,
         hideNeedsYou,
         hideUnread,
-        needsYouCount: needsYou.length,
+        needsYouCount: needsYouIds.length,
         preferUnread: isMain,
-        runningCount: runningTopics.length,
-        unreadCount: unreadTopics.length,
+        runningCount: topics.runningIds.length,
+        unreadCount: topics.unreadIds.length,
       })
     : null;
   const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
@@ -319,25 +300,27 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         updateSystemStatus({ homeGoalsCollapsed: next }, 'toggleHomeGoals'),
     });
 
-  if (!isMain && !hideNeedsYou && needsYou.length > 0)
+  if (!isMain && !hideNeedsYou && needsYouIds.length > 0)
     sections.push(
       // The rail paginates instead of stacking and owns its header. Keep the
       // page-level scope control in that header alongside the pager.
       isRail
         ? {
             key: 'needsYou',
-            node: <NeedsYouRailCard briefs={needsYou} scopeControl={placeToggle('needsYou')} />,
+            node: (
+              <NeedsYouRailCard briefIds={needsYouIds} scopeControl={placeToggle('needsYou')} />
+            ),
             selfShelled: true,
           }
         : {
             action: placeToggle('needsYou'),
-            count: needsYou.length,
+            count: needsYouIds.length,
             key: 'needsYou',
             label: t('inbox.needsYou.title'),
             node: (
               <Flexbox gap={12}>
-                {needsYou.map((brief) => (
-                  <InboxBriefCard brief={brief} key={brief.id} />
+                {needsYouIds.map((briefId) => (
+                  <InboxBriefCard briefId={briefId} key={briefId} />
                 ))}
               </Flexbox>
             ),
@@ -353,47 +336,48 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       node: <AsyncError error={topics.error} variant={'inline'} onRetry={topics.reload} />,
     });
 
-  if (!hideUnread && unreadTopics.length > 0)
+  if (!hideUnread && topics.unreadIds.length > 0)
     sections.push({
       action: placeToggle('unread'),
-      count: unreadTopics.length,
+      count: topics.unreadIds.length,
       key: 'unread',
       label: t('inbox.unread.title'),
       node: (
         <UnreadTopicList
           bare={isRail}
+          indexObservedAt={topics.indexObservedAt}
           showAuthor={teamView}
-          topics={unreadTopics}
+          topicIds={topics.unreadIds}
           onFollowUpSent={topics.promoteToRunning}
         />
       ),
     });
 
   if (isMain) {
-    if (briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
+    if (briefsQuery.error && !isBriefsInit && !briefsQuery.isLoading) {
       sections.push({
         key: 'needsYou-error',
         label: t('inbox.needsYou.title'),
         node: (
           <AsyncError
-            error={briefsSWR.error}
+            error={briefsQuery.error}
             variant={'inline'}
-            onRetry={() => void briefsSWR.mutate()}
+            onRetry={() => void briefsQuery.mutate()}
           />
         ),
       });
     } else if (!isBriefsInit) {
       sections.push({ key: 'needsYou-loading', node: <BriefCardSkeleton /> });
-    } else if (!hideNeedsYou && needsYou.length > 0) {
+    } else if (!hideNeedsYou && needsYouIds.length > 0) {
       sections.push({
         action: placeToggle('needsYou'),
-        count: needsYou.length,
+        count: needsYouIds.length,
         key: 'needsYou',
         label: t('inbox.needsYou.title'),
         node: (
           <Flexbox gap={12}>
-            {needsYou.map((brief) => (
-              <InboxBriefCard brief={brief} key={brief.id} />
+            {needsYouIds.map((briefId) => (
+              <InboxBriefCard briefId={briefId} key={briefId} />
             ))}
           </Flexbox>
         ),
@@ -404,15 +388,15 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // No title: the card already says "3 tasks running" on its own head. Keep
   // this in the main flow immediately before Recent topics; the rail is for
   // glanceable reports, not live work the user may want to open.
-  if (!hideRunning && !isRail && runningTopics.length > 0)
+  if (!hideRunning && !isRail && topics.runningIds.length > 0)
     sections.push({
       key: 'running',
       node: (
         <RunningTasksCard
           action={placeToggle('running')}
           bare={isRail}
-          running={runningTopics}
           showAuthor={teamView}
+          topicIds={topics.runningIds}
         />
       ),
     });
@@ -462,7 +446,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       action: (
         <Flexbox horizontal align={'center'} gap={4}>
           {unresolvedNews.length > 0 && (
-            <MarkAllReadButton news={unresolvedNews} onResolved={() => void newsSWR.mutate()} />
+            <MarkAllReadButton
+              briefIds={unresolvedNews.map((brief) => brief.id)}
+              onResolved={() => void newsSWR.mutate()}
+            />
           )}
           <ActionIcon
             disabled={!hasEarlierNews}

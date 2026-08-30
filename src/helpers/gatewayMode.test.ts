@@ -1,11 +1,21 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useAgentStore } from '@/store/agent';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import * as serverConfigStore from '@/store/serverConfig';
 
 import { resolveGatewayModeEnabled, useIsGatewayModeEnabled } from './gatewayMode';
+
+const SCOPE = 'user-1:personal';
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => SCOPE,
+  isAnonymousScope: () => false,
+  isScopeTrusted: () => true,
+  useCacheScope: () => SCOPE,
+}));
 
 const mockServerConfig = (serverConfig?: {
   agentGatewayUrl?: string;
@@ -17,11 +27,22 @@ const mockServerConfig = (serverConfig?: {
       typeof serverConfigStore.getServerConfigStoreState
     >);
 
-const stateWith = (disableGatewayMode?: boolean): AgentStoreState =>
-  ({
+const stateWith = (disableGatewayMode?: boolean): AgentStoreState => {
+  getProjectionStoreState().commitAgentConfig(
+    SCOPE,
+    { chatConfig: { disableGatewayMode }, id: 'agent-1' },
+    'full',
+    'mutation',
+  );
+
+  return {
     activeAgentId: 'agent-1',
-    agentMap: { 'agent-1': { chatConfig: { disableGatewayMode } } },
-  }) as unknown as AgentStoreState;
+  } as unknown as AgentStoreState;
+};
+
+beforeEach(() => {
+  useProjectionStore.setState({ scopes: {} });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -68,9 +89,12 @@ describe('useIsGatewayModeEnabled', () => {
     // subscribe to agencyConfig, a sibling slice, so they would otherwise stay
     // stale after sends fall back to sandbox).
     act(() => {
-      useAgentStore.setState({
-        agentMap: { 'agent-1': { chatConfig: { disableGatewayMode: true } } },
-      } as Partial<AgentStoreState>);
+      getProjectionStoreState().commitAgentConfig(
+        SCOPE,
+        { chatConfig: { disableGatewayMode: true }, id: 'agent-1' },
+        'full',
+        'mutation',
+      );
     });
     expect(result.current).toBe(false);
   });

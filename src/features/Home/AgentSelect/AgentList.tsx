@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { Block, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -9,12 +10,12 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR } from '@/const/meta';
+import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useHomeSidebarItem } from '@/projection';
+import { useAgentMeta } from '@/store/agent/projection';
 
-import { type AgentRow, useHomeAgentRows } from './useHomeAgentRows';
+import { type AgentRowRef, useHomeAgentRows } from './useHomeAgentRows';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
@@ -42,13 +43,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface AgentListProps {
   activeAgentId: string;
-  /** Thrown error from the agent-list SWR — surfaced as a failure state. */
   error?: unknown;
   onRetry?: () => void;
   onSelect: (agentId: string) => void;
 }
 
-// Same spec as the agent-detail SwitchPanel's section header.
 const SectionHeader = memo<{ children: ReactNode }>(({ children }) => (
   <Flexbox className={styles.sectionHeader}>
     <Text fontSize={12} type={'secondary'} weight={500}>
@@ -57,56 +56,81 @@ const SectionHeader = memo<{ children: ReactNode }>(({ children }) => (
   </Flexbox>
 ));
 
+interface AgentListItemProps {
+  active: boolean;
+  onSelect: (agentId: string) => void;
+  row: AgentRowRef;
+}
+
+const AgentListItem = memo<AgentListItemProps>(({ active, onSelect, row }) => {
+  const { t } = useTranslation('chat');
+  const entityItem = useHomeSidebarItem(row.source === 'entity' ? row.ref : undefined);
+  const builtinMeta = useAgentMeta(row.source === 'builtin' ? row.id : '');
+
+  if (row.source === 'entity' && !entityItem) return null;
+
+  const title =
+    row.source === 'builtin'
+      ? agentDisplayName(builtinMeta, 'Lobe AI')
+      : agentDisplayName(entityItem, t('untitledAgent'));
+  const subtitle = row.source === 'entity' ? agentSecondaryDisplayName(entityItem) : undefined;
+  const avatarValue = row.source === 'builtin' ? builtinMeta?.avatar : entityItem?.avatar;
+  const avatar =
+    (typeof avatarValue === 'string' ? avatarValue : undefined) ||
+    (row.source === 'builtin' ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
+  const backgroundColor =
+    (row.source === 'builtin' ? builtinMeta?.backgroundColor : entityItem?.backgroundColor) ||
+    undefined;
+
+  return (
+    <Block
+      clickable
+      horizontal
+      align={'center'}
+      className={`${styles.item} ${active ? styles.active : ''}`}
+      gap={8}
+      variant={'borderless'}
+      onClick={() => onSelect(row.id)}
+    >
+      <Avatar
+        avatar={avatar}
+        background={backgroundColor}
+        name={title}
+        shape={'square'}
+        size={24}
+      />
+      <Text
+        ellipsis
+        color={active ? cssVar.colorText : cssVar.colorTextSecondary}
+        style={{ flex: 1 }}
+        weight={active ? 600 : 500}
+      >
+        {title}
+        {subtitle && (
+          <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{subtitle}</span>
+        )}
+      </Text>
+      {row.pinned && (
+        <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
+      )}
+    </Block>
+  );
+});
+
 const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelect }) => {
   const { t } = useTranslation('common');
+  const { isInitialized, privateRows, showPrivateSection, workspaceRows } = useHomeAgentRows();
 
-  const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  const { privateRows, showPrivateSection, workspaceRows } = useHomeAgentRows();
+  const renderRow = (row: AgentRowRef) => (
+    <AgentListItem active={row.id === activeAgentId} key={row.id} row={row} onSelect={onSelect} />
+  );
 
-  const renderRow = (row: AgentRow) => {
-    const isActive = row.id === activeAgentId;
-
-    return (
-      <Block
-        clickable
-        horizontal
-        align={'center'}
-        className={`${styles.item} ${isActive ? styles.active : ''}`}
-        gap={8}
-        key={row.id}
-        variant={'borderless'}
-        onClick={() => onSelect(row.id)}
-      >
-        <Avatar
-          avatar={row.avatar || DEFAULT_AVATAR}
-          background={row.backgroundColor}
-          name={row.title}
-          shape={'square'}
-          size={24}
-        />
-        <Text
-          ellipsis
-          color={isActive ? cssVar.colorText : cssVar.colorTextSecondary}
-          style={{ flex: 1 }}
-          weight={isActive ? 600 : 500}
-        >
-          {row.title}
-        </Text>
-        {row.pinned && (
-          <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
-        )}
-      </Block>
-    );
-  };
-
-  // Error gated ahead of the skeleton so a failed list fetch shows Retry instead
-  // of a permanent skeleton (`isAgentListInit` only flips on success).
   return (
     <AsyncBoundary
-      data={isInit ? workspaceRows : undefined}
+      data={isInitialized ? workspaceRows : undefined}
       error={error}
       errorVariant={'block'}
-      isLoading={!isInit && !error}
+      isLoading={!isInitialized && !error}
       loading={<SkeletonList rows={6} style={{ padding: 8 }} />}
       onRetry={onRetry}
     >

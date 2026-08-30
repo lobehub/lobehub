@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
@@ -21,9 +21,7 @@ const TitleTags = memo(() => {
       ? s.threadMaps[topicId]?.find((thread) => thread.id === threadId)?.title
       : undefined,
   );
-  const topicTitle = useChatStore((s) =>
-    topicId ? topicSelectors.getTopicById(topicId)(s)?.title : undefined,
-  );
+  const topicTitle = useChatTopicById(topicId ?? undefined)?.title;
   const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
 
   // Archived topics fall out of the sidebar list fetch — pull their detail by

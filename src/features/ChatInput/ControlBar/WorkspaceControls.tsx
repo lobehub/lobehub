@@ -7,10 +7,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useAgentRuntimeMode, useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
@@ -40,8 +39,8 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
   ({ agentId, alwaysShowWorkspace = false }) => {
     const { t } = useTranslation('setting');
     const { canConfigureResource, canUseResource } = useChatInputResourceAccess();
-    const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
-    const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+    const runtimeMode = useAgentRuntimeMode(agentId);
+    const isHeterogeneous = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
     // Effective config = shared row + this member's device override,
     // so `isDeviceMode` routes the working-directory section by the device THIS
     // member's run actually targets.

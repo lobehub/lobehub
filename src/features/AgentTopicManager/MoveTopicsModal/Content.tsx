@@ -14,11 +14,14 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 type Step = 'pick' | 'confirm' | 'moving' | 'done';
 
@@ -61,15 +64,14 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
   const [target, setTarget] = useState<{ id: string; title: string } | null>(null);
 
   const batchMoveTopicsToAgent = useChatStore((s) => s.batchMoveTopicsToAgent);
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
-  const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+  const agents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
+  const isAgentListInit = useHomeSidebarProjection(homeSidebarSelectors.isAgentListInit);
 
   // The inbox (default "LobeAI") agent is virtual, so it's filtered out of the
   // sidebar agent list — add it back so topics can be moved to it too.
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const inboxMeta = useAgentStore((s) =>
-    inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : undefined,
-  );
+  const projectedInboxMeta = useAgentMeta(inboxAgentId);
+  const inboxMeta = inboxAgentId ? projectedInboxMeta : undefined;
 
   useFetchAgentList();
 

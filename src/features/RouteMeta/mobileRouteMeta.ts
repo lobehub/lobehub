@@ -5,11 +5,10 @@ import { Settings } from 'lucide-react';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 
 const MobileAgentSettingsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(params.aid ?? ''));
+  const meta = useAgentMeta(params.aid ?? '');
 
   usePublishDynamicRouteMeta(
     {

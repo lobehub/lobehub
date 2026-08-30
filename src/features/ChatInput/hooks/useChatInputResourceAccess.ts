@@ -5,10 +5,11 @@ import type { StoreApi } from 'zustand';
 
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentStore } from '@/store/agent';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { type State, useChatInputStoreApiOptional } from '../store';
 
@@ -41,11 +42,10 @@ const useChatInputAgentId = (): string | undefined => {
 export const useChatInputResourceAccess = () => {
   const chatInputAgentId = useChatInputAgentId();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentVisibility = useAgentStore((s) =>
-    chatInputAgentId ? s.agentMap[chatInputAgentId]?.visibility : undefined,
-  );
-  const activeGroup = useAgentGroupStore((s) =>
-    s.activeGroupId ? agentGroupSelectors.getGroupById(s.activeGroupId)(s) : undefined,
+  const agentVisibility = useAgentValue(chatInputAgentId, agentProjectionSelectors.visibility);
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const activeGroup = useChatGroupProjection((scope) =>
+    activeGroupId ? chatGroupProjectionSelectors.getGroupById(activeGroupId)(scope) : undefined,
   );
   const isGroupContext =
     !!chatInputAgentId && !!activeGroup && activeGroup.supervisorAgentId === chatInputAgentId;

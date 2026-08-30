@@ -31,7 +31,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useClientDataSWR } from '@/libs/swr';
 import { workKeys } from '@/libs/swr/keys';
 import { workService } from '@/services/work';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
+import { goalSelectors } from '@/store/goal/selectors';
 import type { ProjectDetail } from '@/store/project';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -139,8 +140,9 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
   const openWork = useOpenWork();
   const workspaceId = useActiveWorkspaceId();
   const goalScope = `project:${projectId}`;
+  const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const goals = useGoalStore(goalSelectors.goalList(goalScope));
-  const goalSWR = useGoalStore((s) => s.useFetchGoals)(undefined, projectId);
+  const goalSWR = useFetchGoals(undefined, projectId);
   const coordinatorAgentId = detail.project.coordinatorAgentId;
   const projectReference = detail.project.slug ?? projectId;
   const workSWR = useClientDataSWR(

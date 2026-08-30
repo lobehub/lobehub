@@ -9,8 +9,7 @@ import { Outlet } from 'react-router';
 
 import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopic } from '@/store/chat/slices/topic/projection';
 
 import PopupTitleBar from './TitleBar';
 
@@ -21,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const PopupLayout: FC = () => {
-  const topicTitle = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.title);
+  const topicTitle = useCurrentChatTopic()?.title;
 
   // Archived topics fall out of the sidebar list fetch — pull their detail by
   // id so the title doesn't degrade to the "new topic" placeholder.

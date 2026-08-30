@@ -1,7 +1,8 @@
 import { resolveSearchDecision, type SearchDecision } from 'model-bank';
 
+import { getAgentProjectionById } from '@/projection';
 import { getAgentStoreState } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
 
@@ -24,7 +25,7 @@ export const getSearchConfig = (
 ): SearchConfig => {
   const agentStoreState = getAgentStoreState();
   const targetAgentId = agentId || agentStoreState.activeAgentId || '';
-  const chatConfig = chatConfigByIdSelectors.getChatConfigById(targetAgentId)(agentStoreState);
+  const chatConfig = agentProjectionSelectors.chatConfig(getAgentProjectionById(targetAgentId));
   const aiInfraStoreState = getAiInfraStoreState();
 
   const providerSearchMode =

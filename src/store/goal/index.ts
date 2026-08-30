@@ -9,6 +9,8 @@ import { flattenActions } from '@/store/utils/flattenActions';
 import { type GoalAction, GoalActionImpl, type GoalStore } from './action';
 import { initialState } from './initialState';
 
+export { goalSelectors } from './selectors';
+
 const devtools = createDevtools('goal');
 
 export const useGoalStore = createWithEqualityFn<GoalStore>()(
@@ -18,5 +20,3 @@ export const useGoalStore = createWithEqualityFn<GoalStore>()(
   })),
   shallow,
 );
-
-export { goalSelectors } from './selectors';

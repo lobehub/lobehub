@@ -5,11 +5,9 @@ import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import ImperativeModal from '@/components/ImperativeModal';
-import { groupKeys } from '@/libs/swr/keys';
-import { agentService } from '@/services/agent';
+import { useAgentDirectory } from '@/projection';
 
 import { type AgentItemData } from './AgentItem';
 import AvailableAgentList from './AvailableAgentList';
@@ -49,10 +47,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     const clearSelection = useAgentSelectionStore((s) => s.clearSelection);
 
     // Fetch agents from the new API (non-virtual agents only)
-    const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR(
-      open ? groupKeys.queryAgents() : null,
-      () => agentService.queryAgents(),
-    );
+    const { data: allAgents = [], isLoading: isLoadingAgents } = useAgentDirectory(open);
 
     // Filter out existing members
     const availableAgents = useMemo<AgentItemData[]>(() => {

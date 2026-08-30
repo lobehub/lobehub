@@ -19,14 +19,11 @@ import debug from 'debug';
 import { produce } from 'immer';
 
 import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
+import { getAgentProjectionById } from '@/projection';
+import { getChatGroupProjection } from '@/projection/modules/chatGroup/read';
+import { chatGroupProjectionSelectors } from '@/projection/modules/chatGroup/selectors';
 import { getAgentStoreState } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
-import { getChatGroupStoreState } from '@/store/agentGroup';
-import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { isDev } from '@/utils/env';
@@ -197,11 +194,11 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     return nextPluginIds;
   };
 
-  const agentStoreState = getAgentStoreState();
-
-  // Get base config from store
-  const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
-  const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
+  const agent = getAgentProjectionById(agentId);
+  const sharedAgentConfig = agentProjectionSelectors.config(agent);
+  if (!sharedAgentConfig) {
+    throw new Error(`Agent config is not projected: ${agentId}`);
+  }
   const currentUserId = userProfileSelectors.userId(useUserStore.getState());
   // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
   // server (`isResourceAuthorOrAdmin`) — an admin reads the shared row like
@@ -238,7 +235,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       memberModelOverride,
     ),
   };
-  const sharedChatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const sharedChatConfig = agentProjectionSelectors.chatConfig(getAgentProjectionById(agentId));
   const chatConfig =
     memberModeOverride === undefined
       ? sharedChatConfig
@@ -255,8 +252,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // This takes priority because supervisor needs special group-supervisor behavior,
   // even if the agent has its own slug
   if (ctx.groupId && ctx.scope === 'group') {
-    const groupStoreState = getChatGroupStoreState();
-    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
+    const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(ctx.groupId));
 
     log(
       'checking supervisor FIRST (scope=group): groupId=%s, group=%O, agentId=%s',
@@ -285,7 +281,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // If not identified as supervisor, check agent store for slug
   if (!slug) {
-    const storeSlug = agentSelectors.getAgentSlugById(agentId)(agentStoreState) ?? undefined;
+    const storeSlug = getAgentProjectionById(agentId)?.slug ?? undefined;
     log('slug from agentStore: %s (agentId: %s)', storeSlug, agentId);
 
     // Only use the slug if it's a valid builtin agent slug
@@ -401,9 +397,8 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   let groupSupervisorContext;
   if (slug === BUILTIN_AGENT_SLUGS.groupSupervisor && ctx.groupId) {
     log('building groupSupervisorContext for agentId: %s, groupId: %s', agentId, ctx.groupId);
-    const groupStoreState = getChatGroupStoreState();
     // Direct lookup using groupId
-    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
+    const group = getChatGroupProjection(chatGroupProjectionSelectors.getGroupById(ctx.groupId));
 
     log(
       'groupById result for %s: %o',
@@ -419,7 +414,9 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     );
 
     if (group) {
-      const groupMembers = agentGroupSelectors.getGroupMembers(group.id)(groupStoreState);
+      const groupMembers = getChatGroupProjection(
+        chatGroupProjectionSelectors.getGroupMembers(group.id),
+      );
       log(
         'groupMembers for groupId %s: %o',
         group.id,
@@ -523,7 +520,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const resolvedAgentConfig: LobeAgentConfig = {
     ...agentConfig,
     ...(resolvedAgencyConfig ? { agencyConfig: resolvedAgencyConfig } : {}),
-    systemRole: resolvedSystemRole,
+    systemRole: resolvedSystemRole ?? '',
   };
 
   // Apply params adjustments based on chatConfig

@@ -10,8 +10,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { useImgToClipboard } from '@/hooks/useImgToClipboard';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreenshot';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 
 import { contextSelectors, useConversationStore } from '../../../store';
 import { styles } from '../style';
@@ -28,9 +27,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: string }>(
   ({ message, uniqueId }) => {
     const agentId = useConversationStore(contextSelectors.agentId);
-    const currentAgentTitle = useAgentStore((s) =>
-      agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
-    );
+    const currentAgentTitle = agentDisplayName(useAgentMeta(agentId));
     const context = useConversationStore((s) => s.context);
     const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
     const { t } = useTranslation(['chat', 'common']);

@@ -8,8 +8,7 @@ import { useParams } from 'react-router';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AgentBuilder from './features/AgentBuilder';
@@ -19,9 +18,12 @@ import MemberProfile from './features/MemberProfile';
 import StoreSync from './StoreSync';
 
 const ProfileArea = memo(() => {
+  const { gid } = useParams<{ gid: string }>();
   const editor = useGroupProfileStore((s) => s.editor);
   const activeTabId = useGroupProfileStore((s) => s.activeTabId);
-  const isGroupsLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
+  const isGroupsLoading = !useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupById(gid ?? ''),
+  );
 
   const isGroupTab = activeTabId === 'group';
 

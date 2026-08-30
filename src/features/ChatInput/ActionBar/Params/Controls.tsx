@@ -22,8 +22,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import ModelSelect from '@/features/ModelSelect';
 import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentConfig, useAgentValue } from '@/store/agent/projection';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
@@ -541,10 +540,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   // re-rendering whichever toolbar or sidebar merely hosts the panel.
   const [updating, setUpdating] = useState(false);
 
-  const config = useAgentStore(
-    (s) => agentByIdSelectors.getAgentConfigById(agentId)(s) || DEFAULT_AGENT_CONFIG,
-    isEqual,
-  );
+  const config = useAgentConfig(agentId) || DEFAULT_AGENT_CONFIG;
   const { disabledParams, model, provider } = useParamsModelConfig(agentId);
   const modelExtendParamsList = useAiInfraStore(
     aiModelSelectors.modelExtendParams(model, provider),
@@ -560,7 +556,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
     REASONING_PARAMS_SET.has(param),
   );
-  const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
+  const enableAgentMode = useAgentValue(agentId, agentProjectionSelectors.enableMode);
   const [form] = AntdForm.useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
   const [modelConfigOpen, setModelConfigOpen] = useState(() =>
@@ -588,12 +584,11 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const reasoningEffortValue = form.getFieldValue(['params', 'reasoning_effort']);
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};
 
-  const historyCountFromStore = useAgentStore((s) =>
-    chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
-  );
+  const historyCountFromStore = useAgentValue(agentId, agentProjectionSelectors.historyCount);
   // Use raw chatConfig value, not the selector with business logic that may force false
-  const enableHistoryCountFromStore = useAgentStore(
-    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).enableHistoryCount,
+  const enableHistoryCountFromStore = useAgentValue(
+    agentId,
+    agentProjectionSelectors.enableHistoryCount,
   );
 
   const lastValuesRef = useRef<Record<ParamKey, number | undefined>>({

@@ -6,8 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentConfigStatus } from '@/store/agent/projection';
 
 const BUILTIN_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
@@ -36,7 +35,7 @@ AgentNotFound.displayName = 'AgentNotFound';
 export const AgentNotFoundGuard: FC<PropsWithChildren> = memo(({ children }) => {
   const params = useParams<{ aid?: string }>();
   const aid = params.aid && !BUILTIN_SLUG_SET.has(params.aid) ? params.aid : '';
-  const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(aid));
+  const isNotFound = useAgentConfigStatus(aid).isNotFound;
 
   if (isNotFound) return <AgentNotFound />;
 

@@ -4,10 +4,8 @@ import { Alert } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentAgentWorkingDirectory } from '@/store/agent/projection';
+import { useChatTopicWorkingDirectory } from '@/store/chat/slices/topic/projection';
 import { useElectronStore } from '@/store/electron';
 
 interface OutOfScopeWarningProps {
@@ -23,11 +21,9 @@ interface OutOfScopeWarningProps {
 const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
   const { t } = useTranslation('tool');
 
-  const topicWorkingDir = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const topicWorkingDir = useChatTopicWorkingDirectory();
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const agentWorkingDir = useAgentStore(
-    agentSelectors.currentAgentWorkingDirectory(currentDeviceId),
-  );
+  const agentWorkingDir = useCurrentAgentWorkingDirectory(currentDeviceId);
   const workingDirectory = topicWorkingDir || agentWorkingDir;
 
   // Find paths that are outside the working directory

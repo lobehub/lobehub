@@ -4,7 +4,8 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useTaskStore } from '@/store/task';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
@@ -14,7 +15,7 @@ const DEBOUNCE_MS = 300;
 const TaskDetailTitleInput = memo(() => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
-  const name = useTaskStore(taskDetailSelectors.activeTaskName);
+  const name = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskName);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const updateTask = useTaskStore((s) => s.updateTask);
 

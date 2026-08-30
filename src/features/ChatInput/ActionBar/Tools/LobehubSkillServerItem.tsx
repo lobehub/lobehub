@@ -2,12 +2,13 @@ import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Checkbox } from '@lobehub/ui/base-ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentConfig } from '@/store/agent/projection';
 import { useToolStore } from '@/store/tool';
 import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
@@ -154,8 +155,8 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     );
 
     const pluginId = server ? server.identifier : '';
-    const plugins =
-      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
+    const agentConfig = useAgentConfig(effectiveAgentId);
+    const plugins = useMemo(() => agentConfig?.plugins ?? [], [agentConfig?.plugins]);
     const checked = plugins.includes(pluginId);
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
@@ -198,9 +199,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
             .lobehubSkillServers?.find((s) => s.identifier === provider);
           if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
             const newPluginId = latestServer.identifier;
-            const currentAgentPlugins =
-              agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())
-                ?.plugins || [];
+            const currentAgentPlugins = getAgentProjectionById(effectiveAgentId)?.plugins || [];
             const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
             if (canEdit && !isAlreadyEnabled) {
               console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);

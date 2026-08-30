@@ -1,6 +1,10 @@
+import { isDesktop } from '@lobechat/const';
+
+import { resolveRuntimeMode } from '@/helpers/executionTarget';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { useAgentStore } from '@/store/agent';
 import { type AgentStoreState } from '@/store/agent/initialState';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentData, useAgentValue } from '@/store/agent/projection';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -48,9 +52,8 @@ const resolveDisableGatewayMode = (
   agentState: AgentStoreState,
   resolvedAgentId: string | undefined,
 ): boolean | undefined => {
-  const agentDisableGatewayMode = resolvedAgentId
-    ? agentSelectors.getAgentConfigById(resolvedAgentId)(agentState)?.chatConfig?.disableGatewayMode
-    : undefined;
+  const agentDisableGatewayMode =
+    getAgentProjectionById(resolvedAgentId)?.chatConfig?.disableGatewayMode;
   const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
     .chatConfig?.disableGatewayMode;
 
@@ -84,10 +87,9 @@ export const resolveGatewayModeEnabled = (
 export const useIsGatewayModeEnabled = (agentId?: string): boolean => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const resolvedAgentId = agentId ?? activeAgentId;
-  const agentDisableGatewayMode = useAgentStore((s) =>
-    resolvedAgentId
-      ? agentSelectors.getAgentConfigById(resolvedAgentId)(s)?.chatConfig?.disableGatewayMode
-      : undefined,
+  const agentDisableGatewayMode = useAgentValue(
+    resolvedAgentId,
+    (agent) => agent?.chatConfig?.disableGatewayMode,
   );
   const defaultDisableGatewayMode = useUserStore(
     (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
@@ -95,4 +97,25 @@ export const useIsGatewayModeEnabled = (agentId?: string): boolean => {
   const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
 
   return evaluateGatewayModeEnabled(disableGatewayMode);
+};
+
+export const getAgentRuntimeMode = (agentId: string) => {
+  const agent = getAgentProjectionById(agentId);
+  return resolveRuntimeMode(
+    agent?.agencyConfig,
+    isDesktop,
+    resolveGatewayModeEnabled(useAgentStore.getState(), agentId),
+    Boolean(agent?.workspaceId),
+  );
+};
+
+export const useAgentRuntimeMode = (agentId: string) => {
+  const agent = useAgentData(agentId);
+  const gatewayModeEnabled = useIsGatewayModeEnabled(agentId);
+  return resolveRuntimeMode(
+    agent?.agencyConfig,
+    isDesktop,
+    gatewayModeEnabled,
+    Boolean(agent?.workspaceId),
+  );
 };

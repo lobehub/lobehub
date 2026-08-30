@@ -1,16 +1,13 @@
-import { NEWS_BRIEF_TYPES } from '@lobechat/types';
-
 import { type BriefItem } from '@/features/DailyBrief/types';
+import {
+  compareHomeNeedsYouBriefs,
+  isHomeNewsBrief,
+} from '@/projection/modules/home/homeBriefSections';
 
 /**
  * Within "Needs you", failures sink to the bottom: a stuck decision blocks the
  * agent right now, while a failed run has already stopped and can wait.
  */
-const NEEDS_YOU_ORDER: Record<string, number> = {
-  decision: 0,
-  error: 9,
-};
-
 export interface SplitBriefs {
   /** Briefs the user must act on — grouped as "Needs you", errors last. */
   needsYou: BriefItem[];
@@ -25,8 +22,6 @@ export interface SplitBriefs {
  * into the to-do pile), so results are news unconditionally — accepting a
  * one-off delivery stays available from the task page.
  */
-const isNewsBrief = (brief: BriefItem): boolean => NEWS_BRIEF_TYPES.includes(brief.type);
-
 /**
  * Splits the unresolved brief feed by whether the user has to *do* something.
  * `decision` / `error` block an agent until answered; `insight` and `result`
@@ -40,7 +35,7 @@ export const splitBriefs = (briefs: BriefItem[]): SplitBriefs => ({
     // A successful optimistic resolve stamps the row before the unresolved-list
     // SWR cache revalidates. Hide it immediately so "Ignore" actually closes the
     // card instead of leaving a resolved tombstone in the queue until remount.
-    .filter((brief) => !brief.resolvedAt && !isNewsBrief(brief))
-    .sort((a, b) => (NEEDS_YOU_ORDER[a.type] ?? 5) - (NEEDS_YOU_ORDER[b.type] ?? 5)),
-  news: briefs.filter(isNewsBrief),
+    .filter((brief) => !brief.resolvedAt && !isHomeNewsBrief(brief))
+    .sort(compareHomeNeedsYouBriefs),
+  news: briefs.filter(isHomeNewsBrief),
 });

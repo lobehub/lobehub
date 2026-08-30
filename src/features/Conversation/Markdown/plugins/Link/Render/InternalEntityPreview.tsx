@@ -16,9 +16,10 @@ import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { agentService } from '@/services/agent';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
+import { loadTaskDetailProjection } from '@/projection/modules/task/queries';
 import { documentService } from '@/services/document';
-import { taskService } from '@/services/task';
 import { verifyService } from '@/services/verify';
 
 import type { InternalLinkReference } from '../internalLink';
@@ -136,7 +137,8 @@ const getPreviewData = async (
       };
     }
     case 'agent': {
-      return agentService.getAgentConfigById(reference.agentId);
+      const scope = getCacheScope();
+      return (await loadAgentConfigProjection(reference.agentId, scope)) ?? null;
     }
     case 'document': {
       const document = await documentService.getDocumentById(reference.documentId);
@@ -148,12 +150,12 @@ const getPreviewData = async (
         : null;
     }
     case 'task': {
-      const result = await taskService.getDetail(reference.taskId);
-      const task = result.data;
-      return task
+      const scope = getCacheScope();
+      const canonical = await loadTaskDetailProjection(reference.taskId, scope);
+      return canonical
         ? {
-            description: task.description || task.instruction,
-            title: task.name || task.identifier,
+            description: canonical.description || canonical.instruction,
+            title: canonical.name || canonical.identifier,
           }
         : null;
     }

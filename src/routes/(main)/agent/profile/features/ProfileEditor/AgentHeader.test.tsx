@@ -104,18 +104,36 @@ vi.mock('@/store/agent', async () => {
   };
 });
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentMetaById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId] || {},
-    getAgentConfigById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId] || {},
-    getAgentSlugById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId]?.slug,
-    getAgentStoredAvatarById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
-      state.agentMap[agentId]?.storedAvatar || undefined,
-  },
-}));
+vi.mock('@/store/agent/projection', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const useProjectedAgent = <T,>(agentId: string, selector: (agent: Record<string, any>) => T) =>
+    useSyncExternalStore(
+      (listener) => {
+        mocks.agentStoreListeners.add(listener);
+        return () => mocks.agentStoreListeners.delete(listener);
+      },
+      () => selector(mocks.agentStoreState.agentMap[agentId] || {}),
+    );
+
+  return {
+    agentProjectionSelectors: {
+      avatar: (agent: { avatar?: string | null }) =>
+        typeof agent.avatar === 'string' ? agent.avatar : undefined,
+      slug: (agent: { slug?: string }) => agent.slug,
+    },
+    useAgentConfig: (agentId: string) => useProjectedAgent(agentId, (agent) => agent),
+    useAgentMeta: (agentId: string) =>
+      useProjectedAgent(agentId, (agent) => ({
+        avatar: agent.avatar || '/avatars/agent-default.png',
+        backgroundColor: agent.backgroundColor,
+        description: agent.description,
+        name: agent.name,
+        title: agent.title,
+      })),
+    useAgentValue: (agentId: string, selector: (agent: Record<string, any>) => unknown) =>
+      useProjectedAgent(agentId, selector),
+  };
+});
 
 vi.mock('@/features/AgentIdentityModal', () => ({
   createAgentIdentityModal: (...args: unknown[]) => mocks.createAgentIdentityModal(...args),
@@ -136,6 +154,13 @@ vi.mock('@/store/home', () => {
 vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: {
     allAgents: (state: { agents: unknown[] }) => state.agents,
+  },
+}));
+
+vi.mock('@/projection/modules/home/sidebarHooks', () => ({
+  getHomeSidebarProjection: () => mocks.sidebarAgents,
+  homeSidebarSelectors: {
+    allAgents: (agents: typeof mocks.sidebarAgents) => agents,
   },
 }));
 
@@ -187,7 +212,7 @@ describe('AgentHeader', () => {
 
   it('keeps the display fallback out of the artwork character reference', () => {
     mocks.agentStoreState.agentMap = {
-      'agent-a': { avatar: '/avatars/agent-default.png', storedAvatar: null },
+      'agent-a': { storedAvatar: null },
     };
 
     render(<AgentHeader />);

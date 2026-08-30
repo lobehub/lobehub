@@ -14,7 +14,7 @@ import ChatConversation from '@/routes/(main)/agent/features/Conversation';
 import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { getProjectConversationPath } from '../Layout/navigation';
@@ -26,9 +26,7 @@ const ProjectConversation = memo(() => {
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const coordinatorAgentId = detail?.project.coordinatorAgentId;
   const projectSlug = detail?.project.slug ?? projectId;
-  const topicTitle = useChatStore((s) =>
-    topicId ? topicSelectors.getTopicById(topicId)(s)?.title : undefined,
-  );
+  const topicTitle = useChatTopicById(topicId)?.title;
 
   useInitAgentConfig(coordinatorAgentId);
 

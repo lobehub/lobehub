@@ -8,7 +8,8 @@ import type { ConversationContext } from '@/features/Conversation';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -36,8 +37,9 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
     const pageAgentId = useAgentStore(builtinAgentSelectors.pageAgentId);
     const activeTopicId = useChatStore((s) => s.activeTopicId);
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
-    const isActiveAgentHeterogeneous = useAgentStore((s) =>
-      activeAgentId ? agentByIdSelectors.isAgentHeterogeneousById(activeAgentId)(s) : false,
+    const isActiveAgentHeterogeneous = useAgentValue(
+      activeAgentId,
+      agentProjectionSelectors.heterogeneous,
     );
     const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
     const syncedAgentIdRef = useRef<string | undefined>(undefined);

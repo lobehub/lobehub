@@ -10,11 +10,15 @@ import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransfer
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, nextProjectionObservedAt } from '@/projection';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import { useHomeStore } from '@/store/home';
+
+import { persistRecentRename } from './renameRecent';
 
 export const useRecentItemDropdownMenu = (
   item: RecentItem,
@@ -42,34 +46,33 @@ export const useRecentItemDropdownMenu = (
 
   const handleRename = useCallback(
     async (newTitle: string) => {
+      const scope = getCacheScope();
       // Optimistic update
       updateRecentTitle(item.id, newTitle);
 
-      // Persist to server
-      switch (item.type) {
-        case 'document': {
-          await documentService.updateDocument({ id: item.id, title: newTitle });
-          break;
-        }
-        case 'task': {
-          await taskService.update(item.id, { name: newTitle });
-          break;
-        }
-        case 'topic': {
-          await topicService.updateTopic(item.id, { title: newTitle });
-          break;
-        }
+      try {
+        // A revalidation may observe the pre-mutation row while the request is
+        // in flight, so persistence also re-stamps the confirmed canonical row.
+        await persistRecentRename(item, newTitle, scope);
+      } catch (error) {
+        // Re-read both the legacy list projection and the canonical Topic
+        // fragment so a rejected optimistic rename cannot remain authoritative.
+        await refreshRecents();
+        throw error;
       }
     },
-    [item, updateRecentTitle],
+    [item, refreshRecents, updateRecentTitle],
   );
 
   const handleDelete = useCallback(() => {
     if (item.type === 'topic') {
       void confirmRemoveTopic({
         onConfirm: async (removeFiles) => {
+          const scope = getCacheScope();
+          const observedAt = nextProjectionObservedAt();
           // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
           await topicService.removeTopic(item.id, removeFiles);
+          getProjectionStoreState().deleteChatTopicProjections(scope, [item.id], observedAt);
           await refreshRecents();
         },
         topicIds: [item.id],
@@ -87,6 +90,8 @@ export const useRecentItemDropdownMenu = (
       okButtonProps: { danger: true },
       okText: t('delete', { ns: 'common' }),
       onOk: async () => {
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
         switch (item.type) {
           case 'document': {
             await documentService.deleteDocument(item.id);
@@ -94,6 +99,7 @@ export const useRecentItemDropdownMenu = (
           }
           case 'task': {
             await taskService.delete(item.id);
+            getProjectionStoreState().deleteTaskProjection(scope, item.id, observedAt);
             break;
           }
         }

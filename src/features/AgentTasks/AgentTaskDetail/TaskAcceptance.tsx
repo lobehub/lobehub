@@ -26,10 +26,11 @@ import {
   useAcceptanceBySubject,
 } from '@/features/Acceptance';
 import { usePermission } from '@/hooks/usePermission';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import GoalRoundTimeline from './GoalRoundTimeline';
@@ -108,8 +109,12 @@ const TaskAcceptance = memo(() => {
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
-  const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
+  const taskDatabaseId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskDatabaseId,
+  );
+  const verify = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskVerifyConfig,
+  );
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 

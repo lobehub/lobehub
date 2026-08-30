@@ -1,6 +1,14 @@
 import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 import debug from 'debug';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  activeProjectionRecord,
+  findTaskRecordByIdentity,
+  getProjectionStoreState,
+  selectTaskDetail,
+  selectTaskRow,
+} from '@/projection';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
@@ -57,21 +65,52 @@ export class TaskLifecycleSliceActionImpl {
     params?: { continueTopicId?: string; prompt?: string },
     options?: { throwOnError?: boolean },
   ): Promise<Awaited<ReturnType<typeof taskService.run>> | null> => {
+    const projectionScope = getCacheScope();
+    const projectionRecord = findTaskRecordByIdentity(
+      getProjectionStoreState().scopes[projectionScope],
+      id,
+    );
+    const previousStatusCandidate =
+      selectTaskDetail(projectionRecord)?.status ??
+      selectTaskRow(projectionRecord)?.status ??
+      activeProjectionRecord(projectionRecord)?.fragments.lifecycle?.data.status;
+    const previousStatus = isTaskStatus(previousStatusCandidate)
+      ? previousStatusCandidate
+      : undefined;
+
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
       value: { error: null, status: 'running' },
     });
+    getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, 'running');
 
     let result: Awaited<ReturnType<typeof taskService.run>>;
     try {
       result = await taskService.run(id, params);
     } catch (error) {
       log('Failed to run task %s: %O', id, error);
-      try {
-        await this.#get().internal_refreshTaskDetail(id);
-      } catch (refreshError) {
-        log('Failed to refresh task %s after run failure: %O', id, refreshError);
+      if (previousStatus) {
+        if (getCacheScope() === projectionScope) {
+          this.#get().internal_dispatchTaskDetail({
+            id,
+            type: 'updateTaskDetail',
+            value: { status: previousStatus },
+          });
+        }
+        getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, previousStatus);
+      }
+      const refreshResults =
+        getCacheScope() === projectionScope
+          ? await Promise.allSettled([
+              this.#get().internal_refreshTaskDetail(id),
+              this.#get().refreshTaskList(),
+            ])
+          : [];
+      for (const refreshResult of refreshResults) {
+        if (refreshResult.status === 'rejected') {
+          log('Failed to refresh task %s after run failure: %O', id, refreshResult.reason);
+        }
       }
       if (options?.throwOnError) throw error;
       return null;
@@ -80,10 +119,13 @@ export class TaskLifecycleSliceActionImpl {
     // The server-side execution has already succeeded. Cache refreshes are
     // best-effort and must not turn that success into a retryable run failure,
     // because retrying would create a duplicate execution.
-    const refreshResults = await Promise.allSettled([
-      this.#get().internal_refreshTaskDetail(id),
-      this.#get().refreshTaskList(),
-    ]);
+    const refreshResults =
+      getCacheScope() === projectionScope
+        ? await Promise.allSettled([
+            this.#get().internal_refreshTaskDetail(id),
+            this.#get().refreshTaskList(),
+          ])
+        : [];
     for (const refreshResult of refreshResults) {
       if (refreshResult.status === 'rejected') {
         log('Failed to refresh task %s after successful run: %O', id, refreshResult.reason);
@@ -130,15 +172,18 @@ export class TaskLifecycleSliceActionImpl {
     extraUpdate?: Partial<TaskDetailData>,
     error?: string,
   ): Promise<void> => {
+    const projectionScope = getCacheScope();
+    const projectionRecord = findTaskRecordByIdentity(
+      getProjectionStoreState().scopes[projectionScope],
+      id,
+    );
     const transitionVersion = ++this.#nextStatusTransitionVersion;
     this.#statusTransitionVersions.set(id, transitionVersion);
 
     const previousStatusCandidate =
-      this.#get().taskDetailMap[id]?.status ??
-      this.#get().tasks.find((task) => task.identifier === id)?.status ??
-      this.#get()
-        .taskGroups.flatMap((group) => group.tasks)
-        .find((task) => task.identifier === id)?.status;
+      selectTaskDetail(projectionRecord)?.status ??
+      selectTaskRow(projectionRecord)?.status ??
+      activeProjectionRecord(projectionRecord)?.fragments.lifecycle?.data.status;
     const previousStatus = isTaskStatus(previousStatusCandidate)
       ? previousStatusCandidate
       : undefined;
@@ -148,7 +193,7 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
-    this.#patchTaskCollectionsStatus(id, status);
+    getProjectionStoreState().updateTaskProjectionStatus(projectionScope, id, status);
 
     try {
       await runMutation(this.#set, this.#get, {
@@ -160,21 +205,32 @@ export class TaskLifecycleSliceActionImpl {
           console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
           if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
-          if (previousStatus) this.#patchTaskCollectionsStatus(id, previousStatus);
-          try {
-            await this.#get().internal_refreshTaskDetail(id);
-          } catch (refreshError) {
-            console.error(
-              `[TaskStore] Failed to refresh task ${id} after status failure:`,
-              refreshError,
+          if (previousStatus) {
+            getProjectionStoreState().updateTaskProjectionStatus(
+              projectionScope,
+              id,
+              previousStatus,
             );
           }
-          saveToast(err, {
-            retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
-          });
+          if (getCacheScope() === projectionScope) {
+            try {
+              await this.#get().internal_refreshTaskDetail(id);
+            } catch (refreshError) {
+              console.error(
+                `[TaskStore] Failed to refresh task ${id} after status failure:`,
+                refreshError,
+              );
+            }
+            saveToast(err, {
+              retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
+            });
+          }
         },
         setStatus: (s) => {
-          if (this.#statusTransitionVersions.get(id) === transitionVersion) {
+          if (
+            this.#statusTransitionVersions.get(id) === transitionVersion &&
+            getCacheScope() === projectionScope
+          ) {
             this.#get().internal_setTaskSaveStatus(id, s);
           }
         },
@@ -182,10 +238,13 @@ export class TaskLifecycleSliceActionImpl {
 
       if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
-      const refreshResults = await Promise.allSettled([
-        this.#get().internal_refreshTaskDetail(id),
-        this.#get().refreshTaskList(),
-      ]);
+      const refreshResults =
+        getCacheScope() === projectionScope
+          ? await Promise.allSettled([
+              this.#get().internal_refreshTaskDetail(id),
+              this.#get().refreshTaskList(),
+            ])
+          : [];
       for (const refreshResult of refreshResults) {
         if (refreshResult.status === 'rejected') {
           log(
@@ -200,45 +259,6 @@ export class TaskLifecycleSliceActionImpl {
         this.#statusTransitionVersions.delete(id);
       }
     }
-  };
-
-  #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
-    const { listGroupBy, taskGroups, tasks } = this.#get();
-    const listTask = tasks.find((task) => task.identifier === id);
-    const groupedTask = taskGroups
-      .flatMap((group) => group.tasks)
-      .find((task) => task.identifier === id);
-    if (!listTask && !groupedTask) return;
-
-    const nextTasks = listTask
-      ? tasks.map((item) => (item.identifier === id ? { ...item, status } : item))
-      : tasks;
-    const nextTaskGroups = groupedTask
-      ? listGroupBy === 'status'
-        ? taskGroups.map((group) => {
-            const targetGroupKey = taskGroupKeyByStatus[status];
-            const containsTask = group.tasks.some((item) => item.identifier === id);
-            const belongsToTarget = group.key === targetGroupKey;
-            const filteredTasks = group.tasks.filter((item) => item.identifier !== id);
-            const patchedGroupedTask = { ...groupedTask, status };
-
-            return {
-              ...group,
-              tasks: belongsToTarget ? [...filteredTasks, patchedGroupedTask] : filteredTasks,
-              total: group.total - (containsTask ? 1 : 0) + (belongsToTarget ? 1 : 0),
-            };
-          })
-        : taskGroups.map((group) => ({
-            ...group,
-            tasks: group.tasks.map((item) => (item.identifier === id ? { ...item, status } : item)),
-          }))
-      : taskGroups;
-
-    this.#set(
-      { taskGroups: nextTaskGroups, tasks: nextTasks },
-      false,
-      'transitionStatus/patchTaskCollections',
-    );
   };
 }
 

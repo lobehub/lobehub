@@ -12,8 +12,11 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
-import { agentService } from '@/services/agent';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { loadAgentConfigProjection } from '@/projection/modules/agent/queries';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { useAgentStore } from '@/store/agent';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -32,19 +35,17 @@ import { taskNameFromMessage } from './taskName';
 const stripHintEllipsis = (hint: string): string => hint.replace(/\s*(?:\.{3,}|…)\s*$/, '').trim();
 
 /**
- * Make sure the agent's config is hydrated into `agentMap` before we call
+ * Make sure the agent's config is hydrated into Projection before we call
  * `sendMessage`. Without this, sending to an agent the user just picked from
  * the home AgentSelect (and never opened in this session) silently fails:
  * `sendMessage` reaches `getAgentConfigById(agentId)` which returns `undefined`
- * from `agentMap`, the `{ model, provider }` destructure throws, and the
+ * from Projection, the `{ model, provider }` destructure throws, and the
  * surrounding catch swallows it — so the chat page mounts with optimistic
  * messages but the runtime never starts.
  */
 const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
-  const agentState = useAgentStore.getState();
-  if (agentState.agentMap[agentId]) return;
-  const config = await agentService.getAgentConfigById(agentId);
-  if (config) agentState.internal_dispatchAgentMap(agentId, config);
+  if (getAgentProjectionById(agentId)) return;
+  await loadAgentConfigProjection(agentId, getCacheScope());
 };
 
 interface PendingTaskRun {
@@ -76,9 +77,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const agentId = selectedAgentId;
   const contextSelectionKey = `home:${mode}:${selectedAgentId ?? 'unresolved'}`;
   const { allowed: canCreateContent } = usePermission('create_content');
-  const agentVisibility = useAgentStore((s) =>
-    selectedAgentId ? s.agentMap[selectedAgentId]?.visibility : undefined,
-  );
+  const agentVisibility = useAgentValue(selectedAgentId, agentProjectionSelectors.visibility);
   const gatedResourceId =
     selectedAgentId && selectedAgentId !== inboxAgentId && agentVisibility !== 'private'
       ? selectedAgentId

@@ -1,8 +1,9 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
+import { getAgentProjectionById } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 
 import { chatHelpers } from '../../../helpers';
 import { type ChatStoreState } from '../../../initialState';
@@ -109,8 +110,12 @@ const mainAIChats = (s: ChatStoreState): UIChatMessage[] => {
  */
 const mainAIChatsWithHistoryConfig = (s: ChatStoreState): UIChatMessage[] => {
   const chats = mainAIChats(s);
-  const enableHistoryCount = agentChatConfigSelectors.enableHistoryCount(useAgentStore.getState());
-  const historyCount = agentChatConfigSelectors.historyCount(useAgentStore.getState());
+  const enableHistoryCount = agentProjectionSelectors.enableHistoryCount(
+    getAgentProjectionById(useAgentStore.getState().activeAgentId),
+  );
+  const historyCount = agentProjectionSelectors.historyCount(
+    getAgentProjectionById(useAgentStore.getState().activeAgentId),
+  );
 
   return chatHelpers.getSlicedMessages(chats, {
     enableHistoryCount,

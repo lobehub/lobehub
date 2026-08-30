@@ -6,6 +6,7 @@ import { bootTiming } from '@/libs/bootTiming';
 import { setAppReady } from '../atoms/app';
 import { initializeApp } from '.';
 import { startImportSettingsFromUrl } from './importSettings';
+import { prefetchShellProjection } from './prefetchProjection';
 
 let started = false;
 
@@ -24,6 +25,8 @@ export const startAppInitialization = () => {
 
   // must run synchronously before first React render
   bootTiming.spanSync('import-settings', startImportSettingsFromUrl);
+
+  void prefetchShellProjection();
 
   void bootTiming
     .span('core-init', initializeApp)

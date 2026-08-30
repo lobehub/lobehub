@@ -11,6 +11,7 @@
   "types": "src/index.ts",
   "dependencies": {
     "@lobechat/heterogeneous-agents": "workspace:*",
+    "@lobechat/types": "workspace:*",
     "sf-symbols-typescript": "^2.2.0"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import { memo } from 'react';
 
 import { resolveChiefAgentArtwork } from '@/features/ChiefAgent/artwork';
 import { useAgentStore } from '@/store/agent';
+import { useAgentMeta } from '@/store/agent/projection';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from './AgentSelect/useResolvedHomeAgentId';
@@ -41,17 +42,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const HomePortrait = memo(() => {
-  // The portrait depicts whoever home is addressing, so it follows the same
-  // selection the composer sends to — not the Inbox Agent it defaults to.
   const { agentId } = useResolvedHomeAgentId();
   const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
-  // A freshly picked agent may not be in the store yet; without this the
-  // portrait would silently stay on the previous one's artwork.
   useFetchAgentConfig(true, agentId ?? '');
 
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId ?? ''));
-  // An agent that has been through the artwork studio shows its own character;
-  // the built-in catalog covers everyone else.
+  const meta = useAgentMeta(agentId ?? '');
   const fullBodyArtwork = useAgentStore(agentSelectors.getAgentFullBodyArtworkById(agentId ?? ''));
   const artwork = resolveChiefAgentArtwork(meta.avatar || DEFAULT_INBOX_AVATAR);
   const hero = fullBodyArtwork || artwork.hero;

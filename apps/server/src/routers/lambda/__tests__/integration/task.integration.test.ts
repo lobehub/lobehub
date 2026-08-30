@@ -780,7 +780,7 @@ describe('Task Router Integration', () => {
       const { eq } = await import('drizzle-orm');
       await serverDB
         .update(agents)
-        .set({ avatar: 'avatar.png', title: 'Agent One' })
+        .set({ avatar: 'avatar.png', name: 'Ari', title: 'Agent One' })
         .where(eq(agents.id, testAgentId));
 
       await caller.create({ assigneeAgentId: testAgentId, instruction: 'Task A' });
@@ -795,6 +795,7 @@ describe('Task Router Integration', () => {
           avatar: 'avatar.png',
           backgroundColor: null,
           id: testAgentId,
+          name: 'Ari',
           title: 'Agent One',
           type: 'agent',
         },

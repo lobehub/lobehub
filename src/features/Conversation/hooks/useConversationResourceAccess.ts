@@ -2,10 +2,10 @@
 
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentStore } from '@/store/agent';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
 
 import { useConversationStore } from '../store';
@@ -22,11 +22,9 @@ const useConversationResourceAccessForTarget = ({
   const isGroupContext = !!groupId;
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentVisibility = useAgentStore((s) =>
-    agentId ? s.agentMap[agentId]?.visibility : undefined,
-  );
-  const group = useAgentGroupStore((s) =>
-    groupId ? agentGroupSelectors.getGroupById(groupId)(s) : undefined,
+  const agentVisibility = useAgentValue(agentId ?? undefined, agentProjectionSelectors.visibility);
+  const group = useChatGroupProjection((scope) =>
+    groupId ? chatGroupProjectionSelectors.getGroupById(groupId)(scope) : undefined,
   );
 
   const gatedResourceId = isGroupContext

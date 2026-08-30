@@ -4,6 +4,7 @@ import type { LocalDatabaseAdapter, LocalDatabaseBatchOperation } from './types'
 export type {
   LocalDatabaseAdapter,
   LocalDatabaseBatchOperation,
+  LocalDatabaseCollectionInfo,
   LocalDatabaseEntry,
 } from './types';
 
@@ -34,6 +35,7 @@ export const localDatabase = {
   get: <T>(collection: string, key: string): Promise<T | undefined> =>
     activeAdapter.get<T>(collection, key),
   initialize: (): Promise<void> => activeAdapter.initialize(),
+  listCollections: () => activeAdapter.listCollections(),
   set: (collection: string, key: string, value: unknown): Promise<void> =>
     activeAdapter.set(collection, key, value),
 };

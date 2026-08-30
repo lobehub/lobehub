@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveHomeTopicSections } from './homeTopicSections';
+import { resolveHomeTopicIdSections, resolveHomeTopicSections } from './homeTopicSections';
 
 describe('resolveHomeTopicSections', () => {
   it('shows every running topic once and removes it from recent topics', () => {
@@ -19,6 +19,18 @@ describe('resolveHomeTopicSections', () => {
     ).toEqual({
       recent: [recentOnly],
       running: [runningRecent, runningOutsideRecentLimit],
+    });
+  });
+
+  it('applies the same mutually-exclusive ordering to normalized Topic ids', () => {
+    expect(
+      resolveHomeTopicIdSections(
+        ['running-recent', 'recent-only'],
+        ['running-recent', 'running-outside-limit'],
+      ),
+    ).toEqual({
+      recent: ['recent-only'],
+      running: ['running-recent', 'running-outside-limit'],
     });
   });
 });

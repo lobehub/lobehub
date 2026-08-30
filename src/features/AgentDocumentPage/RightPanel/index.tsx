@@ -18,8 +18,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentMeta, useAgentValue } from '@/store/agent/projection';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   backLink: css`
@@ -60,18 +59,14 @@ const AgentDocumentSidebarContent = memo(() => {
   const { aid: agentId = '' } = useActiveRouteParams<{
     aid?: string;
   }>();
-  const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+  const agentMeta = useAgentMeta(agentId);
   const agentTitle = agentDisplayName(agentMeta, t('untitledAgent'));
   const agentPath = buildWorkspaceAwarePath(`/agent/${agentId}`, activeWorkspaceSlug);
-  const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  const isHetero = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
   const workingDirectory = useEffectiveWorkingDirectory(agentId);
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
+  const agencyConfig = useAgentValue(agentId, agentProjectionSelectors.agencyConfig);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-  const isWorkspaceAgent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
-  );
+  const isWorkspaceAgent = useAgentValue(agentId, agentProjectionSelectors.workspaceScoped);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

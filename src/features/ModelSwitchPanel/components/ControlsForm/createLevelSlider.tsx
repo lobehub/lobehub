@@ -6,8 +6,7 @@ import { memo } from 'react';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import LevelSlider, { type LevelSliderMark } from './LevelSlider';
 
@@ -68,7 +67,7 @@ export function createLevelSliderComponent<T extends string>(config: LevelSlider
   const LevelSliderWithStore = memo<{ defaultValue: T }>(({ defaultValue: dv }) => {
     const agentId = useAgentId();
     const { updateAgentChatConfig } = useUpdateAgentConfig();
-    const agentConfig = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+    const agentConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
 
     const resolveValue = (): T => {
       const rawValue = agentConfig[configKey];

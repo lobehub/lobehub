@@ -4,13 +4,13 @@ import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
+  type ProjectionSource,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { toast } from '@lobehub/ui/base-ui';
-import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
-import { produce } from 'immer';
+import { useEffect } from 'react';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
@@ -18,7 +18,16 @@ import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
-import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
+import { nextProjectionObservedAt } from '@/projection/core/ingest';
+import {
+  useAgentConfigProjection,
+  useAvailableAgentsProjection,
+} from '@/projection/modules/agent/hooks';
+import { type AgentProjectionInput } from '@/projection/modules/agent/ingestors';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
+import { getProjectionStoreState } from '@/projection/store';
+import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {
   type AgentDocumentListItem,
@@ -155,6 +164,7 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
+    const projectionScope = getCacheScope();
     // Seed a default name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
@@ -180,6 +190,12 @@ export class AgentSliceActionImpl {
     };
 
     const result = await agentService.createAgent({ ...params, config });
+    getProjectionStoreState().commitAgentConfig(
+      projectionScope,
+      { ...config, id: result.agentId } as unknown as AgentProjectionInput,
+      'identity',
+      'mutation',
+    );
     this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
@@ -263,14 +279,18 @@ export class AgentSliceActionImpl {
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
-    return agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const result = await agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
+    getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
+    return result;
   };
 
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
-    const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
+    const { activeAgentId, updateAgentConfig } = this.#get();
     if (!activeAgentId) return;
 
-    const currentPlugins = (agentMap[activeAgentId]?.plugins as string[]) || [];
+    const currentPlugins = (getAgentProjectionById(activeAgentId)?.plugins as string[]) || [];
     const hasPlugin = currentPlugins.includes(pluginId);
 
     // Determine new state
@@ -410,69 +430,40 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useFetchAgentConfig = (
-    isLogin: boolean | undefined,
-    agentId: string,
-  ): SWRResponse<LobeAgentConfig> => {
-    const swrKey =
-      isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? agentConfigKeys.config(agentId)
-        : null;
+  useFetchAgentConfig = (isLogin: boolean | undefined, agentId: string) => {
+    const scope = useCacheScope();
+    const enabledAgentId =
+      isLogin === true && agentId && !isChatGroupSessionId(agentId) ? agentId : undefined;
+    const request = useAgentConfigProjection(enabledAgentId, {
+      onSuccess: () => {
+        if (getCacheScope() !== scope) return;
+        this.#clearAgentConfigError(agentId);
+      },
+      onError: (error) => {
+        if (getCacheScope() !== scope) return;
+        this.#set(
+          (state) => ({
+            agentConfigErrorMap: {
+              ...state.agentConfigErrorMap,
+              [agentId]: error?.message || String(error),
+            },
+          }),
+          false,
+          'fetchAgentConfig/error',
+        );
+      },
+    });
 
-    return useClientDataSWRWithSync<LobeAgentConfig>(
-      swrKey,
-      async () => {
-        const data = await agentService.getAgentConfigById(agentId);
-        return data as LobeAgentConfig;
-      },
-      {
-        onData: (data) => {
-          // A successful fetch that resolves to null means the agent doesn't
-          // exist or the caller lost access (e.g. a workspace agent switched
-          // back to private) — a settled state, not "still loading".
-          if (!data) {
-            this.#markAgentNotFound(agentId);
-            return;
-          }
-          this.#clearAgentNotFound(agentId);
-          // This endpoint returns a complete, authoritative profile snapshot.
-          // Replace the cached entry instead of applying patch semantics: fields
-          // cleared on the server (for example editorData: null) may be omitted
-          // from the response and must not survive from an older local profile.
-          if (!isEqual(this.#get().agentMap[agentId], data)) {
-            this.#set(
-              (state) => ({ agentMap: { ...state.agentMap, [agentId]: data } }),
-              false,
-              'fetchAgentConfig',
-            );
-          }
-          // Only adopt the fetched agent as the active one when nothing is
-          // active yet. The active agent is owned by the route-level sync
-          // (AgentIdSync on desktop/mobile, the popup pages' own setState).
-          // A background or secondary config fetch — e.g. the inbox config
-          // requested by the home input, a side-panel copilot, or another
-          // open tab — must NOT hijack `activeAgentId` away from the routed
-          // agent, which would otherwise flash the conversation header/welcome
-          // back to the inbox ("Lobe AI") agent.
-          if (!this.#get().activeAgentId) {
-            this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
-          }
-          this.#clearAgentConfigError(agentId);
-        },
-        onError: (error) => {
-          this.#set(
-            (state) => ({
-              agentConfigErrorMap: {
-                ...state.agentConfigErrorMap,
-                [agentId]: error?.message || String(error),
-              },
-            }),
-            false,
-            'fetchAgentConfig/error',
-          );
-        },
-      },
-    );
+    useEffect(() => {
+      if (!request.data || getCacheScope() !== scope || this.#get().activeAgentId) return;
+
+      // Only adopt a successfully projected agent when nothing is active yet.
+      // The request marker also settles for a not-found response, whereas
+      // canonical projection data only exists for an accessible agent.
+      this.#set({ activeAgentId: agentId }, false, 'fetchAgentConfig');
+    }, [agentId, request.data, scope]);
+
+    return request;
   };
 
   useFetchServerDefaultHeterogeneousCapability = (enabled: boolean) =>
@@ -493,42 +484,11 @@ export class AgentSliceActionImpl {
     this.#clearAgentConfigError(id);
 
     await mutate(
-      (key) => Array.isArray(key) && key[0] === agentConfigKeys.config.root && key[1] === id,
-    );
-  };
-
-  #markAgentNotFound = (agentId: string) => {
-    const { agentNotFoundMap, agentMap } = this.#get();
-    if (agentNotFoundMap[agentId] && !agentMap[agentId]) return;
-
-    this.#set(
-      (state) => {
-        // Also drop the previously cached config: surfaces reading `agentMap`
-        // (title/avatar in the sidebar or header) must not keep showing an
-        // agent the viewer lost access to next to the 404 content area.
-        const nextAgentMap = { ...state.agentMap };
-        delete nextAgentMap[agentId];
-        return {
-          agentMap: nextAgentMap,
-          agentNotFoundMap: { ...state.agentNotFoundMap, [agentId]: true },
-        };
-      },
-      false,
-      'markAgentNotFound',
-    );
-  };
-
-  #clearAgentNotFound = (agentId: string) => {
-    if (!this.#get().agentNotFoundMap[agentId]) return;
-
-    this.#set(
-      (state) => {
-        const next = { ...state.agentNotFoundMap };
-        delete next[agentId];
-        return { agentNotFoundMap: next };
-      },
-      false,
-      'clearAgentNotFound',
+      (key) =>
+        Array.isArray(key) &&
+        key[0] === agentConfigKeys.config.root &&
+        key[1] === id &&
+        key[2] === getCacheScope(),
     );
   };
 
@@ -546,32 +506,10 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useHydrateAgentConfig = (
-    isLogin: boolean | undefined,
-    agentId: string,
-  ): SWRResponse<LobeAgentConfig> => {
-    const swrKey =
-      isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? agentConfigKeys.config(agentId)
-        : null;
-
-    return useClientDataSWRWithSync<LobeAgentConfig>(
-      swrKey,
-      async () => {
-        const data = await agentService.getAgentConfigById(agentId);
-        return data as LobeAgentConfig;
-      },
-      {
-        onData: (data) => {
-          if (!data) {
-            this.#markAgentNotFound(agentId);
-            return;
-          }
-          this.#clearAgentNotFound(agentId);
-          this.#get().internal_dispatchAgentMap(agentId, data);
-        },
-      },
-    );
+  useHydrateAgentConfig = (isLogin: boolean | undefined, agentId: string) => {
+    const enabledAgentId =
+      isLogin === true && agentId && !isChatGroupSessionId(agentId) ? agentId : undefined;
+    return useAgentConfigProjection(enabledAgentId);
   };
 
   useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentDocumentListItem[]> => {
@@ -584,21 +522,13 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useFetchAvailableAgents = (enabled: boolean): SWRResponse<AvailableAgentItem[]> => {
-    return useClientDataSWRWithSync<AvailableAgentItem[]>(
-      enabled ? agentConfigKeys.available() : null,
-      () => agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }),
-      {
-        onData: (data) => {
-          this.#set({ availableAgents: data }, false, 'useFetchAvailableAgents');
-        },
-        revalidateOnFocus: false,
-      },
-    );
+  useFetchAvailableAgents = (enabled: boolean) => {
+    return useAvailableAgentsProjection(enabled, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT, {
+      revalidateOnFocus: false,
+    });
   };
 
   invalidateAvailableAgents = (): void => {
-    this.#set({ availableAgents: undefined }, false, 'invalidateAvailableAgents');
     void mutate(agentConfigKeys.available());
   };
 
@@ -630,25 +560,42 @@ export class AgentSliceActionImpl {
     return request;
   };
 
-  internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {
-    const agentMap = produce(this.#get().agentMap, (draft) => {
-      if (!draft[id]) {
-        draft[id] = config;
-      } else {
-        draft[id] = merge(draft[id], config);
-        // The character sheet is authored as one document — `AgentModel`
-        // replaces it rather than merging — so mirror that here, or a trait the
-        // user just cleared reappears until the next full fetch.
-        if (Object.hasOwn(config, 'profile')) draft[id].profile = config.profile;
-        // merge() can't drop keys; honor `undefined` as a per-device delete so
-        // clearing a working directory takes effect optimistically.
-        pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);
-      }
-    });
+  internal_dispatchAgentProjection = (
+    id: string,
+    config: PartialDeep<LobeAgentConfig>,
+    options?: {
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
+  ): void => {
+    const current = getAgentProjectionById(id);
+    const agent = merge(current ?? {}, config) as PartialDeep<LobeAgentConfig>;
+    if (Object.hasOwn(config, 'profile')) agent.profile = config.profile;
+    pruneWorkingDirByDeviceDeletes(agent.agencyConfig, config.agencyConfig);
 
-    if (isEqual(this.#get().agentMap, agentMap)) return;
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { ...agent, id } as unknown as AgentProjectionInput,
+      'full',
+      options?.source ?? 'mutation',
+      options?.observedAt,
+    );
+  };
 
-    this.#set({ agentMap }, false, 'dispatchAgentMap');
+  /**
+   * Temporary downstream compatibility alias. All writes still enter Projection;
+   * the one-way bridge materializes `agentMap` for legacy business selectors.
+   */
+  internal_dispatchAgentMap = (
+    id: string,
+    config: PartialDeep<LobeAgentConfig>,
+    options?: {
+      commitProjection?: boolean;
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
+  ): void => {
+    this.internal_dispatchAgentProjection(id, config, options);
   };
 
   #mergeLatestAgencyConfigPatch = (
@@ -658,7 +605,7 @@ export class AgentSliceActionImpl {
     const agencyConfigPatch = data.agencyConfig;
     if (!agencyConfigPatch) return data;
 
-    const currentAgencyConfig = this.#get().agentMap[id]?.agencyConfig;
+    const currentAgencyConfig = getAgentProjectionById(id)?.agencyConfig;
     const agencyConfig = merge(
       currentAgencyConfig ?? {},
       agencyConfigPatch,
@@ -676,11 +623,11 @@ export class AgentSliceActionImpl {
     signal?: AbortSignal,
     options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
-    const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const { internal_dispatchAgentProjection, updateSaveStatus } = this.#get();
     const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
 
     // 1. Optimistic update (instant UI feedback)
-    internal_dispatchAgentMap(id, mergedData);
+    internal_dispatchAgentProjection(id, mergedData);
     updateSaveStatus('saving');
 
     try {
@@ -689,7 +636,7 @@ export class AgentSliceActionImpl {
 
       // 3. Apply returned data, then invalidate the SWR key for later subscribers.
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent);
+        internal_dispatchAgentProjection(id, result.agent);
         // Refresh agent:config so cached model A cannot replay after a
         // successful model A -> B update.
         await this.#get().internal_refreshAgentConfig(id);
@@ -725,10 +672,10 @@ export class AgentSliceActionImpl {
     meta: AgentMetaUpdate,
     signal?: AbortSignal,
   ): Promise<void> => {
-    const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const { internal_dispatchAgentProjection, updateSaveStatus } = this.#get();
 
     // 1. Optimistic update - meta fields are at the top level of agent config
-    internal_dispatchAgentMap(id, meta as PartialDeep<LobeAgentConfig>);
+    internal_dispatchAgentProjection(id, meta as PartialDeep<LobeAgentConfig>);
     updateSaveStatus('saving');
 
     try {
@@ -737,7 +684,7 @@ export class AgentSliceActionImpl {
 
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent);
+        internal_dispatchAgentProjection(id, result.agent);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
@@ -752,7 +699,7 @@ export class AgentSliceActionImpl {
   };
 
   internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    await mutate(agentConfigKeys.config(id));
+    await mutate(agentConfigKeys.config(id, getCacheScope()));
   };
 
   internal_createAbortController = (key: keyof AgentSliceState): AbortController => {

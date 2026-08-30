@@ -18,7 +18,7 @@ import {
 } from '@/features/RecommendTaskTemplates/useConnectorConnection';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slices/composioStore';
@@ -424,7 +424,7 @@ const ToolAuthAlert = memo(() => {
   const { t } = useTranslation('chat');
 
   const agentId = useConversationStore(contextSelectors.agentId);
-  const plugins = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
+  const plugins = useAgentValue(agentId, agentProjectionSelectors.plugins, isEqual);
   const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);

@@ -3,6 +3,7 @@
 import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
 import type { AgentProfile } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
+import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +11,8 @@ import { ArtworkStudioContent, styleReferencesForArtworkStyle } from '@/features
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { cutOutFullBodyArtwork, resolveArtworkReferenceSource } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
-import { agentArtworkSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentMeta, useAgentValue } from '@/store/agent/projection';
+import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
 
 import { generateCharacterSet } from './generateCharacterSet';
@@ -52,14 +54,13 @@ const useTransparentFullBody = () => {
 const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
   const appOrigin = useAppOrigin();
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
-  const fullBody = useAgentStore(agentSelectors.getAgentFullBodyArtworkById(agentId));
-  const profile = useAgentStore(agentSelectors.getAgentProfileById(agentId));
-  /** Excludes the display-only default avatar from character references. */
-  const storedAvatar = useAgentStore(agentSelectors.getAgentStoredAvatarById(agentId));
-  const systemRole = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.systemRole,
+  const meta = useAgentMeta(agentId);
+  const profile = useAgentValue(agentId, (agent) => agent?.profile ?? undefined, isEqual);
+  const fullBody = profile?.fullBodyArtwork;
+  const storedAvatar = useAgentValue(agentId, (agent) =>
+    typeof agent?.avatar === 'string' ? agent.avatar : undefined,
   );
+  const systemRole = useAgentValue(agentId, agentProjectionSelectors.systemRole);
   const generation = useAgentStore(agentArtworkSelectors.generationByAgentId(agentId));
   const generateAgentArtwork = useAgentStore((s) => s.generateAgentArtwork);
   const cancelAgentArtworkGeneration = useAgentStore((s) => s.cancelAgentArtworkGeneration);

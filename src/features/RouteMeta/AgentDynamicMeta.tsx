@@ -4,10 +4,8 @@ import { agentDisplayName } from '@lobechat/types';
 import { useTranslation } from 'react-i18next';
 
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { useAgentData, useAgentMeta } from '@/store/agent/projection';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 
 import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from './workspaceScope';
@@ -16,28 +14,17 @@ const useTopicTitle = (
   agentId: string | undefined,
   topicId: string | undefined,
   routeWorkspaceId: string | null | undefined,
-): string | undefined =>
-  useChatStore((state) => {
-    if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
-
-    // Archived (completed) topics are excluded from the list fetch — fall back
-    // to the by-id detail cache filled by `useFetchTopicDetail`.
-    const topic =
-      state.topicDataMap[topicMapKey({ agentId })]?.items?.find((item) => item.id === topicId) ??
-      state.topicDetailMap[topicId];
-    return topic?.title || undefined;
-  });
+): string | undefined => {
+  const topic = useChatTopicById(agentId && routeWorkspaceId !== undefined ? topicId : undefined);
+  return topic?.title || undefined;
+};
 
 const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);
-  const meta = useAgentStore((state) => {
-    const agentId = params.aid ?? '';
-    const agent = state.agentMap[agentId];
-
-    if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
-
-    return agentSelectors.getAgentMetaById(agentId)(state);
-  });
+  const agent = useAgentData(params.aid);
+  const projectedMeta = useAgentMeta(params.aid);
+  const meta =
+    agent && matchesRouteWorkspace(agent.workspaceId, routeWorkspaceId) ? projectedMeta : {};
   const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
   const hasMeta = Object.keys(meta).length > 0;
   const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
@@ -65,14 +52,10 @@ const createAgentSectionDynamicMeta = (titleKey: string) => {
     // (same approach as RouteMetaBridge's `translateTitleKey`).
     const translate = t as unknown as (key: string) => string;
     const routeWorkspaceId = useRouteWorkspaceId(params);
-    const meta = useAgentStore((state) => {
-      const agentId = params.aid ?? '';
-      const agent = state.agentMap[agentId];
-
-      if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
-
-      return agentSelectors.getAgentMetaById(agentId)(state);
-    });
+    const agent = useAgentData(params.aid);
+    const projectedMeta = useAgentMeta(params.aid);
+    const meta =
+      agent && matchesRouteWorkspace(agent.workspaceId, routeWorkspaceId) ? projectedMeta : {};
     const hasMeta = Object.keys(meta).length > 0;
     const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
 

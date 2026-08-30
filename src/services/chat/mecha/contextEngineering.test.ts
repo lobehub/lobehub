@@ -2,6 +2,8 @@ import { type UIChatMessage } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -75,10 +77,9 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 
 beforeEach(() => {
   vi.mocked(agentService.queryAgents).mockResolvedValue([]);
+  useProjectionStore.setState({ scopes: {} });
   useAgentStore.setState({
     activeAgentId: undefined,
-    agentMap: {},
-    availableAgents: undefined,
   });
 });
 
@@ -178,14 +179,13 @@ describe('contextEngineering', () => {
   });
 
   it('should fall back to stored chat mode when runtime agent mode is omitted', async () => {
-    useAgentStore.setState({
-      activeAgentId: 'agent-1',
-      agentMap: {
-        'agent-1': {
-          chatConfig: { enableAgentMode: false },
-        },
-      },
-    });
+    useAgentStore.setState({ activeAgentId: 'agent-1' });
+    getProjectionStoreState().commitAgentConfig(
+      getCacheScope(),
+      { chatConfig: { enableAgentMode: false }, id: 'agent-1' },
+      'full',
+      'mutation',
+    );
 
     const output = await contextEngineering({
       agentDocuments: [
@@ -215,8 +215,9 @@ describe('contextEngineering', () => {
   });
 
   it('should use cached available agents without querying during context engineering', async () => {
-    useAgentStore.setState({
-      availableAgents: [
+    getProjectionStoreState().commitAvailableAgents(
+      getCacheScope(),
+      [
         {
           avatar: null,
           backgroundColor: null,
@@ -234,7 +235,8 @@ describe('contextEngineering', () => {
           title: 'Setup Agent',
         },
       ],
-    });
+      { limit: 12 },
+    );
 
     await contextEngineering({
       agentId: 'agent-1',

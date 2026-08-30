@@ -1,12 +1,23 @@
-import { type AgentGroupDetail } from '@lobechat/types';
-import isEqual from 'fast-deep-equal';
-import { produce } from 'immer';
+import { useEffect } from 'react';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { groupKeys } from '@/libs/swr/keys';
-import { chatGroupService } from '@/services/chatGroup';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  chatGroupListViewContract,
+  getProjectionStoreState,
+  useProjectionViewHydration,
+} from '@/projection';
+import {
+  chatGroupDetailProjectionQuery,
+  chatGroupsProjectionQuery,
+  loadChatGroupDetailProjection,
+  loadChatGroupsProjection,
+} from '@/projection/modules/chatGroup/queries';
+import { useChatGroupProjectionState } from '@/projection/modules/chatGroup/viewHooks';
+import { useProjectionRequest } from '@/projection/query/hook';
 import { getAgentStoreState } from '@/store/agent';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
 import { useChatStore } from '@/store/chat';
@@ -16,26 +27,14 @@ import { type ResetableStore } from '@/store/utils/resetableStore';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ChatGroupState, initialChatGroupState } from './initialState';
-import { type ChatGroupDispatchPayloads, type ChatGroupReducer } from './reducers';
-import { chatGroupReducers } from './reducers';
 import { ChatGroupCurdAction } from './slices/curd';
 import { ChatGroupLifecycleAction } from './slices/lifecycle';
 import { ChatGroupMemberAction } from './slices/member';
 
 const n = setNamespace('chatGroup');
 
-/**
- * Convert ChatGroupItem to AgentGroupDetail by adding empty agents array if not present
- */
-const toAgentGroupDetail = (group: ChatGroupItem): AgentGroupDetail =>
-  ({
-    ...group,
-    agents: [],
-  }) as AgentGroupDetail;
-
 type Setter = StoreSetter<ChatGroupStore>;
 class ChatGroupInternalAction implements ResetableStore {
-  readonly #get: () => ChatGroupState;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatGroupState, _api?: unknown) {
@@ -43,84 +42,23 @@ class ChatGroupInternalAction implements ResetableStore {
     void _api;
 
     this.#set = set;
-    this.#get = get;
+    void get;
   }
 
   reset: ResetableStore['reset'] = () => {
     this.#set(initialChatGroupState, false, n('reset'));
   };
 
-  internal_dispatchChatGroup = <T extends keyof ChatGroupDispatchPayloads>(payload: {
-    payload: ChatGroupDispatchPayloads[T];
-    type: T;
-  }) => {
-    this.#set(
-      produce((draft: ChatGroupState) => {
-        const reducer = chatGroupReducers[payload.type] as ChatGroupReducer | undefined;
-        if (reducer) return reducer(draft, payload);
-      }),
-      false,
-      payload,
-    );
-  };
-
-  private removeStaleGroup = (groupId: string) => {
-    this.internal_dispatchChatGroup({ payload: groupId, type: 'deleteGroup' });
-  };
-
-  // A successful fetch that resolves to nothing means the group doesn't exist
-  // or the caller lost access (e.g. switched back to private) — a settled
-  // state the UI renders as a 404 card, not an error to retry.
-  #markGroupNotFound = (groupId: string) => {
-    if (this.#get().groupNotFoundMap[groupId]) return;
-
-    this.#set(
-      (state) => ({ groupNotFoundMap: { ...state.groupNotFoundMap, [groupId]: true } }),
-      false,
-      'markGroupNotFound',
-    );
-  };
-
-  #clearGroupNotFound = (groupId: string) => {
-    if (!this.#get().groupNotFoundMap[groupId]) return;
-
-    this.#set(
-      (state) => {
-        const next = { ...state.groupNotFoundMap };
-        delete next[groupId];
-        return { groupNotFoundMap: next };
-      },
-      false,
-      'clearGroupNotFound',
-    );
-  };
-
   internal_fetchGroupDetail = async (groupId: string) => {
-    const groupDetail = await chatGroupService.getGroupDetail(groupId);
-    if (!groupDetail) {
-      this.removeStaleGroup(groupId);
-      this.#markGroupNotFound(groupId);
-      return;
-    }
-    this.#clearGroupNotFound(groupId);
-
-    // Update groupMap with full group detail including supervisorAgentId and agents
-    this.internal_dispatchChatGroup({
-      payload: { id: groupDetail.id, value: groupDetail },
-      type: 'updateGroup',
-    });
-
-    // Sync group agents to agentStore for builtin agent resolution
-    const agentStore = getAgentStoreState();
-    for (const agent of groupDetail.agents) {
-      agentStore.internal_dispatchAgentMap(agent.id, agent as any);
-    }
+    const scope = getCacheScope();
+    const resolvedGroup = await loadChatGroupDetailProjection(groupId, scope);
+    if (!resolvedGroup) return;
 
     // Set activeAgentId to supervisor for correct model resolution
-    if (groupDetail.supervisorAgentId) {
-      agentStore.setActiveAgentId(groupDetail.supervisorAgentId);
+    if (resolvedGroup.supervisorAgentId) {
+      getAgentStoreState().setActiveAgentId(resolvedGroup.supervisorAgentId);
       useChatStore.setState(
-        { activeAgentId: groupDetail.supervisorAgentId },
+        { activeAgentId: resolvedGroup.supervisorAgentId },
         false,
         'syncActiveAgentIdFromAgentGroup',
       );
@@ -128,50 +66,14 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   internal_updateGroupMaps = (groups: ChatGroupItem[]) => {
-    // Build a candidate map from incoming groups
-    const incomingMap = groups.reduce(
-      (map, group) => {
-        map[group.id] = group;
-        return map;
-      },
-      {} as Record<string, ChatGroupItem>,
-    );
-
-    // Merge with existing map, preserving existing config and agents if present
-    const mergedMap = produce(this.#get().groupMap, (draft) => {
-      for (const id of Object.keys(incomingMap)) {
-        const incoming = incomingMap[id];
-        const existing = draft[id];
-        if (existing) {
-          draft[id] = {
-            ...existing,
-            ...incoming,
-
-            // Preserve existing agents data
-            agents: existing.agents,
-
-            // Keep existing config (authoritative) if present; do not overwrite
-            config: existing.config || incoming.config,
-          } as AgentGroupDetail;
-        } else {
-          draft[id] = toAgentGroupDetail(incoming);
-        }
-      }
-    });
-
-    this.#set(
-      {
-        groupMap: mergedMap,
-        groupsInit: true,
-      },
-      false,
-      n('internal_updateGroupMaps/chatGroup'),
-    );
+    // Session rows are an indirect, partial ChatGroup source. They may seed an
+    // empty Projection, but must never outrank a typed ChatGroup request or a
+    // local edit that already owns the entity.
+    getProjectionStoreState().commitChatGroups(getCacheScope(), groups, 0);
   };
 
   loadGroups = async () => {
-    const groups = await chatGroupService.getGroups();
-    this.internal_dispatchChatGroup({ payload: groups, type: 'loadGroups' });
+    await loadChatGroupsProjection(getCacheScope());
   };
 
   refreshGroupDetail = async (groupId: string) => {
@@ -190,113 +92,40 @@ class ChatGroupInternalAction implements ResetableStore {
     this.#set({ activeThreadAgentId: agentId }, false, 'toggleThread');
   };
 
-  useFetchGroupDetail = (enabled: boolean, groupId: string) =>
-    useClientDataSWRWithSync<AgentGroupDetail | null>(
+  useFetchGroupDetail = (enabled: boolean, groupId: string) => {
+    const projection = useChatGroupProjectionState(enabled && groupId ? groupId : undefined);
+    const request = useProjectionRequest(
       enabled && groupId ? groupKeys.detail(groupId) : null,
-      async () => {
-        const groupDetail = await chatGroupService.getGroupDetail(groupId);
-        // Resolve to null instead of throwing: "gone / no access" is a settled
-        // terminal state (rendered as a 404 card), not a retryable error.
-        if (!groupDetail) {
-          this.removeStaleGroup(groupId);
-          return null;
-        }
-        return groupDetail;
-      },
-      {
-        onData: (groupDetail) => {
-          if (!groupDetail) {
-            this.#markGroupNotFound(groupId);
-            return;
-          }
-          this.#clearGroupNotFound(groupId);
-
-          // Update groupMap with detailed group info including agents
-          const currentGroup = this.#get().groupMap[groupDetail.id];
-          if (isEqual(currentGroup, groupDetail)) return;
-
-          const nextGroupMap = {
-            ...this.#get().groupMap,
-            [groupDetail.id]: groupDetail,
-          };
-
-          this.#set(
-            {
-              groupMap: nextGroupMap,
-            },
-            false,
-            n('useFetchGroupDetail/onData', { groupId: groupDetail.id }),
-          );
-
-          // Sync group agents to agentStore for builtin agent resolution (e.g., supervisor slug)
-          // Use smart merge: only overwrite if server data is newer to prevent race conditions
-          const agentStore = getAgentStoreState();
-          for (const agent of groupDetail.agents) {
-            const currentAgentInStore = agentStore.agentMap[agent.id];
-
-            // Only overwrite if:
-            // 1. Agent doesn't exist in store
-            // 2. Server data is newer than store data (based on updatedAt)
-            if (
-              !currentAgentInStore ||
-              new Date(agent.updatedAt) > new Date(currentAgentInStore.updatedAt || 0)
-            ) {
-              // AgentGroupMember extends AgentItem which shares fields with LobeAgentConfig
-              agentStore.internal_dispatchAgentMap(agent.id, agent as any);
-            }
-          }
-
-          // Set activeAgentId to supervisor for correct model resolution in sendMessage
-          if (groupDetail.supervisorAgentId) {
-            agentStore.setActiveAgentId(groupDetail.supervisorAgentId);
-            useChatStore.setState(
-              { activeAgentId: groupDetail.supervisorAgentId },
-              false,
-              'syncActiveAgentIdFromAgentGroup',
-            );
-          }
-        },
-      },
+      chatGroupDetailProjectionQuery,
+      { groupId },
     );
+
+    useEffect(() => {
+      const supervisorAgentId = projection.data?.supervisorAgentId;
+      if (!request.data || !supervisorAgentId) return;
+
+      const agentStore = getAgentStoreState();
+      agentStore.setActiveAgentId(supervisorAgentId);
+      useChatStore.setState(
+        { activeAgentId: supervisorAgentId },
+        false,
+        'syncActiveAgentIdFromAgentGroup',
+      );
+    }, [projection.data?.supervisorAgentId, request.data]);
+
+    return request;
+  };
 
   // SWR Hooks for data fetching
   // This is not used for now, as we are combining group in the session lambda's response
-  useFetchGroups = (enabled: boolean, isLogin: boolean) =>
-    useClientDataSWRWithSync<ChatGroupItem[]>(
+  useFetchGroups = (enabled: boolean, isLogin: boolean) => {
+    useProjectionViewHydration(chatGroupListViewContract, {}, enabled);
+    return useProjectionRequest(
       enabled ? groupKeys.list(isLogin) : null,
-      async () => chatGroupService.getGroups(),
-      {
-        fallbackData: [],
-        onData: (groups) => {
-          // Update both groups list and groupMap
-          const currentMap = this.#get().groupMap;
-          const nextGroupMap = groups.reduce(
-            (map, group) => {
-              // Preserve existing agents data if available
-              const existing = currentMap[group.id];
-              map[group.id] = existing
-                ? ({ ...existing, ...group } as AgentGroupDetail)
-                : toAgentGroupDetail(group);
-              return map;
-            },
-            {} as Record<string, AgentGroupDetail>,
-          );
-
-          if (this.#get().groupsInit && isEqual(currentMap, nextGroupMap)) {
-            return;
-          }
-
-          this.#set(
-            {
-              groupMap: nextGroupMap,
-              groupsInit: true,
-            },
-            false,
-            n('useFetchGroups/onData'),
-          );
-        },
-      },
+      chatGroupsProjectionQuery,
+      {},
     );
+  };
 }
 
 type PublicActions<T> = { [K in keyof T]: T[K] };

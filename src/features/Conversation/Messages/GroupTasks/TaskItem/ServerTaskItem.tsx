@@ -6,8 +6,8 @@ import { AccordionItem, Block } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { TaskContent } from '../../Tasks/shared';
 import { type TaskMetrics } from './TaskTitle';
@@ -29,10 +29,10 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
 
   // Get agent info from store
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const agent = useAgentGroupStore((s) =>
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const agent = useChatGroupProjection((scope) =>
     activeGroupId && agentId
-      ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(s)
+      ? chatGroupProjectionSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(scope)
       : null,
   );
 

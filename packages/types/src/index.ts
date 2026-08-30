@@ -39,6 +39,7 @@ export * from './meta';
 export * from './notification';
 export * from './plugins';
 export * from './project';
+export * from './projection';
 export * from './rag';
 export * from './redis';
 export * from './resourceTransfer';

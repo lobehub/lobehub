@@ -7,6 +7,11 @@ interface HomeTopicSections<TRecent extends TopicIdentity, TRunning extends Topi
   running: TRunning[];
 }
 
+export interface HomeTopicIdSections {
+  recent: string[];
+  running: string[];
+}
+
 /**
  * Running topics are a live status group, not a subtype of recency. Keep the
  * sections mutually exclusive while preserving the source order of both feeds.
@@ -23,5 +28,17 @@ export const resolveHomeTopicSections = <
   return {
     recent: recentTopics.filter((topic) => !runningTopicIds.has(topic.id)),
     running: [...runningTopics],
+  };
+};
+
+export const resolveHomeTopicIdSections = (
+  recentTopicIds: readonly string[],
+  runningTopicIds: readonly string[],
+): HomeTopicIdSections => {
+  const runningIds = new Set(runningTopicIds);
+
+  return {
+    recent: recentTopicIds.filter((id) => !runningIds.has(id)),
+    running: [...runningTopicIds],
   };
 };

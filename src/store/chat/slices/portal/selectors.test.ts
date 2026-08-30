@@ -1,6 +1,8 @@
-import { type UIChatMessage } from '@lobechat/types';
+import { type ChatTopic, type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { type ChatStoreState } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
@@ -21,21 +23,35 @@ const localFileTabId = ({
 const createTopicState = (
   activeTopicId: string,
   workingDirectoriesByTopic: Record<string, string>,
-) => ({
-  activeTopicId,
-  topicDataMap: {
-    [topicMapKey({ agentId: 'test-id' })]: {
-      currentPage: 1,
-      hasMore: false,
-      items: Object.entries(workingDirectoriesByTopic).map(([id, workingDirectory]) => ({
+) => {
+  const items = Object.entries(workingDirectoriesByTopic).map(
+    ([id, workingDirectory]) =>
+      ({
+        createdAt: 0,
         id,
         metadata: { workingDirectory },
-      })),
+        title: id,
+        updatedAt: 0,
+      }) as ChatTopic,
+  );
+  useProjectionStore.setState({ scopes: {} });
+  getProjectionStoreState().commitChatTopicsPage(
+    getCacheScope(),
+    {
+      containerKey: topicMapKey({ agentId: 'test-id' }),
+      context: { agentId: 'test-id' },
+      items,
+      page: 0,
       pageSize: 20,
-      total: Object.keys(workingDirectoriesByTopic).length,
+      signature: {},
+      surface: 'sidebar',
+      total: items.length,
     },
-  },
-});
+    { observedAt: 1, source: 'network' },
+  );
+
+  return { activeTopicId };
+};
 
 describe('chatDockSelectors', () => {
   const createState = (overrides?: Partial<ChatStoreState>) => {

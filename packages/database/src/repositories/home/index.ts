@@ -373,6 +373,7 @@ export class HomeRepository {
           updatedAt: a.updatedAt,
           userId: a.agentUserId,
           visibility,
+          workspaceId: this.workspaceId ?? null,
         };
       }),
       ...chatGroupItems.map((g): EnrichedItem => {
@@ -395,6 +396,7 @@ export class HomeRepository {
           updatedAt: g.updatedAt,
           userId: g.groupUserId,
           visibility,
+          workspaceId: this.workspaceId ?? null,
         };
       }),
     ];

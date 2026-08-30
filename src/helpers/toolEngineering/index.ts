@@ -21,10 +21,12 @@ import {
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
+import { getAgentRuntimeMode } from '@/helpers/gatewayMode';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -219,20 +221,26 @@ export const createAgentToolsEngine = (
   const agentState = getAgentStoreState();
   // `currentAgentPlugins` already resolves to pinned-only identifiers — disabled
   // entries never reach the tools-engine whitelist.
-  const userPlugins = agentSelectors.currentAgentPlugins(agentState);
-  const disabledPluginIds = agentSelectors.currentAgentDisabledPlugins(agentState);
+  const userPlugins = agentProjectionSelectors.plugins(
+    getAgentProjectionById(agentState.activeAgentId),
+  );
+  const disabledPluginIds = agentProjectionSelectors.disabledPlugins(
+    getAgentProjectionById(agentState.activeAgentId),
+  );
   const isChatMode =
-    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
-    !isCanUseFC(workingModel.model, workingModel.provider);
+    agentProjectionSelectors.chatConfig(getAgentProjectionById(agentState.activeAgentId))
+      .enableAgentMode === false || !isCanUseFC(workingModel.model, workingModel.provider);
 
   // Each entry below still respects its own runtime gate; in chat mode this
   // is the entire whitelist. `allowExplicitActivation` and user plugins /
   // `alwaysOnToolIds` are deliberately omitted in chat mode so the activator
   // can't smuggle additional tools in.
-  const kbEnabled = agentSelectors.hasEnabledKnowledgeBases(agentState);
+  const kbEnabled = agentProjectionSelectors.hasEnabledKnowledgeBases(
+    getAgentProjectionById(agentState.activeAgentId),
+  );
   const memoryEnabled =
-    agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
-    settingsSelectors.memoryEnabled(useUserStore.getState());
+    agentProjectionSelectors.chatConfig(getAgentProjectionById(agentState.activeAgentId)).memory
+      ?.enabled ?? settingsSelectors.memoryEnabled(useUserStore.getState());
   const webBrowsingEnabled = searchConfig.useApplicationBuiltinSearchTool;
   // Chat mode no longer auto-injects image generation (token cost + unwanted
   // tool calls). Users opt in by pinning `lobe-image-generation`. Models with
@@ -264,10 +272,13 @@ export const createAgentToolsEngine = (
     // System-level rules (may override user selection for specific tools)
     // Browser rides the same local-runtime gate as local-system because the
     // control IPC only exists in the desktop main process.
-    [BrowserManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-    [CloudSandboxManifest.identifier]: agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
+    [BrowserManifest.identifier]:
+      getAgentRuntimeMode(agentState.activeAgentId || '') === 'local',
+    [CloudSandboxManifest.identifier]:
+      getAgentRuntimeMode(agentState.activeAgentId || '') === 'cloud',
     [KnowledgeBaseManifest.identifier]: kbEnabled,
-    [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
+    [LocalSystemManifest.identifier]:
+      getAgentRuntimeMode(agentState.activeAgentId || '') === 'local',
     [MemoryManifest.identifier]: memoryEnabled,
     [WebBrowsingManifest.identifier]: webBrowsingEnabled,
   };

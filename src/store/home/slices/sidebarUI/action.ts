@@ -1,6 +1,8 @@
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState, nextProjectionObservedAt } from '@/projection';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -83,7 +85,10 @@ export class SidebarUIActionImpl {
   };
 
   removeAgent = async (agentId: string): Promise<void> => {
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     await agentService.removeAgent(agentId);
+    getProjectionStoreState().deleteAgentProjection(scope, agentId, observedAt);
     await this.#get().refreshAgentList();
     // deleting an agent cascade-deletes its topics + messages on the server; drop
     // their message cache too so it doesn't orphan in IndexedDB (never expires)
@@ -91,8 +96,11 @@ export class SidebarUIActionImpl {
   };
 
   removeAgentGroup = async (groupId: string): Promise<void> => {
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
     // Delete the group
     await chatGroupService.deleteGroup(groupId);
+    getProjectionStoreState().deleteChatGroupProjection(scope, groupId, observedAt);
     await this.#get().refreshAgentList();
     // same cascade for a group's conversations — drop its cached message lists
     void evictMessageCache((ctx) => ctx.groupId === groupId);

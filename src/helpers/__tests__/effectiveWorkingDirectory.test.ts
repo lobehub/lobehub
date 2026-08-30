@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveEffectiveWorkingDirectory } from '../effectiveWorkingDirectory';
 
-vi.mock('@lobechat/const', () => ({
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   isDesktop: true,
 }));
 
@@ -11,75 +12,62 @@ vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => mockGetElectronStoreState(),
 }));
 
-const mockGetAgentStoreState = vi.fn();
+const mockGetAgentWorkingDirectory = vi.fn();
 vi.mock('@/store/agent', () => ({
-  getAgentStoreState: () => mockGetAgentStoreState(),
+  getAgentWorkingDirectory: (agentId?: string | null, deviceId?: string) =>
+    mockGetAgentWorkingDirectory(agentId, deviceId),
 }));
 
-const mockCurrentAgentWorkingDirectory = vi.fn();
-const mockGetAgentWorkingDirectoryById = vi.fn();
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentWorkingDirectory: (deviceId?: string) => mockCurrentAgentWorkingDirectory(deviceId),
-  },
-  agentByIdSelectors: {
-    getAgentWorkingDirectoryById: (agentId: string, deviceId?: string) => () =>
-      mockGetAgentWorkingDirectoryById(agentId, deviceId),
-  },
-}));
-
-const mockGetTopicWorkingDirectory = vi.fn();
-vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: {
-    getTopicWorkingDirectory: (topicId?: string | null) => (state: any) =>
-      mockGetTopicWorkingDirectory(topicId, state),
-  },
+const mockGetChatTopic = vi.fn();
+vi.mock('@/projection', () => ({
+  getChatProjection: (selector: (scope: object) => unknown) => selector({}),
+  selectChatTopicItem: (_scope: object, topicId: string) => mockGetChatTopic(topicId),
 }));
 
 describe('resolveEffectiveWorkingDirectory', () => {
-  const chatState = {} as any;
+  const chatState = { activeAgentId: 'active-agent' } as any;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetElectronStoreState.mockReturnValue({
       gatewayDeviceInfo: { deviceId: 'device-1' },
     });
-    mockGetAgentStoreState.mockReturnValue({});
   });
 
   it('returns the topic working directory when one is configured', () => {
-    mockGetTopicWorkingDirectory.mockReturnValue('/home/user/project');
+    mockGetChatTopic.mockReturnValue({
+      metadata: { workingDirectory: '/home/user/project' },
+    });
 
     const result = resolveEffectiveWorkingDirectory(chatState, 'topic-1');
 
     expect(result).toBe('/home/user/project');
-    expect(mockGetTopicWorkingDirectory).toHaveBeenCalledWith('topic-1', chatState);
+    expect(mockGetChatTopic).toHaveBeenCalledWith('topic-1');
   });
 
   it('falls back to the active agent when no topic working directory and no agentId', () => {
-    mockGetTopicWorkingDirectory.mockReturnValue(undefined);
-    mockCurrentAgentWorkingDirectory.mockReturnValue(() => '/agent/default/repo');
+    mockGetChatTopic.mockReturnValue(undefined);
+    mockGetAgentWorkingDirectory.mockReturnValue('/agent/default/repo');
 
     const result = resolveEffectiveWorkingDirectory(chatState, 'topic-1');
 
     expect(result).toBe('/agent/default/repo');
-    expect(mockCurrentAgentWorkingDirectory).toHaveBeenCalledWith('device-1');
+    expect(mockGetAgentWorkingDirectory).toHaveBeenCalledWith('active-agent', 'device-1');
   });
 
   it('falls back to the captured agent when agentId is provided', () => {
-    mockGetTopicWorkingDirectory.mockReturnValue(undefined);
-    mockGetAgentWorkingDirectoryById.mockReturnValue('/agent-captured/repo');
+    mockGetChatTopic.mockReturnValue(undefined);
+    mockGetAgentWorkingDirectory.mockReturnValue('/agent-captured/repo');
 
     const result = resolveEffectiveWorkingDirectory(chatState, 'topic-1', 'agent-42');
 
     expect(result).toBe('/agent-captured/repo');
-    expect(mockGetAgentWorkingDirectoryById).toHaveBeenCalledWith('agent-42', 'device-1');
-    expect(mockCurrentAgentWorkingDirectory).not.toHaveBeenCalled();
+    expect(mockGetAgentWorkingDirectory).toHaveBeenCalledWith('agent-42', 'device-1');
   });
 
   it('returns undefined when no topic working directory, no agentId, and active agent has no working directory', () => {
-    mockGetTopicWorkingDirectory.mockReturnValue(undefined);
-    mockCurrentAgentWorkingDirectory.mockReturnValue(() => undefined);
+    mockGetChatTopic.mockReturnValue(undefined);
+    mockGetAgentWorkingDirectory.mockReturnValue(undefined);
 
     const result = resolveEffectiveWorkingDirectory(chatState, 'topic-1');
 
@@ -87,8 +75,8 @@ describe('resolveEffectiveWorkingDirectory', () => {
   });
 
   it('returns undefined when no topic working directory, agentId provided but agent has no working directory', () => {
-    mockGetTopicWorkingDirectory.mockReturnValue(undefined);
-    mockGetAgentWorkingDirectoryById.mockReturnValue(undefined);
+    mockGetChatTopic.mockReturnValue(undefined);
+    mockGetAgentWorkingDirectory.mockReturnValue(undefined);
 
     const result = resolveEffectiveWorkingDirectory(chatState, 'topic-1', 'agent-42');
 
@@ -96,12 +84,14 @@ describe('resolveEffectiveWorkingDirectory', () => {
   });
 
   it('prefers topic working directory over captured agentId fallback', () => {
-    mockGetTopicWorkingDirectory.mockReturnValue('/topic/overrides/everything');
-    mockGetAgentWorkingDirectoryById.mockReturnValue('/agent-captured/repo');
+    mockGetChatTopic.mockReturnValue({
+      metadata: { workingDirectory: '/topic/overrides/everything' },
+    });
+    mockGetAgentWorkingDirectory.mockReturnValue('/agent-captured/repo');
 
     const result = resolveEffectiveWorkingDirectory(chatState, 'topic-1', 'agent-42');
 
     expect(result).toBe('/topic/overrides/everything');
-    expect(mockGetAgentWorkingDirectoryById).not.toHaveBeenCalled();
+    expect(mockGetAgentWorkingDirectory).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 
 const DRAGGING_ROOT_ID = 'dragging-root';
 export const getContainer = () => document.querySelector(`#${DRAGGING_ROOT_ID}`);
@@ -75,8 +75,8 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
   // to fix this issue, use a counter to ensure the status change only when drag event left the browser window .
   const dragCounter = useRef(0);
 
-  const model = useAgentStore(agentSelectors.currentAgentModel);
-  const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  const model = useCurrentAgentValue(agentProjectionSelectors.model);
+  const provider = useCurrentAgentValue(agentProjectionSelectors.provider);
   const agentId = useAgentStore((s) => s.activeAgentId ?? undefined);
   const { canUploadImage, canUploadVideo } = useMediaUploadAbility(model, provider, agentId);
 

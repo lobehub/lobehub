@@ -1,9 +1,8 @@
+import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentData } from '@/store/agent/projection';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-
-import { useEffectiveAgentModePreference } from './effectiveAgentModePreference';
+import { useUserStore } from '@/store/user';
 
 export type ChatInputMode = 'agent' | 'chat';
 
@@ -45,18 +44,28 @@ export const resolveEffectiveAgentMode = ({
 };
 
 export const useEffectiveAgentMode = (agentId: string) => {
-  const [model, provider] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-  ]);
-  const { enableAgentMode, isPreferenceLoading, usesWorkspaceMemberMode } =
-    useEffectiveAgentModePreference(agentId);
+  const agent = useAgentData(agentId);
+  const sharedEnableAgentMode = agentProjectionSelectors.enableMode(agent);
+  const model = agentProjectionSelectors.model(agent);
+  const provider = agentProjectionSelectors.provider(agent);
+  const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
+  const usesWorkspaceMemberMode =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
+  const storePreference = useUserStore((s) => s.workspaceUserPreference);
+  const { data: fetchedPreference, isLoading } = useUserStore(
+    (s) => s.useFetchWorkspaceUserPreference,
+  )();
+  const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
+  const memberModeOverride = usesWorkspaceMemberMode
+    ? preference.agentModeOverrides?.[agentId]
+    : undefined;
+  const enableAgentMode = memberModeOverride ?? sharedEnableAgentMode;
   const supportToolUse = useModelSupportToolUse(model, provider);
   const isModelListReady = useAiInfraStore(aiProviderSelectors.isInitAiProviderRuntimeState);
 
   return {
     ...resolveEffectiveAgentMode({ enableAgentMode, isModelListReady, supportToolUse }),
-    isPreferenceLoading,
+    isPreferenceLoading: isAccessLoading || (usesWorkspaceMemberMode && isLoading),
     usesWorkspaceMemberMode,
   };
 };

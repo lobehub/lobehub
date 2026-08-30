@@ -1,5 +1,11 @@
 import type { CheckpointConfig, TaskAutomationMode, TaskDetailData } from '@lobechat/types';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getProjectionStoreState } from '@/projection';
+import {
+  getTaskDetailProjection,
+  getTaskDetailProjectionMap,
+} from '@/projection/modules/task/read';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
@@ -49,16 +55,27 @@ export class TaskConfigSliceActionImpl {
     this.#get = get;
   }
 
-  // `getState` exposes only the taskDetailMap slice so the engine's patches
+  // `getState` exposes an ephemeral map derived from Projection so the engine's patches
   // refer to keys under it — needed for `extractAffectedPaths` to produce
   // `taskDetailMap.<id>` conflict keys.
   #getAutomationEngine = (): OptimisticEngine<AutomationModeOptimisticState> => {
     if (this.#automationEngine) return this.#automationEngine;
     this.#automationEngine = new OptimisticEngine(
       {
-        getState: () => ({ taskDetailMap: this.#get().taskDetailMap }),
-        setState: (next) =>
-          this.#set(next as Partial<TaskStore>, false, 'taskConfig/automationEngine'),
+        getState: () => ({ taskDetailMap: getTaskDetailProjectionMap() }),
+        setState: (next) => {
+          const current = getTaskDetailProjectionMap();
+          const resolved = typeof next === 'function' ? next({ taskDetailMap: current }) : next;
+          const nextMap = resolved.taskDetailMap ?? current;
+          const committed = new Set<string>();
+          for (const [key, detail] of Object.entries(nextMap)) {
+            if (detail === current[key]) continue;
+            const identity = detail.id ?? detail.identifier ?? key;
+            if (committed.has(identity)) continue;
+            committed.add(identity);
+            getProjectionStoreState().commitTaskDetail(getCacheScope(), detail, 'mutation');
+          }
+        },
       },
       { maxRetries: 0 },
     );
@@ -145,7 +162,7 @@ export class TaskConfigSliceActionImpl {
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
-      value: { config: { ...this.#get().taskDetailMap[id]?.config, ...modelConfig } },
+      value: { config: { ...getTaskDetailProjection(id)?.config, ...modelConfig } },
     });
     await runMutation(this.#set, this.#get, {
       mutate: async () => {
@@ -179,7 +196,7 @@ export class TaskConfigSliceActionImpl {
   // mode that has never been configured, also persist the mode's defaults so the
   // popover summary, cron runtime and DB row stay aligned.
   setAutomationMode = async (id: string, mode: TaskAutomationMode | null): Promise<void> => {
-    const detail = this.#get().taskDetailMap[id];
+    const detail = getTaskDetailProjection(id);
 
     const update: Parameters<typeof taskService.update>[1] = { automationMode: mode };
     // Automation and a human assignee are mutually exclusive (the server
@@ -254,7 +271,7 @@ export class TaskConfigSliceActionImpl {
     schedule: { maxExecutions: number | null; pattern: string; timezone: string },
   ): Promise<void> => {
     const existingConfig =
-      (this.#get().taskDetailMap[id]?.config as Record<string, unknown> | undefined) ?? {};
+      (getTaskDetailProjection(id)?.config as Record<string, unknown> | undefined) ?? {};
     const existingScheduleConfig =
       (existingConfig.schedule as Record<string, unknown> | undefined) ?? {};
     const nextConfig = {

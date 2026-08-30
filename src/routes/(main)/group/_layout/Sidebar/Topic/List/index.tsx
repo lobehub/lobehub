@@ -10,7 +10,7 @@ import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { topicsWithoutCron, useCurrentChatTopics } from '@/store/chat/slices/topic/projection';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
@@ -21,8 +21,9 @@ import FlatMode from '../TopicListContent/FlatMode';
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');
   const router = useQueryRoute();
-  const topicLength = useChatStore((s) => topicSelectors.currentTopicLength(s));
-  const isUndefinedTopics = useChatStore((s) => topicSelectors.isUndefinedTopics(s));
+  const topicView = useCurrentChatTopics();
+  const topicLength = topicsWithoutCron(topicView?.items)?.length ?? 0;
+  const isUndefinedTopics = !topicView;
   const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   const [allTopicsDrawerOpen, closeAllTopicsDrawer] = useChatStore((s) => [
     s.allTopicsDrawerOpen,

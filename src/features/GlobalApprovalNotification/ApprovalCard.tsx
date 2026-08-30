@@ -16,10 +16,10 @@ import { type ConversationContext, type MessagesChangeMeta } from '@/features/Co
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useChatTopicDetailProjectionRequest } from '@/projection';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { styles } from './styles';
@@ -53,18 +53,18 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   );
 
   const operationState = useOperationState(context);
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(context.agentId));
+  const meta = useAgentMeta(context.agentId);
 
-  // Topic title tells the user *which* conversation this approval belongs to.
   // A parked approval can belong to an older topic outside the agent's loaded
   // sidebar page, so resolve across every topic cache and fetch the detail by
   // id when it is still missing. Falling back to the agent name here makes two
   // approvals from the same agent indistinguishable.
-  const [topicTitle, useFetchTopicDetail] = useChatStore((s) => [
-    context.topicId ? topicSelectors.getTopicById(context.topicId)(s)?.title : undefined,
-    s.useFetchTopicDetail,
-  ]);
-  useFetchTopicDetail(context.topicId && !topicTitle ? context.topicId : undefined);
+  const projectedTitle = useChatTopicById(context.topicId ?? undefined)?.title;
+  useChatTopicDetailProjectionRequest(
+    context.topicId ?? undefined,
+    Boolean(context.topicId && !projectedTitle),
+  );
+  const topicTitle = useChatTopicById(context.topicId ?? undefined)?.title;
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);

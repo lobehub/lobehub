@@ -20,17 +20,12 @@ export interface AgentSliceState {
    */
   agentConfigErrorMap: Record<string, string>;
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
+  /** Temporary downstream compatibility projection. Projection remains canonical. */
   agentMap: Record<string, PartialDeep<AgentItem>>;
-  /**
-   * Agents whose config fetch succeeded but resolved to `null` — the agent
-   * doesn't exist or the caller lost access (e.g. a workspace agent switched
-   * back to private). Distinct from `agentConfigErrorMap` (transport errors):
-   * these are settled, non-retryable, and should render a 404 card rather
-   * than a loading skeleton. Cleared when a later fetch succeeds (e.g. the
-   * agent is made public again).
-   */
+  /** Settled inaccessible agents materialized for downstream compatibility selectors. */
   agentNotFoundMap: Record<string, boolean>;
   agentSettingInstance?: AgentSettingsInstance | null;
+  /** Temporary downstream compatibility projection of the available-agent index. */
   availableAgents?: AvailableAgentItem[];
   /**
    * Whether the agent panel is pinned (UI state)

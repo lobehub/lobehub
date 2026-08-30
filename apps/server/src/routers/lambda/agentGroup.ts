@@ -57,6 +57,8 @@ import {
   redactAgentConfig,
   redactGroupConfig,
   type ResourceConfigAccess,
+  type ResourceConfigAccessResult,
+  type VisibleResourceConfigAccess,
 } from './_helpers/resourceConfigGuard';
 import { getWorkspaceGroupVirtualAgentIds } from './_helpers/workspaceAgentGuard';
 
@@ -87,13 +89,17 @@ const getGroupConfigAccess = <T extends Record<string, any>>(
     workspaceId: group.workspaceId ?? null,
   });
 
-const protectGroupMemberConfigs = async <T extends Record<string, any>>(
+const protectGroupMemberConfigsWithAccess = async <T extends Record<string, any>>(
   ctx: Parameters<typeof resourceConfigGuardCtx>[0],
   group: T,
-): Promise<T> => {
-  if (!Array.isArray(group.agents) || group.agents.length === 0) return group;
+): Promise<{
+  data: T;
+  memberAccess: Record<string, VisibleResourceConfigAccess>;
+}> => {
+  if (!Array.isArray(group.agents) || group.agents.length === 0) {
+    return { data: group, memberAccess: {} };
+  }
 
-  let changed = false;
   const protectedAgents = await Promise.all(
     group.agents.map(async (agent: Record<string, any>) => {
       const knownMeta =
@@ -112,18 +118,68 @@ const protectGroupMemberConfigs = async <T extends Record<string, any>>(
       );
 
       if (access === 'none') {
-        changed = true;
         return null;
       }
-      if (access === 'profile') {
-        changed = true;
-        return redactAgentConfig(agent);
-      }
-      return agent;
+      return {
+        access,
+        data: access === 'profile' ? redactAgentConfig(agent) : agent,
+        id: agent.id as string,
+      };
     }),
   );
 
-  return changed ? ({ ...group, agents: protectedAgents.filter(Boolean) } as T) : group;
+  const visibleAgents = protectedAgents.filter((agent): agent is NonNullable<typeof agent> =>
+    Boolean(agent),
+  );
+  const memberAccess = Object.fromEntries(
+    visibleAgents.map(({ access, id }) => [id, access]),
+  ) as Record<string, VisibleResourceConfigAccess>;
+  const changed =
+    visibleAgents.length !== group.agents.length ||
+    visibleAgents.some(({ access }) => access === 'profile');
+
+  return {
+    data: changed ? ({ ...group, agents: visibleAgents.map(({ data }) => data) } as T) : group,
+    memberAccess,
+  };
+};
+
+type GroupDetailProtectionContext = Parameters<typeof resourceConfigGuardCtx>[0] & {
+  agentGroupService: Pick<AgentGroupService, 'mergeAgentsDefaultConfig'>;
+  userModel: Pick<UserModel, 'getUserSettingsDefaultAgentConfig'>;
+};
+
+const protectGroupDetailWithAccess = async <T extends Record<string, any>>(
+  ctx: GroupDetailProtectionContext,
+  detail: T | null | undefined,
+): Promise<
+  | (ResourceConfigAccessResult<T> & {
+      memberAccess: Record<string, VisibleResourceConfigAccess>;
+    })
+  | null
+> => {
+  if (!detail) return null;
+
+  const access = await getGroupConfigAccess(ctx, detail);
+  if (access === 'none') return null;
+  if (access === 'profile') {
+    const data = redactGroupConfig(detail);
+    const memberAccess = Object.fromEntries(
+      (Array.isArray(data.agents) ? data.agents : []).map((agent: Record<string, any>) => [
+        agent.id,
+        'profile' as const,
+      ]),
+    );
+    return { access, data, memberAccess };
+  }
+
+  const defaultAgentConfig = await ctx.userModel.getUserSettingsDefaultAgentConfig();
+  const protectedGroup = await protectGroupMemberConfigsWithAccess(ctx, {
+    ...detail,
+    agents: ctx.agentGroupService.mergeAgentsDefaultConfig(defaultAgentConfig, detail.agents),
+  });
+
+  return { access, ...protectedGroup };
 };
 
 /**
@@ -649,16 +705,14 @@ export const agentGroupRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
       const detail = await ctx.agentGroupService.getGroupDetail(input.id);
-      if (!detail) return null;
-      const access = await getGroupConfigAccess(ctx, detail);
-      if (access === 'none') return null;
-      if (access === 'profile') return redactGroupConfig(detail);
+      return (await protectGroupDetailWithAccess(ctx, detail))?.data ?? null;
+    }),
 
-      const defaultAgentConfig = await ctx.userModel.getUserSettingsDefaultAgentConfig();
-      return protectGroupMemberConfigs(ctx, {
-        ...detail,
-        agents: ctx.agentGroupService.mergeAgentsDefaultConfig(defaultAgentConfig, detail.agents),
-      });
+  getGroupDetailWithAccess: agentGroupProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const detail = await ctx.agentGroupService.getGroupDetail(input.id);
+      return protectGroupDetailWithAccess(ctx, detail);
     }),
 
   getGroups: agentGroupProcedure.query(async ({ ctx }) => {
@@ -676,10 +730,15 @@ export const agentGroupRouter = router({
         if (access === 'profile') return redactGroupConfig(group);
         if (!defaultAgentConfig) return group;
 
-        return protectGroupMemberConfigs(ctx, {
-          ...group,
-          agents: ctx.agentGroupService.mergeAgentsDefaultConfig(defaultAgentConfig, group.agents),
-        });
+        return (
+          await protectGroupMemberConfigsWithAccess(ctx, {
+            ...group,
+            agents: ctx.agentGroupService.mergeAgentsDefaultConfig(
+              defaultAgentConfig,
+              group.agents,
+            ),
+          })
+        ).data;
       }),
     );
 

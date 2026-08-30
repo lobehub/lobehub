@@ -10,7 +10,7 @@ import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useCurrentAgentConfigStatus } from '@/store/agent/projection';
 import { StyleSheet } from '@/utils/styles';
 
 import PermissionForm from './PermissionForm';
@@ -29,8 +29,7 @@ const AgentPermission = memo(() => {
   // Data-presence loading ("no config in the map yet") is true on failure too,
   // so read the recorded fetch error as well — otherwise a failed config load
   // renders the personal-agent empty state, which is a different fact.
-  const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
-  const configError = useAgentStore(agentSelectors.currentAgentConfigError);
+  const { error: configError, isLoading: isAgentConfigLoading } = useCurrentAgentConfigStatus();
   const retryAgentConfigFetch = useAgentStore((s) => s.retryAgentConfigFetch);
 
   return (

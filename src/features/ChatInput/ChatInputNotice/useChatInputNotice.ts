@@ -11,8 +11,11 @@ import {
 } from '@/features/ModelSelect/resolveStaleModelState';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfigStatus,
+  useAgentValue,
+} from '@/store/agent/projection';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
@@ -57,7 +60,7 @@ export const resolveChatInputNotice = ({
   // Model-config notices don't apply to heterogeneous agents (own toolchain),
   // before the model runtime config is ready, or before the agent's effective
   // model is settled. The last one matters on a cold page load: until
-  // `agentMap` has the agent (and, for a member-selection workspace agent,
+  // the Agent Projection is complete (and, for a member-selection workspace agent,
   // until the member override is fetched), the model resolves to the
   // DEFAULT_MODEL/DEFAULT_PROVIDER fallback, which is often absent from the
   // user's enabled list — that used to flash the "model offline" warning for a
@@ -101,10 +104,8 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const agentId = useAgentId();
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [isAgentConfigLoading, isHeterogeneousAgent] = useAgentStore((s) => [
-    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
-    agentByIdSelectors.isAgentHeterogeneousById(agentId)(s),
-  ]);
+  const isAgentConfigLoading = useAgentConfigStatus(agentId).isLoading;
+  const isHeterogeneousAgent = useAgentValue(agentId, agentProjectionSelectors.heterogeneous);
 
   // Same source as the model trigger renders, so the notice can never judge a
   // different model than the one the user sees (member overrides included).

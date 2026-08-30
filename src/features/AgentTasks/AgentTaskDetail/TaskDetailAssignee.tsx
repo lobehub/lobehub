@@ -7,9 +7,12 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import HeterogeneousTag from '@/features/HeterogeneousTag';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
-import { useTaskStore } from '@/store/task';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
@@ -21,19 +24,30 @@ import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 const TaskDetailAssignee = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
-  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
-  const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
-  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
-  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
+  const status = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskStatus) as
+    | TaskStatus
+    | undefined;
+  const assigneeAgentId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAgentId,
+  );
+  const assigneeUserId = useActiveTaskDetailProjection((detail) => detail?.userId);
+  const visibility = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskVisibility,
+  );
+  const createdByUserId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskCreatedByUserId,
+  );
+  const automationMode = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAutomationMode,
+  );
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   // An agent assignee wins the display when both ids are set (only external
   // writers can produce that combination — the picker keeps them exclusive).
   const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
   // Same source as the home list so the runtime tag stays consistent.
-  const assigneeHeterogeneousType = useHomeStore(
-    (s) => homeAgentListSelectors.getAgentById(assigneeAgentId ?? '')(s)?.heterogeneousType,
+  const assigneeHeterogeneousType = useHomeSidebarProjection(
+    (sidebar) =>
+      homeSidebarSelectors.getAgentById(assigneeAgentId ?? '')(sidebar)?.heterogeneousType,
   );
   const { isDarkMode } = useThemeMode();
 

@@ -3,8 +3,7 @@ import { useEffect } from 'react';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { rememberAgentManagementAccess } from '@/helpers/agentManagementAccess';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -17,9 +16,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
  * access grants them edit capability.
  */
 export const useAgentManagementAccess = (agentId?: string) => {
-  const agent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgentById(agentId)(s) : undefined,
-  );
+  const agent = useAgentData(agentId);
   const isAgentLoading = !!agentId && !agent;
   const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
   const { allowed: canEditContent } = usePermission('edit_own_content');

@@ -7,7 +7,7 @@ import { BaseExecutor } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { ragService } from '@/services/rag';
-import { agentSelectors } from '@/store/agent/selectors';
+import { getAgentKnowledgeIds } from '@/store/agent/projection';
 import { getAgentStoreState } from '@/store/agent/store';
 
 import { KnowledgeBaseExecutionRuntime } from '../../ExecutionRuntime';
@@ -179,7 +179,7 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
     params: SearchKnowledgeBaseArgs,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const { knowledgeBaseIds } = agentSelectors.currentKnowledgeIds(getAgentStoreState());
+    const { knowledgeBaseIds } = getAgentKnowledgeIds(getAgentStoreState().activeAgentId || '');
     return this.toResult(
       await this.runtime.searchKnowledgeBase(params, {
         knowledgeBaseIds,

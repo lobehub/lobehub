@@ -5,8 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { useBusinessTTSProvider } from '@/business/client/hooks/useBusinessTTSProvider';
 import { createHeaderWithOpenAI } from '@/services/_header';
 import { API_ENDPOINTS } from '@/services/_url';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -18,7 +17,7 @@ interface TTSConfig extends TTSOptions {
 
 export const useTTS = (content: string, config?: TTSConfig) => {
   const ttsSettings = useUserStore(settingsSelectors.currentTTS, isEqual);
-  const voice = useAgentStore(agentSelectors.currentAgentTTSVoice);
+  const voice = useCurrentAgentValue(agentProjectionSelectors.ttsVoice);
   const businessTTSProvider = useBusinessTTSProvider();
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const currentVoice = config?.voice || voice;

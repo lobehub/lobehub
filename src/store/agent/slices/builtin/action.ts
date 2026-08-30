@@ -1,9 +1,11 @@
-import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
+import { type AgentItem } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
-import { type PartialDeep } from 'type-fest';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { builtinAgentKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { nextProjectionObservedAt } from '@/projection/core/ingest';
+import { getProjectionStoreState } from '@/projection/store';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
@@ -37,9 +39,18 @@ export class BuiltinAgentSliceActionImpl {
   }
 
   refreshBuiltinAgent = async (slug: string): Promise<void> => {
-    const data = await agentService.getBuiltinAgent(slug);
-    if (data?.id) {
-      this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+    const scope = getCacheScope();
+    const observedAt = nextProjectionObservedAt();
+    const result = await agentService.getBuiltinAgentWithAccess(slug);
+    const data = result?.data;
+    if (data?.id && result) {
+      getProjectionStoreState().commitAgentConfig(
+        scope,
+        { ...data, id: data.id },
+        result.access,
+        'network',
+        observedAt,
+      );
       // Mirror useInitBuiltinAgent's onSuccess: keep builtinAgentIdMap in sync
       // so callers can rely on this as a real "ensure" path instead of just a
       // post-init refresh.
@@ -58,18 +69,37 @@ export class BuiltinAgentSliceActionImpl {
     return useOnlyFetchOnceSWR(
       context?.isLogin === false ? null : builtinAgentKeys.init(slug),
       async () => {
-        const data = await agentService.getBuiltinAgent(slug);
+        const scope = getCacheScope();
+        const observedAt = nextProjectionObservedAt();
+        const result = await agentService.getBuiltinAgentWithAccess(slug);
+        const data = result?.data;
+        if (data?.id && result) {
+          getProjectionStoreState().commitAgentConfig(
+            scope,
+            { ...data, id: data.id },
+            result.access,
+            'network',
+            observedAt,
+          );
+        }
 
         return data as AgentItem | null;
       },
       {
         onSuccess: (data: AgentItem | null) => {
           if (data?.id) {
+            const scope = getCacheScope();
+            const projectionStore = getProjectionStoreState();
+            if (!projectionStore.scopes[scope]?.records.agent[data.id]) {
+              projectionStore.commitAgentConfig(
+                scope,
+                { ...data, id: data.id },
+                'profile',
+                'network',
+                0,
+              );
+            }
             // Update builtinAgentIdMap with the agent id
-            // Update agentMap with the agent config
-            // AgentItem contains all fields needed for LobeAgentConfig
-            this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
-
             this.#set(
               { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
               false,

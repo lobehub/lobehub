@@ -61,7 +61,6 @@ const agentState = vi.hoisted(() => ({
     agt_inbox: {},
   } as Record<string, any>,
   inboxAgentId: 'agt_inbox',
-  internal_dispatchAgentMap: vi.fn(),
 }));
 
 const globalState = vi.hoisted(() => ({
@@ -123,6 +122,24 @@ vi.mock('@/store/agent', () => ({
       getState: () => agentState,
     },
   ),
+}));
+
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: (agentId: string) => agentState.agentMap[agentId],
+}));
+
+vi.mock('@/projection/modules/agent/queries', () => ({
+  loadAgentConfigProjection: vi.fn(),
+}));
+
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    visibility: (agent?: { visibility?: string }) => agent?.visibility,
+  },
+  useAgentValue: (
+    agentId: string | undefined,
+    selector: (agent?: { visibility?: string }) => unknown,
+  ) => selector(agentId ? agentState.agentMap[agentId] : undefined),
 }));
 
 vi.mock('@/store/agent/selectors', () => ({

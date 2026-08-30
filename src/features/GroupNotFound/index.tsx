@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
-import { agentGroupByIdSelectors, useAgentGroupStore } from '@/store/agentGroup';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 
 /**
  * Terminal 404 card for a chat group whose detail fetch settled on nothing —
@@ -28,8 +28,8 @@ GroupNotFound.displayName = 'GroupNotFound';
  */
 export const GroupNotFoundGuard: FC<PropsWithChildren> = memo(({ children }) => {
   const params = useParams<{ gid?: string }>();
-  const isNotFound = useAgentGroupStore(
-    agentGroupByIdSelectors.isGroupNotFoundById(params.gid ?? ''),
+  const isNotFound = useChatGroupProjection(
+    chatGroupProjectionSelectors.isGroupNotFoundById(params.gid ?? ''),
   );
 
   if (isNotFound) return <GroupNotFound />;

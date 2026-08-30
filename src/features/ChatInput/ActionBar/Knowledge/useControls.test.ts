@@ -16,11 +16,13 @@ vi.mock('@/store/agent', () => ({
     selector({ toggleFile: vi.fn(), toggleKnowledgeBase: vi.fn() }),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgentFilesById: () => () => mockFiles.current,
-    getAgentKnowledgeBasesById: () => () => mockKnowledgeBases.current,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    files: (agent: { files: unknown[] }) => agent.files,
+    knowledgeBases: (agent: { knowledgeBases: unknown[] }) => agent.knowledgeBases,
   },
+  useAgentValue: (_agentId: string, selector: (agent: Record<string, unknown>) => unknown) =>
+    selector({ files: mockFiles.current, knowledgeBases: mockKnowledgeBases.current }),
 }));
 
 vi.mock('../../hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));

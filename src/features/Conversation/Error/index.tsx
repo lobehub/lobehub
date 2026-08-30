@@ -23,7 +23,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopic } from '@/store/chat/slices/topic/projection';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
@@ -358,16 +358,14 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // orchestration lives in the conversation store; this only binds the actions.
     const scheduleHeteroContinuation = useConversationStore((s) => s.scheduleHeteroContinuation);
     const cancelHeteroContinuation = useConversationStore((s) => s.cancelHeteroContinuation);
-    const activeTopicScheduled = useChatStore(
-      (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
-    );
+    const activeTopic = useCurrentChatTopic();
+    const activeTopicScheduled = activeTopic?.status === 'scheduled';
     const activeAgentId = useChatStore((s) => s.activeAgentId);
-    const scheduledResetsAt = useChatStore((s) => {
-      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
-      return scheduledRun?.kind === 'resume_after_rate_limit'
+    const scheduledRun = activeTopic?.metadata?.scheduledRun;
+    const scheduledResetsAt =
+      scheduledRun?.kind === 'resume_after_rate_limit'
         ? scheduledRun.rateLimit?.resetsAt
         : undefined;
-    });
 
     const isRateLimitError =
       canCreate &&

@@ -181,17 +181,15 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => agentStore,
   useAgentStore: (selector: (s: typeof agentStore) => unknown) => selector(agentStore),
 }));
-vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: {
-    getAgencyConfigById: () => () => agentStore.rawAgencyConfig,
-    isWorkspaceAgentById: () => () => false,
+vi.mock('@/store/agent/projection', () => ({
+  agentProjectionSelectors: {
+    heterogeneous: (agent: { heterogeneous: boolean }) => agent.heterogeneous,
+    toolMode: (agent: { toolMode: string }) => agent.toolMode,
   },
-  agentSelectors: {
-    isCurrentAgentHeterogeneous: () => agentStore.isHeterogeneous,
-  },
-  chatConfigByIdSelectors: {
-    isChatModeById: () => () => false,
-  },
+  useAgentValue: (_agentId: string | undefined, selector: (agent: object) => unknown) =>
+    selector({ toolMode: 'agent' }),
+  useCurrentAgentValue: (selector: (agent: object) => unknown) =>
+    selector({ heterogeneous: agentStore.isHeterogeneous }),
 }));
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (s: typeof globalStore) => unknown) => selector(globalStore),

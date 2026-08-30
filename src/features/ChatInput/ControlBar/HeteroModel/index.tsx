@@ -6,10 +6,8 @@ import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useAgentValue } from '@/store/agent/projection';
+import { useActiveChatTopicModel } from '@/store/chat/slices/topic/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -20,8 +18,9 @@ import { useHeteroProviderPatch } from './useHeteroProviderPatch';
 
 const HeteroModel = memo(() => {
   const agentId = useAgentId();
-  const provider = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
+  const provider = useAgentValue(
+    agentId,
+    (agent) => agent?.agencyConfig?.heterogeneousProvider,
     isEqual,
   );
   const { allowed: canCreateContent, reason } = usePermission('create_content');
@@ -30,7 +29,7 @@ const HeteroModel = memo(() => {
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const patch = useHeteroProviderPatch({ agentId, enabled, provider });
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useActiveChatTopicModel();
   const effectiveProvider = provider
     ? applyTopicModelToHeterogeneousProvider(provider, topicModel)
     : undefined;

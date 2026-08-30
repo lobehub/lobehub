@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agentBuilderKeys,
+  agentKeys,
   documentCommentKeys,
+  homeKeys,
   isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
+  projectionKeys,
   recentKeys,
   resourceKeys,
   taskKeys,
@@ -33,33 +36,6 @@ describe('recentKeys', () => {
     expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
       recentKeys.allDrawer(true, 'user-1:workspace-2'),
     );
-  });
-
-  it('keys the Home topic-only list independently from mixed recents', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
-      'recent:topicList',
-      9,
-      'user-1:workspace-1',
-      'mine',
-    ]);
-  });
-
-  it('keeps the mine and team views of the Home topic list isolated', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).not.toEqual(
-      recentKeys.topicList(9, 'user-1:workspace-1', 'team'),
-    );
-  });
-
-  // Regression: `recent:topicList` had no CACHE_TIERS entry of its own, and the
-  // provider matches patterns as substrings — so `recent:list` never covered it.
-  // The Home recents list was memory-only and flashed a skeleton on every boot.
-  it('routes the Home topic-only recents key to a persisted cache tier', () => {
-    const serialized = unstable_serialize(recentKeys.topicList(9, 'user-1:workspace-1', 'mine'));
-    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
-      serialized.includes(pattern),
-    );
-
-    expect(persisted).toBe(true);
   });
 });
 
@@ -173,15 +149,76 @@ describe('agentBuilderKeys', () => {
 });
 
 describe('taskKeys', () => {
-  // Regression for sidebar task list cache persists across navigation to skip skeleton: the sidebar task list used a `sidebar:` domain
-  // key that no CACHE_TIERS pattern matched, so it was memory-only and every
-  // fresh page load showed a skeleton. The key must route to a persisted tier
-  // (the provider matches patterns against the serialized SWR key).
-  it('routes the sidebar task-groups key to a persisted cache tier', () => {
+  it('retires task DTOs from SWR persistence after Projection migration', () => {
     const serialized = unstable_serialize(taskKeys.sidebarGroups('agent-1'));
     const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
       serialized.includes(pattern),
     );
-    expect(persisted).toBe(true);
+    expect(persisted).toBe(false);
+  });
+});
+
+describe('homeKeys', () => {
+  it('isolates daily briefs by user without changing the original request identity', () => {
+    expect(homeKeys.dailyBrief('user-1')).toEqual(['home:dailyBrief', 'user-1']);
+    expect(homeKeys.dailyBrief('user-1')).not.toEqual(homeKeys.dailyBrief('user-2'));
+  });
+});
+
+describe('projectionKeys', () => {
+  it('isolates normalized Home requests by Projection scope', () => {
+    expect(projectionKeys.sidebar('user-1:workspace-1')).not.toEqual(
+      projectionKeys.sidebar('user-1:workspace-2'),
+    );
+  });
+
+  it('keeps the mine and team views of the Home recent topics feed isolated', () => {
+    expect(projectionKeys.recentTopics('user-1:workspace-1', 9, 'mine')).not.toEqual(
+      projectionKeys.recentTopics('user-1:workspace-1', 9, 'team'),
+    );
+  });
+
+  it('retires the legacy full sidebar response from SWR persistence', () => {
+    const serialized = unstable_serialize(agentKeys.list(true));
+
+    expect(
+      [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+    ).toBe(false);
+  });
+
+  it('retires migrated entity DTOs from every SWR persistence tier', () => {
+    const migratedKeys = [
+      ['topic:list', 'agent-1'],
+      ['agent:available'],
+      ['agent:config', 'agent-1'],
+      ['agent:search', 'builder'],
+      ['group:detail', 'group-1'],
+      ['group:list', true],
+      ['task:list', '__all__', 'all'],
+    ].map(unstable_serialize);
+
+    for (const serialized of migratedKeys) {
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
+  });
+
+  it('keeps request markers outside every SWR persistence tier', () => {
+    const serializedKeys = [
+      projectionKeys.sidebar('scope-1'),
+      projectionKeys.recentTopics('scope-1', 9, 'mine'),
+      projectionKeys.inboxTopics('scope-1'),
+      projectionKeys.scheduledTasks('scope-1'),
+      projectionKeys.tasks('scope-1'),
+      projectionKeys.briefs('scope-1'),
+      projectionKeys.localView('scope-1', 'agent.directory'),
+    ].map(unstable_serialize);
+
+    for (const serialized of serializedKeys) {
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
   });
 });

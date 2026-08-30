@@ -2,12 +2,12 @@ import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Checkbox } from '@lobehub/ui/base-ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentConfig } from '@/store/agent/projection';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
@@ -103,7 +103,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       if (server?.status === ComposioServerStatus.ACTIVE && isWaitingAuth) {
         cleanup();
       }
-    }, [server?.status, isWaitingAuth, cleanup, t]);
+    }, [server?.status, isWaitingAuth, cleanup]);
 
     /**
      * Start fallback polling (when window.closed is inaccessible)
@@ -131,7 +131,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           setIsWaitingAuth(false);
         }, POLL_TIMEOUT_MS);
       },
-      [refreshComposioConnectionStatus, t],
+      [refreshComposioConnectionStatus],
     );
 
     /**
@@ -165,7 +165,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           }
         }, 500);
       },
-      [refreshComposioConnectionStatus, startFallbackPolling],
+      [startFallbackPolling],
     );
 
     /**
@@ -187,13 +187,13 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           startFallbackPolling(serverName);
         }
       },
-      [cleanup, startWindowMonitor, startFallbackPolling, t],
+      [cleanup, startWindowMonitor, startFallbackPolling],
     );
 
     // Get plugin ID for this server (use identifier as pluginId)
     const pluginId = server ? server.identifier : '';
-    const plugins =
-      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
+    const agentConfig = useAgentConfig(effectiveAgentId);
+    const plugins = useMemo(() => agentConfig?.plugins ?? [], [agentConfig?.plugins]);
     const checked = plugins.includes(pluginId);
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 

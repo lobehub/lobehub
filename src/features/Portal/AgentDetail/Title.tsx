@@ -6,14 +6,13 @@ import { Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import Avatar from '@/components/Avatar';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const Title = memo(() => {
   const agentId = useChatStore(chatPortalSelectors.agentDetailId);
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId || ''));
+  const meta = useAgentMeta(agentId || '');
   const displayName = agentDisplayName(meta, agentId ?? '');
 
   return (

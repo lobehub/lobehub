@@ -4,6 +4,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useProjectionStore } from '@/projection/store';
+import { withSWR } from '~test-utils';
+
 import TaskParentBar from './TaskParentBar';
 
 const mocks = vi.hoisted(() => ({
@@ -35,6 +38,8 @@ vi.mock('@/services/task', () => ({
 }));
 
 vi.mock('@/store/task', () => ({
+  useActiveTaskDetailProjection: (selector: (detail: unknown) => unknown) =>
+    selector(mocks.taskState.taskDetailMap[mocks.taskState.activeTaskId]),
   useTaskStore: (selector: any) => selector(mocks.taskState),
 }));
 
@@ -67,6 +72,7 @@ vi.mock('../features/TaskSubtaskProgressTag', () => ({
 
 describe('TaskParentBar', () => {
   beforeEach(() => {
+    useProjectionStore.setState({ scopes: {} });
     mocks.navigate.mockClear();
     mocks.getDetail.mockReset();
     mocks.taskState = createState({
@@ -90,7 +96,7 @@ describe('TaskParentBar', () => {
   });
 
   it("opens the parent task inside the parent task's owning agent route", async () => {
-    render(<TaskParentBar />);
+    render(<TaskParentBar />, { wrapper: withSWR });
 
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
@@ -113,7 +119,7 @@ describe('TaskParentBar', () => {
       },
     });
 
-    render(<TaskParentBar />);
+    render(<TaskParentBar />, { wrapper: withSWR });
 
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
@@ -138,7 +144,7 @@ describe('TaskParentBar', () => {
       },
     });
 
-    render(<TaskParentBar />);
+    render(<TaskParentBar />, { wrapper: withSWR });
 
     fireEvent.click(await screen.findByTestId('parent-subtask'));
 

@@ -1,3 +1,6 @@
+import type { TaskStatus } from './task';
+import type { ChatTopicMetadata, ChatTopicStatus } from './topic/topic';
+
 /**
  * Sidebar item type - can be an agent or a chat group
  */
@@ -108,6 +111,8 @@ export interface SidebarAgentItem {
    * for personal-mode rows that pre-date the column.
    */
   visibility?: SidebarVisibility;
+  /** Workspace owning the row. Personal-scope payloads may omit it or use `null`. */
+  workspaceId?: string | null;
 }
 
 /**
@@ -148,4 +153,46 @@ export interface SidebarAgentListResponse {
    */
   privateUngrouped: SidebarAgentItem[];
   ungrouped: SidebarAgentItem[];
+}
+
+export interface HomeRecentItem {
+  agentId?: string | null;
+  /** User note on the topic; preferred over the last reply as the row snippet. */
+  description?: string | null;
+  icon: string;
+  id: string;
+  lastAssistantMessage?: string | null;
+  metadata?: ChatTopicMetadata;
+  routePath: string;
+  status: TaskStatus | null;
+  title: string;
+  type: 'document' | 'task' | 'topic';
+  updatedAt: Date | number | string;
+  /** The member who owns this item — for author attribution in workspace team views. */
+  userId?: string;
+}
+
+/** Minimal complete Topic view required by Home Dashboard and Home Inbox. */
+export interface HomeTopicView {
+  agentId?: string | null;
+  createdAt?: Date | number | string;
+  description?: string | null;
+  id: string;
+  lastAssistantMessage?: string | null;
+  routePath?: string;
+  runStartedAt?: Date | null;
+  status?: ChatTopicStatus | null;
+  title: string;
+  trigger?: string | null;
+  updatedAt: Date | number | string;
+  userId?: string;
+}
+
+export interface HomeDailyBriefPair {
+  hint: string;
+  welcome: string;
+}
+
+export interface HomeDailyBriefResponse {
+  pairs: HomeDailyBriefPair[];
 }

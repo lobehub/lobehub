@@ -3,8 +3,7 @@ import { memo, useMemo } from 'react';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 const NANO_BANANA_ASPECT_RATIOS = [
   'auto',
@@ -56,7 +55,7 @@ const ImageAspectRatioSelectInner = memo<{
 const ImageAspectRatioSelectWithStore = memo<{ defaultValue: AspectRatio }>(({ defaultValue }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+  const config = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
 
   const storeValue = (config.imageAspectRatio as AspectRatio) || defaultValue;
 

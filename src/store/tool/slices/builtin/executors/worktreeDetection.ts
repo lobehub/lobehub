@@ -10,7 +10,7 @@ import isEqual from 'fast-deep-equal';
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
-import { topicSelectors } from '@/store/chat/selectors';
+import { getChatTopicById } from '@/store/chat/slices/topic/projection';
 import { getChatStoreState } from '@/store/chat/store';
 import { getElectronStoreState } from '@/store/electron';
 
@@ -980,7 +980,7 @@ export const recordWorktreeAdd = async (params: {
   const { command, topicId } = params;
   const state = getChatStoreState();
 
-  const topic = topicSelectors.getTopicById(topicId)(state);
+  const topic = getChatTopicById(topicId);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
   const source = getWorkingDirSourcePath(currentConfig) ?? topic?.metadata?.workingDirectory;
   if (!source) return;
@@ -1013,7 +1013,7 @@ export const recordGitCommandEffects = async (params: {
   const { command, resultContent, topicId } = params;
   const state = getChatStoreState();
 
-  const topic = topicSelectors.getTopicById(topicId)(state);
+  const topic = getChatTopicById(topicId);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
   const source = getWorkingDirSourcePath(currentConfig) ?? topic?.metadata?.workingDirectory;
   if (!source) return;
@@ -1108,7 +1108,7 @@ export const recordWorktreeEnter = async (params: {
   const { content, topicId } = params;
   const state = getChatStoreState();
 
-  const topic = topicSelectors.getTopicById(topicId)(state);
+  const topic = getChatTopicById(topicId);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
   const source = getWorkingDirSourcePath(currentConfig) ?? topic?.metadata?.workingDirectory;
 
@@ -1136,7 +1136,7 @@ export const recordWorktreeExit = async (params: {
 
   const state = getChatStoreState();
 
-  const topic = topicSelectors.getTopicById(topicId)(state);
+  const topic = getChatTopicById(topicId);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
   const source = getWorkingDirSourcePath(currentConfig) ?? topic?.metadata?.workingDirectory;
   if (!source) return;

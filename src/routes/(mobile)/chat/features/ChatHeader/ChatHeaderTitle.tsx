@@ -8,20 +8,18 @@ import { useTranslation } from 'react-i18next';
 
 import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useCurrentChatTopic, useCurrentChatTopics } from '@/store/chat/slices/topic/projection';
 import { useGlobalStore } from '@/store/global';
 
 const ChatHeaderTitle = memo(() => {
   const { t } = useTranslation(['chat', 'topic']);
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
-  const [topicCount, topic] = useChatStore((s) => [
-    topicSelectors.currentTopicCount(s),
-    topicSelectors.currentActiveTopic(s),
-  ]);
+  const topicCount = useCurrentChatTopics()?.total ?? 0;
+  const topic = useCurrentChatTopic();
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
-  const title = useAgentStore(agentSelectors.currentAgentDisplayName);
+  const title = useCurrentAgentValue(agentProjectionSelectors.displayName);
 
   // Archived topics fall out of the sidebar list fetch — pull their detail by
   // id so the title doesn't degrade to the "new topic" placeholder.

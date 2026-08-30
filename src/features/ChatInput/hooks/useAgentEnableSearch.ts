@@ -1,7 +1,6 @@
 'use client';
 
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { useAgentId } from './useAgentId';
@@ -14,9 +13,7 @@ import { useEffectiveModel } from './useEffectiveModel';
 export const useAgentEnableSearch = () => {
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
-  const agentSearchMode = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSearchModeById(agentId)(s),
-  );
+  const agentSearchMode = useAgentValue(agentId, agentProjectionSelectors.searchMode);
 
   const searchImpl = useAiInfraStore(aiModelSelectors.modelBuiltinSearchImpl(model, provider));
 

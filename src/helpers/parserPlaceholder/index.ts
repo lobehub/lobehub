@@ -2,8 +2,9 @@ import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { isDesktop } from '@lobechat/const';
 import { uuid } from '@lobechat/utils';
 
+import { getAgentProjectionById } from '@/projection/modules/agent/read';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -147,8 +148,12 @@ export const VARIABLE_GENERATORS = {
    * | `{{provider}}` | openai |
    *
    */
-  model: () => agentSelectors.currentAgentModel(useAgentStore.getState()),
-  provider: () => agentSelectors.currentAgentModelProvider(useAgentStore.getState()),
+  model: () =>
+    agentProjectionSelectors.model(getAgentProjectionById(useAgentStore.getState().activeAgentId)),
+  provider: () =>
+    agentProjectionSelectors.provider(
+      getAgentProjectionById(useAgentStore.getState().activeAgentId),
+    ),
 
   /**
    * Desktop app path-related template variables (only available in Electron)

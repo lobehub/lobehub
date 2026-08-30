@@ -97,6 +97,10 @@ class ChatGroupService {
     return lambdaClient.group.getGroupDetail.query({ id });
   };
 
+  getGroupDetailWithAccess = (id: string) => {
+    return lambdaClient.group.getGroupDetailWithAccess.query({ id });
+  };
+
   getGroups = (): Promise<ChatGroupItem[]> => {
     return lambdaClient.group.getGroups.query();
   };

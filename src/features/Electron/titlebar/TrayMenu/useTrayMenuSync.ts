@@ -3,17 +3,19 @@
 import { useEffect, useMemo, useRef } from 'react';
 
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { desktopTrayService } from '@/services/electron/tray';
 import { useElectronStore } from '@/store/electron';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/slices/agentList/selectors';
 
 import { useResolvedPages } from '../RecentlyViewed/hooks/useResolvedPages';
 import { resolveTrayNavigationSnapshot } from './resolveSnapshot';
 
 export const useTrayMenuSync = () => {
   useFetchAgentList();
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const agents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
   const scope = useElectronStore((state) => state.activeRecentScope);
   const { pinnedPages, recentPages } = useResolvedPages();
   const lastSnapshotRef = useRef<string | undefined>(undefined);

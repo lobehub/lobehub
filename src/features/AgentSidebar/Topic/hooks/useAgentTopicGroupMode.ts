@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode } from '@/types/topic';
@@ -9,10 +9,8 @@ import type { TopicGroupMode } from '@/types/topic';
 import { resolveAgentTopicGroupMode } from '../utils/topicGroupMode';
 
 export const useAgentTopicGroupMode = () => {
-  const agentType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
-  const agentTopicGroupMode = useAgentStore(
-    (s) => agentSelectors.currentAgentConfig(s)?.chatConfig?.topicGroupMode,
-  );
+  const agentType = useCurrentAgentValue(agentProjectionSelectors.heterogeneousProviderType);
+  const agentTopicGroupMode = useCurrentAgentValue((agent) => agent?.chatConfig?.topicGroupMode);
   const updateAgentChatConfig = useAgentStore((s) => s.updateAgentChatConfig);
   const globalMode = useUserStore(preferenceSelectors.topicGroupMode);
 

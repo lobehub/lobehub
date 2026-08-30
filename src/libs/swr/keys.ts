@@ -134,12 +134,16 @@ export const topicKeys = {
     'topic:scheduledRunWatch',
     topicId,
   ]),
-  search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
+  search: def(
     'topic:search',
-    keywords,
-    agentId,
-    groupId,
-  ]),
+    (keywords: string, scope: string, agentId?: string, groupId?: string) => [
+      'topic:search',
+      keywords,
+      scope,
+      agentId,
+      groupId,
+    ],
+  ),
 };
 
 // ---- topic comment ------------------------------------------------------
@@ -293,13 +297,6 @@ export const recentKeys = {
     isLogin,
     limit,
     scope,
-  ]),
-  /** Home chat-only list; filtering happens before the server-side limit. */
-  topicList: def('recent:topicList', (limit: number, scope: string, view: 'mine' | 'team') => [
-    'recent:topicList',
-    limit,
-    scope,
-    view,
   ]),
 };
 
@@ -471,8 +468,12 @@ export const homeInboxKeys = {
 // (agentKeys.list defined above)
 export const agentConfigKeys = {
   available: def('agent:available', () => ['agent:available']),
-  config: def('agent:config', (agentId: string) => ['agent:config', agentId]),
-  search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
+  config: def('agent:config', (agentId: string, scope: string) => ['agent:config', agentId, scope]),
+  search: def('agent:search', (keyword: string | undefined, scope: string) => [
+    'agent:search',
+    keyword,
+    scope,
+  ]),
   serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
     'agent:serverDefaultHeterogeneousCapability',
   ]),
@@ -1231,6 +1232,45 @@ export const topicActionKeys = {
 // ---- misc remaining domains ---------------------------------------------
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
+};
+
+/**
+ * Non-persistent request identities for the normalized Home projection graph.
+ * Fetchers cache only a completion marker; all domain data lives in ProjectionStore.
+ * The serialized `request:entity:*` roots remain stable for cache compatibility.
+ */
+export const projectionKeys = {
+  briefs: def('request:entity:home:briefs', (scope: string) => [
+    'request:entity:home:briefs',
+    scope,
+  ]),
+  inboxTopics: def('request:entity:home:inboxTopics', (scope: string) => [
+    'request:entity:home:inboxTopics',
+    scope,
+  ]),
+  localView: def('request:entity:localView', (scope: string, view: string) => [
+    'request:entity:localView',
+    scope,
+    view,
+  ]),
+  recentTopics: def(
+    'request:entity:home:recentTopics',
+    (scope: string, limit: number, view: 'mine' | 'team') => [
+      'request:entity:home:recentTopics',
+      scope,
+      limit,
+      view,
+    ],
+  ),
+  sidebar: def('request:entity:home:sidebar', (scope: string) => [
+    'request:entity:home:sidebar',
+    scope,
+  ]),
+  scheduledTasks: def('request:entity:home:scheduledTasks', (scope: string) => [
+    'request:entity:home:scheduledTasks',
+    scope,
+  ]),
+  tasks: def('request:entity:home:tasks', (scope: string) => ['request:entity:home:tasks', scope]),
 };
 
 /**

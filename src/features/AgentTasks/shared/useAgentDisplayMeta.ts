@@ -4,10 +4,10 @@ import { cssVar } from 'antd-style';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { useHomeAgentIdentity } from '@/projection';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 import { isInboxAgentId } from './isInboxAgent';
 
@@ -32,31 +32,30 @@ export const useAgentDisplayMeta = (
 ): AgentDisplayMeta | undefined => {
   const { t } = useTranslation(['chat', 'common']);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const meta = useAgentStore((s) =>
-    agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
-  );
-  const sidebarAgent = useHomeStore(homeAgentListSelectors.getAgentById(agentId ?? ''));
+  const projectedMeta = useAgentMeta(agentId ?? undefined);
+  const meta = agentId ? projectedMeta : undefined;
+  const entityAgent = useHomeAgentIdentity(agentId ?? undefined);
 
   if (!agentId) return undefined;
 
   const isInbox = isInboxAgentId(agentId, inboxAgentId);
-  const sidebarAvatar = typeof sidebarAgent?.avatar === 'string' ? sidebarAgent.avatar : undefined;
+  const sidebarAvatar = typeof entityAgent?.avatar === 'string' ? entityAgent.avatar : undefined;
   const hasResolvedMeta =
     isInbox ||
     !!meta?.avatar ||
     !!meta?.backgroundColor ||
     !!agentDisplayName(meta) ||
-    !!sidebarAgent;
+    !!entityAgent;
 
   if (!fallbackToDefault && !hasResolvedMeta) return undefined;
 
   return {
     avatar: meta?.avatar || sidebarAvatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
     backgroundColor:
-      meta?.backgroundColor || sidebarAgent?.backgroundColor || cssVar.colorBgContainer,
+      meta?.backgroundColor || entityAgent?.backgroundColor || cssVar.colorBgContainer,
     title:
       agentDisplayName(meta) ||
-      agentDisplayName(sidebarAgent) ||
+      agentDisplayName(entityAgent) ||
       (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' })),
   };
 };

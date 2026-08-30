@@ -306,10 +306,9 @@ We also need to display the opening configuration set by the user on the chat pa
 const AgentInfo = () => {
   const { t } = useTranslation(['chat', 'welcome']);
 
-  // Prefer conversation-scoped agent config (openingMessage on agent config)
-  const openingMessage = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage || '',
-  );
+  // Read conversation-scoped config from the canonical Agent Projection
+  const openingMessage =
+    useAgentValue(agentId, agentProjectionSelectors.openingMessage) || '';
 
   const message = useMemo(() => {
     if (openingMessage) return openingMessage;

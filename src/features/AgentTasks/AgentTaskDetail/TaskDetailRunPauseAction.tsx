@@ -6,9 +6,10 @@ import { useTranslation } from 'react-i18next';
 
 import StopLoadingIcon from '@/components/StopLoading';
 import { usePermission } from '@/hooks/usePermission';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useTaskStore } from '@/store/task';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { nextHeartbeatFiring, nextScheduleFiring } from './scheduler/helpers';
@@ -46,16 +47,26 @@ const TaskDetailRunPauseAction = memo(() => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask, reason } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
-  const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
-  const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
-  const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
-  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
-  const interval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
-  const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
-  const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
-  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
+  const canRun = useActiveTaskDetailProjection(taskDetailProjectionSelectors.canRunActiveTask);
+  const canPause = useActiveTaskDetailProjection(taskDetailProjectionSelectors.canPauseActiveTask);
+  const status = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskStatus);
+  const detail = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskDetail);
+  const automationMode = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAutomationMode,
+  );
+  const interval = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskPeriodicInterval,
+  );
+  const schedulePattern = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskSchedulePattern,
+  );
+  const scheduleTimezone = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskScheduleTimezone,
+  );
+  const assigneeAgentId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAgentId,
+  );
+  const assigneeUserId = useActiveTaskDetailProjection((task) => task?.userId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isRerun = status === 'completed';
   const runTask = useTaskStore((s) => s.runTask);

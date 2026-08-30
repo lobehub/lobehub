@@ -1,9 +1,9 @@
 import { isDesktop } from '@lobechat/const';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 
-import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { getChatProjection, selectChatTopicItem } from '@/projection';
+import { getAgentWorkingDirectory } from '@/store/agent';
 import { type ChatStoreState } from '@/store/chat/initialState';
-import { topicSelectors } from '@/store/chat/selectors';
 import { getElectronStoreState } from '@/store/electron';
 
 /**
@@ -37,20 +37,15 @@ export const resolveEffectiveWorkingDirectory = (
 ): string | undefined => {
   if (!isDesktop) return undefined;
 
-  const topicWorkingDir = topicSelectors.getTopicWorkingDirectory(topicId)(chatState);
+  const resolvedTopicId = topicId === undefined ? chatState.activeTopicId : topicId;
+  const topic = resolvedTopicId
+    ? getChatProjection((scope) => selectChatTopicItem(scope, resolvedTopicId))
+    : undefined;
+  const topicWorkingDir = getWorkingDirEffectivePath(
+    topic?.metadata?.workingDirectoryConfig ?? topic?.metadata?.workingDirectory,
+  );
   if (topicWorkingDir) return topicWorkingDir;
 
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-  if (agentId) {
-    return (
-      agentByIdSelectors.getAgentWorkingDirectoryById(
-        agentId,
-        currentDeviceId,
-      )(getAgentStoreState()) ?? undefined
-    );
-  }
-
-  return (
-    agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(getAgentStoreState()) ?? undefined
-  );
+  return getAgentWorkingDirectory(agentId ?? chatState.activeAgentId, currentDeviceId);
 };

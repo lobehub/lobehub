@@ -4,8 +4,7 @@ import { SlidersHorizontal, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -14,9 +13,7 @@ const SkillActivateMode = memo(() => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const currentMode = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
-  );
+  const currentMode = useAgentValue(agentId, agentProjectionSelectors.skillActivateMode);
 
   return (
     <Tabs

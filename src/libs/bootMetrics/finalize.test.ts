@@ -14,10 +14,11 @@ const mocks = vi.hoisted(() => ({
   getUserStoreState: vi.fn(() => ({ user: null })),
   isLogin: vi.fn(() => false),
   isProductUsageEventEnabled: vi.fn(() => true),
+  waitForIdle: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/libs/bootTiming', () => ({
-  bootTiming: { snapshot: mocks.bootTimingSnapshot },
+  bootTiming: { snapshot: mocks.bootTimingSnapshot, waitForIdle: mocks.waitForIdle },
 }));
 
 vi.mock('@/store/serverConfig', () => ({
@@ -100,6 +101,7 @@ describe('startBootMetricsFinalize', () => {
     mocks.getUserStoreState.mockReturnValue({ user: null });
     mocks.isLogin.mockReturnValue(false);
     mocks.isProductUsageEventEnabled.mockReturnValue(true);
+    mocks.waitForIdle.mockResolvedValue(undefined);
 
     process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL = INGEST_URL;
   });
@@ -158,6 +160,25 @@ describe('startBootMetricsFinalize', () => {
       spans: expect.any(Array),
       totalMs: expect.any(Number),
     });
+  });
+
+  it('waits for asynchronous boot spans to settle before taking the payload snapshot', async () => {
+    let releaseBootActivity!: () => void;
+    mocks.waitForIdle.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseBootActivity = resolve;
+      }),
+    );
+    const { startBootMetricsFinalize } = await import('./finalize');
+
+    startBootMetricsFinalize();
+    await vi.runAllTimersAsync();
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
+
+    releaseBootActivity();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
   });
 
   it('pagehide fallback sends when idle path has not fired, and sent flag prevents double-send', async () => {

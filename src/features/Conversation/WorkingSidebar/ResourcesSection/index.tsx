@@ -3,7 +3,7 @@ import { memo } from 'react';
 
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 
 import AgentDocumentsGroup, { type ResourceFilter } from './AgentDocumentsGroup';
 import SkillsGroup from './SkillsGroup';
@@ -22,7 +22,7 @@ interface ResourcesSectionProps {
 }
 
 const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId, enabled = true, filter }) => {
-  const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHetero = useCurrentAgentValue(agentProjectionSelectors.heterogeneous);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   // Resolve the cwd the same way the runtime bar / WorkingSidebar do
   // (`useEffectiveWorkingDirectory`). The old `topicCwd || agentCwd` pattern

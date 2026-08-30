@@ -7,8 +7,11 @@ import { VList } from 'virtua';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import GroupItem from '../List/AgentGroupItem';
 import AgentItem from '../List/AgentItem';
@@ -34,7 +37,10 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
   );
 
   // Get all agents from homeStore (ungrouped agents for default view)
-  const allUngroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
+  const allUngroupedAgents = useHomeSidebarProjection(
+    homeSidebarSelectors.ungroupedAgents,
+    isEqual,
+  );
 
   // The drawer is sidebar overflow, so it honors the caller's "removed from
   // my sidebar" list like every sidebar section — items hidden there are

@@ -17,6 +17,12 @@ interface ResourceConfigGuardCtx {
 }
 
 export type ResourceConfigAccess = 'full' | 'none' | 'profile';
+export type VisibleResourceConfigAccess = Exclude<ResourceConfigAccess, 'none'>;
+
+export interface ResourceConfigAccessResult<T> {
+  access: VisibleResourceConfigAccess;
+  data: T;
+}
 
 const ACCESS_RANK: Record<ResourceConfigAccess, number> = {
   full: 2,

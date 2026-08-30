@@ -30,8 +30,8 @@ const PopupAgentTopicPage = memo(() => {
     );
   }, [aid, tid]);
 
-  // Populate topicDataMap so the title-bar can resolve the topic title,
-  // and so chat operations that read topic metadata behave correctly.
+  // Populate the Topic Projection so the title bar and chat operations can
+  // resolve canonical topic metadata.
   useFetchTopics();
 
   if (!aid || !tid) return null;

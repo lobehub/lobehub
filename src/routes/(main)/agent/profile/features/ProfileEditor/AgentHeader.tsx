@@ -4,7 +4,6 @@ import { agentSecondaryDisplayName } from '@lobechat/types';
 import { Flexbox, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import { PencilIcon, SparklesIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +12,12 @@ import { createAgentIdentityModal } from '@/features/AgentIdentityModal';
 import { AgentProfileArtwork } from '@/features/AgentProfileArtwork';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import {
+  agentProjectionSelectors,
+  useAgentConfig,
+  useAgentMeta,
+  useAgentValue,
+} from '@/store/agent/projection';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
@@ -25,11 +29,10 @@ const AgentHeader = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   const agentId = useAgentStore((s) => s.activeAgentId || '');
-  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
-  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
-  /** Keeps the render-only fallback avatar out of generation references. */
-  const storedAvatar = useAgentStore(agentSelectors.getAgentStoredAvatarById(agentId));
+  const meta = useAgentMeta(agentId);
+  const config = useAgentConfig(agentId);
+  const slug = useAgentValue(agentId, agentProjectionSelectors.slug);
+  const storedAvatar = useAgentValue(agentId, agentProjectionSelectors.avatar);
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const { autoName, naming } = useAutoName(agentId);
   const personalName = meta.name?.trim();

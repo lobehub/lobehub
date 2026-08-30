@@ -4,7 +4,8 @@ import { Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useTaskStore } from '@/store/task';
+import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
+import { useActiveTaskDetailProjection, useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import TaskPriorityTag from '../features/TaskPriorityTag';
@@ -43,12 +44,21 @@ const TaskProperties = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
-  const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
-  const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
-  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
-  const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
-  const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const status = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskStatus) as
+    TaskStatus | undefined;
+  const priority = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskPriority);
+  const heartbeatInterval = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskPeriodicInterval,
+  );
+  const automationMode = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAutomationMode,
+  );
+  const schedulePattern = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskSchedulePattern,
+  );
+  const scheduleTimezone = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskScheduleTimezone,
+  );
 
   if (!taskId) return null;
 

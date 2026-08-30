@@ -5,20 +5,19 @@ import { memo } from 'react';
 
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 
 /**
  * Connected AgentGroupAvatar that reads from agentGroup store
  */
 const CurrentAgentGroupAvatar = memo<{ size?: number }>(({ size = 28 }) => {
   const { gid } = useActiveRouteParams<{ gid: string }>();
-  const groupMeta = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s),
+  const groupMeta = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMeta(gid ?? ''),
     isEqual,
   );
-  const memberAvatars = useAgentGroupStore(
-    (s) => agentGroupSelectors.getGroupMemberAvatars(gid ?? '')(s),
+  const memberAvatars = useChatGroupProjection(
+    chatGroupProjectionSelectors.getGroupMemberAvatars(gid ?? ''),
     isEqual,
   );
 

@@ -226,6 +226,7 @@ export interface TaskParticipant {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  name?: string | null;
   title: string;
   type: 'user' | 'agent';
 }

@@ -305,10 +305,9 @@ const OpeningQuestions = memo(() => {
 const AgentInfo = () => {
   const { t } = useTranslation(['chat', 'welcome']);
 
-  // 优先会话作用域下的 agent 配置（openingMessage 在 agent config 上）
-  const openingMessage = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage || '',
-  );
+  // 从 canonical Agent Projection 读取会话作用域下的配置
+  const openingMessage =
+    useAgentValue(agentId, agentProjectionSelectors.openingMessage) || '';
 
   const message = useMemo(() => {
     if (openingMessage) return openingMessage;

@@ -6,8 +6,7 @@ import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useAgentStore } from '@/store/agent/store';
+import { useAgentValue } from '@/store/agent/projection';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 import HistoryDivider from './HistoryDivider';
@@ -35,8 +34,9 @@ const History = memo(() => {
   });
 
   const agentId = useConversationStore(contextSelectors.agentId);
-  const enableCompressHistory = useAgentStore(
-    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).enableCompressHistory,
+  const enableCompressHistory = useAgentValue(
+    agentId,
+    (agent) => agent?.chatConfig?.enableCompressHistory,
   );
 
   return (

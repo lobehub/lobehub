@@ -5,8 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 
 const REASONING_MODES = MODEL_REASONING_PARAM_LEVELS.reasoningMode;
 type ReasoningMode = (typeof REASONING_MODES)[number];
@@ -51,7 +50,7 @@ const ReasoningModeSegmentedWithStore = memo<{
 }>(({ defaultValue, disabled, id }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+  const config = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
 
   const value = REASONING_MODES.includes(config.reasoningMode as ReasoningMode)
     ? (config.reasoningMode as ReasoningMode)

@@ -1,10 +1,20 @@
-import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { ProjectionSource, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { nextProjectionObservedAt } from '@/projection/core/ingest';
+import { useTaskDetailProjectionRequest } from '@/projection/modules/task/hooks';
+import { loadTaskDetailProjection } from '@/projection/modules/task/queries';
+import {
+  getTaskDetailProjection,
+  getTaskDetailProjectionMap,
+} from '@/projection/modules/task/read';
+import { useTaskDetailProjection } from '@/projection/modules/task/viewHooks';
+import { getProjectionStoreState } from '@/projection/store';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import type { StoreSetter } from '@/store/types';
@@ -13,7 +23,6 @@ import { saveToast } from '@/store/utils/saveToast';
 import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStore } from '../../store';
-import { useTaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
 import { findSubtaskParentId, taskDetailReducer } from './reducer';
 
@@ -143,42 +152,16 @@ export class TaskDetailSliceActionImpl {
       throw new Error('No task identifier provided and no current task context.');
     }
 
-    const result = await taskService.getDetail(resolvedId);
-    const detail = result.data;
-
-    if (!detail) {
-      // Mark the *resolved* not-found so the read side can tell it apart from a
-      // network / 500 rejection (which propagates from `taskService.getDetail`
-      // above with an HTTP status). Without this tag both would render the same
-      // terminal 404, telling the user a merely-errored task was deleted.
-      const notFound = new Error(`Task not found: ${resolvedId}`) as Error & { code?: string };
-      notFound.code = 'TASK_NOT_FOUND';
-      throw notFound;
+    const previous = getTaskDetailProjection(resolvedId);
+    const scope = getCacheScope();
+    const canonical = await loadTaskDetailProjection(resolvedId, scope, 'throw');
+    if (!canonical) throw new Error(`Task projection missing after load: ${resolvedId}`);
+    this.#incrementInstructionRevisionIfChanged(canonical.identifier, previous, canonical);
+    if (resolvedId !== canonical.identifier) {
+      this.#incrementInstructionRevisionIfChanged(resolvedId, previous, canonical);
     }
 
-    this.internal_dispatchTaskDetail(
-      {
-        id: detail.identifier,
-        type: 'setTaskDetail',
-        value: detail,
-      },
-      { instructionSource: 'external' },
-    );
-
-    // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
-    // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
-    if (resolvedId !== detail.identifier) {
-      this.internal_dispatchTaskDetail(
-        {
-          id: resolvedId,
-          type: 'setTaskDetail',
-          value: detail,
-        },
-        { instructionSource: 'external' },
-      );
-    }
-
-    return detail;
+    return canonical;
   };
 
   createTask = async (params: {
@@ -213,7 +196,7 @@ export class TaskDetailSliceActionImpl {
   };
 
   deleteTask = async (identifier: string): Promise<DeletedTask | null> => {
-    const snapshot = this.#get().taskDetailMap[identifier];
+    const snapshot = getTaskDetailProjection(identifier);
     this.#set({ isDeletingTask: true }, false, 'deleteTask/start');
     try {
       this.internal_dispatchTaskDetail({ id: identifier, type: 'deleteTaskDetail' });
@@ -369,7 +352,7 @@ export class TaskDetailSliceActionImpl {
     // Snapshot every map entry the optimistic patch will touch BEFORE dispatch.
     // activeTaskId can change mid-flight, and the patch can mutate a parent's
     // cached subtree in addition to `id`, so rollback must target both.
-    const patchedParentId = findSubtaskParentId(this.#get().taskDetailMap, id);
+    const patchedParentId = findSubtaskParentId(getTaskDetailProjectionMap(), id);
     const snapshotActiveTaskId = this.#get().activeTaskId;
     const refreshPatchedTargets = async (): Promise<void> => {
       const targets = new Set<string>([id]);
@@ -423,16 +406,12 @@ export class TaskDetailSliceActionImpl {
     // is a trap here: it's only re-evaluated after a timer fires, so if the first
     // call (with undefined cache data) returns 0, no timer is ever scheduled and
     // polling never starts — even once real data arrives.
-    const shouldPoll = useTaskStore((s) => {
-      const detail = taskId ? s.taskDetailMap[taskId] : undefined;
-      return hasInFlightActivity(detail);
-    });
+    const detail = useTaskDetailProjection(taskId);
+    const shouldPoll = hasInFlightActivity(detail);
 
-    return useClientDataSWR(
-      taskId ? taskKeys.detail(taskId) : null,
-      async ([, id]: [string, string]) => this.fetchTaskDetail(id),
-      { refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0 },
-    );
+    return useTaskDetailProjectionRequest(taskKeys.detail(taskId ?? ''), taskId, {
+      refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0,
+    });
   };
 
   // ── Internal Actions ──
@@ -450,10 +429,15 @@ export class TaskDetailSliceActionImpl {
 
   internal_dispatchTaskDetail = (
     payload: TaskDetailDispatch,
-    options?: { instructionSource?: 'external' },
+    options?: {
+      commitProjection?: boolean;
+      instructionSource?: 'external';
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
   ): void => {
     const state = this.#get();
-    const currentMap = state.taskDetailMap;
+    const currentMap = getTaskDetailProjectionMap();
     const nextMap = taskDetailReducer(currentMap, payload);
     const shouldIncrementInstructionRevision =
       options?.instructionSource === 'external' &&
@@ -473,7 +457,6 @@ export class TaskDetailSliceActionImpl {
     if (shouldIncrementInstructionRevision) {
       this.#set(
         {
-          taskDetailMap: nextMap,
           taskInstructionRevisionMap: {
             ...state.taskInstructionRevisionMap,
             [payload.id]: (state.taskInstructionRevisionMap[payload.id] ?? 0) + 1,
@@ -482,6 +465,7 @@ export class TaskDetailSliceActionImpl {
         false,
         `internal_dispatchTaskDetail/${payload.type}`,
       );
+      this.#commitTaskDetailChanges(currentMap, nextMap, payload, options);
       return;
     }
 
@@ -489,14 +473,60 @@ export class TaskDetailSliceActionImpl {
       const taskInstructionRevisionMap = { ...state.taskInstructionRevisionMap };
       delete taskInstructionRevisionMap[payload.id];
       this.#set(
-        { taskDetailMap: nextMap, taskInstructionRevisionMap },
+        { taskInstructionRevisionMap },
         false,
         `internal_dispatchTaskDetail/${payload.type}`,
       );
+      this.#commitTaskDetailChanges(currentMap, nextMap, payload, options);
       return;
     }
 
-    this.#set({ taskDetailMap: nextMap }, false, `internal_dispatchTaskDetail/${payload.type}`);
+    this.#commitTaskDetailChanges(currentMap, nextMap, payload, options);
+  };
+
+  #incrementInstructionRevisionIfChanged = (
+    id: string,
+    current: TaskDetailData | undefined,
+    next: TaskDetailData | undefined,
+  ): void => {
+    if (!hasInstructionSnapshotChanged(current, next)) return;
+    const revisionMap = this.#get().taskInstructionRevisionMap;
+    this.#set(
+      { taskInstructionRevisionMap: { ...revisionMap, [id]: (revisionMap[id] ?? 0) + 1 } },
+      false,
+      'taskDetail/instructionRevision',
+    );
+  };
+
+  #commitTaskDetailChanges = (
+    previous: Record<string, TaskDetailData>,
+    next: Record<string, TaskDetailData>,
+    payload: TaskDetailDispatch,
+    options?: {
+      commitProjection?: boolean;
+      observedAt?: number;
+      source?: ProjectionSource;
+    },
+  ): void => {
+    if (options?.commitProjection === false) return;
+    const scope = getCacheScope();
+    const observedAt = options?.observedAt ?? nextProjectionObservedAt();
+    if (payload.type === 'deleteTaskDetail') {
+      getProjectionStoreState().deleteTaskProjection(scope, payload.id, observedAt);
+    }
+    const committed = new Set<string>();
+    for (const [id, detail] of Object.entries(next)) {
+      if (detail === previous[id]) continue;
+      const identity = detail.id ?? detail.identifier ?? id;
+      if (committed.has(identity)) continue;
+      committed.add(identity);
+      getProjectionStoreState().commitTaskDetail(
+        scope,
+        { ...detail, id: detail.id ?? id },
+        options?.source ?? 'mutation',
+        observedAt,
+      );
+    }
   };
 
   internal_refreshTaskDetail = async (id: string): Promise<void> => {

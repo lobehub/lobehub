@@ -8,8 +8,7 @@ import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentProjectionSelectors, useAgentValue } from '@/store/agent/projection';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type SearchMode } from '@/types/search';
 
@@ -69,7 +68,7 @@ interface NetworkOption {
 const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const mode = useAgentStore((s) => chatConfigByIdSelectors.getSearchModeById(agentId)(s));
+  const mode = useAgentValue(agentId, agentProjectionSelectors.searchMode);
   const { allowed: canCreate } = usePermission('create_content');
 
   return (
@@ -106,10 +105,9 @@ const Controls = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
 
   const { model, provider } = useEffectiveModel(agentId);
-  const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s).searchMode,
-  ]);
+  const chatConfig = useAgentValue(agentId, agentProjectionSelectors.chatConfig);
+  const useModelBuiltinSearch = chatConfig.useModelBuiltinSearch;
+  const searchMode = chatConfig.searchMode;
 
   const supportFC = useAiInfraStore(aiModelSelectors.isModelSupportToolUse(model, provider));
   const isProviderHasBuiltinSearchConfig = useAiInfraStore(

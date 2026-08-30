@@ -5,8 +5,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { marketApiService } from '@/services/marketApi';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useCurrentAgentMeta } from '@/store/agent/projection';
 
 interface AgentVersion {
   isLatest: boolean;
@@ -26,7 +25,7 @@ const AgentVersionReviewTag = memo(() => {
   const [versions, setVersions] = useState<AgentVersion[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  const meta = useCurrentAgentMeta();
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {
@@ -79,7 +78,7 @@ export const useVersionReviewStatus = () => {
   const [isUnderReview, setIsUnderReview] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  const meta = useCurrentAgentMeta();
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {

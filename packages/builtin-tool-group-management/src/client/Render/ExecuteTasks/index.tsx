@@ -8,8 +8,8 @@ import { createStaticStyles, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { chatGroupProjectionSelectors, useChatGroupProjection } from '@/projection';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams } from '../../../types';
 
@@ -68,9 +68,9 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
     const resultContent = typeof content === 'string' ? content.trim() : '';
 
     // Get active group ID and agents from store
-    const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-    const groupAgents = useAgentGroupStore((s) =>
-      activeGroupId ? agentGroupSelectors.getGroupAgents(activeGroupId)(s) : [],
+    const activeGroupId = useAgentGroupStore((state) => state.activeGroupId);
+    const groupAgents = useChatGroupProjection((scope) =>
+      activeGroupId ? chatGroupProjectionSelectors.getGroupAgents(activeGroupId)(scope) : [],
     );
 
     // Get agent details for each task

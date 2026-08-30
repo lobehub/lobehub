@@ -6,10 +6,12 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
+import {
+  homeSidebarSelectors,
+  useHomeSidebarProjection,
+} from '@/projection/modules/home/sidebarHooks';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { styles } from './styles';
@@ -19,7 +21,7 @@ const AskAgentCommands = memo(() => {
   const { search, setSearch, setSelectedAgent } = useCommandMenuContext();
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const allAgents = useHomeStore(homeAgentListSelectors.allAgents);
+  const allAgents = useHomeSidebarProjection(homeSidebarSelectors.allAgents);
 
   // Check if search starts with "@"
   const isAtMention = search.trimStart().startsWith('@');

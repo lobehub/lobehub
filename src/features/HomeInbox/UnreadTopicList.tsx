@@ -5,7 +5,7 @@ import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
-import { lazy, memo, Suspense, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UnreadDot from '@/components/UnreadDot';
@@ -14,12 +14,13 @@ import MarkdownMessage from '@/features/Conversation/Markdown';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeInboxTopic } from '@/projection';
 import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';
+import { reconcileRetainedUnreadTopics, removeRetainedUnreadTopic } from './retainedUnreadTopics';
 import { sanitizeInboxPreview } from './sanitizeInboxPreview';
 import { useHomeInboxMarkdown } from './useHomeInboxMarkdown';
-import { type InboxTopic } from './useHomeInboxTopics';
 
 const DOT_WIDTH = 14;
 const ROW_GAP = 8;
@@ -92,7 +93,7 @@ interface UnreadTopicItemProps {
   onFollowUpSent?: (topicId: string) => void;
   /** Team view: show who triggered the run, right of the title. */
   showAuthor?: boolean;
-  topic: InboxTopic;
+  topicId: string;
 }
 
 /**
@@ -103,31 +104,32 @@ interface UnreadTopicItemProps {
  * the topic itself.
  */
 const UnreadTopicItem = memo<UnreadTopicItemProps>(
-  ({ bare, topic, onFollowUpSent, showAuthor }) => {
+  ({ bare, topicId, onFollowUpSent, showAuthor }) => {
     const { t } = useTranslation('home');
-    const agent = useAgentDisplayMeta(topic.agentId);
+    const topic = useHomeInboxTopic(topicId);
+    const agent = useAgentDisplayMeta(topic?.agentId);
     const navigate = useWorkspaceAwareNavigate();
     const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
     const sendMessage = useChatStore((s) => s.sendMessage);
     const prefetchMessages = useChatStore((s) => s.prefetchMessages);
-    const markdownProps = useHomeInboxMarkdown(topic.id);
-    const assistantPreview = sanitizeInboxPreview(topic.lastAssistantMessage ?? '');
+    const markdownProps = useHomeInboxMarkdown(topicId);
+    const assistantPreview = sanitizeInboxPreview(topic?.lastAssistantMessage ?? '');
 
     const [expanded, setExpanded] = useState(false);
     const [read, setRead] = useState(false);
     const [replying, setReplying] = useState(false);
 
-    const agentId = topic.agentId ?? undefined;
+    const agentId = topic?.agentId ?? undefined;
 
     // Engaging with the row IS the read: this is an inbox, not a topic list — a row
     // the user has answered or opened has been triaged. The persisted status drops
     // it from the next inbox fetch; locally the row stays put so it doesn't yank
     // out from under the reader.
     const markRead = useCallback(() => {
-      if (read) return;
+      if (read || !topic) return;
       setRead(true);
       void updateTopicStatus({ agentId, status: 'active', topicId: topic.id });
-    }, [agentId, read, topic.id, updateTopicStatus]);
+    }, [agentId, read, topic, updateTopicStatus]);
 
     const toggle = useCallback(() => {
       setExpanded((prev) => {
@@ -140,10 +142,10 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     // destination the running-topics rows go to, rather than surfacing it in a
     // drawer stacked over the home page.
     const viewChat = useCallback(() => {
-      if (!agentId) return;
+      if (!agentId || !topic) return;
       markRead();
       navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
-    }, [agentId, markRead, navigate, topic.id]);
+    }, [agentId, markRead, navigate, topic]);
 
     // Reply in place, continuing the topic exactly like the chat drawer does:
     // hydrate the topic's messages into the store first so the reply threads onto
@@ -152,7 +154,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     // going server-side. No navigation.
     const submitFollowUp = useCallback(
       async (text: string) => {
-        if (!agentId) return;
+        if (!agentId || !topic) return;
         markRead();
         const context: ConversationContext = {
           agentId,
@@ -167,8 +169,10 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
         // something; the hook reconciles with the server a beat later.
         onFollowUpSent?.(topic.id);
       },
-      [agentId, markRead, onFollowUpSent, prefetchMessages, sendMessage, topic.id],
+      [agentId, markRead, onFollowUpSent, prefetchMessages, sendMessage, topic],
     );
+
+    if (!topic) return null;
 
     return (
       <Flexbox className={bare ? undefined : styles.section}>
@@ -252,10 +256,11 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
 interface UnreadTopicListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
+  indexObservedAt: number | undefined;
   onFollowUpSent?: (topicId: string) => void;
   /** Team view: tag each row with who triggered it. */
   showAuthor?: boolean;
-  topics: InboxTopic[];
+  topicIds: string[];
 }
 
 /**
@@ -263,19 +268,35 @@ interface UnreadTopicListProps {
  * a week of finished runs still fits on screen, and the reply is one click deep.
  */
 const UnreadTopicList = memo<UnreadTopicListProps>(
-  ({ bare, topics, onFollowUpSent, showAuthor }) => (
-    <Flexbox className={bare ? styles.bareList : styles.list}>
-      {topics.map((topic) => (
-        <UnreadTopicItem
-          bare={bare}
-          key={topic.id}
-          showAuthor={showAuthor}
-          topic={topic}
-          onFollowUpSent={onFollowUpSent}
-        />
-      ))}
-    </Flexbox>
-  ),
+  ({ bare, indexObservedAt, topicIds, onFollowUpSent, showAuthor }) => {
+    const [retained, setRetained] = useState(() => ({ ids: topicIds, indexObservedAt }));
+
+    useEffect(() => {
+      setRetained((current) => reconcileRetainedUnreadTopics(current, topicIds, indexObservedAt));
+    }, [indexObservedAt, topicIds]);
+
+    const handleFollowUpSent = useCallback(
+      (topicId: string) => {
+        setRetained((current) => removeRetainedUnreadTopic(current, topicId));
+        onFollowUpSent?.(topicId);
+      },
+      [onFollowUpSent],
+    );
+
+    return (
+      <Flexbox className={bare ? styles.bareList : styles.list}>
+        {retained.ids.map((topicId) => (
+          <UnreadTopicItem
+            bare={bare}
+            key={topicId}
+            showAuthor={showAuthor}
+            topicId={topicId}
+            onFollowUpSent={handleFollowUpSent}
+          />
+        ))}
+      </Flexbox>
+    );
+  },
 );
 
 export default UnreadTopicList;

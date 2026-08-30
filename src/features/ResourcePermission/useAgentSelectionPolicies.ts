@@ -15,7 +15,7 @@ import {
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentData } from '@/store/agent/projection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -59,7 +59,7 @@ export interface AgentSelectionPoliciesState {
  * sharing. What is edited here is the author's *intent*.
  */
 export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPoliciesState => {
-  const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
+  const agent = useAgentData(agentId);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   // Mirrors the server's policy-write gate. The workspace `owner` role is
   // bound to `workspaces.primaryOwnerId` (a second 'owner' membership resolves

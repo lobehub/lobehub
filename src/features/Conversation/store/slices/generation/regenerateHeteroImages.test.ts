@@ -51,6 +51,16 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
 }));
 
+vi.mock('@/projection/modules/agent/read', () => ({
+  getAgentProjectionById: () => ({
+    agencyConfig: {
+      executionTarget: 'local',
+      heterogeneousProvider: { type: 'claude-code' },
+      workingDirByDevice: { 'device-1': '/work/dir' },
+    },
+  }),
+}));
+
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgentById: () => () => undefined,
@@ -72,6 +82,10 @@ vi.mock('@/store/chat/selectors', () => ({
     getTopicById: () => () => undefined,
     getTopicModelById: () => () => undefined,
   },
+}));
+
+vi.mock('@/store/chat/slices/topic/projectionRead', () => ({
+  getChatTopicById: () => undefined,
 }));
 
 vi.mock('@/store/electron', () => ({

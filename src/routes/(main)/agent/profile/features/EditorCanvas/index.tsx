@@ -21,6 +21,7 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
+import { useAgentData } from '@/store/agent/projection';
 
 import { useMentionOptions } from '../ProfileEditor/MentionList';
 import { useProfileStore, useStoreApi } from '../store';
@@ -101,7 +102,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const [contentInit, setContentInit] = useState(false);
   const { activeEditorMode, setEditorMode, setSourceMarkdown, sourceMarkdown, syncSourceMarkdown } =
     usePromptEditorMode();
-  const config = useAgentStore((s) => s.agentMap[agentId], isEqual);
+  const config = useAgentData(agentId);
   const editorData = config?.editorData;
   const systemRole = config?.systemRole;
   const updateConfigById = useAgentStore((s) => s.updateAgentConfigById);

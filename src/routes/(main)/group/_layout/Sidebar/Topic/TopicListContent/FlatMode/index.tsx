@@ -1,15 +1,18 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import {
+  displayChatTopicsForSidebar,
+  useCurrentChatTopics,
+} from '@/store/chat/slices/topic/projection';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -23,18 +26,19 @@ const FlatMode = memo(() => {
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
 
-  const [activeTopicId, activeThreadId, hasMore, isExpandingPageSize, openAllTopicsDrawer] =
-    useChatStore((s) => [
-      s.activeTopicId,
-      s.activeThreadId,
-      topicSelectors.hasMoreTopicsForSidebar(s),
-      topicSelectors.isExpandingPageSize(s),
-      s.openAllTopicsDrawer,
-    ]);
-
-  const activeTopicList = useChatStore(
-    topicSelectors.displayTopicsForSidebar(topicPageSize, topicSortBy, topicIncludeCompleted),
-    isEqual,
+  const [activeTopicId, activeThreadId, openAllTopicsDrawer] = useChatStore((s) => [
+    s.activeTopicId,
+    s.activeThreadId,
+    s.openAllTopicsDrawer,
+  ]);
+  const topicView = useCurrentChatTopics();
+  const hasMore = Boolean(topicView?.hasMore || (topicView?.total ?? 0) > topicPageSize);
+  const { isExpandingPageSize } = useFetchChatTopics();
+  const activeTopicList = displayChatTopicsForSidebar(
+    topicView?.items,
+    topicPageSize,
+    topicSortBy,
+    topicIncludeCompleted,
   );
 
   return (
@@ -42,7 +46,6 @@ const FlatMode = memo(() => {
       {activeTopicList?.map((topic) => (
         <TopicItem
           active={activeTopicId === topic.id}
-          fav={topic.favorite}
           id={topic.id}
           key={topic.id}
           status={topic.status}

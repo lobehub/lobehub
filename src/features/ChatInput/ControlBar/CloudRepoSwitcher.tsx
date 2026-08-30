@@ -4,15 +4,14 @@ import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckIcon, ChevronDownIcon, SquircleDashed } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useAgentValue } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
 import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useCurrentChatTopicMetadata } from '@/store/chat/slices/topic/projection';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -115,8 +114,8 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
   const [, forceUpdate] = useState(0);
 
   // Available repos configured on the agent
-  const availableRepos: string[] = useAgentStore((s) => {
-    const env = agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.env;
+  const availableRepos: string[] = useAgentValue(agentId, (agent) => {
+    const env = agent?.agencyConfig?.heterogeneousProvider?.env;
     try {
       return JSON.parse(env?.GITHUB_REPOS ?? '[]');
     } catch {
@@ -125,17 +124,13 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
   });
 
   // Repos persisted to the current topic (empty when no topic or none set)
-  const topicRepos: string[] = useChatStore((s) => {
-    const meta = topicSelectors.currentTopicMetadata(s);
-    return meta?.repos ?? [];
-  });
+  const topicMetadata = useCurrentChatTopicMetadata();
+  const topicRepos = useMemo(() => topicMetadata?.repos ?? [], [topicMetadata?.repos]);
 
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
-  const currentWorkingDirectory = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectory,
-  );
+  const currentWorkingDirectory = topicMetadata?.workingDirectory;
 
   const toggleRepo = useCallback(
     async (repo: string) => {

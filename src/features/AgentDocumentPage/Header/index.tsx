@@ -13,8 +13,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentMeta } from '@/store/agent/projection';
 import { oneLineEllipsis } from '@/styles';
 
 import { useMenu } from './useMenu';
@@ -33,7 +32,7 @@ interface HeaderProps {
 const Header = memo<HeaderProps>(
   ({ agentId, agentDocumentId, documentId, itemError, onBack, onDeleted, title, updatedAt }) => {
     const { t } = useTranslation(['file', 'chat']);
-    const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+    const meta = useAgentMeta(agentId);
     const showTitleError = !!itemError && !title;
     const resolvedTitle = showTitleError
       ? t('workingPanel.resources.error', { ns: 'chat' })
