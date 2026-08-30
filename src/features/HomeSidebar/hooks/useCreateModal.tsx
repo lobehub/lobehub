@@ -640,6 +640,7 @@ export const openCreateAgentModal = ({
       />
     ),
     footer: null,
+    maskClosable: false,
     // NOT `onOpenChange`: that only fires for user dismissal (Escape, backdrop,
     // the header close button). `instance.close()` — which the in-content close
     // and the post-create path both call — just flips the stack entry, so the

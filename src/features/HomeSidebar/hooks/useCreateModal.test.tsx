@@ -716,7 +716,7 @@ describe('CreateAgentModal analytics', () => {
 });
 
 describe('openCreateAgentModal', () => {
-  it('reports the close through onOpenChangeComplete, not onOpenChange', () => {
+  it('prevents outside dismissal and reports close through onOpenChangeComplete', () => {
     // Regression: the in-content close and the post-create path both call the
     // instance's `close()`, which never fires `onOpenChange`. Wiring the
     // provider's `createModalOpen` reset to that callback left it stuck true,
@@ -738,6 +738,7 @@ describe('openCreateAgentModal', () => {
     });
 
     const props = vi.mocked(createModal).mock.calls.at(-1)![0] as Record<string, any>;
+    expect(props.maskClosable).toBe(false);
     expect(props.onOpenChange).toBeUndefined();
     expect(typeof props.onOpenChangeComplete).toBe('function');
 
