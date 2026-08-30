@@ -26,6 +26,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'share',
   'select',
   'divider',
+  'saveAsEvalCase',
   'regenerate',
   'delAndRegenerate',
   'del',

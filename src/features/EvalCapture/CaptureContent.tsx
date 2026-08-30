@@ -78,8 +78,16 @@ export interface CaptureContentProps {
   onSaved: (testCaseId: string, datasetName: string) => void;
 }
 
+const ROLE_KEYS: Record<string, string> = {
+  assistant: 'testCaseDetail.role.assistant',
+  system: 'testCaseDetail.role.system',
+  tool: 'testCaseDetail.role.tool',
+  user: 'testCaseDetail.role.user',
+};
+
 const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChange, onSaved }) => {
   const { t } = useTranslation('eval');
+  const roleLabel = (role: string) => (ROLE_KEYS[role] ? t(ROLE_KEYS[role] as never) : role);
   const [form] = Form.useForm();
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
 
@@ -120,10 +128,12 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
       });
 
       const dataset = datasets.find((d) => d.id === values.datasetId);
+      // Hands the modal over to its success phase. Deliberately not followed by
+      // a `finally` that clears loading: that would re-render the form footer
+      // over the success one the phase switch just installed.
       onSaved(created.id, dataset?.name ?? '');
     } catch {
       toast.error(t('capture.error'));
-    } finally {
       onLoadingChange?.(false);
     }
   };
@@ -135,7 +145,7 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
         <span className={styles.label}>{t('capture.captured')}</span>
         {draft.context.map((message, index) => (
           <Flexbox gap={4} key={index}>
-            <span className={styles.msgHead}>{message.role}</span>
+            <span className={styles.msgHead}>{roleLabel(message.role)}</span>
             <div className={styles.msgBodyMuted}>{message.content}</div>
           </Flexbox>
         ))}

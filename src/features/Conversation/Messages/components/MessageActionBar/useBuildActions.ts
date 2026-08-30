@@ -11,6 +11,7 @@ import { delAndRegenerateAction } from './actions/delAndRegenerate';
 import { editAction } from './actions/edit';
 import { regenerateAction } from './actions/regenerate';
 import { restoreToInputAction } from './actions/restoreToInput';
+import { saveAsEvalCaseAction } from './actions/saveAsEvalCase';
 import { selectAction } from './actions/select';
 import { shareAction } from './actions/share';
 import { translateAction } from './actions/translate';
@@ -46,6 +47,7 @@ export const useBuildActions = (
     edit: editAction.useBuild(ctx),
     regenerate: regenerateAction.useBuild(ctx),
     restoreToInput: restoreToInputAction.useBuild(ctx),
+    saveAsEvalCase: saveAsEvalCaseAction.useBuild(ctx),
     select: selectAction.useBuild(ctx),
     share: shareAction.useBuild(ctx),
     translate: translateAction.useBuild(ctx),
