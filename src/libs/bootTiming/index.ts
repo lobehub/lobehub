@@ -1,3 +1,5 @@
+import { isDev } from '@/utils/env';
+
 export interface BootSpan {
   durMs: number;
   name: string;
@@ -116,3 +118,7 @@ export const bootTiming = {
     emitActivity();
   },
 };
+
+if (isDev && typeof window !== 'undefined') {
+  window.__LOBE_BOOT_TIMING__ = () => bootTiming.snapshot();
+}

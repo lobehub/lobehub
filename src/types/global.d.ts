@@ -23,6 +23,8 @@ declare global {
     __DEBUG_PROXY__: boolean | undefined;
     __editor?: IEditor;
     __LOBE_BOOT_T_HTML__?: number;
+    /** Dev-only: boot span snapshot, see `@/libs/bootTiming` */
+    __LOBE_BOOT_TIMING__?: () => { marks: Record<string, number>; spans: unknown[] };
     /** Dev-only: Zustand store snapshots via `getState()` keyed by store name */
     __LOBE_STORES?: Record<string, () => unknown>;
     /** Chat input editor of the main composer, mounted by MainChatInput while it is on screen */

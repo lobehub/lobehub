@@ -37,6 +37,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
+import { homeRoutePrefetch } from '@/features/Home/routePrefetch';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
@@ -51,6 +52,7 @@ import {
   agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
+import { agentRoutePrefetch } from '@/routes/(main)/agent/features/routePrefetch';
 import {
   groupPermissionRouteMeta,
   groupProfileRouteMeta,
@@ -123,12 +125,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
             children: [
               {
                 element: agentChatElement,
-                handle: { meta: agentRouteMeta },
+                handle: { meta: agentRouteMeta, prefetch: agentRoutePrefetch },
                 index: true,
               },
               {
                 element: agentChatElement,
-                handle: { meta: agentRouteMeta },
+                handle: { meta: agentRouteMeta, prefetch: agentRoutePrefetch },
                 path: ':topicId',
               },
             ],
@@ -1390,6 +1392,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),
+      prefetch: homeRoutePrefetch,
     },
     index: true,
   },

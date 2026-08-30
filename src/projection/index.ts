@@ -99,4 +99,5 @@ export type { ProjectionStore } from './store';
 export { getProjectionStoreState, useProjectionStore } from './store';
 export * from './views/client';
 export * from './views/hook';
+export * from './views/prefetch';
 export * from './views/types';

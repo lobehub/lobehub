@@ -15,7 +15,8 @@ import BootShell from './BootShell';
 import { isMainLayoutLocation } from './BootShell/routeScope';
 import { startAppInitialization } from './initialize/bootstrap';
 import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
-import { desktopRoutes } from './router/desktopRouter.config';
+import { prefetchRouteProjection } from './initialize/prefetchProjection';
+import { desktopRoutes, mainAreaMetaRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
 
 // OTA fast-fail signal: this line running proves the whole bundle graph
@@ -31,6 +32,7 @@ registerProjectionPersistence(createElectronProjectionPersistence());
 applyDesktopBootstrapIdentity();
 bootTiming.mark('bundle-eval');
 startAppInitialization();
+prefetchRouteProjection(mainAreaMetaRoutes);
 
 const router = createAppRouter(desktopRoutes);
 

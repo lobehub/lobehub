@@ -152,7 +152,6 @@ describe('buildBootMetricsPayload', () => {
           'projection-decode',
           'projection-hydration',
           'projection-ipc-roundtrip',
-          'projection-queue-wait',
           'projection-store-inject',
           'store-gate',
           'tool-surfaces',

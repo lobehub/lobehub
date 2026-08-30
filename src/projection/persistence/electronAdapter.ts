@@ -29,6 +29,13 @@ const recordAsyncSpan = async <T>(
 export const createElectronProjectionPersistence = (): ProjectionPersistence => {
   const operationsInFlight = new Map<string, Promise<unknown>>();
 
+  /**
+   * Only writes are ordered. Reads bypass the queue: the main process already
+   * serializes its own writes, and the Projection reducer drops observations
+   * older than the ones it holds, so a read that overtakes a pending commit
+   * can never regress the store — while queueing it behind a multi-record
+   * commit transaction is what keeps a cold boot on network latency.
+   */
   const runInOrder = async <T>(scope: string, operation: () => Promise<T>): Promise<T> => {
     const previous = operationsInFlight.get(scope) ?? Promise.resolve();
     const current = previous.then(operation, operation);
@@ -48,43 +55,34 @@ export const createElectronProjectionPersistence = (): ProjectionPersistence => 
       runInOrder(scope, () =>
         ensureElectronIpc().projectionCache.commit(encodeProjectionCommit(scope, commit)),
       ),
-    hydrate: (scope, request) => {
-      const queuedAt = now();
-      return runInOrder(scope, async () => {
-        const operationStartedAt = now();
+    hydrate: async (scope, request) => {
+      const {
+        completedAt: ipcCompletedAt,
+        result: hydration,
+        startedAt: ipcStartedAt,
+      } = await recordAsyncSpan<DesktopProjectionHydration>(
+        projectionBootSpanNames.ipcRoundtrip,
+        () => ensureElectronIpc().projectionCache.hydrate({ ...request, scope }),
+      );
+
+      const databaseReadMs = hydration.timing?.databaseReadMs;
+      if (
+        typeof databaseReadMs === 'number' &&
+        Number.isFinite(databaseReadMs) &&
+        databaseReadMs >= 0
+      ) {
+        // Main and renderer processes have different performance time origins.
+        // Anchor the exact main-process duration to the end of its containing IPC span.
         bootTiming.recordSpan(
-          projectionBootSpanNames.queueWait,
-          queuedAt,
-          operationStartedAt - queuedAt,
+          projectionBootSpanNames.databaseRead,
+          Math.max(ipcStartedAt, ipcCompletedAt - databaseReadMs),
+          databaseReadMs,
         );
-        const {
-          completedAt: ipcCompletedAt,
-          result: hydration,
-          startedAt: ipcStartedAt,
-        } = await recordAsyncSpan<DesktopProjectionHydration>(
-          projectionBootSpanNames.ipcRoundtrip,
-          () => ensureElectronIpc().projectionCache.hydrate({ ...request, scope }),
-        );
+      }
 
-        const databaseReadMs = hydration.timing?.databaseReadMs;
-        if (
-          typeof databaseReadMs === 'number' &&
-          Number.isFinite(databaseReadMs) &&
-          databaseReadMs >= 0
-        ) {
-          // Main and renderer processes have different performance time origins.
-          // Anchor the exact main-process duration to the end of its containing IPC span.
-          bootTiming.recordSpan(
-            projectionBootSpanNames.databaseRead,
-            Math.max(ipcStartedAt, ipcCompletedAt - databaseReadMs),
-            databaseReadMs,
-          );
-        }
-
-        return bootTiming.spanSync(projectionBootSpanNames.decode, () =>
-          decodeProjectionHydration(hydration),
-        );
-      });
+      return bootTiming.spanSync(projectionBootSpanNames.decode, () =>
+        decodeProjectionHydration(hydration),
+      );
     },
   };
 };

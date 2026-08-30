@@ -3,6 +3,5 @@ export const projectionBootSpanNames = {
   decode: 'projection-decode',
   hydration: 'projection-hydration',
   ipcRoundtrip: 'projection-ipc-roundtrip',
-  queueWait: 'projection-queue-wait',
   storeInject: 'projection-store-inject',
 } as const;

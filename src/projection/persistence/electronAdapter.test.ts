@@ -108,11 +108,9 @@ describe('createElectronProjectionPersistence', () => {
   it('measures IPC, main-process database read, and renderer decode separately', async () => {
     vi.spyOn(performance, 'now')
       .mockReturnValueOnce(100)
-      .mockReturnValueOnce(130)
-      .mockReturnValueOnce(132)
-      .mockReturnValueOnce(182)
-      .mockReturnValueOnce(184)
-      .mockReturnValueOnce(190);
+      .mockReturnValueOnce(150)
+      .mockReturnValueOnce(152)
+      .mockReturnValueOnce(158);
     mocks.hydrate.mockResolvedValue({
       indexes: [],
       records: [],
@@ -124,10 +122,28 @@ describe('createElectronProjectionPersistence', () => {
     await persistence.hydrate(scope, { indexes: ['home.sidebar'] });
 
     expect(bootTiming.snapshot().spans).toEqual([
-      { durMs: 30, name: projectionBootSpanNames.queueWait, startMs: 100 },
-      { durMs: 50, name: projectionBootSpanNames.ipcRoundtrip, startMs: 132 },
-      { durMs: 18, name: projectionBootSpanNames.databaseRead, startMs: 164 },
-      { durMs: 6, name: projectionBootSpanNames.decode, startMs: 184 },
+      { durMs: 50, name: projectionBootSpanNames.ipcRoundtrip, startMs: 100 },
+      { durMs: 18, name: projectionBootSpanNames.databaseRead, startMs: 132 },
+      { durMs: 6, name: projectionBootSpanNames.decode, startMs: 152 },
     ]);
+  });
+
+  it('reads without waiting for a pending commit on the same scope', async () => {
+    let releaseCommit!: () => void;
+    mocks.commit.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseCommit = resolve;
+        }),
+    );
+    const persistence = createElectronProjectionPersistence();
+
+    const commit = persistence.commit(scope, materializedCommit);
+    await Promise.resolve();
+    const hydrated = await persistence.hydrate(scope, { indexes: ['home.sidebar'] });
+
+    expect(hydrated).toEqual({ indexes: [], records: [], snapshots: [] });
+    releaseCommit();
+    await commit;
   });
 });
