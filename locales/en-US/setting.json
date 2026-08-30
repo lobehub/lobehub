@@ -526,6 +526,8 @@
   "hotkey.invalidCombination": "The hotkey must include at least one modifier key (Ctrl, Alt, Shift) and one regular key",
   "hotkey.record": "Press a key to record the hotkey",
   "hotkey.reset": "Reset to default hotkeys",
+  "hotkey.resetConfirm": "Reset all hotkeys to their default bindings?",
+  "hotkey.resetSuccess": "Hotkeys reset to defaults",
   "hotkey.title": "Hotkeys",
   "hotkey.updateError": "Failed to update hotkey: Network or system error",
   "hotkey.updateSuccess": "Hotkey updated successfully",

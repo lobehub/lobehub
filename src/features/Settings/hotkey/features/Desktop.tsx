@@ -5,7 +5,7 @@ import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/desktopGlobalShortcuts';
@@ -32,6 +32,10 @@ const HotkeySetting = memo(() => {
   useFetchDesktopHotkeys();
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    form.setFieldsValue(hotkeys);
+  }, [form, hotkeys]);
 
   if (!isHotkeysInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 

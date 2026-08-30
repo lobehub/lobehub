@@ -526,6 +526,8 @@
   "hotkey.invalidCombination": "快捷键需要至少包含一个修饰键 (Ctrl, Alt, Shift) 和一个常规键",
   "hotkey.record": "按下按键以录制快捷键",
   "hotkey.reset": "重置为默认快捷键",
+  "hotkey.resetConfirm": "要将所有快捷键重置为默认按键吗？",
+  "hotkey.resetSuccess": "快捷键已重置为默认值",
   "hotkey.title": "快捷键",
   "hotkey.updateError": "快捷键更新失败：网络或系统错误",
   "hotkey.updateSuccess": "快捷键更新成功",
