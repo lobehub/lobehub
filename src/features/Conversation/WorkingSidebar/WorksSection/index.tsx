@@ -1,5 +1,6 @@
 import type { WorkListItem } from '@lobechat/types';
-import { ActionIcon, Center, Empty, Flexbox } from '@lobehub/ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';

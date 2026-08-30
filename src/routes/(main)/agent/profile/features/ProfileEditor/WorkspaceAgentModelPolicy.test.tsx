@@ -20,14 +20,6 @@ const testState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/features/ModelSelect', () => ({
   default: () => <div data-testid="model-select" />,
 }));

@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Bu istek için konuşma bağlamı birleştirilemedi. Lütfen yeniden deneyin; devam ederse destekle iletişime geçin.",
   "DatabasePersistError": "Bu konuşmayı kaydederken veya yüklerken bir veritabanı işlemi başarısız oldu. Lütfen yeniden deneyin; devam ederse destekle iletişime geçin.",
   "ExceededContextWindow": "Mevcut istek içeriği modelin işleyebileceği uzunluğu aşıyor. Lütfen içerik miktarını azaltıp yeniden deneyin.",
+  "HarnessJsonParseError": "Dahili bir yük geri okunamadığı için bu işlem durduruldu. Aynı isteği yeniden denemek aynı hatayı verecektir — lütfen yeni bir mesaj başlatın; devam ederse, destek ile iletişime geçin.",
   "InsufficientQuota": "Üzgünüz, bu anahtar için kota doldu. Lütfen hesap bakiyenizin yeterli olup olmadığını kontrol edin veya anahtarın kotasını artırdıktan sonra yeniden deneyin.",
   "InvalidBedrockCredentials": "Bedrock kimlik doğrulaması başarısız oldu. Lütfen AccessKeyId/SecretAccessKey'i kontrol edip yeniden deneyin.",
   "InvalidComfyUIArgs": "Geçersiz ComfyUI yapılandırması. Lütfen ayarları kontrol edip yeniden deneyin.",

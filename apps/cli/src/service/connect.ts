@@ -4,10 +4,16 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadCredentials } from '../auth/credentials';
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import {
+  CLI_CONNECT_SERVICE_NAME,
+  CLI_DISPLAY_NAME,
+  CLI_PRIMARY_BIN,
+  resolveCliDirName,
+} from '../constants/identity';
 import { getRunningDaemonPid } from '../daemon/manager';
 
-const SERVICE_NAME = 'lobehub-connect.service';
+const SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 const ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
 const SERVICE_ENV_FILE_NAME = 'connect-service.env';
 
@@ -38,7 +44,7 @@ function getUserServiceDir(): string {
 }
 
 function getCliHomeDir(): string {
-  return path.join(os.homedir(), process.env.LOBEHUB_CLI_HOME || '.lobehub');
+  return path.join(os.homedir(), resolveCliDirName());
 }
 
 function getServiceEnvFilePath(): string {
@@ -70,7 +76,7 @@ function renderUnit(): string {
 
   return [
     '[Unit]',
-    'Description=LobeHub CLI connect service',
+    `Description=${CLI_DISPLAY_NAME} connect service`,
     'After=network-online.target',
     'Wants=network-online.target',
     'StartLimitIntervalSec=60',
@@ -159,10 +165,10 @@ function assertNoConnectDaemonRunning(): void {
 }
 
 function assertConnectServiceAuthAvailable(): void {
-  if (process.env.LOBEHUB_JWT || process.env[CLI_API_KEY_ENV] || loadCredentials()) return;
+  if (process.env.LOBEHUB_JWT || readCliApiKeyEnv() || loadCredentials()) return;
 
   throw new Error(
-    `No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV} before starting the connect service.`,
+    `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV} before starting the connect service.`,
   );
 }
 

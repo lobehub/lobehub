@@ -101,6 +101,7 @@ describe('parseSystemAgent', () => {
     expect(result.topic).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.translation).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.agentMeta).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
+    expect(result.expertise).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.historyCompress).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.onboardingUnderstanding).toEqual({
       provider: 'ollama',

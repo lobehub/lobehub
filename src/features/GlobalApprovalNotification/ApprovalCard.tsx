@@ -2,7 +2,7 @@
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
-import { ActionIcon, Avatar } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentMeta } from '@/store/agent/projection';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useChatTopicById } from '@/store/chat/slices/topic/projection';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -54,9 +55,19 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const operationState = useOperationState(context);
   const meta = useAgentMeta(context.agentId);
 
-  // Topic title tells the user *which* conversation this approval belongs to.
-  // Read agent-scoped (not active-scoped) so a non-active conversation resolves.
-  const topicTitle = useChatTopicById(context.topicId ?? undefined)?.title;
+  // A parked approval can belong to an older topic outside the agent's loaded
+  // sidebar page, so resolve across every topic cache and fetch the detail by
+  // id when it is still missing. Falling back to the agent name here makes two
+  // approvals from the same agent indistinguishable.
+  const projectedTitle = useChatTopicById(context.topicId ?? undefined)?.title;
+  const [cachedTitle, useFetchTopicDetail] = useChatStore((s) => [
+    context.topicId ? topicSelectors.getTopicById(context.topicId)(s)?.title : undefined,
+    s.useFetchTopicDetail,
+  ]);
+  useFetchTopicDetail(
+    context.topicId && !projectedTitle && !cachedTitle ? context.topicId : undefined,
+  );
+  const topicTitle = projectedTitle ?? cachedTitle;
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -144,11 +155,8 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
             title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
-            <div className={styles.headerTitle}>
-              {topicTitle || agentDisplayName(meta, t('globalApproval.title'))}
-            </div>
             <div className={styles.headerSubtitle}>
-              {agentDisplayName(meta) ? `${agentDisplayName(meta)} · ` : ''}
+              {agentDisplayName(meta) && <span>{agentDisplayName(meta)}</span>}
               {t('globalApproval.subtitle')}
             </div>
           </div>
@@ -162,14 +170,14 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
           )}
         </div>
 
-        {userRequest && (
-          <div className={styles.userRequest}>
-            <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
+        <div className={styles.requestContext}>
+          <div className={styles.headerTitle}>{topicTitle || t('globalApproval.title')}</div>
+          {userRequest && (
             <div className={styles.userRequestBody}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {interventions.length > 1 && (
           <InterventionTabBar

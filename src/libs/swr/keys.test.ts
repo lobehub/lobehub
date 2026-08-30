@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   agentBuilderKeys,
   agentKeys,
+  documentCommentKeys,
   homeKeys,
+  isAcceptanceListKey,
+  isDocumentCommentKeyForEvent,
   projectionKeys,
   recentKeys,
   resourceKeys,
@@ -33,6 +36,16 @@ describe('recentKeys', () => {
     expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
       recentKeys.allDrawer(true, 'user-1:workspace-2'),
     );
+  });
+});
+
+describe('isAcceptanceListKey', () => {
+  it('matches every Acceptance list variant without matching detail keys', () => {
+    expect(isAcceptanceListKey(['verify:acceptances', '', '', 'active'])).toBe(true);
+    expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
+      true,
+    );
+    expect(isAcceptanceListKey(['verify:acceptanceBundle', 'acceptance-1'])).toBe(false);
   });
 });
 
@@ -79,6 +92,44 @@ describe('resourceKeys', () => {
     expect(resourceKeys.search({ q: 'report' }, 'workspace-1')).not.toEqual(
       resourceKeys.search({ q: 'report' }, 'workspace-2'),
     );
+  });
+});
+
+describe('isDocumentCommentKeyForEvent', () => {
+  const event = {
+    documentId: 'document-1',
+    rootCommentId: 'root-1',
+    workspaceId: 'workspace-1',
+  };
+
+  it('matches the affected summary, thread pages, and reply thread', () => {
+    expect(isDocumentCommentKeyForEvent(documentCommentKeys.summary('document-1'), event)).toBe(
+      true,
+    );
+    expect(
+      isDocumentCommentKeyForEvent(
+        documentCommentKeys.threads('workspace-1', 'document-1', 'cursor'),
+        event,
+      ),
+    ).toBe(true);
+    expect(
+      isDocumentCommentKeyForEvent(
+        documentCommentKeys.replies('workspace-1', 'root-1', 'cursor'),
+        event,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not invalidate other documents, workspaces, or reply threads', () => {
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.threads('workspace-2', 'document-1'), event),
+    ).toBe(false);
+    expect(isDocumentCommentKeyForEvent(documentCommentKeys.summary('document-2'), event)).toBe(
+      false,
+    );
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.replies('workspace-1', 'root-2'), event),
+    ).toBe(false);
   });
 });
 

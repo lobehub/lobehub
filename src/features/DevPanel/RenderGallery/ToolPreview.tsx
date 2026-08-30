@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useMemo, useState } from 'react';
 
@@ -43,6 +43,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillQuaternary};
+  `,
+  fixture: css`
+    padding: 12px;
   `,
   fixtureSummary: css`
     cursor: pointer;

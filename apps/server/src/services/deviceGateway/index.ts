@@ -466,7 +466,7 @@ export class DeviceGateway {
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
+    type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
     userId: string;
     workspaceId?: string;
   }): Promise<HeterogeneousAgentModelCatalog> {
@@ -1283,11 +1283,14 @@ export class DeviceGateway {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
     topicId: string;
     userId: string;
     workspaceId?: string;
+    /** Topic/run workspace forwarded to the device for hetero ingest. */
+    ingestWorkspaceId?: string;
   }): Promise<{ error?: string; success: boolean }> {
     const client = this.getClient();
     if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };

@@ -10,14 +10,16 @@ vi.mock('@/store/global', () => ({
     selector({ revealInFilesTab: mockRevealInFilesTab }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/components/AntdStaticMethods', () => ({
   message: { error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props} onClick={onClick} />
+  ),
+  confirmModal: vi.fn(),
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('@/services/git', () => ({

@@ -45,6 +45,8 @@ interface OnboardingTaskRecommendationJsonSchema {
   strict: true;
 }
 
+export const ONBOARDING_TASK_RECOMMENDATION_PROMPT_VERSION = 'v1';
+
 /** Structured output contract shared by the recommendation prompt and server-side generation. */
 export const ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA = {
   name: 'onboarding_task_recommendations',

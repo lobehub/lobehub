@@ -73,16 +73,6 @@ vi.mock('../../../appBrowsers', () => ({
   windowTemplates: mockWindowTemplates,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock RemoteServerConfigCtr
 vi.mock('@/controllers/RemoteServerConfigCtr', () => ({
   default: class MockRemoteServerConfigCtr {
@@ -221,6 +211,52 @@ describe('BrowserManager', () => {
       );
 
       expect(result.identifier).toBe('my-custom-id');
+    });
+
+    it('should override template dimensions with the requested window size', () => {
+      manager.createMultiInstanceWindow('popup' as any, '/popup/path', undefined, {
+        height: 900,
+        width: 1400,
+      });
+
+      expect(MockBrowser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 900,
+          path: '/popup/path',
+          restoreWindowState: false,
+          width: 1400,
+        }),
+        mockApp,
+      );
+    });
+
+    it('recreates a closed stable-id window with the latest requested size', () => {
+      const first = manager.createMultiInstanceWindow('popup' as any, '/first', 'workspace-1', {
+        height: 700,
+        width: 1000,
+      });
+      const closedCall = vi
+        .mocked(first.browser.browserWindow.on)
+        .mock.calls.find(([event]) => String(event) === 'closed');
+
+      expect(closedCall).toBeDefined();
+      (closedCall?.[1] as () => void)();
+
+      const second = manager.createMultiInstanceWindow('popup' as any, '/second', 'workspace-1', {
+        height: 900,
+        width: 1400,
+      });
+
+      expect(second.browser).not.toBe(first.browser);
+      expect(MockBrowser).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          height: 900,
+          path: '/second',
+          restoreWindowState: false,
+          width: 1400,
+        }),
+        mockApp,
+      );
     });
 
     it('should throw error for non-existent template', () => {

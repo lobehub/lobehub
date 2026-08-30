@@ -24,20 +24,15 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key.split('.').at(-1) || key }),
 }));
 
-// Headless stubs for @lobehub/ui so we exercise our own markup, not the design
-// system internals (which would need a theme provider in jsdom).
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ title }: { title?: string }) => <button data-testid="action-icon" title={title} />,
-  Block: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <div data-testid="block" onClick={onClick}>
+// base-ui Button requires the app-level motion provider (this package has no
+// shared vitest setup, unlike src tests which stub it globally).
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Button: ({ children, ...props }: { children?: ReactNode }) => (
+    <button type="button" {...props}>
       {children}
-    </div>
+    </button>
   ),
-  Icon: () => <span data-testid="icon" />,
-  Markdown: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="markdown">{children}</div>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@/features/AgentTasks/features/AssigneeAvatar', () => ({
@@ -111,7 +106,7 @@ describe('EditTaskRender', () => {
   it('renders the instruction preview as markdown', () => {
     renderEdit({ instruction: '# Do the thing' });
 
-    expect(screen.getByTestId('markdown').textContent).toContain('# Do the thing');
+    expect(screen.getByRole('heading', { name: 'Do the thing' })).toBeTruthy();
   });
 
   it('renders dependency changes', () => {
@@ -125,7 +120,7 @@ describe('EditTaskRender', () => {
     renderEdit({});
 
     expect(screen.getByText('T-1')).toBeTruthy();
-    expect(screen.queryByTestId('markdown')).toBeNull();
+    expect(screen.queryByRole('heading')).toBeNull();
     expect(screen.queryByTestId('assignee-avatar')).toBeNull();
   });
 });
@@ -166,7 +161,7 @@ describe('SetTaskVerifyRender', () => {
     });
 
     // Body is just the requirement markdown — verifier / iterations are not shown.
-    expect(screen.getByTestId('markdown').textContent).toContain('## Acceptance');
+    expect(screen.getByRole('heading', { name: 'Acceptance' })).toBeTruthy();
     expect(screen.queryByTestId('assignee-avatar')).toBeNull();
     expect(screen.queryByText('3')).toBeNull();
   });

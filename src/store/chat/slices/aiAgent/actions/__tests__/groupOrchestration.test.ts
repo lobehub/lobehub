@@ -6,8 +6,6 @@ import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { getProjectionStoreState, useProjectionStore } from '@/projection';
 import { useChatStore } from '@/store/chat/store';
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));

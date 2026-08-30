@@ -1,8 +1,9 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Block, Flexbox, Icon, stopPropagation, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
+import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ClockIcon, FileTextIcon, StarIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';

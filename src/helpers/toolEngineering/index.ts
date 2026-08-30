@@ -36,7 +36,7 @@ import {
 } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
@@ -270,13 +270,10 @@ export const createAgentToolsEngine = (
     // Always-on builtin tools
     ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
     // System-level rules (may override user selection for specific tools)
-    // Browser rides the same local-runtime gate as local-system (the control
-    // IPC only exists in the desktop main process), plus the in-app browser
-    // Labs toggle that also governs the sidebar tab — with the lab off the
-    // tool would drive a pane the user can't see.
+    // Browser rides the same local-runtime gate as local-system because the
+    // control IPC only exists in the desktop main process.
     [BrowserManifest.identifier]:
-      getAgentRuntimeMode(agentState.activeAgentId || '') === 'local' &&
-      labPreferSelectors.enableInAppBrowser(useUserStore.getState()),
+      getAgentRuntimeMode(agentState.activeAgentId || '') === 'local',
     [CloudSandboxManifest.identifier]:
       getAgentRuntimeMode(agentState.activeAgentId || '') === 'cloud',
     [KnowledgeBaseManifest.identifier]: kbEnabled,

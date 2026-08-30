@@ -2,6 +2,7 @@ import { Flexbox, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
+import ChatInputCredits from '@/business/client/features/ChatInputCredits';
 import { useAgentConfigStatus } from '@/store/agent/projection';
 
 import ContextWindow from '../ActionBar/Token';
@@ -73,6 +74,7 @@ const ControlBar = memo(() => {
       </Flexbox>
 
       <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
+        <ChatInputCredits />
         {isAgentRuntimeMode && <ApprovalMode />}
         {showContextWindow && <ContextWindow />}
       </Flexbox>

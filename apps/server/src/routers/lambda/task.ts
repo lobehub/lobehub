@@ -1,5 +1,5 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { TaskListItem, TaskParticipant } from '@lobechat/types';
+import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -7,10 +7,10 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
-import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
@@ -20,6 +20,8 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
+import { AcceptanceService } from '@/server/services/verify/acceptanceService';
+import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -33,7 +35,6 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId, wsId),
       editLockService: new EditLockService(ctx.userId),
-      goalModel: new GoalModel(ctx.serverDB, ctx.userId, wsId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
@@ -52,6 +53,15 @@ const taskProcedureWrite = taskProcedure.use(withScopedPermission('agent:update'
 // Resolution happens in the model layer via model.resolve()
 const idInput = z.object({ id: z.string() });
 
+const taskVerifyConfigPatchSchema = z.object({
+  enabled: z.boolean().nullish(),
+  maxIterations: z.number().min(1).max(10).nullish(),
+  requirement: z.string().nullish(),
+  verifierAgentId: z.string().nullish(),
+  verifyCriteriaIds: z.array(z.string()).nullish(),
+  verifyRubricId: z.string().nullish(),
+});
+
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
@@ -64,16 +74,6 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
-  // Bind a goal entity (`goals` row) to the created task; the task becomes the
-  // goal's execution carrier and the outer verify-driven round loop applies.
-  goal: z
-    .object({
-      maxRounds: z.number().int().nullish(),
-      maxTotalCost: z.number().nullish(),
-      requirement: z.string().nullish(),
-      title: z.string().optional(),
-    })
-    .optional(),
   identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
@@ -86,6 +86,11 @@ const createSchema = z.object({
   // assignee agent's visibility (private agent → private task). UI surfaces
   // such as the top-level "Tasks" create form pass it explicitly.
   visibility: z.enum(['private', 'public']).optional(),
+  // Removed contract, kept so the server can recognise it. A task no longer
+  // carries a goal — the Goal Graph owns execution and dispatches its own Work
+  // Tasks — and silently dropping this field would let a released client report
+  // that a goal started when only an ordinary task exists.
+  goal: z.unknown().optional(),
 });
 
 const updateSchema = z.object({
@@ -121,7 +126,6 @@ const listSchema = z.object({
   // misconfigured one cannot), false → its exact complement. Omitted leaves the
   // set unnarrowed.
   automated: z.boolean().optional(),
-  hasGoal: z.boolean().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   // Which timestamp orders the page, newest first. Defaults to creation time.
@@ -137,24 +141,31 @@ const listSchema = z.object({
   visibility: z.enum(['private', 'public']).optional(),
 });
 
-const groupListSchema = z.object({
-  assigneeAgentId: z.string().optional(),
-  groups: z
-    .array(
-      z.object({
-        key: z.string(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-        statuses: z.array(z.string()).min(1).max(10),
-      }),
-    )
-    .min(1)
-    .max(10),
-  hasGoal: z.boolean().optional(),
-  parentTaskId: z.string().nullish(),
-  projectId: z.string().optional(),
-  visibility: z.enum(['private', 'public']).optional(),
-});
+const groupListSchema = z
+  .object({
+    assigneeAgentId: z.string().optional(),
+    automated: z.boolean().optional(),
+    excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
+    groupBy: z.enum(['assignee', 'priority']).optional(),
+    groups: z
+      .array(
+        z.object({
+          key: z.string(),
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+          statuses: z.array(z.string()).min(1).max(10),
+        }),
+      )
+      .min(1)
+      .max(10)
+      .optional(),
+    parentTaskId: z.string().nullish(),
+    projectId: z.string().optional(),
+    visibility: z.enum(['private', 'public']).optional(),
+  })
+  .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
+    message: 'Provide either groups or groupBy',
+  });
 
 // Helper: resolve id/identifier and throw if not found
 async function resolveOrThrow(model: TaskModel, id: string) {
@@ -426,8 +437,40 @@ export const taskRouter = router({
     }),
 
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
+    const { goal: legacyGoal, ...createInput } = input;
+    if (legacyGoal !== undefined) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          'Creating a goal through task.create is no longer supported. Reload the app, then create the goal again.',
+      });
+    }
     try {
-      const task = await ctx.taskService.createTask(input);
+      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
+      const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
+      const task = await ctx.taskService.createTask({
+        ...createInput,
+        config: parsedVerify.success ? taskConfig : createInput.config,
+      });
+      try {
+        if (parsedVerify.success) {
+          const { requirement, ...rawConfig } = parsedVerify.data;
+          const config = Object.fromEntries(
+            Object.entries(rawConfig).filter(([, value]) => value != null),
+          );
+          await new AcceptanceService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).ensureForSubject('task', task.id, {
+            config,
+            requirement: requirement ?? undefined,
+          });
+        }
+      } catch (error) {
+        await ctx.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -474,28 +517,6 @@ export const taskRouter = router({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to delete task',
-      });
-    }
-  }),
-
-  deleteGoal: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
-    try {
-      const model = ctx.taskModel;
-      const task = await resolveOrThrow(model, input.id);
-      const goal = await ctx.goalModel.findBySubject('task', task.id);
-      if (!goal) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a goal root' });
-      }
-      assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
-      const count = await model.deleteSubtree(task.id);
-      return { count, data: task, message: 'Goal deleted', success: true };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      console.error('[task:deleteGoal]', error);
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to delete goal',
       });
     }
   }),
@@ -725,9 +746,17 @@ export const taskRouter = router({
       const assigneeIds = [
         ...new Set(result.tasks.map((t) => t.assigneeAgentId).filter((id): id is string => !!id)),
       ];
-      const agents =
-        assigneeIds.length > 0 ? await ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [];
+      const assigneeUserIds = [
+        ...new Set(result.tasks.map((t) => t.assigneeUserId).filter((id): id is string => !!id)),
+      ];
+      const [agents, users] = await Promise.all([
+        assigneeIds.length > 0 ? ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
+        assigneeUserIds.length > 0
+          ? UserModel.getDisplayInfoByIds(ctx.serverDB, assigneeUserIds)
+          : [],
+      ]);
       const agentMap = new Map(agents.map((a) => [a.id, a]));
+      const userMap = new Map(users.map((u) => [u.id, u]));
 
       const data: TaskListItem[] = result.tasks.map((task) => {
         const participants: TaskParticipant[] = [];
@@ -741,6 +770,18 @@ export const taskRouter = router({
               name: agent.name,
               title: agent.title ?? '',
               type: 'agent',
+            });
+          }
+        }
+        if (task.assigneeUserId) {
+          const user = userMap.get(task.assigneeUserId);
+          if (user) {
+            participants.push({
+              avatar: user.avatar,
+              backgroundColor: null,
+              id: user.id,
+              title: user.fullName ?? user.username ?? '',
+              type: 'user',
             });
           }
         }
@@ -770,6 +811,8 @@ export const taskRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const task = await resolveOrThrow(ctx.taskModel, input.id);
+
         const runner = new TaskRunnerService(
           ctx.serverDB,
           ctx.userId,
@@ -778,7 +821,7 @@ export const taskRouter = router({
         return await runner.runTask({
           continueTopicId: input.continueTopicId,
           extraPrompt: input.prompt,
-          taskId: input.id,
+          taskId: task.id,
         });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -989,7 +1032,16 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
-      return { data: model.getVerifyConfig(task) || null, success: true };
+      const resolved = await resolveTaskAcceptance(
+        ctx.serverDB,
+        ctx.userId,
+        task.id,
+        ctx.workspaceId ?? undefined,
+      );
+      return {
+        data: resolved ? { ...resolved.config, requirement: resolved.requirement } : null,
+        success: true,
+      };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:getVerifyConfig]', error);
@@ -1006,16 +1058,8 @@ export const taskRouter = router({
       idInput.merge(
         z.object({
           // `.nullish()` lets callers clear a saved field: `null` removes it
-          // (JSON can't send `undefined`), omission leaves it untouched. See
-          // TaskModel.updateVerifyConfig.
-          verify: z.object({
-            enabled: z.boolean().nullish(),
-            maxIterations: z.number().min(1).max(10).nullish(),
-            requirement: z.string().nullish(),
-            verifierAgentId: z.string().nullish(),
-            verifyCriteriaIds: z.array(z.string()).nullish(),
-            verifyRubricId: z.string().nullish(),
-          }),
+          // (JSON can't send `undefined`), omission leaves it untouched.
+          verify: taskVerifyConfigPatchSchema,
         }),
       ),
     )
@@ -1023,11 +1067,42 @@ export const taskRouter = router({
       const { id, verify } = input;
       try {
         const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
-        const task = await model.updateVerifyConfig(resolved.id, verify);
-        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        const task = await resolveOrThrow(model, id);
+        const acceptanceService = new AcceptanceService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        const resolvedAcceptance = await resolveTaskAcceptance(
+          ctx.serverDB,
+          ctx.userId,
+          task.id,
+          ctx.workspaceId ?? undefined,
+        );
+        const acceptance =
+          resolvedAcceptance?.acceptance ??
+          (await acceptanceService.ensureForSubject('task', task.id));
+        const nextConfig = { ...acceptance.config } as Record<string, unknown>;
+        for (const [key, value] of Object.entries(verify)) {
+          if (key === 'requirement') continue;
+          if (value === null) delete nextConfig[key];
+          else if (value !== undefined) nextConfig[key] = value;
+        }
+        const requirement =
+          verify.requirement === undefined ? acceptance.requirement : verify.requirement;
+        const updated = await acceptanceService.acceptanceModel.updatePolicy(acceptance.id, {
+          config: nextConfig,
+          requirement,
+        });
+        if (!updated) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance policy not found' });
+        }
+        const data: TaskVerifyConfig = {
+          ...(nextConfig as TaskVerifyConfig),
+          requirement: requirement ?? undefined,
+        };
         return {
-          data: model.getVerifyConfig(task),
+          data,
           message: 'Verify config updated',
           success: true,
         };
@@ -1099,6 +1174,22 @@ export const taskRouter = router({
         ctx.taskService.assertAgentVisibilityCompat(resolved.visibility, agentVisibility);
       }
 
+      // A private task can only be assigned to its creator — the assignee
+      // would otherwise never see the task. `null` clears and is always safe.
+      ctx.taskService.assertAssigneeUserVisibilityCompat(
+        resolved.visibility,
+        data.assigneeUserId,
+        resolved.createdByUserId,
+      );
+
+      // Automation and a human assignee are mutually exclusive. Judge the
+      // POST-update effective pair so both directions are caught: assigning a
+      // member to an automated task, and scheduling a member-assigned task.
+      ctx.taskService.assertAutomationAssigneeCompat(
+        data.automationMode !== undefined ? data.automationMode : resolved.automationMode,
+        data.assigneeUserId !== undefined ? data.assigneeUserId : resolved.assigneeUserId,
+      );
+
       const resolvedParentTaskId =
         parentTaskId === undefined
           ? undefined
@@ -1125,7 +1216,10 @@ export const taskRouter = router({
         updateData.instruction !== undefined && updateData.editorData === undefined
           ? { ...updateData, editorData: null }
           : updateData;
-      const task = await model.update(resolved.id, normalizedUpdateData);
+      const task = await ctx.taskService.updateTaskWithAssigneeLock(
+        resolved.id,
+        normalizedUpdateData,
+      );
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {
@@ -1205,6 +1299,17 @@ export const taskRouter = router({
                 'Cannot make this task private while it has subtasks created by other members. Reassign or remove those subtasks first.',
             });
           }
+        }
+
+        // Demoting a member-assigned task to private would strand the
+        // assignee: the task disappears from their view while still carrying
+        // their name. Reject early — unassign first, then demote.
+        if (input.visibility === 'private') {
+          ctx.taskService.assertAssigneeUserVisibilityCompat(
+            input.visibility,
+            resolved.assigneeUserId,
+            resolved.createdByUserId,
+          );
         }
 
         // Promoting a task to public while a private agent is its assignee

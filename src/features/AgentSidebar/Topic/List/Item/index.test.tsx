@@ -1,9 +1,11 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen, waitFor } from '@testing-library/react';
-import type { CSSProperties, ReactNode } from 'react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { removeDraft, saveDraft } from '@/features/ChatInput/draftStorage';
 
 import TopicItem from './index';
 
@@ -16,41 +18,28 @@ const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as { pullRequest?: { state: string } } | undefined,
 }));
+const topicDraftKey = 'main_agt_test_tpc_test';
 
-vi.mock('@lobehub/ui', () => ({
-  ContextMenuTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
+// Assertions key on the raw lucide displayName, which the real Icon does not
+// expose in the DOM.
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Icon: ({
+    'aria-label': ariaLabel,
+    icon,
+    role,
+  }: {
+    'aria-label'?: string;
+    'icon'?: { displayName?: string };
+    'role'?: string;
+  }) => (
+    <div
+      aria-label={ariaLabel}
+      data-icon={icon?.displayName}
+      data-testid="topic-item-icon"
+      role={role}
+    />
   ),
-  Icon: ({ icon }: { icon?: { displayName?: string } }) => (
-    <div data-icon={icon?.displayName} data-testid="topic-item-icon" />
-  ),
-  Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Skeleton: {
-    Button: (props: Record<string, unknown>) => <div {...props} />,
-  },
-  Tag: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('antd-style', () => ({
-  // `ContextMenuTrigger` comes from the base-ui barrel, which pulls in
-  // ScrollArea's global style at import time.
-  createGlobalStyle: () => () => null,
-  createStaticStyles: () => ({
-    dotContainer: 'dotContainer',
-    neonDot: 'neonDot',
-    neonDotWrapper: 'neonDotWrapper',
-  }),
-  cssVar: {
-    colorInfo: '#00f',
-    colorTextDescription: '#999',
-  },
-  keyframes: () => 'keyframes',
-  useTheme: () => ({ isDarkMode: false }),
 }));
 
 vi.mock('motion/react', () => ({
@@ -65,12 +54,6 @@ vi.mock('motion/react', () => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
@@ -79,6 +62,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra,
     href,
     icon,
+    slots,
     title,
   }: {
     active?: boolean;
@@ -86,13 +70,15 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra?: ReactNode;
     href?: string;
     icon?: ReactNode;
+    slots?: { titlePrefix?: ReactNode };
     title?: ReactNode;
   }) => (
     <div data-active={String(active)} data-href={href} data-testid="nav-item">
       {icon}
+      <span data-testid="nav-item-title-prefix">{slots?.titlePrefix}</span>
       {title}
       {description}
-      {extra}
+      <span data-testid="nav-item-extra">{extra}</span>
     </div>
   ),
 }));
@@ -173,6 +159,7 @@ describe('TopicItem active state', () => {
     runningStartTimeMock.value = undefined;
     topicUnreadCompletedMock.value = false;
     topicMetaCardMock.value = undefined;
+    removeDraft(topicDraftKey);
     vi.useRealTimers();
   });
 
@@ -220,6 +207,23 @@ describe('TopicItem active state', () => {
       'data-href',
       '/team/agent/agt_test/tpc_test',
     );
+  });
+
+  it('replaces the draft title prefix text with a pencil icon', () => {
+    saveDraft(topicDraftKey, { root: {} });
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    const draftIcon = within(screen.getByTestId('nav-item-title-prefix')).getByRole('img');
+    expect(draftIcon).toHaveAttribute('data-icon', 'PencilLine');
+    expect(draftIcon).toHaveAccessibleName();
+    expect(within(screen.getByTestId('nav-item-extra')).queryByRole('img')).not.toBeInTheDocument();
   });
 
   it('shows running elapsed time in the nav item extra slot', () => {

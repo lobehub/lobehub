@@ -1,6 +1,5 @@
 import { createStaticStyles, cssVar } from 'antd-style';
 
-/** Shared flat workspace chrome for every panel mounted in DevDock. */
 export const devDockPanelStyles = createStaticStyles(({ css }) => ({
   flatSection: css`
     flex-shrink: 0;

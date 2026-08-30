@@ -1,5 +1,5 @@
-import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRightIcon, FlagIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -118,16 +118,16 @@ const GoalRow = memo<GoalRowProps>(({ bare, entry }) => {
           {entry.title}
         </Text>
         <GoalAgentAvatar agentId={entry.agentId} />
-        {/* A goal is measured in rounds, not in time — how far into its budget it
-            is says more at a glance than when it last moved. */}
+        {/* A goal is measured in the work it has closed, not in time — how far
+            through its own decomposition it is says more at a glance. */}
         <span className={cx(homeType.meta, styles.rounds)}>
-          {entry.maxRounds
-            ? t('goalList.roundProgress', {
-                current: entry.rounds,
+          {entry.pendingDecisions > 0
+            ? t('goalList.needsYou', { count: entry.pendingDecisions, ns: 'chat' })
+            : t('goalList.workProgress', {
+                done: entry.workDone,
                 ns: 'chat',
-                total: entry.maxRounds,
-              })
-            : t('goalList.agentRuns', { count: entry.rounds, ns: 'chat' })}
+                total: entry.workTotal,
+              })}
         </span>
         <Icon color={cssVar.colorTextQuaternary} icon={ChevronRightIcon} size={14} />
       </Flexbox>

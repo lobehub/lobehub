@@ -11,10 +11,12 @@ import type { ChatStore } from '@/store/chat/store';
 
 import {
   buildNotificationBody,
+  buildNotificationSender,
   resolveNotificationNavigate,
   resolveNotificationNavigatePath,
   resolveNotificationTitle,
 } from './desktopNotification';
+import { renderAvatarToDataUrl } from './notificationAvatar';
 
 const SCOPE = 'user-1:personal';
 
@@ -24,8 +26,21 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
   isScopeTrusted: () => true,
   useCacheScope: () => SCOPE,
 }));
+vi.mock('./notificationAvatar', () => ({
+  renderAvatarToDataUrl: vi.fn(async () => 'data:image/png;base64,MOCK'),
+}));
 
 const FALLBACK = 'fallback';
+
+const seedNamedAgent = () => {
+  useProjectionStore.setState({ scopes: {} });
+  getProjectionStoreState().commitAgentConfig(
+    SCOPE,
+    { avatar: '🤖', id: 'agent-named', title: 'My Agent' },
+    'full',
+    'network',
+  );
+};
 
 describe('resolveNotificationNavigatePath', () => {
   it('deep-links a 1:1 agent + topic to the specific topic', () => {
@@ -92,13 +107,7 @@ describe('resolveNotificationTitle', () => {
   const get = () => ({}) as ChatStore;
 
   beforeEach(() => {
-    useProjectionStore.setState({ scopes: {} });
-    getProjectionStoreState().commitAgentConfig(
-      SCOPE,
-      { id: 'agent-named', title: 'My Agent' },
-      'full',
-      'network',
-    );
+    seedNamedAgent();
   });
 
   it('prefers the topic title', () => {
@@ -147,5 +156,47 @@ describe('buildNotificationBody', () => {
   it('returns the fallback for empty / undefined content', () => {
     expect(buildNotificationBody(undefined, FALLBACK)).toBe(FALLBACK);
     expect(buildNotificationBody('   ', FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+describe('buildNotificationSender', () => {
+  beforeEach(() => {
+    seedNamedAgent();
+  });
+
+  it('returns undefined without an agent context', async () => {
+    expect(await buildNotificationSender({ topicId: 't1' })).toBeUndefined();
+  });
+
+  it('returns undefined when the agent has no display name', async () => {
+    expect(await buildNotificationSender({ agentId: 'agent-unknown' })).toBeUndefined();
+  });
+
+  it('builds the sender from agent meta with a rendered avatar', async () => {
+    expect(await buildNotificationSender({ agentId: 'agent-named', topicId: 't1' })).toEqual({
+      avatarDataUrl: 'data:image/png;base64,MOCK',
+      conversationId: 'agent-named:t1',
+      name: 'My Agent',
+    });
+  });
+
+  it('scopes the conversation to the group when present', async () => {
+    const sender = await buildNotificationSender({
+      agentId: 'agent-named',
+      groupId: 'g1',
+      topicId: 't1',
+    });
+
+    expect(sender?.conversationId).toBe('g1:t1');
+  });
+
+  it('keeps the sender when avatar rendering fails', async () => {
+    vi.mocked(renderAvatarToDataUrl).mockRejectedValueOnce(new Error('render failed'));
+
+    expect(await buildNotificationSender({ agentId: 'agent-named' })).toEqual({
+      avatarDataUrl: undefined,
+      conversationId: 'agent-named',
+      name: 'My Agent',
+    });
   });
 });

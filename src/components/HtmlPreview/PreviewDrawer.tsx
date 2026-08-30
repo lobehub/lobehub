@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 
+import { extractHtmlTitle } from './htmlTagScanner';
+
 const styles = createStaticStyles(({ css }) => ({
   container: css`
     height: 100%;
@@ -27,13 +29,6 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   const { t } = useTranslation('components');
   const [mode, setMode] = useState<'preview' | 'code'>('preview');
 
-  const htmlContent = content;
-
-  const extractTitle = useCallback(() => {
-    const m = htmlContent.match(/<title>([\S\s]*?)<\/title>/i);
-    return m ? m[1].trim() : undefined;
-  }, [htmlContent]);
-
   const sanitizeFileName = useCallback((name: string) => {
     return name
       .replaceAll(/["*/:<>?\\|]/g, '-')
@@ -43,10 +38,10 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   }, []);
 
   const onDownload = useCallback(() => {
-    const title = extractTitle();
+    const title = extractHtmlTitle(content);
     const base = title ? sanitizeFileName(title) : `chat-html-preview-${Date.now()}`;
     exportFile(content, `${base}.html`);
-  }, [content, extractTitle, sanitizeFileName]);
+  }, [content, sanitizeFileName]);
 
   const extra = (
     <Flexbox horizontal align={'center'} gap={8}>
@@ -115,7 +110,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
             showLanguage={false}
             style={{ height: '100%', overflow: 'auto' }}
           >
-            {htmlContent}
+            {content}
           </Highlighter>
         </Block>
       )}

@@ -185,7 +185,10 @@ vi.mock('node:crypto', () => ({
 
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const executeRemotePlatformMock = vi.hoisted(() => vi.fn());
+const prepareRemotePlatformSpawnMock = vi.hoisted(() => vi.fn());
 const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcessModule>();
@@ -194,6 +197,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
   resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
 }));
 
 vi.mock('node:os', () => ({
@@ -206,10 +210,6 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 
 vi.mock('@/services/imessageBridgeSrv', () => ({
   default: class ImessageBridgeService {},
-}));
-
-vi.mock('execa', () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }));
@@ -300,6 +300,21 @@ describe('GatewayConnectionCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    resolveRemotePlatformRuntimeMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv = process.env) => ({
+        available: true,
+        execute: executeRemotePlatformMock,
+        prepareSpawn: (args: string[]) => prepareRemotePlatformSpawnMock(type, args, baseEnv),
+      }),
+    );
+    prepareRemotePlatformSpawnMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+        args,
+        command: `/resolved/bin/${type}`,
+        env: { ...baseEnv, PATH: '/resolved/bin:/usr/bin' },
+      }),
+    );
+    executeRemotePlatformMock.mockResolvedValue({ stderr: '', stdout: '' });
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
     mockStoreGet.mockImplementation((key: string) => {
@@ -858,10 +873,11 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
-    it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
+    it('forwards cwd and primary/fallback context from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('claude-code', 'op-ctx', 'hi', 'mock-jwt', {
         cwd: '/Users/alice/repo',
+        resumeFallbackSystemContext: 'RECOVERY CONTEXT',
         systemContext: 'WORKSPACE CONTEXT',
       });
       await vi.advanceTimersByTimeAsync(0);
@@ -869,6 +885,7 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/Users/alice/repo',
+          resumeFallbackSystemContext: 'RECOVERY CONTEXT',
           systemContext: 'WORKSPACE CONTEXT',
         }),
       );
@@ -897,6 +914,18 @@ describe('GatewayConnectionCtr', () => {
         expect.objectContaining({
           args: ['--model', 'opus', '--effort', 'high'],
         }),
+      );
+    });
+
+    it('forwards ingestWorkspaceId to spawnLhHeteroExec as workspaceId', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('grok-build', 'op-ws', 'hi', 'mock-jwt', {
+        ingestWorkspaceId: 'ws-lobehub',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-lobehub' }),
       );
     });
 
@@ -1038,12 +1067,6 @@ describe('GatewayConnectionCtr', () => {
 
     beforeEach(() => {
       execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
-      resolveRemotePlatformCommandMock.mockResolvedValue({
-        available: true,
-        path: '/resolved/bin/openclaw',
-        resolvedPathEnv: '/resolved/bin:/usr/bin',
-        version: '1.2.3',
-      });
       spawnMock.mockReset();
     });
 
@@ -1073,9 +1096,59 @@ describe('GatewayConnectionCtr', () => {
       ];
       expect(spawnCommand).toBe('/resolved/bin/openclaw');
       expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
+      expect(spawnOptions.env.LOBEHUB_OPERATION_ID).toBe('op-1');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
+    });
+
+    it('reports a failed child process as a terminal error', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-failed-child',
+        prompt: 'hello',
+        taskId: 'task-failed-child',
+        topicId: 'topic-failed-child',
+      });
+      child._emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          done: true,
+          error: { message: 'Task failed (exit code: 1)', type: 'HeteroProcessError' },
+          operationId: 'op-failed-child',
+        }),
+      );
+    });
+
+    it('reports a signal exit as a cancelled terminal signal', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-cancelled-child',
+        prompt: 'hello',
+        taskId: 'task-cancelled-child',
+        topicId: 'topic-cancelled-child',
+      });
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancelled: true,
+          done: true,
+          error: undefined,
+          operationId: 'op-cancelled-child',
+        }),
+      );
     });
 
     it.each([
@@ -1173,6 +1246,39 @@ describe('GatewayConnectionCtr', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
       expect(killSpy).toHaveBeenCalledWith(-2222, 'SIGINT');
+
+      killSpy.mockRestore();
+    });
+
+    it('isolates concurrent group members that share a topic', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-1',
+        parentOperationId: 'op-parent',
+        prompt: 'member one',
+        taskId: 'task-child-1',
+        topicId: 'topic-shared',
+      });
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-2',
+        parentOperationId: 'op-parent',
+        prompt: 'member two',
+        taskId: 'task-child-2',
+        topicId: 'topic-shared',
+      });
+
+      expect(killSpy).not.toHaveBeenCalled();
+      const firstArgs = spawnMock.mock.calls[0][1] as string[];
+      const secondArgs = spawnMock.mock.calls[1][1] as string[];
+      expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+      expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+      expect((ctr as any).platformTasks.get('task-child-2')).toMatchObject({
+        parentOperationId: 'op-parent',
+      });
 
       killSpy.mockRestore();
     });
@@ -1342,15 +1448,6 @@ describe('GatewayConnectionCtr', () => {
     });
 
     describe('hermes', () => {
-      beforeEach(() => {
-        resolveRemotePlatformCommandMock.mockResolvedValue({
-          available: true,
-          path: '/resolved/bin/hermes',
-          resolvedPathEnv: '/resolved/bin:/usr/bin',
-          version: '0.20.0',
-        });
-      });
-
       it('relays stdout intact and saves the final session id from stderr', async () => {
         const child = makeMockChild();
         const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
@@ -1383,6 +1480,7 @@ describe('GatewayConnectionCtr', () => {
         expect(notifySpy).toHaveBeenCalledWith(
           expect.objectContaining({
             content: 'session_id: part of the final answer\nHello from Hermes',
+            operationId: 'op-hermes-1',
             topicId: 'topic-hermes',
           }),
         );
@@ -1559,6 +1657,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false for unknown platform', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
+        error: 'Unknown platform: unknownBot',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest(
         'checkPlatformCapability',
@@ -1578,6 +1681,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('getAgentProfile returns empty object', async () => {
+      resolveRemotePlatformRuntimeMock.mockResolvedValue({
+        available: false,
+        error: 'openclaw was not found or failed validation',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-profile');
       await vi.advanceTimersByTimeAsync(0);
@@ -1587,6 +1695,66 @@ describe('GatewayConnectionCtr', () => {
         result: {
           content: JSON.stringify({}),
           state: {},
+          success: true,
+        },
+      });
+      expect(executeRemotePlatformMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the shared OpenClaw runtime to load its profile', async () => {
+      executeRemotePlatformMock.mockResolvedValueOnce({
+        stderr: '',
+        stdout: JSON.stringify([
+          {
+            id: 'main',
+            identityEmoji: '🦞',
+            identityName: 'Clawd',
+            isDefault: true,
+          },
+        ]),
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-openclaw');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('openclaw');
+      expect(executeRemotePlatformMock).toHaveBeenCalledWith(['agents', 'list', '--json'], {
+        timeout: 5000,
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-openclaw',
+        result: {
+          content: JSON.stringify({ avatar: '🦞', title: 'Clawd' }),
+          state: { avatar: '🦞', description: undefined, title: 'Clawd' },
+          success: true,
+        },
+      });
+    });
+
+    it('uses one shared Hermes runtime to load its profile', async () => {
+      executeRemotePlatformMock
+        .mockResolvedValueOnce({ stderr: '', stdout: '◆research\n' })
+        .mockResolvedValueOnce({ stderr: '', stdout: 'Path: /profiles/research\n' });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'hermes' }, 'req-hermes');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('hermes');
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(1, ['profile', 'list'], {
+        timeout: 5000,
+      });
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(
+        2,
+        ['profile', 'show', 'research'],
+        { timeout: 5000 },
+      );
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-hermes',
+        result: {
+          content: JSON.stringify({ avatar: '⚡', title: 'research' }),
+          state: { avatar: '⚡', description: undefined, title: 'research' },
           success: true,
         },
       });

@@ -1,0 +1,142 @@
+name: Verify Workbench
+
+on:
+  pull_request: {}
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: verify-workbench-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve last successful deploy
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "${{ github.repository }}" \
+            --workflow deploy-workbench.yml --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId' || true)
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download last deployed build-inputs manifest
+        id: manifest
+        if: steps.base.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh run download "${{ steps.base.outputs.run_id }}" --repo "${{ github.repository }}" \
+            -n workbench-build-inputs -D /tmp/workbench-manifest; then
+            echo "path=/tmp/workbench-manifest/build-inputs.txt" >> "$GITHUB_OUTPUT"
+          else
+            echo "no manifest artifact on last successful run"
+          fi
+
+      - name: Detect workbench input changes
+        id: detect
+        env:
+          WORKBENCH_MANIFEST: ${{ steps.manifest.outputs.path }}
+        run: |
+          if [ -z "$WORKBENCH_MANIFEST" ]; then
+            echo "no previous deploy manifest — building"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            node apps/workbench/scripts/should-build.mjs \
+              "origin/${{ github.base_ref }}" HEAD
+          fi
+
+      - name: Setup environment
+        if: steps.detect.outputs.should_build == 'true'
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        if: steps.detect.outputs.should_build == 'true'
+        run: pnpm install
+
+      - name: Build workbench
+        if: steps.detect.outputs.should_build == 'true'
+        env:
+          # NODE_ENV is load-bearing: vite.config.rr.mts takes its dev branch otherwise and
+          # discards VITE_CDN_BASE without failing. A preview serves its own assets from its
+          # own workers.dev origin, the way production serves them from the CDN — never
+          # same-origin, because the gateway routes /assets to the landing target. Empty on
+          # fork PRs, which have no secrets to upload with and only run the size guard.
+          NODE_ENV: production
+          NODE_OPTIONS: --max-old-space-size=8192
+          VITE_CDN_BASE: >-
+            ${{ github.event.pull_request.head.repo.full_name == github.repository
+            && format('https://pr{0}-lobehub-workbench.lobeobjects-tg.workers.dev/', github.event.pull_request.number)
+            || '' }}
+        run: |
+          bun run build:rr
+          printf '/*\n  Access-Control-Allow-Origin: *\n' > build/client/_headers
+        working-directory: apps/workbench
+
+      - name: Upload preview version and validate worker bundle
+        if: steps.detect.outputs.should_build == 'true'
+        # Explicit `bash` rather than the default shell, whose lack of pipefail would let a
+        # wrangler failure pass as a green step through the `tee`.
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$SAME_REPO" = 'true' ]; then
+            set -- --preview-alias "pr${PR}" --message "PR-${PR}"
+          else
+            set -- --dry-run
+          fi
+          node_modules/.bin/wrangler versions upload \
+            --config build/server/wrangler.json "$@" | tee /tmp/upload.log
+          gzip_kib=$(grep -Eo 'gzip: [0-9.]+ KiB' /tmp/upload.log | grep -Eo '[0-9.]+' | head -1)
+          echo "worker gzip size: ${gzip_kib} KiB"
+          if [ -n "$gzip_kib" ] && [ "$(printf '%.0f' "$gzip_kib")" -gt 8192 ]; then
+            echo "::error::worker bundle ${gzip_kib} KiB gzip exceeds the 8 MiB guard (plan limit is 10 MiB)"
+            exit 1
+          fi
+          if [ "$SAME_REPO" = 'true' ]; then
+            echo "Preview: https://pr${PR}-lobehub-workbench.lobeobjects-tg.workers.dev" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        working-directory: apps/workbench
+
+      - name: Comment the preview URL
+        if: steps.detect.outputs.should_build == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Matched on a marker rather than `gh pr comment --edit-last`, which edits the
+          # last comment by this actor — and other workflows in this repo comment as the
+          # same bot, so it would rewrite one of theirs.
+          marker='<!-- workbench-preview -->'
+          body="${marker}
+          ### Workbench preview
+
+          <https://pr${PR}-lobehub-workbench.lobeobjects-tg.workers.dev>
+
+          A version, not a deployment: it takes no production traffic. Assets are served
+          from that same origin, so the page also renders through the gateway — point
+          \`workbench\`'s override at that host on staging in 鳥居番, then open
+          <https://gateway-staging.lobehub.com/acceptance>."
+          id=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -f body="$body" > /dev/null
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="$body" > /dev/null
+          fi

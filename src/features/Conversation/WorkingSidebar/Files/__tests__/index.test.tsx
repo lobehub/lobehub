@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode, Ref } from 'react';
+import type { Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGlobalStore } from '@/store/global';
 import { initialState } from '@/store/global/initialState';
+import { useUserStore } from '@/store/user';
 
 import Files from '../index';
 
@@ -175,31 +176,18 @@ vi.mock('@/services/projectFile', () => ({
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ openLocalFile: openLocalFileMock }),
+    selector({
+      activeAgentId: 'agt_1',
+      activeTopicId: 'tpc_1',
+      openLocalFile: openLocalFileMock,
+    }),
 }));
 
 const messageSpy = vi.hoisted(() => ({ warning: vi.fn() }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   message: messageSpy,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button type={'button'} onClick={onClick} />
-  ),
-  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  copyToClipboard: vi.fn(),
-  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  stopPropagation: vi.fn(),
 }));
 
 vi.mock('antd-style', async (importOriginal) => {
@@ -322,6 +310,44 @@ describe('Files — reveal request integration', () => {
     expect(getContextMenuItems(ignoredNode).map((item) => item.key)).not.toContain(
       'show-in-review',
     );
+  });
+
+  it('does not offer a publish action in the open-source build', () => {
+    const previousLab = useUserStore.getState().preference.lab;
+    useUserStore.setState({
+      preference: {
+        ...useUserStore.getState().preference,
+        lab: { ...previousLab, enableArtifactDeployment: true },
+      },
+    });
+
+    try {
+      render(<Files workingDirectory="/repo" />);
+
+      const getContextMenuItems = explorerTreeProps.current?.getContextMenuItems as (
+        node: unknown,
+      ) => { key: string }[];
+
+      expect(
+        getContextMenuItems({
+          data: {
+            isDirectory: false,
+            name: 'index.html',
+            path: '/repo/index.html',
+            relativePath: 'index.html',
+          },
+          id: 'index.html',
+          isFolder: false,
+        }).map((item) => item.key),
+      ).not.toContain('publish');
+    } finally {
+      useUserStore.setState({
+        preference: {
+          ...useUserStore.getState().preference,
+          lab: previousLab,
+        },
+      });
+    }
   });
 
   it('opens file previews with the indexed project root as the approved workspace root', () => {

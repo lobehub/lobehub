@@ -32,12 +32,6 @@ const mockDocumentStore = {
   useFetchDocument,
 };
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('zustand-utils', () => ({
   createStoreUpdater: () => () => undefined,
 }));

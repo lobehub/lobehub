@@ -2,7 +2,7 @@ import type { TransferResourceType } from '@lobechat/types';
 import { and, desc, eq, gt, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 
 import type { ResourceTransferRequestItem } from '../schemas';
-import { resourceTransferRequests } from '../schemas';
+import { notifications, resourceTransferRequests } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 
 /** Create rejected: the resource already carries a live transfer request. */
@@ -171,7 +171,7 @@ export class ResourceTransferRequestModel {
     trx?: Executor,
   ): Promise<void> => {
     if (resourceIds.length === 0) return;
-    await (trx ?? this.db)
+    const voided = await (trx ?? this.db)
       .update(resourceTransferRequests)
       .set({ resolvedAt: new Date(), status: 'cancelled' })
       .where(
@@ -181,7 +181,12 @@ export class ResourceTransferRequestModel {
           inArray(resourceTransferRequests.resourceId, resourceIds),
           eq(resourceTransferRequests.status, 'pending'),
         ),
-      );
+      )
+      .returning({ id: resourceTransferRequests.id });
+    await this.settleLinkedInboxRows(
+      voided.map((row) => row.id),
+      trx,
+    );
   };
 
   /**
@@ -191,7 +196,7 @@ export class ResourceTransferRequestModel {
    * request already resolved.
    */
   invalidateRequest = async (id: string): Promise<void> => {
-    await this.db
+    const voided = await this.db
       .update(resourceTransferRequests)
       .set({ resolvedAt: new Date(), status: 'cancelled' })
       .where(
@@ -199,6 +204,29 @@ export class ResourceTransferRequestModel {
           eq(resourceTransferRequests.id, id),
           eq(resourceTransferRequests.workspaceId, this.workspaceId),
           eq(resourceTransferRequests.status, 'pending'),
+        ),
+      )
+      .returning({ id: resourceTransferRequests.id });
+    await this.settleLinkedInboxRows(voided.map((row) => row.id));
+  };
+
+  /**
+   * A pending item's read state IS its handled state: the request notice
+   * (linked through `metadata.transfer.requestId`) stays unread while the
+   * request is live, and reads the moment the request leaves `pending` —
+   * whichever way (accept / decline / withdraw / expiry / invalidation).
+   * Every state transition in this model funnels through here so the inbox
+   * never shows an "unread" notice for a request nobody can act on anymore.
+   */
+  private settleLinkedInboxRows = async (requestIds: string[], trx?: Executor): Promise<void> => {
+    if (requestIds.length === 0) return;
+    await (trx ?? this.db)
+      .update(notifications)
+      .set({ isRead: true, updatedAt: new Date() })
+      .where(
+        and(
+          eq(notifications.isRead, false),
+          inArray(sql`${notifications.metadata} -> 'transfer' ->> 'requestId'`, requestIds),
         ),
       );
   };
@@ -217,7 +245,7 @@ export class ResourceTransferRequestModel {
     );
 
   private expireOverdue = async (resourceType: TransferResourceType, resourceId: string) => {
-    await this.db
+    const expired = await this.db
       .update(resourceTransferRequests)
       .set({ resolvedAt: sql`now()`, status: 'expired' })
       .where(
@@ -225,7 +253,9 @@ export class ResourceTransferRequestModel {
           this.pendingResourceMatch(resourceType, resourceId),
           lte(resourceTransferRequests.expiresAt, new Date()),
         ),
-      );
+      )
+      .returning({ id: resourceTransferRequests.id });
+    await this.settleLinkedInboxRows(expired.map((row) => row.id));
   };
 
   /** Stamp an overdue pending row `expired` on read, so callers never act on one. */
@@ -246,6 +276,9 @@ export class ResourceTransferRequestModel {
         ),
       )
       .returning();
+    // Whether this call stamped it or a racer resolved it first, the request
+    // is no longer live — settle the notice either way (idempotent).
+    await this.settleLinkedInboxRows([row.id]);
     return updated ?? (await this.reload(row.id)) ?? { ...row, resolvedAt, status: 'expired' };
   };
 
@@ -284,7 +317,10 @@ export class ResourceTransferRequestModel {
       )
       .returning();
 
-    if (updated) return updated;
+    if (updated) {
+      await this.settleLinkedInboxRows([updated.id], trx);
+      return updated;
+    }
 
     // Distinguish "expired" from every other dead end so the recipient gets an
     // actionable message rather than a generic failure.

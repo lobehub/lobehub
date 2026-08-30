@@ -1,4 +1,6 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { usePermission } from '@/hooks/usePermission';
@@ -11,6 +13,42 @@ interface UseUploadFilesOptions {
   provider?: string;
 }
 
+interface MediaUploadAbilityFlags {
+  canUploadAudio: boolean;
+  canUploadImage: boolean;
+  canUploadVideo: boolean;
+}
+
+interface PartitionedMediaFiles {
+  accepted: File[];
+  rejected: File[];
+}
+
+/**
+ * Split files into uploadable ones and media the model cannot receive directly
+ * or via the multimodal-understanding fallback. Non-media files always pass.
+ */
+export const partitionFilesByMediaAbility = (
+  files: File[],
+  { canUploadAudio, canUploadImage, canUploadVideo }: MediaUploadAbilityFlags,
+): PartitionedMediaFiles => {
+  const accepted: File[] = [];
+  const rejected: File[] = [];
+
+  for (const file of files) {
+    const allowed = file.type.startsWith('image')
+      ? canUploadImage
+      : file.type.startsWith('video')
+        ? canUploadVideo
+        : file.type.startsWith('audio')
+          ? canUploadAudio
+          : true;
+    (allowed ? accepted : rejected).push(file);
+  }
+
+  return { accepted, rejected };
+};
+
 /**
  * Hook to handle file uploads with multimodal media support filtering.
  * Filters out image/video files if the model cannot receive them directly or via fallback.
@@ -20,6 +58,7 @@ interface UseUploadFilesOptions {
  */
 export const useUploadFiles = (options: UseUploadFilesOptions) => {
   const { agentId, model = '', provider = '' } = options;
+  const { t } = useTranslation('chat');
 
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
@@ -34,18 +73,27 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
       if (!canUpload) return;
 
       // Filter out media files if the model cannot receive them directly or via fallback.
-      const filteredFiles = files.filter((file) => {
-        if (file.type.startsWith('image')) return canUploadImage;
-        if (file.type.startsWith('video')) return canUploadVideo;
-        if (file.type.startsWith('audio')) return canUploadAudio;
-        return true;
+      const { accepted, rejected } = partitionFilesByMediaAbility(files, {
+        canUploadAudio,
+        canUploadImage,
+        canUploadVideo,
       });
 
-      if (filteredFiles.length > 0) {
-        uploadFiles(filteredFiles, agentId);
+      // Dropping a pasted/dragged file with no feedback reads as "the app ate
+      // my file" — surface which ones the model cannot receive.
+      if (rejected.length > 0) {
+        toast.warning(
+          t('upload.validation.mediaNotSupported', {
+            files: rejected.map((file) => file.name).join(', '),
+          }),
+        );
+      }
+
+      if (accepted.length > 0) {
+        uploadFiles(accepted, agentId);
       }
     },
-    [agentId, canUpload, canUploadImage, canUploadVideo, canUploadAudio, uploadFiles],
+    [agentId, canUpload, canUploadImage, canUploadVideo, canUploadAudio, t, uploadFiles],
   );
 
   return { canUploadImage, canUploadVideo, canUploadAudio, handleUploadFiles };

@@ -2,12 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
+  applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
+  canPublishAgentTopicLink,
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
+  resolveAgentTopicSharePolicy,
+  resolveHeterogeneousProviderTopicModel,
+  unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
   AMP_AGENT_MODES,
@@ -21,6 +28,32 @@ import {
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
 } from './heteroSelectorCapabilities';
+
+describe('server-default heterogeneous model request', () => {
+  it('only accepts the namespaced operation model used for CLI metadata', () => {
+    expect(formatServerDefaultHeterogeneousModel('gpt-5.4')).toBe('lobehub/gpt-5.4');
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.4', 'gpt-5.4')).toBe(true);
+    expect(isServerDefaultHeterogeneousModel('lobehub-default', 'gpt-5.4')).toBe(false);
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.5', 'gpt-5.4')).toBe(false);
+  });
+
+  it('unwraps namespaced CLI reports and the legacy Claude Code alias', () => {
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub/claude-sonnet-4-6')).toBe(
+      'claude-sonnet-4-6',
+    );
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub/gpt-5.4', 'ignored')).toBe('gpt-5.4');
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub-default', 'claude-sonnet-4-6')).toBe(
+      'claude-sonnet-4-6',
+    );
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub-default')).toBe('lobehub-default');
+    expect(unwrapServerDefaultHeterogeneousModel('claude-opus-4-6', 'claude-sonnet-4-6')).toBe(
+      'claude-opus-4-6',
+    );
+    expect(unwrapServerDefaultHeterogeneousModel(undefined, 'claude-sonnet-4-6')).toBe(
+      'claude-sonnet-4-6',
+    );
+  });
+});
 
 describe('normalizeHeterogeneousProviderConfig', () => {
   it('recovers a legacy adapterType before considering the command', () => {
@@ -82,6 +115,88 @@ describe('pruneWorkingDirByDeviceDeletes', () => {
     expect(() =>
       pruneWorkingDirByDeviceDeletes(undefined, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
+  });
+});
+
+describe('heterogeneous topic models', () => {
+  it('snapshots the persisted selector and Default', () => {
+    expect(
+      resolveHeterogeneousProviderTopicModel({
+        args: ['--model', 'cursor-arg-model'],
+        model: 'stale-structured-model',
+        type: 'cursor',
+      }),
+    ).toEqual({ model: 'stale-structured-model', provider: 'cursor' });
+    expect(resolveHeterogeneousProviderTopicModel({ type: 'cursor' })).toEqual({
+      model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      provider: 'cursor',
+    });
+  });
+
+  it('keeps server-default API models Agent-scoped and ignores stale topic bindings', () => {
+    const config = {
+      apiConfig: { model: 'server-model', source: 'server-default' },
+      authMode: 'api',
+      type: 'claude-code',
+    } as const;
+
+    expect(resolveHeterogeneousProviderTopicModel(config)).toBeUndefined();
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'stale-topic-model',
+        provider: 'anthropic',
+      }),
+    ).toBe(config);
+  });
+
+  it('overrides a CLI model without retaining a conflicting global flag', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      {
+        args: ['--model', 'global-model', '--mode', 'plan'],
+        model: 'global-model',
+        type: 'cursor',
+      },
+      { model: 'topic-model', provider: 'cursor' },
+    );
+
+    expect(effective).toEqual({
+      args: ['--mode', 'plan'],
+      model: 'topic-model',
+      type: 'cursor',
+    });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--mode', 'plan', '--model', 'topic-model']);
+  });
+
+  it('overrides an API binding and drops a provider-specific fast model', () => {
+    expect(
+      applyTopicModelToHeterogeneousProvider(
+        {
+          apiConfig: {
+            model: 'global-model',
+            providerId: 'openai',
+            smallFastModel: 'gpt-4.1-mini',
+          },
+          authMode: 'api',
+          type: 'cursor',
+        },
+        { model: 'topic-model', provider: 'anthropic' },
+      ),
+    ).toMatchObject({
+      apiConfig: { model: 'topic-model', providerId: 'anthropic' },
+      authMode: 'api',
+      type: 'cursor',
+    });
+  });
+
+  it('ignores a topic model pinned for another heterogeneous runtime', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'codex-topic-model',
+        provider: 'codex',
+      }),
+    ).toBe(config);
   });
 });
 
@@ -167,6 +282,45 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'cursor',
       }),
     ).toEqual(['--model', 'gpt-5']);
+  });
+
+  it('forwards Grok Build model and effort through direct ACP and device execution', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--no-subagents'],
+      effort: 'xhigh',
+      model: 'grok-4.6',
+      type: 'grok-build',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--no-subagents',
+      '--model',
+      'grok-4.6',
+      '--effort',
+      'xhigh',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--no-subagents',
+      '--agent-arg=--model',
+      '--agent-arg=grok-4.6',
+      '--agent-arg=--effort',
+      '--agent-arg=xhigh',
+    ]);
+  });
+
+  it('keeps native Grok Build selector flags authoritative', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m=grok-build', '--reasoning-effort=low'],
+      effort: 'high',
+      model: 'grok-4.6',
+      type: 'grok-build',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['-m=grok-build', '--reasoning-effort=low']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=-m=grok-build',
+      '--agent-arg=--reasoning-effort=low',
+    ]);
   });
 
   it('keeps TRAE model selection in the wrapper instead of native process arguments', () => {
@@ -558,6 +712,12 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
   });
 
+  it('uses the model-specific levels supported by custom server-default models', () => {
+    expect(getCodexReasoningEffortLevels('deepseek-v4-flash')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('deepseek-v4-pro')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('glm-5.2')).toEqual(['high', 'max']);
+  });
+
   it('uses conservative common levels for old, unknown, and default models', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);
@@ -784,21 +944,11 @@ describe('resolveAgentAgencyConfig', () => {
     ).toEqual(shared);
   });
 
-  it('ignores member policy and overrides while a Workspace Agent is private', () => {
-    expect(
-      resolveAgentAgencyConfig(
-        {
-          boundDeviceId: 'owner-device',
-          executionTarget: 'device',
-          executionTargetSelectionPolicy: 'fixed',
-        },
-        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
-        { visibility: 'private', workspaceId: 'workspace-1' },
-      ),
-    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
-  });
-
-  it('ignores member policy and overrides for an author or Workspace admin', () => {
+  // A `local` / this-machine pick is per-user even for the owner: the shared
+  // row must never reference a personal device (the server rejects it), so the
+  // owner's pick lives in the same override slot members use and must merge
+  // back at read time — bypassing `fixed`, which constrains members only.
+  it("applies the owner's own override on a private Workspace Agent, stripping the member policy", () => {
     expect(
       resolveAgentAgencyConfig(
         {
@@ -806,9 +956,106 @@ describe('resolveAgentAgencyConfig', () => {
           executionTarget: 'device',
           executionTargetSelectionPolicy: 'fixed',
         },
-        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-desktop', executionTarget: 'local' });
+  });
+
+  it("applies an author's or Workspace admin's own override on a public Workspace Agent", () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'manager-desktop', executionTarget: 'local' });
+  });
+
+  it('keeps the shared config (policy stripped) for an owner without an override', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        undefined,
         { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
       ),
     ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
+  });
+
+  it('never applies an override on a personal agent', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        { executionTarget: 'sandbox' },
+        { boundDeviceId: 'stale-device', executionTarget: 'local' },
+        { workspaceId: null },
+      ),
+    ).toEqual({ executionTarget: 'sandbox' });
+  });
+});
+
+describe('resolveAgentTopicSharePolicy', () => {
+  it('never restricts a personal agent — there is nobody to restrict', () => {
+    expect(
+      resolveAgentTopicSharePolicy({
+        agencyConfig: { topicSharePolicy: 'restricted' },
+        workspaceId: null,
+      }),
+    ).toBe('member');
+  });
+
+  it('keeps legacy workspace rows on the behaviour they were created with', () => {
+    expect(resolveAgentTopicSharePolicy({ workspaceId: 'workspace-1' })).toBe('member');
+    expect(resolveAgentTopicSharePolicy({ agencyConfig: {}, workspaceId: 'workspace-1' })).toBe(
+      'member',
+    );
+  });
+
+  it('honours an explicit restriction on a workspace agent', () => {
+    expect(
+      resolveAgentTopicSharePolicy({
+        agencyConfig: { topicSharePolicy: 'restricted' },
+        workspaceId: 'workspace-1',
+      }),
+    ).toBe('restricted');
+  });
+});
+
+describe('canPublishAgentTopicLink', () => {
+  const restricted = {
+    agencyConfig: { topicSharePolicy: 'restricted' as const },
+    userId: 'author',
+    workspaceId: 'workspace-1',
+  };
+
+  it('falls back to the role gate when no agent resolved', () => {
+    // Legacy session-only topics, or a row the caller cannot read: there is no
+    // policy to apply, so this must not become a second, silent denial.
+    expect(canPublishAgentTopicLink(undefined, { userId: 'member' })).toBe(true);
+    expect(canPublishAgentTopicLink(null, { userId: 'member' })).toBe(true);
+  });
+
+  it('blocks a plain member on a restricted agent', () => {
+    expect(canPublishAgentTopicLink(restricted, { userId: 'member' })).toBe(false);
+  });
+
+  it('lets the agent author and workspace owners through', () => {
+    expect(canPublishAgentTopicLink(restricted, { userId: 'author' })).toBe(true);
+    expect(canPublishAgentTopicLink(restricted, { isWorkspaceOwner: true, userId: 'member' })).toBe(
+      true,
+    );
+  });
+
+  it('does not match an author against a missing viewer id', () => {
+    expect(canPublishAgentTopicLink({ ...restricted, userId: null }, { userId: undefined })).toBe(
+      false,
+    );
   });
 });

@@ -23,52 +23,11 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   isDesktop: true,
 }));
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    labItem: 'lab-item',
-  }),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Form: ({
-    items,
-  }: {
-    items: {
-      children: { children?: ReactNode; desc?: string; label: string }[];
-      title: string;
-    }[];
-  }) => (
-    <div>
-      {items.map((group) => (
-        <section key={group.title}>
-          <h2>{group.title}</h2>
-          {group.children.map((item) => (
-            <div key={item.label}>
-              <span>{item.label}</span>
-              {item.children}
-            </div>
-          ))}
-        </section>
-      ))}
-    </div>
-  ),
-  Skeleton: () => <div>loading</div>,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Tooltip: ({ children, title }: { children: ReactNode; title: string }) => (
     <span title={title}>{children}</span>
   ),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
-  Switch: () => <button />,
 }));
 
 vi.mock('@/features/Settings/features/SettingHeader', () => ({
@@ -110,7 +69,7 @@ describe('Labs settings page', () => {
 
     // The page title comes from the settings shell header (like Plans / Storage),
     // so the experimental notice has to carry itself as a standalone banner.
-    expect(screen.getByRole('note').textContent).toBe('description');
+    expect(screen.getByRole('alert').textContent).toBe('description');
   });
 
   it('hides its own setting header when the shell renders a compact one', () => {
@@ -118,7 +77,7 @@ describe('Labs settings page', () => {
     render(<Page showSettingHeader={false} />, { wrapper: createWrapper() });
 
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
-    expect(screen.getByRole('note').textContent).toBe('description');
+    expect(screen.getByRole('alert').textContent).toBe('description');
   });
 
   it('splits experiments into General and Desktop groups', () => {
@@ -160,6 +119,12 @@ describe('Labs settings page', () => {
     expect(screen.queryByText('features.taskVerify.title')).toBeNull();
   });
 
+  it('does not render the released in-app browser as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.inAppBrowser.title')).toBeNull();
+  });
+
   it('labels every experiment with a maturity stage tag', () => {
     renderPage();
 
@@ -171,6 +136,9 @@ describe('Labs settings page', () => {
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
     renderPage();
+
+    const agentProviderBinding = screen.getByText('features.agentProviderBinding.title');
+    expect(within(agentProviderBinding).getByText('stage.alpha.label')).toBeDefined();
 
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();

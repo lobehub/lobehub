@@ -5,6 +5,7 @@ import {
   GROUP_CHAT_URL,
   isDesktop,
 } from '@lobechat/const';
+import type { DesktopNotificationSender } from '@lobechat/electron-client-ipc';
 import type { ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
@@ -13,6 +14,8 @@ import { getAgentMeta } from '@/store/agent/projection';
 import { getChatTopicById } from '@/store/chat/slices/topic/projectionRead';
 import type { ChatStore } from '@/store/chat/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
+
+import { renderAvatarToDataUrl } from './notificationAvatar';
 
 export interface DesktopNotificationContext {
   agentId?: ConversationContext['agentId'];
@@ -85,6 +88,34 @@ export const resolveNotificationTitle = (
   return fallbackTitle;
 };
 
+/**
+ * Build the communication-notification sender (agent name + avatar) for the
+ * conversation context. Returns undefined outside agent conversations so the
+ * notification stays a plain banner.
+ */
+export const buildNotificationSender = async (
+  context: DesktopNotificationContext,
+): Promise<DesktopNotificationSender | undefined> => {
+  if (!context.agentId) return undefined;
+
+  const agentMeta = getAgentMeta(context.agentId);
+  const name = agentDisplayName(agentMeta);
+  if (!name) return undefined;
+
+  const conversationId = [context.groupId ?? context.agentId, context.topicId]
+    .filter(Boolean)
+    .join(':');
+
+  let avatarDataUrl: string | undefined;
+  try {
+    avatarDataUrl = await renderAvatarToDataUrl(context.agentId, agentMeta);
+  } catch (error) {
+    console.error('Notification avatar render failed:', error);
+  }
+
+  return { avatarDataUrl, conversationId, name };
+};
+
 /** Convert the assistant's markdown reply to a length-capped plain-text body. */
 export const buildNotificationBody = (
   content: string | undefined,
@@ -112,6 +143,7 @@ export const notifyDesktopHumanApprovalRequired = async (
     );
 
     const navigate = resolveNotificationNavigate(context);
+    const sender = await buildNotificationSender(context);
 
     await Promise.allSettled([
       desktopNotificationService.setBadgeCount(1),
@@ -120,6 +152,7 @@ export const notifyDesktopHumanApprovalRequired = async (
         force: true,
         navigate,
         requestAttention: true,
+        sender,
         title,
       }),
     ]);
@@ -158,11 +191,13 @@ export const notifyDesktopAgentCompleted = async (
     const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
     const fallback = t('notification.finishChatGeneration', { ns: 'electron' });
     const navigate = resolveNotificationNavigate(context);
+    const sender = await buildNotificationSender(context);
 
     const tasks: Promise<unknown>[] = [
       desktopNotificationService.showNotification({
         body: buildNotificationBody(content, fallback),
         navigate,
+        sender,
         title: resolveNotificationTitle(get, context, fallback),
       }),
     ];

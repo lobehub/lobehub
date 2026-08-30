@@ -176,6 +176,47 @@ export const topicCommentKeys = {
   ]),
 };
 
+// ---- document comment ---------------------------------------------------
+export const documentCommentKeys = {
+  replies: def(
+    'documentComment:replies',
+    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
+      'documentComment:replies',
+      workspaceId ?? '',
+      rootCommentId,
+      cursor ?? '',
+    ],
+  ),
+  summary: def('documentComment:summary', (documentId: string) => [
+    'documentComment:summary',
+    documentId,
+  ]),
+  threads: def(
+    'documentComment:threads',
+    (workspaceId: string | null, documentId: string, cursor?: string) => [
+      'documentComment:threads',
+      workspaceId ?? '',
+      documentId,
+      cursor ?? '',
+    ],
+  ),
+};
+
+export const isDocumentCommentKeyForEvent = (
+  key: unknown,
+  event: { documentId: string; rootCommentId?: string; workspaceId: string },
+): boolean => {
+  if (!Array.isArray(key)) return false;
+
+  if (key[0] === documentCommentKeys.summary.root) return key[1] === event.documentId;
+  if (key[1] !== event.workspaceId) return false;
+  if (key[0] === documentCommentKeys.threads.root) return key[2] === event.documentId;
+  if (key[0] === documentCommentKeys.replies.root) {
+    return !event.rootCommentId || key[2] === event.rootCommentId;
+  }
+  return false;
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -270,6 +311,17 @@ export const recentKeys = {
 export const isTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:list';
 
+export const isScheduledTaskListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'task:scheduledList';
+
+/**
+ * Goal Graph reads. Keyed by the `goals` row id (not the carrier task's
+ * identifier) because that is what every `goal.*` procedure takes.
+ */
+export const goalKeys = {
+  graph: def('goal:graph', (goalId: string) => ['goal:graph', goalId]),
+};
+
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
@@ -277,11 +329,22 @@ export const taskKeys = {
     (
       agentKey: string | undefined,
       visibility: 'all' | 'private' | 'workspace' = 'all',
+      groupBy: 'assignee' | 'priority' | 'status' = 'status',
+      excludeStatuses?: string,
       projectId?: string,
-    ) =>
-      projectId
-        ? ['task:groupList', agentKey, visibility, projectId]
-        : ['task:groupList', agentKey, visibility],
+      automated?: boolean,
+    ) => {
+      const hasBoardFilter = groupBy !== 'status' || excludeStatuses !== undefined;
+      const key = hasBoardFilter
+        ? projectId
+          ? ['task:groupList', agentKey, visibility, groupBy, excludeStatuses, projectId]
+          : ['task:groupList', agentKey, visibility, groupBy, excludeStatuses]
+        : projectId
+          ? ['task:groupList', agentKey, visibility, projectId]
+          : ['task:groupList', agentKey, visibility];
+
+      return automated === undefined ? key : [...key, { automated }];
+    },
   ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
@@ -322,6 +385,25 @@ export const taskKeys = {
         },
       ];
     },
+  ),
+  /**
+   * Home's automated-task roll-up: the tasks that fire on a schedule or a
+   * heartbeat. Kept off `list` because it is a different result set entirely —
+   * sharing the key would let one section's fetch overwrite the other's.
+   */
+  scheduledList: def(
+    'task:scheduledList',
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      limit?: number,
+      offset?: number,
+    ) => [
+      'task:scheduledList',
+      agentKey,
+      visibility,
+      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
+    ],
   ),
   /**
    * AgentSidebar task panel. Lives in the `task:` domain (not a `sidebar:`
@@ -391,6 +473,9 @@ export const agentConfigKeys = {
     'agent:search',
     keyword,
     scope,
+  ]),
+  serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
+    'agent:serverDefaultHeterogeneousCapability',
   ]),
 };
 
@@ -944,7 +1029,13 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  acceptances: def('verify:acceptances', () => ['verify:acceptances']),
+  /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
+  acceptances: def('verify:acceptances', (limit?: number, q?: string, filter?: string) => [
+    'verify:acceptances',
+    String(limit ?? ''),
+    q ?? '',
+    filter ?? '',
+  ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
@@ -974,18 +1065,26 @@ export const verifyKeys = {
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
+/** Match every parameterized Acceptance list key (filter / limit / search variants). */
+export const isAcceptanceListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === verifyKeys.acceptances.root;
+
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
+  navigationCounts: def('inbox:navigationCounts', (workspaceId: string | null) => [
+    'inbox:navigationCounts',
+    workspaceId,
+  ]),
   notifications: def(
     'inbox:notifications',
     // Keyed by context: the server scopes the inbox to the active workspace
     // (null = personal), so cached pages must never be reused across contexts.
-    (workspaceId: string | null, cursor: string | undefined, unreadOnly: boolean | undefined) => [
-      'inbox:notifications',
-      workspaceId,
-      cursor,
-      unreadOnly,
-    ],
+    (
+      workspaceId: string | null,
+      cursor: string | undefined,
+      category: string | undefined,
+      isRead: boolean | undefined,
+    ) => ['inbox:notifications', workspaceId, cursor, category, isRead],
   ),
   unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
     'inbox:unreadCount',
@@ -995,6 +1094,7 @@ export const inboxKeys = {
 
 // ---- share (shared topic / page) ----------------------------------------
 export const shareKeys = {
+  artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,
@@ -1298,6 +1398,7 @@ export const swrKeys = {
   file: fileKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
+  goal: goalKeys,
   global: globalKeys,
   group: groupKeys,
   home: homeKeys,
@@ -1328,6 +1429,7 @@ export const swrKeys = {
   tool: toolKeys,
   topic: topicKeys,
   topicComment: topicCommentKeys,
+  documentComment: documentCommentKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

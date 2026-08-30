@@ -7,10 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 
-vi.mock('@lobehub/ui', () => ({
-  Block: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <div onClick={onClick}>{children}</div>
-  ),
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
     items,
@@ -32,16 +30,6 @@ vi.mock('@lobehub/ui', () => ({
       ))}
     </div>
   ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('antd', () => ({
-  Progress: () => <span>progress</span>,
-}));
-
-vi.mock('antd-style', () => ({
-  cssVar: { colorSuccess: 'green' },
 }));
 
 vi.mock('./TaskStatusIcon', () => ({

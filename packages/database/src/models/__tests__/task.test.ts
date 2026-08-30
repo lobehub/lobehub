@@ -8,7 +8,6 @@ import {
   agents,
   briefs,
   documents,
-  goals,
   tasks,
   topics,
   users,
@@ -17,7 +16,6 @@ import {
 import { taskTopics } from '../../schemas/task';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
-import { GoalModel } from '../goal';
 import { ProjectModel } from '../project';
 import { TaskModel } from '../task';
 import { WorkModel } from '../work';
@@ -451,6 +449,88 @@ describe('TaskModel', () => {
   });
 
   describe('groupList', () => {
+    it('should group tasks by assignee and keep an unassigned column', async () => {
+      const firstAgentId = await createAgent('group-assignee-first');
+      const secondAgentId = await createAgent('group-assignee-second');
+      const model = new TaskModel(serverDB, userId);
+
+      await model.create({ assigneeAgentId: firstAgentId, instruction: 'First assigned task' });
+      await model.create({ assigneeAgentId: secondAgentId, instruction: 'Second assigned task' });
+      await model.create({ assigneeUserId: userId2, instruction: 'Member assigned task' });
+      await model.create({
+        assigneeAgentId: firstAgentId,
+        assigneeUserId: userId2,
+        instruction: 'Legacy dual-assigned task',
+      });
+      await model.create({ instruction: 'Unassigned task' });
+      const completed = await model.create({
+        assigneeAgentId: firstAgentId,
+        instruction: 'Completed task',
+      });
+      await model.updateStatus(completed.id, 'completed', { completedAt: new Date() });
+
+      const result = await model.groupList({
+        excludeStatuses: ['completed', 'canceled'],
+        groupBy: 'assignee',
+      });
+
+      expect(result).toHaveLength(4);
+      const firstAgent = result.find((group) => group.key === `assignee:${firstAgentId}`);
+      expect(firstAgent?.total).toBe(2);
+      expect(firstAgent?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'First assigned task',
+        'Legacy dual-assigned task',
+      ]);
+      expect(result.find((group) => group.key === `assignee:${secondAgentId}`)?.total).toBe(1);
+      const member = result.find((group) => group.key === `assignee:user:${userId2}`);
+      expect(member?.assigneeUserId).toBe(userId2);
+      expect(member?.total).toBe(1);
+      expect(member?.tasks.map((task) => task.instruction)).toEqual(['Member assigned task']);
+      const unassigned = result.find((group) => group.key === 'assignee:unassigned');
+      expect(unassigned?.assigneeAgentId).toBeNull();
+      expect(unassigned?.assigneeUserId).toBeNull();
+      expect(unassigned?.tasks.map((task) => task.instruction)).toEqual(['Unassigned task']);
+
+      const agentScopedResult = await model.groupList({
+        assigneeAgentId: firstAgentId,
+        groupBy: 'assignee',
+      });
+      expect(agentScopedResult.map((group) => group.key)).toEqual([`assignee:${firstAgentId}`]);
+    });
+
+    it('should expose every priority as a kanban drop target', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'High priority', priority: 2 });
+
+      const result = await model.groupList({ groupBy: 'priority' });
+
+      expect(result.map((group) => group.key)).toEqual([
+        'priority:1',
+        'priority:2',
+        'priority:3',
+        'priority:4',
+        'priority:0',
+      ]);
+      expect(result.find((group) => group.key === 'priority:2')?.total).toBe(1);
+      expect(result.find((group) => group.key === 'priority:1')?.total).toBe(0);
+    });
+
+    it('should combine null and zero values in the no-priority group total', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'Explicit no priority', priority: 0 });
+      const nullablePriority = await model.create({ instruction: 'Nullable priority' });
+      await serverDB.update(tasks).set({ priority: null }).where(eq(tasks.id, nullablePriority.id));
+
+      const result = await model.groupList({ groupBy: 'priority' });
+      const noPriority = result.find((group) => group.key === 'priority:0');
+
+      expect(noPriority?.total).toBe(2);
+      expect(noPriority?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'Explicit no priority',
+        'Nullable priority',
+      ]);
+    });
+
     it('should return grouped tasks by status', async () => {
       const model = new TaskModel(serverDB, userId);
 
@@ -524,6 +604,19 @@ describe('TaskModel', () => {
       expect(backlogP2.offset).toBe(2);
     });
 
+    it('should not double-count duplicate statuses in a group', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'Backlog task' });
+
+      const [group] = await model.groupList({
+        groups: [{ key: 'backlog', statuses: ['backlog', 'backlog'] }],
+      });
+
+      expect(group.total).toBe(1);
+      expect(group.tasks).toHaveLength(1);
+      expect(group.hasMore).toBe(false);
+    });
+
     it('should filter root tasks only (parentTaskId null)', async () => {
       const model = new TaskModel(serverDB, userId);
       const parent = await model.create({ instruction: 'Parent' });
@@ -567,34 +660,22 @@ describe('TaskModel', () => {
       expect(result[0].tasks).toHaveLength(1);
     });
 
-    it('should filter tasks by their bound goal entity', async () => {
+    it('should exclude runnable automation from ordinary kanban groups', async () => {
       const model = new TaskModel(serverDB, userId);
-
-      const goalTask = await model.create({ instruction: 'Persistent objective' });
-      const goalRow = await new GoalModel(serverDB, userId).create({
-        maxRounds: 5,
-        subjectId: goalTask.id,
-        subjectType: 'task',
-        title: 'Persistent objective',
-      });
-      await model.create({ instruction: 'Ordinary task' });
-
-      const goals = await model.groupList({
-        groups: [{ key: 'goals', statuses: ['backlog'] }],
-        hasGoal: true,
-      });
-      const ordinary = await model.groupList({
-        groups: [{ key: 'tasks', statuses: ['backlog'] }],
-        hasGoal: false,
+      const manual = await model.create({ instruction: 'Manual task' });
+      await model.create({
+        automationMode: 'schedule',
+        instruction: 'Scheduled task',
+        schedulePattern: '0 9 * * *',
       });
 
-      expect(goals[0].tasks.map((task) => task.id)).toEqual([goalTask.id]);
-      // The goal entity rides along on the returned task row.
-      expect(goals[0].tasks[0].goal?.id).toBe(goalRow.id);
-      expect(goals[0].tasks[0].goal?.maxRounds).toBe(5);
-      expect(ordinary[0].tasks).toHaveLength(1);
-      expect(ordinary[0].tasks[0].instruction).toBe('Ordinary task');
-      expect(ordinary[0].tasks[0].goal).toBeNull();
+      const [group] = await model.groupList({
+        automated: false,
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+      });
+
+      expect(group.tasks.map((task) => task.id)).toEqual([manual.id]);
+      expect(group.total).toBe(1);
     });
 
     it('should group only tasks from the requested project', async () => {
@@ -735,6 +816,21 @@ describe('TaskModel', () => {
       const updated = await model.updateStatus(task.id, 'running', { startedAt });
       expect(updated!.status).toBe('running');
       expect(updated!.startedAt).toBeDefined();
+    });
+
+    it('should update status only when the current status matches', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+      await model.updateStatus(task.id, 'running');
+
+      const completed = await model.updateStatusIfCurrent(task.id, 'running', 'completed', {
+        completedAt: new Date(),
+      });
+      const staleUpdate = await model.updateStatusIfCurrent(task.id, 'running', 'failed');
+
+      expect(completed?.status).toBe('completed');
+      expect(staleUpdate).toBeNull();
+      expect((await model.findById(task.id))?.status).toBe('completed');
     });
   });
 
@@ -1275,24 +1371,6 @@ describe('TaskModel', () => {
       const { total: total2 } = await model2.list();
       expect(total1).toBe(0);
       expect(total2).toBe(1);
-    });
-
-    it('sweeps the goals bound to bulk-deleted tasks', async () => {
-      // Regression (codex review): the FK-less goals rows survived clearAll,
-      // orphaning every cleared goal — only single and subtree deletion swept.
-      const model = new TaskModel(serverDB, userId);
-      const goalModel = new GoalModel(serverDB, userId);
-      const goalTask = await model.create({ instruction: 'Goal task' });
-      await goalModel.create({ subjectId: goalTask.id, subjectType: 'task', title: 'Doomed' });
-      const otherUsers = new GoalModel(serverDB, userId2);
-      await otherUsers.create({ subjectId: 'task_foreign', subjectType: 'task', title: 'Keep' });
-
-      await model.deleteAll();
-
-      const mine = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId) });
-      const theirs = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId2) });
-      expect(mine).toHaveLength(0);
-      expect(theirs).toHaveLength(1);
     });
   });
 

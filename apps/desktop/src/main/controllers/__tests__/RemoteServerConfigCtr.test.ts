@@ -14,16 +14,6 @@ vi.mock('@/utils/net-fetch', () => ({
   netFetch: mockFetch,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock electron
 vi.mock('electron', () => ({
   app: {

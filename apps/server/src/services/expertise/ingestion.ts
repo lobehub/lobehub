@@ -10,21 +10,25 @@ import {
   messages,
   topics,
 } from '@lobechat/database/schemas';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import {
+  chainExpertiseTopicIngestion,
+  EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
+  EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
+import { resolveExpertiseModelConfig } from './modelConfig';
+
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
-const PROMPT_VERSION = 'expertise-ingestion-v1';
-
+const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
   domains: z.array(
     z.object({
@@ -33,8 +37,8 @@ const AnalysisSchema = z.object({
       observations: z
         .array(
           z.object({
-            existingCode: z.string().nullable(),
             example: z.string(),
+            existingLessonCode: z.string().nullable(),
             layer: z.string().nullable(),
             outcome: z.enum(['pass', 'violation']),
             reasoning: z.string(),
@@ -46,44 +50,34 @@ const AnalysisSchema = z.object({
   ),
 });
 
-const ANALYSIS_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'expertise_topic_ingestion',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      domains: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            domainId: { type: 'string' },
-            matches: { type: 'boolean' },
-            observations: {
-              items: {
-                additionalProperties: false,
-                properties: {
-                  existingCode: { type: ['string', 'null'] },
-                  example: { type: 'string' },
-                  layer: { type: ['string', 'null'] },
-                  outcome: { enum: ['pass', 'violation'], type: 'string' },
-                  reasoning: { type: 'string' },
-                  title: { type: 'string' },
-                },
-                required: ['existingCode', 'example', 'layer', 'outcome', 'reasoning', 'title'],
-                type: 'object',
-              },
-              maxItems: 8,
-              type: 'array',
-            },
-          },
-          required: ['domainId', 'matches', 'observations'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-    },
-    required: ['domains'],
-    type: 'object',
-  },
+/**
+ * The identity a lesson is deduplicated by.
+ *
+ * The title *is* the rule statement, so two lessons that normalize to the same string are the
+ * same judgment written twice. Whitespace and case are dropped because the model rewrites both
+ * freely between runs; punctuation is kept, since it is what separates a rule from its negation.
+ */
+export const normalizeLessonTitle = (title: string) => title.replaceAll(/\s+/g, '').toLowerCase();
+
+/**
+ * The lesson an observation attaches to, or `undefined` when it genuinely starts a new one.
+ *
+ * `existingLessonCode` is the model's own answer and is taken first, but only when it actually
+ * looks like a code: the field name reads as "the existing code" to a model staring at a diff, and
+ * roughly one observation in six comes back holding a source snippet instead. An unguarded lookup
+ * turns every one of those into a fresh P-nn. The normalized title is the semantic fallback —
+ * whatever the model meant to reference, an identical rule statement is that rule.
+ */
+const matchLesson = <T>(
+  observation: { existingLessonCode: string | null; title: string },
+  lessons: { byCode: Map<string, T>; byTitle: Map<string, T> },
+) => {
+  const code = observation.existingLessonCode?.trim();
+  if (code && LESSON_CODE_PATTERN.test(code)) {
+    const byCode = lessons.byCode.get(code);
+    if (byCode) return byCode;
+  }
+  return lessons.byTitle.get(normalizeLessonTitle(observation.title));
 };
 
 interface ExpertiseCompletionInput {
@@ -265,9 +259,7 @@ export class ExpertiseIngestionService {
     const context = topicContext.serializedContext.slice(-MAX_CONTEXT_CHARS);
     if (!context.trim()) return { ingested: 0, reason: 'empty-context' } as const;
 
-    const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
-    const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
-    if (!modelConfig) return { ingested: 0, reason: 'no-model' } as const;
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
 
     const domains = await Promise.all(
       bound.map(async ({ domain }) => ({
@@ -277,6 +269,10 @@ export class ExpertiseIngestionService {
         layers: domain.layers,
         lessons: (await expertiseModel.listLessons(domain.id)).map((lesson) => ({
           code: lesson.code,
+          layer: lesson.layer,
+          // The judgment behind the title. Without it the model is asked to decide "same judgment?"
+          // from a headline alone, and reaches for a new lesson whenever the wording differs.
+          why: lesson.sections.find((section) => section.key === 'why')?.body ?? null,
           title: lesson.title,
         })),
         outOfScope: domain.outOfScope,
@@ -287,27 +283,17 @@ export class ExpertiseIngestionService {
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          {
-            content:
-              'You maintain evidence-backed expertise from real conversations. First apply each domainFilter and outOfScope literally. If a conversation does not match, return matches=false and no observations. For a match, map concrete evidence to an existing lesson when its judgment is the same; otherwise propose one reusable lesson. Do not turn implementation trivia or a one-off fact into a lesson. Use only declared layer keys. Keep evidence short and grounded in the supplied conversation.',
-            role: 'system',
-          },
-          {
-            content: `DOMAINS\n${JSON.stringify(domains)}\n\nTOPIC CONTEXT (bounded at this completed turn)\n${context}`,
-            role: 'user',
-          },
-        ],
+        ...chainExpertiseTopicIngestion({ context, domains }),
         ...modelConfig,
-        schema: ANALYSIS_JSON_SCHEMA,
+        schema: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
       },
       {
         metadata: { trigger: 'expertise_topic_ingestion' },
         tracing: {
           agentId: input.agentId,
-          promptVersion: PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.TopicAutoSummary,
-          schemaName: ANALYSIS_JSON_SCHEMA.name,
+          promptVersion: EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.ExpertiseTopicIngestion,
+          schemaName: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA.name,
           topicId: input.topicId,
         },
       },
@@ -354,7 +340,7 @@ export class ExpertiseIngestionService {
 
   private persistDomainRun = async (
     input: ExpertiseCompletionInput & {
-      domain: { id: string; lessons: Array<{ code: string; title: string }> };
+      domain: { id: string };
       observations: z.infer<typeof AnalysisSchema>['domains'][number]['observations'];
     },
   ) => {
@@ -403,20 +389,34 @@ export class ExpertiseIngestionService {
         workspaceId: this.workspaceId,
       });
 
-      const persistedCodes = await tx
-        .select({ code: expertiseLessons.code })
+      const persisted = await tx
+        .select({
+          code: expertiseLessons.code,
+          id: expertiseLessons.id,
+          status: expertiseLessons.status,
+          title: expertiseLessons.title,
+        })
         .from(expertiseLessons)
-        .where(eq(expertiseLessons.domainId, input.domain.id));
+        .where(eq(expertiseLessons.domainId, input.domain.id))
+        .orderBy(asc(expertiseLessons.createdAt), asc(expertiseLessons.code));
+      // A retired code is never handed out again, so the counter walks every row; only active
+      // lessons are dedup targets, because attaching to one the user chose to forget revives it.
       let nextCodeNumber =
-        Math.max(0, ...persistedCodes.map(({ code }) => Number(/^P-(\d+)$/.exec(code)?.[1] ?? 0))) +
-        1;
+        Math.max(0, ...persisted.map(({ code }) => Number(/^P-(\d+)$/.exec(code)?.[1] ?? 0))) + 1;
+      const byCode = new Map<string, string>();
+      const byTitle = new Map<string, string>();
+      for (const lesson of persisted) {
+        if (lesson.status !== 'active') continue;
+        byCode.set(lesson.code, lesson.id);
+        // Oldest wins, so a domain that already holds duplicates converges on one canonical row.
+        const key = normalizeLessonTitle(lesson.title);
+        if (!byTitle.has(key)) byTitle.set(key, lesson.id);
+      }
       const countedLessonIds = new Set<string>();
 
       for (const observation of input.observations) {
-        let lesson = observation.existingCode
-          ? input.domain.lessons.find((item) => item.code === observation.existingCode)
-          : undefined;
-        if (!lesson) {
+        const matchedId = matchLesson(observation, { byCode, byTitle });
+        if (!matchedId) {
           newCount += 1;
           const lessonId = randomUUID();
           const code = `P-${String(nextCodeNumber++).padStart(2, '0')}`;
@@ -441,9 +441,9 @@ export class ExpertiseIngestionService {
             ],
             title: observation.title,
           });
-          lesson = { code, title: observation.title };
+          byCode.set(code, lessonId);
+          byTitle.set(normalizeLessonTitle(observation.title), lessonId);
           countedLessonIds.add(lessonId);
-          input.domain.lessons.push(lesson);
           await tx.insert(expertiseHits).values({
             domainId: input.domain.id,
             example: observation.example,
@@ -455,28 +455,17 @@ export class ExpertiseIngestionService {
           });
         } else {
           instanceCount += 1;
-          const [row] = await tx
-            .select({ id: expertiseLessons.id })
-            .from(expertiseLessons)
-            .where(
-              and(
-                eq(expertiseLessons.domainId, input.domain.id),
-                eq(expertiseLessons.code, lesson.code),
-              ),
-            )
-            .limit(1);
-          if (!row) continue;
           await tx.insert(expertiseHits).values({
             domainId: input.domain.id,
             example: observation.example,
-            lessonId: row.id,
+            lessonId: matchedId,
             note: observation.reasoning,
             operationId: input.operationId,
             outcome: observation.outcome,
             runId,
           });
-          const firstHitThisRun = !countedLessonIds.has(row.id);
-          countedLessonIds.add(row.id);
+          const firstHitThisRun = !countedLessonIds.has(matchedId);
+          countedLessonIds.add(matchedId);
           await tx
             .update(expertiseLessons)
             .set({
@@ -488,7 +477,7 @@ export class ExpertiseIngestionService {
               lastHitAt: new Date(),
               lastHitRunId: runId,
             })
-            .where(eq(expertiseLessons.id, row.id));
+            .where(eq(expertiseLessons.id, matchedId));
         }
       }
 

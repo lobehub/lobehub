@@ -1,6 +1,5 @@
 import type { taskService } from '@/services/task';
 
-// Derive types from TRPC inference via service
 export type TaskListItem = Awaited<ReturnType<typeof taskService.list>>['data'][number];
 export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['data'][number];
 
@@ -15,16 +14,18 @@ export type TaskViewMode = 'kanban' | 'list';
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
+export type TaskKanbanGroupBy = 'assignee' | 'priority' | 'status';
 
 export interface TaskListSliceState {
-  /** Temporary downstream compatibility projections. Projection remains canonical. */
+  groupListQueryAutomated?: boolean;
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
-  /** Effective visibility of the currently selected task-list Projection. */
+  listGroupBy: TaskKanbanGroupBy;
+  listGroupExcludeStatuses?: string;
+  listQueryAutomated?: boolean;
+  listQueryStatuses?: string;
   listQueryVisibility: TaskListVisibilityFilter;
-  /** Defaults to 'all' so the Tasks top entry shows every visible task
-   *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
@@ -33,8 +34,10 @@ export interface TaskListSliceState {
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
+  groupListQueryAutomated: undefined,
   isTaskGroupListInit: false,
   isTaskListInit: false,
+  listGroupBy: 'status',
   listQueryVisibility: 'all',
   listVisibility: 'all',
   taskGroups: [],

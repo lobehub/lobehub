@@ -7,12 +7,17 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as resolveCliCommand from './resolveCliCommand';
+
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
 const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
 const execFileMock = vi.mocked(childProcess.execFile);
+const detectHeterogeneousCliCommandMock = vi.mocked(
+  resolveCliCommand.detectHeterogeneousCliCommand,
+);
 
 const callExecFile = (stdout: string) => {
   execFileMock.mockImplementationOnce(((...args: unknown[]) => {
@@ -38,6 +43,11 @@ vi.mock('node:child_process', async () => {
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
   return { ...actual, platform: vi.fn(() => 'linux') };
+});
+
+vi.mock('./resolveCliCommand', async () => {
+  const actual = await vi.importActual<typeof resolveCliCommand>('./resolveCliCommand');
+  return { ...actual, detectHeterogeneousCliCommand: vi.fn() };
 });
 
 const createFakeProc = ({
@@ -166,7 +176,9 @@ const createGrokAcpProc = ({
   return { proc, requests };
 };
 
-const createFakeAcpProc = () => {
+const createFakeAcpProc = ({
+  promptAutoComplete = true,
+}: { promptAutoComplete?: boolean } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -219,6 +231,7 @@ const createFakeAcpProc = () => {
             return;
           }
           case 'session/prompt': {
+            if (!promptAutoComplete) return;
             send({
               method: 'session/update',
               params: {
@@ -236,6 +249,62 @@ const createFakeAcpProc = () => {
       return true;
     }),
   };
+
+  return { proc, requests };
+};
+
+const createCursorAcpProc = () => {
+  const proc = new EventEmitter() as any;
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const requests: Array<{
+    id?: number;
+    method?: string;
+    params?: Record<string, unknown>;
+  }> = [];
+  const send = (message: Record<string, unknown>) =>
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  Object.assign(proc, {
+    kill: vi.fn(() => true),
+    killed: false,
+    pid: 67_890,
+    stderr,
+    stdin: {
+      once: vi.fn(),
+      write: vi.fn((chunk: string) => {
+        const message = JSON.parse(chunk.trim());
+        requests.push(message);
+        queueMicrotask(() => {
+          switch (message.method) {
+            case 'initialize': {
+              send({
+                id: message.id,
+                result: {
+                  agentCapabilities: { loadSession: true },
+                  authMethods: [{ id: 'cursor_login' }],
+                  protocolVersion: 1,
+                },
+              });
+              return;
+            }
+            case 'authenticate': {
+              send({ id: message.id, result: {} });
+              return;
+            }
+            case 'session/load': {
+              send({ id: message.id, result: {} });
+              return;
+            }
+            case 'session/prompt': {
+              send({ id: message.id, result: { stopReason: 'end_turn' } });
+            }
+          }
+        });
+        return true;
+      }),
+    },
+    stdout,
+  });
 
   return { proc, requests };
 };
@@ -263,6 +332,7 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, path: 'traecli' });
   });
 
   afterEach(async () => {
@@ -459,39 +529,39 @@ describe('spawnAgent', () => {
     expect(spawnCalls).toHaveLength(0);
   });
 
-  it('spawns Cursor with positional prompt, resume, native args, and no stdin payload', async () => {
-    const fake = createFakeProc();
+  it('runs Cursor through ACP with native args and an ACP-native resume id', async () => {
+    const fake = createCursorAcpProc();
     nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
     const { spawnAgent } = await import('./spawnAgent');
-    await spawnAgent({
+    const handle = await spawnAgent({
       agentType: 'cursor',
       extraArgs: ['--model', 'sonnet', '--mode', 'plan'],
       operationId: 'op-cursor',
       prompt: 'do a thing',
       resumeSessionId: 'cursor-session',
     });
+    const events = [];
+    for await (const event of handle.events) events.push(event);
+    await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
 
     expect(spawnCalls[0]).toMatchObject({
-      args: [
-        '-p',
-        '--force',
-        '--trust',
-        '--output-format',
-        'stream-json',
-        '--stream-partial-output',
-        '--resume',
-        'cursor-session',
-        '--model',
-        'sonnet',
-        '--mode',
-        'plan',
-        '--',
-        'do a thing',
-      ],
+      args: ['--model', 'sonnet', '--mode', 'plan', 'acp'],
       command: 'agent',
     });
-    expect(fake.stdinWrites).toEqual([]);
-    expect(fake.proc.stdin.end).toHaveBeenCalledOnce();
+    expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
+      'initialize',
+      'authenticate',
+      'session/load',
+      'session/prompt',
+    ]);
+    expect(fake.requests.find(({ method }) => method === 'session/prompt')?.params).toEqual({
+      prompt: [{ text: 'do a thing', type: 'text' }],
+      sessionId: 'cursor-session',
+    });
+    expect(handle.sessionId).toBe('cursor-session');
+    expect(events).toContainEqual(expect.objectContaining({ type: 'agent_runtime_end' }));
+    killSpy.mockRestore();
   });
 
   it('runs TRAE through ACP behind the standard handle contract', async () => {
@@ -513,6 +583,11 @@ describe('spawnAgent', () => {
       for await (const event of handle.events) events.push(event);
 
       await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'trae',
+        'traecli',
+        expect.objectContaining({ PATH: process.env.PATH }),
+      );
       expect(spawnCalls[0]).toMatchObject({
         args: ['acp', 'serve', '--yolo', '--feature=test'],
         command: 'traecli',
@@ -537,7 +612,115 @@ describe('spawnAgent', () => {
     }
   });
 
-  it('does not treat the open-source trae-cli trajectory runner as TRAE ACP', async () => {
+  it('preserves SIGKILL when force-stopping a TRAE ACP run', async () => {
+    const fake = createFakeAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        operationId: 'op-trae-force-stop',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      handle.kill('SIGKILL');
+
+      // The ACP spawn bridge reports host kills as signal exits, uniformly
+      // across ACP agents.
+      expect(processKill).toHaveBeenCalledWith(-12_345, 'SIGKILL');
+      await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
+    } finally {
+      processKill.mockRestore();
+    }
+  });
+
+  it('allows the official canonical trae-cli command to run through ACP', async () => {
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    detectHeterogeneousCliCommandMock.mockResolvedValue({
+      available: true,
+      path: '/usr/local/bin/trae-cli',
+    });
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        command: 'trae-cli',
+        env: { PATH: '/custom/node/bin' },
+        operationId: 'op-trae',
+        prompt: 'do a thing',
+      });
+
+      for await (const _event of handle.events) {
+        // Consume the ACP session to completion.
+      }
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', 'serve', '--yolo'],
+        command: '/usr/local/bin/trae-cli',
+        options: { env: { PATH: '/custom/node/bin' } },
+      });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'trae',
+        'trae-cli',
+        expect.objectContaining({ PATH: '/custom/node/bin' }),
+      );
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('resolves a relative TRAE command against the child working directory before probing', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobehub-trae-cwd-'));
+    tempDirs.push(cwd);
+    const relativeCommand = './bin/traecli';
+    const resolvedCommand = path.resolve(cwd, relativeCommand);
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    detectHeterogeneousCliCommandMock.mockImplementationOnce(async (_agentType, command) => ({
+      available: true,
+      path: command,
+    }));
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        command: relativeCommand,
+        cwd,
+        operationId: 'op-trae-relative',
+        prompt: 'do a thing',
+      });
+
+      for await (const _event of handle.events) {
+        // Consume the ACP session to completion.
+      }
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'trae',
+        resolvedCommand,
+        expect.objectContaining({ PATH: process.env.PATH }),
+      );
+      expect(spawnCalls[0]).toMatchObject({
+        command: resolvedCommand,
+        options: { cwd },
+      });
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('rejects a custom TRAE command that does not expose the ACP runtime', async () => {
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: false });
+
     const { spawnAgent } = await import('./spawnAgent');
 
     await expect(
@@ -547,7 +730,12 @@ describe('spawnAgent', () => {
         operationId: 'op-trae',
         prompt: 'do a thing',
       }),
-    ).rejects.toThrow('trajectory runner is unsupported');
+    ).rejects.toThrow('TRAE command does not expose the required ACP runtime: trae-cli');
+    expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+      'trae',
+      'trae-cli',
+      expect.objectContaining({ PATH: process.env.PATH }),
+    );
     expect(spawnCalls).toHaveLength(0);
   });
 

@@ -1,20 +1,17 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowRightIcon, RefreshCwIcon } from 'lucide-react';
+import { ArrowRightIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
-import { GoalAcceptance } from './GoalAcceptance';
-import { getGoalPresentation } from './goalPresentation';
 import { GoalProgress } from './GoalProgress';
 import GoalStatusGlyph from './GoalStatusGlyph';
-import { getGoalDescription, shouldShowGoal } from './goalViewModel';
 import type { GoalItemProps } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -33,17 +30,16 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const GoalCardItem = memo<GoalItemProps>((props) => {
-  const { t } = useTranslation('chat');
+export const GoalCardItem = memo<GoalItemProps>(({ goal: item }) => {
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
-  const { hideAchieved = false, projectId, task } = props;
-  const goal = task.goal;
-  const title = task.name?.trim() || task.instruction.trim() || task.identifier;
-  const description = getGoalDescription(task);
+  const { goal } = item;
+  // On the project Goals page there is no `aid` in the route, and a goal created
+  // there has no responsible agent either — so fall back the same way tasks do,
+  // to the bare detail route. Without this every card there is a dead link.
+  const agentId = aid ?? goal.agentId;
   const handleClick = () => {
-    if (projectId) navigate(`/task/${task.identifier}`);
-    else if (aid) navigate(`/agent/${aid}/goal/${task.identifier}`);
+    navigate(agentId ? `/agent/${agentId}/goal/${goal.id}` : `/goal/${goal.id}`);
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -52,76 +48,42 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
   };
 
   return (
-    <GoalAcceptance taskId={task.id}>
-      {({ bundle, error, isLoading, retry }) => {
-        const presentation = getGoalPresentation({
-          acceptanceStatus: bundle?.acceptance.status,
-          checks: bundle?.checks,
-          goalStatus: goal?.status,
-          maxRounds: goal?.maxRounds,
-          rounds: task.totalTopics ?? 0,
-          taskStatus: task.status,
-        });
-        if (!isLoading && !shouldShowGoal(presentation.statusKey, hideAchieved ? 'active' : 'all'))
-          return null;
-
-        return (
-          <Block
-            clickable
-            className={styles.card}
-            gap={14}
-            padding={16}
-            role={'link'}
-            tabIndex={0}
-            variant={'outlined'}
-            onClick={handleClick}
-            onKeyDown={handleKeyDown}
-          >
-            <Flexbox
-              horizontal
-              align={'flex-start'}
-              gap={12}
-              justify={'space-between'}
-              style={{ minWidth: 0 }}
-            >
-              <Flexbox gap={4} style={{ minWidth: 0 }}>
-                <Flexbox horizontal align={'center'} gap={7}>
-                  <GoalStatusGlyph size={13} statusKey={presentation.statusKey} />
-                  <Text ellipsis fontSize={15} weight={600}>
-                    {title}
-                  </Text>
-                </Flexbox>
-                {description && description !== title && (
-                  <Text ellipsis fontSize={12} type={'secondary'}>
-                    {description}
-                  </Text>
-                )}
-              </Flexbox>
-              {error ? (
-                <ActionIcon
-                  icon={RefreshCwIcon}
-                  size={'small'}
-                  title={t('goalList.retry')}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    retry();
-                  }}
-                />
-              ) : (
-                <Icon color={cssVar.colorTextQuaternary} icon={ArrowRightIcon} size={16} />
-              )}
-            </Flexbox>
-            <GoalProgress
-              isLoading={isLoading}
-              presentation={presentation}
-              totalRunCost={props.task.totalRunCost}
-              totalRunDuration={props.task.totalRunDuration}
-              totalRuns={props.task.totalTopics}
-            />
-          </Block>
-        );
-      }}
-    </GoalAcceptance>
+    <Block
+      clickable
+      className={styles.card}
+      gap={12}
+      padding={16}
+      role={'link'}
+      tabIndex={0}
+      variant={'outlined'}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+    >
+      <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
+        <Flexbox gap={4} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} gap={7}>
+            <GoalStatusGlyph size={13} status={goal.status} />
+            <Text ellipsis fontSize={15} weight={600}>
+              {goal.title}
+            </Text>
+          </Flexbox>
+          {goal.requirement && goal.requirement !== goal.title && (
+            <Text ellipsis fontSize={12} type={'secondary'}>
+              {goal.requirement}
+            </Text>
+          )}
+        </Flexbox>
+        <Icon color={cssVar.colorTextQuaternary} icon={ArrowRightIcon} size={16} />
+      </Flexbox>
+      <GoalProgress
+        findingCount={item.findingCount}
+        pendingDecisions={item.pendingDecisions}
+        totalRunCost={item.totalRunCost}
+        totalRunDuration={item.totalRunDuration}
+        workDone={item.workDone}
+        workTotal={item.workTotal}
+      />
+    </Block>
   );
 });
 

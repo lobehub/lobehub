@@ -240,7 +240,12 @@ export class AcpStdioClient {
     if (this.closed) return;
 
     if (message.method) {
-      if (message.id !== undefined) await this.handleServerRequest(message);
+      if (message.id !== undefined) {
+        // Server requests (permissions, questions, plan approval) can block on
+        // a host UI. Keep that wait off the serial queue so later
+        // `session/update` notifications still reach the adapter.
+        void this.handleServerRequest(message).catch((error) => this.fail(this.toError(error)));
+      }
       return;
     }
 

@@ -13,13 +13,15 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   isDesktop: true,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({
     card: 'card',
     key: 'key',
     row: 'row',
     value: 'value',
   }),
+  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
   cssVar: {
     colorBgContainer: 'var(--color-bg-container)',
     colorBorderSecondary: 'var(--color-border-secondary)',
@@ -43,10 +45,13 @@ vi.mock('@lobehub/ui', () => ({
   Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
   Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   Tabs: () => null,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  ToggleGroup: () => null,
 }));
 
 vi.mock('@/components/CodeEditorPane', () => ({
@@ -86,6 +91,12 @@ vi.mock('@/utils/skillMarkdown', () => ({
 
 vi.mock('./MarkdownImage', () => ({
   default: () => null,
+}));
+
+vi.mock('./PublishHtmlArtifactButton', () => ({
+  PublishHtmlArtifactLiveBar: () => null,
+  PublishHtmlArtifactProvider: ({ children }: { children: ReactNode }) => children,
+  PublishHtmlArtifactTrigger: () => null,
 }));
 
 const mockClearPortalStack = vi.hoisted(() => vi.fn());

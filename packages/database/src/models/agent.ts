@@ -1,10 +1,11 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
-import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
+import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import {
   and,
@@ -40,6 +41,10 @@ import {
   chatGroupsAgents,
   devices,
   documents,
+  expertiseBindings,
+  expertiseDomains,
+  expertiseInsights,
+  expertiseRuns,
   files,
   knowledgeBases,
   messages,
@@ -53,6 +58,7 @@ import {
   tasks,
   taskTopics,
   threads,
+  topicDocuments,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -60,8 +66,14 @@ import {
   collectBoundDeviceIds,
   sanitizeAgencyConfigsForWorkspace,
 } from '../utils/agencyConfigDevices';
-import { rehomeAgentConnectorsForRecipient } from '../utils/agentConnectors';
-import { rehomeAgentDocumentsForRecipient } from '../utils/agentDocumentsOwnership';
+import {
+  rehomeAgentConnectorsForRecipient,
+  rehomeAgentConnectorsForScopeTransfer,
+} from '../utils/agentConnectors';
+import {
+  moveAgentDocumentsForScopeTransfer,
+  rehomeAgentDocumentsForRecipient,
+} from '../utils/agentDocumentsOwnership';
 import { rehomeAgentExpertiseForRecipient } from '../utils/agentExpertise';
 import {
   detachAgentKnowledgeMountsForRecipient,
@@ -72,6 +84,7 @@ import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBinding
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
+import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -1035,7 +1048,9 @@ export class AgentModel {
    */
   create = async (input: Partial<AgentItem>): Promise<AgentItem> => {
     const config = this.stripReservedSlug(input);
-    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig);
+    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(
+      sanitizeAgentApiConfig(config.agencyConfig),
+    );
 
     await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
     await this.assertFixedExecutionTarget(this.workspaceId ?? null, agencyConfig);
@@ -1066,7 +1081,9 @@ export class AgentModel {
 
     const normalizedConfigs = configs.map((config) => ({
       ...this.stripReservedSlug(config),
-      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig),
+      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(
+        sanitizeAgentApiConfig(config.agencyConfig),
+      ),
     }));
 
     await Promise.all(
@@ -1093,9 +1110,12 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
+    const apiSafeData = Object.hasOwn(data, 'agencyConfig')
+      ? { ...data, agencyConfig: sanitizeAgentApiConfig(data.agencyConfig) }
+      : data;
     const sanitizedData = await this.stripAgentBuilderProtectedFields(
       agentId,
-      this.stripImmutableFields(data),
+      this.stripImmutableFields(apiSafeData),
     );
 
     return this.db
@@ -1198,6 +1218,34 @@ export class AgentModel {
    * creator, slug and current visibility, scoped by the ownership predicate
    * (other members' private agents resolve to `null`).
    */
+  /**
+   * The topic-share policy and creator of one agent.
+   *
+   * Deliberately scoped by workspace rather than by {@link ownership}: this
+   * answers "what did the author decide for this agent", which must not depend
+   * on whether the *caller* can see the row. A visibility-scoped miss would
+   * return `null` and fail open, handing a restricted agent's topics back to
+   * every member.
+   */
+  getTopicShareSubject = async (id: string): Promise<AgentTopicShareSubject | null> => {
+    const rows = await this.db
+      .select({
+        agencyConfig: agents.agencyConfig,
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+      })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.id, id),
+          this.workspaceId ? eq(agents.workspaceId, this.workspaceId) : this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  };
+
   getAgentVisibilityMeta = async (
     id: string,
   ): Promise<{ slug: string | null; userId: string; visibility: 'private' | 'public' } | null> => {
@@ -1359,6 +1407,21 @@ export class AgentModel {
 
     const mergedValue = merge(agent, restData);
 
+    // API bindings follow updateConfig's partial deep-merge contract. A user-provider patch must
+    // only clear the deployment discriminator retained from a previous server-default binding.
+    const apiConfigPatch = toRecord(data.agencyConfig?.heterogeneousProvider?.apiConfig);
+    const mergedApiConfig = toRecord(mergedValue.agencyConfig?.heterogeneousProvider?.apiConfig);
+    if (
+      apiConfigPatch &&
+      apiConfigPatch.source !== 'server-default' &&
+      typeof apiConfigPatch.providerId === 'string' &&
+      mergedApiConfig
+    ) {
+      delete mergedApiConfig.source;
+    }
+
+    mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
+
     // The inbox is LobeHub's built-in default cloud agent; it must never be
     // turned into a heterogeneous (external-CLI) agent. Two independent inputs can
     // flip it — a stray `agencyConfig.heterogeneousProvider`, and a legacy hetero
@@ -1374,6 +1437,14 @@ export class AgentModel {
       if (isHeterogeneousAgentModelId(mergedValue.model)) {
         mergedValue.model = null;
       }
+    }
+
+    // A character sheet is authored as a whole: the studio reads the current
+    // profile and writes the version it wants. Deep-merging it would make a
+    // cleared trait or a removed artwork impossible to express, since a missing
+    // key reads as "leave it alone". Same reasoning as the graph below.
+    if (Object.hasOwn(data, 'profile')) {
+      mergedValue.profile = data.profile as AgentItem['profile'];
     }
 
     // A AgentGraph is a complete executable document, not a partial config
@@ -2200,15 +2271,12 @@ export class AgentModel {
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
         .where(topicCondition!)
         .returning({ id: topics.id, updatedAt: topics.updatedAt });
+      const movedTopicIds = movedTopics.map((topic) => topic.id);
 
       // 6a. Topic comments denormalize the topic's workspaceId — move them
       // with the topic (or drop them when leaving workspace scope entirely),
       // otherwise workspace-filtered comment reads go stale. See the helper doc.
-      await syncTopicCommentsOnTopicTransfer(
-        trx,
-        movedTopics.map((topic) => topic.id),
-        targetWorkspaceId,
-      );
+      await syncTopicCommentsOnTopicTransfer(trx, movedTopicIds, targetWorkspaceId);
 
       // 7. Message scope rewrite — fast/slow split. Rewriting a message row
       // maintains every message index (incl. the multi-GB BM25 index), so a
@@ -2225,7 +2293,6 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
           : inArray(messages.agentId, agentIds);
-      const movedTopicIds = movedTopics.map((topic) => topic.id);
       const [{ affectedMessages }] = await trx
         .select({ affectedMessages: count() })
         .from(messages)
@@ -2302,10 +2369,6 @@ export class AgentModel {
           .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskDependencies.taskId, movedTaskIds));
         await trx
-          .update(taskDocuments)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
-          .where(inArray(taskDocuments.taskId, movedTaskIds));
-        await trx
           .update(taskTopics)
           .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskTopics.updatedAt })
           .where(inArray(taskTopics.taskId, movedTaskIds));
@@ -2318,13 +2381,148 @@ export class AgentModel {
 
       await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.agentId, agentIds));
 
-      // 13. Update agent bot providers (transfer, not delete)
+      // 13. Move expertise owned exclusively by these agents. The domain is
+      // the ownership root for lessons, hits and snapshots, so those rows keep
+      // their IDs and follow it without per-table rewrites. Runs additionally
+      // carry their own scope for attribution and must be re-scoped explicitly.
+      // A domain
+      // that is also bound to a carrier outside this transfer is shared state
+      // and must stay in the source scope; only the moved agent's binding is
+      // re-scoped in that case.
+      const boundExpertiseDomains = await trx
+        .select({ domainId: expertiseBindings.domainId })
+        .from(expertiseBindings)
+        .innerJoin(expertiseDomains, eq(expertiseDomains.id, expertiseBindings.domainId))
+        .where(
+          and(
+            inArray(expertiseBindings.agentId, agentIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              expertiseDomains,
+            ),
+          ),
+        );
+      const candidateDomainIds = [...new Set(boundExpertiseDomains.map((row) => row.domainId))];
+
+      await trx
+        .update(expertiseBindings)
+        .set({ workspaceId: targetWorkspaceId, updatedAt: expertiseBindings.updatedAt })
+        .where(inArray(expertiseBindings.agentId, agentIds));
+
+      if (candidateDomainIds.length > 0) {
+        const bindings = await trx
+          .select({
+            agentId: expertiseBindings.agentId,
+            boundUserId: expertiseBindings.boundUserId,
+            boundWorkspaceId: expertiseBindings.boundWorkspaceId,
+            domainId: expertiseBindings.domainId,
+            projectId: expertiseBindings.projectId,
+          })
+          .from(expertiseBindings)
+          .where(inArray(expertiseBindings.domainId, candidateDomainIds));
+        const movedAgentIds = new Set(agentIds);
+        const transferableDomainIds = candidateDomainIds.filter((domainId) =>
+          bindings
+            .filter((binding) => binding.domainId === domainId)
+            .every(
+              (binding) =>
+                binding.agentId !== null &&
+                movedAgentIds.has(binding.agentId) &&
+                binding.projectId === null &&
+                binding.boundWorkspaceId === null &&
+                binding.boundUserId === null,
+            ),
+        );
+
+        if (transferableDomainIds.length > 0) {
+          await trx
+            .update(expertiseDomains)
+            .set({ ...ownershipUpdate, updatedAt: expertiseDomains.updatedAt })
+            .where(inArray(expertiseDomains.id, transferableDomainIds));
+          await trx
+            .update(expertiseInsights)
+            .set({ ...ownershipUpdate, updatedAt: expertiseInsights.updatedAt })
+            .where(inArray(expertiseInsights.domainId, transferableDomainIds));
+          await trx
+            .update(expertiseRuns)
+            .set({ ...ownershipUpdate, updatedAt: expertiseRuns.updatedAt })
+            .where(inArray(expertiseRuns.domainId, transferableDomainIds));
+        }
+      }
+
+      // 14. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(inArray(agentBotProviders.agentId, agentIds));
 
-      // 14. Leave every chat group: a group belongs to the source scope, and a
+      // 14a. Agent-scoped connectors (custom plugins) ride along, or every
+      // custom tool the agent carries stops resolving in the target scope.
+      // Same-owner rows keep their credentials; a target owner change strips
+      // them to reauthorization shells (member-handover policy).
+      await rehomeAgentConnectorsForScopeTransfer(trx, {
+        agentIds,
+        targetUserId,
+        targetWorkspaceId,
+      });
+
+      // 14b. Agent documents (Skills / VFS files) ride along: dedicated
+      // agent-created documents move with binding + history, associated
+      // personal documents stay behind with their binding detached. Without
+      // this the agent's Documents list arrives empty and the files strand in
+      // the source scope's Resource list.
+      const movedDocumentIds = await moveAgentDocumentsForScopeTransfer(trx, {
+        agentIds,
+        movedTaskIds,
+        movedTopicIds,
+        targetUserId,
+        targetVisibility,
+        targetWorkspaceId,
+      });
+
+      // 14c. Topic- and task-document junction rows denormalize the owner
+      // scope, but a junction only resolves when BOTH it and its document pass
+      // the target predicate — `TopicDocumentModel.findByTopicId` and
+      // `TaskModel.getDocumentsPinnedSince` join the two. So the split can only
+      // be decided once 14b has said which documents actually moved: links
+      // whose document rode along follow their topic/task, and the rest are
+      // detached. Kept, they would be rows no scope can resolve — invisible in
+      // the target, orphaned in the source once their topic/task left it.
+      if (movedTopicIds.length > 0) {
+        const onMovedTopics = inArray(topicDocuments.topicId, movedTopicIds);
+        if (movedDocumentIds.length > 0) {
+          await trx
+            .update(topicDocuments)
+            .set(ownershipUpdate)
+            .where(and(onMovedTopics, inArray(topicDocuments.documentId, movedDocumentIds)));
+        }
+        await trx
+          .delete(topicDocuments)
+          .where(
+            movedDocumentIds.length > 0
+              ? and(onMovedTopics, notInArray(topicDocuments.documentId, movedDocumentIds))
+              : onMovedTopics,
+          );
+      }
+
+      if (movedTaskIds.length > 0) {
+        const onMovedTasks = inArray(taskDocuments.taskId, movedTaskIds);
+        if (movedDocumentIds.length > 0) {
+          await trx
+            .update(taskDocuments)
+            .set({ ...ownershipUpdate, ...visibilityUpdate })
+            .where(and(onMovedTasks, inArray(taskDocuments.documentId, movedDocumentIds)));
+        }
+        await trx
+          .delete(taskDocuments)
+          .where(
+            movedDocumentIds.length > 0
+              ? and(onMovedTasks, notInArray(taskDocuments.documentId, movedDocumentIds))
+              : onMovedTasks,
+          );
+      }
+
+      // 15. Leave every chat group: a group belongs to the source scope, and a
       // roster row pointing at an agent that now lives elsewhere would render
       // as a member nobody in either scope can use. Guard 1c above has already
       // rejected the memberships where leaving would damage the GROUP, so

@@ -11,7 +11,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import WorkbenchLoading from '@/features/WorkbenchShell/WorkbenchLoading';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -70,7 +70,7 @@ const AgentDocumentReader = memo<AgentDocumentReaderProps>(({ agentId, documentI
       <div className={styles.body}>
         {!error && isLoading ? (
           <Center height={'100%'}>
-            <WorkbenchLoading />
+            <ContentLoading />
           </Center>
         ) : error ? (
           <Center gap={16} height={'100%'} padding={24}>

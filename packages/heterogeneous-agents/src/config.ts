@@ -7,7 +7,11 @@ import type {
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from '@lobechat/types';
-import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/types';
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/types';
 
 export type {
   HeterogeneousAgentDescriptor,
@@ -18,14 +22,16 @@ export type {
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 };
-export { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS };
+export {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+};
 
 /** @deprecated Use `LocalHeterogeneousAgentDescriptor`. */
 export type HeterogeneousAgentConfig = LocalHeterogeneousAgentDescriptor;
 /** @deprecated Use `RemoteHeterogeneousAgentDescriptor`. */
 export type RemoteHeterogeneousAgentConfig = RemoteHeterogeneousAgentDescriptor;
-
-export const LOCAL_HETEROGENEOUS_AGENT_TYPES = HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type);
 
 const LOCAL_HETERO_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 const REMOTE_HETERO_TYPES = new Set<string>(

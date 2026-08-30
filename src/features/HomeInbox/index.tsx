@@ -1,11 +1,15 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  useHomeUsageWidget,
+  useHomeUsageWidgetActive,
+} from '@/business/client/features/HomeUsageWidget';
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
@@ -13,27 +17,19 @@ import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
-// Direct module import, not the feature barrel: home must not pull the whole
-// acceptance workspace into its chunk for one hook.
-import { useAcceptanceStatuses } from '@/features/Verify/hooks';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import {
-  HOME_GOALS_SIGNATURE,
-  useHomeBriefIds,
-  useHomeBriefsRequest,
-  useHomeGoalsRequest,
-  useTaskGroupListProjection,
-} from '@/projection';
+import { useHomeBriefIds, useHomeBriefsRequest } from '@/projection';
 import { useBriefStore } from '@/store/brief';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import GoalsRailCard from './GoalsRailCard';
 import { filterHiddenWidgetSections } from './hiddenWidgets';
-import { buildHomeGoalEntries, indexAcceptanceStatuses } from './homeGoals';
+import { buildHomeGoalEntries } from './homeGoals';
 import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
@@ -170,26 +166,13 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // goal pages themselves — without it a row would navigate to a redirect.
   const goalsEnabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
-  const goalsQuery = useHomeGoalsRequest(showGoals);
-  const goalGroups = useTaskGroupListProjection(HOME_GOALS_SIGNATURE, showGoals);
-  const goals = useMemo(() => goalGroups?.[0]?.tasks ?? [], [goalGroups]);
-  const isGoalsInit = goalsQuery.isInitialized;
-  const goalIds = useMemo(() => goals.map(({ id }) => id), [goals]);
-  // One read for every goal's acceptance, instead of two per row — and asked
-  // about these goals specifically, since the recency-capped acceptance feed
-  // would drop an older accepted goal and resurrect it as "pending acceptance".
-  const acceptanceStatuses = useAcceptanceStatuses('task', goalIds, showGoals);
-  // Which pile a goal lands in depends on that read, so wait for it rather than
-  // flash an already-accepted goal into "pending acceptance" for a beat. A
-  // failed read still shows the card, on task status alone.
-  const goalsResolved =
-    goalIds.length === 0 || Boolean(acceptanceStatuses.data || acceptanceStatuses.error);
+  const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
+  const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
+  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
+  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
   const goalEntries = useMemo(
-    () =>
-      showGoals && goalsResolved
-        ? buildHomeGoalEntries(goals, indexAcceptanceStatuses(acceptanceStatuses.data))
-        : [],
-    [acceptanceStatuses.data, goals, goalsResolved, showGoals],
+    () => (showGoals ? buildHomeGoalEntries(goals) : []),
+    [goals, showGoals],
   );
 
   const goalsCollapsed = useGlobalStore(systemStatusSelectors.homeGoalsCollapsed);
@@ -197,6 +180,13 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   const recommendationsVisible = useRecommendationsVisible();
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+
+  // Business-slot widget: `enabled` false while it's toggled off or its column
+  // isn't on the page, so the slot implementation can skip its fetches.
+  const usageActive = useHomeUsageWidgetActive();
+  const usageNode = useHomeUsageWidget(
+    isLogin === true && usageActive && showRailSections && !hiddenWidgets.includes('usage'),
+  );
 
   // A team context is a workspace with more than the viewer in it. In personal
   // mode this map is empty, so `isTeam` is false and the whole mine/team layer
@@ -284,15 +274,15 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // A goal feed failure must not be silent: without this the card just vanishes,
   // which is indistinguishable from having no open goals — the one reading a
   // long-running goal surface can least afford.
-  if (showGoals && goalsQuery.error && !isGoalsInit)
+  if (showGoals && goalsSWR.error && !isGoalsInit)
     sections.push({
       key: 'goals-error',
       label: t('inbox.goals.title'),
       node: (
         <AsyncError
-          error={goalsQuery.error}
+          error={goalsSWR.error}
           variant={'inline'}
-          onRetry={() => void goalsQuery.mutate()}
+          onRetry={() => void goalsSWR.mutate()}
         />
       ),
     });
@@ -500,15 +490,27 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     });
   }
 
+  // The rail's LAST card, below even the suggestions: usage is passive
+  // reference data, glanceable but never urgent, so it sits under everything
+  // that reports actual work. Same shell as every other rail widget.
+  const usageCard =
+    usageNode &&
+    (isRail ? (
+      <RailCard title={t('inbox.usage.title')}>{usageNode}</RailCard>
+    ) : (
+      <GroupBlock title={t('inbox.usage.title')}>{usageNode}</GroupBlock>
+    ));
+
   const visibleSections = filterHiddenWidgetSections(sections, hiddenWidgets);
 
   if (visibleSections.length === 0) {
     if (isMain) return null;
 
     if (isRail)
-      return recommendationsVisible ? (
+      return recommendationsVisible || usageCard ? (
         <Flexbox gap={12}>
-          <Recommendations variant={'rail'} />
+          {recommendationsVisible && <Recommendations variant={'rail'} />}
+          {usageCard}
         </Flexbox>
       ) : null;
 
@@ -522,6 +524,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             <Recommendations />
           </Flexbox>
         )}
+        {usageCard}
       </>
     );
   }
@@ -592,6 +595,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       )}
 
       {!isMain && <Recommendations variant={variant} />}
+      {usageCard}
     </Flexbox>
   );
 });

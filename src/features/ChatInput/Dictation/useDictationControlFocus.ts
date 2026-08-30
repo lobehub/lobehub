@@ -12,10 +12,10 @@ interface DictationControlFocusOptions {
 }
 
 interface DictationControlRefs {
-  actionRef: RefObject<HTMLDivElement | null>;
-  cancelRef: RefObject<HTMLDivElement | null>;
-  retryRef: RefObject<HTMLDivElement | null>;
-  stopRef: RefObject<HTMLDivElement | null>;
+  actionRef: RefObject<HTMLButtonElement | null>;
+  cancelRef: RefObject<HTMLButtonElement | null>;
+  retryRef: RefObject<HTMLButtonElement | null>;
+  stopRef: RefObject<HTMLButtonElement | null>;
 }
 
 const getFocusTarget = (
@@ -36,10 +36,10 @@ export const useDictationControlFocus = ({
   retryable,
   status,
 }: DictationControlFocusOptions) => {
-  const actionRef = useRef<HTMLDivElement>(null);
-  const cancelRef = useRef<HTMLDivElement>(null);
-  const retryRef = useRef<HTMLDivElement>(null);
-  const stopRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const stopRef = useRef<HTMLButtonElement>(null);
   const awaitingSessionRef = useRef(false);
   const manageFocusRef = useRef(false);
 
@@ -53,7 +53,7 @@ export const useDictationControlFocus = ({
 
   const handleKeyboardActivation = useCallback(
     (
-      event: Pick<KeyboardEvent<HTMLDivElement>, 'key' | 'preventDefault' | 'repeat'>,
+      event: Pick<KeyboardEvent<HTMLButtonElement>, 'key' | 'preventDefault' | 'repeat'>,
       activate: () => void,
     ) => {
       if ((event.key !== 'Enter' && event.key !== ' ') || event.repeat) return;
@@ -74,13 +74,13 @@ export const useDictationControlFocus = ({
     const refs = { actionRef, cancelRef, retryRef, stopRef };
     const controls = Object.values(refs)
       .map((ref) => ref.current)
-      .filter((control): control is HTMLDivElement => Boolean(control));
+      .filter((control): control is HTMLButtonElement => Boolean(control));
     const activeElement = document.activeElement;
 
     if (
       activeElement &&
       activeElement !== document.body &&
-      !controls.includes(activeElement as HTMLDivElement)
+      !controls.includes(activeElement as HTMLButtonElement)
     ) {
       manageFocusRef.current = false;
       return;

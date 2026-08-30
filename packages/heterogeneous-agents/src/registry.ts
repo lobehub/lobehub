@@ -11,6 +11,7 @@ import {
   ClaudeCodeSdkAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CursorAcpAdapter,
   CursorAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
@@ -66,6 +67,9 @@ const localAgentRegistry = {
 const runtimeAdapterRegistry = {
   'claude-code-sdk': {
     createAdapter: () => new ClaudeCodeSdkAdapter(),
+  },
+  'cursor-acp': {
+    createAdapter: () => new CursorAcpAdapter(),
   },
 } satisfies Record<string, AgentRegistryEntry>;
 

@@ -142,7 +142,7 @@ export const qoderBinary: BinarySpec = {
   priority: 6,
 };
 
-/** TRAE Enterprise CLI (TraeCode CLI), not the unrelated open-source `trae-cli`. */
+/** TRAE Enterprise CLI, capability-checked against its ACP runtime. */
 export const traeBinary: BinarySpec = {
   description: 'TRAE CLI - ByteDance enterprise agentic coding CLI',
   detect: () => detectHeterogeneousCliCommand('trae', 'traecli'),

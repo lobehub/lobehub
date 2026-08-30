@@ -9,6 +9,9 @@ import type { AskUserDraft, AskUserQuestionItem } from './types';
  */
 export const FREEFORM_PAYLOAD_KEY = '__freeform__';
 
+/** Optional notes appended to otherwise structured question answers. */
+export const SUPPLEMENT_PAYLOAD_KEY = '__supplement__';
+
 /**
  * Default on-screen countdown, mirroring the server-side bridge timeout
  * (`DEFAULT_ASK_USER_TIMEOUT_MS`). Hosts that have no bridge timeout (the
@@ -27,6 +30,8 @@ export const readDraft = (raw: unknown): AskUserDraft => {
     escapeActive: !!d.escapeActive,
     escapeText: typeof d.escapeText === 'string' ? d.escapeText : '',
     picks: d.picks ?? {},
+    supplementActive: !!d.supplementActive,
+    supplementText: typeof d.supplementText === 'string' ? d.supplementText : '',
   };
 };
 

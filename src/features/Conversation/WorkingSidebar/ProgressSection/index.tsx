@@ -87,7 +87,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       padding 0.2s ${cssVar.motionEaseInOut};
   `,
   listInner: css`
+    /* Blockify the inline-flex Base UI Checkbox labels — without this the todo
+       rows flow inline and wrap several per line. */
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
   `,
   processingRow: css`

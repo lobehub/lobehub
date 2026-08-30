@@ -329,7 +329,20 @@ export const canPerformResourceAction = async (params: {
           resourceId,
         );
   const requiredAccessLevel = getRequiredAccessLevel(action, resourceType);
-  return ACCESS_LEVEL_RANK[accessLevel] >= ACCESS_LEVEL_RANK[requiredAccessLevel];
+  if (ACCESS_LEVEL_RANK[accessLevel] >= ACCESS_LEVEL_RANK[requiredAccessLevel]) return true;
+
+  // A per-user collaborator grant lifts this member above the workspace-wide
+  // level (never below it — the baseline already passed or we wouldn't be
+  // here). Checked last so the common no-grant path costs no extra read, and
+  // deliberately after every ceiling above: a grant never pierces private
+  // resources, RBAC capability, or the workspace boundary.
+  const grantedLevel = await new ResourcePermissionModel(db, workspaceId).getCollaboratorLevel(
+    resourceType,
+    resourceId,
+    userId,
+  );
+  if (!grantedLevel) return false;
+  return ACCESS_LEVEL_RANK[grantedLevel] >= ACCESS_LEVEL_RANK[requiredAccessLevel];
 };
 
 export const assertCanPerformResourceAction = async (

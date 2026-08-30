@@ -449,11 +449,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         success?: boolean;
       };
 
-      // `response.success` is the delivery envelope only: the device-side
-      // ComputerRuntime reports service failures (spawn error, shell lost,
-      // missing params) as `success: true` with `state.success: false` and no
-      // exitCode (`errorOutput`) — without this check they'd fall through to
-      // the still-running branch below and read as a successful run.
+      // `response.success` is the delivery envelope. Device-side service
+      // failures (spawn error, shell lost, missing params) now come back with
+      // `success: false`, but desktop builds predating that fix report them as
+      // `success: true` with `state.success: false` and no exitCode — and a
+      // device runs whatever version the user has installed. Keep testing both
+      // or those runs fall through to the still-running branch below and read
+      // as a successful run.
       if (!response.success || state.success === false) {
         return fail(
           state.stderr ||

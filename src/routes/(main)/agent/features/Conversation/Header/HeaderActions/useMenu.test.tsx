@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { act, render, renderHook, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
@@ -33,21 +32,20 @@ vi.mock('@/features/Conversation/useAgentContext', () => ({
   useAgentContext: () => ({ agentId: 'agent-1', topicId: 'topic-1' }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<{ App: Record<string, unknown> } & Record<string, unknown>>();
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      message: { success: messageSuccessMock },
-      modal: { confirm: modalConfirmMock },
-    }),
-  },
-}));
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        message: { success: messageSuccessMock },
+        modal: { confirm: modalConfirmMock },
+      }),
+    },
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

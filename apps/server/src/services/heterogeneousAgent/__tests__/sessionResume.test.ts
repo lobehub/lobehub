@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 
 import { HeterogeneousAgentService, HeterogeneousPersistenceHandler } from '..';
 import { __resetOperationStatesForTesting } from '../HeterogeneousPersistenceHandler';
@@ -12,8 +13,14 @@ const createSilentStreamManager = (): IStreamEventManager =>
   }) as unknown as IStreamEventManager;
 
 describe('HeterogeneousAgentService — phase 2c session id persistence + resume', () => {
-  beforeEach(() => __resetOperationStatesForTesting());
-  afterEach(() => __resetOperationStatesForTesting());
+  beforeEach(() => {
+    __resetOperationStatesForTesting();
+    vi.spyOn(CompletionLifecycle.prototype, 'completeOperation').mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    __resetOperationStatesForTesting();
+    vi.restoreAllMocks();
+  });
 
   describe('heteroFinish persists sessionId via TopicModel.updateMetadata', () => {
     it('writes the CLI session id to topic.metadata.heteroSessionId', async () => {
@@ -59,6 +66,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+        } as any,
       });
 
       await service.heteroFinish({
@@ -114,6 +126,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+        } as any,
       });
 
       await service.heteroFinish({
@@ -166,6 +183,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+        } as any,
       });
 
       // Simulate: sandbox was recycled, CC exited before emitting system.init
@@ -222,6 +244,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+        } as any,
       });
 
       await service.heteroFinish({
@@ -282,6 +309,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+        } as any,
       });
 
       await service.heteroFinish({
@@ -346,6 +378,11 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: stream,
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+        } as any,
       });
 
       // Should not throw — sessionId persistence is best-effort

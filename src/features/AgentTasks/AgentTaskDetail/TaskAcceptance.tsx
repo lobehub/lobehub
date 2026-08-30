@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -24,7 +24,7 @@ import {
   shouldGroupChecks,
   useAcceptanceBundle,
   useAcceptanceBySubject,
-} from '@/features/Verify';
+} from '@/features/Acceptance';
 import { usePermission } from '@/hooks/usePermission';
 import { taskDetailProjectionSelectors } from '@/projection/modules/task/derivedSelectors';
 import { verifyService } from '@/services/verify';

@@ -8,6 +8,7 @@ import { registerLocalDatabaseAdapter } from '@/libs/localDatabase';
 import { createElectronLocalDatabaseAdapter } from '@/libs/localDatabase/electronAdapter';
 import { createElectronProjectionPersistence } from '@/projection/persistence/electronAdapter';
 import { registerProjectionPersistence } from '@/projection/registry';
+import { rendererOtaService } from '@/services/electron/rendererOta';
 import { createAppRouter } from '@/utils/router';
 
 import BootShell from './BootShell';
@@ -16,6 +17,11 @@ import { startAppInitialization } from './initialize/bootstrap';
 import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
 import { desktopRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
+
+// OTA fast-fail signal: this line running proves the whole bundle graph
+// loaded and evaluated — a broken patch never reaches it, and main rolls back
+// within seconds instead of waiting for the mount-stage timeout.
+rendererOtaService.bootPing('loaded').catch(() => {});
 
 registerLocalDatabaseAdapter(createElectronLocalDatabaseAdapter());
 registerProjectionPersistence(createElectronProjectionPersistence());

@@ -12,7 +12,7 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after }));
 vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: vi.fn(async () => {}),
 }));
-vi.mock('../workRegistration', () => ({ registerWorksForOperation: vi.fn() }));
+vi.mock('@/server/services/workRegistration', () => ({ registerWorksForOperation: vi.fn() }));
 
 /**
  * Regression: the completion-time verify gate used to be launched with a bare

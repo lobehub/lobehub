@@ -1,7 +1,7 @@
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Avatar, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
@@ -429,7 +429,7 @@ const ScheduledTaskContent = memo(() => {
       title={t('dashboard.scheduledTask.title')}
       action={
         !failedFirstLoad && (scheduledIndex?.total ?? scheduledIds.length) > shown.length ? (
-          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+          <WorkspaceLink className={styles.blockAction} to={'/tasks?collection=scheduled'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
         ) : undefined
@@ -583,11 +583,11 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // will happen without me" — the second question only makes sense after the
     // first, so it always sits underneath.
     //
-    // The inline padding keeps the lists from running edge-to-edge with the
-    // composer above: rows carry a -10px hover overhang (see `rowBox`), so
-    // without it the hover pill would reach past the column bounds.
+    // No inline inset: section headers sit flush with the composer edge and the
+    // folded-in inbox sections above, exactly like chat mode — row hover pills
+    // overhang by design (see `rowBox`).
     const taskBlocks = (
-      <Flexbox gap={32} paddingInline={12}>
+      <Flexbox gap={32}>
         {!tasksHidden && <TaskContent />}
         {!scheduledTasksHidden && <ScheduledTaskContent />}
       </Flexbox>

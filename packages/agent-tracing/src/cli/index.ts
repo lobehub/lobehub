@@ -7,6 +7,7 @@ import { registerCtxMapCommand } from './ctx-map';
 import { registerInspectCommand } from './inspect';
 import { registerListCommand } from './list';
 import { registerPartialCommand } from './partial';
+import { registerReplayCommand } from './replay';
 import { registerToolQualityCommand } from './tool-quality';
 
 const program = new Command();
@@ -16,6 +17,7 @@ program.name('agent-tracing').description('Local agent execution snapshot viewer
 registerInspectCommand(program);
 registerListCommand(program);
 registerPartialCommand(program);
+registerReplayCommand(program);
 registerToolQualityCommand(program);
 registerCtxLintCommand(program);
 registerCtxMapCommand(program);

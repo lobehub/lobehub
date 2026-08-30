@@ -36,6 +36,20 @@ describe('LobeAgentManifest', () => {
     );
   });
 
+  it('should route local media through file refs instead of local URLs or base64 text', () => {
+    const analyzeMedia = LobeAgentManifest.api[0];
+    const { refs, urls } = analyzeMedia.parameters.properties;
+
+    expect(analyzeMedia.description).toContain('local filesystem');
+    expect(analyzeMedia.description).toContain('base64 text');
+    expect(refs.description).toContain('local file-reading tools');
+    expect(urls.description).toContain('Local filesystem paths and file:// URLs are unsupported');
+    expect(LobeAgentManifest.systemRole).toContain(
+      'Never pass local filesystem paths or `file://` URLs to `analyzeMedia.urls`',
+    );
+    expect(LobeAgentManifest.systemRole).toContain('stable ref');
+  });
+
   it('should keep media analysis parameters compatible with strict tool schema validators', () => {
     const parameters = LobeAgentManifest.api[0].parameters;
 

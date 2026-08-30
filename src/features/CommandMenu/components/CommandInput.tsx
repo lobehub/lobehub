@@ -1,11 +1,12 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useAgentMeta } from '@/store/agent/projection';
 
 import { useCommandMenuContext } from '../CommandMenuContext';
@@ -66,6 +67,7 @@ const CommandInput = memo(() => {
                   emojiScaleWithBackground
                   avatar={activeAgentMeta?.avatar || DEFAULT_AVATAR}
                   background={activeAgentMeta?.backgroundColor}
+                  name={agentDisplayName(activeAgentMeta, t('defaultAgent'))}
                   shape="square"
                   size={14}
                 />
@@ -98,6 +100,7 @@ const CommandInput = memo(() => {
               <Avatar
                 emojiScaleWithBackground
                 avatar={selectedAgent.avatar}
+                name={agentDisplayName(selectedAgent)}
                 shape="square"
                 size={14}
               />

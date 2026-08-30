@@ -1,5 +1,4 @@
 import { act, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NavigationBar from './NavigationBar';
@@ -14,31 +13,11 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
   useWatchBroadcast: (event: string, handler: () => void) => mocks.handlers.set(event, handler),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ icon: _icon, ...props }: Record<string, unknown>) => <button {...props} />,
-  Flexbox: ({ children, ...props }: { children: ReactNode }) => <div {...props}>{children}</div>,
-  Popover: ({
-    children,
-    content,
-    open,
-  }: {
-    children: ReactNode;
-    content: ReactNode;
-    open: boolean;
-  }) => (
-    <div>
-      {children}
-      {open && content}
-    </div>
-  ),
-  Tooltip: ({ children }: { children: ReactNode }) => children,
-}));
-
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({ clock: 'clock' }),
 }));
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/features/NavPanel/ToggleLeftPanelButton', () => ({ default: () => null }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,

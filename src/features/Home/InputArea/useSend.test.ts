@@ -90,11 +90,8 @@ const activeWorkspaceIdMock = vi.hoisted(() => ({
   value: null as string | null,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { error: messageErrorMock },
 }));
 

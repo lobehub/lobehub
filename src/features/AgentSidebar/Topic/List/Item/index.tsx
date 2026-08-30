@@ -5,11 +5,12 @@ import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed, PencilLine } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -293,19 +294,25 @@ const TopicItemRow = memo<TopicItemRowProps>(
         .prefetchMessages({ agentId: activeAgentId, scope: 'main', topicId: id });
     }, [activeAgentId, hasLocalRunningRuntime, id, isUnreadCompleted]);
 
-    // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
-    // input. Drafts live in localStorage keyed by messageMapKey; the default
-    // topic (no id) maps to the new-topic draft. `useHasDraft` re-renders the
-    // row only when the draft appears or clears.
+    // Surface a pencil before the title when this topic holds unsent input.
+    // Drafts live in localStorage keyed by messageMapKey; the default topic (no
+    // id) maps to the new-topic draft. `useHasDraft` re-renders the row only when
+    // the draft appears or clears.
     const draftKey = useMemo(
       () => (activeAgentId ? messageMapKey({ agentId: activeAgentId, topicId: id }) : undefined),
       [activeAgentId, id],
     );
     const hasDraft = useHasDraft(draftKey);
-    const draftPrefix = hasDraft ? (
-      <Text fontSize={12} style={{ color: cssVar.colorError, flex: 'none' }}>
-        {t('draft')}
-      </Text>
+    const draftIndicator = hasDraft ? (
+      <Tooltip title={t('draft')}>
+        <Icon
+          aria-label={t('draft')}
+          color={cssVar.colorError}
+          icon={PencilLine}
+          role={'img'}
+          size={'small'}
+        />
+      </Tooltip>
     ) : undefined;
 
     // Codex-style hover detail card: when the topic carries git context, hovering
@@ -318,7 +325,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return (
         <NavItem
           active={defaultTopicActive}
-          slots={{ titlePrefix: draftPrefix }}
+          slots={{ titlePrefix: draftIndicator }}
           titleColor={cssVar.colorText}
           icon={
             isLoading ? (
@@ -451,7 +458,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
           description={workingDirectoryNode}
           href={href}
           icon={leadingIconNode}
-          slots={{ titlePrefix: draftPrefix }}
+          slots={{ titlePrefix: draftIndicator }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           extra={

@@ -39,29 +39,13 @@ const mocks = vi.hoisted(() => ({
   updateVerifyConfig: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
+// Real base-ui ActionIcon only surfaces its title via a hover Tooltip; the
+// assertions click the title text directly.
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button type="button" onClick={onClick}>
       {title}
-    </button>
-  ),
-  Block: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <div onClick={onClick}>{children}</div>
-  ),
-  Drawer: ({ children, open }: { children: ReactNode; open?: boolean }) =>
-    open ? <aside>{children}</aside> : null,
-  Flexbox: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <div onClick={onClick}>{children}</div>
-  ),
-  Icon: () => <span />,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
     </button>
   ),
   confirmModal: (opts: unknown) => mocks.confirmModal(opts),
@@ -71,38 +55,16 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: { useApp: () => ({ message: { error: vi.fn() } }) },
-}));
-
-vi.mock('antd-style', () => ({
-  cx: (...classNames: unknown[]) => classNames.filter(Boolean).join(' '),
-  createStaticStyles: () => ({
-    body: 'body',
-    drawerBody: 'drawerBody',
-    error: 'error',
-    group: 'group',
-    groupHeader: 'groupHeader',
-    list: 'list',
-    row: 'row',
-    seq: 'seq',
-  }),
-  cssVar: {
-    colorTextDescription: '#999',
-    colorTextQuaternary: '#aaa',
-    colorTextSecondary: '#666',
-  },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <div>loading</div> }));
 
-vi.mock('@/features/Verify', async () => ({
+vi.mock('@/features/Acceptance', async () => ({
   // The real row/list primitives: the assertions cover the shared grammar.
-  ...(await vi.importActual('@/features/Verify/CriterionList')),
+  ...(await vi.importActual('@/features/Acceptance/CriterionList')),
   CheckRow: ({ check }: { check: { title: string } }) => (
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),
@@ -129,10 +91,6 @@ vi.mock('@/features/Verify', async () => ({
       mutate: mocks.mutateSubject,
     };
   },
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/services/verify', () => ({

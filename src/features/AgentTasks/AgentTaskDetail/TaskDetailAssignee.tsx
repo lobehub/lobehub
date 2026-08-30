@@ -1,5 +1,6 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Block, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, useThemeMode } from 'antd-style';
 import { UserCircle2 } from 'lucide-react';
 import { memo } from 'react';
@@ -16,17 +17,33 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
+import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 
 const TaskDetailAssignee = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useActiveTaskDetailProjection(taskDetailProjectionSelectors.activeTaskStatus) as
-    TaskStatus | undefined;
+    | TaskStatus
+    | undefined;
   const assigneeAgentId = useActiveTaskDetailProjection(
     taskDetailProjectionSelectors.activeTaskAgentId,
   );
+  const assigneeUserId = useActiveTaskDetailProjection((detail) => detail?.userId);
+  const visibility = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskVisibility,
+  );
+  const createdByUserId = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskCreatedByUserId,
+  );
+  const automationMode = useActiveTaskDetailProjection(
+    taskDetailProjectionSelectors.activeTaskAutomationMode,
+  );
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
+  // An agent assignee wins the display when both ids are set (only external
+  // writers can produce that combination — the picker keeps them exclusive).
+  const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
   // Same source as the home list so the runtime tag stays consistent.
   const assigneeHeterogeneousType = useHomeSidebarProjection(
     (sidebar) =>
@@ -36,13 +53,19 @@ const TaskDetailAssignee = memo(() => {
 
   if (!taskId) return null;
 
+  const hasAssignee = Boolean(assigneeAgentId || assigneeUserId);
+
   return (
     <AssigneeAgentSelector
       currentAgentId={assigneeAgentId}
+      currentUserId={assigneeUserId}
       disabled={status === 'running'}
+      hideMembers={Boolean(automationMode)}
+      taskCreatorId={createdByUserId}
       taskIdentifier={taskId}
+      taskVisibility={visibility}
     >
-      <Tooltip title={assigneeAgentId ? undefined : t('taskList.unassignedHint')}>
+      <Tooltip title={hasAssignee ? undefined : t('taskList.unassignedHint')}>
         <Block
           clickable
           horizontal
@@ -63,6 +86,13 @@ const TaskDetailAssignee = memo(() => {
                 {assigneeMeta?.title}
               </Text>
               <HeterogeneousTag type={assigneeHeterogeneousType} />
+            </>
+          ) : assigneeUserId ? (
+            <>
+              <AssigneeUserAvatar size={20} userId={assigneeUserId} />
+              <Text ellipsis weight={500}>
+                {memberMeta?.title}
+              </Text>
             </>
           ) : (
             <>

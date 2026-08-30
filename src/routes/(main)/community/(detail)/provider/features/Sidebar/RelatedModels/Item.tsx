@@ -1,5 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -48,7 +49,7 @@ const RelatedItem = memo<DiscoverProviderDetailModelItem>(({ description, id, di
             rows: 2,
           }}
         >
-          {t(`${id}.description`, { defaultValue: description })}
+          {description && t(`${id}.description`, { defaultValue: description })}
         </Text>
       </Flexbox>
     </Block>

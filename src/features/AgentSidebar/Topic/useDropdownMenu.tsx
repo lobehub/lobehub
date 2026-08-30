@@ -193,45 +193,6 @@ export const useTopicActionsDropdownMenu = (
         ),
         onClick: () => handleArchiveMergedPullRequests('own'),
       },
-      {
-        disabled: !canEditTopic,
-        icon: <Icon icon={Trash} />,
-        key: 'deleteUnstarred',
-        label: t(activeWorkspaceId ? 'actions.removeUnstarredOwn' : 'actions.removeUnstarred'),
-        onClick: () => {
-          confirmModal({
-            cancelText: t('cancel', { ns: 'common' }),
-            content: t(
-              activeWorkspaceId
-                ? 'actions.confirmRemoveUnstarredOwn'
-                : 'actions.confirmRemoveUnstarred',
-            ),
-            okButtonProps: { danger: true },
-            okText: t('ok', { ns: 'common' }),
-            onOk: () => removeUnstarredTopic({ onlyOwn: !!activeWorkspaceId }),
-            title: t(activeWorkspaceId ? 'actions.removeUnstarredOwn' : 'actions.removeUnstarred'),
-          });
-        },
-      },
-      {
-        danger: true,
-        disabled: !canEditTopic,
-        icon: <Icon icon={Trash} />,
-        key: 'deleteAll',
-        label: t(activeWorkspaceId ? 'actions.removeAllOwn' : 'actions.removeAll'),
-        onClick: () => {
-          confirmModal({
-            cancelText: t('cancel', { ns: 'common' }),
-            content: t(
-              activeWorkspaceId ? 'actions.confirmRemoveAllOwn' : 'actions.confirmRemoveAll',
-            ),
-            okButtonProps: { danger: true },
-            okText: t('ok', { ns: 'common' }),
-            onOk: () => removeAllTopic('own'),
-            title: t(activeWorkspaceId ? 'actions.removeAllOwn' : 'actions.removeAll'),
-          });
-        },
-      },
       ...(activeWorkspaceId && isWorkspaceOwner
         ? [
             { type: 'divider' as const },

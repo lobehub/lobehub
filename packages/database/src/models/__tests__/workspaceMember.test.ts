@@ -3,7 +3,15 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { devices, users, workspaceInvitations, workspaceMembers, workspaces } from '../../schemas';
+import {
+  devices,
+  resourcePermissions,
+  tasks,
+  users,
+  workspaceInvitations,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -234,6 +242,104 @@ describe('WorkspaceMemberModel', () => {
         .sort();
       expect(remaining).toEqual(['dep-personal', 'other-ws-private', 'team-box']);
     });
+
+    it('revokes the departing member grants, so a re-invite does not restore them', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(resourcePermissions).values([
+        // the departing member's grant, and one in another workspace
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: memberId,
+          workspaceId,
+        },
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-9',
+          resourceType: 'knowledgeBase',
+          userId: memberId,
+          workspaceId: otherWorkspaceId,
+        },
+        // another member's grant, and the workspace-wide row on the same resource
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: otherUserId,
+          workspaceId,
+        },
+        { accessLevel: 'use', resourceId: 'kb-1', resourceType: 'knowledgeBase', workspaceId },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+      // membership is only soft-deleted, and re-inviting revives that same row
+      await model.addMember({ userId: memberId, workspaceId });
+
+      const remaining = await serverDB
+        .select({
+          resourceId: resourcePermissions.resourceId,
+          userId: resourcePermissions.userId,
+          workspaceId: resourcePermissions.workspaceId,
+        })
+        .from(resourcePermissions);
+      expect(remaining).toEqual(
+        expect.arrayContaining([
+          { resourceId: 'kb-9', userId: memberId, workspaceId: otherWorkspaceId },
+          { resourceId: 'kb-1', userId: otherUserId, workspaceId },
+          { resourceId: 'kb-1', userId: null, workspaceId },
+        ]),
+      );
+      expect(remaining).toHaveLength(3);
+    });
+
+    it('clears only the departing member task assignments in that workspace', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values([
+        {
+          assigneeUserId: memberId,
+          createdByUserId: inviterId,
+          id: 'wm-task-departing-member',
+          identifier: 'WM-1',
+          instruction: 'Assigned to the departing member',
+          seq: 1,
+          workspaceId,
+        },
+        {
+          assigneeUserId: otherUserId,
+          createdByUserId: inviterId,
+          id: 'wm-task-other-member',
+          identifier: 'WM-2',
+          instruction: 'Assigned to another member',
+          seq: 2,
+          workspaceId,
+        },
+        {
+          assigneeUserId: memberId,
+          createdByUserId: otherUserId,
+          id: 'wm-task-other-workspace',
+          identifier: 'OTHER-1',
+          instruction: 'Assigned in another workspace',
+          seq: 1,
+          workspaceId: otherWorkspaceId,
+        },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+
+      const taskRows = await serverDB.select().from(tasks);
+      expect(
+        taskRows.find((task) => task.id === 'wm-task-departing-member')?.assigneeUserId,
+      ).toBeNull();
+      expect(taskRows.find((task) => task.id === 'wm-task-other-member')?.assigneeUserId).toBe(
+        otherUserId,
+      );
+      expect(taskRows.find((task) => task.id === 'wm-task-other-workspace')?.assigneeUserId).toBe(
+        memberId,
+      );
+    });
   });
 
   describe('updateMemberRole', () => {
@@ -259,6 +365,50 @@ describe('WorkspaceMemberModel', () => {
         .from(workspaceMembers)
         .where(eq(workspaceMembers.userId, memberId));
       expect(row.role).toBe('member');
+    });
+
+    it('clears task assignments when a member becomes a viewer', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'member', userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values({
+        assigneeUserId: memberId,
+        createdByUserId: inviterId,
+        id: 'wm-task-role-downgrade',
+        identifier: 'WM-ROLE-1',
+        instruction: 'Assigned before the role downgrade',
+        seq: 1,
+        workspaceId,
+      });
+
+      await model.updateMemberRole(workspaceId, memberId, 'viewer');
+
+      const [task] = await serverDB
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, 'wm-task-role-downgrade'));
+      expect(task.assigneeUserId).toBeNull();
+    });
+
+    it('preserves task assignments when a member changes to another eligible role', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'member', userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values({
+        assigneeUserId: memberId,
+        createdByUserId: inviterId,
+        id: 'wm-task-eligible-role',
+        identifier: 'WM-ROLE-2',
+        instruction: 'Assigned before the eligible role change',
+        seq: 1,
+        workspaceId,
+      });
+
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
+
+      const [task] = await serverDB
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, 'wm-task-eligible-role'));
+      expect(task.assigneeUserId).toBe(memberId);
     });
   });
 

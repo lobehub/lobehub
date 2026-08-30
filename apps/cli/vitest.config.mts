@@ -10,7 +10,7 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../../packages/device-gateway-client/src/index.ts'),
       },
       {
-        find: '@lobechat/local-file-shell',
+        find: /^@lobechat\/local-file-shell$/,
         replacement: path.resolve(__dirname, '../../packages/local-file-shell/src/index.ts'),
       },
       {
@@ -29,6 +29,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
     environment: 'node',
+    setupFiles: ['./tests/setup.ts'],
     // Suppress unhandled rejection warnings from Commander async actions with mocked process.exit
     onConsoleLog: () => true,
   },

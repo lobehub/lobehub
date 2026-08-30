@@ -38,9 +38,6 @@ export default {
   'acceptance.bar.progressDone': 'All {{total}} checks confirmed — ready to accept',
   'acceptance.bar.progressZero': '{{total}} checks awaiting your review',
   'acceptance.bar.rejectComment': 'Reject with comment',
-  'acceptance.bar.rerun': 'Fix',
-  'acceptance.bar.rerunDrafted': 'Drafted into your composer — review and send it.',
-  'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
   'acceptance.checks.allAccepted.desc': 'Nice work — every acceptance check has been signed off.',
   'acceptance.checks.allAccepted.title': 'All checks accepted 🎉',
   'acceptance.checks.copied': 'Copied',
@@ -182,6 +179,14 @@ export default {
   'acceptance.review.annotateHint':
     'Drag on the image to circle a region, then leave a note for it.',
   'acceptance.review.annotationPlaceholder': 'What is wrong in region {{index}}…',
+  'acceptance.predict.allClear':
+    'AI reviewed {{count}} pending check(s) and agrees with the current verdicts — nothing new to flag.',
+  'acceptance.predict.inconclusive':
+    'AI could not form an opinion — no readable screenshot evidence, or the review call failed.',
+  'acceptance.predict.nonePending': 'Nothing left to review — every check already has a verdict.',
+  'acceptance.predict.proposals': 'AI review finished: {{count}} check(s) flagged for you.',
+  'acceptance.predict.stillRunning':
+    'AI review is still running — refresh in a moment to see the results.',
   'acceptance.proposal.confirm': 'Confirm and send back',
   'acceptance.proposal.misidentified': 'Real problem, wrong spot',
   'acceptance.proposal.notAnIssue': 'Not a problem',
@@ -201,10 +206,6 @@ export default {
   'acceptance.review.fullscreenDone': 'Done annotating',
   'acceptance.review.ignore': 'Ignore',
   'acceptance.review.ignoredNote': 'Ignored · {{time}}',
-  'acceptance.review.intent.new-idea': 'I want something different',
-  'acceptance.review.intent.no-evidence': 'Not enough evidence',
-  'acceptance.review.intent.unmet': "This check isn't met",
-  'acceptance.review.intentLabel': 'This send-back is:',
   'acceptance.review.regionComments': 'Region comments',
   'acceptance.review.regionCommentsEmpty':
     'Drag on the image to circle a region — its comment lands here.',
@@ -285,6 +286,7 @@ export default {
   'acceptance.workspace.actions.markAccepted': 'Mark as accepted',
   'acceptance.workspace.actions.markClosed': 'Mark as closed',
   'acceptance.workspace.actions.markRejected': 'Mark as rejected',
+  'acceptance.workspace.actions.merge': 'Merge into…',
   'acceptance.workspace.actions.more': 'More actions',
   'acceptance.workspace.actions.rename': 'Rename',
   'acceptance.workspace.actions.reopen': 'Reopen for review',
@@ -307,15 +309,73 @@ export default {
   'acceptance.workspace.filters.noSearchResults': 'No acceptances match “{{query}}”.',
   'acceptance.workspace.filters.showAll': 'Show all acceptances',
   'acceptance.workspace.filters.title': 'Filter acceptances',
+  'acceptance.workspace.groups.ungrouped': 'Ungrouped',
+  'acceptance.workspace.groups.actions': 'Project actions',
+  'acceptance.workspace.groups.createProject': 'Create project',
+  'acceptance.workspace.groups.viewProject': 'View project',
   'acceptance.workspace.listEmpty':
     'Ingest a verification report with the CLI and its acceptance will show up here.',
   'acceptance.workspace.listEmptyTitle': 'No acceptances yet',
+  'acceptance.workspace.onboarding.description':
+    'Add the Acceptance skill to your project, then start a review from your coding agent.',
+  'acceptance.workspace.onboarding.agent.description':
+    'Copy this prompt to your coding agent and let it complete the setup.',
+  'acceptance.workspace.onboarding.agent.prompt':
+    'Read https://lobehub.com/acceptance/skill.md and follow the instructions to install Acceptance.',
+  'acceptance.workspace.onboarding.agent.title': 'Install with an Agent',
+  'acceptance.workspace.onboarding.enable.description': 'Run this from your project root.',
+  'acceptance.workspace.onboarding.enable.title': 'Enable Acceptance',
+  'acceptance.workspace.onboarding.install.description': 'Install the CLI once on this device.',
+  'acceptance.workspace.onboarding.install.title': 'Install the LobeHub CLI',
+  'acceptance.workspace.onboarding.installSection': 'Install Acceptance',
+  'acceptance.workspace.onboarding.manual.description':
+    'Run both commands yourself from the project root.',
+  'acceptance.workspace.onboarding.manual.title': 'Install manually',
+  'acceptance.workspace.onboarding.example.command':
+    '/acceptance Review the current changes, focusing on the core flow, empty states, and error states',
+  'acceptance.workspace.onboarding.example.description':
+    'After installation, send this example to your coding agent to create the first review.',
+  'acceptance.workspace.onboarding.example.title': 'Try your first acceptance',
+  'acceptance.workspace.onboarding.run.description': 'Enter this in your coding agent chat.',
+  'acceptance.workspace.onboarding.run.title': 'Start an acceptance run',
+  'acceptance.workspace.onboarding.title': 'Set up Acceptance',
+  'acceptance.workspace.project.add': 'Add to project',
+  'acceptance.workspace.project.addSuccess': 'Added to the project',
+  'acceptance.workspace.project.create': 'New project with this delivery',
+  'acceptance.workspace.project.empty': 'No projects yet',
+  'acceptance.workspace.project.error': 'Failed to update the project',
+  'acceptance.workspace.project.loadError': 'Couldn’t load your projects',
+  'acceptance.workspace.project.loading': 'Loading projects…',
+  'acceptance.workspace.project.move': 'Move to project',
+  'acceptance.workspace.project.moveSuccess': 'Moved to the project',
+  'acceptance.workspace.project.remove': 'Remove from project',
+  'acceptance.workspace.project.removeSuccess': 'Removed from the project',
+  'acceptance.workspace.merge.title': 'Merge acceptance',
+  'acceptance.workspace.merge.windowHint':
+    'Only the {{count}} most recent acceptances are listed here.',
+
+  'acceptance.workspace.merge.description':
+    'Move the {{count}} checks of “{{title}}” into another acceptance. Pick where they should land.',
+  'acceptance.workspace.merge.noSearchResults': 'No acceptance matches “{{query}}”.',
+  'acceptance.workspace.merge.searchPlaceholder': 'Search acceptances',
+  'acceptance.workspace.merge.noCandidates': 'No other acceptance to merge into.',
+  'acceptance.workspace.merge.settledHint': 'settled — reopen it first',
+  'acceptance.workspace.merge.hint':
+    'The checks keep their verdicts, evidence and rounds. This acceptance is removed once they land.',
+  'acceptance.workspace.merge.confirm': 'Merge',
+  'acceptance.workspace.merge.success': '{{count}} checks merged',
+  'acceptance.workspace.merge.error': 'Failed to merge acceptance',
   'acceptance.workspace.renameEmpty': 'The title cannot be empty',
   'acceptance.workspace.renameError': 'Failed to rename',
   'acceptance.workspace.renameSuccess': 'Renamed',
   'acceptance.workspace.statusError': 'Failed to update status',
   'acceptance.workspace.statusSuccess': 'Status updated',
   'acceptance.workspace.title': 'Deliveries',
+  'actions.backToApp': 'Back to {{name}}',
+  'actions.goToApp': 'Go to {{name}}',
+  'meta.description': 'Verification runs, delivery reports, and acceptance reviews.',
+  'actions.cancel': 'Cancel',
+  'actions.delete': 'Delete',
   'report.actions.copyLink': 'Copy link',
   'report.actions.copyLinkSuccess': 'Link copied',
   'report.actions.openInBrowser': 'Open in browser',
@@ -377,10 +437,8 @@ export default {
 
   'dock.confirm': 'Confirm & run',
   'dock.edit': 'Adjust checks',
-  'dock.forceDeliver': 'Ignore & deliver',
   'dock.repairHint':
     'The next round is fixing the failed checks. A new result is produced and the checker re-runs when it finishes.',
-  'dock.saveAndRepair': 'Save input & repair now',
   'dock.skip': 'Skip checks',
   'dock.title': 'Delivery Checker',
 
@@ -388,11 +446,6 @@ export default {
   'editor.cancel': 'Cancel',
   'editor.placeholder': 'Check title',
   'editor.save': 'Save',
-
-  'input.hint':
-    'This goes to the next repair round as checker input — it will not appear as a chat message.',
-  'input.label': 'Extra input for the next repair round',
-  'input.placeholder': 'e.g. run type-check first; if it still fails, just add a risk note.',
 
   'list.failedCount': '{{count}} failed',
   'list.running': 'Verifying…',

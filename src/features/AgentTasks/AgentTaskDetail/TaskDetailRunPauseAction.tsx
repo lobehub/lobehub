@@ -1,5 +1,5 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, SplitButton } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, SplitButton, Text } from '@lobehub/ui/base-ui';
 import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +37,12 @@ export const formatCountdown = (msRemaining: number): CountdownDisplay => {
   return { countdown, type: 'time' };
 };
 
+export const shouldPersistFallbackAssignee = (
+  assigneeAgentId?: string | null,
+  assigneeUserId?: string | null,
+  inboxAgentId?: string | null,
+) => !assigneeAgentId && !assigneeUserId && !!inboxAgentId;
+
 const TaskDetailRunPauseAction = memo(() => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask, reason } = usePermission('create_content');
@@ -60,6 +66,7 @@ const TaskDetailRunPauseAction = memo(() => {
   const assigneeAgentId = useActiveTaskDetailProjection(
     taskDetailProjectionSelectors.activeTaskAgentId,
   );
+  const assigneeUserId = useActiveTaskDetailProjection((task) => task?.userId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isRerun = status === 'completed';
   const runTask = useTaskStore((s) => s.runTask);
@@ -81,7 +88,7 @@ const TaskDetailRunPauseAction = memo(() => {
     if (!canRun) return;
     setIsStarting(true);
     try {
-      if (!assigneeAgentId && inboxAgentId) {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
         await updateTask(taskId, { assigneeAgentId: inboxAgentId });
       }
       await runTask(taskId);
@@ -93,6 +100,7 @@ const TaskDetailRunPauseAction = memo(() => {
     canRun,
     canPause,
     assigneeAgentId,
+    assigneeUserId,
     inboxAgentId,
     runTask,
     updateTask,
@@ -105,14 +113,14 @@ const TaskDetailRunPauseAction = memo(() => {
     if (!taskId) return;
     setIsRunningNow(true);
     try {
-      if (!assigneeAgentId && inboxAgentId) {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
         await updateTask(taskId, { assigneeAgentId: inboxAgentId });
       }
       await runTask(taskId);
     } finally {
       setIsRunningNow(false);
     }
-  }, [canEditTask, taskId, assigneeAgentId, inboxAgentId, runTask, updateTask]);
+  }, [canEditTask, taskId, assigneeAgentId, assigneeUserId, inboxAgentId, runTask, updateTask]);
 
   const handleCancelSchedule = useCallback(async () => {
     if (!canEditTask) return;

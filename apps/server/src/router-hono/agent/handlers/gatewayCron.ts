@@ -187,14 +187,15 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
  * Auth: `bearerSecretAuth(CRON_SECRET)` on the route.
  */
 export async function gatewayCron(c: Context): Promise<Response> {
-  // When the external message gateway is enabled, sync connections via gateway.
-  if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
-    const service = new GatewayService();
-
-    if (service.useMessageGateway) {
-      await service.ensureRunning();
-      return c.json({ ensureRunning: true });
-    }
+  // When any external message gateway is enabled, sync connections via gateway.
+  // `useMessageGateway` is the whole guard: it already requires the kill switch
+  // plus a configured owning host. Re-checking MESSAGE_GATEWAY_URL here would
+  // narrow that to the default host and drop a node-only deployment into the
+  // legacy path, where its connections are never reconciled.
+  const service = new GatewayService();
+  if (service.useMessageGateway) {
+    await service.ensureRunning();
+    return c.json({ ensureRunning: true });
   }
 
   const platforms = platformRegistry.listPlatforms();

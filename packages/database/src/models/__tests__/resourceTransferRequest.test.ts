@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { resourceTransferRequests, users, workspaces } from '../../schemas';
+import { notifications, resourceTransferRequests, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
   PENDING_TRANSFER_LIST_LIMIT,
@@ -281,6 +281,67 @@ describe('ResourceTransferRequestModel', () => {
       await model.accept(row.id, recipientId);
       await model.invalidateForResources('agent', ['agent-1']);
       await expect(model.findById(row.id)).resolves.toMatchObject({ status: 'accepted' });
+    });
+  });
+
+  describe('settling linked inbox rows', () => {
+    // A pending item's read state IS its handled state: the linked request
+    // notice must flip to read the moment the request leaves `pending`.
+    const seedLinkedRow = async (requestId: string) => {
+      const [row] = await serverDB
+        .insert(notifications)
+        .values({
+          category: 'pending',
+          content: 'transfer request',
+          metadata: { transfer: { requestId } },
+          title: 'Transfer request',
+          type: 'agent_transfer_requested',
+          userId: recipientId,
+          workspaceId,
+        })
+        .returning();
+      return row;
+    };
+
+    const isRowRead = async (id: string) => {
+      const [row] = await serverDB
+        .select({ isRead: notifications.isRead })
+        .from(notifications)
+        .where(eq(notifications.id, id));
+      return row.isRead;
+    };
+
+    it.each([
+      ['accept', (id: string) => model.accept(id, recipientId)],
+      ['decline', (id: string) => model.decline(id, recipientId)],
+      ['cancel', (id: string) => model.cancel(id, initiatorId)],
+      ['invalidateRequest', (id: string) => model.invalidateRequest(id)],
+      ['invalidateForResources', () => model.invalidateForResources('agent', ['agent-1'])],
+    ])('marks the linked notice read on %s', async (_label, act) => {
+      const request = await createRequest();
+      const notice = await seedLinkedRow(request.id);
+      expect(await isRowRead(notice.id)).toBe(false);
+
+      await act(request.id);
+
+      expect(await isRowRead(notice.id)).toBe(true);
+    });
+
+    it('marks the linked notice read on lazy expiry', async () => {
+      const request = await createRequest();
+      const notice = await seedLinkedRow(request.id);
+      await forceExpire(request.id);
+
+      await model.listPendingForUser(recipientId);
+
+      expect(await isRowRead(notice.id)).toBe(true);
+    });
+
+    it('leaves unrelated notices untouched', async () => {
+      const request = await createRequest();
+      const other = await seedLinkedRow('some-other-request');
+      await model.accept(request.id, recipientId);
+      expect(await isRowRead(other.id)).toBe(false);
     });
   });
 });

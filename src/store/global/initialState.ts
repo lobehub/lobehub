@@ -342,6 +342,8 @@ export interface SystemStatus {
   showVerifyReportPanel?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
+  /** Visibility of the lightweight chat overview card. Independent from the workspace panel. */
+  showWorkingOverview?: boolean;
   /**
    * Flat ordered list of sidebar items.
    */
@@ -375,9 +377,11 @@ export interface SystemStatus {
   taskListViewOptions?: {
     groupBy: 'assignee' | 'none' | 'priority' | 'status';
     hideCompleted: boolean;
+    nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
+    showSubTasks: boolean;
     subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
   };
   /**
@@ -515,9 +519,11 @@ export const INITIAL_STATUS = {
   taskListViewOptions: {
     groupBy: 'status',
     hideCompleted: true,
+    nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',
+    showSubTasks: false,
     subGroupBy: 'none',
   },
   taskListViewMode: 'list' as const,

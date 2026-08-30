@@ -1,4 +1,4 @@
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useMatches } from 'react-router';

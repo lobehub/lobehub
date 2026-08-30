@@ -21,7 +21,9 @@ const {
   mockFindLinkById,
   mockFindLinkByIdWithCredentials,
   mockFindByPlatformUser,
+  mockFindFileById,
   mockGetBotRuntimeStatus,
+  mockGetFileAccessUrl,
   mockGetBuiltinAgent,
   mockGetAgentRuntimeRedisClient,
   mockGetServerDB,
@@ -40,6 +42,7 @@ const {
   mockPeekLinkToken,
   mockPollQrStatus,
   mockReleaseWechatQrFinalizeLock,
+  mockSendMessengerPush,
   mockSlackAuthTest,
   mockUpsertForPlatform,
 } = vi.hoisted(() => ({
@@ -56,7 +59,9 @@ const {
   mockFindLinkById: vi.fn(),
   mockFindLinkByIdWithCredentials: vi.fn(),
   mockFindByPlatformUser: vi.fn(),
+  mockFindFileById: vi.fn(),
   mockGetBotRuntimeStatus: vi.fn(),
+  mockGetFileAccessUrl: vi.fn(),
   mockGetBuiltinAgent: vi.fn(),
   mockGetAgentRuntimeRedisClient: vi.fn(),
   mockGetServerDB: vi.fn(),
@@ -75,6 +80,7 @@ const {
   mockPeekLinkToken: vi.fn(),
   mockPollQrStatus: vi.fn(),
   mockReleaseWechatQrFinalizeLock: vi.fn(),
+  mockSendMessengerPush: vi.fn(),
   mockSlackAuthTest: vi.fn(),
   mockUpsertForPlatform: vi.fn(),
 }));
@@ -198,6 +204,24 @@ vi.mock('@/server/services/bot/platforms/slack/api', () => ({
   SlackApi: vi.fn().mockImplementation(() => ({
     authTest: mockSlackAuthTest,
   })),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: class {
+    findById = mockFindFileById;
+  },
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: class {
+    getFileAccessUrl = mockGetFileAccessUrl;
+  },
+}));
+
+vi.mock('@/server/services/messenger/push', () => ({
+  getMessengerPushWindow: vi.fn(),
+  MESSENGER_PUSH_PLATFORMS: ['telegram', 'slack', 'discord', 'wechat'],
+  sendMessengerPush: mockSendMessengerPush,
 }));
 
 const createCaller = createCallerFactory(messengerRouter);
@@ -859,5 +883,96 @@ describe('messengerRouter.listAgentsForBinding', () => {
     );
 
     expect(mockListUserWorkspaces).not.toHaveBeenCalled();
+  });
+});
+
+describe('messengerRouter.sendMessengerPush', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendMessengerPush.mockResolvedValue({ status: 'sent' });
+    mockGetFileAccessUrl.mockResolvedValue('https://app.lobehub.com/f/file-1');
+    mockFindFileById.mockResolvedValue({
+      fileType: 'application/pdf',
+      id: 'file-1',
+      name: 'report.pdf',
+      size: 123_456,
+      url: 's3://bucket/report.pdf',
+    });
+  });
+
+  const caller = async () => createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('resolves an attachment to the stable access URL of the owned file row', async () => {
+    await (
+      await caller()
+    ).sendMessengerPush({
+      attachments: [{ fileId: 'file-1', type: 'file' }],
+      content: 'here you go',
+      platform: 'telegram',
+    });
+
+    expect(mockFindFileById).toHaveBeenCalledWith('file-1');
+    expect(mockSendMessengerPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          {
+            fetchUrl: 'https://app.lobehub.com/f/file-1',
+            mimeType: 'application/pdf',
+            name: 'report.pdf',
+            size: 123_456,
+            // Server-generated from a row this caller owns, which is what lets
+            // the outbound guard accept our own private origins for it.
+            trustedUrl: true,
+            type: 'file',
+          },
+        ],
+        content: 'here you go',
+        platform: 'telegram',
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  // The platform senders materialize `fetchUrl` with a server-side `fetch`, so
+  // a caller-supplied URL would be an SSRF primitive. The schema must reject
+  // the field outright rather than relying on the resolver to overwrite it.
+  it('rejects a caller-supplied fetchUrl or inline data', async () => {
+    const call = await caller();
+
+    await expect(
+      call.sendMessengerPush({
+        attachments: [
+          { fetchUrl: 'http://169.254.169.254/latest/meta-data/', type: 'file' } as never,
+        ],
+        platform: 'telegram',
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      call.sendMessengerPush({
+        attachments: [{ data: 'ZmFrZQ==', type: 'file' } as never],
+        platform: 'telegram',
+      }),
+    ).rejects.toThrow();
+
+    expect(mockSendMessengerPush).not.toHaveBeenCalled();
+  });
+
+  it('refuses to attach a file the caller does not own', async () => {
+    mockFindFileById.mockResolvedValue(undefined);
+
+    await expect(
+      (await caller()).sendMessengerPush({
+        attachments: [{ fileId: 'someone-elses-file', type: 'image' }],
+        platform: 'slack',
+      }),
+    ).rejects.toThrow('File not found');
+
+    expect(mockSendMessengerPush).not.toHaveBeenCalled();
+  });
+
+  it('requires either content or attachments', async () => {
+    await expect((await caller()).sendMessengerPush({ platform: 'telegram' })).rejects.toThrow();
+    expect(mockSendMessengerPush).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,6 @@ import { type AnchorHTMLAttributes } from 'react';
 import { Link as RRLink } from 'react-router';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from './nextjsOnlyRoutes';
-import { shouldHardNavigateToWorkbench } from './workbenchNavigation';
 
 export interface LinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
   href: string;
@@ -35,7 +34,7 @@ const Link = ({
   children,
   ...rest
 }: LinkProps & { ref?: React.RefObject<HTMLAnchorElement | null> }) => {
-  if (isExternalOrNextOnly(href) || shouldHardNavigateToWorkbench(href)) {
+  if (isExternalOrNextOnly(href)) {
     return (
       <a href={href} ref={ref} {...rest}>
         {children}

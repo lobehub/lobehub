@@ -11,6 +11,7 @@ import {
   sessions,
   topics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TopicModel } from '../topic';
@@ -567,6 +568,191 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('settleRunningOperation', () => {
+    it('atomically clears and settles the matching operation', async () => {
+      const hooks = [
+        {
+          id: 'hook-old',
+          type: 'onComplete',
+          webhook: { url: '/callback' },
+        },
+      ];
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-current', operationId: 'op-old' },
+          runningOperation: {
+            assistantMessageId: 'msg-old',
+            hooks,
+            operationId: 'op-old',
+            threadId: 'thread-old',
+          },
+        },
+        title: 'matching operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({
+        assistantMessageId: 'msg-current',
+        hooks,
+        orchestrationRole: undefined,
+        status: 'settled',
+        threadId: 'thread-old',
+      });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.lastSettledOperationId).toBe('op-old');
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('unread');
+    });
+
+    it('corrects unread to active only for the operation that most recently settled', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'watched completion',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+      const corrected = await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      expect(corrected.status).toBe('corrected');
+      expect((await topicModel.findById(topic.id))?.status).toBe('active');
+    });
+
+    it('does not let a watched correction from an old operation hide a newer run', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'new run wins',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+      await topicModel.update(topic.id, {
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-new', operationId: 'op-new' },
+        },
+        status: 'running',
+      });
+
+      const corrected = await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      expect(corrected).toEqual({ activeOperationId: 'op-new', status: 'conflict' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation?.operationId).toBe('op-new');
+      expect(row?.status).toBe('running');
+    });
+
+    it('uses the requested terminal status only for the matching operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'active matching operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('active');
+    });
+
+    it('atomically removes only a matching child operation', async () => {
+      const childHooks = [
+        {
+          id: 'hook-child',
+          type: 'onComplete',
+          webhook: { url: '/child-callback' },
+        },
+      ];
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-child-current', operationId: 'op-child' },
+          runningOperation: {
+            assistantMessageId: 'msg-parent',
+            childOperations: [
+              {
+                assistantMessageId: 'msg-child',
+                hooks: childHooks,
+                operationId: 'op-child',
+                orchestrationRole: 'member',
+                threadId: 'thread-child',
+              },
+            ],
+            operationId: 'op-parent',
+            orchestrationRole: 'supervisor',
+          },
+        },
+        title: 'matching child operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-child');
+
+      expect(settled).toEqual({
+        assistantMessageId: 'msg-child-current',
+        hooks: childHooks,
+        orchestrationRole: 'member',
+        status: 'settled',
+        threadId: 'thread-child',
+      });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toMatchObject({
+        operationId: 'op-parent',
+        orchestrationRole: 'supervisor',
+      });
+      expect(row?.metadata?.runningOperation?.childOperations).toEqual([]);
+      expect(row?.status).toBe('running');
+    });
+
+    it('does not let an old watchdog settle a newer operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-new', operationId: 'op-new' },
+        },
+        title: 'newer operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ activeOperationId: 'op-new', status: 'conflict' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation?.operationId).toBe('op-new');
+      expect(row?.status).toBe('running');
+    });
+
+    it('does not settle an unmarked client-side run', async () => {
+      const topic = await topicModel.create({ title: 'client operation' });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ assistantMessageId: undefined, status: 'missing' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('running');
+    });
+
+    it('retains the operation-scoped assistant pointer after another terminal path cleared the marker', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-current', operationId: 'op-old' },
+          runningOperation: null,
+        },
+        title: 'already cleared operation',
+      });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ assistantMessageId: 'msg-current', status: 'missing' });
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({
@@ -876,6 +1062,112 @@ describe('TopicModel', () => {
       ]);
 
       expect(await topicModel.countTopicsForMemoryExtractor()).toBe(1);
+    });
+  });
+
+  describe('resetMemoryExtractStatus', () => {
+    it('resets completed topics back to pending and clears the run state', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'mem-reset-done',
+          metadata: {
+            userMemoryExtractRunState: {
+              lastRunAt: '2026-08-19T01:00:00.000Z',
+              messageCount: 3,
+              processedMemoryCount: 2,
+            },
+            userMemoryExtractStatus: 'completed',
+          },
+          title: 'done',
+          userId,
+        },
+        { id: 'mem-reset-pending', title: 'pending', userId },
+      ]);
+
+      await topicModel.resetMemoryExtractStatus();
+
+      const done = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, 'mem-reset-done'),
+      });
+      expect(done?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(done?.metadata?.userMemoryExtractRunState).toEqual({});
+
+      const pending = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, 'mem-reset-pending'),
+      });
+      expect(pending?.metadata?.userMemoryExtractStatus).toBeUndefined();
+    });
+
+    it('does not touch topics owned by other users', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'mem-reset-mine',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'mine',
+          userId,
+        },
+        {
+          id: 'mem-reset-other',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'other',
+          userId: otherUserId,
+        },
+      ]);
+
+      await topicModel.resetMemoryExtractStatus();
+
+      const [mine, other] = await Promise.all([
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-mine') }),
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-other') }),
+      ]);
+      expect(mine?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(other?.metadata?.userMemoryExtractStatus).toBe('completed');
+    });
+
+    it('resets topics across personal and workspace scopes for the same user', async () => {
+      const workspaceId = 'topic-model-test-ws-reset';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'topic-model-test-ws-reset',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      await serverDB.insert(topics).values([
+        {
+          id: 'mem-reset-personal',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'personal scope',
+          userId,
+          workspaceId: null,
+        },
+        {
+          id: 'mem-reset-ws',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'workspace scope',
+          userId,
+          workspaceId,
+        },
+        // Another user's workspace topic must stay untouched.
+        {
+          id: 'mem-reset-ws-other-user',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'workspace scope other user',
+          userId: otherUserId,
+          workspaceId,
+        },
+      ]);
+
+      await topicModel.resetMemoryExtractStatus();
+
+      const [personal, ws, wsOther] = await Promise.all([
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-personal') }),
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-ws') }),
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-ws-other-user') }),
+      ]);
+      expect(personal?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(ws?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(wsOther?.metadata?.userMemoryExtractStatus).toBe('completed');
     });
   });
 

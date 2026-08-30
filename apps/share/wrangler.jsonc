@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "lobehub-share",
+  "account_id": "d35842305b91be4b48e06ff9a9ad83f5",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false }
+  },
+  "vars": {
+    "SHARE_API_BASE": "https://app.lobehub.com",
+    "SHARE_APP_HOME": "https://lobehub.com"
+  }
+}

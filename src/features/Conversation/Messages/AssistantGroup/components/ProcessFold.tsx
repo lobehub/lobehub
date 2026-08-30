@@ -1,4 +1,5 @@
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { type Key, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -12,8 +12,6 @@ const projectionAgents = vi.hoisted(() => ({
   inbox: { plugins: ['plugin-1'] as any[] },
 }));
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/services/user', () => ({
   userService: {
     updateOnboarding: vi.fn(),

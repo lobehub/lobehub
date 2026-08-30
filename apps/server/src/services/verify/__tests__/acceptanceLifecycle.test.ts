@@ -5,7 +5,7 @@ import { instantiateVerifyPlanOnStart } from '../planInstantiation';
 import { createRepairRunner } from '../repairService';
 
 const mocks = vi.hoisted(() => ({
-  acceptanceAttachRun: vi.fn(),
+  acceptanceAttachPolicyRun: vi.fn(),
   acceptanceEnsureForSubject: vi.fn(),
   acceptanceUpdate: vi.fn(),
   agentExec: vi.fn(),
@@ -17,17 +17,13 @@ const mocks = vi.hoisted(() => ({
   setMetadata: vi.fn(),
   setPlan: vi.fn(),
   taskFindById: vi.fn(),
-  taskResolveVerifyConfig: vi.fn(),
+  taskAcceptanceResolve: vi.fn(),
 }));
 
-vi.mock('../goalLoop', () => ({
-  maybeContinueGoalLoop: vi.fn().mockResolvedValue('spawn-failed'),
-  syncGoalToolState: vi.fn(),
-}));
 vi.mock('../acceptanceService', () => ({
   AcceptanceService: vi.fn(() => ({
     acceptanceModel: { update: mocks.acceptanceUpdate },
-    attachRun: mocks.acceptanceAttachRun,
+    attachPolicyRun: mocks.acceptanceAttachPolicyRun,
     ensureForSubject: mocks.acceptanceEnsureForSubject,
   })),
 }));
@@ -38,10 +34,13 @@ vi.mock('../planGenerator', () => ({
   })),
 }));
 
+vi.mock('../taskAcceptance', () => ({
+  resolveTaskAcceptance: mocks.taskAcceptanceResolve,
+}));
+
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(() => ({
     findById: mocks.taskFindById,
-    resolveVerifyConfig: mocks.taskResolveVerifyConfig,
   })),
 }));
 
@@ -71,9 +70,10 @@ describe('Verify acceptance lifecycle', () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
   });
 
-  it('creates and attaches the task acceptance when its verify plan is confirmed', async () => {
-    mocks.taskResolveVerifyConfig.mockResolvedValue({
-      enabled: true,
+  it('attaches the verify run to the task acceptance that owns its policy', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
       requirement: 'The novel is complete and coherent',
     });
     mocks.taskFindById.mockResolvedValue({
@@ -83,7 +83,6 @@ describe('Verify acceptance lifecycle', () => {
     mocks.runFindByOperation
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'run-1', plan });
-    mocks.acceptanceEnsureForSubject.mockResolvedValue({ id: 'acceptance-1' });
 
     await instantiateVerifyPlanOnStart(
       db,
@@ -92,13 +91,21 @@ describe('Verify acceptance lifecycle', () => {
       'workspace-1',
     );
 
-    expect(mocks.acceptanceEnsureForSubject).toHaveBeenCalledWith('task', 'task-1', {
-      requirement: 'The novel is complete and coherent',
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+  });
+
+  it('keeps an empty Acceptance opted out of verification', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: {},
     });
-    expect(mocks.acceptanceUpdate).toHaveBeenCalledWith('acceptance-1', {
-      requirement: 'The novel is complete and coherent',
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
     });
-    expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
   });
 
   it('attaches an auto-repair verify run as the next round of the same acceptance', async () => {
@@ -129,6 +136,6 @@ describe('Verify acceptance lifecycle', () => {
 
     expect(result).toEqual({ repairOperationId: 'repair-operation' });
     expect(mocks.agentExec).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1' }));
-    expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
   });
 });

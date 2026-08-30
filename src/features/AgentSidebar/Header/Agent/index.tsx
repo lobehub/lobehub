@@ -39,6 +39,7 @@ const Agent = memo<PropsWithChildren>(() => {
       <SidebarHeaderSelectTrigger
         avatar={isInbox ? avatar || DEFAULT_INBOX_AVATAR : avatar || DEFAULT_AVATAR}
         background={backgroundColor || undefined}
+        name={displayTitle}
         title={displayTitle}
       />
     </SwitchPanel>

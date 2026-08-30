@@ -29,12 +29,6 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    warn: vi.fn(),
-  },
-}));
-
 describe('settings', () => {
   beforeEach(() => {
     fs.mkdirSync(tmpDir, { recursive: true });

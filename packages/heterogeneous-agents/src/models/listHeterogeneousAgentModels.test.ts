@@ -273,6 +273,47 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('parses and discovers Grok Build models', async () => {
+    const stdout = [
+      'You are not authenticated.',
+      '',
+      'Default model: grok-4.6',
+      '',
+      'Available models:',
+      '  * grok-4.6 (default)',
+      '  - grok-4.5',
+      '  - grok-4.6',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseGrokBuildModelCatalog } = await importModule();
+
+    expect(parseGrokBuildModelCatalog(stdout)).toEqual([
+      { id: 'grok-4.6', modelId: 'grok-4.6', providerId: 'grok-build' },
+      { id: 'grok-4.5', modelId: 'grok-4.5', providerId: 'grok-build' },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/grok',
+        cwd: '/repo',
+        env: { XAI_API_KEY: 'test-key' },
+        type: 'grok-build',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'grok-4.6', modelId: 'grok-4.6', providerId: 'grok-build' },
+        { id: 'grok-4.5', modelId: 'grok-4.5', providerId: 'grok-build' },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/grok',
+      ['models'],
+      expect.objectContaining({ cwd: '/repo', env: { XAI_API_KEY: 'test-key' } }),
+      expect.any(Function),
+    );
+  });
+
   it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
     resolveExecFile('openai/gpt-5.6\nopenrouter/google/gemini-2.5-pro\n');
     const { listHeterogeneousAgentModels } = await importModule();
@@ -311,11 +352,25 @@ describe('heterogeneous agent model discovery', () => {
   it('keeps the resolver login-shell PATH when the caller also provides PATH', async () => {
     const originalShell = process.env.SHELL;
     process.env.SHELL = '/bin/zsh';
-    rejectExecFile(new Error('not on inherited PATH'));
-    resolveExecFile('/login/bin:/usr/bin');
-    resolveExecFile('/login/bin/opencode\n');
-    resolveExecFile('1.18.3');
-    resolveExecFile('openai/gpt-5.6\n');
+    execFileMock.mockImplementation(((
+      file: string,
+      args: string[],
+      options: any,
+      callback: any,
+    ) => {
+      if (file === '/bin/zsh') {
+        callback(null, { stderr: '', stdout: '/login/bin:/usr/bin' });
+      } else if (file === 'which' && options.env?.PATH?.includes('/login/bin')) {
+        callback(null, { stderr: '', stdout: '/login/bin/opencode\n' });
+      } else if (file === '/login/bin/opencode' && args.includes('--version')) {
+        callback(null, { stderr: '', stdout: '1.18.3' });
+      } else if (file === '/login/bin/opencode' && args.includes('models')) {
+        callback(null, { stderr: '', stdout: 'openai/gpt-5.6\n' });
+      } else {
+        callback(new Error('unavailable in inherited environment'), { stderr: '', stdout: '' });
+      }
+      return {} as any;
+    }) as any);
 
     try {
       const { listHeterogeneousAgentModels } = await importModule();

@@ -1,7 +1,7 @@
 import type { SearchQuery } from '@lobechat/types';
 // eslint-disable-next-line no-restricted-imports -- Base Select does not support multiple selection yet.
-import { Block, Flexbox, SearchBar as Search, Select, Text, Tooltip } from '@lobehub/ui';
-import { CheckboxGroup, Segmented } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, SearchBar as Search, Select, Tooltip } from '@lobehub/ui';
+import { CheckboxGroup, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { ReactNode } from 'react';
 import { memo, useState } from 'react';

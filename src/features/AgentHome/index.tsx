@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import ToolAuthAlert from '@/routes/(main)/agent/features/Conversation/AgentWelcome/ToolAuthAlert';
+import ToolAuthAlert from '@/features/Conversation/AgentWelcome/ToolAuthAlert';
 import { agentProjectionSelectors, useCurrentAgentValue } from '@/store/agent/projection';
 
 import AgentInfo from './AgentInfo';

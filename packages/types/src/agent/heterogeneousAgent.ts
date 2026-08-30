@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { TopicGroupMode } from '../topic/topic';
 
 export interface HeterogeneousAgentAuthDescriptor {
@@ -332,15 +334,52 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
 ] as const satisfies readonly LocalHeterogeneousAgentDescriptor[];
 
+export const LOCAL_HETEROGENEOUS_AGENT_TYPES = HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type);
+
+export const LocalHeterogeneousAgentTypeSchema = z.enum(LOCAL_HETEROGENEOUS_AGENT_TYPES);
+
+export interface RemoteHeterogeneousAgentCliDescriptor {
+  command: string;
+  validation: {
+    helpKeywords?: readonly string[];
+    keywords?: readonly string[];
+    pattern?: string;
+  };
+  wellKnownHomePaths?: readonly string[];
+}
+
 export interface RemoteHeterogeneousAgentDescriptor {
+  cli: RemoteHeterogeneousAgentCliDescriptor;
   kind: 'remote-task';
   title: string;
   type: string;
 }
 
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
-  { kind: 'remote-task', title: 'OpenClaw', type: 'openclaw' },
-  { kind: 'remote-task', title: 'Hermes', type: 'hermes' },
+  {
+    cli: {
+      command: 'openclaw',
+      validation: {
+        helpKeywords: ['Usage: openclaw'],
+        keywords: ['openclaw'],
+        pattern: '^v?\\d+\\.\\d+\\.\\d+(?:[-+][\\dA-Za-z.-]+)?$',
+      },
+      wellKnownHomePaths: ['.openclaw/bin/openclaw', '.local/bin/openclaw'],
+    },
+    kind: 'remote-task',
+    title: 'OpenClaw',
+    type: 'openclaw',
+  },
+  {
+    cli: {
+      command: 'hermes',
+      validation: { keywords: ['hermes'] },
+      wellKnownHomePaths: ['.local/bin/hermes'],
+    },
+    kind: 'remote-task',
+    title: 'Hermes',
+    type: 'hermes',
+  },
 ] as const satisfies readonly RemoteHeterogeneousAgentDescriptor[];
 
 export type HeterogeneousAgentDescriptor =

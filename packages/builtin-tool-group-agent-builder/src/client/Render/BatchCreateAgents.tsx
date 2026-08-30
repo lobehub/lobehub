@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Users } from 'lucide-react';
 import { memo } from 'react';

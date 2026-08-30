@@ -1,8 +1,8 @@
 'use client';
 
 import { randomAgentName } from '@lobechat/const';
-import { ActionIcon, Flexbox, Input, Text } from '@lobehub/ui';
-import { Button, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { ActionIcon, Button, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { DicesIcon } from 'lucide-react';
 import { memo, type ReactNode, useCallback } from 'react';

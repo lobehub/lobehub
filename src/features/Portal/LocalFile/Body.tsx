@@ -1,18 +1,24 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { ActionIcon, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Image, Markdown } from '@lobehub/ui';
+import { Text, ToggleGroup } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
+import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
-import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
+import { applyHtmlPreviewBaseUrl, InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
+import {
+  PublishHtmlArtifactLiveBar,
+  PublishHtmlArtifactProvider,
+  PublishHtmlArtifactTrigger,
+} from '@/features/Portal/LocalFile/PublishHtmlArtifactButton';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { cloudSandboxService } from '@/services/cloudSandbox';
+import { localFileService } from '@/services/electron/localFileService';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -25,6 +31,7 @@ import {
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
+import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
 const DocumentPreview = lazy(() => import('./DocumentPreview'));
@@ -125,31 +132,6 @@ type TextPreviewMode = 'render' | 'raw';
 
 const NO_TOPIC_KEY = '__no_topic__';
 
-const floatingControlsStyles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-end: 12px;
-
-    padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    opacity: 0.55;
-    background: ${cssVar.colorBgElevated};
-    backdrop-filter: blur(8px);
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity 0.15s ease;
-
-    &:hover,
-    &:focus-within {
-      opacity: 1;
-    }
-  `,
-}));
-
 interface TextPreviewPaneProps {
   activeTopicId?: string | null;
   content: string;
@@ -162,6 +144,7 @@ interface TextPreviewPaneProps {
   readOnly?: boolean;
   reloading?: boolean;
   resourceBaseUrl?: string;
+  sandboxTopicId?: string;
   workingDirectory: string;
 }
 
@@ -178,6 +161,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     readOnly = false,
     reloading = false,
     resourceBaseUrl,
+    sandboxTopicId,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -275,77 +259,116 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       await onReload?.();
       setHtmlPreviewRevision((prev) => prev + 1);
     }, [onReload]);
+    // Electron's window-open handler denies blob: URLs, so the blob path only
+    // works on web; desktop hands local files to the system default app instead,
+    // and remote/sandbox files have no external route there.
+    const canOpenExternal = isDesktop ? !deviceId && !sandboxTopicId : true;
+    const handleOpenExternal = useCallback(() => {
+      if (isDesktop) {
+        void localFileService.openLocalFile({ path: filePath });
+        return;
+      }
+
+      // A top-level blob: document inherits this app's origin, so untrusted HTML
+      // must stay inside a sandboxed (no allow-same-origin) iframe wrapper.
+      const html = applyHtmlPreviewBaseUrl(editingValue, resourceBaseUrl);
+      const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+      const shell = `<!doctype html><title>${filePath.split(/[/\\]/).at(-1) ?? ''}</title><style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="allow-scripts allow-modals allow-popups" srcdoc="${srcdoc}"></iframe>`;
+      const url = URL.createObjectURL(new Blob([shell], { type: 'text/html' }));
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // Revoking immediately can abort the new window's document load — defer it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }, [editingValue, filePath, resourceBaseUrl]);
 
     return (
-      <Flexbox
-        flex={1}
-        height={'100%'}
-        style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
+      <PublishHtmlArtifactProvider
+        content={editingValue}
+        deviceId={deviceId}
+        filePath={filePath}
+        sandboxTopicId={sandboxTopicId}
+        topicId={activeTopicId}
+        workingDirectory={workingDirectory}
       >
-        {canRender && (
-          <Flexbox horizontal align={'center'} className={floatingControlsStyles.container} gap={4}>
-            {isHtml && (
-              <ActionIcon
-                icon={RefreshCwIcon}
-                loading={reloading}
-                size={'small'}
-                title={t('workingPanel.localFile.preview.reload')}
-                onClick={handleReloadPreview}
-              />
-            )}
-
-            <Tabs
-              activeKey={mode}
-              size={'small'}
-              items={[
-                {
-                  icon: <Icon icon={EyeIcon} />,
-                  key: 'render',
-                  label: t('workingPanel.localFile.preview.render'),
-                },
-                {
-                  icon: <Icon icon={CodeIcon} />,
-                  key: 'raw',
-                  label: t(
-                    isHtml
-                      ? 'workingPanel.localFile.preview.source'
-                      : 'workingPanel.localFile.preview.raw',
-                  ),
-                },
-              ]}
-              onChange={(key) => setMode(key as TextPreviewMode)}
-            />
+        <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+          <PublishHtmlArtifactLiveBar />
+          <PreviewToolbar
+            path={filePath}
+            actions={
+              <>
+                {isHtml && (
+                  <ToolbarActionButton
+                    icon={RefreshCwIcon}
+                    loading={reloading}
+                    title={t('workingPanel.localFile.preview.reload')}
+                    onClick={handleReloadPreview}
+                  />
+                )}
+                {canRender && (
+                  <ToggleGroup
+                    value={mode}
+                    variant={'outlined'}
+                    options={[
+                      {
+                        icon: <EyeIcon size={14} />,
+                        label: t('workingPanel.localFile.preview.render'),
+                        value: 'render',
+                      },
+                      {
+                        icon: <CodeIcon size={14} />,
+                        label: t(
+                          isHtml
+                            ? 'workingPanel.localFile.preview.source'
+                            : 'workingPanel.localFile.preview.raw',
+                        ),
+                        value: 'raw',
+                      },
+                    ]}
+                    onChange={(value) => setMode(value as TextPreviewMode)}
+                  />
+                )}
+                {isHtml && canOpenExternal && (
+                  <ToolbarActionButton
+                    icon={ExternalLinkIcon}
+                    title={t('workingPanel.localFile.preview.openExternal')}
+                    onClick={handleOpenExternal}
+                  />
+                )}
+                <PublishHtmlArtifactTrigger />
+              </>
+            }
+          />
+          <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
+              {isMarkdown && mode === 'render' ? (
+                <>
+                  <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
+                  <Markdown
+                    components={markdownComponents}
+                    style={{ paddingBlock: 8, paddingInline: 12 }}
+                  >
+                    {body}
+                  </Markdown>
+                </>
+              ) : showHtmlPreview ? (
+                <InlineHtmlPreview
+                  baseUrl={resourceBaseUrl}
+                  content={editingValue}
+                  key={`${filePath}:${htmlPreviewRevision}`}
+                />
+              ) : (
+                <CodeEditorPane
+                  language={extensionToLanguage(ext)}
+                  readOnly={readOnly}
+                  style={{ fontSize: 12, minHeight: '100%' }}
+                  value={editingValue}
+                  onChange={readOnly ? undefined : handleCodeChange}
+                  onSave={readOnly ? undefined : handleSave}
+                />
+              )}
+            </div>
           </Flexbox>
-        )}
-        <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
-          {isMarkdown && mode === 'render' ? (
-            <>
-              <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
-              <Markdown
-                components={markdownComponents}
-                style={{ paddingBlock: 8, paddingInline: 12 }}
-              >
-                {body}
-              </Markdown>
-            </>
-          ) : showHtmlPreview ? (
-            <InlineHtmlPreview
-              baseUrl={resourceBaseUrl}
-              content={editingValue}
-              key={`${filePath}:${htmlPreviewRevision}`}
-            />
-          ) : (
-            <CodeEditorPane
-              language={extensionToLanguage(ext)}
-              readOnly={readOnly}
-              style={{ fontSize: 12, minHeight: '100%' }}
-              value={editingValue}
-              onChange={readOnly ? undefined : handleCodeChange}
-              onSave={readOnly ? undefined : handleSave}
-            />
-          )}
-        </div>
-      </Flexbox>
+        </Flexbox>
+      </PublishHtmlArtifactProvider>
     );
   },
 );
@@ -469,11 +492,16 @@ const ActiveFileView = memo<ActiveFileViewProps>(
     if (preview.type === 'document') {
       return (
         <Suspense fallback={<Loading />}>
+          {/* Key by source + path: without a remount, switching between two files of
+              the same document type reuses the pane instance, whose local
+              loading/parse state isn't reset on blob change — the previous file's
+              rendered content lingers until the new one finishes. */}
           <DocumentPreview
             blob={preview.blob}
             contentType={preview.contentType}
             filePath={filePath}
             isLocalFile={!sandboxTopicId && !deviceId && isDesktop}
+            key={`${sandboxTopicId ?? deviceId ?? 'local'}:${filePath}`}
           />
         </Suspense>
       );
@@ -503,6 +531,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         readOnly={!!sandboxTopicId}
         reloading={isValidating}
         resourceBaseUrl={preview.resourceBaseUrl}
+        sandboxTopicId={sandboxTopicId}
         workingDirectory={workingDirectory}
         onReload={handleReload}
         onSaved={handleSavedContent}

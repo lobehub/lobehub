@@ -59,9 +59,9 @@ describe('tool display names', () => {
     // total calls (15) leads, "calls total" / "共" wording is gone
     expect(summary.startsWith('15 calls:')).toBe(true);
     expect(summary).not.toContain('calls total');
-    // truncated tool list is followed by the kind count, then the failure count
+    // truncated tool list is followed by the kind count; failures stay in the details
     expect(summary).toContain('across 6 tools');
-    expect(summary).toContain('1 failed');
+    expect(summary).not.toContain('failed');
   });
 
   it('omits the total call count when each tool is called once', () => {

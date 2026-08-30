@@ -51,8 +51,6 @@ const seedTopicWorkingDirectories = (workingDirectoriesByTopic: Record<string, s
   );
 };
 
-vi.mock('zustand/traditional');
-
 describe('chatDockSlice', () => {
   describe('pushPortalView', () => {
     it('should push a new view onto the stack and open portal', () => {

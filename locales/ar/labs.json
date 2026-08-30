@@ -2,6 +2,8 @@
   "description": "هذه الميزات تجريبية. قد نقوم بإزالتها، وقد تحتوي على أخطاء. يسعدنا تلقي ملاحظاتك أثناء استخدامها.",
   "features.agentGraphConfig.desc": "عرض تكوين وقت تشغيل الرسم البياني في إعدادات متقدمة لملف تعريف الوكيل.",
   "features.agentGraphConfig.title": "تكوين وقت تشغيل الرسم البياني للوكيل",
+  "features.agentProviderBinding.desc": "دع الوكلاء المحليين المدعومين يستخدمون موفر API مُعد ونموذج بدلاً من اشتراكهم. متاح في البداية لـ Claude Code و Codex على تنفيذ سطح المكتب المحلي.",
+  "features.agentProviderBinding.title": "ربط موفر الوكيل",
   "features.agentSelfIteration.desc": "السماح للمساعد بالتفكير الذاتي، وبناء الوعي الذاتي، والاستمرار في التطوير عبر المحاولات والتفاعلات المتواصلة.",
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
   "features.artifactDeployment.desc": "نشر العناصر إلى عنوان URL مستضاف وإدارة الإصدارات من الشريط الجانبي للمحادثة",

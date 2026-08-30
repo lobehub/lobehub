@@ -60,6 +60,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
         >
           <SidebarHeaderSelectTrigger
             avatar={project?.avatar || project?.name || t('sidebar.title')}
+            name={project?.name || t('sidebar.title')}
             title={project?.name || t('sidebar.title')}
           />
         </SidebarHeaderSelectPopover>

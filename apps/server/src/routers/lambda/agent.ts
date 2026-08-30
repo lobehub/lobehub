@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import type { KnowledgeItem } from '@lobechat/types';
-import { CreateAgentSchema, KnowledgeType } from '@lobechat/types';
+import { AGENT_PERMISSION_POLICY_KEYS, CreateAgentSchema, KnowledgeType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -67,11 +67,6 @@ import {
   type ResourceConfigAccessResult,
 } from './_helpers/resourceConfigGuard';
 
-const AGENT_PERMISSION_POLICY_KEYS = [
-  'executionTargetSelectionPolicy',
-  'modelSelectionPolicy',
-] as const;
-
 const getAgentPermissionPolicyPatch = (value: Record<string, unknown>) => {
   const agencyConfig = value.agencyConfig;
 
@@ -87,6 +82,7 @@ const stripAgentPermissionPolicies = (value: Record<string, unknown>) => {
   const {
     executionTargetSelectionPolicy: _executionTargetSelectionPolicy,
     modelSelectionPolicy: _modelSelectionPolicy,
+    topicSharePolicy: _topicSharePolicy,
     ...safeAgencyConfig
   } = policyPatch;
 
@@ -1425,7 +1421,7 @@ export const agentRouter = router({
 
       let safeValue = input.value;
 
-      // Model / execution-environment selection policies govern every member.
+      // Model / execution-environment / topic-share policies govern every member.
       // Only the creator or workspace primary owner may write them; other
       // collaborators send a fully merged agencyConfig, so strip the protected
       // keys instead of comparing and later merging stale values over a newer

@@ -22,7 +22,11 @@ import {
   AgentManagementRenders,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
-import { BrowserManifest, BrowserRenders } from '@lobechat/builtin-tool-browser/client';
+import {
+  BrowserInspectors,
+  BrowserManifest,
+  BrowserRenders,
+} from '@lobechat/builtin-tool-browser/client';
 import {
   ClaudeCodeIdentifier,
   ClaudeCodeInspectors,
@@ -277,6 +281,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
     [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
+    [BrowserManifest.identifier]: BrowserInspectors as Record<string, BuiltinInspector>,
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,

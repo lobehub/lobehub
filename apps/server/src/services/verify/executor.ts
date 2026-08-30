@@ -3,6 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import {
+  BATCH_VERDICT_JSON_SCHEMA,
+  chainVerifyJudge,
+  type JudgeEvidence,
+  SINGLE_VERDICT_JSON_SCHEMA,
+  VERIFY_JUDGE_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import type {
   ToulminVerdict,
   VerifyCheckItem,
@@ -23,15 +30,8 @@ import { FileService } from '@/server/services/file';
 
 import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
-import { buildJudgePrompt, type JudgeEvidence, VERIFY_JUDGE_PROMPT_VERSION } from './prompts';
 import { planItemToPendingResult } from './resultSnapshot';
-import {
-  BATCH_VERDICT_JSON_SCHEMA,
-  BatchVerdictSchema,
-  SINGLE_VERDICT_JSON_SCHEMA,
-  type SingleVerdict,
-  SingleVerdictSchema,
-} from './schema';
+import { BatchVerdictSchema, type SingleVerdict, SingleVerdictSchema } from './schema';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-executor');
@@ -206,14 +206,18 @@ export class VerifyExecutorService {
   /** Load a run's evidence rows grouped by the plan item id they back. */
   private async loadEvidence(verifyRunId: string): Promise<EvidenceByItem> {
     const rows = await this.evidenceModel.listByRun(verifyRunId);
+    const documentIds = [
+      ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+    ];
+    const documents = await this.documentModel.findByIds(documentIds);
+    const documentContent = new Map(documents.map((document) => [document.id, document.content]));
     const byItem: EvidenceByItem = new Map();
     for (const row of rows) {
       const list = byItem.get(row.checkItemId) ?? [];
-      // Keep `fileId` so the planner can route file-only text to an agent and
-      // agent verifiers can attach the actual artifact.
       list.push({
-        content: row.content,
+        content: row.documentId ? documentContent.get(row.documentId) : row.content,
         description: row.description,
+        documentId: row.documentId,
         fileId: row.fileId,
         type: row.type,
       });
@@ -430,7 +434,7 @@ export class VerifyExecutorService {
         title: i.title,
       })),
     );
-    const { system, user } = buildJudgePrompt({
+    const chain = chainVerifyJudge({
       deliverable: params.deliverable,
       goal: params.goal,
       items: promptItems,
@@ -440,10 +444,7 @@ export class VerifyExecutorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
+        ...chain,
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: BATCH_VERDICT_JSON_SCHEMA,
@@ -503,7 +504,7 @@ export class VerifyExecutorService {
     const hydratedEvidence = multimodal
       ? await this.hydrateInlineMedia(evidenceByItem.get(item.id) ?? [])
       : evidenceByItem.get(item.id);
-    const { system, user } = buildJudgePrompt({
+    const chain = chainVerifyJudge({
       deliverable: params.deliverable,
       goal: params.goal,
       items: [
@@ -520,26 +521,7 @@ export class VerifyExecutorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: multimodal
-          ? [
-              { content: system, role: 'system' as const },
-              {
-                content: [
-                  { text: user, type: 'text' as const },
-                  ...(hydratedEvidence ?? [])
-                    .filter((evidence) => evidence.accessUrl)
-                    .map((evidence) => ({
-                      image_url: { detail: 'high' as const, url: evidence.accessUrl! },
-                      type: 'image_url' as const,
-                    })),
-                ],
-                role: 'user' as const,
-              },
-            ]
-          : [
-              { content: system, role: 'system' as const },
-              { content: user, role: 'user' as const },
-            ],
+        ...chain,
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: SINGLE_VERDICT_JSON_SCHEMA,

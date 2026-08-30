@@ -1,13 +1,15 @@
 'use client';
 
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { ActionIcon, Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PinIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import Avatar from '@/components/Avatar';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeSidebarItem } from '@/projection';
@@ -41,13 +43,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface AgentListProps {
   activeAgentId: string;
-  /** Thrown error from the agent-list SWR — surfaced as a failure state. */
   error?: unknown;
   onRetry?: () => void;
   onSelect: (agentId: string) => void;
 }
 
-// Same spec as the agent-detail SwitchPanel's section header.
 const SectionHeader = memo<{ children: ReactNode }>(({ children }) => (
   <Flexbox className={styles.sectionHeader}>
     <Text fontSize={12} type={'secondary'} weight={500}>
@@ -92,7 +92,13 @@ const AgentListItem = memo<AgentListItemProps>(({ active, onSelect, row }) => {
       variant={'borderless'}
       onClick={() => onSelect(row.id)}
     >
-      <Avatar avatar={avatar} background={backgroundColor} shape={'square'} size={24} />
+      <Avatar
+        avatar={avatar}
+        background={backgroundColor}
+        name={title}
+        shape={'square'}
+        size={24}
+      />
       <Text
         ellipsis
         color={active ? cssVar.colorText : cssVar.colorTextSecondary}
@@ -119,8 +125,6 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
     <AgentListItem active={row.id === activeAgentId} key={row.id} row={row} onSelect={onSelect} />
   );
 
-  // Error gated ahead of the skeleton so a failed list fetch shows Retry instead
-  // of a permanent skeleton (`isAgentListInit` only flips on success).
   return (
     <AsyncBoundary
       data={isInitialized ? workspaceRows : undefined}

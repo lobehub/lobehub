@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
@@ -15,6 +16,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
 
+import { lessonSectionLabel } from '../helpers';
 import { useExpertiseDomain, useExpertiseLesson } from '../hooks';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -47,18 +49,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const SECTION_LABELS = {
-  breaks: 'rules.section.breaks',
-  correct: 'rules.section.correct',
-  dont: 'rules.section.dont',
-  good: 'rules.section.good',
-  how: 'rules.section.how',
-  limits: 'rules.section.limits',
-  rule: 'rules.section.rule',
-  why: 'rules.section.why',
-  works: 'rules.section.works',
-  wrong: 'rules.section.wrong',
-} as const;
+/** Labels a lesson section, falling back to the raw key when no polarity declares it. */
+const SectionLabel = memo<{ sectionKey: string }>(({ sectionKey }) => {
+  const { t } = useTranslation('selfLearning');
+  const label = lessonSectionLabel(sectionKey);
+  return <>{label ? t(label) : sectionKey}</>;
+});
+
+SectionLabel.displayName = 'ExpertiseSectionLabel';
 
 const LessonDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
@@ -68,7 +66,7 @@ const LessonDetail = memo(() => {
   const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);
   const domainPath =
     activeAgentId && domainId
-      ? urlJoin('/agent', activeAgentId, 'self-learning', domainId)
+      ? urlJoin('/agent', activeAgentId, 'self-evolving', domainId)
       : undefined;
   const experiencePath = domainPath ? urlJoin(domainPath, 'experience') : undefined;
   const sections = data?.lesson.sections.filter(
@@ -143,7 +141,7 @@ const LessonDetail = memo(() => {
                   {sections?.map((section) => (
                     <div className={styles.sectionItem} key={section.key}>
                       <Text fontSize={12} type={'secondary'} weight={600}>
-                        {t(SECTION_LABELS[section.key as keyof typeof SECTION_LABELS])}
+                        <SectionLabel sectionKey={section.key} />
                       </Text>
                       <Text fontSize={14} lineHeight={1.65}>
                         {section.body}

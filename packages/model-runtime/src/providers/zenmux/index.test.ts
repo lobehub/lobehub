@@ -296,6 +296,118 @@ describe('ZenMux Runtime', () => {
         expect(models.length).toBeGreaterThan(0);
       });
 
+      it('should map ZenMux capability metadata onto model cards before processing', async () => {
+        const mockClient = {
+          apiKey: 'test-key',
+          baseURL: 'https://zenmux.ai/api/v1',
+          models: {
+            list: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'dots-studio/dots3-note-prev',
+                  object: 'model',
+                  created: 1786962877,
+                  owned_by: 'dots-studio',
+                  display_name: 'Dots Studio: Dots3-Note Preview (Free)',
+                  input_modalities: ['text', 'image', 'video', 'audio'],
+                  output_modalities: ['text'],
+                  capabilities: { reasoning: true },
+                  context_length: 393100,
+                  pricings: {
+                    completion: [{ value: 0, unit: 'perMTokens', currency: 'USD' }],
+                    input_cache_read: [{ value: 0, unit: 'perMTokens', currency: 'USD' }],
+                    prompt: [{ value: 0, unit: 'perMTokens', currency: 'USD' }],
+                  },
+                  publish_time: '2026-08-17',
+                },
+                {
+                  id: 'z-ai/glm-5.3',
+                  object: 'model',
+                  created: 1786609177,
+                  owned_by: 'z-ai',
+                  input_modalities: ['text'],
+                  output_modalities: ['text'],
+                  capabilities: { reasoning: true },
+                  context_length: 1000000,
+                  pricings: {
+                    completion: [
+                      // tiered pricing: first perMTokens entry is the base tier
+                      { value: 4.4, unit: 'perMTokens', currency: 'USD' },
+                      { value: 8.8, unit: 'perMTokens', currency: 'USD', conditions: {} },
+                    ],
+                    prompt: [{ value: 1.4, unit: 'perMTokens', currency: 'USD' }],
+                    web_search: [{ value: 0.01, unit: 'perCount', currency: 'USD' }],
+                  },
+                  publish_time: '2026-08-13',
+                },
+              ],
+            }),
+          },
+        } as any;
+
+        mockProcessMultiProviderModelList.mockResolvedValue([]);
+
+        await params.models({ client: mockClient });
+
+        expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+          [
+            expect.objectContaining({
+              contextWindowTokens: 393100,
+              id: 'dots-studio/dots3-note-prev',
+              pricing: expect.objectContaining({ cachedInput: 0, input: 0, output: 0 }),
+              reasoning: true,
+              releasedAt: '2026-08-17',
+              video: true,
+              vision: true,
+            }),
+            expect.objectContaining({
+              contextWindowTokens: 1000000,
+              id: 'z-ai/glm-5.3',
+              pricing: expect.objectContaining({ input: 1.4, output: 4.4 }),
+              reasoning: true,
+              video: false,
+              vision: false,
+            }),
+          ],
+          'zenmux',
+        );
+      });
+
+      it('should leave capabilities undefined when ZenMux omits metadata fields', async () => {
+        const mockClient = {
+          apiKey: 'test-key',
+          baseURL: 'https://zenmux.ai/api/v1',
+          models: {
+            list: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'openai/gpt-4o-mini',
+                  object: 'model',
+                  created: 1755177025,
+                  owned_by: 'openai',
+                },
+              ],
+            }),
+          },
+        } as any;
+
+        mockProcessMultiProviderModelList.mockResolvedValue([]);
+
+        await params.models({ client: mockClient });
+
+        expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+          [
+            expect.objectContaining({
+              id: 'openai/gpt-4o-mini',
+              reasoning: undefined,
+              video: undefined,
+              vision: undefined,
+            }),
+          ],
+          'zenmux',
+        );
+      });
+
       it('should handle empty model list', async () => {
         const mockClient = {
           apiKey: 'test-key',

@@ -26,15 +26,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Import AFTER the mocks so the singleton logger and electron stub are wired.
 const { BinaryManager, defineCommandBinary } = await import('../BinaryManager');
 

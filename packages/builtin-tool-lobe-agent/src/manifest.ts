@@ -8,7 +8,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Analyze audio, images, or videos selected by media file refs or direct media URLs and answer a question about them. Prefer the active model's native multimodal capability when it can inspect the media directly; use this tool only as a fallback when the active model lacks the required audio, image, or video capability. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.audio_1, msg_xxx.image_1, or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
+        "Analyze audio, images, or videos selected by media file refs or direct media URLs and answer a question about them. Prefer the active model's native multimodal capability when it can inspect the media directly; use this tool only as a fallback when the active model lacks the required audio, image, or video capability. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.audio_1, msg_xxx.image_1, or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. For media stored on a local filesystem, never pass an OS path or file:// URL through urls and never convert or copy the media as base64 text. If this fallback is needed, first use an available local file-reading tool to upload the media, then pass its stable ref through refs. After this tool returns, answer the user directly with the result.",
       name: LobeAgentApiName.analyzeMedia,
       parameters: {
         additionalProperties: false,
@@ -19,7 +19,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
           refs: {
             description:
-              'Stable media file ref strings to analyze, such as ["msg_xxx.audio_1"], ["msg_xxx.image_1"], or ["msg_xxx.video_1"].',
+              'Stable media file ref strings from <files_info>, including refs created for media uploaded by local file-reading tools, such as ["msg_xxx.audio_1"], ["msg_xxx.image_1"], or ["msg_xxx.video_1"].',
             items: {
               type: 'string',
             },
@@ -28,7 +28,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
           urls: {
             description:
-              'Direct audio, image, or video URLs to analyze when no message file ref exists.',
+              'Direct provider-readable HTTP(S) or data URLs to analyze when no stable media ref exists. Local filesystem paths and file:// URLs are unsupported; use an available local file-reading tool first, then pass its stable ref through refs.',
             items: {
               type: 'string',
             },

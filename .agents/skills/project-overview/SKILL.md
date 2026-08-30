@@ -56,7 +56,6 @@ git submodules.
 ├── apps/
 │   ├── cli/                  # LobeHub CLI
 │   ├── desktop/              # Electron desktop app
-│   ├── device-gateway/       # Device gateway service
 │   └── server/               # Next.js-backed server (`@/server/*` alias)
 │       └── src/
 │           ├── router-hono/  # Hono endpoint routers and standalone runtime

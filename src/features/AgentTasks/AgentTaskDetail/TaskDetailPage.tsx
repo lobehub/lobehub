@@ -104,7 +104,10 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
         }}
       />
       <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
-        <WideScreenContainer fullWidth paddingInline={16}>
+        {/* Detail is prose — instruction, deliverables, activity — so it keeps the
+            centered reading column rather than the list page's full-bleed rows,
+            whose value is the horizontal room for their metadata columns. */}
+        <WideScreenContainer>
           {isInitialLoading ? <TaskDetailSkeleton /> : <TaskDetailSections />}
         </WideScreenContainer>
       </Flexbox>

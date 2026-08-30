@@ -1,5 +1,10 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyReviewPrediction,
+  REVIEW_PREDICT_PROMPT_VERSION,
+  REVIEW_PREDICTION_JSON_SCHEMA,
+} from '@lobechat/prompts';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import debug from 'debug';
 
@@ -13,9 +18,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { buildReviewPredictPrompt, REVIEW_PREDICT_PROMPT_VERSION } from './prompts';
 import type { RawReviewPrediction } from './schema';
-import { REVIEW_PREDICTION_JSON_SCHEMA, ReviewPredictionSchema } from './schema';
+import { ReviewPredictionSchema } from './schema';
 
 const log = debug('lobe-server:verify-review-predictor');
 
@@ -75,6 +79,23 @@ export const shouldSurfaceProposal = <
   prediction.action === 'reject' && !hasUserReview && !prediction.adjudication;
 
 /**
+ * Whether a stored row is the opinion of the reviewer currently in service.
+ *
+ * Rows from an earlier pin (a different model, or an older prompt version)
+ * stay in the table for the comparison set, but they are not what the page
+ * shows or what a fresh request is waiting on: reading the newest row across
+ * models let a stale verdict satisfy "the batch finished" the moment the
+ * current model's row was cleared for re-judging.
+ */
+export const isCurrentReviewPrediction = (
+  prediction: { model: string; promptVersion: string; provider: string },
+  modelConfig: { model: string; provider: string },
+): boolean =>
+  prediction.provider === modelConfig.provider &&
+  prediction.model === modelConfig.model &&
+  prediction.promptVersion === REVIEW_PREDICT_PROMPT_VERSION;
+
+/**
  * Produces an automated second opinion on a check the verifier already judged.
  *
  * Deliberately a SHADOW lane: the verdict lands in `verify_review_predictions`
@@ -104,6 +125,20 @@ export class VerifyReviewPredictorService {
     this.documentModel = new DocumentModel(db, userId, workspaceId);
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
+  }
+
+  /**
+   * Forget the unanswered attempts a new batch is about to replace, so that a
+   * missing row means "not judged yet" for every check in the batch. Called
+   * BEFORE the batch is dispatched — the reset is what lets a poller tell a
+   * finished batch from the previous run's leftovers.
+   */
+  async resetPending(checkResultIds: string[], modelConfig: { model: string; provider: string }) {
+    await this.predictionModel.resetUnadjudicated(checkResultIds, {
+      model: modelConfig.model,
+      promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
+      provider: modelConfig.provider,
+    });
   }
 
   /**
@@ -151,7 +186,7 @@ export class VerifyReviewPredictorService {
       ? ((await this.documentModel.findById(params.instructionDocumentId))?.content ?? undefined)
       : undefined;
 
-    const { system, user } = buildReviewPredictPrompt({
+    const chain = chainVerifyReviewPrediction({
       instruction,
       requirement: params.requirement ?? undefined,
       surface: params.surface ?? undefined,
@@ -159,7 +194,7 @@ export class VerifyReviewPredictorService {
       toulmin: (result.toulmin ?? undefined) as
         { evidence?: string; reasoning?: string } | undefined,
       verdict: result.verdict ?? undefined,
-      visuals: visuals.map((visual) => visual.description ?? ''),
+      visuals,
     });
 
     const startedAt = Date.now();
@@ -168,19 +203,7 @@ export class VerifyReviewPredictorService {
       const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
       raw = await ai.generateObject(
         {
-          messages: [
-            { content: system, role: 'system' as const },
-            {
-              content: [
-                { text: user, type: 'text' as const },
-                ...visuals.map((visual) => ({
-                  image_url: { detail: 'high' as const, url: visual.accessUrl },
-                  type: 'image_url' as const,
-                })),
-              ],
-              role: 'user' as const,
-            },
-          ],
+          ...chain,
           model: modelConfig.model,
           provider: modelConfig.provider,
           schema: REVIEW_PREDICTION_JSON_SCHEMA,

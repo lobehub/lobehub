@@ -237,4 +237,29 @@ describe('TraeAcpAdapter', () => {
       { reason: 'interrupted', stopReason: 'cancelled' },
     ]);
   });
+
+  it('parameterizes provider, event prefix, and per-payload identifier for other ACP agents', () => {
+    const adapter = new TraeAcpAdapter({ eventPrefix: 'cursor', provider: 'cursor' });
+    adapter.adapt({ sessionId: 'cursor-session-1', type: 'cursor_session' });
+
+    const events = [
+      ...adapter.adapt({
+        identifier: 'claude-code',
+        rawInput: { questions: [] },
+        sessionUpdate: 'tool_call',
+        title: 'askUserQuestion',
+        toolCallId: 'ask-1',
+      }),
+      ...adapter.adapt({ stopReason: 'end_turn', type: 'cursor_prompt_completed' }),
+    ];
+
+    expect(adapter.sessionId).toBe('cursor-session-1');
+    expect(dataFor(events, 'stream_start')).toEqual([
+      { provider: 'cursor', sessionId: 'cursor-session-1' },
+    ]);
+    expect(dataFor(events, 'tool_start')[0]).toMatchObject({
+      toolCalling: { apiName: 'askUserQuestion', id: 'ask-1', identifier: 'claude-code' },
+    });
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([{ stopReason: 'end_turn' }]);
+  });
 });

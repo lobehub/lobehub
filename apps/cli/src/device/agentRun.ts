@@ -4,6 +4,7 @@ import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
+import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
 
 export interface SpawnHeteroAgentRunParams {
   agentType: string;
@@ -16,10 +17,14 @@ export interface SpawnHeteroAgentRunParams {
   jwt: string;
   operationId: string;
   prompt: string;
+  /** System context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   serverUrl: string;
   systemContext?: string;
   topicId: string;
+  /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
+  workspaceId?: string;
 }
 
 export interface AgentRunAckResult {
@@ -43,11 +48,9 @@ interface SpawnHeteroAgentRunLogger {
  * detached `lh connect --daemon` child where `PATH` may be minimal.
  *
  * Resolves only once the child's outcome is known: `accepted` on the `spawn`
- * event, `rejected` on an early `error`. `spawn()` reports failures (missing or
- * inaccessible `cwd`, etc.) asynchronously via `error`, so acking eagerly would
- * report a false success and leave the run with no process to emit
- * `heteroFinish` — surfacing as a stuck assistant message. A rejected ack
- * instead flows back as a dispatch failure the user can see.
+ * event, `rejected` on an early wrapper-process `error`. A missing target cwd
+ * is handled inside `lh hetero exec`, which can classify it and emit
+ * `heteroFinish`; other wrapper spawn failures flow back as rejected dispatches.
  */
 export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
@@ -62,12 +65,18 @@ export function spawnHeteroAgentRun(
     jwt,
     operationId,
     prompt,
+    resumeFallbackSystemContext,
     resumeSessionId,
     serverUrl,
     systemContext,
     topicId,
+    workspaceId,
   } = params;
   const workDir = cwd ?? process.cwd();
+  // A stale project path must not prevent the wrapper CLI from starting: the
+  // inner spawnAgent preflight owns cwd classification and reports the
+  // structured working_directory_not_found error through heteroFinish.
+  const spawnCwd = resolveHeteroSpawnCwd(workDir);
 
   // Server-ingest mode (--topic + --operation-id): events are batch-POSTed to
   // the server, not rendered. `--input-json -` reads the prompt from stdin.
@@ -95,7 +104,12 @@ export function spawnHeteroAgentRun(
   // array: context block first, then the user's prompt, then images — mirrors
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
-  const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+  const stdinPayload = buildHeteroExecStdinPayload({
+    imageList,
+    prompt,
+    resumeFallbackSystemContext,
+    systemContext,
+  });
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;
@@ -106,12 +120,13 @@ export function spawnHeteroAgentRun(
     };
 
     const child = spawn(process.execPath, [...process.execArgv, ...cliArgs], {
-      cwd: workDir,
+      cwd: spawnCwd,
       env: {
         ...process.env,
         ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
         LOBEHUB_JWT: jwt,
         LOBEHUB_SERVER: serverUrl,
+        ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
       },
       stdio: ['pipe', 'inherit', 'inherit'],
     });

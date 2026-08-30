@@ -15,27 +15,6 @@ const createState = (taskDetailMap: Record<string, any>) => ({
   taskDetailMap,
 });
 
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => <span>icon</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('antd', () => ({
-  Breadcrumb: ({ items }: { items: Array<{ key?: string; title: ReactNode }> }) => (
-    <nav>
-      {items.map((item, index) => (
-        <span data-testid="crumb" key={item.key ?? index}>
-          {item.title}
-        </span>
-      ))}
-    </nav>
-  ),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
   useParams: () => ({}),

@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "Kết nối đến máy chủ đã hết thời gian chờ. Điều này thường cho thấy vấn đề với mạng cục bộ — vui lòng kiểm tra chất lượng mạng, proxy hoặc cài đặt VPN của bạn và thử lại.",
   "response.RemoteServerUnreachable": "Không thể kết nối đến máy chủ. Điều này thường cho thấy vấn đề với mạng cục bộ — vui lòng kiểm tra kết nối internet, proxy hoặc cài đặt VPN của bạn và thử lại.",
   "response.ServerAgentRuntimeError": "Xin lỗi, dịch vụ Agent hiện không khả dụng. Vui lòng thử lại sau hoặc liên hệ với chúng tôi qua email để được hỗ trợ.",
-  "response.SubscriptionKeyMismatch": "Chúng tôi xin lỗi vì sự bất tiện. Do sự cố hệ thống tạm thời, việc sử dụng gói đăng ký hiện tại của bạn đang bị gián đoạn. Vui lòng nhấn nút bên dưới để khôi phục hoặc liên hệ với chúng tôi qua email.",
   "response.SubscriptionPlanLimit": "Điểm gói đăng ký của bạn đã hết, bạn không thể sử dụng tính năng này. Vui lòng nâng cấp gói hoặc cấu hình API mô hình tùy chỉnh.",
   "response.SubscriptionPlanLimitUltimate": "Điểm gói đăng ký của bạn đã hết, bạn không thể sử dụng tính năng này. Vui lòng nạp thêm điểm hoặc cấu hình API mô hình tùy chỉnh.",
   "response.SystemTimeNotMatchError": "Xin lỗi, thời gian hệ thống của bạn không khớp với máy chủ. Vui lòng kiểm tra lại thời gian hệ thống và thử lại.",

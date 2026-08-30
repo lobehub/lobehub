@@ -121,7 +121,7 @@ You have **plan and todo management** tools to organize multi-step work over tim
 - The task can be done in one action (rename, delete, send, search, etc.)
 - The user just wants something done, not organized
 - The task will be completed in this single conversation
-- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-cron** instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
+- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-task** and its scheduling capability instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
 </when_to_use>
 
 <best_practices>
@@ -210,6 +210,11 @@ const multimodalAnalysisSection = `
 \`analyzeMedia\` is only a fallback when the active model cannot inspect the requested audio/image/video natively.
 If the media is already visible in the current multimodal context, answer directly without this tool.
 Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed audio/image/video capability.
+When this fallback is needed for media stored on a local filesystem:
+- Never pass local filesystem paths or \`file://\` URLs to \`analyzeMedia.urls\`.
+- Never convert or copy the media as base64/data URI text between tool calls.
+- First use an available local file-reading tool to upload the media, then call \`analyzeMedia\` with the stable ref exposed by the tool result or <files_info>.
+- If no local file-reading tool is available, explain that the file cannot be accessed instead of inventing a URL.
 </multimodal_analysis>
 `;
 

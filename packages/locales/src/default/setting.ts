@@ -72,24 +72,34 @@ export default {
   'accountDeletion.workspaceBlocked.title': 'Transfer your workspaces first',
   'advancedSettings': 'Advanced Settings',
   'artworkStudio.cancel': 'Cancel generation',
+  'artworkStudio.composition.avatar': 'Avatar',
+  'artworkStudio.composition.fullBody': 'Full body',
+  'artworkStudio.direction.placeholder':
+    'Add a detail — "a boy with glasses", "cyberpunk mechanic" (optional)',
   'artworkStudio.diyTitle': 'Make your own',
   'artworkStudio.enableModel': 'Enable a model',
-  'artworkStudio.generate': 'Generate avatar',
+  'artworkStudio.generate.avatar': 'Generate',
+  'artworkStudio.generate.fullBody': 'Generate',
+  'artworkStudio.generate.characterSet': 'Generate both images',
+  'artworkStudio.framePreview': 'Preview what home shows',
   'artworkStudio.generateFailed': 'Could not generate the image. Try again.',
   'artworkStudio.generateTitle': 'Generate with AI',
   'artworkStudio.generatingHint':
     'This usually takes about 60 seconds. You can keep editing while it finishes.',
-  'artworkStudio.lobeStyle': 'Lobe official style',
-  'artworkStudio.moreStyles': 'More styles',
   'artworkStudio.noModel': 'Enable an image generation model to use one-click generation.',
-  'artworkStudio.recommended': 'Recommended',
-  'artworkStudio.style.clay': '3D Clay',
-  'artworkStudio.style.geometric': 'Flat Geometric',
-  'artworkStudio.style.lobe': 'Soft 3D mascot with a bold color backdrop',
+  'artworkStudio.reference.remove': 'Remove reference',
+  'artworkStudio.reference.title': 'Reference',
+  'artworkStudio.remove': 'Remove',
+  'artworkStudio.style.anime': 'Anime',
+  'artworkStudio.style.lineArt': 'Hand-drawn Lines',
+  'artworkStudio.style.lobe': 'Lobe Style',
+  'artworkStudio.style.painterly': 'Hand-painted',
   'artworkStudio.style.pixel': 'Pixel Art',
-  'artworkStudio.style.sticker': 'Sticker',
-  'artworkStudio.style.watercolor': 'Watercolor',
-  'artworkStudio.upload': 'Upload image',
+  'artworkStudio.style.title': 'Style',
+  'artworkStudio.upload': 'Upload',
+  'artworkStudio.uploadSpec.avatar': '1:1 · PNG / JPG ≤ 1 MB',
+  'artworkStudio.uploadSpec.fullBody': '3:4 · transparent PNG ≤ 1 MB',
+  'artworkStudio.preview.fullBody': 'Full-body character preview',
   'agentCronJobs.addJob': 'Add Scheduled Task',
   'agentCronJobs.clearTopics': 'Clear Topics',
   'agentCronJobs.clearTopicsFailed': 'Failed to clear topics',
@@ -253,6 +263,24 @@ export default {
     'Your member permission here is "Can use" — you can view and use it, but not edit. Ask the creator or a workspace owner for edit access.',
   'permission.accessTag.viewOnlyTip':
     'Your member permission here is "Can view" — you can view it, but not use or edit. Ask the creator or a workspace owner for more access.',
+  'permission.collaborators.add': 'Add',
+  'permission.collaborators.addModal.confirm': 'Add',
+  'permission.collaborators.addModal.confirmCount_one': 'Add {{count}} member',
+  'permission.collaborators.addModal.confirmCount_other': 'Add {{count}} members',
+  'permission.collaborators.addModal.empty': 'No members available to add',
+  'permission.collaborators.addModal.noMatch': 'No matching members',
+  'permission.collaborators.addModal.search': 'Search members',
+  'permission.collaborators.addModal.selectionLimit':
+    'You can add up to {{count}} members at a time',
+  'permission.collaborators.addModal.selectedCount_one': '{{count}} member selected',
+  'permission.collaborators.addModal.selectedCount_other': '{{count}} members selected',
+  'permission.collaborators.addModal.title': 'Add collaborators',
+  'permission.collaborators.empty': 'No collaborators yet',
+  'permission.collaborators.libraryDesc':
+    'Collaborators can open this knowledge base and view the files inside even when the access level is "No access"',
+  'permission.collaborators.remove': 'Remove',
+  'permission.collaborators.removeConfirmTitle': 'Remove {{name}}?',
+  'permission.collaborators.title': 'Collaborators',
   'permission.generalAccess.trigger': 'Members: {{level}}',
   'permission.generalAccess.editable': 'Can edit',
   'permission.generalAccess.editableDesc': 'Members can view, use, and edit',
@@ -319,6 +347,12 @@ export default {
   'permission.page.groupModelPolicyFixedDesc':
     'Members can only use the model you set for this group',
   'permission.page.groupModelPolicyMemberDesc': 'Members can use a model they set themselves',
+  'permission.page.groupTopicSharePolicyDesc':
+    "Whether members can publish share links for this group's topics.",
+  'permission.page.groupTopicSharePolicyMemberDesc':
+    "Members can publish share links for any of this group's topics",
+  'permission.page.groupTopicSharePolicyRestrictedDesc':
+    'Only you and workspace owners can publish share links for this group',
   'permission.page.memberGroup': 'Access',
   'permission.page.modelPolicyFixedDesc': 'Members can only use the model you set',
   'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',
@@ -330,6 +364,12 @@ export default {
   'permission.page.privateNotice':
     'This agent is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.title': 'Permissions',
+  'permission.page.topicSharePolicyDesc':
+    "Whether members can publish share links for this agent's topics.",
+  'permission.page.topicSharePolicyMemberDesc':
+    "Members can publish share links for any of this agent's topics",
+  'permission.page.topicSharePolicyRestrictedDesc':
+    'Only you and workspace owners can publish share links',
   'permission.page.usableWhenShared': 'Can use when shared',
   'permission.page.viewableWhenShared': 'Can view when shared',
   'permission.saveNoEditPermission':
@@ -360,6 +400,37 @@ export default {
 
   // Heterogeneous agent CLI status (shown on agent profile page in integration mode)
   'heterogeneousStatus.account.label': 'Account',
+  'heterogeneousStatus.apiMode.configureProvider': 'Go to provider settings',
+  'heterogeneousStatus.apiMode.enableInLabs': 'Enable in Labs',
+  'heterogeneousStatus.apiMode.labDisabled':
+    'API mode is a Labs experiment. Enable it to use the LobeHub default provider or a configured API provider instead of the agent subscription.',
+  'heterogeneousStatus.apiMode.localOnly': 'Available only for Desktop local execution',
+  'heterogeneousStatus.apiMode.defaultProvider': 'LobeHub',
+  'heterogeneousStatus.apiMode.model': 'Model',
+  'heterogeneousStatus.apiMode.modelPlaceholder': 'Select a model',
+  'heterogeneousStatus.apiMode.noProviders':
+    'No enabled provider with an Anthropic-compatible endpoint is configured.',
+  'heterogeneousStatus.apiMode.noResponsesProviders':
+    'No enabled provider with an explicitly supported Responses API endpoint is configured.',
+  'heterogeneousStatus.apiMode.smallFastModel': 'Background model',
+  'heterogeneousStatus.apiMode.smallFastModelDesc':
+    'Used for session titles, summaries, and other background work. Does not change the main conversation.',
+  'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
+  'heterogeneousStatus.apiMode.provider': 'Provider',
+  'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
+  'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
+  'heterogeneousStatus.apiMode.serverDefault.disabled':
+    'The deployment administrator has disabled the default API provider for heterogeneous agents.',
+  'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration':
+    'The deployment provider or its compatible models are not configured.',
+  'heterogeneousStatus.apiMode.serverDefault.loadFailed':
+    'Could not check the deployment provider.',
+  'heterogeneousStatus.apiMode.serverDefault.noModels':
+    'No compatible models are available from the deployment provider.',
+  'heterogeneousStatus.apiMode.serverDefault.retry': 'Retry',
+  'heterogeneousStatus.apiMode.serverDefault.unsupported':
+    'The deployment provider does not expose a compatible model for this CLI.',
   'heterogeneousStatus.auth.api': 'API',
   'heterogeneousStatus.auth.label': 'Auth Method',
   'heterogeneousStatus.auth.subscription': 'Subscription',
@@ -594,6 +665,29 @@ export default {
   'devices.visibilityTabs.private': 'Private',
   'devices.visibilityTabs.workspace': 'Workspace',
   'devices.workingDirectory': 'Working dir: {{path}}',
+  'apps.cli.copied': 'Copied',
+  'apps.cli.copy': 'Copy',
+  'apps.cli.desc': 'Scripts, cron jobs, and headless agents — the same LobeHub, from any terminal.',
+  'apps.cli.title': 'CLI',
+  'apps.desktop.cta': 'Get desktop app',
+  'apps.desktop.desc': 'Chat, build, and automate in one app, with full access to this machine:',
+  'apps.desktop.features.files.desc': 'read, write, and organize your folders',
+  'apps.desktop.features.files.label': 'Local files',
+  'apps.desktop.features.focus.desc': 'a dedicated window, away from browser tabs',
+  'apps.desktop.features.focus.label': 'Focused work',
+  'apps.desktop.features.tools.desc': 'screenshots, notifications, shell',
+  'apps.desktop.features.tools.label': 'System tools',
+  'apps.desktop.inUse': 'In use',
+  'apps.desktop.inUseDesc': "You're already in the desktop app.",
+  'apps.desktop.title': 'Desktop',
+  'apps.messenger.desc':
+    'Talk to your agents where your team already is — replies land back in LobeHub.',
+  'apps.messenger.setup': 'Set up',
+  'apps.messenger.title': 'Messenger',
+  'apps.mobile.cta': 'Get mobile app',
+  'apps.mobile.desc': 'Pick up where you left off — your chats, agents, and files travel with you.',
+  'apps.mobile.title': 'Mobile',
+  'apps.title': 'Do more with LobeHub, everywhere you work',
   'checkingPermissions': 'Checking permissions...',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
@@ -739,15 +833,23 @@ export default {
   'notification.category.agent.title': 'Agent',
   'notification.category.billing.title': 'Billing',
   'notification.category.generation.title': 'Generation',
+  'notification.category.mention.title': 'Mentions',
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.category.workspace.title': 'Workspace',
+  'notification.item.agent_cron_job_completed': 'Scheduled task completed',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',
   'notification.item.agent_run_completed': 'Agent task completed',
+  'notification.item.agent_transfer_result': 'Transfer request result',
   'notification.item.credit_balance_low': 'Credit balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
   'notification.item.subscription_payment_failed': 'Subscription renewal payment failed',
+  'notification.item.subscription_plan_changed': 'Subscription plan changed',
+  'notification.item.subscription_renewed': 'Subscription renewed',
+  'notification.item.topic_comment_activity': 'Comment activity',
+  'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
+  'notification.item.workspace_credit_balance_low': 'Workspace credits running low',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
   'notification.item.workspace_member_removed': 'Removed from workspace',
@@ -796,7 +898,7 @@ export default {
   'plugin.store': 'Skill Store',
   'settingAgent.avatar.sizeExceeded': 'Image size exceeds 1MB limit, please choose a smaller image',
   'settingAgent.avatar.title': 'Avatar',
-  'settingAgent.artwork.avatar.generating': 'Creating an avatar that matches this Agent…',
+  'settingAgent.artwork.avatar.generating': 'Creating an image that matches this Agent…',
   'settingAgent.artwork.avatar.image': 'AI avatar',
   'settingAgent.artwork.background.empty': 'Add a background to give this Agent a visual identity',
   'settingAgent.artwork.background.emptyHint': 'Add a cover image',
@@ -905,6 +1007,11 @@ export default {
   'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': 'Locked when shared',
   'settingAgent.selectionPolicy.membersCanSwitch': 'Can switch',
   'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Can switch when shared',
+  // Not a Can-switch / Locked pair like the policies above: sharing is a
+  // capability rather than a setting members flip, so the labels name who holds it.
+  'settingAgent.topicSharePolicy.membersCanShare': 'Members can share',
+  'settingAgent.topicSharePolicy.membersCannotShare': 'Creator and owners only',
+  'settingAgent.topicSharePolicy.title': 'Topic sharing',
   'settingAgent.toolsConfig.title': 'Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
@@ -925,6 +1032,21 @@ export default {
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
   'settingAppearance.desktop.title': 'Desktop',
+  'settingAppearance.font.fontFamily.default': 'System Default',
+  'settingAppearance.font.fontFamily.desc':
+    'Choose a font installed on this device for the whole interface. System Default follows the built-in font stack of your current language.',
+  'settingAppearance.font.fontFamily.loadError':
+    'System fonts could not be loaded. System Default remains available.',
+  'settingAppearance.font.fontFamily.title': 'Interface Font',
+  'settingAppearance.font.fontFamily.unavailable': '{{font}} (Unavailable on this device)',
+  'settingAppearance.font.monospace.default': 'System Default',
+  'settingAppearance.font.monospace.desc':
+    'Used by code blocks and the built-in terminal. Choose a monospaced font installed on this device.',
+  'settingAppearance.font.monospace.loadError':
+    'System fonts could not be loaded. System Default remains available.',
+  'settingAppearance.font.monospace.title': 'Monospace Font',
+  'settingAppearance.font.monospace.unavailable': '{{font}} (Unavailable on this device)',
+  'settingAppearance.font.title': 'Font',
   'settingAppearance.neutralColor.desc': 'Custom grayscale with different color tendencies',
   'settingAppearance.neutralColor.title': 'Neutral Color',
   'settingAppearance.noAnimation.desc': 'Disable all animation effects in the application',
@@ -932,14 +1054,6 @@ export default {
   'settingAppearance.preview.title': 'Color Palette',
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
-  'settingAppearance.terminal.fontFamily.desc':
-    'Choose a monospaced font installed on this device. Select Application Default to use the application code font.',
-  'settingAppearance.terminal.fontFamily.default': 'Application Default',
-  'settingAppearance.terminal.fontFamily.loadError':
-    'System fonts could not be loaded. Application Default remains available.',
-  'settingAppearance.terminal.fontFamily.title': 'Monospace Font',
-  'settingAppearance.terminal.fontFamily.unavailable': '{{font}} (Unavailable on this device)',
-  'settingAppearance.terminal.title': 'Terminal',
   'settingAppearance.title': 'Application Appearance',
   'settingChat.chatStyleType.title': 'Chat Window Style',
   'settingChat.chatStyleType.type.chat': 'Conversation Mode',
@@ -1440,6 +1554,12 @@ When I am ___, I need ___
   'systemAgent.agentMeta.modelDesc':
     'Model used to generate names, descriptions, avatars, and tags',
   'systemAgent.agentMeta.title': 'Profile Generation',
+  'systemAgent.expertise.modelDesc':
+    'Model used to draft expertise domains and extract reusable experience from conversations.',
+  'systemAgent.expertise.title': 'Agent Self-Evolution',
+  'systemAgent.goal.modelDesc':
+    'Model used to turn a persistent goal into its standing acceptance criteria.',
+  'systemAgent.goal.title': 'Goal Creation',
   'systemAgent.customPrompt.addPrompt': 'Add Custom Prompt',
   'systemAgent.customPrompt.desc':
     'Once filled out, the system agent will use the custom prompt when generating content',
@@ -2450,7 +2570,7 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.memberGroup': 'Workspace members',
   'workspace.general.transferAgents.modal.moveAgent': 'Move Agent',
   'workspace.general.transferAgents.modal.moveAgentDesc':
-    'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, file and knowledge base links, scheduled jobs, and related tasks. Custom plugins may not be available and multi-agent group associations will be removed.',
+    'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, documents, custom plugins, file and knowledge base links, scheduled jobs, and related tasks. Multi-agent group associations will be removed, and moved connectors may need to be reauthorized.',
   'workspace.general.transferAgents.modal.moveTitle': 'Move',
   'workspace.general.transferAgents.modal.noAgents': 'No agents in this workspace',
   'workspace.general.transferAgents.modal.requestSent': 'Transfer request sent',
@@ -2468,7 +2588,7 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.title': 'Move Agents',
   'workspace.general.transferAgents.modal.transfer': 'Move {{count}} agent(s)',
   'workspace.general.transferAgents.modal.warning':
-    'Custom plugins may not be available and multi-agent group associations will be removed.',
+    'Multi-agent group associations will be removed, and moved connectors may need to be reauthorized.',
   'workspace.general.transferAgents.personalAccount': 'Personal Account',
   'workspace.general.transferScope.private.desc': 'Only accessible to you',
   'workspace.general.transferScope.private.label': 'Private',
@@ -2734,6 +2854,8 @@ When I am ___, I need ___
   'workspace.waitlistPage.enabledTitle': 'Workspace is ready for you',
   'workspace.waitlistPage.entryCta': 'Join Workspace Beta',
   'workspace.waitlistPage.goHome': 'Back to LobeHub',
+  'workspace.waitlistPage.learnMore': 'Learn more about Workspace',
+  'workspace.waitlistPage.learnMoreNewTabHint': 'Opens in a new tab',
   'workspace.waitlistPage.organizationLabel': 'Organization / Group (optional)',
   'workspace.waitlistPage.organizationPlaceholder': 'Company, school, or family…',
   'workspace.waitlistPage.pendingSubtitle':
@@ -3029,6 +3151,9 @@ When I am ___, I need ___
     'Only workspace owners can do this. Ask an owner if you need this changed.',
   'workspace.permission.requiresPrimaryOwner':
     'Only the workspace Owner can delete this workspace. Transfer ownership first if needed.',
+  // Not a role gate: the agent's author reserved topic sharing on the Permission page.
+  'workspace.permission.topicShareRestricted':
+    'This agent only lets its creator and workspace owners share topics. Ask them if you need a link.',
   'workspace.onboarding.title': 'Set up your workspace',
   'workspace.onboarding.stepLabel': 'Step {{current}} of {{total}}',
   'workspace.onboarding.skip': 'Skip',
@@ -3266,9 +3391,6 @@ When I am ___, I need ___
   'tools.builtins.lobe-creds.description':
     'Manage user credentials for authentication, environment variable injection, and API verification — handle API keys, OAuth tokens, and secrets for third-party integrations.',
   'tools.builtins.lobe-creds.title': 'Credentials',
-  'tools.builtins.lobe-cron.description':
-    'Manage scheduled tasks that run automatically at specified times. Create, update, enable/disable, and monitor recurring tasks for your agents.',
-  'tools.builtins.lobe-cron.title': 'Scheduled Tasks',
   'tools.builtins.lobe-group-agent-builder.description':
     'Configure group metadata, members, and shared content for multi-agent groups',
   'tools.builtins.lobe-group-agent-builder.title': 'Group Agent Builder',
@@ -3299,7 +3421,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-skills.description': 'Activate and use reusable skill packages',
   'tools.builtins.lobe-skills.title': 'Skills',
   'tools.builtins.lobe-task.description':
-    'Create, list, edit, and delete tasks with dependencies and review configuration',
+    'Create, schedule, list, edit, and delete tasks with dependencies and review configuration',
   'tools.builtins.lobe-task.title': 'Task Tools',
   'tools.builtins.lobe-topic-reference.description':
     'Retrieve context from referenced topic conversations',

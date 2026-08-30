@@ -20,6 +20,7 @@ import { briefIcon, priorityLabel, statusBadge } from './helpers';
 import { registerLifecycleCommands } from './lifecycle';
 import { registerReviewCommands } from './review';
 import { registerTopicCommands } from './topic';
+import { resolveAppUrlBuilder } from './url';
 
 export function registerTaskCommand(program: Command) {
   const task = program.command('task').description('Manage agent tasks');
@@ -510,6 +511,7 @@ export function registerTaskCommand(program: Command) {
         priority?: string;
       }) => {
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
 
         const input: Record<string, any> = {
           instruction: options.instruction,
@@ -521,13 +523,15 @@ export function registerTaskCommand(program: Command) {
         if (options.prefix) input.identifierPrefix = options.prefix;
 
         const result = await client.task.create.mutate(input as any);
+        const url = buildUrl(`/task/${encodeURIComponent(result.data.identifier)}`);
 
         if (options.json !== undefined) {
-          outputJson(result.data, options.json);
+          outputJson({ ...result.data, url }, options.json);
           return;
         }
 
         log.info(`Task created: ${pc.bold(result.data.identifier)} ${result.data.name || ''}`);
+        console.log(`${pc.bold('task')}: ${url}`);
       },
     );
 

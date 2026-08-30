@@ -7,7 +7,11 @@ import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { GitMerge, GitPullRequestArrow, GitPullRequestClosed } from 'lucide-react';
 
-import { getConfigRepoType, getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
+import {
+  getConfigRepoType,
+  getWorkingDirectoryName,
+  isWorktreeCheckout,
+} from '@/helpers/workingDirectoryPath';
 
 export type PullRequestState = 'open' | 'merged' | 'closed';
 
@@ -49,8 +53,7 @@ export const getTopicMetaCard = (metadata: ChatTopicMetadata | undefined) => {
 
   const sourcePath = getTopicMetadataWorkingDirectorySourcePath(metadata);
   const effectivePath = getTopicMetadataWorkingDirectoryEffectivePath(metadata);
-  const isWorktree =
-    !!git.isWorktree || (!!git.activeWorktree && git.activeWorktree !== sourcePath);
+  const isWorktree = isWorktreeCheckout({ effectivePath, git, sourcePath });
 
   return {
     branch: git.branch,

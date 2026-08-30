@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "Sunucuya olan bağlantı zaman aşımına uğradı. Bu genellikle yerel ağ sorunlarını gösterir — lütfen ağ kalitenizi, proxy veya VPN ayarlarınızı kontrol edin ve tekrar deneyin.",
   "response.RemoteServerUnreachable": "Sunucuya ulaşılamadı. Bu genellikle yerel ağ sorunlarını gösterir — lütfen internet bağlantınızı, proxy veya VPN ayarlarınızı kontrol edin ve tekrar deneyin.",
   "response.ServerAgentRuntimeError": "Üzgünüz, Ajan hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin veya destek için bizimle iletişime geçin.",
-  "response.SubscriptionKeyMismatch": "Üzgünüz, geçici bir sistem arızası nedeniyle abonelik kullanımınız devre dışı. Lütfen aşağıdaki butona tıklayarak aboneliğinizi geri yükleyin veya destek için bizimle iletişime geçin.",
   "response.SubscriptionPlanLimit": "Abonelik puanlarınız tükendi, bu özelliği kullanamazsınız. Lütfen daha yüksek bir plana geçin veya özel model API yapılandırın.",
   "response.SubscriptionPlanLimitUltimate": "Abonelik puanlarınız tükendi, bu özelliği kullanamazsınız. Lütfen kredi yükleyin veya özel model API yapılandırın.",
   "response.SystemTimeNotMatchError": "Üzgünüz, sistem saatiniz sunucuyla eşleşmiyor. Lütfen sistem saatinizi kontrol edip tekrar deneyin.",

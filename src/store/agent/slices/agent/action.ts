@@ -1,5 +1,6 @@
 import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
@@ -13,8 +14,9 @@ import { useEffect } from 'react';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { nextProjectionObservedAt } from '@/projection/core/ingest';
@@ -33,6 +35,7 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { aiAgentService } from '@/services/aiAgent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
@@ -47,13 +50,23 @@ import type {
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -152,15 +165,28 @@ export class AgentSliceActionImpl {
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
     const projectionScope = getCacheScope();
-    // Seed a personal name so a new agent has an identity before the Agent
+    // Seed a default name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
+    //
+    // A heterogeneous agent never draws a random personal name. In personal or
+    // workspace-private scope its name is the product title; a shared workspace
+    // agent adds the creator so members can distinguish identical tools.
+    const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
       ...params.config,
-      name: params.config?.name || randomAgentName(locale),
+      name:
+        params.config?.name ||
+        (heteroProvider
+          ? heteroAgentDefaultName({
+              productTitle: params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+              visibility: params.visibility,
+              workspaceId: getActiveWorkspaceId(),
+            })
+          : randomAgentName(locale)),
     };
 
     const result = await agentService.createAgent({ ...params, config });
@@ -440,6 +466,11 @@ export class AgentSliceActionImpl {
     return request;
   };
 
+  useFetchServerDefaultHeterogeneousCapability = (enabled: boolean) =>
+    useClientDataSWR(enabled ? agentConfigKeys.serverDefaultHeterogeneousCapability() : null, () =>
+      aiAgentService.getServerDefaultHeterogeneousCapability(),
+    );
+
   /**
    * Re-trigger the agent config fetch after a failure. Clears the recorded
    * error first so consumers fall back to the loading skeleton, then
@@ -539,8 +570,7 @@ export class AgentSliceActionImpl {
   ): void => {
     const current = getAgentProjectionById(id);
     const agent = merge(current ?? {}, config) as PartialDeep<LobeAgentConfig>;
-    // merge() cannot drop keys. Preserve per-device delete markers so clearing
-    // a working directory takes effect in the optimistic Projection commit.
+    if (Object.hasOwn(config, 'profile')) agent.profile = config.profile;
     pruneWorkingDirByDeviceDeletes(agent.agencyConfig, config.agencyConfig);
 
     getProjectionStoreState().commitAgentConfig(

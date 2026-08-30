@@ -1,5 +1,6 @@
 import { SendButton, useEditor } from '@lobehub/editor/react';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { $getRoot } from 'lexical';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

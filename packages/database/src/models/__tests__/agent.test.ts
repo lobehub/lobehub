@@ -1190,6 +1190,25 @@ describe('AgentModel', () => {
   });
 
   describe('updateConfig', () => {
+    it('replaces the profile wholesale so a removed trait can be cleared', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({
+          profile: { artworkStyle: 'anime', fullBodyArtwork: 'https://cdn/full-body.png' },
+          userId,
+        })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { profile: { artworkStyle: 'anime' } });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.profile).toEqual({ artworkStyle: 'anime' });
+    });
+
     it('should update agent config and set updatedAt', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1211,6 +1230,148 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Updated Title');
       expect(result?.model).toBe('gpt-4');
       expect(result?.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+    });
+
+    it('should persist only reference fields in an API binding and clear fast model with null', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-primary',
+              providerId: 'anthropic',
+              smallFastModel: 'claude-fast',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              keyVaults: { apiKey: 'must-not-persist' },
+              model: 'claude-primary',
+              providerId: 'anthropic',
+              smallFastModel: null,
+            },
+          },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+        smallFastModel: null,
+      });
+    });
+
+    it('should preserve omitted API binding fields during same-provider partial updates', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-primary',
+              providerId: 'anthropic',
+              smallFastModel: 'claude-fast',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: { smallFastModel: 'claude-fast-updated' },
+          },
+        },
+      });
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: { model: 'claude-primary-updated' },
+          },
+        },
+      });
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary-updated',
+        providerId: 'anthropic',
+        smallFastModel: 'claude-fast-updated',
+      });
+    });
+
+    it('should not persist a client-selected provider for the deployment API binding', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              model: 'claude-server',
+              providerId: 'must-not-persist',
+              smallFastModel: 'must-not-persist',
+              source: 'server-default',
+            },
+          },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-server',
+        source: 'server-default',
+      });
+    });
+
+    it('should replace a deployment API binding when switching to a user provider', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-server',
+              source: 'server-default',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-primary',
+              providerId: 'anthropic',
+            },
+          },
+        },
+      });
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+      });
     });
 
     it('should update updatedAt even when only updating meta fields like avatar', async () => {
@@ -1393,6 +1554,28 @@ describe('AgentModel', () => {
   });
 
   describe('create', () => {
+    it('should strip secrets and unknown fields from an API binding', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              keyVaults: { apiKey: 'must-not-persist' },
+              model: 'claude-primary',
+              providerId: 'anthropic',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      } as any);
+
+      expect(agent.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+      });
+    });
+
     it('should persist explicit selection policy defaults only for workspace agents', async () => {
       const [workspace] = await serverDB
         .insert(workspaces)
@@ -1406,6 +1589,7 @@ describe('AgentModel', () => {
       expect(workspaceAgent.agencyConfig).toEqual({
         executionTargetSelectionPolicy: 'member',
         modelSelectionPolicy: 'member',
+        topicSharePolicy: 'member',
       });
       expect(personalAgent.agencyConfig).toBeNull();
     });
@@ -1425,6 +1609,30 @@ describe('AgentModel', () => {
       const agent = await agentModel.create({ slug: 'my-own-slug', title: 'Mine' });
 
       expect(agent.slug).toBe('my-own-slug');
+    });
+
+    it('should also strip API binding secrets from direct updates', async () => {
+      const agent = await agentModel.create({ title: 'API Agent' });
+
+      await agentModel.update(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              model: 'claude-primary',
+              providerId: 'anthropic',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+      });
     });
 
     // Identity / scope / provisioning fields feed authorization, so no update may
@@ -1596,6 +1804,7 @@ describe('AgentModel', () => {
         executionTarget: 'none',
         executionTargetSelectionPolicy: 'fixed',
         modelSelectionPolicy: 'member',
+        topicSharePolicy: 'member',
       });
     });
 
@@ -1827,6 +2036,7 @@ describe('AgentModel', () => {
         expect(result?.agencyConfig).toEqual({
           executionTargetSelectionPolicy: 'member',
           modelSelectionPolicy: 'member',
+          topicSharePolicy: 'member',
         });
       });
 

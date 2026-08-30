@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';

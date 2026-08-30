@@ -3,6 +3,7 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { resolveWorkspaceId } from '../api/workspace';
+import { CLI_PRODUCT_NAME } from '../constants/identity';
 import {
   type BoxTableRow,
   formatCost,
@@ -177,7 +178,11 @@ export function registerConfigCommand(program: Command) {
 
         const monthLabel = options.month || new Date().toISOString().slice(0, 7);
         const mode = options.daily ? 'Daily' : 'Monthly';
-        printBoxTable(columns, rows, `LobeHub Token Usage Report - ${mode} (${monthLabel})`);
+        printBoxTable(
+          columns,
+          rows,
+          `${CLI_PRODUCT_NAME} Token Usage Report - ${mode} (${monthLabel})`,
+        );
 
         // Calendar heatmap - fetch past 12 months
         const now = new Date();

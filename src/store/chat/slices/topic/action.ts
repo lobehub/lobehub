@@ -1,8 +1,12 @@
 // Note: To make the code more logic and readable, we just disable the auto sort key eslint rule
 // DON'T REMOVE THE FIRST LINE
-import { chainSummaryTitle } from '@lobechat/prompts';
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -22,7 +26,7 @@ import {
 } from '@/projection';
 import { type ChatTopicDispatch } from '@/projection/modules/chat/mutation';
 import { chatTopicsPageProjectionQuery } from '@/projection/modules/chat/queries';
-import { chatService } from '@/services/chat';
+import { aiChatService } from '@/services/aiChat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import type { TopicBatchDeleteScope } from '@/services/topic';
@@ -49,7 +53,6 @@ import {
   userProfileSelectors,
 } from '@/store/user/selectors';
 import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/types/topic';
-import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
@@ -298,44 +301,51 @@ export class ChatTopicActionImpl {
 
     // Keep an optimistic title like "阅读下面..." stable while AI rename runs;
     // otherwise the sidebar flickers `title -> ... -> final title`.
-    const shouldStreamSummaryTitle = !topic.title || topic.title === LOADING_FLAT;
+    const shouldShowPlaceholder = !topic.title || topic.title === LOADING_FLAT;
 
-    if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
+    if (shouldShowPlaceholder) internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
 
-    let output = '';
+    const restorePreviousTitle = () => {
+      if (shouldShowPlaceholder) internal_updateTopicTitleInSummary(topicId, topic.title);
+    };
 
     // Get current agent for topic
-    const topicConfig = systemAgentSelectors.topic(useUserStore.getState());
+    const { model, provider } = systemAgentSelectors.topic(useUserStore.getState());
 
-    // Automatically summarize the topic title
-    await chatService.fetchPresetTaskResult({
-      onError: () => {
-        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, topic.title);
-      },
-      onFinish: async (text) => {
-        await this.#get().internal_updateTopic(topicId, { title: text });
-      },
-      onMessageHandle: (chunk) => {
-        switch (chunk.type) {
-          case 'text': {
-            output += chunk.text;
-          }
-        }
+    // Structured generation, the same way `SystemAgentService.generateTopicTitle`
+    // does it: the chain asks for `TOPIC_TITLE_JSON_SCHEMA`, so read the title
+    // off the parsed object. Streaming a completion here used to write the raw
+    // answer to `topic.title`, which named topics `{"title":"简单问候"}`.
+    try {
+      const { data } = await aiChatService.generateJSON(
+        {
+          ...chainSummaryTitle(
+            messages,
+            userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
+          ),
+          model,
+          provider,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+            topicId,
+          },
+        },
+        new AbortController(),
+      );
 
-        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, output);
-      },
-      params: merge(
-        topicConfig,
-        chainSummaryTitle(
-          messages,
-          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
-        ),
-      ),
-      trace: this.#get().getCurrentTracePayload({
-        traceName: TraceNameMap.SummaryTopicTitle,
-        topicId,
-      }),
-    });
+      const title = (data as { title?: string } | undefined)?.title?.trim();
+      // An empty result must not blank the title — the placeholder would
+      // otherwise stay in the sidebar forever.
+      if (!title) return restorePreviousTitle();
+
+      await this.#get().internal_updateTopic(topicId, { title });
+    } catch (error) {
+      console.error('[summaryTopicTitle] failed to generate a title:', error);
+      restorePreviousTitle();
+    }
   };
 
   markTopicCompleted = async (id: string): Promise<void> => {
@@ -412,7 +422,7 @@ export class ChatTopicActionImpl {
    * Pin a model to a topic by writing the top-level `topics.model`/`provider`
    * columns (the config source of truth), NOT metadata. Called when the user
    * switches model while a topic is active so each topic keeps its own model
-   * (see the Model/ModelLabel controls); generation + ChatInput display read it
+   * (see the ChatInput Model control); generation + ChatInput display read it
    * back via `topicSelectors.getTopicModelById`.
    */
   updateTopicModel = async (
@@ -486,8 +496,7 @@ export class ChatTopicActionImpl {
     status: ChatTopicStatus;
     topicId: string;
   }): Promise<void> => {
-    const { topicId, status, agentId, groupId, scope } = params;
-    const state = this.#get();
+    const { topicId, status } = params;
     const topic = getChatTopicById(topicId);
     const projectionScope = getCacheScope();
 
@@ -496,6 +505,8 @@ export class ChatTopicActionImpl {
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
 
+    this.internal_pinTopicStatus(params);
+
     // "Archive" in the UI writes status:'completed'. Stamp `completedAt` on that
     // transition so bulk/stale archive records when the topic was completed,
     // matching the single-item `markTopicCompleted`. Other status transitions
@@ -503,16 +514,53 @@ export class ChatTopicActionImpl {
     const patch: Partial<ChatTopic> =
       status === 'completed' ? { completedAt: new Date(), status } : { status };
 
+    await topicService.updateTopic(topicId, patch).catch((err) => {
+      console.error('[updateTopicStatus] persist failed:', err);
+      getProjectionStoreState().clearChatTopicStatusWrite(projectionScope, topicId);
+      void mutate(projectionKeys.inboxTopics(projectionScope));
+    });
+  };
+
+  /**
+   * Local-only half of {@link updateTopicStatus}: registers the optimistic
+   * pending-write pin and dispatches the in-memory patch, without persisting
+   * to the server.
+   *
+   * For completion paths that already have their own ownership-guarded
+   * server write (e.g. the gateway transport's `settleRunningOperation`,
+   * compared under a row lock by operation id) and only need to mirror the
+   * outcome locally — calling `updateTopicStatus` there would add a second,
+   * unguarded `topicService.updateTopic` write that could stomp a newer run's
+   * status. Skipping the pin entirely instead (a bare `internal_dispatchTopic`)
+   * is also wrong: a topic-list refetch racing in behind this write has no
+   * signal that a fresher status just landed, and `#reconcileFetchedTopics`
+   * would happily reapply the older pending write (e.g. the 'running' pin set
+   * when the run started) right back over it, stranding the sidebar spinner
+   * again until that pin expires.
+   */
+  internal_pinTopicStatus = (params: {
+    agentId?: string;
+    groupId?: string;
+    scope?: TopicMapScope;
+    status: ChatTopicStatus;
+    topicId: string;
+  }): void => {
+    const { topicId, status, agentId, groupId, scope } = params;
+    const state = this.#get();
+    const topic = getChatTopicById(topicId);
+
+    if (topic?.status === status) return;
+
+    const patch: Partial<ChatTopic> =
+      status === 'completed' ? { completedAt: new Date(), status } : { status };
+
     getProjectionStoreState().pinChatTopicStatusWrite(
-      projectionScope,
+      getCacheScope(),
       topicId,
       status,
       Date.now() + 15_000,
     );
 
-    // Scope on the payload routes the write to the owning bucket inside
-    // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the DB
-    // write below still ensures the status sticks across the next refetch.
     state.internal_dispatchTopic({
       type: 'updateTopic',
       id: topicId,
@@ -520,15 +568,6 @@ export class ChatTopicActionImpl {
       agentId,
       groupId,
       scope,
-    });
-
-    await topicService.updateTopic(topicId, patch).catch((err) => {
-      console.error('[updateTopicStatus] persist failed:', err);
-      // The DB never got the write — stop pinning it over fetched rows.
-      getProjectionStoreState().clearChatTopicStatusWrite(projectionScope, topicId);
-      // Re-read the Home Topic fragment instead of leaving the optimistic
-      // canonical status authoritative after a rejected write.
-      void mutate(projectionKeys.inboxTopics(projectionScope));
     });
   };
 

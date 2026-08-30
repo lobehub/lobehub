@@ -8,6 +8,8 @@ import {
   GENERATE_SKILL_META_PROMPT_VERSION,
   GENERATE_SKILL_META_SCHEMA,
   GENERATE_SKILL_META_SCHEMA_NAME,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { UserSystemAgentConfig, UserSystemAgentConfigKey } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
@@ -20,19 +22,6 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveSystemAgentModelConfig } from './modelConfig';
 
 const log = debug('lobe-server:system-agent-service');
-
-const TOPIC_TITLE_SCHEMA = {
-  name: 'topic_title',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      title: { description: 'A concise topic title', type: 'string' },
-    },
-    required: ['title'],
-    type: 'object' as const,
-  },
-  strict: true,
-};
 
 /**
  * Server-side service for SystemAgent automated tasks.
@@ -86,11 +75,18 @@ export class SystemAgentService {
       );
       const result = await modelRuntime.generateObject(
         {
-          messages: payload.messages as any[],
+          messages: payload.messages,
           model,
-          schema: TOPIC_TITLE_SCHEMA,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
         },
-        { metadata: { trigger: RequestTrigger.Topic } },
+        {
+          metadata: { trigger: RequestTrigger.Topic },
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+          } satisfies TracingOptions,
+        },
       );
 
       const title = (result as { title?: string })?.title?.trim();

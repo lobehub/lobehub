@@ -1,7 +1,8 @@
 'use client';
 
-import { ActionIcon, Block, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button, Segmented } from '@lobehub/ui/base-ui';
+import type { GoalStatus } from '@lobechat/const/goal';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -11,17 +12,13 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useTaskGroupListProjection } from '@/projection/modules/task/viewHooks';
-import { useGoalStore } from '@/store/goal';
-import { useVerifyStore } from '@/store/verify';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
-import { getGoalPresentation } from './goalPresentation';
-import { shouldShowGoal } from './goalViewModel';
 
 const styles = createStaticStyles(({ css }) => ({
   countBadge: css`
@@ -65,6 +62,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/** Goals whose loop has stopped for good — hidden by the default "open" filter. */
+const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
+
 interface AgentGoalsPageProps {
   agentId?: string;
   projectId?: string;
@@ -75,44 +75,25 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
-  const projectionGroups = useTaskGroupListProjection({
-    agentKey: `${scopeId}:goals-page`,
-    visibility: 'all',
-  });
-  const goals = useMemo(() => projectionGroups?.[0]?.tasks ?? [], [projectionGroups]);
-  const isInitialized = projectionGroups !== undefined;
+  const goals = useGoalStore(goalSelectors.goalList(scopeId));
+  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(scopeId));
   const filter = useGoalStore((s) => s.goalListFilter);
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);
   const setFilter = useGoalStore((s) => s.setGoalListFilter);
   const setViewMode = useGoalStore((s) => s.setGoalViewMode);
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
-  const acceptanceBySubjectMap = useVerifyStore((s) => s.acceptanceBySubjectMap);
-  const acceptanceBundleMap = useVerifyStore((s) => s.acceptanceBundleMap);
   const { error, isLoading } = useFetchGoals(agentId, projectId);
   const summary = useMemo(() => {
-    const delivered = goals.filter((goal) => goal.status === 'completed').length;
+    const delivered = goals.filter(({ goal }) => goal.status === 'review').length;
 
     return { delivered, pursuing: goals.length - delivered, total: goals.length };
   }, [goals]);
   const filteredGoals = useMemo(() => {
     if (filter === 'all') return goals;
 
-    return goals.filter((goal) => {
-      const acceptance = acceptanceBySubjectMap[`task:${goal.id}`];
-      const bundle = acceptance ? acceptanceBundleMap[acceptance.id] : undefined;
-      const presentation = getGoalPresentation({
-        acceptanceStatus: bundle?.acceptance.status,
-        checks: bundle?.checks,
-        goalStatus: goal.goal?.status,
-        maxRounds: goal.goal?.maxRounds,
-        rounds: goal.totalTopics ?? 0,
-        taskStatus: goal.status,
-      });
-
-      return shouldShowGoal(presentation.statusKey, 'active');
-    });
-  }, [acceptanceBundleMap, acceptanceBySubjectMap, filter, goals]);
+    return goals.filter(({ goal }) => !TERMINAL_GOAL_STATUSES.has(goal.status));
+  }, [filter, goals]);
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
   const openCreateGoal = (seed?: GoalExampleSeed) => {
@@ -149,7 +130,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
         {isLoading && !isInitialized ? (
-          <GoalSkeleton showHeader={false} />
+          <GoalSkeleton chrome={'body'} />
         ) : error ? (
           <Block padding={32} variant={'outlined'}>
             <Flexbox align={'center'} gap={12}>
@@ -259,13 +240,8 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                 ) : (
                   filteredGoals
                     .slice(0, visibleLimit)
-                    .map((goal) => (
-                      <GoalItem
-                        hideAchieved={filter === 'active'}
-                        key={goal.id}
-                        projectId={projectId}
-                        task={goal}
-                      />
+                    .map((item) => (
+                      <GoalItem goal={item} key={item.goal.id} projectId={projectId} />
                     ))
                 )}
               </div>

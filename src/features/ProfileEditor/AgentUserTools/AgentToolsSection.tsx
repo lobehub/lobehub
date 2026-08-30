@@ -1,8 +1,8 @@
 'use client';
 
 import { upsertPluginMode } from '@lobechat/types';
-import { Dropdown, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Dropdown, Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon, PlugZapIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';

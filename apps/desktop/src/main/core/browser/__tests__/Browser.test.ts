@@ -113,16 +113,6 @@ vi.mock('electron', () => ({
   shell: mockShell,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock constants
 vi.mock('@/const/dir', () => ({
   buildDir: '/mock/build',
@@ -349,6 +339,32 @@ describe('Browser', () => {
         expect.objectContaining({
           height: 700,
           width: 900,
+        }),
+      );
+    });
+
+    it('should prefer the requested initial size when state restoration is disabled', () => {
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 700, width: 900 };
+        }
+        return undefined;
+      });
+
+      new Browser(
+        {
+          ...defaultOptions,
+          height: 954,
+          restoreWindowState: false,
+          width: 1432,
+        },
+        mockApp,
+      );
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 954,
+          width: 1432,
         }),
       );
     });

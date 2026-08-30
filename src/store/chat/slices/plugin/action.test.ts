@@ -33,8 +33,6 @@ vi.mock('@/utils/localStorage', () => {
   return { AsyncLocalStorage };
 });
 
-vi.mock('zustand/traditional');
-
 // Mock messageService
 vi.mock('@/services/message', () => ({
   messageService: {

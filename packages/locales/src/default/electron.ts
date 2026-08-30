@@ -7,6 +7,7 @@ export default {
   'navigation.discoverMcp': 'Discover MCP',
   'navigation.discoverModels': 'Discover Models',
   'navigation.discoverProviders': 'Discover Providers',
+  'navigation.apps': 'Apps',
   'navigation.group': 'Group',
   'navigation.groupChat': 'Group Chat',
   'navigation.groupProfile': 'Group Profile',
@@ -141,6 +142,7 @@ export default {
   'updater.downloadingUpdate': 'Downloading update',
   'updater.downloadingUpdateDesc': 'The update is downloading, please wait...',
   'updater.installLater': 'Update on next launch',
+  'updater.ignore': 'Ignore',
   'updater.isLatestVersion': 'You are using the latest version',
   'updater.isLatestVersionDesc':
     'Great! The version {{version}} you are using is the latest available.',

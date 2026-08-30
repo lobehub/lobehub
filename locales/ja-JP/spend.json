@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS（毎秒トークン数）：1秒あたりのトークン出力数",
+  "duration.TPS": "tok/s（毎秒トークン数）：1秒あたりのトークン出力数",
   "duration.TTFT": "TTFT（最初のトークンまでの時間）：最初のトークンの遅延時間",
   "duration.completion": "出力完了時間",
   "duration.latency": "所要時間",

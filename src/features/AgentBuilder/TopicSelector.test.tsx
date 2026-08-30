@@ -9,21 +9,15 @@ import TopicSelector from './TopicSelector';
 const switchTopic = vi.fn();
 const useFetchTopics = vi.fn();
 
-vi.mock('@lobehub/ui', () => ({
+// Real base-ui ActionIcon only surfaces its title via a hover Tooltip, so the
+// static DOM has no accessible name to query.
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ disabled, onClick, title }: any) => (
     <button disabled={disabled} type="button" onClick={onClick}>
       {title}
     </button>
   ),
-  DropdownMenu: ({ children }: any) => <div>{children}</div>,
-  Flexbox: ({ children }: any) => <div>{children}</div>,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    time: 'time',
-    title: 'title',
-  }),
 }));
 
 vi.mock('dayjs', () => {
@@ -34,10 +28,6 @@ vi.mock('dayjs', () => {
   });
   return { default: dayjs };
 });
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 vi.mock('@/const/layoutTokens', () => ({
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,

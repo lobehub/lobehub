@@ -1,5 +1,8 @@
-import { mutate } from '@/libs/swr';
-import { isTaskListKey, projectionKeys, taskKeys } from '@/libs/swr/keys';
+import type { TaskStatus } from '@lobechat/types';
+import { useEffect } from 'react';
+
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { isScheduledTaskListKey, isTaskListKey, projectionKeys, taskKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import {
   taskGroupListViewContract,
@@ -15,25 +18,14 @@ import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
-import type { TaskListVisibilityFilter, TaskViewMode } from './initialState';
+import type { TaskKanbanGroupBy, TaskListVisibilityFilter, TaskViewMode } from './initialState';
 
-/**
- * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
- * (e.g. the `/tasks` page). Keeps the SWR cache key distinct from per-agent lists so
- * the two don't collide and `refreshTaskList()` can invalidate the correct entry.
- */
 export const ALL_AGENTS_LIST_KEY = '__all__';
 const PROJECT_LIST_KEY_PREFIX = '__project__:';
 
 const projectIdFromListKey = (key?: string) =>
   key?.startsWith(PROJECT_LIST_KEY_PREFIX) ? key.slice(PROJECT_LIST_KEY_PREFIX.length) : undefined;
 
-// Default kanban groups: 5 columns
-// 'scheduled' shares the 'running' column — both represent "automation in
-// progress" from the user's perspective (one is mid-tick, the other is
-// waiting for the next tick).
-// `needsInput` is intentionally first: in the list view it surfaces the
-// actionable items at the top of the page.
 const DEFAULT_KANBAN_GROUPS = [
   { key: 'needsInput', statuses: ['paused', 'failed'] },
   { key: 'backlog', statuses: ['backlog'] },
@@ -42,11 +34,6 @@ const DEFAULT_KANBAN_GROUPS = [
   { key: 'canceled', statuses: ['canceled'] },
 ];
 
-/**
- * Map the UI-side filter chip value to the server-side `visibility` enum.
- * 'all' has no server filter (undefined), 'workspace' translates to the DB
- * 'public' value, and 'private' passes through unchanged.
- */
 const filterToServerVisibility = (
   filter: 'all' | 'private' | 'workspace',
 ): 'private' | 'public' | undefined => {
@@ -71,9 +58,22 @@ export class TaskListSliceActionImpl {
   }
 
   refreshTaskGroupList = async (): Promise<void> => {
-    const { listAgentId, listVisibility } = this.#get();
+    const {
+      groupListQueryAutomated,
+      listAgentId,
+      listGroupBy,
+      listGroupExcludeStatuses,
+      listVisibility,
+    } = this.#get();
     await mutate(
-      taskKeys.groupList(listAgentId, listVisibility, projectIdFromListKey(listAgentId)),
+      taskKeys.groupList(
+        listAgentId,
+        listVisibility,
+        listGroupBy,
+        listGroupExcludeStatuses,
+        projectIdFromListKey(listAgentId),
+        groupListQueryAutomated,
+      ),
     );
   };
 
@@ -81,17 +81,29 @@ export class TaskListSliceActionImpl {
     taskService.list(params);
 
   refreshTaskList = async (): Promise<void> => {
-    const { listAgentId, listVisibility } = this.#get();
+    const {
+      groupListQueryAutomated,
+      listAgentId,
+      listGroupBy,
+      listGroupExcludeStatuses,
+      listVisibility,
+    } = this.#get();
     const projectId = projectIdFromListKey(listAgentId);
     await Promise.all([
-      // Invalidate every list signature: visibility, ordering and any future
-      // filters can all change membership after one task mutation.
       mutate(isTaskListKey),
-      mutate(taskKeys.groupList(listAgentId, listVisibility, projectId)),
-      // Home keeps ordinary and automated task result sets in distinct
-      // Projection indexes; a task edit can change membership in either one.
+      mutate(
+        taskKeys.groupList(
+          listAgentId,
+          listVisibility,
+          listGroupBy,
+          listGroupExcludeStatuses,
+          projectId,
+          groupListQueryAutomated,
+        ),
+      ),
       mutate(projectionKeys.scheduledTasks(getCacheScope())),
       mutate(projectionKeys.tasks(getCacheScope())),
+      mutate(isScheduledTaskListKey),
     ]);
   };
 
@@ -119,19 +131,63 @@ export class TaskListSliceActionImpl {
     options: {
       agentId?: string;
       allAgents?: boolean;
+      automated?: boolean;
       enabled?: boolean;
+      excludeStatuses?: readonly TaskStatus[];
+      groupBy?: TaskKanbanGroupBy;
       projectId?: string;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, projectId } = options;
+    const {
+      agentId,
+      allAgents = false,
+      automated,
+      enabled = true,
+      excludeStatuses,
+      groupBy = 'status',
+      projectId,
+    } = options;
     const effectiveKey = projectId
       ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
       : allAgents
         ? ALL_AGENTS_LIST_KEY
         : agentId;
-    if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskGroupList/syncAgentId');
-    }
+    const excludeStatusesSignature = excludeStatuses?.length
+      ? [...excludeStatuses].sort().join(',')
+      : undefined;
+    const { groupListQueryAutomated, listAgentId, listGroupBy, listGroupExcludeStatuses } =
+      this.#get();
+    const isQueryScopeCurrent =
+      !effectiveKey ||
+      (listAgentId === effectiveKey &&
+        groupListQueryAutomated === automated &&
+        listGroupBy === groupBy &&
+        listGroupExcludeStatuses === excludeStatusesSignature);
+
+    useEffect(() => {
+      if (!effectiveKey) return;
+
+      const current = this.#get();
+      if (
+        current.listAgentId === effectiveKey &&
+        current.groupListQueryAutomated === automated &&
+        current.listGroupBy === groupBy &&
+        current.listGroupExcludeStatuses === excludeStatusesSignature
+      ) {
+        return;
+      }
+
+      this.#set(
+        {
+          groupListQueryAutomated: automated,
+          listAgentId: effectiveKey,
+          listGroupBy: groupBy,
+          listGroupExcludeStatuses: excludeStatusesSignature,
+        },
+        false,
+        'useFetchTaskGroupList/syncQueryScope',
+      );
+    }, [automated, effectiveKey, excludeStatusesSignature, groupBy]);
     const listVisibility = this.#get().listVisibility;
 
     useProjectionViewHydration(
@@ -143,17 +199,56 @@ export class TaskListSliceActionImpl {
     const requestParams = {
       request: {
         assigneeAgentId: allAgents ? undefined : agentId,
-        groups: DEFAULT_KANBAN_GROUPS,
-        hasGoal: false,
+        ...(automated === undefined ? {} : { automated }),
+        excludeStatuses: excludeStatuses?.length ? [...excludeStatuses] : undefined,
+        ...(groupBy === 'status' ? { groups: DEFAULT_KANBAN_GROUPS } : { groupBy }),
         projectId,
         visibility: filterToServerVisibility(listVisibility),
       },
       signature: { agentKey: effectiveKey, visibility: listVisibility },
     };
-    return useProjectionRequest(
-      enabled && effectiveKey ? taskKeys.groupList(effectiveKey, listVisibility, projectId) : null,
+    const swr = useProjectionRequest(
+      enabled && effectiveKey
+        ? taskKeys.groupList(
+            effectiveKey,
+            listVisibility,
+            groupBy,
+            excludeStatusesSignature,
+            projectId,
+            automated,
+          )
+        : null,
       taskGroupListProjectionQuery,
       requestParams,
+      { revalidateOnFocus: false },
+    );
+
+    return { ...swr, isQueryScopeCurrent };
+  };
+
+  useFetchScheduledTaskList = (
+    options: {
+      agentId?: string;
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+      projectId?: string;
+    } = {},
+  ) => {
+    const { agentId, enabled = true, limit, offset, projectId } = options;
+    const scopeKey = projectId
+      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
+      : (agentId ?? ALL_AGENTS_LIST_KEY);
+    return useClientDataSWR(
+      enabled ? taskKeys.scheduledList(scopeKey, 'all', limit, offset) : null,
+      async () =>
+        this.fetchTaskList({
+          ...(projectId ? { projectId } : agentId ? { assigneeAgentId: agentId } : {}),
+          automated: true,
+          limit,
+          offset,
+          orderBy: 'updatedAt',
+        }),
       { revalidateOnFocus: false },
     );
   };
@@ -162,28 +257,32 @@ export class TaskListSliceActionImpl {
     options: {
       agentId?: string;
       allAgents?: boolean;
+      automated?: boolean;
       enabled?: boolean;
-      /**
-       * Newest-first by creation unless a caller asks otherwise. A block that
-       * calls itself "recent" and prints `updatedAt` has to order by it too, or
-       * the task that just moved falls off the page in favour of a newer idle
-       * one. Part of the cache key: the Tasks page and Home read the same
-       * `tasks` field and must not serve each other's ordering.
-       */
       orderBy?: 'createdAt' | 'updatedAt';
       projectId?: string;
-      /** Override the Task page's persisted filter for embedded consumers. */
+      statuses?: readonly TaskStatus[];
       visibility?: TaskListVisibilityFilter;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, orderBy, projectId, visibility } = options;
+    const {
+      agentId,
+      allAgents = false,
+      automated,
+      enabled = true,
+      orderBy,
+      projectId,
+      statuses,
+      visibility,
+    } = options;
     const effectiveKey = projectId
       ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
       : allAgents
         ? ALL_AGENTS_LIST_KEY
         : agentId;
     const listVisibility = visibility ?? this.#get().listVisibility;
-    const { listAgentId, listQueryVisibility } = this.#get();
+    const statusesSignature = statuses?.length ? [...statuses].sort().join(',') : undefined;
+    const { listAgentId, listQueryAutomated, listQueryStatuses, listQueryVisibility } = this.#get();
 
     useProjectionViewHydration(
       taskListViewContract,
@@ -191,12 +290,18 @@ export class TaskListSliceActionImpl {
       enabled && Boolean(effectiveKey),
     );
 
-    // The selected signature is UI state; result sets remain independently
-    // keyed inside Projection, so switching signatures never overwrites data.
-    if (effectiveKey && (listAgentId !== effectiveKey || listQueryVisibility !== listVisibility)) {
+    if (
+      effectiveKey &&
+      (listAgentId !== effectiveKey ||
+        listQueryVisibility !== listVisibility ||
+        listQueryAutomated !== automated ||
+        listQueryStatuses !== statusesSignature)
+    ) {
       this.#set(
         {
           listAgentId: effectiveKey,
+          listQueryAutomated: automated,
+          listQueryStatuses: statusesSignature,
           listQueryVisibility: listVisibility,
         },
         false,
@@ -207,16 +312,17 @@ export class TaskListSliceActionImpl {
     const requestParams = {
       request: {
         ...(allAgents || projectId ? {} : { assigneeAgentId: agentId }),
-        hasGoal: false,
+        automated,
         orderBy,
         projectId,
+        statuses: statuses?.length ? [...statuses] : undefined,
         visibility: filterToServerVisibility(listVisibility),
       },
       signature: { agentKey: effectiveKey, visibility: listVisibility },
     };
     return useProjectionRequest(
       enabled && effectiveKey
-        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId)
+        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, { automated, statuses })
         : null,
       taskListProjectionQuery,
       requestParams,

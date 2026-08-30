@@ -454,7 +454,6 @@ export default {
   'transferRequest.recipientPlaceholder': 'Select a workspace member...',
   'transferRequest.resourceType.agent': 'Agent',
   'transferRequest.resourceType.agentGroup': 'Group',
-  'transferRequest.sectionTitle': 'Pending transfers',
   'transferRequest.someone': 'A workspace member',
   'transferRequest.untitledResource': 'Untitled',
   'transferRequest.withdraw': 'Withdraw',

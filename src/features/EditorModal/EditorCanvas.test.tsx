@@ -10,8 +10,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import EditorCanvas from './EditorCanvas';
 
-vi.mock('./Typobar', () => ({
-  default: () => null,
+vi.mock('@/features/EditorCanvas/TypoBar', () => ({
+  TypoBar: () => null,
 }));
 
 const mentionEditorState = {

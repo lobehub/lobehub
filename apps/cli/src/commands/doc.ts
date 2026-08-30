@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -136,6 +137,7 @@ export function registerDocCommand(program: Command) {
       }) => {
         const content = readBodyContent(options);
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
 
         const result = await client.document.createDocument.mutate({
           content,
@@ -146,8 +148,13 @@ export function registerDocCommand(program: Command) {
           slug: options.slug,
           title: options.title,
         });
+        const pathname = options.kb
+          ? `/resource/library/${encodeURIComponent(options.kb)}?file=${encodeURIComponent(result.id)}`
+          : `/page/${encodeURIComponent(result.id)}`;
+        const url = buildUrl(pathname);
 
         console.log(`${pc.green('✓')} Created document ${pc.bold(result.id)}`);
+        console.log(`${pc.bold('document')}: ${url}`);
       },
     );
 
@@ -180,6 +187,7 @@ export function registerDocCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
 
       const items = documents.map((d) => ({
         content: d.content,
@@ -193,9 +201,18 @@ export function registerDocCommand(program: Command) {
 
       const result = await client.document.createDocuments.mutate({ documents: items });
       const created = Array.isArray(result) ? result : [result];
+      const urls = await Promise.all(
+        created.map((document, index) => {
+          const source = items[index];
+          const pathname = source?.knowledgeBaseId
+            ? `/resource/library/${encodeURIComponent(source.knowledgeBaseId)}?file=${encodeURIComponent(document.id)}`
+            : `/page/${encodeURIComponent(document.id)}`;
+          return buildUrl(pathname);
+        }),
+      );
       console.log(`${pc.green('✓')} Created ${created.length} document(s)`);
-      for (const doc of created) {
-        console.log(`  ${pc.dim('•')} ${doc.id} — ${doc.title || 'Untitled'}`);
+      for (const [index, doc] of created.entries()) {
+        console.log(`  ${pc.dim('•')} ${doc.id} — ${doc.title || 'Untitled'} — ${urls[index]}`);
       }
     });
 

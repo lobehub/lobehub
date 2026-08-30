@@ -2,16 +2,20 @@ import { t } from 'i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-export type TaskGroupBy = 'assignee' | 'none' | 'priority' | 'status';
+export type TaskGroupBy = 'assignee' | 'automationMode' | 'none' | 'priority' | 'status';
 export type TaskOrderBy = 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
 export type TaskOrderDirection = 'asc' | 'desc';
 
 export interface TaskListViewOptions {
   groupBy: TaskGroupBy;
   hideCompleted: boolean;
+  /** Indent a shown sub-task under its parent instead of listing it as a peer. */
+  nestedSubTasks: boolean;
   orderBy: TaskOrderBy;
   orderCompletedByRecency: boolean;
   orderDirection: TaskOrderDirection;
+  /** List sub-tasks whose parent is already on the list as rows of their own. */
+  showSubTasks: boolean;
   subGroupBy: TaskGroupBy;
 }
 
@@ -22,6 +26,9 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
 
 export interface TaskGroupMeta {
   assigneeId?: string;
+  /** Human assignee (workspace member); mutually exclusive with `assigneeId`. */
+  assigneeUserId?: string;
+  automationMode?: 'heartbeat' | 'schedule';
   groupBy: TaskGroupBy;
   key: string;
   label: string;
@@ -32,13 +39,24 @@ export interface TaskGroupMeta {
 export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
   groupBy: 'status',
   hideCompleted: true,
+  // Nesting is the default *shape* for sub-tasks, but sub-tasks stay hidden
+  // until asked for: a parent already carries its progress (`3/8`), so listing
+  // its children as peers only pads the list with rows the parent stands for.
+  nestedSubTasks: true,
   orderBy: 'updatedAt',
   orderCompletedByRecency: true,
   orderDirection: 'asc',
+  showSubTasks: false,
   subGroupBy: 'none',
 };
 
-const TASK_GROUP_BY_SET = new Set<TaskGroupBy>(['assignee', 'none', 'priority', 'status']);
+const TASK_GROUP_BY_SET = new Set<TaskGroupBy>([
+  'assignee',
+  'automationMode',
+  'none',
+  'priority',
+  'status',
+]);
 const TASK_ORDER_BY_SET = new Set<TaskOrderBy>([
   'assignee',
   'createdAt',
@@ -66,6 +84,10 @@ export const normalizeTaskListViewOptions = (
       typeof next.hideCompleted === 'boolean'
         ? next.hideCompleted
         : DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted,
+    nestedSubTasks:
+      typeof next.nestedSubTasks === 'boolean'
+        ? next.nestedSubTasks
+        : DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks,
     orderBy: TASK_ORDER_BY_SET.has(next.orderBy as TaskOrderBy)
       ? (next.orderBy as TaskOrderBy)
       : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderBy,
@@ -76,6 +98,10 @@ export const normalizeTaskListViewOptions = (
     orderDirection: TASK_ORDER_DIRECTION_SET.has(next.orderDirection as TaskOrderDirection)
       ? (next.orderDirection as TaskOrderDirection)
       : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderDirection,
+    showSubTasks:
+      typeof next.showSubTasks === 'boolean'
+        ? next.showSubTasks
+        : DEFAULT_TASK_LIST_VIEW_OPTIONS.showSubTasks,
     subGroupBy: groupBy === 'none' || subGroupBy !== groupBy ? subGroupBy : 'none',
   };
 };
@@ -115,25 +141,56 @@ const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;
 const getTaskStatusGroup = (task: TaskListItem): NonNullable<TaskGroupMeta['status']> =>
   TASK_STATUS_TO_GROUP_MAP[task.status] ?? 'backlog';
 
-const getTaskAssigneeMeta = (task: TaskListItem): TaskGroupMeta => {
-  const agentId = task.assigneeAgentId;
-  if (!agentId) {
+export const getTaskAssigneeGroupMeta = (
+  agentId: string | null | undefined,
+  userId?: string | null,
+): TaskGroupMeta => {
+  if (agentId) {
     return {
+      assigneeId: agentId,
       groupBy: 'assignee',
-      key: 'assignee:unassigned',
-      label: t('taskList.unassigned', { ns: 'chat' }),
+      key: `assignee:${agentId}`,
+      label: agentId,
+    };
+  }
+
+  if (userId) {
+    return {
+      assigneeUserId: userId,
+      groupBy: 'assignee',
+      key: `assignee:user:${userId}`,
+      label: userId,
     };
   }
 
   return {
-    assigneeId: agentId,
     groupBy: 'assignee',
-    key: `assignee:${agentId}`,
-    label: agentId,
+    key: 'assignee:unassigned',
+    label: t('taskList.unassigned', { ns: 'chat' }),
   };
 };
 
-const getTaskAssigneeSortValue = (task: TaskListItem) => task.assigneeAgentId ?? '';
+const getTaskAssigneeSortValue = (task: TaskListItem) =>
+  task.assigneeAgentId ?? (task.assigneeUserId ? `user:${task.assigneeUserId}` : '');
+
+export const getTaskPriorityGroupMeta = (
+  priorityValue: number | null | undefined,
+): TaskGroupMeta => {
+  const priority = priorityValue ?? 0;
+  const labelKeyMap: Record<number, string> = {
+    0: 'taskDetail.priority.none',
+    1: 'taskDetail.priority.urgent',
+    2: 'taskDetail.priority.high',
+    3: 'taskDetail.priority.normal',
+    4: 'taskDetail.priority.low',
+  };
+  return {
+    groupBy: 'priority',
+    key: `priority:${priority}`,
+    label: t(labelKeyMap[priority] ?? labelKeyMap[0], { defaultValue: '', ns: 'chat' }),
+    priority,
+  };
+};
 
 const toTime = (value: Date | string | null | undefined): number => {
   if (!value) return 0;
@@ -207,23 +264,20 @@ export const compareTaskItems = (
 export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): TaskGroupMeta => {
   switch (groupBy) {
     case 'assignee': {
-      return getTaskAssigneeMeta(task);
+      return getTaskAssigneeGroupMeta(task.assigneeAgentId, task.assigneeUserId);
+    }
+    case 'automationMode': {
+      // Automated tasks created before automationMode was introduced are schedules.
+      const automationMode = task.automationMode === 'heartbeat' ? 'heartbeat' : 'schedule';
+      return {
+        automationMode,
+        groupBy: 'automationMode',
+        key: `automationMode:${automationMode}`,
+        label: t(`taskList.groupBy.${automationMode}`, { ns: 'chat' }),
+      };
     }
     case 'priority': {
-      const priority = getPriorityValue(task);
-      const labelKeyMap: Record<number, string> = {
-        0: 'taskDetail.priority.none',
-        1: 'taskDetail.priority.urgent',
-        2: 'taskDetail.priority.high',
-        3: 'taskDetail.priority.normal',
-        4: 'taskDetail.priority.low',
-      };
-      return {
-        groupBy: 'priority',
-        key: `priority:${priority}`,
-        label: t(labelKeyMap[priority] ?? labelKeyMap[0], { defaultValue: '', ns: 'chat' }),
-        priority,
-      };
+      return getTaskPriorityGroupMeta(getPriorityValue(task));
     }
     case 'status': {
       const groupedStatus = getTaskStatusGroup(task);
@@ -255,6 +309,9 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
 
 const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
   switch (groupBy) {
+    case 'automationMode': {
+      return group.automationMode === 'schedule' ? 0 : 1;
+    }
     case 'priority': {
       if (group.priority === undefined) return Number.MAX_SAFE_INTEGER;
       return PRIORITY_RANK_MAP[group.priority] ?? Number.MAX_SAFE_INTEGER;
@@ -285,4 +342,146 @@ export const sortGroupEntries = (
       ? groupA.label.localeCompare(groupB.label)
       : groupB.label.localeCompare(groupA.label);
   });
+};
+
+export const groupTaskItems = (
+  items: TaskListItem[],
+  groupBy: TaskGroupBy,
+  orderDirection?: TaskOrderDirection,
+): Array<[TaskGroupMeta, TaskListItem[]]> => {
+  const groups = new Map<string, { items: TaskListItem[]; meta: TaskGroupMeta }>();
+
+  for (const task of items) {
+    const meta = getTaskGroupMeta(task, groupBy);
+    const bucket = groups.get(meta.key);
+
+    if (bucket) {
+      bucket.items.push(task);
+    } else {
+      groups.set(meta.key, { items: [task], meta });
+    }
+  }
+
+  return sortGroupEntries(
+    [...groups.values()].map((group) => [group.meta, group.items]),
+    groupBy,
+    orderDirection,
+  );
+};
+
+/** Depth cap — guards a malformed parent chain from recursing without end. */
+const MAX_NEST_DEPTH = 8;
+
+export interface TaskRow {
+  /** Indent level inside its group; 0 for a row that isn't nested. */
+  depth: number;
+  /**
+   * True when the row exists only to anchor a nested child whose parent sits in
+   * another group (or is hidden by the display options). It is rendered muted
+   * and is not counted as one of the group's tasks.
+   */
+  isParentContext: boolean;
+  task: TaskListItem;
+}
+
+/**
+ * Drop the sub-tasks a listed parent already stands for.
+ *
+ * Membership — not `parentTaskId` alone — is what decides: a task whose parent
+ * is absent from this list (a goal's child, a parent on another page) has no
+ * row representing it, so hiding it would drop it from the page entirely.
+ */
+export const collapseSubTasks = (items: TaskListItem[]): TaskListItem[] => {
+  const ids = new Set(items.map((item) => item.id));
+  return items.filter((item) => !item.parentTaskId || !ids.has(item.parentTaskId));
+};
+
+/**
+ * Lay a group's tasks out as indented rows, parents before their children.
+ *
+ * Grouping still keys off each task's own status/priority/assignee, so a
+ * sub-task regularly lands in a group its parent isn't in. Such a child gets a
+ * muted context row for its parent rather than sitting at the top level, where
+ * an indent-free row would read as an unrelated task.
+ */
+export const buildTaskRows = (
+  groupItems: TaskListItem[],
+  options: {
+    compare: (a: TaskListItem, b: TaskListItem) => number;
+    nested: boolean;
+    /** Every task on the list, keyed by id — resolves parents outside the group. */
+    taskById: Map<string, TaskListItem>;
+  },
+): TaskRow[] => {
+  const { compare, nested, taskById } = options;
+  if (!nested) return groupItems.map((task) => ({ depth: 0, isParentContext: false, task }));
+
+  interface TaskNode {
+    children: string[];
+    isParentContext: boolean;
+    task: TaskListItem;
+  }
+
+  const nodes = new Map<string, TaskNode>();
+  for (const task of groupItems) {
+    nodes.set(task.id, { children: [], isParentContext: false, task });
+  }
+
+  const parentOf = new Map<string, string>();
+  const roots: string[] = [];
+
+  // Every node holds at most one parent link, so a cycle can only close on the
+  // edge being added — walking up from the parent is enough to rule it out.
+  const isDescendantOf = (ancestorId: string, id: string) => {
+    let current: string | undefined = id;
+    for (let depth = 0; current && depth <= MAX_NEST_DEPTH; depth += 1) {
+      if (current === ancestorId) return true;
+      current = parentOf.get(current);
+    }
+    return false;
+  };
+
+  for (const task of groupItems) {
+    const parentId = task.parentTaskId;
+    if (!parentId || parentId === task.id) {
+      roots.push(task.id);
+      continue;
+    }
+
+    let parentNode = nodes.get(parentId);
+    if (!parentNode) {
+      const parentTask = taskById.get(parentId);
+      if (!parentTask) {
+        roots.push(task.id);
+        continue;
+      }
+      parentNode = { children: [], isParentContext: true, task: parentTask };
+      nodes.set(parentId, parentNode);
+      roots.push(parentId);
+    }
+
+    if (isDescendantOf(task.id, parentId)) {
+      roots.push(task.id);
+      continue;
+    }
+
+    parentNode.children.push(task.id);
+    parentOf.set(task.id, parentId);
+  }
+
+  const sortIds = (ids: string[]) =>
+    [...ids].sort((a, b) => compare(nodes.get(a)!.task, nodes.get(b)!.task));
+
+  const rows: TaskRow[] = [];
+  const visit = (id: string, depth: number) => {
+    const node = nodes.get(id);
+    if (!node) return;
+    rows.push({ depth, isParentContext: node.isParentContext, task: node.task });
+    if (depth >= MAX_NEST_DEPTH) return;
+    for (const childId of sortIds(node.children)) visit(childId, depth + 1);
+  };
+
+  for (const id of sortIds(roots)) visit(id, 0);
+
+  return rows;
 };

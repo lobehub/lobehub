@@ -387,7 +387,7 @@ export const createServerAgentToolsEngine = (
     // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
     manifestContext,
     enableChecker: createEnableChecker({
-      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron).
+      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-task).
       // Only in agent mode; chat/custom modes can't let the activator bypass their fixed set.
       allowExplicitActivation: toolMode === 'agent',
       rules: isCustomMode ? customModeRules : isChatMode ? chatModeRules : agentModeRules,

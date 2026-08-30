@@ -60,6 +60,7 @@ bun.lockb
 dist/
 public/_spa/
 public/_spa-auth/
+public/_spa-share/
 public/_spa-workbench/
 public/spa/
 es/
@@ -95,6 +96,7 @@ public/swe-worker*
 # Generated files
 src/app/spa/[variants]/[[...path]]/spaHtmlTemplates.ts
 src/app/spa-auth/authHtmlTemplate.ts
+src/app/spa-share/shareHtmlTemplate.ts
 src/app/spa-workbench/workbenchHtmlTemplate.ts
 public/*.js
 robots.txt

@@ -2,6 +2,7 @@ import type {
   MainBroadcastEventKey,
   MainBroadcastParams,
   TopicPopupInfo,
+  WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
 import type { WebContents } from 'electron';
 
@@ -141,6 +142,7 @@ export class BrowserManager {
     templateId: WindowTemplateIdentifiers,
     path: string,
     uniqueId?: string,
+    windowSize?: WindowSizeParams,
   ) {
     const template = windowTemplates[templateId];
     if (!template) {
@@ -155,8 +157,10 @@ export class BrowserManager {
     // Create browser options from template
     const browserOpts: BrowserWindowOpts = {
       ...template,
+      ...windowSize,
       identifier: windowId,
       path,
+      restoreWindowState: windowSize === undefined,
     };
 
     logger.debug(`Creating multi-instance window: ${windowId} with path: ${path}`);
@@ -364,6 +368,16 @@ export class BrowserManager {
 
     browser.browserWindow.on('show', () => {
       if (browser.webContents) this.webContentsMap.set(browser.webContents, browser.identifier);
+    });
+
+    // Dynamic windows may use a stable identifier (for example, one window per
+    // workspace). Once such a window is closed, discard its Browser wrapper so
+    // reopening it can apply the latest path and inherited dimensions instead
+    // of recreating a BrowserWindow from the wrapper's original options.
+    browser.browserWindow.on('closed', () => {
+      if (!(identifier in appBrowsers) && this.browsers.get(identifier) === browser) {
+        this.browsers.delete(identifier);
+      }
     });
 
     return browser;

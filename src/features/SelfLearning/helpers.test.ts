@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   earlyPassRate,
   habitTier,
+  layerLabel,
   passRateSeries,
+  previewSections,
   profileWord,
   recentPassRate,
   zeroViolationStreak,
@@ -44,6 +46,13 @@ describe('profileWord', () => {
   });
 });
 
+describe('layerLabel', () => {
+  it('uses a sequential user-facing label instead of the internal layer key', () => {
+    expect(layerLabel(0)).toBe('L1');
+    expect(layerLabel(11)).toBe('L12');
+  });
+});
+
 describe('reliability series', () => {
   const rel = [
     { pass: 2, run: 1, violation: 2 },
@@ -67,5 +76,27 @@ describe('reliability series', () => {
     expect(recentPassRate(s, 2)).toBe(1);
     expect(earlyPassRate(s, 2)).toBeCloseTo((0.5 + 0.75) / 2);
     expect(recentPassRate([])).toBeNull();
+  });
+});
+
+describe('previewSections', () => {
+  it('drops the rule section, which only restates the title the card already shows', () => {
+    expect(
+      previewSections([
+        { body: '分离运行执行面与观测访问面', key: 'rule' },
+        { body: '两个面的故障域不同', key: 'why' },
+      ]).map((section) => section.key),
+    ).toEqual(['why']);
+  });
+
+  it('never renders a labelled blank row', () => {
+    expect(previewSections([{ body: '   ', key: 'why' }])).toEqual([]);
+    expect(previewSections()).toEqual([]);
+  });
+
+  it('carries the label key so every surface names a section the same way', () => {
+    expect(previewSections([{ body: '补齐文档后通过', key: 'how' }])).toEqual([
+      { body: '补齐文档后通过', key: 'how', label: 'rules.section.how' },
+    ]);
   });
 });

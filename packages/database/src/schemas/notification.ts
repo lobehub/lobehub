@@ -1,5 +1,6 @@
+import type { NotificationMetadata } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { boolean, index, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { users } from './user';
@@ -33,6 +34,9 @@ export const notifications = pgTable(
     content: text('content').notNull(),
     /** Optional secondary context shown in inbox surfaces */
     context: text('context'),
+
+    /** Structured extras for inbox rendering, e.g. the triggering user (`actor`) */
+    metadata: jsonb('metadata').$type<NotificationMetadata>(),
 
     /** Idempotency key — same (userId, dedupeKey) pair prevents duplicate notifications */
     dedupeKey: text('dedupe_key'),

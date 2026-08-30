@@ -7,16 +7,6 @@ import type { App } from '@/core/App';
 import AuthCtr from '../AuthCtr';
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
 }));

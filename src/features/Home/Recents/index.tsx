@@ -1,13 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
-import {
-  AccordionItem,
-  ActionIcon,
-  ContextMenuTrigger,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { AccordionItem, ContextMenuTrigger, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -144,7 +137,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
       paddingBlock={4}
       paddingInline={'8px 4px'}
       action={
-        <DropdownMenu items={dropdownMenu} nativeButton={false}>
+        <DropdownMenu items={dropdownMenu}>
           <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
         </DropdownMenu>
       }

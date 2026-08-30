@@ -171,7 +171,14 @@ const linkOptions = {
 
 // Procedures that should skip batching for faster initial load
 const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalConfig']);
-const slowProcedures = new Set(['market.getAssistantList']);
+// `message.getMessages` can serialize multi-MB payloads on very long topics and
+// run for tens of seconds when the data is cold. Batched with the rest of the
+// initial load, one slow read delays the whole batch; if it exceeds the upstream
+// request timeout the response comes back as an HTML error page instead of JSON,
+// so every sibling procedure in the batch (e.g. `agent.getAgentConfigById`) fails
+// its `JSON.parse` with `Unexpected token '<'`. Split it out so a slow message
+// read only slows itself.
+const slowProcedures = new Set(['market.getAssistantList', 'message.getMessages']);
 const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedures]);
 
 // Queries whose input can exceed the GET URL budget (`maxURLLength` 2083):
