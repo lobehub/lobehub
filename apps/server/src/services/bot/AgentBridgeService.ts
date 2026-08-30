@@ -12,14 +12,15 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from './createBotCompletionHook';
-import { formatPrompt as formatPromptUtil } from './formatPrompt';
-import type { BotReplyLocale, PlatformClient } from './platforms';
+import { formatGroupHistoryBlock, formatPrompt as formatPromptUtil } from './formatPrompt';
+import type { BotMessageAttachment, BotReplyLocale, PlatformClient } from './platforms';
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
@@ -30,6 +31,7 @@ import {
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import { buildRecentChannelHistory } from './recentChannelHistory';
+import { deliverEditedReply } from './replyDelivery';
 import {
   renderAgentError,
   renderError,
@@ -91,10 +93,19 @@ function hookEventAttachmentsToChatSdk(
 }
 
 const EXECUTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-
 // If the last activity in a bot topic is older than this threshold,
 // create a new topic instead of continuing in the stale one.
 const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000; // 4 hours
+
+/** Max human messages pre-injected from the platform API on a group thread's wake-up. */
+const GROUP_HISTORY_PRE_INJECT_LIMIT = 20;
+
+/**
+ * Fallback pre-injection window (seconds) when a group thread has no usable
+ * watermark (first wake-up, lost state, process restart). Re-injecting the
+ * last 24h keeps the operation idempotent — overlap beats gaps.
+ */
+const GROUP_HISTORY_FALLBACK_WINDOW_SEC = 24 * 60 * 60;
 
 // PostgreSQL error code for foreign key constraint violations.
 // See: https://www.postgresql.org/docs/current/errcodes-appendix.html
@@ -149,6 +160,15 @@ interface DiscordChannelContext {
 interface ThreadState {
   channelContext?: DiscordChannelContext;
   /**
+   * Unix-seconds watermark of the last successful group-history pre-injection
+   * on this thread (see `platformDef.preInjectGroupHistory`). The next group
+   * wake-up fetches messages created AFTER this second; a missing or stale
+   * watermark falls back to a 24h window (`GROUP_HISTORY_FALLBACK_WINDOW_SEC`)
+   * so re-injection stays idempotent. Written only after a successful fetch —
+   * a failed injection retries the whole window next time.
+   */
+  lastGroupHistorySync?: number;
+  /**
    * Per-conversation execution mode set via the `/mode` command. When present
    * it overrides the agent's own `chatConfig.toolMode` for every run in this
    * thread; absent means "follow the agent's configured default".
@@ -178,6 +198,20 @@ interface ActiveReaction {
   platform?: string;
   reactionThreadId: string;
   userMessageId: string;
+}
+
+/**
+ * Reply-threaded outbound handle (Feishu/Lark — `supportsReplyThreading`).
+ * `edit` rewrites the reply placeholder message; `post` threads a fresh
+ * message against the same trigger. Both normalize markdown through the
+ * platform's `formatMarkdown` so the messenger path sends what the
+ * queue-mode callback would send (the adapter path instead converts via
+ * `{ markdown }` posts). Built only when the placeholder reply resolved a
+ * message id — otherwise outbound keeps the Chat SDK adapter path.
+ */
+export interface ReplyDelivery {
+  edit: (text: string) => Promise<void>;
+  post: (text: string, attachments?: BotMessageAttachment[]) => Promise<void>;
 }
 
 /**
@@ -386,6 +420,7 @@ export class AgentBridgeService {
     error?: unknown;
     operationId?: string;
     progressMessage?: SentMessage;
+    replyDelivery?: ReplyDelivery;
     replyLocale?: BotReplyLocale;
     stopped?: boolean;
     thread: Thread<ThreadState>;
@@ -396,6 +431,7 @@ export class AgentBridgeService {
       error,
       operationId,
       progressMessage,
+      replyDelivery,
       replyLocale,
       stopped,
       thread,
@@ -414,13 +450,25 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
-    const errorContent = {
-      markdown: stopped
-        ? renderStopped(errorMessage, replyLocale)
-        : renderError(operationId, replyLocale),
-    };
+    const errorText = stopped
+      ? renderStopped(errorMessage, replyLocale)
+      : renderError(operationId, replyLocale);
+    const errorContent = { markdown: errorText };
 
-    if (progressMessage) {
+    if (replyDelivery) {
+      // Reply-threaded run: rewrite the reply placeholder; a failed edit
+      // falls through to a fresh reply post rather than an adapter message.
+      try {
+        await replyDelivery.edit(errorText);
+      } catch (editError) {
+        log('finishStartupFailure: failed to edit reply placeholder: %O', editError);
+        try {
+          await replyDelivery.post(errorText);
+        } catch (postError) {
+          log('finishStartupFailure: failed to post reply error message: %O', postError);
+        }
+      }
+    } else if (progressMessage) {
       try {
         await progressMessage.edit(errorContent);
       } catch (editError) {
@@ -447,6 +495,16 @@ export class AgentBridgeService {
    */
   private resolveReplyLocale(opts: BridgeHandlerOpts): BotReplyLocale {
     return opts.replyLocale ?? getBotReplyLocale(opts.botContext?.platform);
+  }
+
+  /**
+   * Normalize outbound markdown for the messenger (reply-threaded) path.
+   * The Chat SDK adapter converts `{ markdown }` posts itself; the messenger
+   * takes raw text, so we apply the platform's `formatMarkdown` (e.g.
+   * Feishu's stripMarkdown) to match what the queue-mode callback sends.
+   */
+  private toMessengerText(text: string, client?: PlatformClient): string {
+    return client?.formatMarkdown?.(text) ?? text;
   }
 
   /**
@@ -811,6 +869,60 @@ export class AgentBridgeService {
       log('executeWithCallback: failed to read thread state for toolMode: %O', error);
     }
 
+    // Platforms where un-@-mentioned group chatter never reaches the bot
+    // (e.g. Feishu): on EVERY group wake-up — fresh mention or topic
+    // follow-up alike — pre-inject the human messages the bot missed since
+    // its last injection, fetched straight from the platform API. The thread
+    // state keeps a watermark (`lastGroupHistorySync`); a missing/stale one
+    // falls back to a 24h window, so a restart re-injects the same
+    // discussion at most once (overlap beats gaps: the previous design gated
+    // on `!topicId`, which made everything between two @-mentions a
+    // permanent blind spot). DM threads (p2p) never pre-inject — every DM
+    // already reaches the bot. Best-effort — never block the reply.
+    // The fetched messages are prepended to the user prompt (not the system
+    // prompt) below, so they persist in the topic and survive later turns.
+    let recentGroupMessages:
+      Array<{ author: string; text: string; attachments?: AttachmentSource[] }> | undefined;
+    if (
+      platformDef?.preInjectGroupHistory &&
+      botContext?.platformThreadId &&
+      !botContext.platformThreadId.split(':')[1]?.startsWith('p2p') &&
+      opts.client?.readRecentMessages
+    ) {
+      try {
+        // Watermark read is isolated from the toolMode read above: a state
+        // failure here means "unknown watermark" (24h fallback), not "skip".
+        let watermark: number | undefined;
+        try {
+          const raw = (await thread.state)?.lastGroupHistorySync;
+          watermark = typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined;
+        } catch (error) {
+          log('executeWithCallback: watermark read failed (non-fatal): %O', error);
+        }
+        const fetchedAtSec = Math.floor(Date.now() / 1000);
+        const sinceSec = Math.max(watermark ?? 0, fetchedAtSec - GROUP_HISTORY_FALLBACK_WINDOW_SEC);
+        const messages = await opts.client.readRecentMessages(
+          botContext.platformThreadId,
+          GROUP_HISTORY_PRE_INJECT_LIMIT,
+          // Drop the triggering mention itself — it is delivered below as the
+          // run's own user prompt, so injecting it here duplicates content.
+          { excludeMessageId: botContext.triggerMessageId, sinceSec },
+        );
+        if (messages.length > 0) recentGroupMessages = messages;
+        // Advance the watermark only after a successful fetch (an empty
+        // result included — the window was simply quiet), so a failed
+        // injection retries the whole window next time. Best-effort: a
+        // failed write just means one redundant re-injection later.
+        try {
+          await thread.setState({ lastGroupHistorySync: fetchedAtSec });
+        } catch (error) {
+          log('executeWithCallback: watermark write failed (non-fatal): %O', error);
+        }
+      } catch (error) {
+        log('executeWithCallback: group history pre-inject failed (non-fatal): %O', error);
+      }
+    }
+
     const queueMode = isQueueAgentRuntimeEnabled();
     const aiAgentService = new AiAgentService(this.db, this.userId, {
       workspaceId: this.workspaceId,
@@ -845,9 +957,45 @@ export class AgentBridgeService {
         : true;
     const useGatewayTyping = gwClient.isEnabled && platformSupportsTyping;
 
+    // Reply-threaded delivery (Feishu/Lark `supportsReplyThreading`): when
+    // the run carries the triggering platform message id, the placeholder and
+    // every subsequent outbound go through the reply-capable messenger
+    // instead of the Chat SDK adapter — the adapter posts by chatId only, so
+    // topic-group replies would land on the group's main timeline. The
+    // placeholder reply's message id becomes the progress handle for both
+    // local-mode edits and the queue-mode callback webhook. Only platforms
+    // whose messenger resolves a message id take this path; everything else
+    // (including a failed reply attempt below) falls through to the adapter.
+    const triggerMessageId = botContext?.triggerMessageId;
+    const replyMessenger =
+      triggerMessageId &&
+      botContext?.platformThreadId &&
+      client &&
+      platformDef?.supportsReplyThreading
+        ? client.getMessenger(botContext.platformThreadId, {
+            replyToMessageId: triggerMessageId,
+          })
+        : undefined;
+
     let progressMessage: SentMessage | undefined;
     let gatewayConnectionId: string | undefined;
-    if (useGatewayTyping) {
+    let progressReplyId: string | undefined;
+
+    if (replyMessenger) {
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (reply placeholder)');
+      try {
+        const sent = await replyMessenger.createMessage(
+          renderStart(userMessage.text, { lng: replyLocale, timezone }),
+        );
+        if (sent && typeof sent === 'object') progressReplyId = sent.messageId;
+      } catch (error) {
+        log('executeWithCallback: reply-threaded placeholder failed: %O', error);
+      }
+    }
+
+    if (progressReplyId) {
+      log('executeWithCallback: reply-threaded placeholder posted (message=%s)', progressReplyId);
+    } else if (useGatewayTyping) {
       log('executeWithWebhooks: using gateway typing, skipping ack message');
 
       // Platform typing (best-effort, must not block AI generation)
@@ -918,8 +1066,47 @@ export class AgentBridgeService {
       }
     }
 
-    const { files, warnings: fileWarnings } = await this.resolveFiles(userMessage, client);
-    const prompt = this.formatPrompt(userMessage, client);
+    const { files: messageFiles, warnings: fileWarnings } = await this.resolveFiles(
+      userMessage,
+      client,
+    );
+    // Quoted/replied message (Feishu `parent_id`): the quoted line is injected
+    // right before the user prompt — same persistence semantics as the group
+    // history block below (user prompt → topic message → visible on later
+    // turns). Quoted media joins the run's files so the agent can read it.
+    // Best-effort — a failed resolution just means no quote context.
+    let referencedBlock = '';
+    let files = messageFiles;
+    if (client?.resolveReference) {
+      try {
+        const reference = await client.resolveReference(userMessage);
+        if (reference?.text) {
+          referencedBlock = `<referenced_message sender="${reference.sender}">${reference.text}</referenced_message>`;
+          if (reference.surrounding?.length) {
+            referencedBlock += `\n${formatGroupHistoryBlock(reference.surrounding)}`;
+          }
+          if (reference.attachments?.length) {
+            files = [...(files ?? []), ...reference.attachments];
+          }
+        }
+      } catch (error) {
+        log('executeWithCallback: resolveReference failed (non-fatal): %O', error);
+      }
+    }
+    // Prepend the group history block to the USER prompt (inside the speaker
+    // tag) — it persists as the topic's user message, so later turns keep the
+    // context even though the system prompt is rebuilt each turn. Media in the
+    // window (file/image sent without @-mentioning the bot, then the @mention
+    // in a separate message) joins the run's files so the agent can read it.
+    const historyBlock = recentGroupMessages ? formatGroupHistoryBlock(recentGroupMessages) : '';
+    const historyAttachments = recentGroupMessages?.flatMap((m) => m.attachments ?? []) ?? [];
+    if (historyAttachments.length > 0) {
+      files = [...(files ?? []), ...historyAttachments];
+    }
+    const prefixBlocks = [historyBlock, referencedBlock].filter(Boolean).join('\n');
+    const prompt = prefixBlocks
+      ? `${prefixBlocks}\n${this.formatPrompt(userMessage, client)}`
+      : this.formatPrompt(userMessage, client);
 
     // Attach file warnings to botPlatformContext for injection via context engine
     if (fileWarnings?.length && botPlatformContext) {
@@ -936,7 +1123,12 @@ export class AgentBridgeService {
       // to read from.
       messengerInstallationKey: botContext?.messengerInstallationKey,
       platformThreadId: botContext?.platformThreadId,
-      progressMessageId: progressMessage?.id,
+      // Reply-threaded runs: the placeholder reply's id — the callback edits
+      // it in place and threads its own outbound against the same trigger.
+      progressMessageId: progressReplyId ?? progressMessage?.id,
+      // Triggering platform message id — reply-capable platforms build their
+      // outbound messenger against it in BotCallbackService.
+      triggerMessageId,
       // Pass thread name only if it's user-set.
       // Bot-generated threads use "Thread <locale date>" (e.g. "Thread 4/9/2026, 6:00:00 PM"),
       // which always starts with "Thread " followed by a digit.
@@ -963,6 +1155,27 @@ export class AgentBridgeService {
       files?.length ?? 0,
     );
 
+    // Reply-threaded outbound handle — built only when the placeholder reply
+    // resolved a message id, so a failed reply attempt keeps the whole run on
+    // the adapter path (never half reply, half adapter).
+    const replyDelivery: ReplyDelivery | undefined =
+      progressReplyId && replyMessenger
+        ? {
+            edit: async (text: string) => {
+              await replyMessenger.editMessage(
+                progressReplyId!,
+                this.toMessengerText(text, client),
+              );
+            },
+            post: async (text: string, attachments?: BotMessageAttachment[]) => {
+              const plain = this.toMessengerText(text, client);
+              await replyMessenger.createMessage(
+                attachments?.length ? { attachments, content: plain } : plain,
+              );
+            },
+          }
+        : undefined;
+
     // In queue mode, return immediately after startup — hooks handle the rest via webhooks
     if (queueMode) {
       return this.executeWithHooksQueueMode(thread, userMessage, aiAgentService, {
@@ -975,6 +1188,7 @@ export class AgentBridgeService {
         files,
         progressMessage,
         prompt,
+        replyDelivery,
         replyLocale,
         toolModeOverride,
         topicId,
@@ -997,6 +1211,7 @@ export class AgentBridgeService {
       gatewayConnectionId,
       progressMessage,
       prompt,
+      replyDelivery,
       replyLocale,
       toolModeOverride,
       topicId,
@@ -1023,6 +1238,7 @@ export class AgentBridgeService {
       files?: any;
       progressMessage?: SentMessage;
       prompt: string;
+      replyDelivery?: ReplyDelivery;
       replyLocale: BotReplyLocale;
       toolModeOverride?: ThreadState['toolMode'];
       topicId?: string;
@@ -1040,6 +1256,7 @@ export class AgentBridgeService {
       files,
       progressMessage,
       prompt,
+      replyDelivery,
       replyLocale,
       toolModeOverride,
       topicId,
@@ -1126,6 +1343,7 @@ export class AgentBridgeService {
         client,
         error,
         progressMessage,
+        replyDelivery,
         replyLocale,
         stopped: isAbortError(error),
         thread,
@@ -1140,6 +1358,7 @@ export class AgentBridgeService {
         error: result.error,
         operationId: result.operationId,
         progressMessage,
+        replyDelivery,
         replyLocale,
         thread,
         userMessage,
@@ -1191,6 +1410,7 @@ export class AgentBridgeService {
       gatewayConnectionId?: string;
       progressMessage?: SentMessage;
       prompt: string;
+      replyDelivery?: ReplyDelivery;
       replyLocale: BotReplyLocale;
       toolModeOverride?: ThreadState['toolMode'];
       topicId?: string;
@@ -1211,6 +1431,7 @@ export class AgentBridgeService {
       files,
       gatewayConnectionId,
       prompt,
+      replyDelivery,
       replyLocale,
       toolModeOverride,
       topicId,
@@ -1269,7 +1490,8 @@ export class AgentBridgeService {
                   await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
                 }
 
-                if (!event.shouldContinue || !progressMessage || displayToolCalls !== true) return;
+                if (!event.shouldContinue || (!progressMessage && !replyDelivery)) return;
+                if (displayToolCalls !== true) return;
 
                 const msgBody = renderStepProgress(
                   {
@@ -1310,7 +1532,11 @@ export class AgentBridgeService {
                 if (progressBody === lastProgressText) return;
 
                 try {
-                  progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  if (replyDelivery) {
+                    await replyDelivery.edit(progressBody);
+                  } else {
+                    progressMessage = await progressMessage!.edit({ markdown: progressBody });
+                  }
                   lastProgressText = progressBody;
                 } catch (error) {
                   log('executeWithCallback[local]: failed to edit progress message: %O', error);
@@ -1352,7 +1578,9 @@ export class AgentBridgeService {
                     // platform's markdown parse_mode (e.g. Telegram `Markdown`,
                     // Slack `mrkdwn`) and converts the body. Plain strings are
                     // sent without parse_mode and would render literal `**`.
-                    if (progressMessage) {
+                    if (replyDelivery) {
+                      await replyDelivery.edit(errorBody);
+                    } else if (progressMessage) {
                       await progressMessage.edit({ markdown: errorBody });
                     } else {
                       await thread.post({ markdown: errorBody });
@@ -1369,10 +1597,17 @@ export class AgentBridgeService {
                 }
 
                 if (reason === 'interrupted') {
-                  if (progressMessage) {
+                  const stoppedBody = renderStopped(undefined, replyLocale);
+                  if (replyDelivery) {
+                    try {
+                      await replyDelivery.edit(stoppedBody);
+                    } catch {
+                      // ignore edit failure
+                    }
+                  } else if (progressMessage) {
                     try {
                       await progressMessage.edit({
-                        markdown: renderStopped(undefined, replyLocale),
+                        markdown: stoppedBody,
                       });
                     } catch {
                       // ignore edit failure
@@ -1425,7 +1660,44 @@ export class AgentBridgeService {
                         : { markdown: chunk };
 
                     try {
-                      if (progressMessage) {
+                      if (replyDelivery) {
+                        // Reply-threaded run: the first chunk rewrites the reply
+                        // placeholder; every further chunk is a fresh reply to
+                        // the same trigger (multi-part replies). Attachments
+                        // stay in the hook-event shape — the messenger consumes
+                        // exactly that. A single-chunk reply never enters the
+                        // loop below, so its attachments ride the FIRST post —
+                        // `edit` is text-only and would drop them.
+                        if (chunks.length === 1 && hasAttachments) {
+                          const delivered = await deliverEditedReply({
+                            attachments: event.attachments as BotMessageAttachment[],
+                            currentText: lastProgressText,
+                            editText: (text) => replyDelivery.edit(text),
+                            postAttachments: (attachments) => replyDelivery.post('', attachments),
+                            postText: (text) => replyDelivery.post(text),
+                            text: chunks[0],
+                          });
+                          lastProgressText = delivered.text;
+                          if (delivered.usedFallback) {
+                            log(
+                              'executeWithCallback[local]: completion reply delivered via fallback post, thread=%s',
+                              thread.id,
+                            );
+                          }
+                        } else if (chunks[0] !== lastProgressText) {
+                          await replyDelivery.edit(chunks[0]);
+                          lastProgressText = chunks[0];
+                        }
+                        for (let i = 1; i < chunks.length; i++) {
+                          const isLast = i === lastIdx;
+                          await replyDelivery.post(
+                            chunks[i],
+                            isLast && hasAttachments
+                              ? (event.attachments as BotMessageAttachment[])
+                              : undefined,
+                          );
+                        }
+                      } else if (progressMessage) {
                         if (chunks[0] !== lastProgressText) {
                           await progressMessage.edit(buildPostable(chunks[0], 0));
                           lastProgressText = chunks[0];
@@ -1528,7 +1800,13 @@ export class AgentBridgeService {
               result.error,
             );
 
-            if (progressMessage) {
+            if (replyDelivery) {
+              try {
+                await replyDelivery.edit(renderError(result.operationId, replyLocale));
+              } catch (error) {
+                log('executeWithCallback[local]: failed to edit startup error: %O', error);
+              }
+            } else if (progressMessage) {
               try {
                 await progressMessage.edit({
                   markdown: renderError(result.operationId, replyLocale),
@@ -1568,7 +1846,13 @@ export class AgentBridgeService {
           clearTimeout(timeout);
 
           if (isAbortError(error)) {
-            if (progressMessage) {
+            if (replyDelivery) {
+              try {
+                await replyDelivery.edit(renderStopped(error.message, replyLocale));
+              } catch (editError) {
+                log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
+              }
+            } else if (progressMessage) {
               try {
                 await progressMessage.edit({
                   markdown: renderStopped(error.message, replyLocale),
@@ -1605,7 +1889,13 @@ export class AgentBridgeService {
           // is traceable instead of opaque.
           const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
 
-          if (progressMessage) {
+          if (replyDelivery) {
+            try {
+              await replyDelivery.edit(renderError(fallbackOperationId, replyLocale));
+            } catch (editError) {
+              log('executeWithCallback[local]: failed to edit startup error: %O', editError);
+            }
+          } else if (progressMessage) {
             try {
               await progressMessage.edit({
                 markdown: renderError(fallbackOperationId, replyLocale),

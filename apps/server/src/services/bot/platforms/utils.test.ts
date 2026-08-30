@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PlatformDefinition } from './types';
+import type { FieldSchema, PlatformDefinition } from './types';
 import {
   formatDuration,
   formatTokens,
   formatUsageStats,
+  mergeWithDefaults,
   resolveBotProviderConfig,
   resolveConnectionMode,
 } from './utils';
@@ -138,5 +139,33 @@ describe('resolveConnectionMode', () => {
   it('falls back to webhook when platform definition is missing', () => {
     expect(resolveConnectionMode(undefined, null)).toBe('webhook');
     expect(resolveConnectionMode(undefined, { connectionMode: 'websocket' })).toBe('websocket');
+  });
+});
+
+describe('mergeWithDefaults', () => {
+  const schema: FieldSchema[] = [
+    {
+      key: 'settings',
+      label: 'Settings',
+      properties: [
+        {
+          default: 100,
+          key: 'charLimit',
+          label: 'Limit',
+          maximum: 4000,
+          minimum: 1,
+          type: 'number',
+        },
+      ],
+      type: 'object',
+    },
+  ];
+
+  it.each([
+    [30_000, 4000],
+    [0, 1],
+    [2000, 2000],
+  ])('clamps numeric settings to their schema bounds', (value, expected) => {
+    expect(mergeWithDefaults(schema, { charLimit: value }).charLimit).toBe(expected);
   });
 });

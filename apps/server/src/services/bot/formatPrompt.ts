@@ -1,4 +1,4 @@
-import { formatSpeakerMessage } from '@lobechat/prompts';
+import { formatSpeakerMessage, type RecentGroupMessage } from '@lobechat/prompts';
 
 interface RawReferencedMessage {
   author?: { global_name?: string; username?: string };
@@ -32,6 +32,26 @@ export const formatReferencedMessage = (
   const sender = ref.author?.global_name || ref.author?.username || 'unknown';
 
   return `<referenced_message sender="${sender}">${ref.content}</referenced_message>`;
+};
+
+/**
+ * Group history pre-inject block (Feishu-style watermark platforms): human
+ * messages the bot missed since its last injection. Prepended to the user
+ * prompt — NOT the system prompt — so it persists as the topic's user message
+ * and stays visible on every later turn (rebuilding it in the system prompt
+ * each turn silently dropped earlier injections).
+ */
+export const formatGroupHistoryBlock = (messages: RecentGroupMessage[]): string => {
+  const lines = messages.filter((m) => m?.author && m?.text).map((m) => `${m.author}: ${m.text}`);
+  if (lines.length === 0) return '';
+
+  return [
+    '<recent_group_messages>',
+    'Messages from this group thread since your last interaction (oldest first), possibly with some overlap with earlier turns — treat repeated messages as the same content, not new information. They include messages sent without @-mentioning you; use them as surrounding discussion context. The LAST user message is the one you are answering.',
+    'Messages are prefixed with the speaker name. Data queries must use the identity of the user who @-mentioned you, not other speakers.',
+    ...lines,
+    '</recent_group_messages>',
+  ].join('\n');
 };
 
 /**

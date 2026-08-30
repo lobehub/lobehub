@@ -17,6 +17,11 @@ export const lark: PlatformDefinition = {
   },
   schema: sharedSchema,
   supportsMarkdown: false,
+  // See feishu definition — Lark shares the same event model.
+  preInjectGroupHistory: true,
+  // Outbound threads as replies to the triggering message (topic-group
+  // replies land inside the topic instead of the group's main timeline).
+  supportsReplyThreading: true,
   unsupportedMessageApis: PLATFORM_UNSUPPORTED_MESSAGE_APIS.lark,
   clientFactory: sharedClientFactory,
 };

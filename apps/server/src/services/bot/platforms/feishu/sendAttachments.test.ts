@@ -19,6 +19,8 @@ vi.mock('../publicUrlFetch', async () => ({
 }));
 
 const makeApi = () => ({
+  replyMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-r1', raw: {} }),
+  sendDirectMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-dm1', raw: {} }),
   sendMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-1', raw: {} }),
   uploadFile: vi.fn().mockResolvedValue({ file_key: 'file_xyz' }),
   uploadImage: vi.fn().mockResolvedValue({ image_key: 'img_abc' }),
@@ -33,7 +35,7 @@ describe('sendFeishuAttachments', () => {
   it('uploads image and sends with msg_type=image', async () => {
     const api = makeApi();
 
-    const n = await sendFeishuAttachments(api as any, 'oc_chat', [
+    const ids = await sendFeishuAttachments(api as any, 'oc_chat', [
       {
         data: Buffer.from('img-bytes').toString('base64'),
         mimeType: 'image/png',
@@ -42,13 +44,51 @@ describe('sendFeishuAttachments', () => {
       },
     ]);
 
-    expect(n).toBe(1);
+    expect(ids).toEqual(['m-1']);
     expect(api.uploadImage).toHaveBeenCalledWith(expect.any(Buffer), 'foo.png');
     expect(api.sendMessageWithMsgType).toHaveBeenCalledWith(
       'oc_chat',
       'image',
       JSON.stringify({ image_key: 'img_abc' }),
     );
+  });
+
+  it('sends via the reply API when replyToMessageId is set', async () => {
+    const api = makeApi();
+
+    const ids = await sendFeishuAttachments(
+      api as any,
+      'oc_chat',
+      [{ data: Buffer.from('v').toString('base64'), name: 'v.mp4', type: 'video' }],
+      'om_trigger',
+    );
+
+    expect(api.replyMessageWithMsgType).toHaveBeenCalledWith(
+      'om_trigger',
+      'media',
+      JSON.stringify({ file_key: 'file_xyz' }),
+    );
+    expect(api.sendMessageWithMsgType).not.toHaveBeenCalled();
+    expect(ids).toEqual(['m-r1']);
+  });
+
+  it('sends directly to a user for attachment-only DMs', async () => {
+    const api = makeApi();
+
+    const ids = await sendFeishuAttachments(
+      api as any,
+      'ou_user',
+      [{ data: Buffer.from('img').toString('base64'), type: 'image' }],
+      undefined,
+      true,
+    );
+
+    expect(api.sendDirectMessageWithMsgType).toHaveBeenCalledWith(
+      'ou_user',
+      'image',
+      JSON.stringify({ image_key: 'img_abc' }),
+    );
+    expect(ids).toEqual(['m-dm1']);
   });
 
   it('infers file_type from extension/mime', async () => {
@@ -101,23 +141,23 @@ describe('sendFeishuAttachments', () => {
       .mockRejectedValueOnce(new Error('429'))
       .mockResolvedValueOnce({ image_key: 'img_2' });
 
-    const n = await sendFeishuAttachments(api as any, 'oc_chat', [
+    const ids = await sendFeishuAttachments(api as any, 'oc_chat', [
       { data: Buffer.from('a').toString('base64'), name: 'a.png', type: 'image' },
       { data: Buffer.from('b').toString('base64'), name: 'b.png', type: 'image' },
     ]);
 
-    expect(n).toBe(1);
+    expect(ids).toEqual(['m-1']);
     expect(api.sendMessageWithMsgType).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 0 when no attachments resolve', async () => {
+  it('returns an empty list when no attachments resolve', async () => {
     const api = makeApi();
 
-    const n = await sendFeishuAttachments(api as any, 'oc_chat', [
+    const ids = await sendFeishuAttachments(api as any, 'oc_chat', [
       { type: 'image' } as any, // no data, no fetchUrl
     ]);
 
-    expect(n).toBe(0);
+    expect(ids).toEqual([]);
     expect(api.uploadImage).not.toHaveBeenCalled();
     expect(api.sendMessageWithMsgType).not.toHaveBeenCalled();
   });

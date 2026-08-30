@@ -30,6 +30,8 @@ import type {
   ReplyToThreadState,
   SearchMessagesParams,
   SearchMessagesState,
+  SendDirectMessageParams,
+  SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
   UnpinMessageParams,
@@ -79,6 +81,39 @@ export class FeishuMessageService implements MessageRuntimeService {
   ) {
     this.platformName = platformName;
   }
+
+  sendDirectMessage = async (params: SendDirectMessageParams): Promise<SendDirectMessageState> => {
+    // Feishu sends a DM by addressing the user directly via receive_id;
+    // no separate createDM step is needed. The API implicitly creates/reuses
+    // a p2p chat and returns chat_id in the raw response.
+    const textResult = params.content.trim()
+      ? await this.api.sendDirectMessage(params.userId, params.content)
+      : undefined;
+    const chatId = textResult?.raw?.chat_id;
+    let attachmentMessageIds: string[] = [];
+    if (params.attachments?.length) {
+      if (chatId)
+        attachmentMessageIds = await sendFeishuAttachments(this.api, chatId, params.attachments);
+      else
+        attachmentMessageIds = await sendFeishuAttachments(
+          this.api,
+          params.userId,
+          params.attachments,
+          undefined,
+          true,
+        );
+    }
+    if (params.attachments?.length && attachmentMessageIds.length === 0) {
+      throw new Error('Feishu direct message delivered no attachments');
+    }
+    const messageId = textResult?.messageId ?? attachmentMessageIds.at(-1);
+    if (!messageId) throw new Error('Feishu direct message delivered no content');
+    return {
+      channelId: chatId ?? params.userId,
+      messageId,
+      platform: this.platformName,
+    };
+  };
 
   // ==================== Core Message Operations ====================
 
@@ -197,7 +232,9 @@ export class FeishuMessageService implements MessageRuntimeService {
   };
 
   replyToThread = async (params: ReplyToThreadParams): Promise<ReplyToThreadState> => {
-    const result = await this.api.replyMessage(params.threadId, params.content);
+    // threadId here is the topic root message id — the card reply lands
+    // inside that topic.
+    const result = await this.api.replyCard(params.threadId, params.content);
     return { messageId: result.messageId, threadId: params.threadId };
   };
 

@@ -76,6 +76,14 @@ export interface ChatTopicBotContext {
    * platform-specific message shapes.
    */
   senderExternalUserId: string;
+  /**
+   * Platform message id of the inbound message that triggered this run
+   * (e.g. Feishu/Lark `om_xxx`). Reply-capable platforms thread every
+   * outbound message against this id so replies land inside the trigger's
+   * topic thread / render as quoted replies. Optional — absent for runs not
+   * triggered by a specific message.
+   */
+  triggerMessageId?: string;
 }
 
 export interface OnboardingFeedbackEntry {

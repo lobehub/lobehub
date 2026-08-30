@@ -743,7 +743,7 @@ describe('BotCallbackService', () => {
 
     // ==================== Attachments ====================
 
-    it('should pass attachments through to messenger when present on single-chunk reply', async () => {
+    it('should post attachments separately from a single-chunk progress edit', async () => {
       const body = makeBody({
         attachments: [
           {
@@ -762,6 +762,9 @@ describe('BotCallbackService', () => {
 
       expect(mockEditMessage).toHaveBeenCalledWith(
         'progress-msg-1',
+        expect.stringContaining('Here is the image you asked for.'),
+      );
+      expect(mockCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           attachments: [
             expect.objectContaining({
@@ -769,7 +772,7 @@ describe('BotCallbackService', () => {
               type: 'image',
             }),
           ],
-          content: expect.stringContaining('Here is the image you asked for.'),
+          content: '',
         }),
       );
     });
@@ -797,7 +800,7 @@ describe('BotCallbackService', () => {
       });
     });
 
-    it('should fall back to createMessage with attachments when edit fails', async () => {
+    it('should post text and attachments separately when edit fails', async () => {
       mockEditMessage.mockRejectedValueOnce(new Error('edit failed'));
 
       const body = makeBody({
@@ -809,15 +812,33 @@ describe('BotCallbackService', () => {
 
       await service.handleCallback(body);
 
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
-          content: expect.stringContaining('reply'),
-        }),
-      );
+      expect(mockCreateMessage).toHaveBeenCalledWith({
+        attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+        content: '',
+      });
+      expect(mockCreateMessage).toHaveBeenCalledWith(expect.stringContaining('reply'));
     });
 
-    // Regression for Codex P1: image-only final assistant turn must still
+    it('should not resend edited text when the attachment follow-up fails', async () => {
+      mockCreateMessage.mockRejectedValueOnce(new Error('attachment failed'));
+      const body = makeBody({
+        attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+        lastAssistantContent: 'reply',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+      expect(mockCreateMessage).toHaveBeenCalledWith({
+        attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
+        content: '',
+      });
+    });
+
+    // An image-only final assistant turn must still
     // ship the attachments, instead of being silently dropped because there
     // is no `lastAssistantContent.trim()`.
     it('should deliver attachments even when reply text is empty', async () => {

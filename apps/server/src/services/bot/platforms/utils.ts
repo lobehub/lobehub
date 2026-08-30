@@ -41,8 +41,8 @@ export function extractDefaults(fields?: FieldSchema[]): Record<string, unknown>
 }
 
 /**
- * Merge platform schema defaults with user-provided settings.
- * Extracts defaults from the schema, then deep-merges with user overrides.
+ * Merge platform schema defaults with user-provided settings, then clamp
+ * numeric values to the schema's minimum and maximum bounds.
  *
  *   const settings = mergeWithDefaults(entry.schema, provider.settings);
  */
@@ -52,8 +52,18 @@ export function mergeWithDefaults(
 ): Record<string, unknown> {
   const settingsSchema = schema.find((f) => f.key === 'settings')?.properties;
   const defaults = extractDefaults(settingsSchema);
-  if (!userSettings) return defaults;
-  return merge(defaults, userSettings) as Record<string, unknown>;
+  const settings = userSettings
+    ? (merge(defaults, userSettings) as Record<string, unknown>)
+    : defaults;
+  for (const field of settingsSchema ?? []) {
+    const value = settings[field.key];
+    if (typeof value !== 'number') continue;
+    settings[field.key] = Math.min(
+      field.maximum ?? Number.POSITIVE_INFINITY,
+      Math.max(field.minimum ?? Number.NEGATIVE_INFINITY, value),
+    );
+  }
+  return settings;
 }
 
 // --------------- Connection mode resolution ---------------

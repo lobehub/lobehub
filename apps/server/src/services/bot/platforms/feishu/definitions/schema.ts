@@ -75,7 +75,7 @@ export const sharedSchema: FieldSchema[] = [
         default: 4000,
         description: 'channel.charLimitHint',
         label: 'channel.charLimit',
-        maximum: 30_000,
+        maximum: 4000,
         minimum: 100,
         type: 'number',
       },

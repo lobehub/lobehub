@@ -21,6 +21,20 @@ export interface RecentChannelHistory {
   topics: RecentChannelTopic[];
 }
 
+/**
+ * One recent human message in the current group thread, fetched from the
+ * platform API at wake-up time on watermark-incremental platforms (includes
+ * messages the bot never received because they didn't @-mention it).
+ * Oldest-first. Consumed by `formatGroupHistoryBlock` (bot prompt assembly),
+ * which prepends them to the USER prompt so they persist across turns.
+ */
+export interface RecentGroupMessage {
+  /** Sender display name at fetch time. */
+  author: string;
+  /** Plain-text message body (pre-truncated upstream). */
+  text: string;
+}
+
 export interface BotPlatformInfo {
   /**
    * Whether the platform can read chat history at runtime via `readMessages`.

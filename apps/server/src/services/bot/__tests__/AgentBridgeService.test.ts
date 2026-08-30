@@ -48,6 +48,11 @@ vi.mock('@/server/services/bot/formatPrompt', () => ({
   formatPrompt: mockFormatPrompt,
 }));
 
+vi.mock('@/server/services/bot/reactionState', () => ({
+  clearReactionState: vi.fn().mockResolvedValue(undefined),
+  saveReactionState: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/server/services/bot/platforms', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
@@ -56,6 +61,13 @@ vi.mock('@/server/services/bot/platforms', async (importOriginal) => {
       getPlatform: mockGetPlatform,
     },
   };
+});
+
+const mockDefaultExecAgentRef = async () => ({
+  assistantMessageId: 'assistant-msg-1',
+  createdAt: new Date().toISOString(),
+  operationId: 'op-1',
+  topicId: 'topic-1',
 });
 
 const { AgentBridgeService } = await import('../AgentBridgeService');
@@ -112,12 +124,8 @@ function createClient() {
 describe('AgentBridgeService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExecAgent.mockResolvedValue({
-      assistantMessageId: 'assistant-msg-1',
-      createdAt: new Date().toISOString(),
-      operationId: 'op-1',
-      topicId: 'topic-1',
-    });
+    mockExecAgent.mockImplementation(mockDefaultExecAgentRef);
+
     mockFormatPrompt.mockReturnValue('formatted prompt');
     mockGetPlatform.mockReturnValue({ id: 'discord', supportsMessageEdit: true });
     mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
@@ -265,6 +273,129 @@ describe('AgentBridgeService', () => {
         ]),
       }),
     );
+  });
+
+  describe('reply-threaded delivery (supportsReplyThreading)', () => {
+    /** Run a local-mode mention and return the captured onComplete event handler. */
+    const runLocalMentionWithAttachments = async (
+      eventAttachments: any,
+      editFails = false,
+      lastAssistantContent = 'here is the image',
+    ) => {
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      const msg = createMessage();
+
+      const messenger = {
+        createMessage: vi
+          .fn()
+          // placeholder reply resolves a message id → activates replyDelivery
+          .mockResolvedValueOnce({ messageId: 'om_reply_placeholder' })
+          .mockResolvedValue({ messageId: 'om_reply_next' }),
+        editMessage: editFails
+          ? vi.fn().mockRejectedValue(new Error('edit failed'))
+          : vi.fn().mockResolvedValue(undefined),
+        replaceReaction: vi.fn().mockResolvedValue(undefined),
+        triggerTyping: vi.fn(),
+      };
+      const client = {
+        ...createClient(),
+        formatMarkdown: undefined,
+        getMessenger: vi.fn().mockReturnValue(messenger),
+      };
+      mockGetPlatform.mockReturnValue({
+        id: 'feishu',
+        supportsMessageEdit: true,
+        supportsReplyThreading: true,
+      });
+
+      let onComplete!: (event: any) => Promise<void>;
+      mockExecAgent.mockImplementation(async (params: any) => {
+        const hook = params.hooks.find((h: any) => h.type === 'onComplete');
+        onComplete = hook.handler;
+        return {
+          assistantMessageId: 'assistant-1',
+          operationId: 'op-1',
+          success: true,
+          topicId: 'topic-1',
+        };
+      });
+
+      const done = service.handleMention(thread, msg, {
+        agentId: 'agent-1',
+        botContext: {
+          platform: 'feishu',
+          platformThreadId: 'feishu:group:oc_g:omt_t1',
+          triggerMessageId: 'om_trigger_1',
+        } as any,
+        client,
+      });
+
+      // handleMention is async through several awaits before execAgent runs —
+      // drain microtasks until the hook handler is captured (bounded loop).
+      for (let i = 0; i < 50 && !onComplete; i += 1) {
+        await Promise.resolve();
+      }
+      if (!onComplete) throw new Error('onComplete hook was never captured');
+      await onComplete({
+        attachments: eventAttachments,
+        lastAssistantContent,
+        reason: 'done',
+      });
+      await done;
+
+      // Restore the default execAgent behavior — mockImplementation survives
+      // clearAllMocks and would otherwise leak into sibling tests.
+      mockExecAgent.mockImplementation(mockDefaultExecAgentRef);
+      return { messenger };
+    };
+
+    // A single-chunk completion with attachments
+    // never entered the chunk loop (it starts at i=1), so the attachments
+    // were dropped — `edit` is text-only. The first chunk must deliver its
+    // attachments through a follow-up post.
+    it('delivers attachments on a single-chunk reply-threaded completion', async () => {
+      const attachments = [{ data: 'aGk=', mimeType: 'image/png', name: 'img.png', type: 'image' }];
+      const { messenger } = await runLocalMentionWithAttachments(attachments);
+
+      // Placeholder reply + the attachment post both went through the
+      // reply-capable messenger's createMessage.
+      expect(messenger.createMessage).toHaveBeenCalledTimes(2);
+      // Second call carries the attachments (empty text is skipped inside).
+      expect(messenger.createMessage).toHaveBeenLastCalledWith({
+        attachments,
+        content: '',
+      });
+    });
+
+    it('does not post an attachment follow-up when there are no attachments', async () => {
+      const { messenger } = await runLocalMentionWithAttachments(undefined);
+
+      expect(messenger.createMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('still posts attachments when the final progress edit fails', async () => {
+      const attachments = [{ data: 'aGk=', name: 'img.png', type: 'image' }];
+      const { messenger } = await runLocalMentionWithAttachments(attachments, true);
+
+      expect(messenger.createMessage).toHaveBeenCalledWith({
+        attachments,
+        content: '',
+      });
+      expect(messenger.createMessage).toHaveBeenLastCalledWith('here is the image');
+    });
+
+    it('completes the placeholder for an attachment-only reply', async () => {
+      const attachments = [{ data: 'aGk=', name: 'img.png', type: 'image' }];
+      const { messenger } = await runLocalMentionWithAttachments(attachments, false, '');
+
+      expect(messenger.editMessage).toHaveBeenCalledWith('om_reply_placeholder', '📎');
+      expect(messenger.createMessage).toHaveBeenCalledWith({
+        attachments,
+        content: '',
+      });
+    });
   });
 
   describe('stale cached topic recovery', () => {

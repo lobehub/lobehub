@@ -30,6 +30,7 @@ import {
   resolveBotProviderConfig,
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
+import { deliverEditedReply } from './replyDelivery';
 import {
   renderAgentError,
   renderFinalReply,
@@ -123,6 +124,14 @@ export interface BotCallbackBody {
   totalSteps?: number;
   totalTokens?: number;
   totalToolCalls?: any;
+  /**
+   * Platform message id of the inbound message that triggered this run
+   * (Feishu/Lark `om_xxx`). Reply-capable platforms build the outbound
+   * messenger with it so every outbound message lands as a reply to the
+   * trigger (inside its topic thread). Optional — absent on runs not
+   * triggered by a specific message.
+   */
+  triggerMessageId?: string;
   type: 'completion' | 'step';
   userId?: string;
   userMessageId?: string;
@@ -152,6 +161,7 @@ export class BotCallbackService {
       platformThreadId,
       progressMessageId,
       messengerInstallationKey,
+      triggerMessageId,
       userId,
     } = body;
     const platform = platformFromThreadId(platformThreadId);
@@ -162,6 +172,7 @@ export class BotCallbackService {
         messengerInstallationKey,
         platform,
         platformThreadId,
+        triggerMessageId,
         userId,
         workspaceId: body.workspaceId,
       });
@@ -217,6 +228,7 @@ export class BotCallbackService {
     messengerInstallationKey?: string;
     platform: string;
     platformThreadId: string;
+    triggerMessageId?: string;
     userId?: string;
     workspaceId?: string;
   }): Promise<{
@@ -227,7 +239,14 @@ export class BotCallbackService {
     settings: Record<string, unknown>;
     workspaceId?: string | null;
   }> {
-    const { applicationId, messengerInstallationKey, platform, platformThreadId, userId } = params;
+    const {
+      applicationId,
+      messengerInstallationKey,
+      platform,
+      platformThreadId,
+      triggerMessageId,
+      userId,
+    } = params;
 
     // Deterministic discriminator: any run originated from the shared
     // Messenger bot is tagged by `MessengerRouter` with the install key. We
@@ -240,6 +259,7 @@ export class BotCallbackService {
         platformThreadId,
         userId,
         params.workspaceId,
+        triggerMessageId,
       );
     }
 
@@ -277,7 +297,10 @@ export class BotCallbackService {
       redisClient: getAgentRuntimeRedisClient() as any,
       userId: row.userId ?? userId,
     });
-    const messenger = client.getMessenger(platformThreadId);
+    const messenger = client.getMessenger(
+      platformThreadId,
+      triggerMessageId ? { replyToMessageId: triggerMessageId } : undefined,
+    );
 
     return {
       charLimit,
@@ -308,6 +331,7 @@ export class BotCallbackService {
     platformThreadId: string,
     userId?: string,
     workspaceId?: string,
+    triggerMessageId?: string,
   ): Promise<{
     charLimit?: number;
     connectionId: string;
@@ -338,7 +362,10 @@ export class BotCallbackService {
       );
     }
 
-    const messenger = client.getMessenger(platformThreadId);
+    const messenger = client.getMessenger(
+      platformThreadId,
+      triggerMessageId ? { replyToMessageId: triggerMessageId } : undefined,
+    );
 
     // Pull the SystemBot's connectionMode from the messenger definition (NOT
     // `bot/platforms`) — SystemBot's transport is fixed per platform and may
@@ -569,22 +596,33 @@ export class BotCallbackService {
     attachments?: BotMessageAttachment[],
     strictDelivery = false,
   ): Promise<boolean> {
-    const payload = attachments && attachments.length > 0 ? { attachments, content: text } : text;
+    const hasAttachments = attachments && attachments.length > 0;
+    const payload = hasAttachments ? { attachments, content: text } : text;
 
     if (canEdit && progressMessageId) {
       try {
-        await messenger.editMessage(progressMessageId, payload);
-        // Positive delivery record (console, not debug): "we sent it and the
-        // platform accepted it" must be provable from production logs alone —
-        // burned days on inferring delivery from the absence of
-        // error logs while the target thread had been deleted out from under
-        // the bot.
-        console.info(
-          `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
-        );
+        const { usedFallback } = await deliverEditedReply({
+          attachments,
+          editText: (completionText) => messenger.editMessage(progressMessageId, completionText),
+          postAttachments: (items) =>
+            messenger.createMessage({ attachments: items, content: '' }).then(() => {}),
+          postText: (completionText) => messenger.createMessage(completionText).then(() => {}),
+          text,
+        });
+        if (usedFallback) {
+          console.info('[BotCallbackService] completion reply delivered via createMessage');
+        } else {
+          console.info(
+            `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
+          );
+        }
         return true;
       } catch (error) {
-        log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
+        console.error(
+          `[BotCallbackService] edited reply delivery failed: ${describePlatformError(error)}`,
+        );
+        if (strictDelivery) throw error;
+        return false;
       }
     }
     try {

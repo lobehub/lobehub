@@ -143,8 +143,13 @@ export function stripMarkdown(md: string): string {
 
   // --- Step 3: inline transforms ---
 
-  // Images: ![alt](url) → alt
-  text = text.replaceAll(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+  // Images: ![alt](url) → alt (url). The URL must survive — generated-image
+  // replies embed the download link this way, and dropping it (the old
+  // `→ alt` rule) left the bot's "here's your image" message with no image.
+  // Mirrors the link rule below; alt may be empty (`![](url)` → `url`).
+  text = text.replaceAll(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt: string, url: string) =>
+    alt.trim() ? `${alt.trim()} (${url})` : url,
+  );
 
   // Links: [text](url) → text (url)
   text = text.replaceAll(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');

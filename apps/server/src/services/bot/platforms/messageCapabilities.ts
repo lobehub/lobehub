@@ -31,7 +31,6 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.listThreads,
     MessageApiName.pinMessage,
     MessageApiName.searchMessages,
-    MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
   // iMessage supports readMessages/searchMessages, so history is read on demand.
@@ -59,7 +58,6 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.listThreads,
     MessageApiName.pinMessage,
     MessageApiName.searchMessages,
-    MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
   // QQ has no history-read API → prompt uses pre-injected recent channel history.

@@ -33,6 +33,8 @@ type WarnFn = (message: string, ...args: unknown[]) => void;
  *
  *   - `lark:p2p:oc_xxx`   single chat (DM with bot)
  *   - `lark:group:oc_xxx` group chat
+ *   - `lark:group:oc_xxx:omt_yyy` group chat, topic (thread) scoped — each
+ *                         Feishu topic is its own conversation
  *   - `lark:oc_xxx`       legacy / unknown type — emitted only when callers
  *                         don't have `chatType` at hand (e.g. `parseMessage`
  *                         on history fetches). `decodeLarkThreadId` accepts
@@ -44,10 +46,11 @@ type WarnFn = (message: string, ...args: unknown[]) => void;
  * and Slack uses (channel ID prefix `D`).
  */
 export function encodeLarkThreadId(data: LarkThreadId): string {
-  if (data.chatType === 'p2p' || data.chatType === 'group') {
-    return `${data.platform}:${data.chatType}:${data.chatId}`;
-  }
-  return `${data.platform}:${data.chatId}`;
+  const base =
+    data.chatType === 'p2p' || data.chatType === 'group'
+      ? `${data.platform}:${data.chatType}:${data.chatId}`
+      : `${data.platform}:${data.chatId}`;
+  return data.threadId ? `${base}:${data.threadId}` : base;
 }
 
 /**
@@ -79,8 +82,20 @@ export function decodeLarkThreadId(
   if (nextColon !== -1) {
     const maybeType = rest.slice(0, nextColon);
     if (maybeType === 'p2p' || maybeType === 'group') {
+      const tail = rest.slice(nextColon + 1);
+      // Optional 4th segment: the Feishu topic ID (`omt_…`). Chat IDs never
+      // contain colons, so a colon in the tail always separates chat/topic.
+      const topicColon = tail.indexOf(':');
+      if (topicColon !== -1) {
+        return {
+          chatId: tail.slice(0, topicColon),
+          chatType: maybeType,
+          platform,
+          threadId: tail.slice(topicColon + 1),
+        };
+      }
       return {
-        chatId: rest.slice(nextColon + 1),
+        chatId: tail,
         chatType: maybeType,
         platform,
       };
@@ -110,15 +125,65 @@ export function decodeLarkThreadId(
  * its allowlist), so downstream consumers still get a count + descriptive
  * metadata for each attachment.
  */
+
+/**
+ * Flatten a rich-text (post) body's element list. Feishu ships two shapes:
+ * new-style `content: [[…elements]]` (array of paragraphs) and legacy
+ * `content: […elements]` — both are normalized to a flat element array.
+ */
+function postElements(content: Record<string, unknown>): Array<Record<string, any>> {
+  const flat: Array<Record<string, any>> = [];
+  if (!Array.isArray(content.content)) return flat;
+  for (const ele of content.content) {
+    if (Array.isArray(ele)) flat.push(...ele);
+    else if (ele && typeof ele === 'object') flat.push(ele);
+  }
+  return flat.filter((ele) => typeof ele?.tag === 'string');
+}
+
+/** Media embedded in a post body: inline `img` / `media` elements. */
+function postMediaItems(
+  content: Record<string, unknown>,
+): Array<{ kind: 'image' | 'media'; key: string }> {
+  const items: Array<{ kind: 'image' | 'media'; key: string }> = [];
+  for (const ele of postElements(content)) {
+    if (ele.tag === 'img' && typeof ele.image_key === 'string') {
+      items.push({ kind: 'image', key: ele.image_key });
+    } else if (ele.tag === 'media' && typeof ele.file_key === 'string') {
+      items.push({ kind: 'media', key: ele.file_key });
+    }
+  }
+  return items;
+}
+
+/** Text of a post body: title + concatenated `text` elements. */
+export function postText(content: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (typeof content.title === 'string' && content.title) parts.push(content.title);
+  for (const ele of postElements(content)) {
+    if (ele.tag === 'text' && typeof ele.text === 'string') parts.push(ele.text);
+  }
+  return parts.join('').trim();
+}
+
 export function extractMediaMetadata(raw: LarkRawMessage): Attachment[] {
   const messageType = raw.message_type;
-  if (messageType === 'text' || messageType === 'post') return [];
+  if (messageType === 'text') return [];
 
   let content: Record<string, string>;
   try {
     content = JSON.parse(raw.content);
   } catch {
     return [];
+  }
+
+  // Rich-text (post) messages: media rides inline as `img` / `media` elements.
+  if (messageType === 'post') {
+    return postMediaItems(content).map(({ kind }) =>
+      kind === 'media'
+        ? ({ mimeType: 'video/mp4', name: 'video.mp4', type: 'video' } as Attachment)
+        : ({ mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' } as Attachment),
+    );
   }
 
   switch (messageType) {
@@ -173,7 +238,7 @@ export async function downloadMediaFromRawMessage(
   const warn: WarnFn = logger?.warn?.bind(logger) ?? (() => {});
 
   const messageType = raw.message_type;
-  if (messageType === 'text' || messageType === 'post') return [];
+  if (messageType === 'text') return [];
 
   let content: Record<string, string>;
   try {
@@ -183,6 +248,31 @@ export async function downloadMediaFromRawMessage(
   }
 
   const messageId = raw.message_id;
+
+  // Rich-text (post): download each inline img / media element.
+  if (messageType === 'post') {
+    const items = postMediaItems(content);
+    const attachments: Attachment[] = [];
+    for (const item of items) {
+      try {
+        const buffer = await api.downloadResource(
+          messageId,
+          item.key,
+          item.kind === 'media' ? 'file' : 'image',
+        );
+        attachments.push({
+          buffer,
+          mimeType: item.kind === 'media' ? 'video/mp4' : 'image/jpeg',
+          name: item.kind === 'media' ? 'video.mp4' : 'image.jpg',
+          type: item.kind === 'media' ? 'video' : 'image',
+        } as Attachment);
+      } catch (error) {
+        warn('Failed to download post media %s for message %s: %s', item.key, messageId, error);
+      }
+    }
+    return attachments;
+  }
+
   const attachments: Attachment[] = [];
 
   try {
@@ -406,6 +496,13 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
           messageText = content.text || '';
           break;
         }
+        case 'post': {
+          // Rich text (@mention + pasted image, links, …): text comes from
+          // the element list, media rides as inline img/media elements.
+          messageText = postText(content);
+          hasMedia = postMediaItems(content).length > 0;
+          break;
+        }
         case 'image':
         case 'file':
         case 'audio':
@@ -434,6 +531,8 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
           ? message.chat_type
           : undefined,
       platform: this.platform,
+      // Topic-group messages carry thread_id — scope the conversation to it
+      threadId: message.thread_id,
     });
 
     // Create message lazily via factory
@@ -455,7 +554,7 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
   ): Promise<RawMessage<LarkRawMessage>> {
     const { chatId } = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
-    const { messageId, raw } = await this.api.sendMessage(chatId, text);
+    const { messageId, raw } = await this.api.sendCard(chatId, text);
 
     return {
       id: messageId,
@@ -464,13 +563,23 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
     };
   }
 
+  async reply(
+    threadId: string,
+    messageId: string,
+    message: AdapterPostableMessage,
+  ): Promise<RawMessage<LarkRawMessage>> {
+    const text = this.formatConverter.renderPostable(message);
+    const { messageId: replyMessageId, raw } = await this.api.replyCard(messageId, text);
+    return { id: replyMessageId, raw: raw as LarkRawMessage, threadId };
+  }
+
   async editMessage(
     threadId: string,
     messageId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<LarkRawMessage>> {
     const text = this.formatConverter.renderPostable(message);
-    const { raw } = await this.api.editMessage(messageId, text);
+    const { raw } = await this.api.editCard(messageId, text);
 
     return {
       id: messageId,
@@ -531,7 +640,7 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
     let text = '';
     try {
       const content = JSON.parse(raw.content);
-      text = content.text || '';
+      text = raw.message_type === 'post' ? postText(content) : content.text || '';
     } catch {
       // malformed
     }
@@ -546,6 +655,7 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
     const threadId = this.encodeThreadId({
       chatId: raw.chat_id,
       platform: this.platform,
+      threadId: raw.thread_id,
     });
 
     // Metadata-only attachments — actual binary download happens later, on

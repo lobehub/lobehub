@@ -1,9 +1,57 @@
+import { parseMarkdown } from 'chat';
+
 const BASE_URLS: Record<string, string> = {
   feishu: 'https://open.feishu.cn/open-apis',
   lark: 'https://open.larksuite.com/open-apis',
 };
 
 const MAX_TEXT_LENGTH = 4000;
+const MAX_CARD_CONTENT_BYTES = 30 * 1024;
+const textEncoder = new TextEncoder();
+
+const userReceiveIdType = (userId: string) =>
+  userId.startsWith('ou_') ? 'open_id' : userId.startsWith('on_') ? 'union_id' : 'user_id';
+
+// Card markdown component images only accept Feishu image_keys, never URLs —
+// a `![alt](url)` in the payload makes the whole card fail with 230099 /
+// ErrCode 11310 ("card contains images but no imagekey"). Downgrade URL
+// images to plain text links; real attachments ride the uploadImage channel.
+interface MarkdownNode {
+  alt?: string | null;
+  children?: MarkdownNode[];
+  position?: { end: { offset?: number }; start: { offset?: number } };
+  type?: string;
+  url?: string;
+}
+
+const toCardMarkdown = (markdown: string): string => {
+  const images: MarkdownNode[] = [];
+  const visit = (node: MarkdownNode) => {
+    if (node.type === 'image') images.push(node);
+    node.children?.forEach(visit);
+  };
+  visit(parseMarkdown(markdown) as MarkdownNode);
+
+  return images.toReversed().reduce((result, image) => {
+    const start = image.position?.start.offset;
+    const end = image.position?.end.offset;
+    if (start === undefined || end === undefined || image.url === undefined) return result;
+    const alt = image.alt?.trim();
+    const replacement = image.url ? (alt ? `${alt}: ${image.url}` : image.url) : (alt ?? '');
+    return result.slice(0, start) + replacement + result.slice(end);
+  }, markdown);
+};
+
+const cardContent = (markdown: string): string => {
+  const content = JSON.stringify({
+    config: { update_multi: true },
+    elements: [{ content: toCardMarkdown(markdown), tag: 'markdown' }],
+  });
+  if (textEncoder.encode(content).byteLength > MAX_CARD_CONTENT_BYTES) {
+    throw new Error('Lark card content exceeds the 30 KB limit');
+  }
+  return content;
+};
 
 /**
  * Lightweight wrapper around the Lark/Feishu Open API.
@@ -28,6 +76,16 @@ export class LarkApiClient {
   // Messages
   // ------------------------------------------------------------------
 
+  async sendCard(chatId: string, markdown: string): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call('POST', '/im/v1/messages?receive_id_type=chat_id', {
+      content: cardContent(markdown),
+      msg_type: 'interactive',
+      receive_id: chatId,
+    });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
+  /** @deprecated Use sendCard for Markdown/card messages. */
   async sendMessage(chatId: string, text: string): Promise<{ messageId: string; raw: any }> {
     const data = await this.call('POST', '/im/v1/messages?receive_id_type=chat_id', {
       content: JSON.stringify({ text: this.truncateText(text) }),
@@ -37,10 +95,35 @@ export class LarkApiClient {
     return { messageId: data.data.message_id, raw: data.data };
   }
 
+  async sendDirectMessage(userId: string, text: string): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call(
+      'POST',
+      `/im/v1/messages?receive_id_type=${userReceiveIdType(userId)}`,
+      {
+        content: JSON.stringify({ text: this.truncateText(text) }),
+        msg_type: 'text',
+        receive_id: userId,
+      },
+    );
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
   async editMessage(messageId: string, text: string): Promise<{ raw: any }> {
     const data = await this.call('PUT', `/im/v1/messages/${messageId}`, {
       content: JSON.stringify({ text: this.truncateText(text) }),
       msg_type: 'text',
+    });
+    return { raw: data.data };
+  }
+
+  async editCard(messageId: string, text: string): Promise<{ raw: any }> {
+    // Card-only edit. The update endpoint is PATCH (not PUT), takes NO
+    // `msg_type`, only updates interactive cards, and its body is
+    // `{ content: "<serialized card JSON string>" }` — the card itself (with
+    // `config.update_multi: true`, required on BOTH the original card and the
+    // update) is double-serialized. See: 更新已发送的消息卡片.
+    const data = await this.call('PATCH', `/im/v1/messages/${messageId}`, {
+      content: cardContent(text),
     });
     return { raw: data.data };
   }
@@ -56,11 +139,24 @@ export class LarkApiClient {
 
   async listMessages(
     chatId: string,
-    options?: { pageSize?: number; pageToken?: string; startTime?: string; endTime?: string },
+    options?: {
+      /** Message container dimension: 'chat' (default) lists the whole chat; 'thread' lists a topic (chatId = omt_ id). */
+      containerType?: 'chat' | 'thread';
+      pageSize?: number;
+      pageToken?: string;
+      /** 'asc' (API default) or 'desc' — newest-first, so page 1 is the latest N messages. */
+      sortOrder?: 'asc' | 'desc';
+      startTime?: string;
+      endTime?: string;
+    },
   ): Promise<{ items: any[]; hasMore: boolean; pageToken?: string }> {
-    const params = new URLSearchParams({ container_id_type: 'chat', container_id: chatId });
+    const params = new URLSearchParams({
+      container_id_type: options?.containerType ?? 'chat',
+      container_id: chatId,
+    });
     if (options?.pageSize) params.set('page_size', String(options.pageSize));
     if (options?.pageToken) params.set('page_token', options.pageToken);
+    if (options?.sortOrder === 'desc') params.set('sort_type', 'ByCreateTimeDesc');
     if (options?.startTime) params.set('start_time', options.startTime);
     if (options?.endTime) params.set('end_time', options.endTime);
 
@@ -72,10 +168,38 @@ export class LarkApiClient {
     };
   }
 
+  async replyCard(messageId: string, markdown: string): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call('POST', `/im/v1/messages/${messageId}/reply`, {
+      content: cardContent(markdown),
+      msg_type: 'interactive',
+    });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
+  /** @deprecated Use replyCard for Markdown/card messages. */
   async replyMessage(messageId: string, text: string): Promise<{ messageId: string; raw: any }> {
     const data = await this.call('POST', `/im/v1/messages/${messageId}/reply`, {
       content: JSON.stringify({ text: this.truncateText(text) }),
       msg_type: 'text',
+    });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
+  /**
+   * Reply with a non-text message (image / file / audio / media) to a
+   * message — the reply-API twin of `sendMessageWithMsgType`. `content` must
+   * already be the platform-specific JSON-stringified payload.
+   *
+   * See: https://open.feishu.cn/document/server-docs/im-v1/message/reply
+   */
+  async replyMessageWithMsgType(
+    messageId: string,
+    msgType: 'image' | 'file' | 'audio' | 'media',
+    content: string,
+  ): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call('POST', `/im/v1/messages/${messageId}/reply`, {
+      content,
+      msg_type: msgType,
     });
     return { messageId: data.data.message_id, raw: data.data };
   }
@@ -104,7 +228,9 @@ export class LarkApiClient {
     return data.bot;
   }
 
-  async getUserInfo(openId: string): Promise<{ name?: string } | null> {
+  async getUserInfo(
+    openId: string,
+  ): Promise<{ email?: string; enterpriseEmail?: string; name?: string } | null> {
     const userIdType = openId.startsWith('ou_')
       ? 'open_id'
       : openId.startsWith('on_')
@@ -119,8 +245,14 @@ export class LarkApiClient {
     const user = data.data?.user;
     if (!user) return null;
 
-    const name = user.name || user.display_name || user.nickname || user.en_name;
-    return name ? { name } : null;
+    // `enterprise_email` (org-assigned) is usually populated even when the
+    // personal `email` field is empty. Both need the contact:user.email:readonly
+    // scope; absent scope yields empty strings.
+    return {
+      email: user.email || undefined,
+      enterpriseEmail: user.enterprise_email || undefined,
+      name: user.name || user.display_name || user.nickname || user.en_name,
+    };
   }
 
   // ------------------------------------------------------------------
@@ -189,6 +321,23 @@ export class LarkApiClient {
       msg_type: msgType,
       receive_id: chatId,
     });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
+  async sendDirectMessageWithMsgType(
+    userId: string,
+    msgType: 'image' | 'file' | 'audio' | 'media',
+    content: string,
+  ): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call(
+      'POST',
+      `/im/v1/messages?receive_id_type=${userReceiveIdType(userId)}`,
+      {
+        content,
+        msg_type: msgType,
+        receive_id: userId,
+      },
+    );
     return { messageId: data.data.message_id, raw: data.data };
   }
 

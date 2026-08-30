@@ -173,7 +173,13 @@ export interface PlatformMessenger {
    * can omit this). Callers must no-op on platforms that don't implement it.
    */
   addReaction?: (messageId: string, emoji: string) => Promise<void>;
-  createMessage: (content: MessengerContent) => Promise<void>;
+  /**
+   * Send a message to the messenger's thread. Platforms that thread replies
+   * (Feishu/Lark via `getMessenger` opts) resolve with the sent message's
+   * platform id so callers can track it as the progress-message handle for
+   * later `editMessage` calls; other platforms keep resolving `void`.
+   */
+  createMessage: (content: MessengerContent) => Promise<{ messageId: string } | void>;
   editMessage: (messageId: string, content: MessengerContent) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
   /**
@@ -314,10 +320,34 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
+  /** Get a messenger for a specific thread (outbound messaging). */
+  getMessenger: (
+    platformThreadId: string,
+    opts?: {
+      /**
+       * Platform message id every outbound message should reply to
+       * (Feishu/Lark: the triggering inbound message). Reply-threaded
+       * messengers resolve `createMessage` with the reply message id so the
+       * caller can edit it in place. Optional — platforms without a reply
+       * API ignore it.
+       */
+      replyToMessageId?: string;
+    },
+  ) => PlatformMessenger;
+
   // --- Runtime Operations ---
 
-  /** Get a messenger for a specific thread (outbound messaging). */
-  getMessenger: (platformThreadId: string) => PlatformMessenger;
+  /**
+   * Resolve the platform user’s profile (e.g. email) for identity
+   * auto-binding. Optional — only platforms that support email-based
+   * auto-linking implement this.
+   */
+  getUserInfo?: (platformUserId: string) => Promise<{
+    email?: string;
+    /** Org-assigned email (feishu `enterprise_email`) — preferred match key. */
+    enterpriseEmail?: string;
+    name?: string;
+  } | null>;
 
   readonly id: string;
 
@@ -343,6 +373,26 @@ export interface PlatformClient {
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;
+
+  /**
+   * Fetch recent human-authored messages of a GROUP thread (speaker-attributed,
+   * oldest-first) for context pre-injection. Only called for group threads on
+   * platforms whose definition sets `preInjectGroupHistory`. Optional —
+   * platforms without a history-read API omit it.
+   *
+   * `sinceSec` bounds the fetch to messages created after the given Unix
+   * second (the caller's incremental watermark, falling back to a ~24h
+   * window). Feishu/Lark's listing API paginates oldest-first from the start
+   * of the container, so without that bound the first page — not the recent
+   * one — is what comes back. `excludeMessageId` drops the triggering
+   * mention, which is already delivered as the run's own user prompt —
+   * without it the trigger appears twice in the same turn.
+   */
+  readRecentMessages?: (
+    platformThreadId: string,
+    limit: number,
+    options?: { excludeMessageId?: string; sinceSec?: number },
+  ) => Promise<Array<{ author: string; text: string; attachments?: AttachmentSource[] }>>;
 
   /**
    * Register bot commands with the platform (e.g., Telegram setMyCommands).
@@ -377,6 +427,24 @@ export interface PlatformClient {
    * When not implemented, `threadId` is used as-is.
    */
   resolveReactionThreadId?: (threadId: string, messageId: string) => string;
+
+  /**
+   * Resolve the quoted/replied message of an inbound message (platforms whose
+   * replies carry a parent reference, e.g. Feishu `parent_id`). Returns the
+   * quoted message's sender + rendered text, optionally the whole discussion
+   * it lives in (topic threads) and any media it carries (downloaded, ready
+   * for the agent's attachment pipeline). Optional — platforms without a
+   * quote concept omit it; a failed resolution degrades to no quote context.
+   */
+  resolveReference?: (message: Message) => Promise<
+    | {
+        sender: string;
+        text: string;
+        surrounding?: { author: string; text: string }[];
+        attachments?: AttachmentSource[];
+      }
+    | undefined
+  >;
 
   /** Strip platform-specific bot mention artifacts from user input. */
   sanitizeUserInput?: (text: string) => string;
@@ -516,6 +584,16 @@ export interface PlatformDefinition {
   /** The name of the platform. */
   name: string;
 
+  /**
+   * Whether a group thread's first bot mention should pre-inject recent
+   * same-thread human messages (via `PlatformClient.readRecentMessages`) into
+   * the system context, even though the platform CAN read history at runtime.
+   * For platforms where un-@-mentioned group chatter never reaches the bot
+   * (e.g. Feishu), so the model starts with the surrounding discussion without
+   * burning a `readMessages` tool turn. Defaults to false.
+   */
+  preInjectGroupHistory?: boolean;
+
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];
 
@@ -536,6 +614,20 @@ export interface PlatformDefinition {
    * Defaults to true.
    */
   supportsMessageEdit?: boolean;
+
+  /**
+   * Whether outbound messages can be threaded as replies to the triggering
+   * message (`PlatformClient.getMessenger` `opts.replyToMessageId` +
+   * `PlatformMessenger.createMessage` resolving the reply message id).
+   *
+   * When true AND the run carries `ChatTopicBotContext.triggerMessageId`,
+   * `AgentBridgeService` routes the progress placeholder and every
+   * subsequent outbound through the reply-capable messenger instead of the
+   * Chat SDK adapter — the adapter posts by chatId only, which lands
+   * topic-group replies on the group's main timeline (Feishu). Defaults to
+   * false; platforms without a reply API ignore the messenger opts.
+   */
+  supportsReplyThreading?: boolean;
 
   /**
    * `lobe-message` channel API names this platform does NOT support — either the

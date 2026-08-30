@@ -46,21 +46,28 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
 /**
  * Upload + send each attachment as its own Lark/Feishu message:
  *
- * - `image` → `POST /im/v1/images` → `sendMessageWithMsgType(chatId, 'image', {image_key})`
- * - `file` / `video` / `audio` → `POST /im/v1/files` → `sendMessageWithMsgType`
- *   with msg_type `'file'` / `'media'` / `'audio'` respectively.
+ * - `image` → `POST /im/v1/images` → send with msg_type `'image'`
+ * - `file` / `video` / `audio` → `POST /im/v1/files` → send with msg_type
+ *   `'file'` / `'media'` / `'audio'` respectively
  *
- * Lark/Feishu has no single "text + media" composite message, so the caller
- * sends the text leg through a separate `sendMessage` (or `replyMessage`)
- * first. Single-attachment failures are logged and skipped so the rest
- * still ship.
+ * Sending goes through the reply API when `replyToMessageId` is set (keeps
+ * the attachment inside the trigger's topic thread), otherwise through a
+ * direct chat send. Lark/Feishu has no single "text + media" composite
+ * message, so the caller sends the text leg through a separate
+ * `sendMessage`/`replyMessage` call first. Single-attachment failures are
+ * logged and skipped so the rest still ship.
+ *
+ * @returns the platform message ids of the attachments actually delivered
+ * (empty on total failure).
  */
 export const sendFeishuAttachments = async (
   api: LarkApiClient,
-  chatId: string,
+  receiveId: string,
   attachments: BotMessageAttachment[],
-): Promise<number> => {
-  let delivered = 0;
+  replyToMessageId?: string,
+  directMessage = false,
+): Promise<string[]> => {
+  const sentIds: string[] = [];
   for (const [index, att] of attachments.entries()) {
     try {
       const buffer = await loadAttachmentBuffer(att);
@@ -71,15 +78,26 @@ export const sendFeishuAttachments = async (
       const filename = fallbackFilename(att, index);
       if (att.type === 'image') {
         const { image_key } = await api.uploadImage(buffer, filename);
-        await api.sendMessageWithMsgType(chatId, 'image', JSON.stringify({ image_key }));
+        const payload = JSON.stringify({ image_key });
+        const { messageId } = replyToMessageId
+          ? await api.replyMessageWithMsgType(replyToMessageId, 'image', payload)
+          : directMessage
+            ? await api.sendDirectMessageWithMsgType(receiveId, 'image', payload)
+            : await api.sendMessageWithMsgType(receiveId, 'image', payload);
+        sentIds.push(messageId);
       } else {
         const fileType = inferFeishuFileType(att);
         const { file_key } = await api.uploadFile(buffer, filename, fileType);
         const msgType: 'file' | 'media' | 'audio' =
           att.type === 'video' ? 'media' : att.type === 'audio' ? 'audio' : 'file';
-        await api.sendMessageWithMsgType(chatId, msgType, JSON.stringify({ file_key }));
+        const payload = JSON.stringify({ file_key });
+        const { messageId } = replyToMessageId
+          ? await api.replyMessageWithMsgType(replyToMessageId, msgType, payload)
+          : directMessage
+            ? await api.sendDirectMessageWithMsgType(receiveId, msgType, payload)
+            : await api.sendMessageWithMsgType(receiveId, msgType, payload);
+        sentIds.push(messageId);
       }
-      delivered += 1;
     } catch (error) {
       log(
         'sendFeishuAttachments: failed to send %s "%s": %O',
@@ -87,7 +105,8 @@ export const sendFeishuAttachments = async (
         att.name ?? '(unnamed)',
         error,
       );
+      console.error(`[Feishu] failed to send ${att.type} attachment at index ${index}:`, error);
     }
   }
-  return delivered;
+  return sentIds;
 };
