@@ -113,6 +113,7 @@
     "release": "semantic-release",
     "release:branch": "tsx ./scripts/releaseWorkflow/index.ts",
     "search:reindex": "bun run scripts/elasticsearchReindex/index.ts",
+    "search:sync": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchSync/cli.ts",
     "self-hosting:docker": "docker build -t lobehub:local .",
     "self-hosting:docker-cn": "docker build -t lobehub-local --build-arg USE_CN_MIRROR=true .",
     "start": "next start -p 3210",
