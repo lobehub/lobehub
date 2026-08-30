@@ -24,9 +24,9 @@ describe('buildHost', () => {
   it('uses the actor for conversation adapters under a delegated principal', () => {
     const loadAgentState = vi.fn();
     const serverDB = {} as RuntimeExecutorContext['serverDB'];
-    const ctx = {
+    const ctx: RuntimeExecutorContext = {
       loadAgentState,
-      messageModel: {},
+      messageModel: {} as RuntimeExecutorContext['messageModel'],
       operationId: 'operation-1',
       principal: {
         actorUserId: 'visitor-user',
@@ -34,11 +34,11 @@ describe('buildHost', () => {
       },
       serverDB,
       stepIndex: 0,
-      streamManager: {},
-      toolExecutionService: {},
+      streamManager: {} as RuntimeExecutorContext['streamManager'],
+      toolExecutionService: {} as RuntimeExecutorContext['toolExecutionService'],
       topicId: 'topic-1',
       workspaceId: 'workspace-1',
-    } as RuntimeExecutorContext;
+    };
 
     const host = buildHost(ctx);
 
