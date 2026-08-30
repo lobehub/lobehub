@@ -47,6 +47,7 @@ describe('searchRouter', () => {
 
       const allImpls = [
         'browserless',
+        'crw',
         'exa',
         'firecrawl',
         'jina',

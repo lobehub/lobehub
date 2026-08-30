@@ -1,4 +1,5 @@
 import { browserless } from './browserless';
+import { crw } from './crw';
 import { exa } from './exa';
 import { firecrawl } from './firecrawl';
 import { jina } from './jina';
@@ -8,6 +9,7 @@ import { tavily } from './tavily';
 
 export const crawlImpls = {
   browserless,
+  crw,
   exa,
   firecrawl,
   jina,
