@@ -11,6 +11,7 @@ import {
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
+  HistoricalWebSearchResultFilter,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,
@@ -460,6 +461,8 @@ export class MessagesEngine {
       new AgentCouncilFlattenProcessor(),
       // Group message flatten
       new GroupMessageFlattenProcessor(),
+      // Historical web search raw results are large, current-turn-only context.
+      new HistoricalWebSearchResultFilter(),
       // Tasks message flatten
       new TasksFlattenProcessor(),
       // Task message processing

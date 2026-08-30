@@ -1008,6 +1008,110 @@ Document content here.
         filteredToolCalls: 1,
       });
     });
+
+    it('should remove historical web search tool results while keeping current-turn results', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Search the web',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: 'msg-2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'search',
+              arguments: '{"query":"LobeHub"}',
+              id: 'call_history_search',
+              identifier: 'lobe-web-browsing',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '<searchResults>large historical payload</searchResults>',
+          createdAt: Date.now(),
+          id: 'msg-3',
+          plugin: {
+            apiName: 'search',
+            arguments: '{"query":"LobeHub"}',
+            id: 'call_history_search',
+            identifier: 'lobe-web-browsing',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: 'call_history_search',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: 'Historical answer.',
+          createdAt: Date.now(),
+          id: 'msg-4',
+          role: 'assistant',
+          search: { citations: [{ title: 'Source', url: 'https://example.com' }] },
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: 'Search again',
+          createdAt: Date.now(),
+          id: 'msg-5',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: 'msg-6',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'search',
+              arguments: '{"query":"current"}',
+              id: 'call_current_search',
+              identifier: 'lobe-web-browsing',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '<searchResults>current payload</searchResults>',
+          createdAt: Date.now(),
+          id: 'msg-7',
+          plugin: {
+            apiName: 'search',
+            arguments: '{"query":"current"}',
+            id: 'call_current_search',
+            identifier: 'lobe-web-browsing',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: 'call_current_search',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({ messages });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+      const serialized = JSON.stringify(result.messages);
+
+      expect(serialized).not.toContain('large historical payload');
+      expect(serialized).toContain('current payload');
+      expect(result.messages.some((m) => m.content === 'Historical answer.')).toBe(true);
+      expect(result.metadata.historicalWebSearchResultFilter).toEqual({
+        removedToolMessages: 1,
+        strippedAssistantMessages: 1,
+        strippedToolCalls: 1,
+      });
+    });
   });
 
   describe('Page Selections', () => {

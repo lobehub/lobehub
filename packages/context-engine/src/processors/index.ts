@@ -13,6 +13,7 @@ export {
   type OrchestrationAgentInfo,
 } from './GroupOrchestrationFilter';
 export { GroupRoleTransformProcessor } from './GroupRoleTransform';
+export { HistoricalWebSearchResultFilter } from './HistoricalWebSearchResultFilter';
 export { getSlicedMessages, HistoryTruncateProcessor } from './HistoryTruncate';
 export { InputTemplateProcessor } from './InputTemplate';
 export { MessageCleanupProcessor } from './MessageCleanup';
