@@ -1,4 +1,5 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
+import { RequestTrigger } from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
@@ -38,6 +39,21 @@ const log = debug('lobe-server:completion-lifecycle');
  */
 export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
+
+/**
+ * Triggers whose completion recalls the user with a push notification. Beyond
+ * plain chat: `Scheduled` is a user-deferred chat turn ("send this in 3
+ * hours"), and `Cron` is today stamped only by the rate-limit auto-resume of a
+ * user's own chat turn (see scheduledRunKinds) — both are exactly the "user
+ * walked away mid-conversation" case the recall exists for. Everything else
+ * (task runner, bots, evals, API, agent-signal self-iterations, …) is
+ * background work and stays silent.
+ */
+const USER_RECALLABLE_TRIGGERS = new Set<string>([
+  RequestTrigger.Chat,
+  RequestTrigger.Cron,
+  RequestTrigger.Scheduled,
+]);
 
 /**
  * A parked human-approval run is not safely published until its generic Review
@@ -620,6 +636,68 @@ export class CompletionLifecycle {
   }
 
   /**
+   * The facts the recall gate needs. The trigger rides on `state.metadata` for
+   * in-process runs (the appContext spread); synthetic terminals
+   * ({@link buildStateFromInput}) have none, so fall back to the op row
+   * `recordStart` stamped — which also reveals `parentOperationId`, marking
+   * internal child runs (verifier/repair/evidence pass it without `isSubAgent`).
+   * `trigger: undefined` means neither source knows.
+   */
+  private async resolveRunRecallFacts(
+    operationId: string,
+    metadata: { trigger?: unknown } | undefined,
+  ): Promise<{ isChildRun: boolean; trigger: string | undefined }> {
+    if (typeof metadata?.trigger === 'string')
+      return { isChildRun: false, trigger: metadata.trigger };
+
+    try {
+      const operation = await this.agentOperationModel.findById(operationId);
+      return {
+        isChildRun: Boolean(operation?.parentOperationId),
+        trigger: operation?.trigger ?? undefined,
+      };
+    } catch (error) {
+      log('[%s] Failed to resolve run trigger from op row: %O', operationId, error);
+      return { isChildRun: false, trigger: undefined };
+    }
+  }
+
+  /**
+   * Push a completion recall — but only for runs the user is waiting on.
+   * Background executions (scheduled tasks, bots, evals, …) complete constantly
+   * and would spam the OS banner. An unknown trigger passes: human-approval
+   * chat continuations can reach here without one, and dropping a chat push is
+   * worse than a rare stray banner.
+   */
+  private async recallUserOnCompletion(
+    operationId: string,
+    event: { agentId?: string; duration?: number; lastAssistantContent?: string; topicId?: string },
+    metadata: { trigger?: unknown; userId?: string } | undefined,
+  ): Promise<void> {
+    const { isChildRun, trigger } = await this.resolveRunRecallFacts(operationId, metadata);
+    if (isChildRun) {
+      log('[%s] Skipping completion push for internal child run', operationId);
+      return;
+    }
+    if (trigger !== undefined && !USER_RECALLABLE_TRIGGERS.has(trigger)) {
+      log('[%s] Skipping completion push for non-interactive trigger %s', operationId, trigger);
+      return;
+    }
+
+    await notifyAgentRunCompleted({
+      agentId: event.agentId || undefined,
+      duration: event.duration,
+      lastAssistantContent: event.lastAssistantContent,
+      operationId,
+      topicId: event.topicId,
+      userId: metadata?.userId || this.userId,
+      // Personal runs leave this undefined ⇒ bare deep link; workspace
+      // runs carry the id so the business slot can slug-prefix the URL.
+      workspaceId: this.workspaceId,
+    });
+  }
+
+  /**
    * Register the operation's Works: entity files edited this round
    * (pptx/xlsx/docx/pdf, …) as `file` Works — one version per operation,
    * exported from the sandbox — plus github issue/PR Works recovered from
@@ -774,23 +852,15 @@ export class CompletionLifecycle {
       // `@/business` slot; the default implementation is a no-op. Sub-agent /
       // group-member completions are internal steps of a parent run, never a
       // user-facing recall — in-group members carry `orchestrationRole: 'member'`
-      // WITHOUT `isSubAgent` (see execAgentMember), so guard both.
+      // WITHOUT `isSubAgent` (see execAgentMember), so guard both. The
+      // remaining condition — only interactive chat runs recall the user —
+      // lives in recallUserOnCompletion.
       if (
         isSuccessLikeCompletionReason(reason) &&
         metadata?.isSubAgent !== true &&
         metadata?.orchestrationRole !== 'member'
       ) {
-        void notifyAgentRunCompleted({
-          agentId: event.agentId || undefined,
-          duration: event.duration,
-          lastAssistantContent: event.lastAssistantContent,
-          operationId,
-          topicId: event.topicId,
-          userId: metadata?.userId || this.userId,
-          // Personal runs leave this undefined ⇒ bare deep link; workspace
-          // runs carry the id so the business slot can slug-prefix the URL.
-          workspaceId: this.workspaceId,
-        }).catch((error) =>
+        void this.recallUserOnCompletion(operationId, event, metadata).catch((error) =>
           log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
         );
       }

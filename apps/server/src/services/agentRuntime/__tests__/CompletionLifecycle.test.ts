@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type Message, parse } from '@lobechat/conversation-flow';
-import { ChatErrorType } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotifyAgentInterventionRequiredParams } from '@/business/server/agent-run/agentInterventionReview';
@@ -693,20 +693,23 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
     vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+    // The recall gate falls back to the op row when metadata carries no trigger.
+    (lifecycle as any).agentOperationModel = { findById: vi.fn(async () => null) };
   };
+
+  const buildDoneState = (metadata: Record<string, unknown> = {}) => ({
+    createdAt: new Date(Date.now() - 90_000).toISOString(),
+    messages: [{ content: 'final reply', role: 'assistant' }],
+    metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', ...metadata },
+    status: 'done',
+  });
 
   it('notifies with fields mapped from the lifecycle event on a done completion', async () => {
     const lifecycle = buildLifecycle();
     stubSideEffects(lifecycle);
 
-    const createdAt = new Date(Date.now() - 90_000).toISOString();
-    const doneState = {
-      createdAt,
-      messages: [{ content: 'final reply', role: 'assistant' }],
-      metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', userId: 'user-2' },
-      status: 'done',
-    };
-    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ userId: 'user-2' }), 'done');
+    await flushMicrotasks();
 
     expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
     expect(mockNotifyAgentRunCompleted).toHaveBeenCalledWith(
@@ -727,28 +730,76 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     const lifecycle = new CompletionLifecycle({} as any, 'user-1', 'ws_1');
     stubSideEffects(lifecycle);
 
-    const doneState = {
-      createdAt: new Date(Date.now() - 90_000).toISOString(),
-      messages: [{ content: 'final reply', role: 'assistant' }],
-      metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', userId: 'user-2' },
-      status: 'done',
-    };
-    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ userId: 'user-2' }), 'done');
+    await flushMicrotasks();
 
     expect(mockNotifyAgentRunCompleted).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'ws_1' }),
     );
   });
 
+  // 'task' is TopicTrigger.RunTask (the task-runner funnel), not a RequestTrigger member.
+  it.each(['task', RequestTrigger.Bot, RequestTrigger.Eval, RequestTrigger.Api])(
+    'does not notify for background %s-triggered completions',
+    async (trigger) => {
+      const lifecycle = buildLifecycle();
+      stubSideEffects(lifecycle);
+
+      await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
+      await flushMicrotasks();
+
+      expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+    },
+  );
+
+  // Scheduled = a user-deferred chat turn; Cron = the rate-limit auto-resume of
+  // a user's chat turn. Both are "user walked away" runs the recall exists for.
+  it.each([RequestTrigger.Chat, RequestTrigger.Scheduled, RequestTrigger.Cron])(
+    'notifies for a user-recallable %s-triggered completion',
+    async (trigger) => {
+      const lifecycle = buildLifecycle();
+      stubSideEffects(lifecycle);
+
+      await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
+      await flushMicrotasks();
+
+      expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('falls back to the op row trigger when metadata carries none (synthetic hetero path)', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+    (lifecycle as any).agentOperationModel = {
+      findById: vi.fn(async () => ({ trigger: RequestTrigger.Bot })),
+    };
+
+    // heteroFinish/agentNotify build metadata via buildStateFromInput — no trigger.
+    await lifecycle.dispatchHooks('op-1', buildDoneState(), 'done');
+    await flushMicrotasks();
+
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not notify for internal child runs (verifier/repair pass parentOperationId only)', async () => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
+    (lifecycle as any).agentOperationModel = {
+      findById: vi.fn(async () => ({ parentOperationId: 'op-parent', trigger: null })),
+    };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(), 'done');
+    await flushMicrotasks();
+
+    expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
   it('does not notify for sub-agent completions', async () => {
     const lifecycle = buildLifecycle();
     stubSideEffects(lifecycle);
 
-    const doneState = {
-      metadata: { _hooks: [], agentId: 'agt_1', isSubAgent: true, topicId: 'tpc_1' },
-      status: 'done',
-    };
-    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ isSubAgent: true }), 'done');
+    await flushMicrotasks();
 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
   });
@@ -759,11 +810,8 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
     // execAgentMember stamps in-group members with orchestrationRole: 'member'
     // but NOT isSubAgent — they are internal steps of the supervisor run.
-    const doneState = {
-      metadata: { _hooks: [], agentId: 'agt_1', orchestrationRole: 'member', topicId: 'tpc_1' },
-      status: 'done',
-    };
-    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ orchestrationRole: 'member' }), 'done');
+    await flushMicrotasks();
 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
   });
@@ -785,13 +833,8 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
       const lifecycle = buildLifecycle();
       stubSideEffects(lifecycle);
 
-      const doneState = {
-        createdAt: new Date(Date.now() - 90_000).toISOString(),
-        messages: [{ content: 'final reply', role: 'assistant' }],
-        metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1' },
-        status: 'done',
-      };
-      await lifecycle.dispatchHooks('op-1', doneState, reason);
+      await lifecycle.dispatchHooks('op-1', buildDoneState(), reason);
+      await flushMicrotasks();
 
       expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
     },
