@@ -706,6 +706,51 @@ describe('heterogeneous direct invocation protocol', () => {
     });
   });
 
+  it('encodes Gemini text and reasoning parts as Responses output', async () => {
+    const events = parseSseEvents(
+      await readText(
+        responsesSse(
+          protocolStream([
+            {
+              data: { content: 'thinking', inReasoning: true, partType: 'text' },
+              type: 'reasoning_part',
+            },
+            { data: { content: 'answer', partType: 'text' }, type: 'content_part' },
+            {
+              data: { content: 'base64-image', mimeType: 'image/png', partType: 'image' },
+              type: 'content_part',
+            },
+          ]),
+        ),
+      ),
+    );
+    const textDeltas = events
+      .filter(({ type }) => type === 'response.output_text.delta')
+      .map(({ data }) => data.delta);
+    const reasoningDeltas = events
+      .filter(({ type }) => type === 'response.reasoning_summary_text.delta')
+      .map(({ data }) => data.delta);
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(textDeltas).toEqual(['answer']);
+    expect(reasoningDeltas).toEqual(['thinking']);
+    expect(completed?.data.response.output).toEqual([
+      {
+        id: expect.any(String),
+        status: 'completed',
+        summary: [{ text: 'thinking', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        content: [{ annotations: [], text: 'answer', type: 'output_text' }],
+        id: expect.any(String),
+        role: 'assistant',
+        status: 'completed',
+        type: 'message',
+      },
+    ]);
+  });
+
   it('encodes Responses incomplete and failed terminal lifecycle events', async () => {
     const incomplete = await readText(
       responsesSse(
