@@ -112,10 +112,6 @@ export interface GoalMoveInput {
   concurrency: number;
   frontier: FrontierSelection;
   graph: GoalGraphSnapshot;
-  /** Idle time after which a running operation is treated as abandoned. */
-  leaseTimeoutMs: number;
-  /** Decision clock, so staleness is an input rather than a side effect. */
-  now: number;
   /**
    * The responsible Task of every candidate that has one, keyed by task id.
    * A candidate whose task id is absent from the map has lost its row.
@@ -164,8 +160,6 @@ export const decideNextMove = ({
   concurrency,
   frontier,
   graph,
-  leaseTimeoutMs,
-  now,
   tasksById,
 }: GoalMoveInput): GoalMove => {
   const { candidates, chosen } = frontier;
@@ -220,19 +214,6 @@ export const decideNextMove = ({
 
     const task = candidate.node.taskId ? tasksById.get(candidate.node.taskId) : undefined;
     if (isInFlight(task)) {
-      // Still examined for staleness — skipping it outright would make an
-      // abandoned operation unreclaimable, because the reclaim only ever runs
-      // from the branch that looks at a running Task.
-      if (now - new Date(task!.updatedAt).getTime() > leaseTimeoutMs) {
-        return {
-          ...base,
-          branch: 'task_running',
-          chosenNodeId: candidate.node.id,
-          message: `Task ${task!.identifier} is ${task!.status}`,
-          outcome: 'waiting_external',
-          taskId: task!.id,
-        };
-      }
       waitingOn ??= { node: candidate.node, task: task! };
       continue;
     }

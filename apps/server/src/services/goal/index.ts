@@ -394,8 +394,6 @@ export class GoalService {
       concurrency,
       frontier,
       graph,
-      leaseTimeoutMs: resolveOperationLeaseTimeout(graph.goal),
-      now: at,
       tasksById,
     });
     // The scheduler may pick past the head of the frontier, so every arm below

@@ -13,8 +13,6 @@ import { decideNextMove, selectFrontier } from './decideNextMove';
 
 /** Matches `resolveMaxConcurrentTasks`'s default, for traces that predate it. */
 const DEFAULT_REPLAY_CONCURRENCY = 3;
-/** Matches `resolveOperationLeaseTimeout`'s default. */
-const DEFAULT_REPLAY_LEASE_MS = 5 * 60 * 1000;
 
 /**
  * Lift a recorded graph back into the shape the coordinator reads.
@@ -67,8 +65,6 @@ export const coordinatorDecider: GoalDecider = (input): GoalDecision => {
     concurrency: input.concurrency ?? DEFAULT_REPLAY_CONCURRENCY,
     frontier,
     graph,
-    leaseTimeoutMs: DEFAULT_REPLAY_LEASE_MS,
-    now: input.now,
     tasksById: toTasksById(input),
   });
 

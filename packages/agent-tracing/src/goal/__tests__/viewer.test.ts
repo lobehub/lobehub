@@ -117,6 +117,33 @@ describe('renderGoalAdvanceDetail', () => {
     expect(output).toContain('effect: started_run task_A op=op_1');
   });
 
+  it('shows the legacy frontier task when candidate tasks were not recorded yet', () => {
+    const legacyTrajectory: GoalTrajectory = {
+      ...trajectory,
+      advances: [
+        {
+          ...trajectory.advances[0],
+          ticks: [
+            tick({
+              candidateTasks: undefined,
+              frontierTask: {
+                error: 'Device offline',
+                id: 'task_legacy',
+                identifier: 'T-legacy',
+                status: 'failed',
+                updatedAt: 0,
+              },
+            }),
+          ],
+        },
+      ],
+    };
+
+    const output = renderGoalAdvanceDetail(legacyTrajectory, 0);
+
+    expect(output).toContain('task: T-legacy failed — Device offline');
+  });
+
   it('says so rather than rendering an empty frame for an advance that is not there', () => {
     expect(renderGoalAdvanceDetail(trajectory, 9)).toBe('No advance #9 in goal_1');
   });

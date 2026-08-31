@@ -48,21 +48,16 @@ const decide = (
     budget?: Parameters<typeof decideNextMove>[0]['budget'];
     concurrency?: number;
     frontierTask?: TaskItem | null;
-    now?: number;
     tasks?: TaskItem[];
   } = {},
 ) => {
-  const { budget, concurrency = 3, frontierTask, now = 0, tasks } = extra;
+  const { budget, concurrency = 3, frontierTask, tasks } = extra;
   const listed = tasks ?? (frontierTask ? [frontierTask] : []);
   return decideNextMove({
     budget,
     concurrency,
     frontier: selectFrontier(snapshot),
     graph: snapshot,
-    // Far above any fixture's `updatedAt`, so a running task reads as fresh
-    // unless a case deliberately moves the clock.
-    leaseTimeoutMs: 10 * 60 * 1000,
-    now,
     tasksById: new Map(listed.map((item) => [item.id, item])),
   });
 };

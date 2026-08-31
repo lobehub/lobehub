@@ -20,7 +20,6 @@ export interface GoalDecisionInput {
   /** @deprecated Legacy single-task shape; present only on older trajectories. */
   frontierTask?: GoalFrontierTaskState;
   graph: GoalGraphState;
-  now: number;
 }
 
 /**
@@ -88,7 +87,6 @@ export const replayGoalTrajectory = (
           tick.candidateTasks ?? (tick.frontierTask ? [tick.frontierTask] : undefined),
         concurrency: tick.concurrency,
         graph,
-        now: tick.at,
       });
 
       const before = divergences.length;

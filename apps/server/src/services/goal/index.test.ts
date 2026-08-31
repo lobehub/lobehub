@@ -722,6 +722,27 @@ describe('GoalService', () => {
     });
   });
 
+  it('starts ready sibling Work even when a running Task row is older than the operation lease', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
+      title: 'Keep parallel work moving',
+      work: ['Long-running experiment', 'Independent analysis'],
+    });
+    const running = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(running.taskId!, 'running');
+    await serverDB
+      .update(tasks)
+      .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+      .where(eq(tasks.id, running.taskId!));
+
+    const sibling = await service.tick(graph.goal.id);
+
+    expect(sibling).toMatchObject({ outcome: 'advanced' });
+    expect(sibling.taskId).not.toBe(running.taskId);
+  });
+
   it('rolls back the operation reclaim when recovery bookkeeping fails', async () => {
     vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
       { operationId: 'op-atomic-recovery', topicId: 'topic-stale' } as never,

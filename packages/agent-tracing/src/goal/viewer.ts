@@ -109,7 +109,8 @@ export const renderGoalAdvanceDetail = (trajectory: GoalTrajectory, seq: number)
       lines.push(`    budget: ${limits}`);
     }
 
-    for (const task of tick.candidateTasks ?? []) {
+    const candidateTasks = tick.candidateTasks ?? (tick.frontierTask ? [tick.frontierTask] : []);
+    for (const task of candidateTasks) {
       const error = task.error ? ` — ${task.error}` : '';
       const mark = task.nodeId && task.nodeId === tick.chosenNodeId ? '▸' : ' ';
       lines.push(`    ${mark} task: ${task.identifier ?? task.id} ${task.status}${error}`);
