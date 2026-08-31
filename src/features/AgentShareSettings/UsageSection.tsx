@@ -56,8 +56,9 @@ const UsageSection = memo<UsageSectionProps>(({ agentId }) => {
   const spend = data?.monthlySpend ?? null;
   const limit = data?.monthlySpendLimit ?? null;
   // `0` is a real cap ("stop everything"), so it must not fall back to the
-  // unlimited branch — and it would divide by zero here.
-  const hasLimit = limit !== null && limit > 0;
+  // unlimited branch; the zero case is special-cased below to avoid dividing
+  // by it in the progress computation.
+  const hasLimit = limit !== null;
 
   return (
     <Section desc={t('share.settings.usage.desc')} title={t('share.settings.usage.title')}>
@@ -89,7 +90,7 @@ const UsageSection = memo<UsageSectionProps>(({ agentId }) => {
               </Flexbox>
               {hasLimit && (
                 <Progress
-                  percent={Math.min(100, Math.round((spend / limit) * 100))}
+                  percent={limit === 0 ? 100 : Math.min(100, Math.round((spend / limit) * 100))}
                   showInfo={false}
                   size={'small'}
                   status={spend >= limit ? 'exception' : 'normal'}

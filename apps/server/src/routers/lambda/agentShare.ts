@@ -110,7 +110,7 @@ export const agentShareRouter = router({
       monthlySpend,
       monthlySpendLimit: share.shareConfig.monthlySpendLimit ?? null,
       topicCount: visitors.topicCount,
-      userViewCount: share.userViewCount ?? 0,
+      userViewCount: share.userViewCount,
       visitorCount: visitors.visitorCount,
     };
   }),
