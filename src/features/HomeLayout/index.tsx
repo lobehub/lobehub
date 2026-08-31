@@ -7,7 +7,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { useIsDark } from '@/hooks/useIsDark';
 
 import HomeAgentIdSync from './HomeAgentIdSync';
-import RecentHydration from './RecentHydration';
+import RecentSync from './RecentSync';
 import { styles } from './style';
 
 interface LayoutProps {
@@ -62,7 +62,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
         </Flexbox>
 
         <HomeAgentIdSync />
-        <RecentHydration />
+        <RecentSync />
       </Flexbox>
     </Activity>
   );

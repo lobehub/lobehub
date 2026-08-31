@@ -1,9 +1,9 @@
 import { useSyncRecents } from '@/hooks/useSyncRecents';
 
-const RecentHydration = () => {
+const RecentSync = () => {
   useSyncRecents();
 
   return null;
 };
 
-export default RecentHydration;
+export default RecentSync;
