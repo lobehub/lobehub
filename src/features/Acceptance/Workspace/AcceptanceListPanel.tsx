@@ -62,6 +62,7 @@ import AcceptanceRow from './AcceptanceRow';
 import {
   acceptanceBatchTargets,
   acceptanceSelectAllState,
+  chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
   toggleAcceptanceSelection,
   visibleAcceptanceSelection,
@@ -395,10 +396,16 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       const attempted = selectedVisible.length;
       setBatchPending(true);
       try {
-        const { failedIds, updated } = await verifyService.updateAcceptanceStatusBatch(
-          targets,
-          status,
+        // The endpoint caps one request, so a long selection goes in chunks —
+        // otherwise select-all after enough scrolling is refused wholesale and
+        // nothing moves at all.
+        const results = await Promise.all(
+          chunkAcceptanceBatch(targets).map((chunk) =>
+            verifyService.updateAcceptanceStatusBatch(chunk, status),
+          ),
         );
+        const failedIds = results.flatMap((part) => part.failedIds);
+        const updated = results.reduce((total, part) => total + part.updated, 0);
         const failedSet = new Set(failedIds);
         await settleBatch(
           targets.filter((id) => !failedSet.has(id)),
@@ -428,7 +435,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
         onOk: async () => {
           setBatchPending(true);
           try {
-            const { deleted, failedIds } = await verifyService.deleteAcceptanceBatch(targets);
+            const results = await Promise.all(
+              chunkAcceptanceBatch(targets).map((chunk) =>
+                verifyService.deleteAcceptanceBatch(chunk),
+              ),
+            );
+            const failedIds = results.flatMap((part) => part.failedIds);
+            const deleted = results.reduce((total, part) => total + part.deleted, 0);
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
             if (acceptanceId && targets.includes(acceptanceId) && !failedIds.includes(acceptanceId))

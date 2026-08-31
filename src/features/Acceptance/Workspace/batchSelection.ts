@@ -73,3 +73,22 @@ export const acceptanceBatchTargets = (
     )
     .map((item) => item.id);
 };
+
+/**
+ * The server caps one sweep at 200 ids, so a select-all after enough scrolling
+ * would be rejected wholesale — accept, close and delete all failing before
+ * anything changed. Split the work instead: a sweep is a background chore, and
+ * a partial result the caller can report beats a hard refusal.
+ */
+export const ACCEPTANCE_BATCH_CHUNK = 200;
+
+export const chunkAcceptanceBatch = (ids: string[], size = ACCEPTANCE_BATCH_CHUNK): string[][] => {
+  if (ids.length === 0) return [];
+  if (ids.length <= size) return [ids];
+
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += size) {
+    chunks.push(ids.slice(index, index + size));
+  }
+  return chunks;
+};

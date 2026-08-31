@@ -146,6 +146,9 @@ const AcceptanceRow = memo<{
         } catch (error) {
           console.error('[acceptance:rename]', error);
           toast.error(t('acceptance.workspace.renameError'));
+          // Re-throw: the shared modal closes on a RESOLVED save, which would
+          // discard the title the user just typed and leave no way to retry.
+          throw error;
         } finally {
           setMutating(false);
         }

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { AcceptanceListItem } from '@/services/verify';
 
 import {
+  ACCEPTANCE_BATCH_CHUNK,
   acceptanceBatchTargets,
+  chunkAcceptanceBatch,
   acceptanceSelectAllState,
   nextAcceptanceSelectAll,
   toggleAcceptanceSelection,
@@ -74,5 +76,29 @@ describe('acceptanceBatchTargets', () => {
 
   it('ignores rows outside the selection', () => {
     expect(acceptanceBatchTargets(items, ['accepted'], 'close')).toEqual(['accepted']);
+  });
+});
+
+describe('chunkAcceptanceBatch', () => {
+  const ids = (count: number) => Array.from({ length: count }, (_, index) => `id-${index}`);
+
+  it('keeps a selection the server accepts in one request', () => {
+    expect(chunkAcceptanceBatch(ids(3))).toEqual([ids(3)]);
+    expect(chunkAcceptanceBatch(ids(ACCEPTANCE_BATCH_CHUNK))).toHaveLength(1);
+  });
+
+  it('splits a selection past the endpoint cap instead of letting it be refused', () => {
+    // Select-all after enough scrolling can exceed the cap; one oversized
+    // request fails before anything changes at all.
+    const chunks = chunkAcceptanceBatch(ids(ACCEPTANCE_BATCH_CHUNK + 1));
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toHaveLength(ACCEPTANCE_BATCH_CHUNK);
+    expect(chunks[1]).toEqual(['id-200']);
+    expect(chunks.flat()).toEqual(ids(ACCEPTANCE_BATCH_CHUNK + 1));
+  });
+
+  it('has nothing to send for an empty selection', () => {
+    expect(chunkAcceptanceBatch([])).toEqual([]);
   });
 });
