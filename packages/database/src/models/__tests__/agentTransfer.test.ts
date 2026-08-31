@@ -2173,6 +2173,43 @@ describe('AgentModel.transferAgents group history preservation', () => {
     ).resolves.toHaveLength(4);
   });
 
+  it('records the transfer target as a protected scope on a deferred remap job', async () => {
+    process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '2';
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Mention Magnet' });
+    await serverDB.insert(chatGroups).values({ id: 'pin-group', userId });
+    await serverDB
+      .insert(chatGroupsAgents)
+      .values({ agentId: agent.id, chatGroupId: 'pin-group', userId });
+    // Only target_id mentions: the group-history remap exceeds the threshold
+    // while the main transfer (zero agent_id messages, zero own topics) stays
+    // on the fast path — so the remap job is the ONLY thing standing between
+    // the moved agent and a target-scope owner delete.
+    await serverDB.insert(messages).values(
+      [1, 2, 3].map((n) => ({
+        groupId: 'pin-group',
+        id: `pin-msg-${n}`,
+        role: 'user' as const,
+        targetId: agent.id,
+        userId,
+      })),
+    );
+
+    const [result] = await model.transferAgents([agent.id], wsId2, targetUserId);
+    expect(result.transferJobId).toBeNull();
+    expect(result.remapJobIds).toHaveLength(1);
+
+    // The moved agent's NEW scope is a protected scope of the remap job:
+    // deleting its owner or workspace mid-drain would cascade the agent and
+    // with it every group row the remap has not rescued yet.
+    await expect(
+      AgentTransferJobModel.hasPendingJobTouchingUser(serverDB, targetUserId),
+    ).resolves.toBe(true);
+    await expect(
+      AgentTransferJobModel.hasPendingJobTouchingWorkspace(serverDB, wsId2),
+    ).resolves.toBe(true);
+  });
+
   it('discovers a mention that references the agent only via topic-anchored target_id', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Mentioned Only' });

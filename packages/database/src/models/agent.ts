@@ -2063,6 +2063,7 @@ export class AgentModel {
     trx: Transaction,
     agentIds: string[],
     agentById: Map<string, AgentItem>,
+    transferTarget: { userId: string; workspaceId: string | null },
   ): Promise<string[]> => {
     // (group, agent) pairs holding history. The direct arms anchor on the
     // rows' own group_id; the join arms catch rows that carry only a topicId
@@ -2244,7 +2245,6 @@ export class AgentModel {
           .select({ id: topics.id, updatedAt: topics.updatedAt })
           .from(topics)
           .where(eq(topics.groupId, group.id));
-        const groupScope = { userId: group.userId, workspaceId: group.workspaceId };
         const remapJobId = await AgentTransferJobModel.createJob(trx, {
           // Junction coverage on the moved agents: blocks a re-transfer
           // (step 1a's pending-job guard) and — via the remap payload — a
@@ -2258,8 +2258,14 @@ export class AgentModel {
           // residual REMAP anchors on `groupIds` above.
           residualAgentIds: [],
           sessionIds: [],
-          source: groupScope,
-          target: groupScope,
+          // The scope pair exists for the OWNER-DELETE guards, and both ends
+          // are load-bearing: the group's scope owns the rows being remapped,
+          // and the transfer's target scope owns the moved agent — deleting
+          // either owner/workspace mid-drain would cascade rows the remap
+          // has not rescued yet. The drain itself never rewrites scope for a
+          // remap-only job, so `target` is not a destination here.
+          source: { userId: group.userId, workspaceId: group.workspaceId },
+          target: transferTarget,
           topics: groupTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
         });
         remapJobIds.push(remapJobId);
@@ -2504,7 +2510,10 @@ export class AgentModel {
       // repointing the group rows first also keeps those moves from dragging
       // group history into the target scope (threads matched by `agent_id` in
       // step 8, topicless group messages in step 7's residual rewrite).
-      const remapJobIds = await this.preserveGroupHistoryForTransfer(trx, agentIds, agentById);
+      const remapJobIds = await this.preserveGroupHistoryForTransfer(trx, agentIds, agentById, {
+        userId: targetUserId,
+        workspaceId: targetWorkspaceId,
+      });
 
       // 6. Update topics (linked via sessionId or agentId)
       const topicCondition =
