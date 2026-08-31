@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FileBox, Repeat2, ShieldCheck } from 'lucide-react';
@@ -183,6 +182,15 @@ const useStateChip = (data: GraphNodeData): { color: string; text: string } | nu
         ? t('goalProcess.node.decidedByYou')
         : t('goalProcess.node.decidedByAgent'),
     };
+  // Every task reads its state in the same top row — a queued one included,
+  // so "not dispatched" no longer hides in the metric strip.
+  if (node.kind === 'task')
+    return {
+      color: cssVar.colorTextTertiary,
+      text: node.taskId
+        ? t(`goalProcess.nodeStatus.${node.status}` as const)
+        : t('goalProcess.node.unassigned'),
+    };
   return null;
 };
 
@@ -253,24 +261,15 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         </div>
         {isTask && (
           <div className={styles.metrics}>
-            {node.taskId ? (
+            {/* "Not dispatched" moved to the status row with every other
+                state; an unassigned task simply has no verifier metric yet. */}
+            {node.taskId && (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>
                 <span className={styles.metric}>
                   <Icon icon={ShieldCheck} size={13} />
                   {t('goalProcess.node.verifier')}
                 </span>
               </Tooltip>
-            ) : (
-              <span className={styles.metric}>
-                <Icon
-                  color={TASK_STATUS_VISUALS.backlog.color}
-                  icon={TASK_STATUS_VISUALS.backlog.icon}
-                  size={13}
-                />
-                <Text fontSize={11} type={'secondary'}>
-                  {t('goalProcess.node.unassigned')}
-                </Text>
-              </span>
             )}
             <Tooltip title={t('goalProcess.node.attemptsTooltip', { count: attempts })}>
               <span className={styles.metric}>
