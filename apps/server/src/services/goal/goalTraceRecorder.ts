@@ -12,7 +12,7 @@ import { sql } from 'drizzle-orm';
 
 import { GoalTraceModel } from '@/database/models/goalTrace';
 import type { LobeChatDatabase } from '@/database/type';
-import { buildGoalTraceKey } from '@/server/modules/GoalTracing';
+import { buildGoalTraceKey, buildGoalTracePartialKey } from '@/server/modules/GoalTracing';
 
 import type { GoalTickObservation } from './traceObservation';
 import { createDefaultGoalTraceStore } from './traceStore';
@@ -136,7 +136,13 @@ export class GoalAdvanceRecorder {
       startedAt: new Date(rollup.startedAt),
       ticksByBranch: rollup.ticksByBranch,
       ticksTotal: rollup.ticksTotal,
-      traceS3Key: buildGoalTraceKey(this.goalId),
+      // Whichever object exists *now*. Writing the finalized key from the
+      // first advance made `hasTrace` a lie for every running goal and had the
+      // server sign a URL that 404s — so a goal could not be inspected until it
+      // was over, which is the opposite of the intent.
+      traceS3Key: trajectory.completionReason
+        ? buildGoalTraceKey(this.goalId)
+        : buildGoalTracePartialKey(this.goalId),
       workOperations: rollup.operationsTotal,
       // Columns kept as shipped. The node kind is now `task`, but renaming
       // three columns on a live table buys nothing the reporting names above
