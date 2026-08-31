@@ -1,6 +1,18 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { TRPCError } from '@trpc/server';
-import { and, asc, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type {
   ChatGroupAgentItem,
@@ -14,10 +26,13 @@ import {
   agents,
   chatGroups,
   chatGroupsAgents,
+  messages,
   projectAgents,
   projects,
   sessionGroups,
   tasks,
+  threads,
+  topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeAgencyConfigsForWorkspace } from '../utils/agencyConfigDevices';
@@ -953,6 +968,88 @@ export class ChatGroupModel {
       .update(chatGroupsAgents)
       .set({ userId: toUserId })
       .where(eq(chatGroupsAgents.chatGroupId, groupId));
+
+    // History tombstones — the rosterless virtual clones that
+    // `AgentModel.preserveGroupHistoryForTransfer` parks in the group's scope
+    // so a transferred-then-deleted member keeps resolving — belong to the
+    // group's owner but never appear in `chat_groups_agents`, so the
+    // member-derived re-homing below cannot see them. Left behind, deleting
+    // the previous owner would cascade through `agents.user_id` and erase the
+    // very history they preserve. Discover them from the group's content
+    // references (every probe rides a group_id / topic_id index) and hand
+    // them over with the group.
+    const groupTopicIds = (
+      await trx.select({ id: topics.id }).from(topics).where(eq(topics.groupId, groupId))
+    ).map((row) => row.id);
+    const historyRefRows = [
+      ...(await trx
+        .selectDistinct({ agentId: topics.agentId })
+        .from(topics)
+        .where(eq(topics.groupId, groupId))),
+      ...(await trx
+        .selectDistinct({ agentId: threads.agentId })
+        .from(threads)
+        .where(eq(threads.groupId, groupId))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.agentId })
+        .from(messages)
+        .where(eq(messages.groupId, groupId))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.targetId })
+        .from(messages)
+        .where(eq(messages.groupId, groupId))),
+    ];
+    if (groupTopicIds.length > 0) {
+      historyRefRows.push(
+        ...(await trx
+          .selectDistinct({ agentId: threads.agentId })
+          .from(threads)
+          .where(inArray(threads.topicId, groupTopicIds))),
+        ...(await trx
+          .selectDistinct({ agentId: messages.agentId })
+          .from(messages)
+          .where(inArray(messages.topicId, groupTopicIds))),
+        ...(await trx
+          .selectDistinct({ agentId: messages.targetId })
+          .from(messages)
+          .where(inArray(messages.topicId, groupTopicIds))),
+      );
+    }
+    const rosterIdSet = new Set(agentIds);
+    const historyAgentIds = [...new Set(historyRefRows.map((row) => row.agentId))].filter(
+      (id): id is string => Boolean(id) && !rosterIdSet.has(id!),
+    );
+    if (historyAgentIds.length > 0) {
+      // Only tombstones re-home: virtual, owned by the outgoing owner, and
+      // serving nothing but history — not a builtin (reserved slug), not on
+      // any group's roster, not attached to a project. A standalone agent
+      // that once spoke here and left still belongs to ITS owner, and a
+      // virtual agent serving another group or a project must stay with that
+      // surface — an ownership handover of the group must not steal either.
+      await trx
+        .update(agents)
+        .set({ clientId: null, updatedAt: agents.updatedAt, userId: toUserId })
+        .where(
+          and(
+            inArray(agents.id, historyAgentIds),
+            eq(agents.userId, fromUserId),
+            eq(agents.virtual, true),
+            or(isNull(agents.slug), notInArray(agents.slug, RESERVED_BUILTIN_AGENT_SLUGS)),
+            notExists(
+              trx
+                .select({ id: chatGroupsAgents.agentId })
+                .from(chatGroupsAgents)
+                .where(eq(chatGroupsAgents.agentId, agents.id)),
+            ),
+            notExists(
+              trx
+                .select({ id: projectAgents.agentId })
+                .from(projectAgents)
+                .where(eq(projectAgents.agentId, agents.id)),
+            ),
+          ),
+        );
+    }
 
     if (ownedAgentIds.length > 0) {
       // Re-home device bindings on the owned agents (supervisor + generated

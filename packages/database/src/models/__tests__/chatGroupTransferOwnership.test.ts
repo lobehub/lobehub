@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -111,6 +112,64 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
 
     const [standalone] = await serverDB.select().from(agents).where(eq(agents.id, referenced.id));
     expect(standalone.userId).toBe(teammateId);
+  });
+
+  it('re-homes rosterless history tombstones so deleting the former owner keeps group history', async () => {
+    const { group } = await seedGroupWithRoster();
+    // A history tombstone: virtual, owned by the outgoing owner, referenced
+    // only by group content — never in the roster.
+    const [tombstone] = await serverDB
+      .insert(agents)
+      .values({ title: 'Moved Away', userId: ownerId, virtual: true, workspaceId: wsId })
+      .returning();
+    // A builtin agent (reserved slug) referenced in history must stay with
+    // its owner.
+    const [builtinLike] = await serverDB
+      .insert(agents)
+      .values({
+        slug: Object.values(BUILTIN_AGENT_SLUGS)[0],
+        title: 'Builtin',
+        userId: ownerId,
+        virtual: true,
+        workspaceId: wsId,
+      })
+      .returning();
+    await serverDB.insert(topics).values([
+      {
+        agentId: tombstone.id,
+        groupId: group.id,
+        id: 'hist-topic',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+      {
+        agentId: builtinLike.id,
+        groupId: group.id,
+        id: 'hist-topic-builtin',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    await handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId });
+
+    const [rehomed] = await serverDB.select().from(agents).where(eq(agents.id, tombstone.id));
+    expect(rehomed.userId).toBe(recipientId);
+    const [slugged] = await serverDB.select().from(agents).where(eq(agents.id, builtinLike.id));
+    expect(slugged.userId).toBe(ownerId);
+
+    // The cascade regression: deleting the former owner must not erase the
+    // history the tombstone preserves for the transferred group. (The
+    // workspace itself moves off the leaver first — otherwise the whole
+    // workspace cascades and proves nothing.)
+    await serverDB
+      .update(workspaces)
+      .set({ primaryOwnerId: recipientId })
+      .where(eq(workspaces.id, wsId));
+    await serverDB.delete(users).where(eq(users.id, ownerId));
+    await expect(
+      serverDB.select().from(topics).where(eq(topics.id, 'hist-topic')),
+    ).resolves.toHaveLength(1);
   });
 
   it('keeps everyone’s group conversations untouched', async () => {

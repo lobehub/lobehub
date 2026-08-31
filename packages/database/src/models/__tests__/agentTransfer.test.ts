@@ -2055,7 +2055,7 @@ describe('AgentModel.transferAgents group history preservation', () => {
     expect(leftBehind).toHaveLength(0);
   });
 
-  it('reuses one clone across every group in the same scope', async () => {
+  it('mints one clone per group so a later handover can split their fates', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Busy Member' });
     await seedGroupHistory('multi-a', agent.id);
@@ -2063,19 +2063,53 @@ describe('AgentModel.transferAgents group history preservation', () => {
 
     await model.transferAgent(agent.id, wsId2, targetUserId);
 
+    // Per group, not per scope: `transferGroupOwnership` re-homes a group's
+    // tombstones with the group, which must not drag another group's
+    // preserved history to the new owner.
     const clones = await serverDB
       .select()
       .from(agents)
       .where(and(eq(agents.userId, userId), eq(agents.virtual, true)));
-    expect(clones).toHaveLength(1);
+    expect(clones).toHaveLength(2);
+    const cloneIds = new Set(clones.map((clone) => clone.id));
 
+    const cloneIdByGroup = new Map<string, string>();
     for (const groupId of ['multi-a', 'multi-b']) {
       const [message] = await serverDB
         .select()
         .from(messages)
         .where(eq(messages.id, `${groupId}-msg-topic`));
-      expect(message.agentId).toBe(clones[0].id);
+      expect(cloneIds.has(message.agentId!)).toBe(true);
+      cloneIdByGroup.set(groupId, message.agentId!);
     }
+    expect(cloneIdByGroup.get('multi-a')).not.toBe(cloneIdByGroup.get('multi-b'));
+  });
+
+  it('discovers a mention that references the agent only via topic-anchored target_id', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Mentioned Only' });
+    await serverDB.insert(chatGroups).values({ id: 'mention-group', userId });
+    await serverDB
+      .insert(chatGroupsAgents)
+      .values({ agentId: agent.id, chatGroupId: 'mention-group', userId });
+    await serverDB.insert(topics).values({ groupId: 'mention-group', id: 'mention-topic', userId });
+    // The ONLY reference to the agent: a user message carrying just topicId +
+    // targetId — no agent_id anywhere, no direct group_id. The candidate set
+    // must reach this group through the roster row.
+    await serverDB.insert(messages).values({
+      id: 'mention-msg',
+      role: 'user',
+      targetId: agent.id,
+      topicId: 'mention-topic',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [message] = await serverDB.select().from(messages).where(eq(messages.id, 'mention-msg'));
+    expect(message.targetId).not.toBe(agent.id);
+    const [clone] = await serverDB.select().from(agents).where(eq(agents.id, message.targetId!));
+    expect(clone).toMatchObject({ userId, virtual: true, workspaceId: null });
   });
 
   it('round-trips without stacking tombstones', async () => {

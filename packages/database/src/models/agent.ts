@@ -2045,11 +2045,13 @@ export class AgentModel {
    * `topics/threads/messages.agent_id` (+ the FK-less `messages.target_id`)
    * from the moved agent onto its clone.
    *
-   * The clone is scoped per group scope, not per group: every group in one
-   * scope can resolve the same tombstone, and cross-scope groups (a workspace
-   * group referencing a personal agent) each get one that THEIR readers can
-   * load. Agents with no group history insert nothing — the common case costs
-   * six index-only probes.
+   * The clone is scoped per group, in the group's own scope: cross-scope
+   * groups (a workspace group referencing a personal agent) each get one that
+   * THEIR readers can load, and a later same-workspace ownership handover
+   * (`ChatGroupModel.transferGroupOwnership`) can re-home one group's
+   * tombstones without pulling another group's history along. Agents with no
+   * group history insert nothing — the common case costs a handful of
+   * index-only probes.
    */
   private preserveGroupHistoryForTransfer = async (
     trx: Transaction,
@@ -2058,9 +2060,7 @@ export class AgentModel {
   ): Promise<void> => {
     // (group, agent) pairs holding history. The direct arms anchor on the
     // rows' own group_id; the join arms catch rows that carry only a topicId
-    // into a group topic. `messages.target_id` (no FK) rides the same pairs —
-    // it cannot cascade anything, but left stale it would attribute @mentions
-    // to an agent the scope cannot see.
+    // into a group topic. Every arm probes an agent_id index.
     const pairSources: { agentId: string | null; groupId: string | null }[] = [
       ...(await trx
         .selectDistinct({ agentId: topics.agentId, groupId: topics.groupId })
@@ -2084,11 +2084,59 @@ export class AgentModel {
         .from(messages)
         .innerJoin(topics, eq(messages.topicId, topics.id))
         .where(and(inArray(messages.agentId, agentIds), isNotNull(topics.groupId)))),
+    ];
+
+    // `messages.target_id` (no FK) rides the same pairs — it cannot cascade
+    // anything, but left stale it would attribute @mentions to an agent the
+    // scope cannot see. Unlike the arms above it has no index, so the scan is
+    // fenced to candidate groups reachable through indexed paths: every group
+    // the arms already surfaced plus the agents' current roster rows. A
+    // target-only reference outside both (the agent left the group without
+    // ever leaving an indexed trace behind) stays put — acceptable for a soft
+    // reference that cannot cascade anything.
+    const rosterGroupRows = await trx
+      .selectDistinct({ groupId: chatGroupsAgents.chatGroupId })
+      .from(chatGroupsAgents)
+      .where(inArray(chatGroupsAgents.agentId, agentIds));
+    const candidateGroupIds = [
+      ...new Set([
+        ...pairSources.map((pair) => pair.groupId),
+        ...rosterGroupRows.map((row) => row.groupId),
+      ]),
+    ].filter((id): id is string => Boolean(id));
+    if (candidateGroupIds.length === 0) return;
+
+    const candidateTopics = await trx
+      .select({ groupId: topics.groupId, id: topics.id })
+      .from(topics)
+      .where(inArray(topics.groupId, candidateGroupIds));
+    const topicGroupById = new Map(candidateTopics.map((topic) => [topic.id, topic.groupId]));
+
+    pairSources.push(
       ...(await trx
         .selectDistinct({ agentId: messages.targetId, groupId: messages.groupId })
         .from(messages)
-        .where(and(inArray(messages.targetId, agentIds), isNotNull(messages.groupId)))),
-    ];
+        .where(
+          and(inArray(messages.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
+        )),
+    );
+    if (candidateTopics.length > 0) {
+      const targetRows = await trx
+        .selectDistinct({ agentId: messages.targetId, topicId: messages.topicId })
+        .from(messages)
+        .where(
+          and(
+            inArray(messages.topicId, [...topicGroupById.keys()]),
+            inArray(messages.targetId, agentIds),
+          ),
+        );
+      pairSources.push(
+        ...targetRows.map((row) => ({
+          agentId: row.agentId,
+          groupId: (row.topicId && topicGroupById.get(row.topicId)) || null,
+        })),
+      );
+    }
 
     const agentIdsByGroup = new Map<string, Set<string>>();
     for (const { agentId, groupId } of pairSources) {
@@ -2107,32 +2155,23 @@ export class AgentModel {
       .from(chatGroups)
       .where(inArray(chatGroups.id, [...agentIdsByGroup.keys()]));
 
-    const scopes = new Map<
-      string,
-      { agentIds: Set<string>; groupIds: string[]; userId: string; workspaceId: string | null }
-    >();
-    for (const group of groupRows) {
-      const key = `${group.userId}\0${group.workspaceId ?? ''}`;
-      const scope = scopes.get(key) ?? {
-        agentIds: new Set<string>(),
-        groupIds: [],
-        userId: group.userId,
-        workspaceId: group.workspaceId,
-      };
-      scope.groupIds.push(group.id);
-      for (const agentId of agentIdsByGroup.get(group.id)!) scope.agentIds.add(agentId);
-      scopes.set(key, scope);
+    const topicIdsByGroup = new Map<string, string[]>();
+    for (const topic of candidateTopics) {
+      if (!topic.groupId) continue;
+      const list = topicIdsByGroup.get(topic.groupId) ?? [];
+      list.push(topic.id);
+      topicIdsByGroup.set(topic.groupId, list);
     }
 
-    for (const scope of scopes.values()) {
-      const cloneSourceIds = [...scope.agentIds];
+    for (const group of groupRows) {
+      const cloneSourceIds = [...agentIdsByGroup.get(group.id)!];
       const clones = await trx
         .insert(agents)
         .values(
           cloneSourceIds.map((sourceId) => ({
             ...buildAgentCopyValues(
               agentById.get(sourceId),
-              { userId: scope.userId, workspaceId: scope.workspaceId },
+              { userId: group.userId, workspaceId: group.workspaceId },
               'Agent',
             ),
             // Same overrides, same rationale as the group transfer's clone
@@ -2150,12 +2189,7 @@ export class AgentModel {
         sourceAgentId,
       }));
 
-      const groupTopicIds = (
-        await trx
-          .select({ id: topics.id })
-          .from(topics)
-          .where(inArray(topics.groupId, scope.groupIds))
-      ).map((row) => row.id);
+      const groupTopicIds = topicIdsByGroup.get(group.id) ?? [];
 
       // One statement per pair, exactly like the group transfer's remap loop —
       // the pair count is the number of moved agents with history here, i.e. a
@@ -2165,11 +2199,11 @@ export class AgentModel {
         await trx
           .update(topics)
           .set({ agentId: newAgentId, updatedAt: topics.updatedAt })
-          .where(and(inArray(topics.groupId, scope.groupIds), eq(topics.agentId, sourceAgentId)));
+          .where(and(eq(topics.groupId, group.id), eq(topics.agentId, sourceAgentId)));
         await trx
           .update(threads)
           .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
-          .where(and(inArray(threads.groupId, scope.groupIds), eq(threads.agentId, sourceAgentId)));
+          .where(and(eq(threads.groupId, group.id), eq(threads.agentId, sourceAgentId)));
         if (groupTopicIds.length > 0) {
           await trx
             .update(threads)
@@ -2184,7 +2218,7 @@ export class AgentModel {
       // whose topic is gone; the topic anchor covers rows that carry only a
       // topicId into a group topic. Overlap is harmless — the remap is
       // idempotent.
-      await remapMessageAgentIdsForGroups(trx, scope.groupIds, remapPairs);
+      await remapMessageAgentIdsForGroups(trx, [group.id], remapPairs);
       await remapMessageAgentIdsForTopics(trx, groupTopicIds, remapPairs);
     }
   };
