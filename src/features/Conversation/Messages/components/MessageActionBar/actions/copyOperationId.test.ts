@@ -17,7 +17,6 @@ interface MockOperation {
 
 const mocks = vi.hoisted(() => ({
   copyToClipboard: vi.fn(),
-  isDevMode: true,
   messageOperationMap: {} as Record<string, string>,
   messageSuccess: vi.fn(),
   operations: {} as Record<string, MockOperation>,
@@ -60,16 +59,6 @@ vi.mock('@/store/chat/selectors', () => ({
   },
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: {
-    config: () => ({ isDevMode: mocks.isDevMode }),
-  },
-}));
-
 const build = (
   data: Partial<UIChatMessage> = {},
   role: MessageActionContext['role'] = 'assistant',
@@ -87,15 +76,14 @@ const build = (
 describe('copyOperationIdAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.isDevMode = true;
     mocks.messageOperationMap = {};
     mocks.operations = {};
   });
 
-  it('is absent when Advanced Tools (dev mode) is off', () => {
-    mocks.isDevMode = false;
-
-    expect(build({ metadata: { operationId: 'op-server' } })).toBeNull();
+  // The action used to require Advanced Tools; it now lives in the Advanced
+  // submenu, which is the affordance that keeps it out of the way.
+  it('is present without Advanced Tools once an id resolves', () => {
+    expect(build({ metadata: { operationId: 'op-server' } })).not.toBeNull();
   });
 
   it('is absent when no operation id is resolvable', () => {
