@@ -103,7 +103,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface FrontierActions {
   addTask: (title: string) => Promise<void>;
-  advance: () => void;
   decide: (decisionId: string, optionId: string, resolution?: string) => void;
 }
 
@@ -323,18 +322,6 @@ const FrontierRow = memo<{
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           {item.kind === 'running' && <RunningClock startedAt={view.startedAt} />}
           {item.kind === 'done' && <DoneTime view={view} />}
-          {item.kind === 'stale' && canEdit && (
-            <Button
-              size={'small'}
-              type={'primary'}
-              onClick={(event) => {
-                stop(event);
-                actions.advance();
-              }}
-            >
-              {t('goalProcess.advance.label')}
-            </Button>
-          )}
           {item.kind === 'gate' &&
             canEdit &&
             view.decision?.options?.map((option) => (
