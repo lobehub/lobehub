@@ -14,7 +14,6 @@ import { frostedModalStyles } from './modals';
 
 export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
 export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
-export const REJECT_MODAL_INLINE_PADDING = 16;
 
 const styles = createStaticStyles(({ css }) => ({
   modalPopup: css`
@@ -51,8 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   modalFooter: css`
     flex: none;
-    padding-block: 12px;
-    padding-inline: ${REJECT_MODAL_INLINE_PADDING}px;
+    padding-block-start: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   regionIndex: css`
@@ -207,16 +205,7 @@ export const checkRejectModalShell = (evidenceCount: number) => {
     },
     styles: {
       ...frostedModalStyles,
-      content: {
-        display: 'flex',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'hidden',
-        padding: 0,
-        paddingBlock: 0,
-        paddingInline: 0,
-      },
-      header: { paddingInline: REJECT_MODAL_INLINE_PADDING },
+      content: { display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' },
     },
     width: modalSize.width,
   };
@@ -486,7 +475,7 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
     return (
       <div className={styles.modalBody}>
         {activeEvidence && (
-          <Flexbox flex={1} gap={12} padding={REJECT_MODAL_INLINE_PADDING} style={{ minHeight: 0 }}>
+          <Flexbox flex={1} gap={12} style={{ minHeight: 0 }}>
             <Flexbox gap={12} height={'100%'} style={{ minHeight: 0 }}>
               {thumbnails}
               <div className={styles.fullscreenBody} style={{ position: 'relative' }}>
