@@ -2106,6 +2106,18 @@ describe('AgentModel.transferAgents group history preservation', () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Chatty Member' });
     await seedGroupHistory('big-group', agent.id); // 4 message references > threshold 2
+    // A group-anchored row whose topic_id is NOT one of the group's own
+    // topics (nothing enforces the pair): the per-topic drain can never
+    // reach it, only the group-anchored finalization remap can.
+    await serverDB.insert(topics).values({ id: 'foreign-topic', userId });
+    await serverDB.insert(messages).values({
+      agentId: agent.id,
+      groupId: 'big-group',
+      id: 'big-group-msg-foreign-topic',
+      role: 'assistant',
+      topicId: 'foreign-topic',
+      userId,
+    });
 
     await model.transferAgents([agent.id], wsId2, targetUserId);
 
@@ -2129,12 +2141,13 @@ describe('AgentModel.transferAgents group history preservation', () => {
       'big-group-msg-residual',
       'big-group-msg-target',
       'big-group-msg-topic-only',
+      'big-group-msg-foreign-topic',
     ];
     const pendingRows = await serverDB
       .select()
       .from(messages)
       .where(inArray(messages.id, messageIds));
-    expect(pendingRows).toHaveLength(4);
+    expect(pendingRows).toHaveLength(5);
     for (const message of pendingRows) {
       expect(message.userId).toBe(userId);
       expect(message.workspaceId).toBeNull();
@@ -2163,7 +2176,7 @@ describe('AgentModel.transferAgents group history preservation', () => {
       .select()
       .from(messages)
       .where(inArray(messages.id, messageIds));
-    expect(drainedRows).toHaveLength(4);
+    expect(drainedRows).toHaveLength(5);
     for (const message of drainedRows) {
       expect(message.userId).toBe(userId);
       expect(message.workspaceId).toBeNull();
@@ -2175,7 +2188,7 @@ describe('AgentModel.transferAgents group history preservation', () => {
     await targetModel.delete(agent.id);
     await expect(
       serverDB.select().from(messages).where(inArray(messages.id, messageIds)),
-    ).resolves.toHaveLength(4);
+    ).resolves.toHaveLength(5);
   });
 
   it('records the transfer target as a protected scope on a deferred remap job', async () => {

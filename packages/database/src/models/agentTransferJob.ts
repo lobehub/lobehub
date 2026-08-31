@@ -289,7 +289,10 @@ export const remapResidualMessageAgentIds = async (
  * cancelled Stripe and wiped the billing rows.
  */
 const isPendingTransfer = () =>
-  and(eq(agentHistoryJobs.status, 'pending'), eq(agentHistoryJobs.type, 'transfer'));
+  and(
+    eq(agentHistoryJobs.status, 'pending'),
+    inArray(agentHistoryJobs.type, ['transfer', 'remap']),
+  );
 
 export interface CreateAgentTransferJobParams {
   /**
@@ -378,6 +381,10 @@ export class AgentTransferJobModel {
         targetUserId: params.target.userId,
         targetWorkspaceId: params.target.workspaceId,
         totalTopics: params.topics.length,
+        // Distinct type so a worker predating remap-only jobs refuses them
+        // instead of scope-rewriting a stationary group's history — see the
+        // schema comment on `type`.
+        ...(params.remapOnly ? { type: 'remap' as const } : {}),
       })
       .returning({ id: agentHistoryJobs.id });
 
@@ -461,7 +468,7 @@ export class AgentTransferJobModel {
       .where(
         and(
           eq(agentHistoryJobs.status, 'pending'),
-          eq(agentHistoryJobs.type, 'transfer'),
+          inArray(agentHistoryJobs.type, ['transfer', 'remap']),
           // COALESCE covers both a NULL payload (the common case for a plain
           // agent transfer) and a payload that carries no remap.
           sql`EXISTS (
@@ -717,7 +724,9 @@ export class AgentTransferJobModel {
       // transfer logic over a `copy` job would rewrite the scope of its target
       // topics and drop their queue rows, reporting success against history it
       // never duplicated (see the `type` column's schema comment).
-      if (!job || job.type !== 'transfer' || job.status === 'completed') return { done: true };
+      if (!job || (job.type !== 'transfer' && job.type !== 'remap') || job.status === 'completed') {
+        return { done: true };
+      }
 
       const target = { userId: job.targetUserId, workspaceId: job.targetWorkspaceId };
       // A group transfer that left referenced members behind also has to move
@@ -726,8 +735,10 @@ export class AgentTransferJobModel {
       // inline, so the drain must do it on exactly the same rows.
       const agentIdRemap = job.payload?.agentIdRemap;
       // A remap-only job never moves anything: the rows belong to a group
-      // that stayed put, and only who they point at changes.
-      const remapOnly = job.payload?.remapOnly === true;
+      // that stayed put, and only who they point at changes. The `type`
+      // discriminator is authoritative; the payload flag is kept as a
+      // self-describing mirror.
+      const remapOnly = job.type === 'remap' || job.payload?.remapOnly === true;
 
       const [next] = await trx
         .select({ topicId: agentHistoryJobTopics.topicId })
@@ -744,7 +755,19 @@ export class AgentTransferJobModel {
             target,
           );
         }
-        if (agentIdRemap) await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);
+        if (agentIdRemap) {
+          if (remapOnly) {
+            // The full group anchor, not just the topicless residual: a row
+            // can carry `group_id` alongside a topic_id that is NOT one of
+            // the group's own topics (nothing enforces the pair), so the
+            // per-topic drain never reaches it. The synchronous branch covers
+            // such rows via the same group-anchored remap; by finalization
+            // the bulk is already remapped, so this touches only leftovers.
+            await remapMessageAgentIdsForGroups(trx, job.groupIds, agentIdRemap);
+          } else {
+            await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);
+          }
+        }
         await trx
           .update(agentHistoryJobs)
           .set({ completedAt: new Date(), status: 'completed' })
@@ -752,7 +775,7 @@ export class AgentTransferJobModel {
             and(
               eq(agentHistoryJobs.id, jobId),
               eq(agentHistoryJobs.status, 'pending'),
-              eq(agentHistoryJobs.type, 'transfer'),
+              inArray(agentHistoryJobs.type, ['transfer', 'remap']),
             ),
           );
         return { done: true };

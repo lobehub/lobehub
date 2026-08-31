@@ -5,11 +5,18 @@
   "exports": {
     "./*": "./src/*.ts"
   },
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
   "dependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/database": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/trpc": "workspace:*",
     "@lobechat/types": "workspace:*"
+  },
+  "devDependencies": {
+    "vite-tsconfig-paths": "^6.1.1"
   }
 }

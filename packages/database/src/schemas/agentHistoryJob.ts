@@ -109,7 +109,13 @@ export const agentHistoryJobs = pgTable(
      * that runs transfer logic over a `copy` job would delete its queue rows
      * and report success against untouched history.
      */
-    type: text('type', { enum: ['transfer', 'copy'] })
+    // `remap` is a deliberate discriminator, not just a payload flag: a
+    // worker predating it routes the job into a `processNextTopic` whose
+    // type check refuses it outright, so a mixed-version rollout can never
+    // run a remap-only job's topics through the unconditional scope rewrites
+    // (which would move a stationary group's history into the transfer's
+    // target scope). The TS enum adds no DB constraint — no migration.
+    type: text('type', { enum: ['transfer', 'copy', 'remap'] })
       .notNull()
       .default('transfer'),
 
