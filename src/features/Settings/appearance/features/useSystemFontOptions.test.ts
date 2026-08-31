@@ -75,4 +75,13 @@ describe('useSystemFontOptions', () => {
 
     expect(result.current.options).toEqual([{ label: 'default', value: APPLICATION_DEFAULT_FONT }]);
   });
+
+  it('does not load system fonts when disabled', () => {
+    const { result } = renderHook(() => useSystemFontOptions({ ...params, enabled: false }));
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.options).toEqual([{ label: 'default', value: APPLICATION_DEFAULT_FONT }]);
+    expect(electronSystemService.getSystemFonts).not.toHaveBeenCalled();
+    expect(electronSystemService.getSystemMonospaceFonts).not.toHaveBeenCalled();
+  });
 });
