@@ -331,8 +331,16 @@ describe('AcceptanceModel', () => {
       const model = new AcceptanceModel(serverDB, userId);
       await seed([{ minutesAgo: 0, status: 'delivered' }]);
 
-      const { items } = await model.queryPage({ cursor: 'garbage', limit: 10 });
-      expect(items.map((item) => item.subjectId)).toEqual(['page-subject-0']);
+      for (const cursor of [
+        'garbage',
+        // Well-formed shape, unusable id: comparing it against a uuid column
+        // makes Postgres raise 22P02, turning bad client input into a 500.
+        '2026-08-30T12:00:00.000Z__not-a-uuid',
+        'not-a-date__00000000-0000-4000-8000-000000000000',
+      ]) {
+        const { items } = await model.queryPage({ cursor, limit: 10 });
+        expect(items.map((item) => item.subjectId)).toEqual(['page-subject-0']);
+      }
     });
   });
 

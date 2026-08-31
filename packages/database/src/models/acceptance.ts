@@ -23,7 +23,10 @@ const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null =
   if (idx <= 0) return null;
   const createdAt = new Date(cursor.slice(0, idx));
   const id = cursor.slice(idx + 2);
-  if (Number.isNaN(createdAt.getTime()) || !id) return null;
+  // The id half is compared against a uuid column, so a malformed one would be
+  // parsed by Postgres and raise 22P02 — a client's bad cursor turning into a
+  // 500. An unreadable cursor is simply the start of the feed.
+  if (Number.isNaN(createdAt.getTime()) || !isUuid(id)) return null;
   return { createdAt, id };
 };
 

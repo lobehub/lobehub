@@ -22,6 +22,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
+import type { LobeChatDatabase } from '@/database/type';
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -39,6 +40,7 @@ import {
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { canManageAcceptance } from './_helpers/acceptanceWriteScope';
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
@@ -63,17 +65,38 @@ const acceptanceProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 // read-only); personal mode passes through unrestricted.
 const acceptanceWriteProcedure = acceptanceProcedure.use(requireWorkspaceRoleWhenScoped('member'));
 
-const resolveAcceptance = async (
-  ctx: { acceptanceService: AcceptanceService },
+/**
+ * Resolve an acceptance for WRITING, with a service bound to the scope the row
+ * actually lives in.
+ *
+ * Every model write is scoped by `buildWorkspaceWhere`, which matches on the
+ * bound workspace — so a service bound to the caller's ACTIVE workspace simply
+ * fails to find a row that lives in another one, and the write dies as
+ * `NOT_FOUND` after authorization already said yes. Binding to the row's own
+ * workspace is what makes the workspace-owner path actually resolve.
+ *
+ * The bound user stays the CALLER, never the creator: decisions record
+ * `decidedBy`, and an acceptance whose audit trail attributes a teammate's
+ * verdict to its author is worse than one nobody can sign off at all.
+ */
+const resolveAcceptanceForWrite = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string },
   id: string,
-): Promise<AcceptanceItem> => {
-  const acceptance = await ctx.acceptanceService.acceptanceModel.findById(id);
+): Promise<{ acceptance: AcceptanceItem; service: AcceptanceService }> => {
+  const acceptance = isUuid(id)
+    ? await ctx.serverDB.query.acceptances.findFirst({ where: eq(acceptances.id, id) })
+    : undefined;
 
-  if (!acceptance) {
+  // An unauthorized caller gets the same answer as a missing row: the existence
+  // of someone else's delivery is not ours to disclose.
+  if (!acceptance || !(await canManageAcceptance(ctx, acceptance))) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
   }
 
-  return acceptance;
+  return {
+    acceptance,
+    service: new AcceptanceService(ctx.serverDB, ctx.userId, acceptance.workspaceId ?? undefined),
+  };
 };
 
 /** Max rows one multi-select sweep may touch — the list itself is capped at 200. */
@@ -94,25 +117,22 @@ const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed'
  * not be forced back to a decision-pending state by hand.
  */
 const applyAcceptanceStatus = async (
-  ctx: { acceptanceService: AcceptanceService },
+  service: AcceptanceService,
   acceptance: AcceptanceItem,
   status: z.infer<typeof acceptanceStatusOverrideSchema>,
 ) => {
   if (status === 'accepted') {
-    await ctx.acceptanceService.accept(acceptance.id);
+    await service.accept(acceptance.id);
     return;
   }
 
   if (status === 'closed') {
-    await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
+    await service.acceptanceModel.updateStatus(acceptance.id, 'closed');
     return;
   }
 
   if (status === 'rejected') {
-    await ctx.acceptanceService.reject(
-      acceptance.id,
-      'Rejected from the acceptance list — needs another round.',
-    );
+    await service.reject(acceptance.id, 'Rejected from the acceptance list — needs another round.');
     return;
   }
 
@@ -129,7 +149,7 @@ const applyAcceptanceStatus = async (
     });
   }
 
-  await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'delivered');
+  await service.acceptanceModel.updateStatus(acceptance.id, 'delivered');
 };
 
 export const acceptanceRouter = router({
@@ -142,10 +162,9 @@ export const acceptanceRouter = router({
   accept: acceptanceWriteProcedure
     .input(z.object({ comment: z.string().max(2000).optional(), id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return ctx.acceptanceService.accept(acceptance.id, input.comment);
+      return service.accept(acceptance.id, input.comment);
     }),
 
   /**
@@ -156,8 +175,7 @@ export const acceptanceRouter = router({
   attachRun: acceptanceWriteProcedure
     .input(z.object({ acceptanceId: z.string(), verifyRunId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.acceptanceId);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.acceptanceId);
 
       // The attach rewrites the RUN's acceptance_id/round_index too — and a
       // workspace-visible run is not necessarily the caller's. Creator-scope it
@@ -174,7 +192,7 @@ export const acceptanceRouter = router({
       assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
 
       try {
-        return await ctx.acceptanceService.attachRun(run.id, acceptance.id);
+        return await service.attachRun(run.id, acceptance.id);
       } catch (error) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -341,12 +359,9 @@ export const acceptanceRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
-      // Whether this viewer may REVIEW, mirroring exactly what the write path
-      // enforces (`assertWorkspaceRowManageable`): the creator, or an owner of
-      // the workspace the acceptance belongs to. Gating the UI on `isOwner`
-      // instead was stricter than the server — a workspace owner opening a
-      // teammate's delivery got a read-only page they actually had rights on.
-      const canReview = isOwner || member?.role === 'owner';
+      // The one rule the write path enforces — same helper, so the page can
+      // never advertise an action the mutation would refuse.
+      const canReview = await canManageAcceptance(ctx, acceptance);
 
       // Sub-reads (rounds / results / evidence) are ownership-scoped models, so
       // read them AS the aggregate's owner — same pattern as the evidence file
@@ -474,8 +489,11 @@ export const acceptanceRouter = router({
       // Automated proposals are the reviewer's working state, not published
       // content — a shared acceptance URL (the whole point of `public`
       // visibility) must not show visitors "an AI thinks this is broken".
-      // Owner-only, same rule as `origin`.
-      const predictions = isOwner
+      // Scoped to whoever may REVIEW, not to the creator: the predict button is
+      // gated the same way, and a reviewer who can spend the model budget but
+      // never receives a `predictionStatus` polls until it times out, then
+      // reports the work as still running after it finished.
+      const predictions = canReview
         ? await new VerifyReviewPredictionModel(
             ctx.serverDB,
             acceptance.userId,
@@ -612,13 +630,13 @@ export const acceptanceRouter = router({
   merge: acceptanceWriteProcedure
     .input(z.object({ sourceId: z.string(), targetId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const source = await resolveAcceptance(ctx, input.sourceId);
-      assertWorkspaceRowManageable(ctx, source.userId, 'acceptance');
-      const target = await resolveAcceptance(ctx, input.targetId);
-      assertWorkspaceRowManageable(ctx, target.userId, 'acceptance');
+      // A merge rewrites BOTH aggregates, so both have to authorize; the source
+      // owns the rows that move, so its scope is the one the write runs in.
+      const { acceptance: source, service } = await resolveAcceptanceForWrite(ctx, input.sourceId);
+      const { acceptance: target } = await resolveAcceptanceForWrite(ctx, input.targetId);
 
       try {
-        return await ctx.acceptanceService.merge(source.id, target.id);
+        return await service.merge(source.id, target.id);
       } catch (error) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -665,14 +683,13 @@ export const acceptanceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
       // The feedback is addressed to the CURRENT round and lives on its run's
       // decision detail — the same home as the round's terminal accept/reject
       // note, so staleness falls out of the round chain and a deleted round
       // takes its feedback along.
-      const { runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const { runs } = await service.loadRounds(acceptance.id);
       const currentRun = runs.at(-1);
       if (!currentRun) {
         throw new TRPCError({
@@ -754,11 +771,10 @@ export const acceptanceRouter = router({
         ),
     )
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
       try {
-        const result = await ctx.acceptanceService.reviewChecks(acceptance.id, {
+        const result = await service.reviewChecks(acceptance.id, {
           action: input.action,
           annotations: input.annotations,
           checkItemIds: input.checkItemIds,
@@ -798,8 +814,9 @@ export const acceptanceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      // Authorization only — the prediction rows are read through their own
+      // owner-scoped model just below.
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
 
       const model = new VerifyReviewPredictionModel(
         ctx.serverDB,
@@ -826,10 +843,9 @@ export const acceptanceRouter = router({
   predictReviews: acceptanceWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      const { results, runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const { results, runs } = await service.loadRounds(acceptance.id);
       const resultsByRun = new Map<string, typeof results>();
       for (const result of results) {
         const bucket = resultsByRun.get(result.verifyRunId!) ?? [];
@@ -903,10 +919,9 @@ export const acceptanceRouter = router({
   setVisibility: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), visibility: z.enum(acceptanceVisibilities) }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      const updated = await ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+      const updated = await service.acceptanceModel.update(acceptance.id, {
         visibility: input.visibility,
       });
       // Cascade to every chained round: each round's report page is its own
@@ -929,8 +944,7 @@ export const acceptanceRouter = router({
   markRepairing: acceptanceWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
       if (acceptance.status !== 'delivered' && acceptance.status !== 'errored') {
         throw new TRPCError({
@@ -938,7 +952,7 @@ export const acceptanceRouter = router({
           message: `Only a settled acceptance can be sent back (status: ${acceptance.status})`,
         });
       }
-      return ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+      return service.acceptanceModel.updateStatus(acceptance.id, 'repairing');
     }),
 
   /**
@@ -950,10 +964,9 @@ export const acceptanceRouter = router({
   reject: acceptanceWriteProcedure
     .input(z.object({ comment: z.string().min(1).max(2000), id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return ctx.acceptanceService.reject(acceptance.id, input.comment);
+      return service.reject(acceptance.id, input.comment);
     }),
 
   /**
@@ -965,10 +978,9 @@ export const acceptanceRouter = router({
   rename: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), title: z.string().trim().min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+      return service.acceptanceModel.update(acceptance.id, {
         metadata: { ...acceptance.metadata, title: input.title },
       });
     }),
@@ -985,8 +997,7 @@ export const acceptanceRouter = router({
   setProject: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
       if (input.projectId) {
         const project = await new ProjectModel(
@@ -997,7 +1008,7 @@ export const acceptanceRouter = router({
         if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
       }
 
-      await ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+      await service.acceptanceModel.update(acceptance.id, {
         projectId: input.projectId,
       });
       return { success: true };
@@ -1010,11 +1021,10 @@ export const acceptanceRouter = router({
   updateStatus: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), status: acceptanceStatusOverrideSchema }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
       try {
-        await applyAcceptanceStatus(ctx, acceptance, input.status);
+        await applyAcceptanceStatus(service, acceptance, input.status);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -1049,9 +1059,8 @@ export const acceptanceRouter = router({
 
       for (const id of new Set(input.ids)) {
         try {
-          const acceptance = await resolveAcceptance(ctx, id);
-          assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
-          await applyAcceptanceStatus(ctx, acceptance, input.status);
+          const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
+          await applyAcceptanceStatus(service, acceptance, input.status);
           updated += 1;
         } catch (error) {
           console.error('[acceptance] batch status update failed for %s', id, error);
@@ -1070,10 +1079,9 @@ export const acceptanceRouter = router({
   remove: acceptanceWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
-      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      await ctx.acceptanceService.acceptanceModel.delete(acceptance.id);
+      await service.acceptanceModel.delete(acceptance.id);
       return { success: true };
     }),
 
@@ -1090,9 +1098,8 @@ export const acceptanceRouter = router({
 
       for (const id of new Set(input.ids)) {
         try {
-          const acceptance = await resolveAcceptance(ctx, id);
-          assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
-          await ctx.acceptanceService.acceptanceModel.delete(acceptance.id);
+          const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
+          await service.acceptanceModel.delete(acceptance.id);
           deleted += 1;
         } catch (error) {
           console.error('[acceptance] batch delete failed for %s', id, error);
