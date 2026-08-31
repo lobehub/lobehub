@@ -62,6 +62,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     gap: 8px;
     align-items: center;
+    justify-content: flex-end;
 
     padding-block: 0 10px;
     padding-inline: 12px;
@@ -245,19 +246,6 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         )}
         {isTask && (
           <div className={styles.metrics}>
-            {chip && (
-              <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
-                <span className={styles.chipDot} style={{ background: chip.color }} />
-                <span className={styles.chipText} style={{ color: chip.color }}>
-                  {chip.text}
-                </span>
-              </Flexbox>
-            )}
-            {view.humanTouches.length > 0 && (
-              <Tooltip title={t('goalProcess.node.humanTouched')}>
-                <span className={styles.human}>@</span>
-              </Tooltip>
-            )}
             {/* Verifier is icon-only: with the state chip sharing this strip
                 the word no longer fits the card width, and the tooltip carries
                 the full meaning anyway. */}
@@ -295,7 +283,29 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 </span>
               </Tooltip>
             )}
-            {running && <RunningClock startedAt={view.startedAt} />}
+            {/* State lives on the strip's right edge (review: bottom-left felt
+                off); the clock rides along when the task is running. */}
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={10}
+              style={{ flex: 'none', marginInlineStart: 'auto' }}
+            >
+              {running && <RunningClock startedAt={view.startedAt} />}
+              {chip && (
+                <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
+                  <span className={styles.chipDot} style={{ background: chip.color }} />
+                  <span className={styles.chipText} style={{ color: chip.color }}>
+                    {chip.text}
+                  </span>
+                </Flexbox>
+              )}
+              {view.humanTouches.length > 0 && (
+                <Tooltip title={t('goalProcess.node.humanTouched')}>
+                  <span className={styles.human}>@</span>
+                </Tooltip>
+              )}
+            </Flexbox>
           </div>
         )}
       </div>
