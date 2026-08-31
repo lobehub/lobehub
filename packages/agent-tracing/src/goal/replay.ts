@@ -14,8 +14,9 @@ import type {
  */
 export interface GoalDecisionInput {
   budget?: GoalBudgetState;
-  /** State of the chosen work node's responsible task, when it already has one. */
-  frontierTask?: GoalFrontierTaskState;
+  /** Every candidate's responsible task — the scheduler reads all of them. */
+  candidateTasks?: GoalFrontierTaskState[];
+  concurrency?: number;
   graph: GoalGraphState;
   now: number;
 }
@@ -78,7 +79,8 @@ export const replayGoalTrajectory = (
       const graph: GoalGraphState = reconstructGraphAt(trajectory, advance.seq, tick.index);
       const replayed = decide({
         budget: tick.budget,
-        frontierTask: tick.frontierTask,
+        candidateTasks: tick.candidateTasks,
+        concurrency: tick.concurrency,
         graph,
         now: tick.at,
       });

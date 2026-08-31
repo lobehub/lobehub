@@ -25,9 +25,10 @@ const STOP_OUTCOMES = new Set<GoalTickOutcome>([
 ]);
 
 /**
- * Safety limit for one advance. Dispatching a Work takes two ticks, so a
- * healthy run is a handful; anything near this is a loop that is not
- * converging, and the sweep will come back to it.
+ * Safety limit for one advance. Dispatching a Task takes two ticks and an
+ * advance now fills every free concurrency slot, so a healthy run is a
+ * handful; anything near this is a loop that is not converging, and the sweep
+ * will come back to it.
  */
 export const MAX_TICKS_PER_ADVANCE = 20;
 

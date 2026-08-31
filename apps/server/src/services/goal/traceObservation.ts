@@ -21,9 +21,10 @@ export interface GoalTickObservation {
   branch: GoalTickBranch;
   budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
+  candidateTasks?: GoalFrontierTaskState[];
   chosenNodeId?: string;
+  concurrency?: number;
   effects: GoalAdvanceEffect[];
-  frontierTask?: GoalFrontierTaskState;
   graphState: GoalGraphState;
   message: string;
   outcome: GoalTickOutcome;
@@ -75,10 +76,11 @@ export const toTraceGraphState = (graph: GoalGraphSnapshot): GoalGraphState => (
   })),
 });
 
-export const toFrontierTaskState = (task: TaskItem): GoalFrontierTaskState => ({
+export const toFrontierTaskState = (task: TaskItem, nodeId?: string): GoalFrontierTaskState => ({
   error: task.error,
   id: task.id,
   identifier: task.identifier,
+  nodeId,
   status: task.status,
   updatedAt: new Date(task.updatedAt).getTime(),
 });

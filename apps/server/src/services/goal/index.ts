@@ -36,7 +36,11 @@ import {
   needsBudget,
   selectFrontier,
 } from './decideNextMove';
-import { resolveOperationLeaseTimeout, resolveTaskMaxSteps } from './recoveryPolicy';
+import {
+  resolveMaxConcurrentTasks,
+  resolveOperationLeaseTimeout,
+  resolveTaskMaxSteps,
+} from './recoveryPolicy';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
   type GoalTickOptions,
@@ -363,16 +367,42 @@ export class GoalService {
     const frontier = selectFrontier(graph);
     const chosen = frontier.chosen;
 
-    const frontierTask = chosen?.taskId
-      ? ((await this.taskModel.findById(chosen.taskId)) ?? null)
-      : undefined;
+    // Every candidate's task, not just the head's: the scheduler has to know
+    // which of them are in flight before it can decide what else to start.
+    const candidateTaskIds = frontier.eligible.flatMap(({ node }) =>
+      node.taskId ? [node.taskId] : [],
+    );
+    const tasksById = new Map(
+      (candidateTaskIds.length > 0 ? await this.taskModel.findByIds(candidateTaskIds) : []).map(
+        (task) => [task.id, task],
+      ),
+    );
+
+    const frontierTask = chosen?.taskId ? (tasksById.get(chosen.taskId) ?? null) : undefined;
     // Only the branch that could start a run reads the budget, so a goal that is
     // merely waiting on running Work does not pay for the query on every sweep.
     const budget = needsBudget(frontierTask)
       ? toBudgetState(graph.goal, await this.evaluateBudget(graph.goal, graph))
       : undefined;
 
-    const move = decideNextMove({ budget, frontier, frontierTask, graph });
+    const concurrency = resolveMaxConcurrentTasks(graph.goal);
+    const move = decideNextMove({
+      budget,
+      concurrency,
+      frontier,
+      graph,
+      leaseTimeoutMs: resolveOperationLeaseTimeout(graph.goal),
+      now: at,
+      tasksById,
+    });
+    // The scheduler may pick past the head of the frontier, so every arm below
+    // acts on the node the move chose — never on `chosen`, which is only the
+    // highest-ranked candidate.
+    const acting = move.chosenNodeId
+      ? graph.nodes.find((node) => node.id === move.chosenNodeId)
+      : undefined;
+    const actingTask = acting?.taskId ? (tasksById.get(acting.taskId) ?? null) : undefined;
+
     const effects: GoalAdvanceEffect[] = [];
 
     const observe = (result: GoalTickResult): GoalTickResult => {
@@ -383,7 +413,11 @@ export class GoalService {
         candidates: move.candidates,
         chosenNodeId: move.chosenNodeId,
         effects,
-        frontierTask: frontierTask ? toFrontierTaskState(frontierTask) : undefined,
+        candidateTasks: frontier.eligible.flatMap(({ node }) => {
+          const task = node.taskId ? tasksById.get(node.taskId) : undefined;
+          return task ? [toFrontierTaskState(task, node.id)] : [];
+        }),
+        concurrency,
         graphState: toTraceGraphState(graph),
         message: result.message,
         outcome: result.outcome,
@@ -425,48 +459,48 @@ export class GoalService {
       }
 
       case 'create_task': {
-        return observe(await this.createResponsibleTask(graph, chosen!, effects));
+        return observe(await this.createResponsibleTask(graph, acting!, effects));
       }
 
       case 'missing_task': {
         await this.coordinatorGraph.updateNodeStatus(
           goalId,
-          chosen!.id,
+          acting!.id,
           'waiting',
           'Responsible task is missing',
         );
-        effects.push({ nodeId: chosen!.id, type: 'node_status', detail: 'waiting' });
+        effects.push({ nodeId: acting!.id, type: 'node_status', detail: 'waiting' });
         return observe({
           goalId,
           message: move.message,
-          nodeId: chosen!.id,
+          nodeId: acting!.id,
           outcome: move.outcome,
         });
       }
 
       default: {
         // Everything from here on has a live responsible task.
-        const task = frontierTask!;
-        await this.ensureTaskWorkVersion(graph.goal.id, chosen!.id, task.id);
+        const task = actingTask!;
+        await this.ensureTaskWorkVersion(graph.goal.id, acting!.id, task.id);
 
         switch (move.branch) {
           case 'consume_completed': {
-            return observe(await this.consumeCompletedTask(graph, chosen!.id, task.id, effects));
+            return observe(await this.consumeCompletedTask(graph, acting!.id, task.id, effects));
           }
 
           case 'recover_lease': {
             return observe(
-              await this.resumeAbandonedTaskRecovery(graph, chosen!.id, task, effects),
+              await this.resumeAbandonedTaskRecovery(graph, acting!.id, task, effects),
             );
           }
 
           case 'recover_verification': {
-            return observe(await this.recoverAfterVerification(graph, chosen!.id, task, effects));
+            return observe(await this.recoverAfterVerification(graph, acting!.id, task, effects));
           }
 
           case 'failure_decision': {
             return observe(
-              await this.openFailureDecision(graph, chosen!.id, task.id, move.message, effects),
+              await this.openFailureDecision(graph, acting!.id, task.id, move.message, effects),
             );
           }
 
@@ -474,7 +508,7 @@ export class GoalService {
             return observe({
               goalId,
               message: move.message,
-              nodeId: chosen!.id,
+              nodeId: acting!.id,
               outcome: move.outcome,
               taskId: task.id,
             });
@@ -482,13 +516,13 @@ export class GoalService {
 
           case 'task_running': {
             if (task.status === 'running') {
-              const recovered = await this.recoverAbandonedTask(graph, chosen!.id, task, effects);
+              const recovered = await this.recoverAbandonedTask(graph, acting!.id, task, effects);
               if (recovered) return observe(recovered);
             }
             return observe({
               goalId,
               message: move.message,
-              nodeId: chosen!.id,
+              nodeId: acting!.id,
               outcome: move.outcome,
               taskId: task.id,
             });
@@ -500,14 +534,14 @@ export class GoalService {
             return observe({
               goalId,
               message: move.message,
-              nodeId: chosen!.id,
+              nodeId: acting!.id,
               outcome: move.outcome,
               taskId: task.id,
             });
           }
 
           default: {
-            return observe(await this.dispatchWork(graph, chosen!.id, task, effects));
+            return observe(await this.dispatchWork(graph, acting!.id, task, effects));
           }
         }
       }
