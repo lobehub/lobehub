@@ -91,7 +91,7 @@ import { type GlobalMemoryLayer } from '@/types/serverConfig';
 import { type ProviderConfig } from '@/types/user/settings';
 import { type MergeStrategyEnum } from '@/types/userMemory';
 import { LayersEnum, MemorySourceType, TypesEnum } from '@/types/userMemory';
-import { trimBasedOnBatchProbe } from '@/utils/chunkers';
+import { chunkByTokens, trimBasedOnBatchProbe } from '@/utils/chunkers';
 import { encodeAsync } from '@/utils/tokenizer';
 
 const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
@@ -1409,25 +1409,36 @@ export class MemoryExtractionExecutor {
     const userMemoryModel = new UserMemoryModel(db, userId, ftsSearchRepo);
     // TODO: make topK configurable
     const topK = 10;
-    const aggregatedContent = await this.trimTextToTokenLimit(
-      conversations.map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n'),
-      tokenLimit,
-    );
+    const aggregatedContent = conversations
+      .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n');
+
+    // Chunk long conversations instead of hard-trimming the tail: trimming
+    // drops the head of the conversation, losing early context. Chunking keeps
+    // the full content by splitting into multiple embedding inputs; the
+    // downstream searchMemory call already accepts multiple query embeddings
+    // and combines them (mean pooling).
+    const embedInputs =
+      tokenLimit && (await this.countTokens(aggregatedContent)) > tokenLimit
+        ? await chunkByTokens(aggregatedContent, { tokenLimit })
+        : [aggregatedContent];
 
     const embeddings = await runtime.embeddings(
       {
         dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: [aggregatedContent],
+        input: embedInputs,
         model: embeddingModel,
       },
       { metadata: { trigger: RequestTrigger.Memory }, user: userId },
     );
 
-    const vector = embeddings?.[0];
-    if (vector) {
+    const vectors = (embeddings ?? []).filter((embedding): embedding is number[] =>
+      Boolean(embedding),
+    );
+    if (vectors.length > 0) {
       const retrieved = await userMemoryModel.searchMemory(
         {
-          queries: [aggregatedContent],
+          queries: embedInputs,
           topK: {
             activities: topK,
             contexts: topK,
@@ -1436,7 +1447,7 @@ export class MemoryExtractionExecutor {
             preferences: topK,
           },
         },
-        [vector],
+        vectors,
       );
 
       return retrieved;
@@ -1621,10 +1632,10 @@ export class MemoryExtractionExecutor {
             conversations,
             extractorContextLimit,
           );
-          const embeddingConversations = await this.trimConversationsToTokenLimit(
-            conversations,
-            embeddingContextLimit,
-          );
+          // NOTE: embeddingConversations must stay UNTRIMMED. long topics are chunked
+          // inside listRelevantUserMemories via chunkByTokens so the head of the
+          // conversation is still retrievable; trimming here would drop it.
+          const embeddingConversations = conversations;
 
           const messageIds = extractorConversations.map((item) => item.id);
 
