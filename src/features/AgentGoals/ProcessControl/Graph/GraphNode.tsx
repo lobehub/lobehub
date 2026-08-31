@@ -3,11 +3,12 @@
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { FileBox, Repeat2, ShieldCheck } from 'lucide-react';
+import { FileBox, type LucideIcon, Repeat2, ShieldCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
@@ -42,12 +43,6 @@ const styles = createStaticStyles(({ css }) => ({
     transition:
       opacity 0.2s,
       border-color 0.15s;
-  `,
-  chipDot: css`
-    flex: none;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
   `,
   chipText: css`
     font-size: 11px;
@@ -160,24 +155,49 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const useStateChip = (data: GraphNodeData): { color: string; text: string } | null => {
+interface StateChip {
+  color: string;
+  /** The task family's status glyph; running renders the animated ring instead. */
+  icon?: LucideIcon;
+  text: string;
+}
+
+const useStateChip = (data: GraphNodeData): StateChip | null => {
   const { t } = useTranslation('chat');
   const { isGate, running, stale, view } = data;
   const { node } = view;
 
-  if (isGate) return { color: cssVar.colorWarning, text: t('goalProcess.tag.needsDecision') };
-  if (stale) return { color: cssVar.colorError, text: t('goalProcess.tag.lost') };
-  // Same running color the whole task family uses (frontier glyphs, task
-  // rows) — a lone blue chip here read as a different state.
+  if (isGate)
+    return {
+      color: TASK_STATUS_VISUALS.paused.color,
+      icon: TASK_STATUS_VISUALS.paused.icon,
+      text: t('goalProcess.tag.needsDecision'),
+    };
+  if (stale)
+    return {
+      color: TASK_STATUS_VISUALS.failed.color,
+      icon: TASK_STATUS_VISUALS.failed.icon,
+      text: t('goalProcess.tag.lost'),
+    };
+  // Running renders the same animated ring the frontier and home surfaces use.
   if (running)
     return { color: TASK_STATUS_VISUALS.running.color, text: t('goalProcess.node.running') };
   if (node.kind === 'task' && node.status === 'resolved')
-    return { color: cssVar.colorSuccess, text: t('goalProcess.node.done') };
+    return {
+      color: TASK_STATUS_VISUALS.completed.color,
+      icon: TASK_STATUS_VISUALS.completed.icon,
+      text: t('goalProcess.node.done'),
+    };
   if (node.kind === 'task' && (node.status === 'retired' || node.status === 'rejected'))
-    return { color: cssVar.colorTextTertiary, text: t('goalProcess.tag.retired') };
+    return {
+      color: TASK_STATUS_VISUALS.canceled.color,
+      icon: TASK_STATUS_VISUALS.canceled.icon,
+      text: t('goalProcess.tag.retired'),
+    };
   if (node.kind === 'decision' && node.status === 'resolved')
     return {
       color: cssVar.colorTextTertiary,
+      icon: TASK_STATUS_VISUALS.completed.icon,
       text: view.humanTouches.length
         ? t('goalProcess.node.decidedByYou')
         : t('goalProcess.node.decidedByAgent'),
@@ -186,7 +206,8 @@ const useStateChip = (data: GraphNodeData): { color: string; text: string } | nu
   // so "not dispatched" no longer hides in the metric strip.
   if (node.kind === 'task')
     return {
-      color: cssVar.colorTextTertiary,
+      color: TASK_STATUS_VISUALS.backlog.color,
+      icon: TASK_STATUS_VISUALS.backlog.icon,
       text: node.taskId
         ? t(`goalProcess.nodeStatus.${node.status}` as const)
         : t('goalProcess.node.unassigned'),
@@ -235,8 +256,12 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         {(chip || view.humanTouches.length > 0) && (
           <div className={styles.statusRow}>
             {chip && (
-              <Flexbox horizontal align={'center'} gap={4}>
-                <span className={styles.chipDot} style={{ background: chip.color }} />
+              <Flexbox horizontal align={'center'} gap={5}>
+                {chip.icon ? (
+                  <Icon color={chip.color} icon={chip.icon} size={13} />
+                ) : (
+                  <RunningGlyph size={13} />
+                )}
                 <span className={styles.chipText} style={{ color: chip.color }}>
                   {chip.text}
                 </span>
