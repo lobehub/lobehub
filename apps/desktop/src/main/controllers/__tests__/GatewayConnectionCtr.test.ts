@@ -394,6 +394,28 @@ describe('GatewayConnectionCtr', () => {
       expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
     });
 
+    it('should reconnect the matching device from a protocol link', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const { deviceId } = await ctr.getDeviceInfo();
+      const result = await ctr.reconnectFromProtocol({ deviceId });
+
+      expect(result).toBe(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
+    it('should reject a protocol reconnect intended for another device', async () => {
+      mockStoreSet.mockClear();
+
+      const result = await ctr.reconnectFromProtocol({ deviceId: 'another-device' });
+
+      expect(result).toBe(false);
+      expect(mockStoreSet).not.toHaveBeenCalled();
+    });
+
     it('should no-op when already connected', async () => {
       ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);

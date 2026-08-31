@@ -589,6 +589,7 @@ export default {
   'heteroAgent.executionTarget.noneDesc': 'No device enabled',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
+  'heteroAgent.executionTarget.reconnect': 'Reconnect',
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
