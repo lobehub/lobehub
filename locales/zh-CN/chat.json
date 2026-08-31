@@ -840,6 +840,7 @@
   "heteroAgent.executionTarget.online": "在线",
   "heteroAgent.executionTarget.personalGroup": "私人设备",
   "heteroAgent.executionTarget.reconnect": "重新连接",
+  "heteroAgent.executionTarget.reconnectFailed": "无法重新连接此设备。请确认桌面端正在运行，然后重试。",
   "heteroAgent.executionTarget.sandbox": "云端沙箱",
   "heteroAgent.executionTarget.sandboxDesc": "在临时云端沙箱中运行",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} 目前仅支持在本地设备或已连接设备上运行",

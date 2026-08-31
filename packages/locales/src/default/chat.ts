@@ -590,6 +590,8 @@ export default {
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
+  'heteroAgent.executionTarget.reconnectFailed':
+    'Could not reconnect this device. Make sure the desktop app is running, then try again.',
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',

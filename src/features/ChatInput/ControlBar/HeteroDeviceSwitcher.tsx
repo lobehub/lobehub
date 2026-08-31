@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
@@ -430,16 +430,24 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         // The deep link crosses browser → desktop → gateway → server, so give
         // the live device registry a short window to converge instead of
         // making the user close and reopen the picker to see the result.
+        let connected = false;
         for (let attempt = 0; attempt < 8; attempt += 1) {
           const nextDevices = await refreshDevices();
-          if (nextDevices?.some((device) => device.deviceId === deviceId && device.online)) break;
+          if (nextDevices?.some((device) => device.deviceId === deviceId && device.online)) {
+            connected = true;
+            break;
+          }
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
+        if (!connected) toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+      } catch (error) {
+        console.error('Device reconnect failed:', error);
+        toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
       } finally {
         setReconnectingDeviceId(undefined);
       }
     },
-    [currentDeviceId, refreshDevices],
+    [currentDeviceId, refreshDevices, t],
   );
 
   // A member's explicit target override may resolve `local`; without one the
@@ -703,28 +711,26 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={d.friendlyName || d.hostname || d.deviceId}
         tag={isCurrentMachine ? t('heteroAgent.executionTarget.gateway') : undefined}
         desc={
-          isCurrentMachine ? (
-            t('heteroAgent.executionTarget.gatewayDesc')
-          ) : (
-            <>
-              {renderDeviceStatus(d)}
-              {d.online ? null : (
-                <Button
-                  className={styles.reconnectButton}
-                  icon={RefreshCwIcon}
-                  loading={reconnectingDeviceId === d.deviceId}
-                  size={'small'}
-                  type={'text'}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void handleReconnectDevice(d.deviceId);
-                  }}
-                >
-                  {t('heteroAgent.executionTarget.reconnect')}
-                </Button>
-              )}
-            </>
-          )
+          <>
+            {isCurrentMachine
+              ? t('heteroAgent.executionTarget.gatewayDesc')
+              : renderDeviceStatus(d)}
+            {d.online ? null : (
+              <Button
+                className={styles.reconnectButton}
+                icon={RefreshCwIcon}
+                loading={reconnectingDeviceId === d.deviceId}
+                size={'small'}
+                type={'text'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleReconnectDevice(d.deviceId);
+                }}
+              >
+                {t('heteroAgent.executionTarget.reconnect')}
+              </Button>
+            )}
+          </>
         }
         onClick={() => void handleSelect('device', d.deviceId)}
       />

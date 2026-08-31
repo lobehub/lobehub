@@ -133,6 +133,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
   private readonly hermesSessionMap = new Map<string, string>();
 
   private localSystemRuntime: LocalSystemExecutionRuntime | null = null;
+  private resolveGatewayReady: (() => void) | undefined;
+  private readonly gatewayReady = new Promise<void>((resolve) => {
+    this.resolveGatewayReady = resolve;
+  });
 
   // ─── Service Accessor ───
 
@@ -206,6 +210,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.checkWorkspaceDeviceRegistered(workspaceId, deviceId),
     );
 
+    this.resolveGatewayReady?.();
+
     // Auto-connect if already logged in
     this.tryAutoConnect();
   }
@@ -248,8 +254,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
   async reconnectFromProtocol({ deviceId }: { deviceId?: string }): Promise<boolean> {
     if (!deviceId) return false;
 
-    const currentDevice = await this.service.getDeviceInfo();
-    if (currentDevice.deviceId !== deviceId) return false;
+    await this.gatewayReady;
+    if (!(await this.service.matchesDeviceId(deviceId))) return false;
 
     this.app.storeManager.set('gatewayEnabled', true);
     const result = await this.service.connect();
