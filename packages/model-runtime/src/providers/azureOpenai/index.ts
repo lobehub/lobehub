@@ -235,6 +235,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       azureImageLogger('Is Image Edit: %s', isImageEdit);
 
       if (userInput.size === 'auto') delete userInput.size;
+      if (userInput.background === 'auto') delete userInput.background;
 
       // gpt-image-2 rejects input_fidelity because it is always high fidelity by default.
       // Keep the parameter limited to the gpt-image-1 family, matching OpenAI-compatible runtime.
