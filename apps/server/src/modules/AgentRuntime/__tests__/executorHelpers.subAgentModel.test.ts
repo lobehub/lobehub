@@ -102,7 +102,7 @@ describe('runner builders fail closed for share-visitor runs', () => {
   const state = {
     metadata: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
     operationId: 'parent-op',
-  } as AgentState;
+  } as unknown as AgentState;
 
   it('buildServerVirtualSubAgentRunner returns undefined when agentShare is set', () => {
     expect(
