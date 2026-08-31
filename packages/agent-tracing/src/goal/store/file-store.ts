@@ -52,16 +52,49 @@ export class FileGoalTraceStore implements IGoalTraceStore {
     return partial ? partialToTrajectory(goalId, partial) : null;
   }
 
+  /**
+   * Finalized and in-progress trajectories together, newest first.
+   *
+   * A long-horizon goal spends nearly all of its life as a partial, so a
+   * listing that showed only finalized objects would report "nothing here" on
+   * a machine that is actively running goals — while inspecting any one of
+   * them by id worked fine.
+   */
   async list(options?: { limit?: number }): Promise<GoalTraceSummary[]> {
     const limit = options?.limit ?? 10;
-    const files = await this.listFiles();
-    const summaries: GoalTraceSummary[] = [];
 
-    for (const file of files.slice(0, limit)) {
-      const trajectory = await readJson<GoalTrajectory>(path.join(this.dir, file));
-      if (trajectory) summaries.push(toSummary(trajectory));
-    }
-    return summaries;
+    const finalized = await Promise.all(
+      (await this.listFiles()).map(async (file) => ({
+        mtime: await mtimeOf(path.join(this.dir, file)),
+        trajectory: await readJson<GoalTrajectory>(path.join(this.dir, file)),
+      })),
+    );
+    const partials = await Promise.all(
+      (await this.listPartials()).map(async (file) => {
+        const filePath = path.join(this.partialDir(), file);
+        const partial = await readJson<Partial<GoalTrajectory>>(filePath);
+        return {
+          mtime: await mtimeOf(filePath),
+          trajectory: partial
+            ? partialToTrajectory(partial.goalId ?? file.replace(/\.json$/, ''), partial)
+            : null,
+        };
+      }),
+    );
+
+    // A goal that finalized while a stale partial lingered would otherwise show
+    // twice; the finalized object wins because it is the complete one.
+    const seen = new Set<string>();
+    return [...finalized, ...partials]
+      .flatMap((entry) => (entry.trajectory ? [{ ...entry, trajectory: entry.trajectory }] : []))
+      .sort((a, b) => b.mtime - a.mtime)
+      .filter(({ trajectory }) => {
+        if (seen.has(trajectory.goalId)) return false;
+        seen.add(trajectory.goalId);
+        return true;
+      })
+      .slice(0, limit)
+      .map(({ trajectory }) => toSummary(trajectory));
   }
 
   async listPartials(): Promise<string[]> {
@@ -90,21 +123,10 @@ export class FileGoalTraceStore implements IGoalTraceStore {
     }
   }
 
-  /** Newest first, by mtime — the file name is an id, so it cannot carry order. */
   private async listFiles(): Promise<string[]> {
     try {
       const entries = await fs.readdir(this.dir);
-      const files = entries.filter((file) => file.endsWith('.json'));
-      const stats = await Promise.all(
-        files.map(async (file) => ({
-          file,
-          mtime: await fs
-            .stat(path.join(this.dir, file))
-            .then((stat) => stat.mtimeMs)
-            .catch(() => 0),
-        })),
-      );
-      return stats.sort((a, b) => b.mtime - a.mtime).map((entry) => entry.file);
+      return entries.filter((file) => file.endsWith('.json'));
     } catch {
       return [];
     }
@@ -112,6 +134,13 @@ export class FileGoalTraceStore implements IGoalTraceStore {
 }
 
 const safeName = (goalId: string): string => goalId.replaceAll(/[^\w-]/g, '_');
+
+/** The file name is an id, so ordering has to come from the filesystem. */
+const mtimeOf = async (filePath: string): Promise<number> =>
+  fs
+    .stat(filePath)
+    .then((stat) => stat.mtimeMs)
+    .catch(() => 0);
 
 async function readJson<T>(filePath: string): Promise<T | null> {
   try {

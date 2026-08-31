@@ -1,4 +1,4 @@
-import { buildGraphShape, reconstructFinalGraph } from './delta';
+import { applyGraphDelta, buildGraphShape, reconstructFinalGraph } from './delta';
 import type { GoalGraphShape, GoalTrajectory } from './types';
 
 /**
@@ -35,27 +35,61 @@ const increment = (counter: Record<string, number>, key: string): void => {
   counter[key] = (counter[key] ?? 0) + 1;
 };
 
+interface GateMetrics {
+  gatesOpened: number;
+  gatesResolved: number;
+  humanWaitingMs: number;
+}
+
 /**
- * Time parked on a person: from the advance that opened a gate to the advance
- * that a human's decision triggered. Derived rather than measured because the
- * gate rows carry `resolvedAt` but nothing records when the coordinator
- * actually stopped, and it is the stop that costs wall time.
+ * Gate metrics, read from the recorded graph rather than from effects.
+ *
+ * Effects only exist where someone remembered to emit one, and the resolving
+ * half never can: a person answers a gate through `goal.decide`, outside any
+ * advance, so no tick is running to report it. The decision rows are in every
+ * recorded graph state either way, so folding them forward sees both
+ * transitions without the coordinator having to cooperate.
+ *
+ * Waiting time is measured between the tick that first saw the gate open and
+ * the tick that first saw it answered. That is the wall time the goal actually
+ * stood still — it starts when the coordinator stopped, not when the row was
+ * written, and it ends when the coordinator noticed, not when the person
+ * clicked. Both boundaries are what the goal experienced.
  */
-const humanWaiting = (trajectory: GoalTrajectory): number => {
-  let total = 0;
-  let openedAt: number | undefined;
+const gateMetrics = (trajectory: GoalTrajectory): GateMetrics => {
+  let state = trajectory.graphBaseline;
+  const openedAt = new Map<string, number>();
+  let gatesOpened = 0;
+  let gatesResolved = 0;
+  let humanWaitingMs = 0;
+
+  const observe = (at: number) => {
+    for (const decision of state.decisions) {
+      if (decision.status === 'pending') {
+        if (!openedAt.has(decision.id)) {
+          openedAt.set(decision.id, at);
+          gatesOpened += 1;
+        }
+        continue;
+      }
+      // Anything that is no longer pending has been answered — by a person, or
+      // by the coordinator canceling it.
+      const opened = openedAt.get(decision.id);
+      if (opened === undefined) continue;
+      openedAt.delete(decision.id);
+      gatesResolved += 1;
+      humanWaitingMs += Math.max(0, at - opened);
+    }
+  };
 
   for (const advance of trajectory.advances) {
-    if (openedAt !== undefined && advance.trigger === 'decide') {
-      total += advance.startedAt - openedAt;
-      openedAt = undefined;
+    for (const tick of advance.ticks) {
+      state = applyGraphDelta(state, tick.graphDelta);
+      observe(tick.at);
     }
-    const opened = advance.ticks.some((tick) =>
-      tick.effects.some((effect) => effect.type === 'opened_decision'),
-    );
-    if (opened) openedAt = advance.completedAt;
   }
-  return total;
+
+  return { gatesOpened, gatesResolved, humanWaitingMs };
 };
 
 export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollup => {
@@ -64,8 +98,6 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
   const ticksByBranch: Record<string, number> = {};
 
   let ticksTotal = 0;
-  let gatesOpened = 0;
-  let gatesResolved = 0;
   const operationIds = new Set<string>();
 
   for (const advance of trajectory.advances) {
@@ -76,18 +108,13 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
     if (last) increment(advancesByOutcome, last.outcome);
 
     ticksTotal += advance.ticks.length;
-    for (const tick of advance.ticks) {
-      increment(ticksByBranch, tick.branch);
-      for (const effect of tick.effects) {
-        if (effect.type === 'opened_decision') gatesOpened += 1;
-        if (effect.type === 'resolved_decision') gatesResolved += 1;
-      }
-    }
+    for (const tick of advance.ticks) increment(ticksByBranch, tick.branch);
     for (const operationId of advance.childOperationIds ?? []) operationIds.add(operationId);
   }
 
-  const shape: GoalGraphShape = buildGraphShape(reconstructFinalGraph(trajectory));
   const finalGraph = reconstructFinalGraph(trajectory);
+  const shape: GoalGraphShape = buildGraphShape(finalGraph);
+  const gates = gateMetrics(trajectory);
 
   return {
     advancesByOutcome,
@@ -96,9 +123,9 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
     completedAt: trajectory.completedAt,
     completionReason: trajectory.completionReason,
     findingsTotal: shape.findings,
-    gatesOpened,
-    gatesResolved,
-    humanWaitingMs: humanWaiting(trajectory),
+    gatesOpened: gates.gatesOpened,
+    gatesResolved: gates.gatesResolved,
+    humanWaitingMs: gates.humanWaitingMs,
     nodesTotal: shape.nodesTotal,
     startedAt: trajectory.startedAt,
     ticksByBranch,

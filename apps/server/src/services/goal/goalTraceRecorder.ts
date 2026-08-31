@@ -8,6 +8,7 @@ import {
   type RecordTickInput,
 } from '@lobechat/agent-tracing';
 import debug from 'debug';
+import { sql } from 'drizzle-orm';
 
 import { GoalTraceModel } from '@/database/models/goalTrace';
 import type { LobeChatDatabase } from '@/database/type';
@@ -17,6 +18,12 @@ import type { GoalTickObservation } from './traceObservation';
 import { createDefaultGoalTraceStore } from './traceStore';
 
 const log = debug('lobe-server:goal-trace');
+
+/**
+ * Advisory-lock namespace, so a goal's trace lock cannot collide with another
+ * feature's. `0x676f_616c` is ASCII `goal`, and fits int4.
+ */
+const GOAL_TRACE_LOCK_NAMESPACE = 0x67_6f_61_6c;
 
 /**
  * Collects one advance's ticks and writes them into the goal's trajectory.
@@ -58,19 +65,46 @@ export class GoalAdvanceRecorder {
     if (!this.store || this.ticks.length === 0) return;
 
     try {
-      const trajectory = await appendAdvanceToPartial(this.store, this.goalId, {
-        childOperationIds: [...this.operationIds],
-        error: error
-          ? { message: error instanceof Error ? error.message : String(error), type: 'advance' }
-          : undefined,
-        startedAt: this.startedAt,
-        ticks: this.ticks,
-        trigger: this.trigger,
+      await this.serializedPerGoal(async (tx) => {
+        const trajectory = await appendAdvanceToPartial(this.store!, this.goalId, {
+          childOperationIds: [...this.operationIds],
+          error: error
+            ? { message: error instanceof Error ? error.message : String(error), type: 'advance' }
+            : undefined,
+          startedAt: this.startedAt,
+          ticks: this.ticks,
+          trigger: this.trigger,
+        });
+        if (trajectory) await this.writeObservationRow(trajectory, tx);
       });
-      if (trajectory) await this.writeObservationRow(trajectory);
     } catch (writeError) {
       log('failed to record advance for %s: %O', this.goalId, writeError);
     }
+  }
+
+  /**
+   * Run the trajectory write under a per-goal advisory lock.
+   *
+   * Appending is read-modify-write on one object, and advances for the same
+   * goal genuinely overlap — an event hook, a manual nudge and the sweep can
+   * all be in flight at once, which the coordinator handles everywhere else by
+   * claiming rows. Without serialization two advances read the same partial,
+   * pick the same `seq`, and the second write silently erases the first; the
+   * stale rollup then overwrites the row and `advancesTotal` goes backwards.
+   *
+   * The lock is transaction-scoped, so it releases on commit or on any failure,
+   * and it is held across the object write — which is the point: reading the
+   * partial and writing it back have to be one critical section. That keeps a
+   * transaction open for one storage round trip, which is the cost of the
+   * trajectory being complete.
+   */
+  private async serializedPerGoal<T>(run: (tx: LobeChatDatabase) => Promise<T>): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${GOAL_TRACE_LOCK_NAMESPACE}, hashtext(${this.goalId}))`,
+      );
+      return run(tx as unknown as LobeChatDatabase);
+    });
   }
 
   /**
@@ -81,10 +115,13 @@ export class GoalAdvanceRecorder {
    * would drift. It also keeps the row queryable while the goal is still
    * running, which is when a stalling goal is worth finding.
    */
-  private async writeObservationRow(trajectory: GoalTrajectory): Promise<void> {
+  private async writeObservationRow(
+    trajectory: GoalTrajectory,
+    tx: LobeChatDatabase = this.db,
+  ): Promise<void> {
     const rollup = buildGoalTraceRollup(trajectory);
 
-    await new GoalTraceModel(this.db).upsert({
+    await new GoalTraceModel(tx).upsert({
       advancesByOutcome: rollup.advancesByOutcome,
       advancesByTrigger: rollup.advancesByTrigger,
       advancesTotal: rollup.advancesTotal,
@@ -117,8 +154,10 @@ export class GoalAdvanceRecorder {
   async finalize(completionReason: string): Promise<void> {
     if (!this.store) return;
     try {
-      const trajectory = await finalizeGoalTrace(this.store, this.goalId, { completionReason });
-      if (trajectory) await this.writeObservationRow(trajectory);
+      await this.serializedPerGoal(async (tx) => {
+        const trajectory = await finalizeGoalTrace(this.store!, this.goalId, { completionReason });
+        if (trajectory) await this.writeObservationRow(trajectory, tx);
+      });
     } catch (error) {
       log('failed to finalize trajectory for %s: %O', this.goalId, error);
     }

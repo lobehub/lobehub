@@ -10,8 +10,26 @@ import { resolveTaskAttemptBudget, resolveTaskMaxSteps } from './recoveryPolicy'
 
 const log = debug('lobe-server:goal-work-recovery');
 
-export type WorkRecoveryOutcome =
-  'continued' | 'exhausted-cost' | 'exhausted-rounds' | 'spawn-failed';
+export type TaskRecoveryOutcome =
+  /** This call spawned the retry, and `operationId` is its run. */
+  | 'started'
+  /** Another overlapping advance owns the retry; this one started nothing. */
+  | 'already-running'
+  | 'exhausted-cost'
+  | 'exhausted-rounds'
+  | 'spawn-failed';
+
+/**
+ * `started` and `already-running` both mean "the Work is moving, keep waiting",
+ * but only the first is something *this* advance did. They used to share the
+ * name `continued`, which made the trajectory claim a run it had not started
+ * and drop the operation id of the one it had.
+ */
+export interface TaskRecoveryResult {
+  /** Present only on `started`. The drill-down link into `agent_operations`. */
+  operationId?: string;
+  outcome: TaskRecoveryOutcome;
+}
 
 /** Retry budget and spawn boundary for a Goal Graph Work Task. */
 export class TaskRecoveryCoordinator {
@@ -25,11 +43,11 @@ export class TaskRecoveryCoordinator {
     goal: GoalItem;
     spentCost?: number;
     task: TaskItem;
-  }): Promise<WorkRecoveryOutcome> => {
+  }): Promise<TaskRecoveryResult> => {
     const { goal, task } = params;
     const attempts = task.totalTopics || 0;
     const attemptBudget = resolveTaskAttemptBudget(goal);
-    if (attempts >= attemptBudget) return 'exhausted-rounds';
+    if (attempts >= attemptBudget) return { outcome: 'exhausted-rounds' };
 
     if (typeof goal.maxTotalCost === 'number') {
       const spent =
@@ -37,7 +55,7 @@ export class TaskRecoveryCoordinator {
         (await new AgentOperationModel(this.db, this.userId, this.workspaceId).sumCostByTask(
           task.id,
         ));
-      if (spent >= goal.maxTotalCost) return 'exhausted-cost';
+      if (spent >= goal.maxTotalCost) return { outcome: 'exhausted-cost' };
     }
 
     // Both recovery paths — a failed verification and an abandoned operation —
@@ -53,7 +71,7 @@ export class TaskRecoveryCoordinator {
     const current = await taskModel.findById(task.id);
     if (!current || current.status === 'running') {
       log('task %s recovery was already claimed by another advance', task.identifier);
-      return 'continued';
+      return { outcome: 'already-running' };
     }
     const claimed = await taskModel.updateStatusIfCurrent(task.id, current.status, 'running', {
       error: null,
@@ -61,17 +79,17 @@ export class TaskRecoveryCoordinator {
     });
     if (!claimed) {
       log('task %s recovery lost the claim race', task.identifier);
-      return 'continued';
+      return { outcome: 'already-running' };
     }
 
     try {
-      await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
+      const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
         maxSteps: resolveTaskMaxSteps(goal),
         taskId: task.id,
         trigger: 'goal',
       });
       log('task %s → recovery attempt %d spawned', task.identifier, attempts + 1);
-      return 'continued';
+      return { operationId: run.operationId, outcome: 'started' };
     } catch (error) {
       log('task %s recovery spawn failed (non-fatal): %O', task.identifier, error);
       // We own the claim, so nothing else will put the task back.
@@ -80,7 +98,7 @@ export class TaskRecoveryCoordinator {
         .catch((releaseError) => {
           log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
         });
-      return 'spawn-failed';
+      return { outcome: 'spawn-failed' };
     }
   };
 }

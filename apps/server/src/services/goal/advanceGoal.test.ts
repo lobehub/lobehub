@@ -3,12 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   createStore: vi.fn(() => null as unknown),
+  execute: vi.fn(),
   status: vi.fn(),
   tick: vi.fn(),
   upsert: vi.fn(),
 }));
 
-vi.mock('@/database/server', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
+// The trajectory write runs inside a transaction so it can hold a per-goal
+// advisory lock, so the fake database has to model that seam.
+vi.mock('@/database/server', () => ({
+  getServerDB: vi.fn().mockResolvedValue({
+    execute: mocks.execute,
+    transaction: (run: (tx: unknown) => unknown) => run({ execute: mocks.execute }),
+  }),
+}));
 vi.mock('./index', () => ({
   GoalService: vi.fn(() => ({ status: mocks.status, tick: mocks.tick })),
 }));
@@ -133,6 +141,7 @@ describe('advanceGoal trajectory recording', () => {
     mocks.status.mockReset();
     mocks.createStore.mockReset();
     mocks.upsert.mockReset();
+    mocks.execute.mockReset();
   });
 
   it('records the ticks it observed, tagged with what triggered the advance', async () => {
@@ -154,6 +163,24 @@ describe('advanceGoal trajectory recording', () => {
     });
     expect(state.partial.advances[0].ticks[0]).toMatchObject({ branch: 'dispatch_task', index: 0 });
     expect(state.saved).toBeUndefined();
+  });
+
+  it('serializes the write behind a per-goal lock so overlapping advances cannot erase one another', async () => {
+    const { store } = memoryStore();
+    mocks.createStore.mockReturnValue(store);
+    mocks.status.mockResolvedValue('running');
+    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
+      options?.onDecision?.(observation('waiting_external'));
+      return tickResult('waiting_external');
+    });
+
+    await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
+
+    // Appending is read-modify-write on one object; without this the settle,
+    // sweep and manual advances that overlap on a goal would pick the same
+    // `seq` and the last writer would drop the others.
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mocks.execute.mock.calls[0][0])).toContain('pg_advisory_xact_lock');
   });
 
   it('writes the observation row while the goal is still running, not only at the end', async () => {

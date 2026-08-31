@@ -687,7 +687,7 @@ export class GoalService {
       this.workspaceId,
     ).recover({ goal: graph.goal, spentCost: totalCost, task });
 
-    if (recovery === 'continued') {
+    if (recovery.outcome === 'started' || recovery.outcome === 'already-running') {
       await this.coordinatorGraph.updateNodeStatus(
         goalId,
         nodeId,
@@ -695,12 +695,18 @@ export class GoalService {
         'Automatically started the next Work attempt after verification feedback',
       );
       await this.goalModel.updateStatus(goalId, 'running');
-      effects.push({
-        nodeId,
-        targetId: task.id,
-        type: 'started_run',
-        detail: 'verification retry',
-      });
+      // Only when this advance is the one that spawned the run. Reporting it
+      // for a retry another advance owns would put a run in this trajectory
+      // that it did not start, and attribute its cost here.
+      if (recovery.outcome === 'started') {
+        effects.push({
+          detail: 'verification retry',
+          nodeId,
+          operationId: recovery.operationId,
+          targetId: task.id,
+          type: 'started_run',
+        });
+      }
       return {
         goalId,
         message: `Automatically retried task ${task.identifier}`,
@@ -711,9 +717,9 @@ export class GoalService {
     }
 
     const exhaustedReason =
-      recovery === 'exhausted-cost'
+      recovery.outcome === 'exhausted-cost'
         ? 'Goal cost budget was exhausted'
-        : recovery === 'exhausted-rounds'
+        : recovery.outcome === 'exhausted-rounds'
           ? 'Work attempt budget was exhausted'
           : 'Automatic recovery could not start the next attempt';
     return this.openFailureDecision(graph, nodeId, task.id, exhaustedReason, effects);
@@ -868,7 +874,7 @@ export class GoalService {
       this.userId,
       this.workspaceId,
     ).recover({ goal: graph.goal, task });
-    if (recovery === 'continued') {
+    if (recovery.outcome === 'started' || recovery.outcome === 'already-running') {
       await this.coordinatorGraph.updateNodeStatus(
         graph.goal.id,
         nodeId,
@@ -876,6 +882,15 @@ export class GoalService {
         'Recovered an abandoned Work operation and started the next attempt',
       );
       await this.goalModel.updateStatus(graph.goal.id, 'running');
+      if (recovery.outcome === 'started') {
+        effects.push({
+          detail: 'abandoned operation retry',
+          nodeId,
+          operationId: recovery.operationId,
+          targetId: task.id,
+          type: 'started_run',
+        });
+      }
       return {
         goalId: graph.goal.id,
         message: `Recovered abandoned task ${task.identifier}`,
@@ -886,9 +901,9 @@ export class GoalService {
     }
 
     const reason =
-      recovery === 'exhausted-cost'
+      recovery.outcome === 'exhausted-cost'
         ? 'Goal cost budget was exhausted after an operation was abandoned'
-        : recovery === 'exhausted-rounds'
+        : recovery.outcome === 'exhausted-rounds'
           ? 'Work attempt budget was exhausted after an operation was abandoned'
           : 'Automatic recovery could not restart an abandoned operation';
     return this.openFailureDecision(graph, nodeId, task.id, reason, effects);

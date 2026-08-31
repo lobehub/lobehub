@@ -71,35 +71,71 @@ describe('buildGoalTraceRollup', () => {
     expect(rollup.ticksTotal).toBe(4);
   });
 
-  it('counts gates and dedupes child operations', () => {
+  it('dedupes child operations across advances', () => {
+    // The same operation can be reported by the advance that started it and by
+    // the one that consumed its result.
     const rollup = buildGoalTraceRollup(
       trajectory([
-        advance(0, 'create', {
-          childOperationIds: ['op_1', 'op_2'],
-          ticks: [tick({ effects: [{ type: 'opened_decision' }] })],
-        }),
-        advance(1, 'decide', {
-          childOperationIds: ['op_2'],
-          ticks: [tick({ effects: [{ type: 'resolved_decision' }] })],
-        }),
+        advance(0, 'create', { childOperationIds: ['op_1', 'op_2'] }),
+        advance(1, 'settle', { childOperationIds: ['op_2'] }),
       ]),
     );
 
-    expect(rollup).toMatchObject({ gatesOpened: 1, gatesResolved: 1, operationsTotal: 2 });
+    expect(rollup.operationsTotal).toBe(2);
   });
 
-  it('measures the wall time a goal sat parked on a person', () => {
+  it('counts a gate that a person answered between two advances', () => {
+    // The resolving half is never an effect: `goal.decide` runs outside any
+    // advance, so no tick is executing to report it. Both transitions are only
+    // visible in the recorded graph.
+    const gate = (status: string) => ({
+      decisionsUpserted: [{ id: 'd1', nodeId: 'n1', question: 'Retry or retire?', status }],
+    });
+
     const rollup = buildGoalTraceRollup(
       trajectory([
-        advance(0, 'sweep', {
-          completedAt: 100,
-          ticks: [tick({ effects: [{ type: 'opened_decision' }] })],
+        advance(0, 'settle', {
+          ticks: [tick({ at: 1000, graphDelta: gate('pending'), outcome: 'waiting_human' })],
         }),
-        advance(1, 'decide', { startedAt: 400 }),
+        advance(1, 'decide', {
+          ticks: [tick({ at: 4000, graphDelta: gate('resolved') })],
+        }),
       ]),
     );
 
-    expect(rollup.humanWaitingMs).toBe(300);
+    expect(rollup).toMatchObject({ gatesOpened: 1, gatesResolved: 1, humanWaitingMs: 3000 });
+  });
+
+  it('leaves a still-open gate counted as opened and unresolved', () => {
+    const rollup = buildGoalTraceRollup(
+      trajectory([
+        advance(0, 'settle', {
+          ticks: [
+            tick({
+              at: 1000,
+              graphDelta: {
+                decisionsUpserted: [
+                  { id: 'd1', nodeId: 'n1', question: 'Retry?', status: 'pending' },
+                ],
+              },
+              outcome: 'waiting_human',
+            }),
+          ],
+        }),
+      ]),
+    );
+
+    expect(rollup).toMatchObject({ gatesOpened: 1, gatesResolved: 0, humanWaitingMs: 0 });
+  });
+
+  it('does not count a gate from effects alone, which only cover half its life', () => {
+    const rollup = buildGoalTraceRollup(
+      trajectory([
+        advance(0, 'sweep', { ticks: [tick({ effects: [{ type: 'opened_decision' }] })] }),
+      ]),
+    );
+
+    expect(rollup).toMatchObject({ gatesOpened: 0, gatesResolved: 0 });
   });
 
   it('reads the final graph shape through the delta chain', () => {
