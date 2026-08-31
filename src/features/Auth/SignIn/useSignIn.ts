@@ -11,7 +11,11 @@ import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
-import { buildOnboardingRedirectUrl, sanitizeRedirectPath } from '@/utils/onboardingRedirect';
+import {
+  buildOnboardingRedirectUrl,
+  sanitizeRedirectPath,
+  toAbsoluteAuthCallbackUrl,
+} from '@/utils/onboardingRedirect';
 
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
@@ -87,11 +91,15 @@ export const useSignIn = () => {
 
       setSending(true);
       const callbackUrl = searchParams.get('callbackUrl') || '/';
+      const authOrigin = window.location.origin;
       const { error } = await signIn.magicLink({
-        callbackURL: callbackUrl,
+        callbackURL: toAbsoluteAuthCallbackUrl(callbackUrl, authOrigin),
         email: emailValue,
         // First-time magic-link users are signups — land them on onboarding first
-        newUserCallbackURL: buildOnboardingRedirectUrl(callbackUrl),
+        newUserCallbackURL: toAbsoluteAuthCallbackUrl(
+          buildOnboardingRedirectUrl(callbackUrl),
+          authOrigin,
+        ),
       });
       if (error) {
         toast.error(error.message || t('betterAuth.signin.magicLinkError'));
@@ -208,7 +216,11 @@ export const useSignIn = () => {
     try {
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const result = await signIn.email(
-        { callbackURL: callbackUrl, email, password: values.password },
+        {
+          callbackURL: toAbsoluteAuthCallbackUrl(callbackUrl, window.location.origin),
+          email,
+          password: values.password,
+        },
         {
           onError: (ctx) => {
             console.error('Sign in error:', ctx.error);
@@ -266,19 +278,24 @@ export const useSignIn = () => {
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       // First-time OAuth users are signups — land them on onboarding first
-      const newUserCallbackURL = buildOnboardingRedirectUrl(callbackUrl);
+      const authOrigin = window.location.origin;
+      const callbackURL = toAbsoluteAuthCallbackUrl(callbackUrl, authOrigin);
+      const newUserCallbackURL = toAbsoluteAuthCallbackUrl(
+        buildOnboardingRedirectUrl(callbackUrl),
+        authOrigin,
+      );
       const additionalData = await getAdditionalData();
       const signInWithAdditionalData = async () =>
         isBuiltinProvider(normalizedProvider)
           ? await signIn.social({
               additionalData,
-              callbackURL: callbackUrl,
+              callbackURL,
               newUserCallbackURL,
               provider: normalizedProvider,
             })
           : await signIn.oauth2({
               additionalData,
-              callbackURL: callbackUrl,
+              callbackURL,
               newUserCallbackURL,
               providerId: normalizedProvider,
             });
@@ -329,7 +346,10 @@ export const useSignIn = () => {
       // throwing, so a failed send would otherwise land on the "email sent" screen.
       const { error } = await requestPasswordReset({
         email: targetEmail,
-        redirectTo: `/reset-password?email=${encodeURIComponent(targetEmail)}`,
+        redirectTo: toAbsoluteAuthCallbackUrl(
+          `/reset-password?email=${encodeURIComponent(targetEmail)}`,
+          window.location.origin,
+        ),
       });
       if (error) throw error;
       return true;
