@@ -271,8 +271,6 @@ export default {
   'overview.sections.datasets.empty': 'No datasets yet',
   'overview.sections.datasets.noBenchmark': 'Not part of a benchmark',
   'overview.sections.datasets.title': 'Datasets',
-  'sidebar.datasets': 'Datasets',
-  'sidebar.datasetsEmpty': 'No datasets yet',
   'overview.sections.benchmarks.title': 'Benchmarks',
   'overview.sections.count': '{{count}} total',
   'overview.sections.experiments.subtitle':
@@ -394,6 +392,7 @@ export default {
   'sidebar.benchmarks': 'Benchmarks',
   'sidebar.dashboard': 'Dashboard',
   'sidebar.datasets': 'Datasets',
+  'sidebar.datasetsEmpty': 'No datasets yet',
   'sidebar.experiments': 'Experiments',
   'sidebar.runs': 'Runs',
 
