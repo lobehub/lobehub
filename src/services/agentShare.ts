@@ -31,8 +31,11 @@ class AgentShareService {
     return lambdaClient.agentShare.updateShareConfig.mutate({ agentId, config });
   }
 
-  /** Update the share's custom URL slug. Throws `CONFLICT` if another share already claims it. */
-  async updateSlug(agentId: string, slug: string) {
+  /**
+   * Update the share's custom URL slug, or clear it with `null`. Throws
+   * `CONFLICT` if another share already claims it.
+   */
+  async updateSlug(agentId: string, slug: string | null) {
     return lambdaClient.agentShare.updateSlug.mutate({ agentId, slug });
   }
 
