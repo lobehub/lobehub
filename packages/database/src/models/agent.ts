@@ -2801,11 +2801,14 @@ export class AgentModel {
       // everything reaching here is a `referenced` link the caller confirmed.
       await trx.delete(chatGroupsAgents).where(inArray(chatGroupsAgents.agentId, agentIds));
 
-      return agentIds.map((id) => ({
+      return agentIds.map((id, index) => ({
         agentId: id,
-        // Shared by the whole batch, like `transferJobId`: the caller must
-        // kick every one post-commit or the deferred remaps never drain.
-        remapJobIds,
+        // Shared by the whole batch, like `transferJobId`, and carried only
+        // on the first element (the routers read it from there) — repeating
+        // a possibly long job list per agent would just multiply the
+        // response. The caller must kick every one post-commit or the
+        // deferred remaps never drain.
+        remapJobIds: index === 0 ? remapJobIds : [],
         slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
         transferJobId,
       }));

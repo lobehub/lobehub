@@ -25,7 +25,19 @@ import {
 
 const RETRY_DELAY_MS = 5000;
 
+/**
+ * Global drain-concurrency bound. A single call site can hand this runner a
+ * burst of jobs — one deferred group-history remap per group, or every
+ * pending job at boot — and each drain is a loop of index-heavy message
+ * UPDATE transactions; running them all at once would saturate PostgreSQL.
+ * Jobs beyond the bound wait in FIFO order and start as slots free up.
+ */
+const MAX_CONCURRENT_DRAINS = 3;
+
+/** Every job this runner owns right now: actively draining OR queued. */
 const running = new Set<string>();
+const waiting: { db: LobeChatDatabase; jobId: string }[] = [];
+let activeDrains = 0;
 
 const drainWithRetry = async (db: LobeChatDatabase, jobId: string): Promise<void> => {
   try {
@@ -40,13 +52,23 @@ const drainWithRetry = async (db: LobeChatDatabase, jobId: string): Promise<void
   }
 };
 
+const pumpDrains = (): void => {
+  while (activeDrains < MAX_CONCURRENT_DRAINS && waiting.length > 0) {
+    const next = waiting.shift()!;
+    activeDrains += 1;
+    void drainWithRetry(next.db, next.jobId).finally(() => {
+      activeDrains -= 1;
+      running.delete(next.jobId);
+      pumpDrains();
+    });
+  }
+};
+
 export const startAgentTransferJob = (db: LobeChatDatabase, jobId: string): void => {
   if (running.has(jobId)) return;
   running.add(jobId);
-
-  void drainWithRetry(db, jobId).finally(() => {
-    running.delete(jobId);
-  });
+  waiting.push({ db, jobId });
+  pumpDrains();
 };
 
 export const prioritizeAgentTransferTopic = async (
