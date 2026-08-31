@@ -36,11 +36,16 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
 
   // The share itself stopped accepting traffic mid-session: the creator flipped
   // visibility away from `link` (`resolveLinkShareOrThrow` → FORBIDDEN) or
-  // deleted the share entirely (NOT_FOUND). `useSharedAgent` never revalidates,
-  // so the page keeps rendering the stale "everything is fine" shell — without
-  // this branch the visitor only sees the generic copy and retries forever.
+  // deleted the share/topic entirely (NOT_FOUND). `useSharedAgent` never
+  // revalidates, so the page keeps rendering the stale "everything is fine"
+  // shell — without this branch the visitor only sees the generic copy and
+  // retries forever.
   if (error instanceof TRPCClientError) {
     if (error.data?.code === 'FORBIDDEN') return 'share.visitor.errors.sharingPaused';
+    // NOT_FOUND is ambiguous: a deleted share AND a deleted topic both surface
+    // it, and the client cannot tell them apart. Mapped to the "reload the
+    // page" copy but deliberately NOT terminal (see below): a topic-level
+    // NOT_FOUND must stay recoverable by switching / starting a new topic.
     if (error.data?.code === 'NOT_FOUND') return 'share.visitor.errors.unavailable';
   }
 
@@ -64,8 +69,10 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
  * message survives a topic switch.
  */
 const TERMINAL_VISITOR_ERROR_KEYS = new Set([
+  // `unavailable` (NOT_FOUND) is intentionally absent: it may describe only the
+  // current topic, so locking the composer for it would strand the visitor —
+  // worst case a truly deleted share just fails again on the next send.
   'share.visitor.errors.sharingPaused',
-  'share.visitor.errors.unavailable',
 ]);
 
 export const isTerminalVisitorError = (errorKey: string): boolean =>

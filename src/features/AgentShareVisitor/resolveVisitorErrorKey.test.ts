@@ -50,7 +50,7 @@ describe('resolveVisitorErrorKey', () => {
     );
   });
 
-  it('maps a NOT_FOUND send to the unavailable copy instead of a retryable failure', () => {
+  it('maps a NOT_FOUND send to the unavailable copy', () => {
     expect(resolveVisitorErrorKey(trpcError('NOT_FOUND', 'Topic not found'))).toBe(
       'share.visitor.errors.unavailable',
     );
@@ -58,7 +58,10 @@ describe('resolveVisitorErrorKey', () => {
 
   it('treats share-level failures as terminal and per-attempt ones as retryable', () => {
     expect(isTerminalVisitorError('share.visitor.errors.sharingPaused')).toBe(true);
-    expect(isTerminalVisitorError('share.visitor.errors.unavailable')).toBe(true);
+    // NOT_FOUND may describe only the current topic (deleted topic), which a
+    // topic switch / new conversation recovers from — locking the composer on
+    // it would strand the visitor with no way out but a reload.
+    expect(isTerminalVisitorError('share.visitor.errors.unavailable')).toBe(false);
     // The turn limit is scoped to one topic — a new conversation clears it.
     expect(isTerminalVisitorError('share.visitor.errors.turnLimit')).toBe(false);
     expect(isTerminalVisitorError('share.visitor.errors.generic')).toBe(false);
