@@ -15,6 +15,7 @@ import {
 import {
   canDismissRejectModal,
   CHECK_REJECT_MODAL_SIZE,
+  checkRejectModalShell,
   checkRejectModalSize,
   mergeRejectComments,
   rejectModalTitle,
@@ -149,6 +150,19 @@ describe('check reject modal presentation', () => {
   it('keeps a text-only rejection compact', () => {
     expect(checkRejectModalSize(0)).toEqual({ height: 'auto', width: TEXT_REJECT_MODAL_WIDTH });
     expect(checkRejectModalSize(1)).toEqual(CHECK_REJECT_MODAL_SIZE);
+  });
+
+  it('does not size the overlay, which would pin the dialog to the left', () => {
+    const text = checkRejectModalShell(0);
+    const media = checkRejectModalShell(1);
+
+    expect(text.styles.popup?.height).toBeUndefined();
+    expect(text.styles.popup?.maxWidth).toBeUndefined();
+    expect(media.styles.popup?.height).toBeUndefined();
+    expect(media.styles.popup?.maxWidth).toBeUndefined();
+    expect(text.width).toBe(TEXT_REJECT_MODAL_WIDTH);
+    expect(media.width).toBe(CHECK_REJECT_MODAL_SIZE.width);
+    expect(media.classNames.popup).not.toBe(text.classNames.popup);
   });
 
   it('shows the acceptance item description below its title', () => {
