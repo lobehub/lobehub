@@ -160,7 +160,10 @@ const useStateChip = (data: GraphNodeData): { color: string; text: string } | nu
 
   if (isGate) return { color: cssVar.colorWarning, text: t('goalProcess.tag.needsDecision') };
   if (stale) return { color: cssVar.colorError, text: t('goalProcess.tag.lost') };
-  if (running) return { color: cssVar.colorInfo, text: t('goalProcess.node.running') };
+  // Same running color the whole task family uses (frontier glyphs, task
+  // rows) — a lone blue chip here read as a different state.
+  if (running)
+    return { color: TASK_STATUS_VISUALS.running.color, text: t('goalProcess.node.running') };
   if (node.kind === 'task' && node.status === 'resolved')
     return { color: cssVar.colorSuccess, text: t('goalProcess.node.done') };
   if (node.kind === 'task' && (node.status === 'retired' || node.status === 'rejected'))
