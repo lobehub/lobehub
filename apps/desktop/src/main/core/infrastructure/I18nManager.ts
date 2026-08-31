@@ -170,17 +170,8 @@ export class I18nManager {
 
   private async loadLocale(language: string) {
     logger.debug(`Loading locale for language: ${language}`);
-    // Preload base namespaces. i18next's fallbackLng only works for resources
-    // that have been registered, so load the English bundles explicitly for
-    // non-English locales to avoid displaying missing keys in native menus.
-    const languages =
-      language === 'en' || language.startsWith('en-') ? [language] : [language, 'en'];
-
-    await Promise.all(
-      ['menu', 'dialog', 'common'].map((ns) =>
-        Promise.all(languages.map((lng) => this.loadNamespace(lng, ns))),
-      ),
-    );
+    // Preload base namespaces
+    await Promise.all(['menu', 'dialog', 'common'].map((ns) => this.loadNamespace(language, ns)));
   }
 
   /**
