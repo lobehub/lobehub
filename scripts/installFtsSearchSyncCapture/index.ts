@@ -25,8 +25,12 @@ type LoadRepository = () => Promise<FtsSearchSyncCaptureRepository>;
 type RunWithLockRetry = (operation: () => Promise<void>) => Promise<void>;
 type Logger = (...arguments_: unknown[]) => void;
 
+interface FtsSearchSyncCaptureEnvironment {
+  DATABASE_URL?: string;
+}
+
 export type InstallFtsSearchSyncCaptureOptions = {
-  env?: NodeJS.ProcessEnv;
+  env?: FtsSearchSyncCaptureEnvironment;
   loadRepository?: LoadRepository;
   runWithLockRetry?: RunWithLockRetry;
 };
@@ -45,7 +49,7 @@ const loadRepository: LoadRepository = async () => {
 };
 
 export const installFtsSearchSyncCapture = async ({
-  env: environment = process.env,
+  env: environment = { DATABASE_URL: process.env.DATABASE_URL },
   loadRepository: load = loadRepository,
   runWithLockRetry = defaultRunWithLockRetry,
 }: InstallFtsSearchSyncCaptureOptions = {}) => {
