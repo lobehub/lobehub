@@ -357,4 +357,22 @@ describe('I18nManager', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('loadLocale', () => {
+    beforeEach(async () => {
+      await manager.init();
+      vi.clearAllMocks();
+    });
+
+    it('should load English fallback resources for non-English locales', async () => {
+      await manager['loadLocale']('ru-RU');
+
+      expect(mockLoadResources).toHaveBeenCalledWith('ru-RU', 'menu');
+      expect(mockLoadResources).toHaveBeenCalledWith('en', 'menu');
+      expect(mockLoadResources).toHaveBeenCalledWith('ru-RU', 'dialog');
+      expect(mockLoadResources).toHaveBeenCalledWith('en', 'dialog');
+      expect(mockLoadResources).toHaveBeenCalledWith('ru-RU', 'common');
+      expect(mockLoadResources).toHaveBeenCalledWith('en', 'common');
+    });
+  });
 });
