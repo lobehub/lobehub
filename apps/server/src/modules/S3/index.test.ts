@@ -1,11 +1,17 @@
 // @vitest-environment node
+import type { ListPartsCommandOutput } from '@aws-sdk/client-s3';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  paginateListParts,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -394,6 +400,114 @@ describe('FileS3', () => {
       expect(result).toEqual({
         headers: { 'x-amz-acl': 'public-read' },
         url: 'https://presigned-url.example.com',
+      });
+    });
+  });
+
+  describe('multipart uploads', () => {
+    it('should create an upload and sign individual parts', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({ UploadId: 'upload-1' });
+
+      await expect(s3.createMultipartUpload('large.bin', 'application/octet-stream')).resolves.toBe(
+        'upload-1',
+      );
+      await expect(s3.createPreSignedUploadPartUrl('large.bin', 'upload-1', 2)).resolves.toBe(
+        'https://presigned-url.example.com',
+      );
+
+      expect(CreateMultipartUploadCommand).toHaveBeenCalledWith({
+        ACL: 'public-read',
+        Bucket: 'test-bucket',
+        ContentType: 'application/octet-stream',
+        Key: 'large.bin',
+      });
+      expect(UploadPartCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'large.bin',
+        PartNumber: 2,
+        UploadId: 'upload-1',
+      });
+    });
+
+    it('should complete with ETags returned to the browser', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({});
+
+      await s3.completeMultipartUpload('large.bin', 'upload-1', 2, [
+        { ETag: 'etag-2', PartNumber: 2 },
+        { ETag: 'etag-1', PartNumber: 1 },
+      ]);
+
+      expect(paginateListParts).not.toHaveBeenCalled();
+      expect(CompleteMultipartUploadCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'large.bin',
+        MultipartUpload: {
+          Parts: [
+            { ETag: 'etag-1', PartNumber: 1 },
+            { ETag: 'etag-2', PartNumber: 2 },
+          ],
+        },
+        UploadId: 'upload-1',
+      });
+    });
+
+    it('should fall back to listing parts when CORS hides ETag', async () => {
+      const s3 = new FileS3();
+      vi.mocked(paginateListParts).mockReturnValue(
+        (async function* (): AsyncGenerator<ListPartsCommandOutput, undefined> {
+          yield {
+            Parts: [
+              { ETag: 'etag-2', PartNumber: 2 },
+              { ETag: 'etag-1', PartNumber: 1 },
+            ],
+          } as ListPartsCommandOutput;
+          return undefined;
+        })(),
+      );
+      mockS3ClientSend.mockResolvedValue({});
+
+      await s3.completeMultipartUpload('large.bin', 'upload-1', 2);
+
+      expect(CompleteMultipartUploadCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'large.bin',
+        MultipartUpload: {
+          Parts: [
+            { ETag: 'etag-1', PartNumber: 1 },
+            { ETag: 'etag-2', PartNumber: 2 },
+          ],
+        },
+        UploadId: 'upload-1',
+      });
+    });
+
+    it('should reject completion when a part is missing', async () => {
+      const s3 = new FileS3();
+      vi.mocked(paginateListParts).mockReturnValue(
+        (async function* (): AsyncGenerator<ListPartsCommandOutput, undefined> {
+          yield { Parts: [{ ETag: 'etag-1', PartNumber: 1 }] } as ListPartsCommandOutput;
+          return undefined;
+        })(),
+      );
+
+      await expect(s3.completeMultipartUpload('large.bin', 'upload-1', 2)).rejects.toThrow(
+        'has 1/2 parts',
+      );
+      expect(CompleteMultipartUploadCommand).not.toHaveBeenCalled();
+    });
+
+    it('should abort an unfinished upload', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({});
+
+      await s3.abortMultipartUpload('large.bin', 'upload-1');
+
+      expect(AbortMultipartUploadCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'large.bin',
+        UploadId: 'upload-1',
       });
     });
   });

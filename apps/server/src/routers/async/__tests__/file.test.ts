@@ -96,6 +96,22 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
     );
   });
 
+  it('rejects oversized files before reading them into memory', async () => {
+    fileModelMock.findById.mockResolvedValue({
+      id: 'large-file',
+      name: 'large.pdf',
+      size: 64 * 1024 * 1024 + 1,
+      url: 'https://example.com/large.pdf',
+    });
+
+    const caller = fileRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.parseFileToChunks({ fileId: 'large-file', taskId: 'task-large' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(fileServiceMock.getFileByteArray).not.toHaveBeenCalled();
+  });
+
   it('skips storage fetch and returns gracefully when url is internal://', async () => {
     fileModelMock.findById.mockResolvedValue({
       id: 'file_inline',

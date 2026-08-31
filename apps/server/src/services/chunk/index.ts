@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 
+import { MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { type ChunkContentParams } from '@/server/modules/ContentChunk';
@@ -81,6 +82,7 @@ export class ChunkService {
     const result = await this.fileModel.findById(fileId);
 
     if (!result) return;
+    if (result.size > MAX_FILE_PARSE_SIZE) return;
 
     // skip if already exist chunk tasks
     if (skipExist && result.chunkTaskId) return;

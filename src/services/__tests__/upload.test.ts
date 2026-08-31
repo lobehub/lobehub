@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
 
-import { UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
+import { hashFile, UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
+
+const { mockHashHex, mockHashUpdate } = vi.hoisted(() => ({
+  mockHashHex: vi.fn(() => 'streamed-hash'),
+  mockHashUpdate: vi.fn(),
+}));
 
 vi.mock('@lobechat/model-runtime', () => ({
   parseDataUri: vi.fn(),
@@ -16,6 +21,18 @@ vi.mock('@lobechat/utils', () => ({
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     upload: {
+      abortS3MultipartUpload: {
+        mutate: vi.fn(),
+      },
+      completeS3MultipartUpload: {
+        mutate: vi.fn(),
+      },
+      createS3MultipartUpload: {
+        mutate: vi.fn(),
+      },
+      createS3MultipartUploadPartUrl: {
+        mutate: vi.fn(),
+      },
       createS3PreSignedUrl: {
         mutate: vi.fn(),
       },
@@ -24,17 +41,30 @@ vi.mock('@/libs/trpc/client', () => ({
 }));
 
 vi.mock('js-sha256', () => ({
-  sha256: vi.fn((data) => {
-    if (data instanceof ArrayBuffer) {
-      return 'mock-hash-' + data.byteLength;
-    }
-    return 'mock-hash';
-  }),
+  sha256: {
+    create: vi.fn(() => ({ hex: mockHashHex, update: mockHashUpdate })),
+  },
 }));
 
 describe('UploadService', () => {
   const mockFile = new File(['test'], 'test.png', { type: 'image/png' });
   const mockPreSignUrl = 'https://example.com/presign';
+
+  beforeAll(() => {
+    Object.defineProperty(File.prototype, 'stream', {
+      configurable: true,
+      value: function () {
+        return new ReadableStream<Uint8Array>({
+          type: 'bytes',
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          },
+        });
+      },
+      writable: true,
+    });
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,6 +81,7 @@ describe('UploadService', () => {
             setTimeout(() => handler({ target: { status: 200 } }), 0);
           }
         }),
+        getResponseHeader: vi.fn(() => 'etag-value'),
         open: vi.fn(),
         send: vi.fn(),
         setRequestHeader: vi.fn(),
@@ -128,9 +159,6 @@ describe('UploadService', () => {
         type: 'base64',
       });
 
-      const { sha256 } = await import('js-sha256');
-      vi.mocked(sha256).mockReturnValue('base64-hash');
-
       const base64Data = 'data:image/png;base64,dGVzdA==';
       const result = await uploadService.uploadBase64ToS3(base64Data);
 
@@ -166,9 +194,6 @@ describe('UploadService', () => {
         mimeType: 'image/png',
         type: 'base64',
       });
-
-      const { sha256 } = await import('js-sha256');
-      vi.mocked(sha256).mockReturnValue('custom-hash');
 
       const base64Data = 'data:image/png;base64,dGVzdA==';
       const result = await uploadService.uploadBase64ToS3(base64Data, {
@@ -229,6 +254,7 @@ describe('UploadService', () => {
       // Mock XMLHttpRequest
       const xhrMock = {
         addEventListener: vi.fn(),
+        getResponseHeader: vi.fn(() => 'etag-value'),
         open: vi.fn(),
         send: vi.fn(),
         setRequestHeader: vi.fn(),
@@ -263,6 +289,7 @@ describe('UploadService', () => {
         filename: 'mock-uuid.png',
         path: `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/1/mock-uuid.png`,
       });
+      expect(xhr.send).toHaveBeenCalledWith(mockFile);
     });
 
     it('should report progress during upload', async () => {
@@ -363,5 +390,97 @@ describe('UploadService', () => {
 
       expect(result.path).toBe(customPath);
     });
+
+    it('should upload large files as sequential S3 parts without buffering the whole file', async () => {
+      const largeFile = new File(['small fixture'], 'large.bin', {
+        type: 'application/octet-stream',
+      });
+      Object.defineProperty(largeFile, 'size', { value: 64 * 1024 * 1024 + 1 });
+      const slice = vi
+        .spyOn(largeFile, 'slice')
+        .mockImplementation(() => new Blob(['part'], { type: largeFile.type }));
+      const arrayBuffer = vi.fn();
+      Object.defineProperty(largeFile, 'arrayBuffer', { value: arrayBuffer });
+
+      vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
+        uploadId: 'upload-1',
+      });
+      vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockResolvedValue(
+        'https://example.com/part',
+      );
+      vi.mocked(lambdaClient.upload.completeS3MultipartUpload.mutate).mockResolvedValue({
+        success: true,
+      });
+
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event === 'load') {
+          // @ts-expect-error test event only needs to trigger the registered handler
+          handler({});
+        }
+      });
+
+      await uploadService.uploadToServerS3(largeFile, {});
+
+      expect(lambdaClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
+      expect(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).toHaveBeenCalledTimes(3);
+      expect(slice).toHaveBeenCalledTimes(3);
+      expect(xhr.send).toHaveBeenCalledTimes(3);
+      expect(arrayBuffer).not.toHaveBeenCalled();
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith({
+        partCount: 3,
+        parts: [
+          { etag: 'etag-value', partNumber: 1 },
+          { etag: 'etag-value', partNumber: 2 },
+          { etag: 'etag-value', partNumber: 3 },
+        ],
+        pathname: expect.stringContaining('mock-uuid.bin'),
+        uploadId: 'upload-1',
+      });
+      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should abort the S3 multipart upload when a part cannot be signed', async () => {
+      const largeFile = new File(['small fixture'], 'large.bin');
+      Object.defineProperty(largeFile, 'size', { value: 64 * 1024 * 1024 });
+      vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
+        uploadId: 'upload-1',
+      });
+      vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockRejectedValue(
+        new Error('signing failed'),
+      );
+      vi.mocked(lambdaClient.upload.abortS3MultipartUpload.mutate).mockResolvedValue({
+        success: true,
+      });
+
+      await expect(uploadService.uploadToServerS3(largeFile, {})).rejects.toThrow('signing failed');
+
+      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).toHaveBeenCalledWith({
+        pathname: expect.any(String),
+        uploadId: 'upload-1',
+      });
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).not.toHaveBeenCalled();
+    });
+  });
+
+  it('should calculate a SHA-256 hash with a reusable BYOB buffer', async () => {
+    const file = new File(['fixture'], 'fixture.bin');
+    const arrayBuffer = vi.fn();
+    Object.defineProperty(file, 'arrayBuffer', { value: arrayBuffer });
+    Object.defineProperty(file, 'stream', {
+      value: () =>
+        new ReadableStream<Uint8Array>({
+          type: 'bytes',
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2]));
+            controller.enqueue(new Uint8Array([3, 4]));
+            controller.close();
+          },
+        }),
+    });
+
+    await expect(hashFile(file)).resolves.toBe('streamed-hash');
+    expect(mockHashUpdate).toHaveBeenCalledOnce();
+    expect(arrayBuffer).not.toHaveBeenCalled();
   });
 });
