@@ -15,31 +15,28 @@ interface FontSizeControlProps {
 
 export const FontSizeControl = memo<FontSizeControlProps>(({ onChange, value }) => {
   const { t } = useTranslation('setting');
-  const options = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, index) => {
-        const size = index + 12;
+  const options = useMemo(() => {
+    const marks: Record<number, string> = {
+      12: 'A',
+      14: t('settingChatAppearance.fontSize.marks.normal'),
+      18: 'A',
+    };
 
-        return {
-          ariaLabel: `${size}px`,
-          label:
-            size === 12
-              ? 'A'
-              : size === 14
-                ? t('settingChatAppearance.fontSize.marks.normal')
-                : size === 18
-                  ? 'A'
-                  : ' ',
-          style: {
-            fontSize: size === 14 ? 14 : size,
-            overflowWrap: 'normal' as const,
-            whiteSpace: 'nowrap' as const,
-          },
-          value: size,
-        };
-      }),
-    [t],
-  );
+    return Array.from({ length: 7 }, (_, index) => {
+      const size = index + 12;
+
+      return {
+        ariaLabel: `${size}px`,
+        label: marks[size] ?? ' ',
+        style: {
+          fontSize: size,
+          overflowWrap: 'normal' as const,
+          whiteSpace: 'nowrap' as const,
+        },
+        value: size,
+      };
+    });
+  }, [t]);
 
   return (
     <Flexbox gap={16} width={'100%'}>
