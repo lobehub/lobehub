@@ -258,11 +258,13 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 <span className={styles.human}>@</span>
               </Tooltip>
             )}
+            {/* Verifier is icon-only: with the state chip sharing this strip
+                the word no longer fits the card width, and the tooltip carries
+                the full meaning anyway. */}
             {node.taskId ? (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>
                 <span className={styles.metric}>
                   <Icon icon={ShieldCheck} size={13} />
-                  {t('goalProcess.node.verifier')}
                 </span>
               </Tooltip>
             ) : (

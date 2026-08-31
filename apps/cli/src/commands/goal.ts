@@ -82,7 +82,11 @@ export function registerGoalCommand(program: Command) {
     .command('create <title>')
     .description('Create a standalone goal and seed its graph')
     .option('-r, --requirement <text>', 'Acceptance requirement')
-    .option('-w, --work <title...>', 'Initial work node titles')
+    .option(
+      '-i, --instruction <text>',
+      "The ask in the user's own words, shown on the problem node",
+    )
+    .option('-w, --work <title...>', 'Initial work node titles (omit to let the planner decompose)')
     .option('--agent <id>', 'Responsible agent ID')
     .option('--project <id>', 'Project ID')
     .option('--max-rounds <n>', 'Maximum goal rounds')
@@ -117,6 +121,7 @@ export function registerGoalCommand(program: Command) {
             : undefined,
         maxRounds: options.maxRounds ? Number.parseInt(options.maxRounds, 10) : undefined,
         maxTotalCost: options.maxCost ? Number.parseFloat(options.maxCost) : undefined,
+        problemDescription: options.instruction,
         projectId: options.project,
         requirement: options.requirement,
         title,
