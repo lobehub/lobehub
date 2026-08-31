@@ -1,18 +1,4 @@
-export interface QueryProjectionKey {
-  queryKey: string;
-  scope: string;
-}
-
-export interface QueryProjection<T> {
-  data: T;
-  updatedAt: number;
-}
-
-export interface QueryProjectionStorage<T> {
-  get: (key: QueryProjectionKey) => Promise<QueryProjection<T> | undefined>;
-  remove: (key: QueryProjectionKey) => Promise<void>;
-  set: (key: QueryProjectionKey, projection: QueryProjection<T>) => Promise<void>;
-}
+import type { QueryProjection, QueryProjectionKey, QueryProjectionStorage } from './types';
 
 interface LocalStorageQueryProjectionStorageOptions<T> {
   deserialize?: (value: string) => QueryProjection<T>;

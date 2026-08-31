@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { LocalStorageQueryProjectionStorage } from './queryProjectionStorage';
+import { LocalStorageQueryProjectionStorage } from './localStorage';
 
 afterEach(() => {
   localStorage.clear();
