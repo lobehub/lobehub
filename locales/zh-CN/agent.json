@@ -347,6 +347,7 @@
   "share.visitor.errors.promptTooLong": "消息太长了，请精简到 {{max}} 个字符以内后重试。",
   "share.visitor.errors.providerNotSupported": "该分享助手当前不可用，请联系创建者。",
   "share.visitor.errors.sharingPaused": "创建者已暂停分享，暂时无法发送新消息。",
+  "share.visitor.errors.spendLimit": "该分享助手暂时无法使用，请稍后再试。",
   "share.visitor.errors.stopFailed": "停止失败，请重试。",
   "share.visitor.errors.topicLimit": "你在这个分享助手上的会话数量已达上限。",
   "share.visitor.errors.turnLimit": "本次会话的轮数已达上限，新建会话即可继续。",

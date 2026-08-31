@@ -11,6 +11,7 @@ export interface RouterRuntimeRequestContext {
 }
 
 export enum RequestTrigger {
+  AgentShare = 'agent_share',
   AgentSignal = 'agent_signal',
   Api = 'api',
   Bot = 'bot',

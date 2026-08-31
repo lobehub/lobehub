@@ -454,6 +454,8 @@ export default {
     'This shared agent is not available right now. Please contact its owner.',
   'share.visitor.errors.sharingPaused':
     'The owner has paused sharing, so new messages are turned off.',
+  'share.visitor.errors.spendLimit':
+    'This shared agent is temporarily unavailable. Please try again later.',
   'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
   'share.visitor.errors.topicLimit':
     'You have reached the conversation limit on this shared agent.',

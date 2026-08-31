@@ -79,6 +79,14 @@ describe('resolveVisitorErrorKey', () => {
     );
   });
 
+  it('maps ShareSpendLimitExceeded to non-terminal "temporarily unavailable" copy', () => {
+    expect(resolveVisitorErrorKey(new Error(ChatErrorType.ShareSpendLimitExceeded))).toBe(
+      'share.visitor.errors.spendLimit',
+    );
+    // The cap resets next month and the owner can raise it — keep the composer usable.
+    expect(isTerminalVisitorError('share.visitor.errors.spendLimit')).toBe(false);
+  });
+
   it('maps InsufficientBudgetForModel', () => {
     expect(resolveVisitorErrorKey(new Error(ChatErrorType.InsufficientBudgetForModel))).toBe(
       'share.visitor.errors.insufficientBudget',

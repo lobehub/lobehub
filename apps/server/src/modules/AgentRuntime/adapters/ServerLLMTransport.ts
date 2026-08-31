@@ -283,6 +283,16 @@ export class ServerLLMTransport implements LLMTransport {
       // state.metadata into the attempt so the LLM-call metadata can surface them
       // for auditing and spend attribution.
       clientIp: input.state.metadata?.clientIp,
+      // Projected, not spread: `state.metadata.agentShare` also carries the
+      // run's tool/memory restrictions, which have no place in billing
+      // metadata. Only the three attribution ids travel.
+      shareAttribution: input.state.metadata?.agentShare
+        ? {
+            agentId: input.state.metadata.agentShare.agentId,
+            shareId: input.state.metadata.agentShare.shareId,
+            visitorUserId: input.state.metadata.agentShare.visitorUserId,
+          }
+        : undefined,
       topicId: input.state.metadata?.topicId,
       trigger: input.state.metadata?.trigger,
       userAgent: input.state.metadata?.userAgent,

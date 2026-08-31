@@ -62,6 +62,11 @@ vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(() => ({ getFileAccessUrl: vi.fn() })),
 }));
 
+const mockSpendGate = vi.fn();
+vi.mock('@/business/server/agent-share/spendGate', () => ({
+  checkAgentShareSpendAllowance: (...args: any[]) => mockSpendGate(...args),
+}));
+
 const mockSignUserJWT = vi.fn();
 vi.mock('@/libs/trpc/utils/internalJwt', () => ({
   signUserJWT: (...args: any[]) => mockSignUserJWT(...args),
@@ -107,6 +112,7 @@ describe('shareChatRouter', () => {
     mockExecAgent.mockResolvedValue({ operationId: 'op-1', success: true });
     mockInterruptTask.mockResolvedValue({ operationId: 'op-1', success: true });
     mockSignUserJWT.mockResolvedValue('visitor-jwt');
+    mockSpendGate.mockResolvedValue({ allowed: true });
   });
 
   describe('execAgent', () => {
@@ -123,6 +129,38 @@ describe('shareChatRouter', () => {
         code: 'FORBIDDEN',
       });
       expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    // The spend gate runs before ANY row is created, so a rejected run leaves
+    // no orphan topic / placeholder assistant message behind.
+    it('rejects the run when the spend gate vetoes it, before any topic lookup', async () => {
+      mockSpendGate.mockResolvedValue({ allowed: false });
+      const caller = await createCaller();
+
+      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'ShareSpendLimitExceeded',
+      });
+      expect(mockCountBySender).not.toHaveBeenCalled();
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('passes the creator, share and configured cap to the spend gate', async () => {
+      mockAccessCheck.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, monthlySpendLimit: 25 },
+      });
+      const caller = await createCaller();
+
+      await caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+
+      expect(mockSpendGate).toHaveBeenCalledWith({
+        agentId: share.agentId,
+        monthlySpendLimit: 25,
+        ownerUserId: OWNER,
+        shareId: 'share-1',
+        visitorUserId: VISITOR,
+      });
     });
 
     it('rejects a new-topic run once the visitor topic cap is reached', async () => {

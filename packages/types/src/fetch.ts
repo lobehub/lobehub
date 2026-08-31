@@ -12,6 +12,7 @@ export const ChatErrorType = {
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
   ShareTurnLimitExceeded: 'ShareTurnLimitExceeded', // Shared-agent topic hit shareConfig.maxTurnsPerTopic — visitor can start a new topic
   ShareTopicLimitExceeded: 'ShareTopicLimitExceeded', // Visitor hit shareConfig.maxTopicsPerVisitor on this shared agent
+  ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed

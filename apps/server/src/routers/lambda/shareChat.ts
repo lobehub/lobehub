@@ -9,6 +9,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { checkAgentShareSpendAllowance } from '@/business/server/agent-share/spendGate';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel, sanitizeVisitorError } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
@@ -174,10 +175,23 @@ export const shareChatRouter = router({
     .mutation(async ({ input, ctx }) => {
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
-      // TODO(v2-5 cloud budget gate): precheck the creator's share budget here,
-      // BEFORE any row is created — the runtime billing gate would otherwise
-      // reject the run mid-run, after the topic and placeholder messages have
-      // persisted, leaving junk topics with a "..." assistant row.
+      // Spend admission runs FIRST, before any row is created: a run rejected
+      // by the runtime billing path instead fails mid-run, after the topic and
+      // placeholder messages have persisted, leaving junk topics with a "..."
+      // assistant row. No-op in deployments that do not meter share spend.
+      const spendGate = await checkAgentShareSpendAllowance({
+        agentId: share.agentId,
+        monthlySpendLimit: share.shareConfig.monthlySpendLimit,
+        ownerUserId: share.ownerId,
+        shareId: share.shareId,
+        visitorUserId: ctx.userId,
+      });
+      if (!spendGate.allowed) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: ChatErrorType.ShareSpendLimitExceeded,
+        });
+      }
 
       // Runtime-normalized (findByShareIdWithAccessCheck fills defaults), but
       // the config TYPE keeps every field optional — re-apply the same default
@@ -286,7 +300,11 @@ export const shareChatRouter = router({
           interactiveStart: false,
           prompt: input.prompt,
           shareGate,
-          trigger: RequestTrigger.Chat,
+          // Not `RequestTrigger.Chat`: a share run is billed to the CREATOR,
+          // so its spend rows must be separable from the creator's own chat
+          // spend (they land on the same account). The trigger rides
+          // `state.metadata.trigger` all the way into the spend-log metadata.
+          trigger: RequestTrigger.AgentShare,
           userAgent: ctx.userAgent ?? undefined,
         });
 

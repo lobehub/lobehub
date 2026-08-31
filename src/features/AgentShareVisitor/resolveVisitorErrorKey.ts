@@ -53,6 +53,10 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
     return 'share.visitor.errors.turnLimit';
   if (message.includes(ChatErrorType.ShareTopicLimitExceeded))
     return 'share.visitor.errors.topicLimit';
+  // Deliberately NOT terminal: the cap is per calendar month and the owner can
+  // raise it at any time, so the composer stays usable for a retry.
+  if (message.includes(ChatErrorType.ShareSpendLimitExceeded))
+    return 'share.visitor.errors.spendLimit';
   if (message.includes(ChatErrorType.InsufficientBudgetForModel))
     return 'share.visitor.errors.insufficientBudget';
   if (message.includes(ChatErrorType.AgentShareProviderNotSupported))
