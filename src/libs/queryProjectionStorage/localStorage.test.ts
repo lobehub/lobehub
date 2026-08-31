@@ -24,4 +24,15 @@ describe('LocalStorageQueryProjectionStorage', () => {
     await expect(storage.get({ queryKey: 'limit:10', scope: 'scope-b' })).resolves.toBeUndefined();
     await expect(storage.get({ queryKey: 'limit:50', scope: 'scope-a' })).resolves.toBeUndefined();
   });
+
+  it('preserves rich data types with the default codec', async () => {
+    const storage = new LocalStorageQueryProjectionStorage<{ createdAt: Date }>({
+      namespace: 'test',
+    });
+    const key = { queryKey: 'detail:1', scope: 'scope' };
+
+    await storage.set(key, { data: { createdAt: new Date(0) }, updatedAt: 1 });
+
+    expect((await storage.get(key))?.data.createdAt).toEqual(new Date(0));
+  });
 });

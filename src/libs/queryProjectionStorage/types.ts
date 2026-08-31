@@ -13,3 +13,8 @@ export interface QueryProjectionStorage<T> {
   remove: (key: QueryProjectionKey) => Promise<void>;
   set: (key: QueryProjectionKey, projection: QueryProjection<T>) => Promise<void>;
 }
+
+export interface QueryProjectionCodec<T> {
+  parse: (value: string) => QueryProjection<T>;
+  stringify: (projection: QueryProjection<T>) => string;
+}
