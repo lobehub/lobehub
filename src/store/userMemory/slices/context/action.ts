@@ -11,6 +11,7 @@ import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
+import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
 
 const n = setNamespace('userMemory/context');
 
@@ -86,6 +87,15 @@ export class ContextActionImpl {
       },
       {
         onSuccess: (data: any) => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              { page: state.contextsPage, q: state.contextsQuery, sort: state.contextsSort },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
           this.#set(
             produce((draft) => {
               draft.contextsSearchLoading = false;

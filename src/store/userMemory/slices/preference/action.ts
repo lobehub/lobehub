@@ -11,6 +11,7 @@ import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
+import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
 
 const n = setNamespace('userMemory/preference');
 
@@ -89,14 +90,27 @@ export class PreferenceActionImpl {
       },
       {
         onSuccess: (data: any) => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              {
+                page: state.preferencesPage,
+                q: state.preferencesQuery,
+                sort: state.preferencesSort,
+              },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
           this.#set(
             produce((draft) => {
               draft.preferencesSearchLoading = false;
+              draft.preferencesTotal = data.total;
 
               // Set basic information
               if (!draft.preferencesInit) {
                 draft.preferencesInit = true;
-                draft.preferencesTotal = data.total;
               }
 
               // Transform data structure

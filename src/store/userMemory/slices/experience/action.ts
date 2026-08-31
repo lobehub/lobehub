@@ -10,6 +10,7 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
+import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
 
 const n = setNamespace('userMemory/experience');
 
@@ -86,6 +87,19 @@ export class ExperienceActionImpl {
       },
       {
         onSuccess: (data: ExperienceListResult) => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              {
+                page: state.experiencesPage,
+                q: state.experiencesQuery,
+                sort: state.experiencesSort,
+              },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
           this.#set(
             produce((draft) => {
               draft.experiencesSearchLoading = false;

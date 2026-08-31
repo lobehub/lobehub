@@ -2,7 +2,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Tag } from '@lobehub/ui/base-ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
@@ -16,6 +16,7 @@ import { useUserMemoryStore } from '@/store/userMemory';
 import EditableModal from '../features/EditableModal';
 import FilterBar from '../features/FilterBar';
 import Loading from '../features/Loading';
+import { useResetMemoryList } from '../features/useResetMemoryList';
 import { type ViewMode } from '../features/ViewModeSwitcher';
 import ViewModeSwitcher from '../features/ViewModeSwitcher';
 import List from './features/List';
@@ -46,12 +47,12 @@ const PreferencesArea = memo(() => {
   // Convert sort: capturedAt becomes undefined (backend default)
   const apiSort = sortValue === 'capturedAt' ? undefined : (sortValue as 'scorePriority');
 
-  // Reset list when search or sort changes
-  useEffect(() => {
-    if (!apiSort) return;
-    const sort = viewMode === 'grid' ? apiSort : undefined;
-    resetPreferencesList({ q: searchValue || undefined, sort });
-  }, [searchValue, apiSort, viewMode]);
+  useResetMemoryList({
+    query: searchValue,
+    resetList: resetPreferencesList,
+    sort: apiSort,
+    viewMode,
+  });
 
   // Call SWR hook to fetch data
   const { isLoading } = useFetchPreferences({

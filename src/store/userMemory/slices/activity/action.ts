@@ -10,6 +10,7 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
+import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
 
 const n = setNamespace('userMemory/activity');
 
@@ -88,6 +89,19 @@ export class ActivityActionImpl {
       },
       {
         onSuccess: (data: ActivityListResult) => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              {
+                page: state.activitiesPage,
+                q: state.activitiesQuery,
+                sort: state.activitiesSort,
+              },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
           this.#set(
             produce((draft) => {
               draft.activitiesSearchLoading = false;
