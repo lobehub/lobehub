@@ -18,27 +18,19 @@ const FileTreeSkeleton = memo<FileTreeSkeletonProps>(({ rows = 8, showRootFile =
     <Flexbox gap={2}>
       {showRootFile && (
         <Flexbox horizontal align={'center'} gap={6} height={ROW_HEIGHT} paddingInline={8}>
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{
-              borderRadius: cssVar.borderRadius,
-              height: 14,
-              minWidth: 14,
-              width: 14,
-            }}
-          />
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{
-              borderRadius: cssVar.borderRadius,
-              height: 16,
-              minWidth: 80,
-              opacity: 0.6,
-              width: '40%',
-            }}
-          />
+          <Skeleton  style={{
+            borderRadius: cssVar.borderRadius,
+            height: 14,
+            minWidth: 14,
+            width: 14,
+          }} />
+          <Skeleton  style={{
+            borderRadius: cssVar.borderRadius,
+            height: 16,
+            minWidth: 80,
+            opacity: 0.6,
+            width: '40%',
+          }} />
         </Flexbox>
       )}
       {skeletonRows.map((rowIndex) => {
@@ -55,27 +47,19 @@ const FileTreeSkeleton = memo<FileTreeSkeletonProps>(({ rows = 8, showRootFile =
             paddingInline={8}
             style={{ paddingInlineStart: 8 + depth * 16 }}
           >
-            <Skeleton.Button
-              active
-              size={'small'}
-              style={{
-                borderRadius: cssVar.borderRadius,
-                height: 14,
-                minWidth: 14,
-                width: 14,
-              }}
-            />
-            <Skeleton.Button
-              active
-              size={'small'}
-              style={{
-                borderRadius: cssVar.borderRadius,
-                height: 16,
-                minWidth: 70,
-                opacity: 0.55,
-                width,
-              }}
-            />
+            <Skeleton  style={{
+              borderRadius: cssVar.borderRadius,
+              height: 14,
+              minWidth: 14,
+              width: 14,
+            }} />
+            <Skeleton  style={{
+              borderRadius: cssVar.borderRadius,
+              height: 16,
+              minWidth: 70,
+              opacity: 0.55,
+              width,
+            }} />
           </Flexbox>
         );
       })}

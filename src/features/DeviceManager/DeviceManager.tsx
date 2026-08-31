@@ -251,7 +251,7 @@ const ListSkeleton = memo<{ withHeader?: boolean }>(({ withHeader }) => (
   <Flexbox className={styles.listCol} flex={1}>
     {withHeader && (
       <Flexbox horizontal align={'center'} className={styles.listHeader}>
-        <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
+        <Skeleton  style={{ height: 16, minWidth: 80, width: 80 }} />
       </Flexbox>
     )}
     <Flexbox padding={4}>

@@ -404,7 +404,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       endpointItem,
       showResponsesApiSwitch
         ? {
-            children: isLoading ? <Skeleton.Button active /> : <Switch loading={configUpdating} />,
+            children: isLoading ? <Skeleton height={36}  /> : <Switch loading={configUpdating} />,
             desc: t('providerModels.config.responsesApi.desc'),
             label: t('providerModels.config.responsesApi.title'),
             minWidth: undefined,
@@ -415,7 +415,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       showChecker
         ? {
             children: isLoading ? (
-              <Skeleton.Button active />
+              <Skeleton height={36}  />
             ) : (
               <Checker
                 checkErrorRender={checkErrorRender}

@@ -490,8 +490,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
           <Suspense
             fallback={
               <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
+                <Skeleton  height={18} width={'100%'} />
+                <Skeleton  height={18} width={'100%'} />
               </Flexbox>
             }
           >

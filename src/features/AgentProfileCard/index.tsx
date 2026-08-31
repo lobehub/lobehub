@@ -132,12 +132,7 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
                 </Text>
               </Tooltip>
             ) : loading ? (
-              <Skeleton
-                active
-                className={styles.descriptionSkeleton}
-                paragraph={{ rows: 2, width: ['100%', '60%'] }}
-                title={false}
-              />
+              <Skeleton.Text  className={styles.descriptionSkeleton} rows={2} width={['100%', '60%']} />
             ) : null}
           </Flexbox>
         </Flexbox>

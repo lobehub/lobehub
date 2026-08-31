@@ -222,14 +222,10 @@ const DesktopOnboardingPage = memo(() => {
           fallback={
             <Flexbox gap={8}>
               <Skeleton.Avatar size={48} />
-              <Skeleton
-                paragraph={{
-                  rows: 8,
-                }}
-                title={{
-                  fontSize: 24,
-                }}
-              />
+              <Flexbox gap={16} width={'100%'}>
+                <Skeleton.Text fontSize={24} width={'60%'} />
+                <Skeleton.Text rows={8} />
+              </Flexbox>
             </Flexbox>
           }
         >

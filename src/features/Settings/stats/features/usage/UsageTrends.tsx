@@ -130,7 +130,7 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUs
         />
       }
     >
-      {isLoading ? <Skeleton.Block height={280} /> : charts}
+      {isLoading ? <Skeleton height={280} /> : charts}
     </StatsFormGroup>
   );
 });

@@ -208,7 +208,7 @@ const Overview = memo<OverviewProps>(
 
             {repoType && workingDirectory && isGitLoading ? (
               <div className={styles.skeleton}>
-                <Skeleton active paragraph={{ rows: 2 }} title={false} />
+                <Skeleton.Text  rows={2} />
               </div>
             ) : gitError ? (
               <Center className={styles.error} gap={8}>

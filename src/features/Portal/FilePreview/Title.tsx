@@ -22,7 +22,7 @@ const Title = () => {
       <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeFilePreview()} />
 
       {isLoading ? (
-        <Skeleton.Button active style={{ height: 28 }} />
+        <Skeleton  height={28} />
       ) : (
         <Text className={oneLineEllipsis} style={{ fontSize: 16 }} type={'secondary'}>
           {data?.name}

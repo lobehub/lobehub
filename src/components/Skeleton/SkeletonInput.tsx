@@ -2,4 +2,4 @@
 
 import { Skeleton } from '@lobehub/ui';
 
-export const SkeletonInput = () => <Skeleton.Button active block />;
+export const SkeletonInput = () => <Skeleton height={36}  />;

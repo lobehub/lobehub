@@ -18,12 +18,12 @@ import Actions from './Actions';
 import Inspectors from './Inspector';
 
 const Debug = dynamic(() => import('./Debug'), {
-  loading: () => <Skeleton.Block active height={300} width={'100%'} />,
+  loading: () => <Skeleton  height={300} width={'100%'} />,
   ssr: false,
 });
 
 const Detail = dynamic(() => import('./Detail'), {
-  loading: () => <Skeleton.Block active height={120} width={'100%'} />,
+  loading: () => <Skeleton  height={120} width={'100%'} />,
   ssr: false,
 });
 

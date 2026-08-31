@@ -33,7 +33,7 @@ const HotkeySetting = memo(() => {
 
   const [loading, setLoading] = useState(false);
 
-  if (!isHotkeysInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isHotkeysInit) return <Skeleton.Text  rows={5} />;
 
   const updateHotkey = async (id: DesktopHotkeyItem['id'], value: string) => {
     setLoading(true);

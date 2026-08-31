@@ -143,7 +143,7 @@ const Head = memo<{ id: string }>(({ id }) => {
         />
       </Center>
       {!name ? (
-        <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />
+        <Skeleton.Text width={80} />
       ) : (
         <DropdownMenu items={menuItems} placement="bottomRight">
           <Center

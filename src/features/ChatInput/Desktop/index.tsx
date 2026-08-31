@@ -185,17 +185,12 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const loadingLeftSlot = isConfigLoading ? (
       <Flexbox horizontal align="center" gap={6} paddingInline={4}>
-        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
-        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
+        <Skeleton height={28} radius={'50%'} width={28} />
+        <Skeleton height={28} radius={'50%'} width={28} />
       </Flexbox>
     ) : null;
     const loadingRightSlot = isConfigLoading ? (
-      <Skeleton.Button
-        active
-        shape="round"
-        size="small"
-        style={{ height: 32, minWidth: 64, width: 64 }}
-      />
+      <Skeleton radius={999} style={{ height: 32, minWidth: 64, width: 64 }} />
     ) : null;
     const noticeNode = !isConfigLoading && <ChatInputNotice />;
     // The action bar is `width: 100%`, so a sibling placed *inside* its

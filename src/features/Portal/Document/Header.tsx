@@ -37,7 +37,7 @@ const Header = () => {
         width={'100%'}
       >
         <Flexbox flex={1}>
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 180 }} />
+          <Skeleton  height={16} width={180} />
         </Flexbox>
       </Flexbox>
     );

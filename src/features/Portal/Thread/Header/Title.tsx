@@ -10,7 +10,7 @@ const Header = () => {
 
   const isInit = useChatStore((s) => s.threadsInit);
 
-  if (!isInit) return <Skeleton.Button active size={'small'} style={{ height: 22, width: 200 }} />;
+  if (!isInit) return <Skeleton  height={22} width={200} />;
 
   return isInNew ? <NewThread /> : <ActiveThread />;
 };

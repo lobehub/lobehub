@@ -45,10 +45,10 @@ const AgentInfo = memo(() => {
   if (isLoading) {
     return (
       <Flexbox gap={12}>
-        <Skeleton.Avatar active shape={'square'} size={64} />
-        <Skeleton.Button active style={{ height: 32, width: 200 }} />
+        <Skeleton.Avatar  shape={'square'} size={64} />
+        <Skeleton  height={32} width={200} />
         <Flexbox width={'min(100%, 640px)'}>
-          <Skeleton active paragraph={{ rows: 2 }} title={false} />
+          <Skeleton.Text  rows={2} />
         </Flexbox>
       </Flexbox>
     );

@@ -10,12 +10,12 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../.
 import Inspectors from '../../AssistantGroup/Tool/Inspector';
 
 const Debug = dynamic(() => import('../../AssistantGroup/Tool/Debug'), {
-  loading: () => <Skeleton.Block active height={300} width={'100%'} />,
+  loading: () => <Skeleton  height={300} width={'100%'} />,
   ssr: false,
 });
 
 const Detail = dynamic(() => import('../../AssistantGroup/Tool/Detail'), {
-  loading: () => <Skeleton.Block active height={120} width={'100%'} />,
+  loading: () => <Skeleton  height={120} width={'100%'} />,
   ssr: false,
 });
 

@@ -41,7 +41,7 @@ const Common = memo(() => {
   };
 
   if (!(isStatusInit && isUserStateInit))
-    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+    return <Skeleton.Text  rows={5} />;
 
   const themeFormGroup: FormGroupItemType = {
     children: [

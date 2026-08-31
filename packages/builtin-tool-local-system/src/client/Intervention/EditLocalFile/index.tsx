@@ -62,7 +62,7 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
       </Flexbox>
 
       {isLoading ? (
-        <Skeleton active paragraph={{ rows: 3 }} />
+        <Skeleton.Text rows={3} />
       ) : (
         <Flexbox gap={8}>
           {isAmbiguous ? (

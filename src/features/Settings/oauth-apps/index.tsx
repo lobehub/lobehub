@@ -55,7 +55,7 @@ const Page = () => {
     labPreferSelectors.enableOAuthApps(s),
   ]);
 
-  if (!isPreferenceInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isPreferenceInit) return <Skeleton.Text  rows={5} />;
   if (!enableOAuthApps) return <NotFound />;
 
   return (

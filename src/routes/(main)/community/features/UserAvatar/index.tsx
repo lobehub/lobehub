@@ -92,7 +92,7 @@ const UserAvatar = memo<UserAvatarProps>(({ avatarOverride }) => {
   }, [isWorkspaceScope, navigate, userProfile?.userName, userProfile?.namespace]);
 
   if (isLoading) {
-    return <Skeleton.Avatar active shape={'square'} size={28} style={{ borderRadius: 6 }} />;
+    return <Skeleton.Avatar  shape={'square'} size={28} style={{ borderRadius: 6 }} />;
   }
 
   // If trustedClient is enabled, skip the "become a creator" button and show the avatar directly

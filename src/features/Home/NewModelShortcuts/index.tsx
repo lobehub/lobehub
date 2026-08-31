@@ -165,15 +165,7 @@ export const NewModelShortcuts = () => {
         <Text className={styles.label}>{t('starter.newLabel')}</Text>
         {isLoading
           ? defaultHomeNewModels.map((item, index) => (
-              <Skeleton.Button
-                active
-                key={getShortcutKey(item)}
-                style={{
-                  borderRadius: 8,
-                  height: 24,
-                  width: skeletonWidths[index] ?? 104,
-                }}
-              />
+              <Skeleton height={24} key={getShortcutKey(item)} radius={8} width={skeletonWidths[index] ?? 104}  />
             ))
           : items.map((item) => {
               const key = getShortcutKey(item);

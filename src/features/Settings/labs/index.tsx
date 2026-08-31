@@ -63,7 +63,7 @@ const LabsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+    return <Skeleton.Text  rows={5} />;
   }
 
   const checkedByFlag = Object.fromEntries(

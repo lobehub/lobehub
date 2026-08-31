@@ -77,8 +77,8 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
             </Flexbox>
           ) : (
             <Flexbox horizontal gap={16}>
-              <Skeleton.Avatar active shape={'square'} size={40} />
-              <Skeleton.Button active />
+              <Skeleton.Avatar  shape={'square'} size={40} />
+              <Skeleton height={36}  />
             </Flexbox>
           )}
         </Block>

@@ -93,7 +93,7 @@ const ModelTitle = memo<ModelFetcherProps>(
             )}
           </Flexbox>
           {isLoading ? (
-            <Skeleton.Button active size={'small'} style={{ width: 120 }} />
+            <Skeleton  height={28} width={120} />
           ) : isEmpty ? null : (
             <Flexbox horizontal align={'center'} gap={8}>
               {!mobile && (

@@ -1006,12 +1006,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   <Flexbox className={styles.pane}>
                     <Suspense
                       fallback={
-                        <Skeleton
-                          active
-                          className={styles.paramsLoading}
-                          paragraph={{ rows: 6 }}
-                          title={false}
-                        />
+                        <Skeleton.Text  className={styles.paramsLoading} rows={6} />
                       }
                     >
                       <ParamsSection />

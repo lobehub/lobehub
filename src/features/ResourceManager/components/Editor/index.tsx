@@ -23,12 +23,8 @@ interface FileEditorProps {
 
 const FileDetailSkeleton = () => (
   <Flexbox gap={16}>
-    <Skeleton
-      active
-      paragraph={{ rows: 5, width: ['80%', '60%', '40%', '70%', '70%'] }}
-      title={false}
-    />
-    <Skeleton active paragraph={{ rows: 2, width: ['50%', '60%'] }} title={false} />
+    <Skeleton.Text  rows={5} width={['80%', '60%', '40%', '70%', '70%']} />
+    <Skeleton.Text  rows={2} width={['50%', '60%']} />
   </Flexbox>
 );
 

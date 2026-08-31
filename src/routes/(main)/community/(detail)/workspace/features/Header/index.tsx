@@ -58,7 +58,7 @@ const WorkspaceHeader = memo(() => {
             )}
           </Flexbox>
           {isLoading ? (
-            <Skeleton.Button active style={{ height: 32, width: 140 }} />
+            <Skeleton  height={32} width={140} />
           ) : (
             <Flexbox horizontal gap={8}>
               {publicProfileUrl && (

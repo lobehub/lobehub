@@ -386,7 +386,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           <Suspense
             fallback={
               <div style={{ padding: 24 }}>
-                <Skeleton active paragraph={{ rows: 6 }} title={false} />
+                <Skeleton.Text  rows={6} />
               </div>
             }
           >
@@ -480,7 +480,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (syncing) {
     return (
       <div style={{ padding: 24 }}>
-        <Skeleton active paragraph={{ rows: 6 }} title={false} />
+        <Skeleton.Text  rows={6} />
       </div>
     );
   }

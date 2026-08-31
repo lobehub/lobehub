@@ -585,9 +585,9 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
 
       {loading && !hasQuotaData ? (
         <Flexbox gap={8}>
-          <Skeleton.Button active block size="small" style={{ height: 18 }} />
-          <Skeleton.Button active block size="small" style={{ height: 18 }} />
-          <Skeleton.Button active block size="small" style={{ height: 18 }} />
+          <Skeleton height={18} />
+          <Skeleton height={18} />
+          <Skeleton height={18} />
         </Flexbox>
       ) : quota?.status === 'unavailable' ? (
         <div className={styles.emptyState}>

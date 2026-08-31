@@ -140,7 +140,7 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy, resolveUse
   };
 
   return isLoading ? (
-    <Skeleton active paragraph={{ rows: 8 }} title={false} />
+    <Skeleton.Text  rows={8} />
   ) : (
     <Collapse
       defaultActiveKey={formattedData.map((item) => item.id)}

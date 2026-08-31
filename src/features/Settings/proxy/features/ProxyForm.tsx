@@ -206,7 +206,7 @@ const ProxyForm = () => {
     }
   }, [proxySettings, testUrl, form, t]);
 
-  if (isLoading) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (isLoading) return <Skeleton.Text  rows={5} />;
 
   const enableProxyGroup: FormGroupItemType = {
     children: [

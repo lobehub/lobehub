@@ -110,9 +110,9 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   if (!detail)
     return (
       <Flexbox gap={16}>
-        <Skeleton active paragraph={{ rows: 1, width: 200 }} title={false} />
+        <Skeleton.Text  rows={1} width={200} />
         <div className={styles.card}>
-          <Skeleton active paragraph={{ rows: 4 }} title={false} />
+          <Skeleton.Text  rows={4} />
         </div>
       </Flexbox>
     );

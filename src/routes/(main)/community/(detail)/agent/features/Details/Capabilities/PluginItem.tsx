@@ -198,7 +198,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   if (isLoading)
     return (
       <Block horizontal gap={12} key={identifier} padding={12} variant={'outlined'}>
-        <Skeleton paragraph={{ rows: 1 }} title={false} />
+        <Skeleton.Text  rows={1}  />
       </Block>
     );
 

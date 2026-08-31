@@ -12,15 +12,7 @@ import dynamic from '@/libs/next/dynamic';
 
 const Preview = dynamic(() => import('./Preview'), {
   loading: () => (
-    <Skeleton.Button
-      active
-      block
-      size={'large'}
-      style={{
-        height: 400,
-        width: '100%',
-      }}
-    />
+    <Skeleton  height={400} width={'100%'} />
   ),
 });
 

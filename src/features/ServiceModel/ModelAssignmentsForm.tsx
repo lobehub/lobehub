@@ -104,7 +104,7 @@ const ModelAssignmentsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+    return <Skeleton.Text  rows={8} />;
   }
 
   const updateDefaultAgentModel = async ({

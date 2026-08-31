@@ -7,16 +7,11 @@ const SkeletonList = memo<{ count?: number }>(({ count = 6 }) => {
   return (
     <Grid gap={4} maxItemWidth={64} padding={6} rows={6} width={'100%'}>
       {Array.from({ length: count }).map((_, index) => (
-        <Skeleton.Button
-          active
-          block
+        <Skeleton
+          height={'auto'}
           key={index}
-          style={{
-            aspectRatio: 1,
-            borderRadius: 4,
-            height: 'auto',
-            minWidth: 0,
-          }}
+          radius={4}
+          style={{ aspectRatio: 1, minWidth: 0 }}
         />
       ))}
     </Grid>

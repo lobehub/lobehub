@@ -76,13 +76,13 @@ const SkeletonGrid = memo(() => (
     {[0, 1, 2, 3].map((i) => (
       <Flexbox className={styles.skeletonCard} gap={16} key={i}>
         <Flexbox horizontal gap={12}>
-          <Skeleton.Avatar active shape={'square'} size={36} />
+          <Skeleton.Avatar  shape={'square'} size={36} />
           <Flexbox flex={1} gap={8}>
-            <Skeleton.Button active size={'small'} style={{ height: 14, width: 160 }} />
-            <Skeleton.Button active size={'small'} style={{ height: 12, width: 220 }} />
+            <Skeleton  height={14} width={160} />
+            <Skeleton  height={12} width={220} />
           </Flexbox>
         </Flexbox>
-        <Skeleton.Button active block size={'small'} style={{ height: 64 }} />
+        <Skeleton  height={64} />
       </Flexbox>
     ))}
   </div>

@@ -134,7 +134,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
       </Center>
     );
   } else {
-    content = <Skeleton active paragraph={{ rows: 4 }} title={false} />;
+    content = <Skeleton.Text  rows={4} />;
   }
 
   return (

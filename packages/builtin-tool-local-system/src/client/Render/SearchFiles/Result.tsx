@@ -21,10 +21,10 @@ const SearchFiles = memo<SearchFilesProps>(({ searchResults = [], messageId }) =
   if (loading) {
     return (
       <Flexbox gap={4}>
-        <Skeleton.Button active block style={{ height: 16 }} />
-        <Skeleton.Button active block style={{ height: 16 }} />
-        <Skeleton.Button active block style={{ height: 16 }} />
-        <Skeleton.Button active block style={{ height: 16 }} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
       </Flexbox>
     );
   }

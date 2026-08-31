@@ -12,10 +12,10 @@ const Loading = memo(() => {
     <Flexbox gap={24}>
       <Flexbox gap={12}>
         <Flexbox horizontal align={'center'} gap={16} width={'100%'}>
-          <Skeleton.Avatar active shape={'square'} size={mobile ? 48 : 64} />
-          <Skeleton.Button active style={{ height: 36, width: 200 }} />
+          <Skeleton.Avatar  shape={'square'} size={mobile ? 48 : 64} />
+          <Skeleton  height={36} width={200} />
         </Flexbox>
-        <Skeleton.Button size={'small'} style={{ width: 200 }} />
+        <Skeleton  height={28} width={200} />
       </Flexbox>
       <Nav />
       <Flexbox
@@ -31,13 +31,13 @@ const Loading = memo(() => {
             overflow: 'hidden',
           }}
         >
-          <Skeleton paragraph={{ rows: 3 }} title={false} />
-          <Skeleton paragraph={{ rows: 8 }} title={false} />
-          <Skeleton paragraph={{ rows: 8 }} title={false} />
+          <Skeleton.Text  rows={3}  />
+          <Skeleton.Text  rows={8}  />
+          <Skeleton.Text  rows={8}  />
         </Flexbox>
         <Flexbox gap={16} width={360}>
-          <Skeleton paragraph={{ rows: 3 }} title={false} />
-          <Skeleton paragraph={{ rows: 4 }} title={false} />
+          <Skeleton.Text  rows={3}  />
+          <Skeleton.Text  rows={4}  />
         </Flexbox>
       </Flexbox>
     </Flexbox>

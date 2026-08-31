@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, SkeletonParagraph } from '@lobehub/ui';
+import { Block, Flexbox, Icon, SkeletonText } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
@@ -115,14 +115,7 @@ const TransferManifestList = ({
   if (loading || !manifest)
     return loading ? (
       <Flexbox aria-label={t('transferRequest.manifestLoading')} role="status" style={style}>
-        <SkeletonParagraph
-          active
-          fontSize={12}
-          gap={8}
-          lineHeight={19}
-          rows={2}
-          width={['88%', '64%']}
-        />
+        <SkeletonText fontSize={12} gap={8} rows={2} width={['88%', '64%']} />
       </Flexbox>
     ) : null;
 

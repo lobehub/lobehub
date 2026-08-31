@@ -53,7 +53,7 @@ const SearchBar = memo<SearchBarProps>(
         </Block>
 
         {searching ? (
-          <Skeleton.Block active style={{ height: 20, width: 40 }} />
+          <Skeleton height={20} width={40} />
         ) : (
           <Flexbox horizontal align={'center'} gap={4}>
             <EngineAvatarGroup engines={defaultEngines} />

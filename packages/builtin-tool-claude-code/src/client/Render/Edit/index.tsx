@@ -13,7 +13,7 @@ interface EditArgs {
 }
 
 const Edit = memo<BuiltinRenderProps<EditArgs>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+  if (!args) return <Skeleton.Text rows={4} />;
 
   const filePath = args.file_path || '';
   const fileName = filePath ? path.basename(filePath) : '';

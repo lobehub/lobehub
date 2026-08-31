@@ -249,14 +249,11 @@ const KanbanColumn = memo<KanbanColumnProps>(
         <div className={styles.header}>
           {headerVariant === 'loading' ? (
             <>
-              <Skeleton.Avatar
-                active
-                shape={'square'}
-                size={16}
-                style={{ borderRadius: 4, flex: 'none' }}
-              />
-              <Skeleton.Button active style={{ height: 14, minWidth: 64, width: 64 }} />
-              <Skeleton.Button active style={{ height: 12, minWidth: 20, width: 20 }} />
+              <Skeleton.Avatar  shape={'square'}
+              size={16}
+              style={{ borderRadius: 4, flex: 'none' }} />
+              <Skeleton  height={14} style={{ minWidth: 64 }} width={64}  />
+              <Skeleton  height={12} style={{ minWidth: 20 }} width={20}  />
             </>
           ) : headerVariant === 'group' && groupMeta ? (
             <>

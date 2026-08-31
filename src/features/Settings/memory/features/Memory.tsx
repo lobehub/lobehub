@@ -27,7 +27,7 @@ const MemorySetting = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton.Text  rows={3} />;
 
   const memorySettings: FormGroupItemType = {
     children: [

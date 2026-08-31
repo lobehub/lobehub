@@ -6,7 +6,7 @@ import React, { memo } from 'react';
 
 const EditLocalFile = memo<BuiltinRenderProps<any, EditLocalFileState>>(
   ({ args, pluginState, pluginError }) => {
-    if (!args) return <Skeleton active />;
+    if (!args) return <Skeleton.Text rows={4} />;
 
     // Support both IPC format (file_path) and ComputerRuntime format (path)
     const filePath = args.file_path || args.path || '';

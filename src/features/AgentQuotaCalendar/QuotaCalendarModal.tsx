@@ -882,8 +882,8 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
   if (loading)
     return (
       <Flexbox gap={12}>
-        <Skeleton.Button active block style={{ height: 170 }} />
-        <Skeleton.Button active block style={{ height: 320 }} />
+        <Skeleton  height={170} />
+        <Skeleton  height={320} />
       </Flexbox>
     );
 

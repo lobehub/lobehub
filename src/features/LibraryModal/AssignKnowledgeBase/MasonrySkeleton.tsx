@@ -36,20 +36,13 @@ const MasonrySkeleton = memo<MasonrySkeletonProps>(({ columnCount }) => {
     >
       {Array.from({ length: itemCount }).map((_, index) => (
         <div className={styles.card} key={index}>
-          <Skeleton
-            active
-            avatar={{ shape: 'square', size: 48 }}
-            paragraph={{
-              rows: 3,
-              width: ['100%', '90%', '70%'],
-            }}
-            style={{
-              height: heights[index % heights.length],
-            }}
-            title={{
-              width: '80%',
-            }}
-          />
+          <Flexbox horizontal align={'flex-start'} gap={16} width={'100%'}>
+            <Skeleton.Avatar size={48} />
+            <Flexbox gap={16} style={{ height: heights[index % heights.length] }} width={'100%'}>
+              <Skeleton.Text width={'80%'} />
+              <Skeleton.Text rows={3} width={['100%', '90%', '70%']} />
+            </Flexbox>
+          </Flexbox>
         </div>
       ))}
     </div>

@@ -9,5 +9,5 @@ const switchLoading = cx(css`
 `);
 
 export const SkeletonSwitch = () => {
-  return <Skeleton.Button active className={switchLoading} />;
+  return <Skeleton className={switchLoading} height={36} />;
 };

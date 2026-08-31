@@ -25,7 +25,7 @@ const ImageSettings = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
 
   if (!isUserStateInit) {
-    return <Skeleton active paragraph={{ rows: 1 }} title={false} />;
+    return <Skeleton.Text  rows={1} />;
   }
 
   const items: FormGroupItemType[] = [

@@ -40,7 +40,7 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
       ];
     }, [avatars, userAvatar, nickName, username]);
 
-    if (loading) return <Skeleton.Avatar active shape={'square'} size={size} />;
+    if (loading) return <Skeleton.Avatar  shape={'square'} size={size} />;
 
     return (
       <GroupAvatar

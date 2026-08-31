@@ -23,7 +23,7 @@ const WorkspaceWelcome = memo<{ mobile?: boolean }>(({ mobile }) => {
   const members = useWorkspaceMembers();
 
   if (!workspace) {
-    return <Skeleton.Button active style={{ height: 24, minWidth: 200, width: 200 }} />;
+    return <Skeleton  height={24} style={{ minWidth: 200 }} width={200}  />;
   }
 
   const days = Math.max(1, dayjs().diff(dayjs(workspace.createdAt), 'day'));

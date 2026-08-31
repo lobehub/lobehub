@@ -208,8 +208,8 @@ const HeteroControlBar = memo(() => {
   if (!agentId || isLoading) {
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} gap={4} justify={'space-between'}>
-        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 100, width: 100 }} />
-        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 80, width: 80 }} />
+        <Skeleton  style={{ height: 22, minWidth: 100, width: 100 }} />
+        <Skeleton  style={{ height: 22, minWidth: 80, width: 80 }} />
       </Flexbox>
     );
   }

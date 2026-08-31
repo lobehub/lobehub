@@ -59,8 +59,8 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
     if (isLoading)
       return (
         <Flexbox gap={12} padding={12}>
-          <Skeleton paragraph={{ rows: 2 }} title={false} />
-          <Skeleton paragraph={{ rows: 2 }} title={false} />
+          <Skeleton.Text  rows={2}  />
+          <Skeleton.Text  rows={2}  />
         </Flexbox>
       );
 

@@ -11,10 +11,10 @@ export const ListFiles = memo<BuiltinPlaceholderProps<ListLocalFileParams>>(({ a
       {args?.path && <LocalFolder path={args.path} />}
       <Center height={140}>
         <Flexbox gap={4} width={'90%'}>
-          <Skeleton.Button active block style={{ height: 16 }} />
-          <Skeleton.Button active block style={{ height: 16 }} />
-          <Skeleton.Button active block style={{ height: 16 }} />
-          <Skeleton.Button active block style={{ height: 16 }} />
+          <Skeleton height={16} />
+          <Skeleton height={16} />
+          <Skeleton height={16} />
+          <Skeleton height={16} />
         </Flexbox>
       </Center>
     </Flexbox>

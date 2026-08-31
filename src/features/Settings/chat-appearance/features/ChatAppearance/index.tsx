@@ -47,7 +47,7 @@ const ChatAppearance = memo(() => {
     [t],
   );
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton.Text  rows={5} />;
 
   const handleChange = (key: string, value: any) => {
     setSavingKey(key);

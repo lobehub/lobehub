@@ -49,8 +49,8 @@ const LoadingCard = memo<{ url: string }>(({ url }) => {
         <CopyButton content={url} size={'small'} />
       </Flexbox>
       <Flexbox gap={4} paddingInline={16}>
-        <Skeleton.Block active style={{ height: 14, width: '95%' }} />
-        <Skeleton.Block active style={{ height: 14, width: '40%' }} />
+        <Skeleton height={14} width={'95%'} />
+        <Skeleton height={14} width={'40%'} />
       </Flexbox>
 
       <div className={styles.footer}>{t('search.crawPages.crawling')}</div>

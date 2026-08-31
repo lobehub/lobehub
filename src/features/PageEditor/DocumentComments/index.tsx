@@ -140,8 +140,8 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
       <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
         {isHeaderLoading ? (
           <>
-            <Skeleton.Button active style={{ height: 28, width: 48 }} />
-            <Skeleton.Button active style={{ height: 20, width: 16 }} />
+            <Skeleton  height={28} width={48} />
+            <Skeleton  height={20} width={16} />
           </>
         ) : (
           <>

@@ -207,11 +207,7 @@ const LiteTableInner = <RecordType,>({
                           data-list-slot={column.listSlot}
                           key={column.key}
                         >
-                          <Skeleton.Button
-                            active
-                            size={'small'}
-                            style={{ height: 14, minWidth: 0, width: '100%' }}
-                          />
+                          <Skeleton  style={{ height: 14, minWidth: 0, width: '100%' }} />
                         </td>
                       ))}
                     </tr>

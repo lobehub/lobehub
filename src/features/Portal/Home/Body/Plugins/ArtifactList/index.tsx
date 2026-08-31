@@ -19,12 +19,7 @@ const ArtifactList = () => {
   return !isCurrentChatLoaded ? (
     <Flexbox gap={12} paddingInline={12}>
       {[1, 1, 1, 1, 1, 1].map((key, index) => (
-        <Skeleton.Button
-          active
-          block
-          key={`${key}-${index}`}
-          style={{ borderRadius: 8, height: 68 }}
-        />
+        <Skeleton height={68} key={`${key}-${index}`} radius={8}  />
       ))}
     </Flexbox>
   ) : messages.length === 0 ? (

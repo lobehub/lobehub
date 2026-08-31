@@ -40,7 +40,7 @@ const ProviderCard = memo<ProviderCardProps>(
           gap={24}
           padding={16}
         >
-          <Skeleton active />
+          <Skeleton   />
         </Flexbox>
       );
 

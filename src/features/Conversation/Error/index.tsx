@@ -82,7 +82,7 @@ const loading = () => (
       width: '100%',
     }}
   >
-    <Skeleton.Button active block />
+    <Skeleton height={36}  />
   </Block>
 );
 

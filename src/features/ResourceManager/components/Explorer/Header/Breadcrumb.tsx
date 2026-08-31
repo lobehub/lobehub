@@ -117,7 +117,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
         {knowledgeBaseName ? (
           knowledgeBaseName
         ) : (
-          <Skeleton.Button active size="small" style={{ height: 14, minWidth: 80, width: 80 }} />
+          <Skeleton  style={{ height: 14, minWidth: 80, width: 80 }} />
         )}
       </span>
 

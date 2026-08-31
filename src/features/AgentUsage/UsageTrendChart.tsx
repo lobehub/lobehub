@@ -68,7 +68,7 @@ const UsageTrendChart = memo<UsageTrendChartProps>(({ buckets, isLoading }) => {
         />
       </Flexbox>
       {isLoading ? (
-        <Skeleton.Block height={320} />
+        <Skeleton height={320} />
       ) : (
         <BarChart
           showLegend

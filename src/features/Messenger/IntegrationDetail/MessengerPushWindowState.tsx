@@ -85,7 +85,7 @@ export const MessengerPushWindowState = memo<MessengerPushWindowStateProps>(
         </Flexbox>
       );
 
-    if (!status) return <Skeleton.Button active size="small" style={{ width: 220 }} />;
+    if (!status) return <Skeleton  height={28} width={220} />;
 
     if (status.deliverability === 'always')
       return (

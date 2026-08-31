@@ -113,9 +113,9 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
       <Flexbox flex={1} style={{ minHeight: 0 }}>
         {isLoading ? (
           <Flexbox gap={8} padding={8}>
-            <Skeleton active paragraph={{ rows: 1 }} title={false} />
-            <Skeleton active paragraph={{ rows: 1 }} title={false} />
-            <Skeleton active paragraph={{ rows: 1 }} title={false} />
+            <Skeleton.Text  rows={1} />
+            <Skeleton.Text  rows={1} />
+            <Skeleton.Text  rows={1} />
           </Flexbox>
         ) : filteredAgents.length === 0 ? (
           <AgentSelectionEmpty

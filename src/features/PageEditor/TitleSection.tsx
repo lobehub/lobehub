@@ -114,7 +114,7 @@ const TitleSection = memo(() => {
 
       {/* Title Input */}
       {showTitleSkeleton ? (
-        <Skeleton.Button active style={{ height: 44, width: 320 }} />
+        <Skeleton  height={44} width={320} />
       ) : (
         <TextArea
           autoSize={{ minRows: 1 }}

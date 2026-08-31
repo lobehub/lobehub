@@ -39,7 +39,7 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
 
   if (customErrorRender) {
     return (
-      <Suspense fallback={<Skeleton.Button active block />}>{customErrorRender(error)}</Suspense>
+      <Suspense fallback={<Skeleton height={36}  />}>{customErrorRender(error)}</Suspense>
     );
   }
 
