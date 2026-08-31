@@ -187,7 +187,7 @@
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",
-    "@ant-design/icons": "^6.3.2",
+    "@ant-design/icons": "6.3.2",
     "@anthropic-ai/sdk": "^0.73.0",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.2.0",
