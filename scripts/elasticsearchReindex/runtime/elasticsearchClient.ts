@@ -2,13 +2,13 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { z } from 'zod';
 
-import { parseElasticsearchUrl } from '../ftsSearch/elasticsearch/url';
+import { parseElasticsearchUrl } from '../../../packages/database/src/repositories/ftsSearch/elasticsearch/url';
 import type {
   FtsSearchReindexBulkItemResult,
   FtsSearchReindexElasticsearchClient,
   FtsSearchReindexIndexBody,
   FtsSearchReindexIndexOptions,
-} from './service';
+} from './reindexService';
 
 const bulkResponseSchema = z.object({
   items: z.array(

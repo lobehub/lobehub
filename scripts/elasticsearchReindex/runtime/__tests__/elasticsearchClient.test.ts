@@ -1,8 +1,12 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FTS_SEARCH_INDEX_ANALYSIS, FTS_SEARCH_INDEX_DEFINITIONS } from '../../ftsSearchDocument';
-import { FtsSearchReindexHttpClient } from '../elasticsearch';
-import type { FtsSearchReindexIndexBody } from '../service';
+import {
+  FTS_SEARCH_INDEX_ANALYSIS,
+  FTS_SEARCH_INDEX_DEFINITIONS,
+} from '../../../../packages/database/src/repositories/ftsSearchDocument';
+import { FtsSearchReindexHttpClient } from '../elasticsearchClient';
+import type { FtsSearchReindexIndexBody } from '../reindexService';
 
 const response = (body: unknown, status = 200) =>
   new Response(body === undefined ? undefined : JSON.stringify(body), {

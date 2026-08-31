@@ -11,7 +11,7 @@ import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { z } from 'zod';
 
-import { getFtsSearchPhysicalIndexName } from '../ftsSearchDocument';
+import { getFtsSearchPhysicalIndexName } from '../../../packages/database/src/repositories/ftsSearchDocument';
 
 export interface FtsSearchReindexBatchFailure {
   documentId: string;
@@ -567,21 +567,3 @@ export class FtsSearchReindexFileRepository {
     });
   }
 }
-
-export type { FtsSearchReindexHttpClientOptions } from './elasticsearch';
-export { FtsSearchReindexHttpClient, FtsSearchReindexRequestError } from './elasticsearch';
-export type {
-  FtsSearchReindexAuditEvent,
-  FtsSearchReindexAuditValue,
-  FtsSearchReindexFileLoggerOptions,
-} from './logger';
-export { FtsSearchReindexFileLogger, summarizeFtsSearchReindexError } from './logger';
-export type {
-  FtsSearchReindexElasticsearchClient,
-  FtsSearchReindexIndexBody,
-  FtsSearchReindexProgressEvent,
-  FtsSearchReindexResult,
-  FtsSearchReindexServiceOptions,
-  FtsSearchReindexStateRepository,
-} from './service';
-export { FtsSearchReindexEntityError, FtsSearchReindexService } from './service';

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FtsSearchReindexFileRepository } from '..';
+import { FtsSearchReindexFileRepository } from '../checkpointRepository';
 
 let stateDirectory: string;
 let repository: FtsSearchReindexFileRepository;

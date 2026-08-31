@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { isRecord } from '@lobechat/utils/object';
 
-import type { FtsSearchReindexProgressEvent } from './service';
+import type { FtsSearchReindexProgressEvent } from './reindexService';
 
 type JsonPrimitive = boolean | null | number | string;
 export type FtsSearchReindexAuditValue =

@@ -1,5 +1,5 @@
 import type { FtsSearchSyncDrainResult } from '../../apps/server/src/services/ftsSearchSync';
-import { summarizeFtsSearchReindexError } from '../../packages/database/src/repositories/ftsSearchReindex';
+import { summarizeFtsSearchReindexError } from '../elasticsearchReindex/runtime/auditLogger';
 import { parseElasticsearchFtsSearchSyncCliOptions } from './options';
 
 type FtsSearchSyncService = {

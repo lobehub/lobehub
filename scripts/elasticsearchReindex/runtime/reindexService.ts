@@ -2,17 +2,17 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
-import type { FtsSearchDocumentBuilder } from '../ftsSearchDocument';
+import type { FtsSearchDocumentBuilder } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import {
   FTS_SEARCH_INDEX_ANALYSIS,
   FTS_SEARCH_INDEX_DEFINITIONS,
   getFtsSearchIndexAlias,
-} from '../ftsSearchDocument';
+} from '../../../packages/database/src/repositories/ftsSearchDocument';
 import type {
   FtsSearchReindexBatchFailure,
   FtsSearchReindexFileRepository,
   FtsSearchReindexRunState,
-} from '.';
+} from './checkpointRepository';
 
 export interface FtsSearchReindexBulkItemResult {
   error?: unknown;

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
-import { summarizeFtsSearchReindexError } from '../../packages/database/src/repositories/ftsSearchReindex';
+import { summarizeFtsSearchReindexError } from '../elasticsearchReindex/runtime/auditLogger';
 import { runWithLockRetry as defaultRunWithLockRetry } from '../migrateServerDB/retry';
 
 // Load environment variables in priority order:

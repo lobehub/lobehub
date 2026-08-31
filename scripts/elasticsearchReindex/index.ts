@@ -10,15 +10,6 @@ import {
   FTS_SEARCH_INDEX_SCHEMA_VERSION,
   FtsSearchDocumentBuilder,
 } from '../../packages/database/src/repositories/ftsSearchDocument';
-import {
-  type FtsSearchReindexAuditValue,
-  FtsSearchReindexEntityError,
-  FtsSearchReindexFileLogger,
-  FtsSearchReindexFileRepository,
-  FtsSearchReindexHttpClient,
-  FtsSearchReindexService,
-  summarizeFtsSearchReindexError,
-} from '../../packages/database/src/repositories/ftsSearchReindex';
 import { FtsSearchSyncOutboxRepository } from '../../packages/database/src/repositories/ftsSearchSyncOutbox';
 import * as schema from '../../packages/database/src/schemas';
 import {
@@ -41,6 +32,15 @@ import {
   resolveFtsSearchReindexTelemetryEnvironment,
 } from './options';
 import { runFtsSearchReindexCommand } from './preparation';
+import {
+  type FtsSearchReindexAuditValue,
+  FtsSearchReindexEntityError,
+  FtsSearchReindexFileLogger,
+  FtsSearchReindexFileRepository,
+  FtsSearchReindexHttpClient,
+  FtsSearchReindexService,
+  summarizeFtsSearchReindexError,
+} from './runtime';
 
 const { Pool } = pg;
 

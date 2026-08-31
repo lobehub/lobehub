@@ -1,14 +1,15 @@
+// @vitest-environment node
 import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { FtsSearchReindexRunState } from '..';
+import type { FtsSearchReindexFailure, FtsSearchReindexRunState } from '../checkpointRepository';
 import type {
   FtsSearchReindexElasticsearchClient,
   FtsSearchReindexProgressEvent,
   FtsSearchReindexStateRepository,
-} from '../service';
-import { FtsSearchReindexService } from '../service';
+} from '../reindexService';
+import { FtsSearchReindexService } from '../reindexService';
 
 const createState = (): FtsSearchReindexRunState => ({
   progress: FTS_SEARCH_DOCUMENT_ENTITIES.map((entity) => ({
@@ -33,6 +34,18 @@ const createState = (): FtsSearchReindexRunState => ({
     status: 'backfilling',
     updatedAt: '2026-08-28T00:00:00.000Z',
   },
+});
+
+const createFailure = (
+  entity: FtsSearchDocumentEntity,
+  documentId: string,
+): FtsSearchReindexFailure => ({
+  attempts: 1,
+  documentId,
+  entity,
+  error: 'retryable failure',
+  resolvedAt: null,
+  retryable: true,
 });
 
 const createDependencies = () => {
@@ -582,9 +595,9 @@ describe('FtsSearchReindexService', () => {
     const documentProgress = state.progress.find(({ entity }) => entity === 'documents')!;
     documentProgress.failedCount = 21;
     documentProgress.status = 'backfilling';
-    const failures = Array.from({ length: 21 }, (_, index) => ({
-      documentId: `document-${index}`,
-    }));
+    const failures = Array.from({ length: 21 }, (_, index) =>
+      createFailure('documents', `document-${index}`),
+    );
     vi.mocked(repository.listUnresolvedFailures)
       .mockResolvedValueOnce(failures)
       .mockResolvedValueOnce([]);
@@ -594,7 +607,7 @@ describe('FtsSearchReindexService', () => {
       return ids.length;
     });
     builder.buildByIds.mockImplementation(async (entity, ids) =>
-      ids.map((id) => ({ entity, id, source: { id } })),
+      ids.map((id: string) => ({ entity, id, source: { id } })),
     );
     vi.mocked(client.bulk).mockImplementation(async (body) =>
       Array.from({ length: body.trim().split('\n').length / 2 }, () => ({ status: 201 })),
@@ -621,7 +634,7 @@ describe('FtsSearchReindexService', () => {
     documentProgress.failedCount = 1;
     documentProgress.status = 'backfilling';
     vi.mocked(repository.listUnresolvedFailures)
-      .mockResolvedValueOnce([{ documentId: 'document-1' }])
+      .mockResolvedValueOnce([createFailure('documents', 'document-1')])
       .mockResolvedValueOnce([]);
     vi.mocked(repository.resolveFailures).mockImplementation(async (_runId, _entity, ids) => {
       documentProgress.failedCount -= ids.length;
@@ -697,7 +710,11 @@ describe('FtsSearchReindexService', () => {
       index.includes('-agents-') ? 1 : 0,
     );
     const service = new FtsSearchReindexService(
-      { buildBatch: vi.fn().mockResolvedValue([]), buildByIds: vi.fn().mockResolvedValue([]) },
+      {
+        buildBatch: vi.fn().mockResolvedValue([]),
+        buildByIds: vi.fn().mockResolvedValue([]),
+        buildRangeBatch: vi.fn().mockResolvedValue([]),
+      },
       repository,
       client,
       {
