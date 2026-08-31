@@ -4,16 +4,53 @@ import { timestamps } from './_helpers';
 import { agents } from './agent';
 
 export interface AgentShareConfig {
+  /**
+   * Whether the creator may view visitor sessions/topics created against this
+   * share. Defaults to `false` — visitor conversations are private to the
+   * visitor unless the creator explicitly opts into oversight.
+   */
+  allowCreatorViewSessions?: boolean;
+  /**
+   * Whether visitors may read the creator's persisted long-term memory during
+   * a shared conversation. Defaults to `false`.
+   */
   allowReadMemory?: boolean;
-  filePermissionConfig?: {
-    agentFiles?: 'none' | 'read';
-    knowledgeBase?: 'none' | 'read';
-    uploadAllowed?: boolean;
-  };
-  guestEnabled?: boolean;
-  maxGuestTopics?: number;
+  /** Whitelist of builtin tool ids visitors may invoke. Empty/undefined grants no tools. */
+  enabledToolIds?: string[];
+  /** Maximum number of topics each signed-in visitor can create for this share. */
+  maxTopicsPerVisitor?: number;
+  /** Maximum number of message turns allowed in each shared topic. */
+  maxTurnsPerTopic?: number;
+  /**
+   * Creator's monthly spend cap for this shared agent, in USD credits.
+   * Billing enforcement for this cap lives in the Cloud repo (business slot);
+   * the OSS schema only carries the configured value.
+   */
+  monthlySpendLimit?: number;
+  /**
+   * Whether visitors may see raw run error details (message/stack) instead of
+   * a generic failure notice. Defaults to `false`.
+   */
+  showErrorDetails?: boolean;
+  /**
+   * Whether visitors may see which model/provider is powering the agent.
+   * Defaults to `false` — the creator's model choice is hidden by default.
+   */
+  showModelInfo?: boolean;
+  /**
+   * Custom URL slug for this share's public link (e.g. `/share/agent/my-cool-bot`).
+   * Uniqueness is enforced at the APPLICATION level
+   * (`AgentShareModel.updateSlug`), not by a DB constraint/index — acceptable
+   * at the current whitelist-rollout scale (low write volume, no adversarial
+   * multi-tenant contention). Add a unique index if this ever opens up to a
+   * larger audience.
+   */
+  slug?: string;
   // tipSplitRatio is platform-controlled, not configurable by the creator
 }
+
+/** Client-owned config fields accepted by atomic server-side patch updates. */
+export type AgentShareConfigPatch = Partial<AgentShareConfig>;
 
 export const agentShares = pgTable(
   'agent_shares',

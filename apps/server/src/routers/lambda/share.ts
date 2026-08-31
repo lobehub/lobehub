@@ -1,11 +1,62 @@
-import { type SharedTopicData } from '@lobechat/types';
+import { type SharedAgentData, type SharedTopicData } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AgentShareModel } from '@/database/models/agentShare';
 import { TopicShareModel } from '@/database/models/topicShare';
-import { publicProcedure, router } from '@/libs/trpc/lambda';
+import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 export const shareRouter = router({
+  /**
+   * Resolve the visitor-facing metadata for an agent share, by its custom
+   * slug or its raw share id, after enforcing signed-in access.
+   *
+   * `findBySlugOrId` intentionally does NOT enforce visibility — it resolves
+   * whatever share matches, of ANY visibility, so the id it returns can be
+   * handed to `findByShareIdWithAccessCheck` for the actual (private → owner
+   * only, link → any authed viewer) gate. Two lookups, not one, keeps the
+   * access-check logic itself in a single tested place instead of
+   * duplicating it here.
+   */
+  getSharedAgent: authedProcedure
+    .use(serverDatabase)
+    .input(z.object({ slugOrId: z.string().trim().min(1) }))
+    .query(async ({ input, ctx }): Promise<SharedAgentData> => {
+      const resolved = await AgentShareModel.findBySlugOrId(ctx.serverDB, input.slugOrId);
+
+      if (!resolved) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
+      }
+
+      const share = await AgentShareModel.findByShareIdWithAccessCheck(
+        ctx.serverDB,
+        resolved.shareId,
+        ctx.userId,
+      );
+
+      await AgentShareModel.incrementUserViewCount(ctx.serverDB, share.shareId);
+
+      return {
+        agentId: share.agentId,
+        agentMeta: {
+          avatar: share.agentAvatar,
+          backgroundColor: share.agentBackgroundColor,
+          description: share.agentDescription,
+          name: share.agentName,
+          title: share.agentTitle,
+        },
+        isOwner: share.ownerId === ctx.userId,
+        shareId: share.shareId,
+        slug: share.shareConfig.slug ?? null,
+        // TODO(LOBE-11930 budget gate): surface a `budgetExhausted` flag once
+        // the Cloud-side monthly spend gate (business slot) lands. This step
+        // only carries the creator's configured `monthlySpendLimit`, not
+        // enforcement/remaining-balance state.
+        visibility: share.visibility as SharedAgentData['visibility'],
+      };
+    }),
+
   /**
    * Get shared topic metadata for public access
    * Uses shareId (not topicId) for access
