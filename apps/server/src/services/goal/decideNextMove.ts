@@ -180,19 +180,27 @@ const decideWithoutFrontier = (
 ): GoalMove => {
   const base = { candidates };
   const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
-  const allWorkTerminal =
-    taskNodes.length > 0 && taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
+
+  // A goal with no work at all has not been planned yet — decompose it into
+  // explorable directions before anything runs, instead of parking it.
+  if (taskNodes.length === 0) {
+    return {
+      ...base,
+      branch: 'plan_decomposition',
+      message: 'Goal has no work yet; plan its exploration structure first',
+      outcome: 'advanced',
+    };
+  }
+
+  const allWorkTerminal = taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
 
   if (!allWorkTerminal) {
-    // Nothing here moves without a person: either there is no Work at all, or
-    // every remaining Work is blocked and nothing is running to unblock it.
+    // Nothing here moves without a person: every remaining Work is blocked and
+    // nothing is running to unblock it.
     return {
       ...base,
       branch: 'no_frontier',
-      message:
-        taskNodes.length === 0
-          ? 'No work frontier exists; add a work node'
-          : 'No work node is ready; resolve its dependencies first',
+      message: 'No work node is ready; resolve its dependencies first',
       outcome: 'no_progress',
     };
   }

@@ -320,6 +320,26 @@ export class GoalGraphModel {
       return node;
     });
 
+  /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
+  updateNodeDescription = async (goalId: string, nodeId: string, description: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ description, updatedAt: new Date() })
+        .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Planner refined the description',
+        taskId: node.taskId ?? undefined,
+      });
+      return node;
+    });
+
   updateNodeStatus = async (
     goalId: string,
     nodeId: string,

@@ -15,6 +15,7 @@ export const TRACING_SCENARIOS = {
   ExpertiseTopicIngestion: 'expertise_topic_ingestion',
   FollowUp: 'follow_up',
   GoalCriteriaGen: 'goal_criteria_gen',
+  GoalDecompose: 'goal_decompose',
   HomeBrief: 'home_brief',
   InputCompletion: 'input_completion',
   MemoryExtract: 'memory_extract',

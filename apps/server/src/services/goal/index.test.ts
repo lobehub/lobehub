@@ -7,6 +7,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import {
@@ -28,6 +29,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import { GoalService } from './index';
 import type { GoalTickObservation } from './traceObservation';
 
@@ -214,12 +216,61 @@ describe('GoalService', () => {
     expect(await service.graph(graph.goal.id)).toBeDefined();
   });
 
-  it('parks a goal nothing can move so the sweep stops re-picking it', async () => {
-    // A goal with no Work can only report `no_progress`. Left `running` it is
-    // selected by every newest-first scan forever, and enough of them starve
-    // every other stalled goal out of the sweep's window.
+  it('plans the decomposition when a goal has no work yet', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '核心问题的一句话陈述',
+      works: [
+        { instruction: '收集原始材料', title: '方向A:收集' },
+        { instruction: '分析并综合结论', title: '方向B:分析' },
+      ],
+    });
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Nothing to do' });
+    const graph = await service.create({
+      problemDescription: '用户的原话',
+      requirement: '完整需求与验收标准全文',
+      title: 'Complex ask',
+    });
+    // The seeded graph carries the user's own words, not the contract blob.
+    expect(graph.nodes.find((n) => n.kind === 'problem')?.description).toBe('用户的原话');
+    expect(graph.nodes.filter((n) => n.kind === 'task')).toHaveLength(0);
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('advanced');
+    const after = await service.graph(graph.goal.id);
+    expect(after.nodes.filter((n) => n.kind === 'task').map((n) => n.title)).toEqual([
+      '方向A:收集',
+      '方向B:分析',
+    ]);
+    expect(after.nodes.find((n) => n.kind === 'problem')?.description).toBe('核心问题的一句话陈述');
+    expect(after.edges.filter((e) => e.kind === 'decomposes')).toHaveLength(2);
+  });
+
+  it('falls back to a single work when the planner fails, instead of stalling', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockRejectedValue(
+      new Error('model unavailable'),
+    );
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ problemDescription: '原话', title: 'Nothing to do' });
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('advanced');
+    const tasks = (await service.graph(graph.goal.id)).nodes.filter((n) => n.kind === 'task');
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].description).toBe('原话');
+  });
+
+  it('parks a goal nothing can move so the sweep stops re-picking it', async () => {
+    // Every remaining Work is blocked and nothing runs to unblock it. Left
+    // `running` it is selected by every newest-first scan forever, and enough
+    // of them starve every other stalled goal out of the sweep's window.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Deadlocked', work: ['A', 'B'] });
+    const [a, b] = graph.nodes.filter((n) => n.kind === 'task');
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
+    await graphModel.createEdge(graph.goal.id, b.id, a.id, 'depends_on');
 
     const result = await service.tick(graph.goal.id);
 

@@ -114,6 +114,7 @@ export const goalRouter = router({
           .optional(),
         maxRounds: z.number().int().positive().optional(),
         maxTotalCost: z.number().positive().optional(),
+        problemDescription: z.string().optional(),
         projectId: z.string().optional(),
         requirement: z.string().optional(),
         title: z.string().min(1),

@@ -202,8 +202,13 @@ describe('decideNextMove', () => {
   });
 
   describe('with no ready work', () => {
-    it('reports an empty graph and a fully blocked one differently', () => {
-      expect(decide(graph()).message).toContain('add a work node');
+    it('plans the decomposition for an empty graph, parks a fully blocked one', () => {
+      // A goal with no work has not been planned yet — that is the planner's
+      // cue, not a dead end.
+      expect(decide(graph())).toMatchObject({
+        branch: 'plan_decomposition',
+        outcome: 'advanced',
+      });
 
       const blocked = graph({
         edges: [

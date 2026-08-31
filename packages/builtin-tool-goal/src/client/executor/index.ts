@@ -61,9 +61,11 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
         // passed as `maxRounds`, which counts runs across every Work in the
         // graph and would strand later tasks that have not run at all.
         maxTotalCost: params.maxTotalCost ?? undefined,
+        // No seed work: the coordinator plans the decomposition on first
+        // advance, turning a complex ask into several explorable directions.
+        problemDescription: params.instruction,
         requirement: buildGoalRequirement(params.name, criteria, params.instruction),
         title: params.name,
-        work: [{ description: params.instruction, title: params.name }],
       });
 
       return await this.reportCreatedGoal(graph, criteria.length, params.name);

@@ -27,6 +27,8 @@ export type GoalTickBranch =
   | 'pending_decision'
   /** No work node is eligible: none exists, or all remaining ones are blocked. */
   | 'no_frontier'
+  /** The graph has no work yet — decompose the goal into explorable directions first. */
+  | 'plan_decomposition'
   /** Every work node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
   /** The chosen work has no responsible task yet. */

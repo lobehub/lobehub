@@ -27,6 +27,8 @@ class GoalService {
     createdByAgentId?: string;
     maxRounds?: number;
     maxTotalCost?: number;
+    /** The user's ask in their own words — shown on the seeded problem node. */
+    problemDescription?: string;
     projectId?: string;
     requirement?: string;
     title: string;

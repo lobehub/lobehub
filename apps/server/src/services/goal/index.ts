@@ -29,6 +29,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
+import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import {
   decideNextMove,
   GOAL_ACCEPTANCE_TASK_TITLE,
@@ -64,10 +65,19 @@ export interface CreateGoalGraphInput {
   createdByAgentId?: string;
   maxRounds?: number;
   maxTotalCost?: number;
+  /**
+   * The user's ask in their own words, shown on the seeded problem node. The
+   * full `requirement` (with its acceptance boilerplate) stays on the goal row
+   * — copying it onto the node made every drill-down read like a contract.
+   */
+  problemDescription?: string;
   projectId?: string;
   requirement?: string;
   title: string;
-  /** Seed Work nodes, in dependency-free order. A plain string is title-only. */
+  /**
+   * Seed Work nodes, in dependency-free order. A plain string is title-only.
+   * When omitted, the coordinator plans the decomposition on first advance.
+   */
   work?: Array<CreateGoalWorkInput | string>;
 }
 
@@ -160,7 +170,7 @@ export class GoalService {
     try {
       const problem = await authorGraph.createNode(goal.id, {
         createdByAgentId: input.createdByAgentId,
-        description: input.requirement,
+        description: input.problemDescription ?? input.requirement,
         kind: 'problem',
         status: 'active',
         title: input.title,
@@ -411,6 +421,10 @@ export class GoalService {
 
       case 'terminal_acceptance': {
         return observe(await this.settleTerminalAcceptance(graph, move, effects));
+      }
+
+      case 'plan_decomposition': {
+        return observe(await this.planDecomposition(graph, effects));
       }
 
       case 'no_frontier': {
@@ -930,6 +944,51 @@ export class GoalService {
       .filter(Boolean)
       .join('\n\n');
 
+  /**
+   * Turn a goal with no work into an explorable structure: the LLM plans the
+   * core question plus 1–5 independent directions, each carrying only its own
+   * deliverable requirements. A planning failure degrades to one work seeded
+   * from the raw requirement — the goal must never stall on its planner.
+   */
+  private planDecomposition = async (graph: GoalGraphSnapshot, effects: GoalAdvanceEffect[]) => {
+    const goalId = graph.goal.id;
+    const problem = graph.nodes.find((node) => node.kind === 'problem');
+    const requirement = graph.goal.requirement ?? problem?.description ?? graph.goal.title;
+
+    const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
+    const plan = await generator.decompose({ requirement }).catch(() => undefined);
+
+    const works = plan?.works ?? [
+      { instruction: problem?.description ?? requirement, title: graph.goal.title },
+    ];
+
+    if (plan && problem) {
+      // The node's description becomes the planner's own words for the core
+      // question — not the acceptance boilerplate the goal row keeps.
+      await this.coordinatorGraph.updateNodeDescription(goalId, problem.id, plan.problemStatement);
+    }
+
+    for (const work of works) {
+      const node = await this.coordinatorGraph.createNode(goalId, {
+        description: work.instruction,
+        kind: 'task',
+        title: work.title,
+      });
+      if (!node) continue;
+      if (problem)
+        await this.coordinatorGraph.createEdge(goalId, problem.id, node.id, 'decomposes');
+      effects.push({ nodeId: node.id, type: 'created_node', detail: work.title });
+    }
+
+    return {
+      goalId,
+      message: plan
+        ? `Planned ${works.length} exploration direction${works.length > 1 ? 's' : ''}`
+        : 'Planner unavailable; seeded a single work from the requirement',
+      outcome: 'advanced' as const,
+    };
+  };
+
   private buildTaskAcceptanceRequirement = (
     graph: GoalGraphSnapshot,
     title: string,
@@ -947,12 +1006,14 @@ export class GoalService {
         .join('\n\n');
     }
 
+    // The full goal requirement (with its numbered acceptance list) is NOT
+    // injected here: it belongs to the terminal acceptance task above, and
+    // pasting it into every Work made each task's acceptance read as the whole
+    // contract. A Work is judged on its own outcome only.
     return [
       `Verify only this Work: ${title}.`,
       description ? `Required Work outcome: ${description}` : undefined,
-      graph.goal.requirement
-        ? `Use this overall Goal requirement only to interpret requirements relevant to the current Work: ${graph.goal.requirement}`
-        : undefined,
+      `This Work is one direction of the Goal "${graph.goal.title}"; the full Goal contract is verified separately at the end.`,
       'Pass only when the current Work deliverable is complete and supported by concrete evidence. Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',
     ]
       .filter(Boolean)

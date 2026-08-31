@@ -64,6 +64,69 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
   strict: true,
 };
 
+/** Bump when the goal decomposition planning prompt meaningfully changes. */
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v1';
+
+export const GOAL_DECOMPOSE_JSON_SCHEMA = {
+  name: 'goal_decomposition',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      problemStatement: { maxLength: 280, minLength: 1, type: 'string' },
+      works: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            instruction: { minLength: 1, type: 'string' },
+            title: { maxLength: 80, minLength: 1, type: 'string' },
+          },
+          required: ['title', 'instruction'],
+          type: 'object',
+        },
+        maxItems: 5,
+        minItems: 1,
+        type: 'array',
+      },
+    },
+    required: ['problemStatement', 'works'],
+    type: 'object' as const,
+  },
+  strict: true,
+};
+
+interface GoalDecomposeInput {
+  requirement: string;
+}
+
+/**
+ * Plan the opening exploration structure of a goal graph: the core question it
+ * answers plus the independent work directions to pursue, before anything runs.
+ */
+export const chainGoalDecompose = ({
+  requirement,
+}: GoalDecomposeInput): {
+  messages: OpenAIChatMessage[];
+} => ({
+  messages: [
+    {
+      content: [
+        'You plan the opening exploration structure for a persistent autonomous goal.',
+        'Decompose the goal into the core question it must answer and the independent work directions that together answer it.',
+        'Guidelines:',
+        '- problemStatement is 1–2 sentences naming the core question or outcome of the goal, in your own words. Never copy the acceptance-criteria list into it.',
+        '- Return 1–5 works. A complex goal (analysis, research, multi-stage delivery) must be split into several directions that can be explored independently or in sequence — e.g. gather the raw material, analyze it from distinct angles, then synthesize. A genuinely small single-step goal may stay as one work.',
+        '- Each work.title names its direction concisely; titles must be distinct from each other and from the goal name.',
+        '- Each work.instruction is a complete, self-contained brief for an autonomous agent working on that direction only: what to do, the concrete deliverable, and how that deliverable will be judged. Include only the requirements relevant to this direction — never paste the full goal acceptance list into every work.',
+        '- Preserve every concrete URL, scope, constraint, and numeric threshold from the goal in whichever work it belongs to.',
+        '- Order works so that earlier ones produce what later ones consume.',
+        '- Write all fields in the language used by the goal.',
+      ].join('\n'),
+      role: 'system',
+    },
+    { content: `## Goal\n${requirement}`, role: 'user' },
+  ],
+});
+
 interface GoalCriteriaDraftInput {
   context?: string;
   goal: string;
