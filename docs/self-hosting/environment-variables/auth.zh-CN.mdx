@@ -44,6 +44,20 @@ LobeHub 在部署时提供了完善的身份验证服务能力，以下是相关
 - 默认值：`-`
 - 示例：`google,github,microsoft,cognito`
 
+#### `AUTH_TRUSTED_ORIGINS`
+
+- 类型：可选
+- 描述：使用逗号分隔的列表完全替换 Better Auth 自动生成的可信来源。仅在需要完整控制时使用，并确保包含所有必需的网页来源和移动端自定义协议。URL 中的路径会被归一化为来源。请使用精确来源，不要使用通配符。
+- 默认值：根据 `APP_URL`、Vercel 部署地址、移动端应用协议、Expo 开发协议自动生成；启用 Apple SSO 时还会包含 Apple 来源。
+- 示例：`https://lobe.example.com,com.example.app://`
+
+#### `AUTH_ADDITIONAL_TRUSTED_ORIGINS`
+
+- 类型：可选
+- 描述：以逗号分隔，追加到 Better Auth 最终可信来源列表。适用于需要增加额外回调或重定向来源、但不希望替换应用、Vercel、移动端及认证提供商默认值的场景。URL 中的路径会被归一化为来源，重复来源会被去除，自定义协议会保留。请使用精确来源，不要使用通配符。
+- 默认值：`-`
+- 示例：`https://gateway.example.com`
+
 #### `AUTH_ALLOWED_EMAILS`
 
 - 类型：可选
