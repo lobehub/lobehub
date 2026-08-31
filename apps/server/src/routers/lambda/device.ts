@@ -603,9 +603,9 @@ export const deviceRouter = router({
   searchProjectFiles: deviceProcedure
     .input(
       z.object({
+        changedOnly: z.boolean().optional(),
         deviceId: z.string(),
         excludeIgnored: z.boolean().optional(),
-        includePaths: z.array(z.string()).max(10_000).optional(),
         limit: z.number().int().positive().max(500).optional(),
         query: z.string(),
         scope: z.string(),
@@ -613,9 +613,9 @@ export const deviceRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.searchProjectFiles({
+        changedOnly: input.changedOnly,
         deviceId: input.deviceId,
         excludeIgnored: input.excludeIgnored,
-        includePaths: input.includePaths,
         limit: input.limit,
         query: input.query,
         scope: input.scope,

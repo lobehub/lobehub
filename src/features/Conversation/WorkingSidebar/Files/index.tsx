@@ -244,10 +244,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const changedOnly = viewMode === 'changes';
   const hasDisplayFilter = isFiltering || changedOnly || hideIgnored;
   const workingTreeGitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
-  const changedSearchPaths = useMemo(
-    () => (changedOnly ? workingTreeGitStatus.map((entry) => entry.path) : undefined),
-    [changedOnly, workingTreeGitStatus],
-  );
   const dirtyFilePaths = useMemo(
     () => new Set(workingTreeGitStatus.map((entry) => entry.path)),
     [workingTreeGitStatus],
@@ -327,9 +323,9 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
 
     void projectFileService
       .searchProjectFiles({
+        changedOnly,
         deviceId,
         excludeIgnored: hideIgnored,
-        includePaths: changedSearchPaths,
         limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
         query: normalizedDebouncedQuery,
         scope: workingDirectory,
@@ -350,7 +346,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     return () => {
       cancelled = true;
     };
-  }, [changedSearchPaths, deviceId, hideIgnored, normalizedDebouncedQuery, workingDirectory]);
+  }, [changedOnly, deviceId, hideIgnored, normalizedDebouncedQuery, workingDirectory]);
 
   // Skip resyncs when defaultExpandedIds is structurally unchanged so the user's expansions survive re-renders.
   const prevDefaultRef = useRef<string[]>([]);

@@ -156,10 +156,15 @@ describe('defaultSearchProjectFiles', () => {
       ),
     );
     await writeFile(path.join(dir, 'target-secret.local'), 'ignored\n');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+    execFileSync('git', ['add', '.'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, 'target-200.ts'), 'changed\n');
 
     const result = await defaultSearchProjectFiles({
+      changedOnly: true,
       excludeIgnored: true,
-      includePaths: ['target-200.ts'],
       limit: 1,
       query: 'target',
       scope: dir,
@@ -173,9 +178,20 @@ describe('defaultSearchProjectFiles', () => {
     cleanup.push(dir);
     execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
     await writeFile(path.join(dir, 'button-helper.ts'), 'button\n');
+    await writeFile(path.join(dir, 'Button.tsx'), 'button\n');
+    await writeFile(path.join(dir, 'ButtonStory.tsx'), 'button\n');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+    execFileSync('git', ['add', '.'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: dir });
+    await Promise.all([
+      rm(path.join(dir, 'Button.tsx')),
+      rm(path.join(dir, 'ButtonStory.tsx')),
+      writeFile(path.join(dir, 'button-helper.ts'), 'changed\n'),
+    ]);
 
     const result = await defaultSearchProjectFiles({
-      includePaths: ['Button.tsx', 'button-helper.ts', 'ButtonStory.tsx'],
+      changedOnly: true,
       limit: 2,
       query: 'btn',
       scope: dir,

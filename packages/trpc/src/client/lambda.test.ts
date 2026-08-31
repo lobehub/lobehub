@@ -51,21 +51,6 @@ describe('lambdaClient large-input query transport', () => {
       'topicIds',
       1000,
     ],
-    [
-      'device.searchProjectFiles',
-      () =>
-        lambdaClient.device.searchProjectFiles.query({
-          deviceId: 'dev_test',
-          includePaths: Array.from(
-            { length: 300 },
-            (_, i) => `src/changed-${String(i).padStart(4, '0')}.tsx`,
-          ),
-          query: 'changed',
-          scope: '/repo',
-        }),
-      'includePaths',
-      300,
-    ],
   ] as const)(
     'sends %s with a large path/id array as a POST request',
     async (path, call, arrayField, expectedLength) => {

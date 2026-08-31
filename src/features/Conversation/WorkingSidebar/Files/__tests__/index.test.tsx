@@ -373,7 +373,7 @@ describe('Files — reveal request integration', () => {
       expect(searchProjectFilesMock).toHaveBeenCalledWith(
         expect.objectContaining({
           excludeIgnored: true,
-          includePaths: ['root.ts', 'src/foo/bar.ts', 'deleted.ts'],
+          changedOnly: true,
           limit: 200,
           query: 'bar',
         }),
@@ -538,7 +538,7 @@ describe('Files — reveal request integration', () => {
       expect(searchProjectFilesMock).toHaveBeenCalledWith({
         deviceId: undefined,
         excludeIgnored: false,
-        includePaths: undefined,
+        changedOnly: false,
         limit: 200,
         query: 'bar',
         scope: '/repo',

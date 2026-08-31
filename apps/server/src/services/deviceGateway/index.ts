@@ -932,9 +932,9 @@ export class DeviceGateway {
    * compact tree subset with ancestor directories.
    */
   async searchProjectFiles(params: {
+    changedOnly?: boolean;
     deviceId: string;
     excludeIgnored?: boolean;
-    includePaths?: string[];
     limit?: number;
     query: string;
     scope: string;
@@ -943,10 +943,10 @@ export class DeviceGateway {
     workspaceId?: string;
   }): Promise<DeviceProjectFileSearchResult | undefined> {
     const {
+      changedOnly,
       userId,
       deviceId,
       excludeIgnored,
-      includePaths,
       limit,
       query,
       scope,
@@ -961,7 +961,7 @@ export class DeviceGateway {
         { deviceId, timeout, userId, workspaceId },
         {
           method: 'searchProjectFiles',
-          params: { excludeIgnored, includePaths, limit, query, scope },
+          params: { changedOnly, excludeIgnored, limit, query, scope },
         },
       );
 

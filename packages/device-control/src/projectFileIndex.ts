@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { getGitWorkingTreeFiles } from '@lobechat/local-file-shell/git';
 import fg from 'fast-glob';
 
 import { projectFileSearchManager } from './projectFileSearchManager';
@@ -196,10 +197,11 @@ export const defaultGetProjectFileIndex = async (
 const filterSearchCandidates = (
   entries: ProjectFileIndexEntry[],
   params: ProjectFileSearchParams,
+  includePaths?: string[],
 ) => {
-  if (!params.excludeIgnored && !params.includePaths) return entries;
+  if (!params.excludeIgnored && !includePaths) return entries;
 
-  const includedPaths = params.includePaths ? new Set(params.includePaths) : undefined;
+  const includedPaths = includePaths ? new Set(includePaths) : undefined;
   return entries.filter(
     (entry) =>
       entry.isDirectory ||
@@ -250,6 +252,9 @@ export const defaultSearchProjectFiles = async (
       rootResult?.stdout && !exitCode ? rootResult.stdout.trim() || requestedScope : requestedScope;
 
     if (rootResult?.stdout && !exitCode) {
+      const includePaths = params.changedOnly
+        ? Object.values(await getGitWorkingTreeFiles(root)).flat()
+        : undefined;
       const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
         execFileAsync(
           'git',
@@ -287,12 +292,9 @@ export const defaultSearchProjectFiles = async (
         .map((item) => item.trim())
         .filter(Boolean);
       const entries = filterSearchCandidates(
-        includeMissingSearchCandidates(
-          buildEntries(files, root, ignoredPaths),
-          params.includePaths,
-          root,
-        ),
+        includeMissingSearchCandidates(buildEntries(files, root, ignoredPaths), includePaths, root),
         params,
+        includePaths,
       );
 
       return {
@@ -308,12 +310,9 @@ export const defaultSearchProjectFiles = async (
 
   const files = await projectFileSearchManager.collectNonGitFilePaths(requestedScope);
   const entries = filterSearchCandidates(
-    includeMissingSearchCandidates(
-      buildEntries(files, requestedScope),
-      params.includePaths,
-      requestedScope,
-    ),
+    includeMissingSearchCandidates(buildEntries(files, requestedScope), undefined, requestedScope),
     params,
+    params.changedOnly ? [] : undefined,
   );
 
   return {
