@@ -1,13 +1,16 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -124,11 +127,7 @@ const Libraries = memo(() => {
     <Flexbox gap={12}>
       <SectionTitle title={t('home.libraries')} />
       {isLoading ? (
-        <div className={styles.grid}>
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton.Node active key={index} style={{ height: 52, width: '100%' }} />
-          ))}
-        </div>
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.libraries} />
       ) : (
         <div className={styles.grid}>
           {data?.slice(0, MAX_LIBRARIES).map((item) => (

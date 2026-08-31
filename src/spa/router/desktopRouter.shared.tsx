@@ -31,6 +31,7 @@ import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segm
 import GenerationSkeleton from '@/components/Skeleton/Generation';
 import HomeSkeleton from '@/components/Skeleton/Home';
 import MemorySkeleton from '@/components/Skeleton/Memory';
+import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
@@ -593,7 +594,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               { preloadId: 'resource' },
             ),
             handle: {
-              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+              meta: routeMeta({
+                icon: LibraryBigIcon,
+                Skeleton: ResourceHomeSkeleton,
+                titleKey: 'navigation.resources',
+              }),
             },
             index: true,
           },
