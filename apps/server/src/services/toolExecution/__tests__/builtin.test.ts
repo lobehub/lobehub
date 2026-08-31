@@ -36,9 +36,9 @@ vi.mock('@/server/services/market', () => ({
 // except `lobe-user-memory`, granted so the memory-permission dispatch tests
 // below can exercise the per-API data-tool rules.
 vi.mock('@lobechat/builtin-tools', () => ({
-  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: new Set(['lobe-user-memory']),
+  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: new Set(['lobe-user-memory', 'lobe-consent-tool']),
   isBuiltinToolIdentifier: (id: string) =>
-    ['lobe-notebook', 'lobe-task', 'lobe-user-memory'].includes(id),
+    ['lobe-notebook', 'lobe-task', 'lobe-user-memory', 'lobe-consent-tool'].includes(id),
   builtinTools: [
     {
       identifier: 'lobe-notebook',
@@ -53,6 +53,16 @@ vi.mock('@lobechat/builtin-tools', () => ({
           // exercises the dispatch gate's unstripped-manifest intervention check
           { humanIntervention: 'required', name: 'consentGated' },
         ],
+      },
+    },
+    {
+      identifier: 'lobe-consent-tool',
+      // Tool-level 'required' with an api-level 'never': assembly drops the
+      // WHOLE tool for such a config, so dispatch must too — the api-level
+      // 'never' must not override the tool-level restriction.
+      manifest: {
+        api: [{ humanIntervention: 'never', name: 'freeApi' }],
+        humanIntervention: 'required',
       },
     },
     {
@@ -508,6 +518,22 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
       ...context,
       agentShare: { allowReadMemory: true, enabledToolIds: ['lobe-user-memory'] },
     });
+
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it("blocks a tool-level 'required' tool even when the called API is 'never'", async () => {
+    const result = await executor.execute(
+      {
+        apiName: 'freeApi',
+        arguments: '{}',
+        id: 't-consent',
+        identifier: 'lobe-consent-tool',
+        type: 'default' as any,
+      },
+      { ...context, agentShare: { enabledToolIds: ['lobe-consent-tool'] } },
+    );
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
     expect(mockApiHandler).not.toHaveBeenCalled();

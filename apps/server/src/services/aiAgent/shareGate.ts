@@ -342,9 +342,22 @@ export const isShareBlockedBuiltinDispatch = (
   if (!SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(identifier)) return true;
   if (!(agentShare.enabledToolIds ?? []).includes(identifier)) return true;
 
+  // Sub-agent dispatch has no humanIntervention config to catch it, and the
+  // server sub-agent runner spawns the child via a plain `execAgent` call
+  // that does NOT thread the parent's shareGate — the child would run with
+  // the creator's full, unrestricted tool surface. Assembly strips the API
+  // (`stripSubAgentDispatchApis`); this is its dispatch-time counterpart.
+  if (SUB_AGENT_DISPATCH_APIS[identifier]?.apiName === apiName) return true;
+
   const manifest = builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
   const toolLevelHumanIntervention = (manifest as { humanIntervention?: unknown } | undefined)
     ?.humanIntervention;
+  // Match assembly's semantics exactly (`applyShareGateToInterventionRequiredApis`
+  // drops the WHOLE tool when the tool-level fallback is unusable): a
+  // tool-level 'required'/'always'/dynamic config blocks every API here too —
+  // an api-level 'never' must not override it at dispatch when it could not
+  // have survived assembly either.
+  if (!isApiUsableForShareVisitor(toolLevelHumanIntervention)) return true;
   const apiHumanIntervention = manifest?.api?.find(
     (api) => api.name === apiName,
   )?.humanIntervention;

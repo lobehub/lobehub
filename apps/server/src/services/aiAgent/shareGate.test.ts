@@ -352,6 +352,20 @@ describe('isShareBlockedBuiltinDispatch', () => {
     }
   });
 
+  it('blocks sub-agent dispatch even on an enabled tool with no intervention config', () => {
+    // callSubAgent carries no humanIntervention, so neither the intervention
+    // check nor the data-tool rules would catch it — and the child run it
+    // spawns does not inherit the parent's shareGate. Must be blocked by its
+    // dedicated dispatch rule.
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { enabledToolIds: [LobeAgentIdentifier] },
+        LobeAgentIdentifier,
+        LobeAgentApiName.callSubAgent,
+      ),
+    ).toBe(true);
+  });
+
   it('still applies the data-tool rules after the enable check', () => {
     const enabled = { enabledToolIds: [MemoryIdentifier] };
 

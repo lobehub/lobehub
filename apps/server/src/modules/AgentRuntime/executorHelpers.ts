@@ -212,6 +212,11 @@ export const buildServerVirtualSubAgentRunner = (
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
 ): ServerSubAgentRunner | undefined => {
+  // Share-visitor runs never get a sub-agent runner: the child run spawned
+  // here does not thread the parent's shareGate, so it would execute with the
+  // creator's full unrestricted tool surface. Same fail-closed stance as
+  // `ServerSubAgentTransport` and the `isShareBlockedBuiltinDispatch` gate.
+  if (ctx.agentShare) return undefined;
   const execVirtualSubAgent = ctx.execVirtualSubAgent;
   if (!execVirtualSubAgent) return undefined;
 
@@ -338,6 +343,9 @@ export const buildServerAgentMemberRunner = (
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
 ): ServerAgentMemberRunner | undefined => {
+  // Same share-visitor fail-close as `buildServerVirtualSubAgentRunner`:
+  // member runs would not inherit the parent's shareGate.
+  if (ctx.agentShare) return undefined;
   const execGroupMember = ctx.execGroupMember;
   if (!execGroupMember) return undefined;
 
@@ -348,8 +356,9 @@ export const buildServerAgentMemberRunner = (
 
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
-      const agentMap = (state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> }
-        | undefined)?.agentMap;
+      const agentMap = (
+        state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> } | undefined
+      )?.agentMap;
       const resolvedMembers = members.map((member) => ({
         ...member,
         agentId: resolveGroupMemberId(member.agentId, agentMap),
