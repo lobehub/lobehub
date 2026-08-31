@@ -397,6 +397,7 @@
     "mammoth": "^1.12.1",
     "marked": "^17.0.6",
     "mdast-util-to-markdown": "^2.1.2",
+    "mesurer": "^0.1.0",
     "model-bank": "workspace:*",
     "motion": "^12.43.0",
     "nanoid": "^5.1.16",
