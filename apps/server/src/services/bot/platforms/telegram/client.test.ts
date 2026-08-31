@@ -7,7 +7,8 @@ import { TelegramClientFactory } from './client';
 import { resolveTelegramSecretToken } from './helpers';
 
 const { createTelegramAdapterMock } = vi.hoisted(() => ({
-  createTelegramAdapterMock: vi.fn(() => ({ name: 'telegram' })),
+  // Typed parameter so `mock.calls[n][0]` is a config object, not `never`.
+  createTelegramAdapterMock: vi.fn((_config: Record<string, unknown>) => ({ name: 'telegram' })),
 }));
 
 vi.mock('@chat-adapter/telegram', () => ({
@@ -49,7 +50,7 @@ describe('TelegramWebhookClient.createAdapter', () => {
     createClient().createAdapter();
 
     expect(createTelegramAdapterMock).toHaveBeenCalledTimes(1);
-    const config = createTelegramAdapterMock.mock.calls[0][0] as Record<string, unknown>;
+    const config = createTelegramAdapterMock.mock.calls[0][0];
     expect(config.botToken).toBe(BOT_TOKEN);
     expect(config.secretToken).toBe(resolveTelegramSecretToken({ botToken: BOT_TOKEN }));
     expect(config.secretToken).toMatch(/^[\w-]{43}$/);
@@ -103,10 +104,7 @@ describe('TelegramWebhookClient webhook registration', () => {
     expect(body.secret_token).toBe(resolveTelegramSecretToken({ botToken: BOT_TOKEN }));
 
     client.createAdapter();
-    const adapterConfig = createTelegramAdapterMock.mock.calls.at(-1)![0] as Record<
-      string,
-      unknown
-    >;
+    const adapterConfig = createTelegramAdapterMock.mock.calls.at(-1)![0];
     expect(adapterConfig.secretToken).toBe(body.secret_token);
   });
 
