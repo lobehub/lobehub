@@ -191,6 +191,7 @@
   "management.filters.time.today": "今天",
   "management.filters.time.week": "最近一周",
   "management.filters.trigger.api": "API",
+  "management.filters.trigger.bot": "频道",
   "management.filters.trigger.chat": "对话",
   "management.filters.trigger.eval": "评测",
   "management.filters.trigger.label": "来源",

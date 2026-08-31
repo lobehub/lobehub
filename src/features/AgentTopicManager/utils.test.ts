@@ -7,14 +7,19 @@ import {
   getProjectLabel,
   matchesBotChannel,
   matchesGroup,
+  matchesTrigger,
 } from './utils';
 
-const createTopic = (metadata: ChatTopic['metadata']): ChatTopic => ({
+const createTopic = (
+  metadata: ChatTopic['metadata'],
+  overrides: Partial<ChatTopic> = {},
+): ChatTopic => ({
   createdAt: 1,
   id: 'topic-1',
   metadata,
   title: 'Topic',
   updatedAt: 1,
+  ...overrides,
 });
 
 describe('AgentTopicManager utils', () => {
@@ -35,19 +40,23 @@ describe('AgentTopicManager utils', () => {
   });
 
   it('matches bot channel filters by metadata.bot.platform', () => {
-    const topic = createTopic({
-      bot: {
-        applicationId: 'app-1',
-        isOwner: true,
-        platform: 'discord',
-        platformThreadId: 'discord:guild:channel:thread',
-        senderExternalUserId: 'user-1',
+    const topic = createTopic(
+      {
+        bot: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild:channel:thread',
+          senderExternalUserId: 'user-1',
+        },
       },
-    });
+      { trigger: 'bot' },
+    );
 
     expect(matchesBotChannel(topic, [])).toBe(true);
     expect(matchesBotChannel(topic, ['discord'])).toBe(true);
     expect(matchesBotChannel(topic, ['telegram'])).toBe(false);
+    expect(matchesTrigger(topic, ['bot'])).toBe(true);
   });
 
   it('never matches a bot channel filter when the topic has no bot metadata', () => {

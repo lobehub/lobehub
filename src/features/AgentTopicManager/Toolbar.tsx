@@ -24,6 +24,7 @@ import {
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -152,10 +153,11 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'completed', labelKey: 'management.filters.status.completed' },
 ];
 
-const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
+const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'bot', 'api', 'task', 'eval'];
 
 const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
   api: Webhook,
+  bot: Hash,
   chat: MessageCircle,
   eval: TestTubeIcon,
   task: ListTodoIcon,
@@ -179,18 +181,19 @@ const CheckMark = ({ visible }: { visible: boolean }) => (
 
 interface FilterChipProps {
   icon?: LucideIcon;
+  iconNode?: ReactNode;
   items: DropdownItem[];
   label: string;
   onClear: () => void;
   value: ReactNode;
 }
 
-const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }) => {
+const FilterChip = memo<FilterChipProps>(({ icon, iconNode, label, value, items, onClear }) => {
   return (
     <span className={styles.chip}>
       <DropdownMenu items={items}>
         <span className={styles.chipMain}>
-          {icon && <Icon icon={icon} size={12} />}
+          {iconNode ?? (icon && <Icon icon={icon} size={12} />)}
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>{label}:</Text>
           <span className={styles.chipValue}>{value}</span>
           <Icon icon={ChevronDown} size={10} />
@@ -223,8 +226,10 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
   const setGroupIds = useTopicsViewStore((s) => s.setGroupIds);
   const triggers = useTopicsViewStore((s) => s.triggers);
   const setTriggers = useTopicsViewStore((s) => s.setTriggers);
+  const toggleTrigger = useTopicsViewStore((s) => s.toggleTrigger);
   const botChannels = useTopicsViewStore((s) => s.botChannels);
   const setBotChannels = useTopicsViewStore((s) => s.setBotChannels);
+  const toggleBotChannel = useTopicsViewStore((s) => s.toggleBotChannel);
   const timeRange = useTopicsViewStore((s) => s.timeRange);
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
@@ -241,10 +246,9 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
         icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
         key: tr,
         label: t(`management.filters.trigger.${tr}` as any) as string,
-        onClick: () =>
-          setTriggers(triggers.includes(tr) ? triggers.filter((x) => x !== tr) : [...triggers, tr]),
+        onClick: () => toggleTrigger(tr),
       })),
-    [triggers, t, setTriggers],
+    [triggers, t, toggleTrigger],
   );
 
   const projectItems: DropdownItem[] = useMemo(() => {
@@ -270,19 +274,17 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
     if (botChannelOptions.length === 0) {
       return [{ disabled: true, key: 'empty', label: t('management.filters.botChannel.empty') }];
     }
-    return botChannelOptions.map((option) => ({
-      extra: <CheckMark visible={botChannels.includes(option.key)} />,
-      icon: <Icon icon={Hash} size={14} />,
-      key: option.key,
-      label: option.label,
-      onClick: () =>
-        setBotChannels(
-          botChannels.includes(option.key)
-            ? botChannels.filter((x) => x !== option.key)
-            : [...botChannels, option.key],
-        ),
-    }));
-  }, [botChannelOptions, botChannels, setBotChannels, t]);
+    return botChannelOptions.map((option) => {
+      const PlatformIcon = getPlatformIcon(option.key);
+      return {
+        extra: <CheckMark visible={botChannels.includes(option.key)} />,
+        icon: PlatformIcon ? <PlatformIcon size={14} /> : <Icon icon={Hash} size={14} />,
+        key: option.key,
+        label: option.label,
+        onClick: () => toggleBotChannel(option.key),
+      };
+    });
+  }, [botChannelOptions, botChannels, t, toggleBotChannel]);
 
   const timeItems: DropdownItem[] = useMemo(
     () =>
@@ -392,6 +394,12 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
     const selected = botChannels[0];
     return botChannelOptions.find((o) => o.key === selected)?.label ?? selected;
   }, [botChannels, botChannelOptions]);
+
+  const botChannelChipIcon = useMemo(() => {
+    if (botChannels.length !== 1) return <Icon icon={Hash} size={12} />;
+    const PlatformIcon = getPlatformIcon(botChannels[0]);
+    return PlatformIcon ? <PlatformIcon size={12} /> : <Icon icon={Hash} size={12} />;
+  }, [botChannels]);
 
   const handleArchiveStale = useCallback(() => {
     const cutoff = Date.now() - THREE_MONTHS_MS;
@@ -519,7 +527,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
       )}
       {botChannelApplied && (
         <FilterChip
-          icon={Hash}
+          iconNode={botChannelChipIcon}
           items={botChannelItems}
           label={t('management.filters.botChannel.label')}
           value={botChannelChipValue}

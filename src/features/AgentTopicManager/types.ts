@@ -2,7 +2,7 @@ export type ViewMode = 'card' | 'list';
 
 export type StatusFilter = 'all' | 'active' | 'running' | 'completed' | 'archived';
 
-export type TriggerFilter = 'chat' | 'api' | 'task' | 'eval';
+export type TriggerFilter = 'chat' | 'api' | 'task' | 'eval' | 'bot';
 
 export type TimeRangeFilter = 'all' | 'today' | 'week' | 'month';
 

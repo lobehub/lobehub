@@ -38,8 +38,10 @@ interface TopicsViewActions {
   setTimeRange: (range: TimeRangeFilter) => void;
   setTriggers: (triggers: TriggerFilter[]) => void;
   setViewMode: (mode: ViewMode) => void;
+  toggleBotChannel: (botChannel: BotChannelFilter) => void;
   toggleSelected: (id: string) => void;
   toggleSelectMode: () => void;
+  toggleTrigger: (trigger: TriggerFilter) => void;
 }
 
 const initialState: TopicsViewState = {
@@ -71,6 +73,24 @@ export const useTopicsViewStore = create<TopicsViewState & TopicsViewActions>((s
   setTimeRange: (timeRange) => set({ timeRange }),
   setTriggers: (triggers) => set({ triggers }),
   setViewMode: (viewMode) => set({ viewMode }),
+  toggleBotChannel: (botChannel) =>
+    set((state) => {
+      if (state.botChannels.includes(botChannel)) {
+        return { botChannels: state.botChannels.filter((item) => item !== botChannel) };
+      }
+
+      return { botChannels: [...state.botChannels, botChannel], triggers: ['bot'] };
+    }),
+  toggleTrigger: (trigger) =>
+    set((state) => {
+      const removing = state.triggers.includes(trigger);
+      return {
+        ...(removing && trigger === 'bot' ? { botChannels: [] } : {}),
+        triggers: removing
+          ? state.triggers.filter((item) => item !== trigger)
+          : [...state.triggers, trigger],
+      };
+    }),
   toggleSelectMode: () =>
     set((s) => ({ selectMode: !s.selectMode, selectedIds: s.selectMode ? [] : s.selectedIds })),
   toggleSelected: (id) =>
