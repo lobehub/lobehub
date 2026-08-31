@@ -6,6 +6,7 @@ import { registerGoalCommand } from './goal';
 const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     goal: {
+      create: { mutate: vi.fn() },
       graph: { query: vi.fn() },
       tick: { mutate: vi.fn() },
     },
@@ -13,6 +14,13 @@ const { mockClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
+// Building the app URL otherwise resolves a workspace and a server, which needs
+// a real login; the link's shape is what this file is asserting, not its host.
+vi.mock('./task/url', () => ({
+  resolveAppUrlBuilder: vi
+    .fn()
+    .mockResolvedValue((pathname: string) => `https://app.lobehub.com${pathname}`),
+}));
 const createProgram = () => {
   const program = new Command();
   program.exitOverride();
@@ -151,5 +159,38 @@ describe('goal show command', () => {
     });
 
     expect(await render()).toContain('task_8A1DyvjIc7PL');
+  });
+});
+
+describe('goal create command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  it('links to the created goal rather than to /goal/undefined', async () => {
+    // `goal.create` returns the whole graph snapshot, so the id lives on its
+    // goal. Reading `data.id` printed a link nobody could follow, and the CLI
+    // cannot resolve the router's types to catch it.
+    mockClient.goal.create.mutate.mockResolvedValue({
+      data: {
+        decisions: [],
+        edges: [],
+        events: [],
+        goal: { id: 'goal_PrUIwfSnU9TH', requirement: null, status: 'planning', title: 'Fix bugs' },
+        nodes: [],
+        workVersions: [],
+      },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'create', 'Fix bugs']);
+
+    const output = vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => (value === undefined ? '' : String(value)))
+      .join('\n');
+
+    expect(output).toContain('https://app.lobehub.com/goal/goal_PrUIwfSnU9TH');
+    expect(output).not.toContain('/goal/undefined');
   });
 });

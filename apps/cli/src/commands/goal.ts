@@ -122,7 +122,10 @@ export function registerGoalCommand(program: Command) {
         title,
         work: options.work,
       });
-      const url = buildUrl(`/goal/${encodeURIComponent(result.data.id)}`);
+      // `goal.create` returns the whole graph snapshot, so the id is on its
+      // goal — `result.data.id` is undefined, and the CLI cannot resolve the
+      // router's types to catch that, which is how it reached a printed URL.
+      const url = buildUrl(`/goal/${encodeURIComponent(result.data.goal.id)}`);
       if (options.json !== undefined) return outputJson({ ...result.data, url }, options.json);
       printGraph(result.data);
       console.log(`${pc.bold('goal')}: ${url}`);
