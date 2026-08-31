@@ -18,11 +18,17 @@ const state = (items: RecentItem[]): RecentState => ({
   allRecentsDrawerOpen: false,
   recentsByScope: {
     scope: {
+      hydrationStatusByQuery: {},
       optimisticTitles: {},
       queries: {
-        compact: { items, updatedAt: 1 },
-        drawer: { items: [...items, item('document', 'Document', 'document')], updatedAt: 1 },
+        compact: { items, source: 'server', updatedAt: 1 },
+        drawer: {
+          items: [...items, item('document', 'Document', 'document')],
+          source: 'server',
+          updatedAt: 1,
+        },
       },
+      syncStatusByQuery: {},
     },
   },
 });
@@ -40,6 +46,7 @@ describe('recentReducer', () => {
 
     expect(next.recentsByScope.scope.queries.compact).toEqual({
       items: [item('new', 'New')],
+      source: 'server',
       updatedAt: 2,
     });
     expect(next.recentsByScope.scope.queries.drawer).toBe(
@@ -98,5 +105,19 @@ describe('recentReducer', () => {
 
     expect(next.recentsByScope).toBe(optimistic.recentsByScope);
     expect(next.recentsByScope.scope.optimisticTitles['task:task']?.title).toBe('Latest');
+  });
+
+  it('does not let late storage hydration overwrite server data', () => {
+    const current = state([item('task', 'Server')]);
+    const next = recentReducer(current, {
+      items: [item('task', 'Cached')],
+      queryKey: 'compact',
+      scope: 'scope',
+      type: 'hydrateQuery',
+      updatedAt: 2,
+    });
+
+    expect(next.recentsByScope.scope.queries.compact.items[0].title).toBe('Server');
+    expect(next.recentsByScope.scope.hydrationStatusByQuery.compact).toBe('hydrated');
   });
 });

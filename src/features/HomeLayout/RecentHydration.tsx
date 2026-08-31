@@ -1,11 +1,9 @@
-import { memo } from 'react';
+import { useSyncRecents } from '@/hooks/useSyncRecents';
 
-import { useInitRecents } from '@/hooks/useInitRecents';
-
-const RecentHydration = memo(() => {
-  useInitRecents();
+const RecentHydration = () => {
+  useSyncRecents();
 
   return null;
-});
+};
 
 export default RecentHydration;

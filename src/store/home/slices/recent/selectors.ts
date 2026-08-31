@@ -4,6 +4,8 @@ import type { RecentEntityRef } from './initialState';
 
 const query = (scope: string, queryKey: string) => (s: HomeStore) =>
   s.recentsByScope[scope]?.queries[queryKey];
+const syncStatus = (scope: string, queryKey: string) => (s: HomeStore) =>
+  s.recentsByScope[scope]?.syncStatusByQuery[queryKey];
 const item = (scope: string, queryKey: string, ref: RecentEntityRef) => (s: HomeStore) => {
   const scopedState = s.recentsByScope[scope];
   const recentItem = scopedState?.queries[queryKey]?.items.find(
@@ -19,4 +21,5 @@ const item = (scope: string, queryKey: string, ref: RecentEntityRef) => (s: Home
 export const homeRecentSelectors = {
   item,
   query,
+  syncStatus,
 };

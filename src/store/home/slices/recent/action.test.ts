@@ -7,11 +7,8 @@ import { recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
-import {
-  createRecentQueryKey,
-  initialRecentState,
-  loadRecentScopes,
-} from '@/store/home/slices/recent/initialState';
+import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
+import { recentProjectionStorage } from '@/store/home/slices/recent/projectionStorage';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
 const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem => ({
@@ -68,13 +65,28 @@ describe('RecentActionImpl', () => {
     ).toEqual([item('a', 'Drawer'), item('b', 'B')]);
   });
 
-  it('persists and restores query projections synchronously through localStorage', () => {
+  it('persists query projections through the async storage contract', async () => {
     const queryKey = createRecentQueryKey(11);
     act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Cached')]));
 
-    const persisted = localStorage.getItem('lobechat-home-recents');
-    expect(persisted).toContain('Cached');
-    expect(loadRecentScopes()['user-1:ws-A']?.queries[queryKey]?.items[0]?.title).toBe('Cached');
+    const persisted = await recentProjectionStorage.get({ queryKey, scope: 'user-1:ws-A' });
+    expect(persisted?.data[0].title).toBe('Cached');
+    expect(persisted?.data[0].updatedAt).toEqual(new Date(0));
+  });
+
+  it('ignores storage hydration that resolves after server data', async () => {
+    const queryKey = createRecentQueryKey(11);
+    const cached = deferred<Awaited<ReturnType<typeof recentProjectionStorage.get>>>();
+    vi.spyOn(recentProjectionStorage, 'get').mockReturnValue(cached.promise);
+
+    const hydration = useHomeStore.getState().hydrateRecentQuery('user-1:ws-A', queryKey);
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Server')]));
+    cached.resolve({ data: [item('a', 'Cached')], updatedAt: 1 });
+    await hydration;
+
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', queryKey)(useHomeStore.getState())?.items[0].title,
+    ).toBe('Server');
   });
 
   it('ignores a query update after the active cache scope changed', () => {

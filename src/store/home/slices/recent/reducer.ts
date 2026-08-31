@@ -12,15 +12,31 @@ interface RecentTitleAction {
 export type RecentDispatchAction =
   | (RecentTitleAction & { title: string; type: 'commitTitle' | 'setOptimisticTitle' })
   | (RecentTitleAction & { type: 'rollbackTitle' })
+  | { queryKey: string; scope: string; type: 'failHydration' | 'finishHydration' }
+  | { error: unknown; queryKey: string; scope: string; type: 'failSync' }
+  | {
+      items: RecentItem[];
+      queryKey: string;
+      scope: string;
+      type: 'hydrateQuery';
+      updatedAt: number;
+    }
   | {
       items: RecentItem[];
       queryKey: string;
       scope: string;
       type: 'replaceQuery';
       updatedAt: number;
-    };
+    }
+  | { queryKey: string; scope: string; type: 'startHydration' | 'startSync' }
+  | { queryKey: string; scope: string; type: 'finishSync' };
 
-const createScopeState = (): RecentScopeState => ({ optimisticTitles: {}, queries: {} });
+const createScopeState = (): RecentScopeState => ({
+  hydrationStatusByQuery: {},
+  optimisticTitles: {},
+  queries: {},
+  syncStatusByQuery: {},
+});
 
 const updateRecentTitle = (
   items: RecentItem[],
@@ -67,6 +83,80 @@ export const recentReducer = (
       };
     }
 
+    case 'failHydration':
+    case 'finishHydration':
+    case 'startHydration': {
+      const currentScope = scopedState ?? createScopeState();
+      return {
+        recentsByScope: {
+          ...state.recentsByScope,
+          [action.scope]: {
+            ...currentScope,
+            hydrationStatusByQuery: {
+              ...currentScope.hydrationStatusByQuery,
+              [action.queryKey]:
+                action.type === 'startHydration'
+                  ? 'hydrating'
+                  : action.type === 'finishHydration'
+                    ? 'hydrated'
+                    : 'failed',
+            },
+          },
+        },
+      };
+    }
+
+    case 'failSync':
+    case 'finishSync':
+    case 'startSync': {
+      const currentScope = scopedState ?? createScopeState();
+      return {
+        recentsByScope: {
+          ...state.recentsByScope,
+          [action.scope]: {
+            ...currentScope,
+            syncStatusByQuery: {
+              ...currentScope.syncStatusByQuery,
+              [action.queryKey]: {
+                error: action.type === 'failSync' ? action.error : undefined,
+                isValidating: action.type === 'startSync',
+              },
+            },
+          },
+        },
+      };
+    }
+
+    case 'hydrateQuery': {
+      const currentScope = scopedState ?? createScopeState();
+      const currentQuery = currentScope.queries[action.queryKey];
+      const queries =
+        currentQuery?.source === 'server'
+          ? currentScope.queries
+          : {
+              ...currentScope.queries,
+              [action.queryKey]: {
+                items: action.items,
+                source: 'storage' as const,
+                updatedAt: action.updatedAt,
+              },
+            };
+
+      return {
+        recentsByScope: {
+          ...state.recentsByScope,
+          [action.scope]: {
+            ...currentScope,
+            hydrationStatusByQuery: {
+              ...currentScope.hydrationStatusByQuery,
+              [action.queryKey]: 'hydrated',
+            },
+            queries,
+          },
+        },
+      };
+    }
+
     case 'replaceQuery': {
       const currentScope = scopedState ?? createScopeState();
       return {
@@ -76,7 +166,11 @@ export const recentReducer = (
             ...currentScope,
             queries: {
               ...currentScope.queries,
-              [action.queryKey]: { items: action.items, updatedAt: action.updatedAt },
+              [action.queryKey]: {
+                items: action.items,
+                source: 'server',
+                updatedAt: action.updatedAt,
+              },
             },
           },
         },
