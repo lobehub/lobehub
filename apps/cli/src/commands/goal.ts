@@ -88,6 +88,11 @@ export function registerGoalCommand(program: Command) {
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
     .option('--max-attempts-per-work <n>', 'Attempts per Work before opening a decision gate')
+    .option(
+      '--max-concurrent-tasks <n>',
+      "How many of this goal's tasks may run at once (default 3)",
+    )
+
     .option('--max-steps-per-run <n>', 'Optional agent step cap per Work run (for example 500)')
     .option(
       '--operation-lease-timeout-ms <n>',
@@ -100,8 +105,14 @@ export function registerGoalCommand(program: Command) {
       const result = await client.goal.create.mutate({
         agentId: options.agent,
         config:
-          options.maxAttemptsPerTask || options.maxStepsPerRun || options.operationLeaseTimeoutMs
+          options.maxAttemptsPerTask ||
+          options.maxStepsPerRun ||
+          options.operationLeaseTimeoutMs ||
+          options.maxConcurrentTasks
             ? {
+                maxConcurrentTasks: options.maxConcurrentTasks
+                  ? Number.parseInt(options.maxConcurrentTasks, 10)
+                  : undefined,
                 recovery: {
                   maxAttemptsPerTask: options.maxAttemptsPerTask
                     ? Number.parseInt(options.maxAttemptsPerTask, 10)

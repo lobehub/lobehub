@@ -172,7 +172,6 @@ export interface GoalTickSnapshot {
    */
   budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
-  /** What this tick changed. Attributed per tick so an advance's writes stay ordered. */
   /**
    * The responsible task of every candidate that had one. The scheduler reads
    * all of them — it has to know which are in flight before it can decide what
@@ -183,7 +182,14 @@ export interface GoalTickSnapshot {
   chosenNodeId?: string;
   /** Concurrency cap in force for this tick. */
   concurrency?: number;
+  /** What this tick changed. Attributed per tick so an advance's writes stay ordered. */
   effects: GoalAdvanceEffect[];
+  /**
+   * @deprecated Superseded by `candidateTasks`, which carries every candidate
+   * rather than only the chosen one. Still read when replaying trajectories
+   * recorded before the scheduler could look past the head of the frontier.
+   */
+  frontierTask?: GoalFrontierTaskState;
   /**
    * Graph change since the previously recorded tick, observed on entry to this
    * one. Folding every delta up to and including this field reproduces exactly

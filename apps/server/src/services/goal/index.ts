@@ -14,6 +14,7 @@ import type {
   TaskTopicHandoff,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { sql } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
@@ -31,9 +32,9 @@ import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
 import {
   decideNextMove,
+  frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
-  needsBudget,
   selectFrontier,
 } from './decideNextMove';
 import {
@@ -51,6 +52,8 @@ import {
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
+/** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
+const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
 export interface CreateGoalWorkInput {
   description?: string;
@@ -365,7 +368,6 @@ export class GoalService {
     const at = Date.now();
     const graph = await this.requireGraph(goalId);
     const frontier = selectFrontier(graph);
-    const chosen = frontier.chosen;
 
     // Every candidate's task, not just the head's: the scheduler has to know
     // which of them are in flight before it can decide what else to start.
@@ -378,10 +380,11 @@ export class GoalService {
       ),
     );
 
-    const frontierTask = chosen?.taskId ? (tasksById.get(chosen.taskId) ?? null) : undefined;
-    // Only the branch that could start a run reads the budget, so a goal that is
-    // merely waiting on running Work does not pay for the query on every sweep.
-    const budget = needsBudget(frontierTask)
+    // Asked of every unblocked candidate, not just the head: the scheduler
+    // walks past a running head to start an independent task, so a head that
+    // needs no budget must not decide that nothing does. A goal with nothing
+    // startable still skips the query.
+    const budget = frontierNeedsBudget(frontier, tasksById)
       ? toBudgetState(graph.goal, await this.evaluateBudget(graph.goal, graph))
       : undefined;
 
@@ -396,7 +399,7 @@ export class GoalService {
       tasksById,
     });
     // The scheduler may pick past the head of the frontier, so every arm below
-    // acts on the node the move chose — never on `chosen`, which is only the
+    // acts on the node the move chose, which is not necessarily the
     // highest-ranked candidate.
     const acting = move.chosenNodeId
       ? graph.nodes.find((node) => node.id === move.chosenNodeId)
@@ -774,10 +777,42 @@ export class GoalService {
     // overlapping advances would both dispatch this Work and pay for it twice.
     // Claim the task first: the transition is a single conditional UPDATE, so
     // exactly one advance can win it.
-    const claimed = await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'running', {
-      error: null,
-      startedAt: new Date(),
+    //
+    // Counting free slots is a *separate* race the per-task claim cannot cover:
+    // two advances reading the same `inFlight` below the cap would each claim a
+    // different task and both succeed, taking the goal past
+    // `maxConcurrentTasks`. So the count and the claim happen together, under a
+    // per-goal advisory lock — the planner's cap check is a fast path, this is
+    // the enforcement.
+    const claimed = await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${GOAL_DISPATCH_LOCK_NAMESPACE}, hashtext(${goalId}))`,
+      );
+
+      const inFlight = await new GoalGraphModel(
+        tx,
+        this.userId,
+        this.workspaceId,
+      ).countRunningTasks(goalId);
+      if (inFlight >= resolveMaxConcurrentTasks(graph.goal)) return 'at-capacity' as const;
+
+      return new TaskModel(tx, this.userId, this.workspaceId).updateStatusIfCurrent(
+        task.id,
+        task.status,
+        'running',
+        { error: null, startedAt: new Date() },
+      );
     });
+
+    if (claimed === 'at-capacity') {
+      return {
+        goalId,
+        message: `Concurrency limit reached before ${task.identifier} could start`,
+        nodeId,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
     if (!claimed) {
       return {
         goalId,

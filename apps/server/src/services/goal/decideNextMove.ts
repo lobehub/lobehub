@@ -76,11 +76,34 @@ export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
  * every sweep.
  */
 export const needsBudget = (task?: TaskItem | null): boolean => {
-  if (!task) return false;
-  return !['completed', 'failed', 'canceled', 'paused', 'running', 'scheduled'].includes(
-    task.status,
-  );
+  // A candidate with no task yet will need one created and then dispatched.
+  if (task === undefined) return true;
+  if (task === null) return false;
+  // A failure the coordinator can retry spends money too.
+  if (task.status === 'paused') {
+    return task.error === LEASE_EXPIRED_ERROR || task.error === VERIFICATION_FAILED_ERROR;
+  }
+  return !['completed', 'failed', 'canceled', 'running', 'scheduled'].includes(task.status);
 };
+
+/**
+ * Whether *any* unblocked candidate could start paid work this tick.
+ *
+ * Asking only about the frontier's head was safe while the head was the only
+ * thing that could be dispatched. Now that the scheduler walks past a running
+ * head to start an independent task, keying the budget off the head would let a
+ * goal spend past `maxRounds` / `maxTotalCost`: the head reports "no budget
+ * needed", the budget is never read, and `budget_exhausted` cannot fire.
+ */
+export const frontierNeedsBudget = (
+  frontier: FrontierSelection,
+  tasksById: Map<string, TaskItem>,
+): boolean =>
+  frontier.eligible.some(({ blockedBy, node }) => {
+    if (blockedBy.length > 0) return false;
+    if (!node.taskId) return true;
+    return needsBudget(tasksById.get(node.taskId) ?? null);
+  });
 
 export interface GoalMoveInput {
   /** Required only when {@link needsBudget} says the branch could dispatch. */

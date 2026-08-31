@@ -525,6 +525,36 @@ describe('GoalService', () => {
     );
   });
 
+  it('refuses to start a task once the goal is at its concurrency limit', async () => {
+    // The planner's cap check is a fast path over a snapshot; two overlapping
+    // advances can both read it below the limit. The count and the claim are
+    // therefore taken together under a per-goal lock, and this is the assertion
+    // that the enforcement — not the fast path — is what holds.
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockResolvedValue({ operationId: 'op-cap', taskId: 'placeholder' } as never);
+
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { maxConcurrentTasks: 1 },
+      title: 'Capped goal',
+      work: ['First', 'Second'],
+    });
+
+    // Fill the single slot.
+    const first = await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    await taskModel.updateStatus(first.taskId!, 'running');
+    runSpy.mockClear();
+
+    // The second task exists and is unblocked, but there is no room for it.
+    const capped = await service.tick(graph.goal.id);
+
+    expect(capped.outcome).toBe('waiting_external');
+    expect(runSpy).not.toHaveBeenCalled();
+  });
+
   it('automatically retries failed Work verification within policy budget', async () => {
     const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({
       agentId: 'agent-recovery',

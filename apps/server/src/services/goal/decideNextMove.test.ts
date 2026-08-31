@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   decideNextMove,
+  frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   needsBudget,
@@ -371,5 +372,47 @@ describe('decideNextMove concurrency', () => {
       branch: 'task_running',
       outcome: 'waiting_external',
     });
+  });
+});
+
+describe('frontierNeedsBudget', () => {
+  const withTasks = (snapshot: GoalGraphSnapshot, tasks: TaskItem[]) =>
+    frontierNeedsBudget(selectFrontier(snapshot), new Map(tasks.map((item) => [item.id, item])));
+
+  it('is true when a later candidate can start even though the head cannot', () => {
+    // The hole parallelism opened: the head is running and needs no budget, so
+    // asking only the head would skip the budget read entirely — and
+    // `budget_exhausted` can only fire on a budget that was read.
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' }), node('b')] });
+
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(true);
+  });
+
+  it('is false when nothing unblocked could start paid work', () => {
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' })] });
+
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(false);
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'completed' })])).toBe(false);
+  });
+
+  it('is true for a retryable failure, which spends money too', () => {
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' })] });
+
+    expect(
+      withTasks(snapshot, [
+        task({ error: VERIFICATION_FAILED_ERROR, id: 'task_1', status: 'paused' }),
+      ]),
+    ).toBe(true);
+  });
+
+  it('ignores blocked candidates', () => {
+    const snapshot = graph({
+      edges: [
+        { id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' },
+      ] as GoalGraphSnapshot['edges'],
+      nodes: [node('a', { taskId: 'task_1' }), node('b')],
+    });
+
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(false);
   });
 });

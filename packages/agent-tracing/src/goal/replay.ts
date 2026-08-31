@@ -17,6 +17,8 @@ export interface GoalDecisionInput {
   /** Every candidate's responsible task — the scheduler reads all of them. */
   candidateTasks?: GoalFrontierTaskState[];
   concurrency?: number;
+  /** @deprecated Legacy single-task shape; present only on older trajectories. */
+  frontierTask?: GoalFrontierTaskState;
   graph: GoalGraphState;
   now: number;
 }
@@ -79,7 +81,11 @@ export const replayGoalTrajectory = (
       const graph: GoalGraphState = reconstructGraphAt(trajectory, advance.seq, tick.index);
       const replayed = decide({
         budget: tick.budget,
-        candidateTasks: tick.candidateTasks,
+        // A trajectory recorded before the scheduler existed has only the
+        // chosen candidate's task. Dropping it would replay every one of those
+        // ticks as `missing_task` and report divergences that never happened.
+        candidateTasks:
+          tick.candidateTasks ?? (tick.frontierTask ? [tick.frontierTask] : undefined),
         concurrency: tick.concurrency,
         graph,
         now: tick.at,

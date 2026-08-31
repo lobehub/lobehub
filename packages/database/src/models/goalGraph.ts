@@ -11,7 +11,7 @@ import type {
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
 } from '@lobechat/types';
-import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -21,6 +21,7 @@ import {
   goalNodes,
   goalNodeWorkVersions,
 } from '../schemas/goalGraph';
+import { tasks } from '../schemas/task';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
@@ -185,6 +186,28 @@ export class GoalGraphModel {
       });
       return link;
     });
+
+  /**
+   * How many of a goal's tasks are occupying a concurrency slot.
+   *
+   * Counted in the database rather than from a graph snapshot so it can be read
+   * inside the same transaction as the dispatch claim — two advances that each
+   * counted from their own snapshot would both see room and both start work.
+   */
+  countRunningTasks = async (goalId: string): Promise<number> => {
+    const [row] = await this.db
+      .select({ count: count() })
+      .from(goalNodes)
+      .innerJoin(tasks, eq(goalNodes.taskId, tasks.id))
+      .where(
+        and(
+          eq(goalNodes.goalId, goalId),
+          eq(goalNodes.kind, 'task'),
+          inArray(tasks.status, ['running', 'scheduled']),
+        ),
+      );
+    return row?.count ?? 0;
+  };
 
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
