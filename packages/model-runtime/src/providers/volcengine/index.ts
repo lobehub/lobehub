@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { createVolcengineImage } from './createImage';
-import { createVolcengineVideo } from './video/createVideo';
+import { createVolcengineVideo, pollVolcengineVideoStatus } from './video/createVideo';
 import { handleVolcengineVideoWebhook } from './video/handleCreateVideoWebhook';
 
 const isVolcengineReasoningEffortModel = (model: string) => {
@@ -99,6 +99,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
     responses: () => process.env.DEBUG_VOLCENGINE_RESPONSES === '1',
   },
   handleCreateVideoWebhook: handleVolcengineVideoWebhook,
+  handlePollVideoStatus: (inferenceId, options) => pollVolcengineVideoStatus(inferenceId, options),
   provider: ModelProvider.Volcengine,
   responses: {
     handlePayload: (payload) => {
