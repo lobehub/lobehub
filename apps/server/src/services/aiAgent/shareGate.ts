@@ -410,28 +410,28 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
 };
 
 /**
- * Whether an API's own `humanIntervention` policy can ever complete for a
- * share-visitor run. Every share run is forced onto `approvalMode: 'reject'`
- * (see `AiAgentService.execAgent`'s unconditional override, and
- * `GeneralChatAgent`'s `resolve_blocked_tools` handling of
- * `toolsNeedingIntervention`) — a fail-closed policy with **no approver
- * present**, so it blocks EVERY tool call that reaches
- * `checkInterventionNeeded`'s intervention bucket, not only `'always'`-policy
- * ones: `'required'` gets the identical treatment. A `dynamic` config might
- * resolve to `'never'` for some argument, but this static,
- * schema-assembly-time check cannot prove it always will — fail-closed means
- * never offering a maybe-broken function.
+ * Whether an API's own `humanIntervention` policy can ever HONESTLY complete
+ * for a share-visitor run. Every share run is forced onto `approvalMode:
+ * 'headless'` (see `AiAgentService.execAgent`'s unconditional override) — the
+ * only mode with **no approver waited for**: an `'always'`-policy call becomes
+ * an immediate blocked tool result (`resolve_blocked_tools`), and a
+ * `'required'`-policy call would silently auto-run, granting itself the
+ * consent nobody was present to give. Stripping both classes from the offer
+ * is therefore the fail-closed reading: never offer a function that either
+ * cannot run or would run without its declared consent step. A `dynamic`
+ * config might resolve to `'never'` for some argument, but this static,
+ * schema-assembly-time check cannot prove it always will.
  *
  * `undefined` (no config at all) and the literal string `'never'` are the only
- * two configs guaranteed to execute unconditionally under `reject`.
+ * two configs that execute with no intervention semantics attached.
  */
 const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
   humanIntervention === undefined || humanIntervention === 'never';
 
 /**
  * Structural counterpart to `applyShareGateToDataToolAccess`: strip any builtin
- * API whose OWN `humanIntervention` policy can never complete under a share
- * visitor's forced `reject` approval mode. Reads the SAME `humanIntervention`
+ * API whose OWN `humanIntervention` policy cannot honestly complete under a
+ * share visitor's forced `headless` approval mode. Reads the SAME `humanIntervention`
  * metadata every builtin tool already declares for the approval-UI feature, so
  * a future tool added to `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS` with an
  * intervention-gated API is caught automatically instead of requiring a manual
@@ -447,11 +447,12 @@ const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
  * entirely, the same treatment `applyShareGateToDataToolAccess` gives a
  * `'none'` grant.
  *
- * This only ever narrows what the model is OFFERED (UX / token economy — an
- * intervention-gated API was already unreachable via `checkInterventionNeeded`
- * regardless of whether it appears in the schema). It grants nothing and
- * closes no NEW hole; the actual unbypassable enforcement remains
- * `GeneralChatAgent`'s `reject`-mode handling.
+ * Under `headless` this strip is MORE than UX for `'required'`-policy APIs:
+ * headless auto-runs those, so removing them from the offer is the layer that
+ * keeps a share visitor's model from invoking a consent-gated API without its
+ * consent step ever happening. `'always'`-policy APIs stay unreachable either
+ * way (headless converts them to blocked results); data-bearing APIs are
+ * additionally re-blocked at dispatch by {@link isShareBlockedDataToolCall}.
  */
 const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): void => {
   for (const identifier of Object.keys(toolSet.manifestMap)) {
@@ -571,13 +572,13 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *
  * - `lobe-user-interaction` / `lobe-activator`: same "picker promises an
  *   unusable grant" class, not a data leak. Every share run is forced onto
- *   `approvalMode: 'reject'`, which blocks any tool call whose
- *   `humanIntervention` isn't `'never'`/unset, with no approver ever present.
+ *   `approvalMode: 'headless'` with no approver ever present:
  *   `lobe-user-interaction`'s only entry point (`askUserQuestion`,
- *   `humanIntervention: 'always'`) therefore never runs, and its other APIs
- *   all require a `requestId` only a successful `askUserQuestion` mints.
- *   `lobe-activator`'s only API (`activateTools`, `humanIntervention:
- *   'required'`) dies the identical way. See
+ *   `humanIntervention: 'always'`) is converted to a blocked tool result and
+ *   never runs, and its other APIs all require a `requestId` only a
+ *   successful `askUserQuestion` mints. `lobe-activator`'s only API
+ *   (`activateTools`, `humanIntervention: 'required'`) would auto-run under
+ *   headless but is stripped from the offer instead. See
  *   {@link applyShareGateToInterventionRequiredApis} for the structural fix
  *   that catches this failure mode generically on every ALLOWED tool's
  *   individual APIs.

@@ -1,4 +1,8 @@
-import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
+import {
+  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
+  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  SHARE_VISITOR_PROMPT_MAX_LENGTH,
+} from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
 import { ChatErrorType, entityIdPattern, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -175,7 +179,13 @@ export const shareChatRouter = router({
       // reject the run mid-run, after the topic and placeholder messages have
       // persisted, leaving junk topics with a "..." assistant row.
 
-      const { maxTopicsPerVisitor, maxTurnsPerTopic } = share.shareConfig;
+      // Runtime-normalized (findByShareIdWithAccessCheck fills defaults), but
+      // the config TYPE keeps every field optional — re-apply the same default
+      // constants rather than asserting non-null.
+      const maxTopicsPerVisitor =
+        share.shareConfig.maxTopicsPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
+      const maxTurnsPerTopic =
+        share.shareConfig.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC;
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
       const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
 

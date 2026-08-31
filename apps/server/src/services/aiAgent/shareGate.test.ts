@@ -148,7 +148,7 @@ describe('isShareBlockedDataToolCall', () => {
 
   describe('memory', () => {
     it('blocks every api without allowReadMemory', () => {
-      expect(isShareBlockedDataToolCall({}, MemoryIdentifier, MemoryApiName.searchMemory)).toBe(
+      expect(isShareBlockedDataToolCall({}, MemoryIdentifier, MemoryApiName.searchUserMemory)).toBe(
         true,
       );
     });
@@ -157,7 +157,7 @@ describe('isShareBlockedDataToolCall', () => {
       const permissions = { allowReadMemory: true };
 
       expect(
-        isShareBlockedDataToolCall(permissions, MemoryIdentifier, MemoryApiName.searchMemory),
+        isShareBlockedDataToolCall(permissions, MemoryIdentifier, MemoryApiName.searchUserMemory),
       ).toBe(false);
       expect(
         isShareBlockedDataToolCall(permissions, MemoryIdentifier, MemoryApiName.addContextMemory),
@@ -254,7 +254,10 @@ describe('applyShareGateToToolSet', () => {
     const build = () =>
       buildToolSet([
         {
-          apis: [{ name: MemoryApiName.searchMemory }, { name: MemoryApiName.addContextMemory }],
+          apis: [
+            { name: MemoryApiName.searchUserMemory },
+            { name: MemoryApiName.addContextMemory },
+          ],
           identifier: MemoryIdentifier,
         },
       ]);
@@ -270,10 +273,10 @@ describe('applyShareGateToToolSet', () => {
       buildGate({ allowReadMemory: true, enabledToolIds: [MemoryIdentifier] }),
     );
     expect(granted.manifestMap[MemoryIdentifier].api.map((api) => api.name)).toEqual([
-      MemoryApiName.searchMemory,
+      MemoryApiName.searchUserMemory,
     ]);
     expect(granted.tools!.map((tool: any) => tool.function.name)).toEqual([
-      toolName(MemoryIdentifier, MemoryApiName.searchMemory),
+      toolName(MemoryIdentifier, MemoryApiName.searchUserMemory),
     ]);
   });
 

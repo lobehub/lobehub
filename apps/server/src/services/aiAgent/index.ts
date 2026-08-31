@@ -659,16 +659,24 @@ export class AiAgentService {
 
     // Agent Share visitor runs execute under the CREATOR's credentials (see
     // `shareChat.ts` `execAgent` → `AiAgentService.execAgent({ shareGate })`)
-    // with no visitor-facing approval UI at all. The `headless` default above
-    // exists for TRUSTED async/background tasks and auto-runs any overridable
-    // ('required') tool-level intervention — correct only when the operator who
-    // queued the task is the one being trusted. A share visitor is not that
-    // operator, and nobody is present to grant consent, so every share run is
-    // forced onto the fail-closed `reject` policy here — unconditionally
-    // overriding whatever the caller passed — so this cannot be bypassed by a
-    // future execAgent call site that forgets to set it explicitly.
+    // with no visitor-facing approval UI at all, so no approval can ever be
+    // WAITED for: `headless` is the only mode that converts an intervention
+    // into an immediate blocked tool result ('always'-policy calls become
+    // `resolve_blocked_tools`) instead of parking the run on
+    // `request_human_approve` forever. Forced unconditionally — overriding
+    // whatever the caller passed — so a future execAgent call site cannot
+    // reintroduce a waiting mode by omission.
+    //
+    // `headless` DOES auto-run overridable ('required') interventions. That is
+    // acceptable here only because of the two share-specific layers on top:
+    // `applyShareGateToInterventionRequiredApis` strips every
+    // intervention-gated API from what the model is offered, and
+    // `isShareBlockedDataToolCall` re-blocks data-tool calls at the executor
+    // dispatch site — the residual surface (a hallucinated call to a stripped
+    // 'required' API on an allowed tool) is plan/todo bookkeeping inside the
+    // visitor's own conversation, not creator data.
     const userInterventionConfig: UserInterventionConfig = shareGate
-      ? { approvalMode: 'reject' }
+      ? { approvalMode: 'headless' }
       : requestedUserInterventionConfig;
 
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration

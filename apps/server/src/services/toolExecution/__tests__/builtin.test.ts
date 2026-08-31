@@ -12,7 +12,10 @@ const mockApiHandler = mocks.apiHandler;
 
 vi.mock('../serverRuntimes', () => ({
   hasServerRuntime: vi.fn().mockReturnValue(true),
-  getServerRuntime: vi.fn(async () => ({ createDocument: mocks.apiHandler })),
+  getServerRuntime: vi.fn(async () => ({
+    createDocument: mocks.apiHandler,
+    searchUserMemory: mocks.apiHandler,
+  })),
 }));
 
 vi.mock('@/server/services/composio', () => ({
@@ -27,7 +30,15 @@ vi.mock('@/server/services/market', () => ({
 // The runtime mock above only exposes `createDocument`, but the manifest is the
 // authoritative source of declared APIs — it also lists `listDocuments`, so an
 // UNKNOWN_API hint sourced from the manifest must surface both.
+//
+// The share-gate exports mirror the real module's semantics on this mock's
+// registry: both mocked identifiers are "builtin", neither is share-allowed —
+// except `lobe-user-memory`, granted so the memory-permission dispatch tests
+// below can exercise the per-API data-tool rules.
 vi.mock('@lobechat/builtin-tools', () => ({
+  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: new Set(['lobe-user-memory']),
+  isBuiltinToolIdentifier: (id: string) =>
+    ['lobe-notebook', 'lobe-task', 'lobe-user-memory'].includes(id),
   builtinTools: [
     {
       identifier: 'lobe-notebook',
@@ -425,5 +436,69 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
       targets: [{ taskIdentifier: 'T-1' }],
       type: 'task',
     });
+  });
+});
+
+// Regression for the share-visitor dispatch gate: the assembly-time tool-set
+// trim only shapes what the model is OFFERED — the executor must re-block on
+// its own, or any path that bypasses assembly (resume, recovery hints, future
+// discovery routes) executes with the creator's full permissions.
+describe('BuiltinToolsExecutor share-visitor gate', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  const memoryPayload = (apiName: string): ChatToolPayload => ({
+    apiName,
+    arguments: '{"query":"hi"}',
+    id: 't-share',
+    identifier: 'lobe-user-memory',
+    type: 'default' as any,
+  });
+
+  beforeEach(() => {
+    mockApiHandler.mockReset();
+    mockApiHandler.mockResolvedValue({ content: 'ok', success: true });
+  });
+
+  it('blocks a builtin identifier outside the share allowlist', async () => {
+    const result = await executor.execute(buildPayload('{}'), {
+      ...context,
+      agentShare: {},
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('executes the same call untouched when the run is not a share run', async () => {
+    const result = await executor.execute(buildPayload('{}'), context);
+
+    expect(result.error?.code).not.toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).toHaveBeenCalled();
+  });
+
+  it('blocks memory reads without allowReadMemory', async () => {
+    const result = await executor.execute(memoryPayload('searchUserMemory'), {
+      ...context,
+      agentShare: {},
+    });
+
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('allows memory reads with allowReadMemory but still blocks memory writes', async () => {
+    const read = await executor.execute(memoryPayload('searchUserMemory'), {
+      ...context,
+      agentShare: { allowReadMemory: true },
+    });
+    expect(read.error?.code).not.toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).toHaveBeenCalled();
+
+    const write = await executor.execute(memoryPayload('addContextMemory'), {
+      ...context,
+      agentShare: { allowReadMemory: true },
+    });
+    expect(write.error?.code).toBe('SHARE_GATE_BLOCKED');
   });
 });

@@ -156,6 +156,20 @@ export interface ToolExecutionContext {
    */
   agentMember?: ServerAgentMemberRunner;
   /**
+   * Shared-agent visitor marker, forwarded from
+   * `RuntimeExecutorContext.agentShare` (see
+   * `modules/AgentRuntime/context.ts`). Present ONLY for a share-visitor run.
+   * `BuiltinToolsExecutor.execute` re-checks every builtin dispatch against
+   * `isShareBlockedDataToolCall` with these permissions — the unbypassable
+   * counterpart of the assembly-time tool-set trim, which only shapes what the
+   * model is OFFERED, not what the executor will run.
+   */
+  agentShare?: {
+    allowReadMemory?: boolean;
+    enabledToolIds?: string[];
+    knowledgeBaseIds?: string[];
+  };
+  /**
    * Visibility of the agent executing this tool call. Resolved once per tool
    * call in the runtime executor. Tool runtimes that persist agent side-effects
    * (documents, tasks, etc.) forward this so private-agent output inherits
