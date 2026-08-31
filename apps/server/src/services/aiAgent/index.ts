@@ -671,10 +671,11 @@ export class AiAgentService {
     // acceptable here only because of the two share-specific layers on top:
     // `applyShareGateToInterventionRequiredApis` strips every
     // intervention-gated API from what the model is offered, and
-    // `isShareBlockedDataToolCall` re-blocks data-tool calls at the executor
-    // dispatch site — the residual surface (a hallucinated call to a stripped
-    // 'required' API on an allowed tool) is plan/todo bookkeeping inside the
-    // visitor's own conversation, not creator data.
+    // `isShareBlockedBuiltinDispatch` re-blocks intervention-gated (and
+    // non-enabled, and data-rule-violating) builtin calls at the executor
+    // dispatch site — re-reading the UNSTRIPPED manifest, since the assembly
+    // strip removes the very intervention config the runtime would otherwise
+    // consult. No 'required' builtin API can execute through either layer.
     const userInterventionConfig: UserInterventionConfig = shareGate
       ? { approvalMode: 'headless' }
       : requestedUserInterventionConfig;

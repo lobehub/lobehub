@@ -14,6 +14,7 @@ import {
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
+  builtinTools,
   isBuiltinToolIdentifier,
 } from '@lobechat/builtin-tools';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
@@ -302,6 +303,54 @@ export const isShareBlockedDataToolCall = (
   if (args !== undefined && rule.isArgsOutOfScope?.(permissions, apiName, args)) return true;
 
   return false;
+};
+
+/**
+ * FULL dispatch-time gate for a share-visitor builtin tool call — the check
+ * `BuiltinToolsExecutor.execute` runs on every call that reaches it. Strictly
+ * wider than {@link isShareBlockedDataToolCall}: a call that bypassed
+ * assembly (resume path, recovery hint, model-fabricated call to a tool it
+ * was never offered) must clear ALL the same gates the assembled tool set
+ * enforced, not only the data-tool rules:
+ *
+ * 1. master default-deny allowlist (`SHARE_VISITOR_ALLOWED_IDENTIFIERS`);
+ * 2. the owner's own `enabledToolIds` picker — being on the master allowlist
+ *    is necessary but NOT sufficient; a tool the creator never enabled for
+ *    this share (e.g. `lobe-topic-reference`, image generation spending the
+ *    creator's quota) must not run just because a call reached the executor;
+ * 3. `humanIntervention` policy, re-derived from the REAL manifest: the
+ *    assembly strip removes intervention-gated APIs from the manifest the
+ *    runtime later consults, so at dispatch time such a call looks
+ *    config-less and `headless` would silently auto-run it — the manifest in
+ *    `@lobechat/builtin-tools` is the unstripped source of truth, so the
+ *    consent-gated call is blocked here instead;
+ * 4. the per-API data-tool rules ({@link isShareBlockedDataToolCall}).
+ *
+ * Non-builtin identifiers (MCP/market/custom plugins, LobeHub skills) pass
+ * through untouched: their id namespace does not reliably match
+ * `enabledToolIds` entries, so they remain governed by the assembly-time
+ * `filterPluginsByShareGate` intersection only.
+ */
+export const isShareBlockedBuiltinDispatch = (
+  agentShare: ShareDataToolPermissions & { enabledToolIds?: string[] },
+  identifier: string,
+  apiName: string,
+  args?: any,
+): boolean => {
+  if (!isGovernedByBuiltinAllowlist(identifier)) return false;
+
+  if (!SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(identifier)) return true;
+  if (!(agentShare.enabledToolIds ?? []).includes(identifier)) return true;
+
+  const manifest = builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
+  const toolLevelHumanIntervention = (manifest as { humanIntervention?: unknown } | undefined)
+    ?.humanIntervention;
+  const apiHumanIntervention = manifest?.api?.find(
+    (api) => api.name === apiName,
+  )?.humanIntervention;
+  if (!isApiUsableForShareVisitor(apiHumanIntervention ?? toolLevelHumanIntervention)) return true;
+
+  return isShareBlockedDataToolCall(agentShare, identifier, apiName, args);
 };
 
 /**

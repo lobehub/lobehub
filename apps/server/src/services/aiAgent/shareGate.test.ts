@@ -22,6 +22,7 @@ import {
   applyShareGateToAgentConfig,
   applyShareGateToToolSet,
   filterPluginsByShareGate,
+  isShareBlockedBuiltinDispatch,
   isShareBlockedDataToolCall,
 } from './shareGate';
 
@@ -313,5 +314,77 @@ describe('applyShareGateToToolSet', () => {
 
     expect(toolSet.manifestMap[CalculatorIdentifier]).toBeUndefined();
     expect(toolSet.enabledToolIds).toEqual([]);
+  });
+});
+
+// Dispatch-time full gate, asserted against the REAL manifests: a call that
+// bypassed assembly must clear the master allowlist, the owner's
+// enabledToolIds picker, the UNSTRIPPED manifest's humanIntervention policy,
+// and the data-tool rules — in that order, all fail-closed.
+describe('isShareBlockedBuiltinDispatch', () => {
+  it('blocks an allowlisted builtin the owner did not enable', () => {
+    expect(isShareBlockedBuiltinDispatch({}, CalculatorIdentifier, 'evalExpression')).toBe(true);
+  });
+
+  it('passes an enabled builtin with no intervention semantics', () => {
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { enabledToolIds: [LobeAgentIdentifier] },
+        LobeAgentIdentifier,
+        LobeAgentApiName.analyzeMedia,
+      ),
+    ).toBe(false);
+  });
+
+  it("blocks 'required'- and 'always'-intervention APIs even on an enabled tool", () => {
+    // createPlan is humanIntervention: 'required' in the real manifest — the
+    // assembly strip removes that config from the runtime-visible manifest,
+    // so under headless it would auto-run without its consent step. The
+    // dispatch gate re-reads the unstripped manifest and blocks.
+    for (const apiName of [LobeAgentApiName.createPlan, LobeAgentApiName.askUserQuestion]) {
+      expect(
+        isShareBlockedBuiltinDispatch(
+          { enabledToolIds: [LobeAgentIdentifier] },
+          LobeAgentIdentifier,
+          apiName,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('still applies the data-tool rules after the enable check', () => {
+    const enabled = { enabledToolIds: [MemoryIdentifier] };
+
+    expect(
+      isShareBlockedBuiltinDispatch(enabled, MemoryIdentifier, MemoryApiName.searchUserMemory),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { ...enabled, allowReadMemory: true },
+        MemoryIdentifier,
+        MemoryApiName.searchUserMemory,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { ...enabled, allowReadMemory: true },
+        MemoryIdentifier,
+        MemoryApiName.addContextMemory,
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores non-builtin identifiers entirely', () => {
+    expect(isShareBlockedBuiltinDispatch({}, 'some-mcp-server', 'anything')).toBe(false);
+  });
+
+  it('blocks a builtin outside the master allowlist regardless of enablement', () => {
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { enabledToolIds: [AgentManagementIdentifier] },
+        AgentManagementIdentifier,
+        'searchAgent',
+      ),
+    ).toBe(true);
   });
 });
