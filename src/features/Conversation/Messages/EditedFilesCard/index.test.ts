@@ -65,13 +65,13 @@ describe('getFilePathDisplayInfo', () => {
 
 describe('SINGLE_EDITED_FILE_ICON_SIZE', () => {
   it('keeps the single-file icon container compact', () => {
-    expect(SINGLE_EDITED_FILE_ICON_SIZE).toBe(40);
+    expect(SINGLE_EDITED_FILE_ICON_SIZE).toBe(32);
   });
 });
 
 describe('AGGREGATE_EDITED_FILE_ICON_SIZE', () => {
   it('keeps the multi-file summary as compact as the single-file card', () => {
-    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(40);
+    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(32);
   });
 });
 

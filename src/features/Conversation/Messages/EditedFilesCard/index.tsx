@@ -12,7 +12,13 @@ import {
 import { Center, Flexbox, PatchDiff } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { ArrowUpRightIcon, ChevronDownIcon, ChevronRightIcon, FilePenLineIcon } from 'lucide-react';
+import {
+  ArrowUpRightIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  FilePenLineIcon,
+} from 'lucide-react';
 import { type KeyboardEvent, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,8 +27,11 @@ import FileIcon from '@/components/FileIcon';
 import { type OperationEditedFile, summarizeEditedFilesTotals } from './deriveEditedFiles';
 import { useOpenEditedFile } from './useOpenEditedFile';
 
-export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
-export const AGGREGATE_EDITED_FILE_ICON_SIZE = 40;
+export const SINGLE_EDITED_FILE_ICON_SIZE = 32;
+export const AGGREGATE_EDITED_FILE_ICON_SIZE = 32;
+
+/** Files listed before the "show N more" row, matching Codex's file toolbar. */
+export const INITIAL_VISIBLE_EDITED_FILES = 3;
 
 /** Fire a toggle on Enter/Space so the div-based expander is keyboard operable. */
 const toggleOnKey = (toggle: () => void) => (event: KeyboardEvent<HTMLDivElement>) => {
@@ -43,27 +52,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgElevated};
   `,
   header: css`
-    cursor: pointer;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
   `,
   headerIcon: css`
     flex-shrink: 0;
 
     width: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
     height: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
-    border-radius: 10px;
+    border-radius: 8px;
 
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
   `,
   singleHeader: css`
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
 
     &:hover [data-view-changes],
@@ -85,7 +89,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: ${SINGLE_EDITED_FILE_ICON_SIZE}px;
     height: ${SINGLE_EDITED_FILE_ICON_SIZE}px;
-    border-radius: 10px;
+    border-radius: 8px;
 
     background: ${cssVar.colorFillTertiary};
   `,
@@ -137,6 +141,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   list: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  showMore: css`
+    cursor: pointer;
+
+    padding-block: 7px;
+    padding-inline: 12px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
   `,
   row: css`
     padding-block: 6px;
@@ -290,7 +307,7 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
           onKeyDown={onOpen ? toggleOnKey(onOpen) : undefined}
         >
           <Center className={styles.singleIcon}>
-            <FileIcon fileName={getEditedFileIconName(entry.path)} size={24} />
+            <FileIcon fileName={getEditedFileIconName(entry.path)} size={20} />
           </Center>
           <Flexbox flex={1} gap={2}>
             <Text ellipsis className={styles.singleTitle}>
@@ -353,7 +370,7 @@ SingleEditedFileCard.displayName = 'SingleEditedFileCard';
  */
 const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
   const { t } = useTranslation('chat');
-  const [expanded, setExpanded] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const getOpenAction = useOpenEditedFile();
 
   if (entries.length === 0) return null;
@@ -361,24 +378,19 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
     return <SingleEditedFileCard entry={entries[0]} onOpen={getOpenAction(entries[0])} />;
 
   const totals = summarizeEditedFilesTotals(entries);
+  // The edited-file set is the round's *result*, not one of its steps — it opens
+  // with the first few files already listed and defers only the long tail.
+  const hiddenCount = entries.length - INITIAL_VISIBLE_EDITED_FILES;
+  const visible = showAll ? entries : entries.slice(0, INITIAL_VISIBLE_EDITED_FILES);
+  const toggleShowAll = () => setShowAll((prev) => !prev);
 
   return (
     <Flexbox className={styles.card}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        aria-expanded={expanded}
-        className={styles.header}
-        gap={10}
-        role={'button'}
-        tabIndex={0}
-        onClick={() => setExpanded((prev) => !prev)}
-        onKeyDown={toggleOnKey(() => setExpanded((prev) => !prev))}
-      >
+      <Flexbox horizontal align={'center'} className={styles.header} gap={10}>
         <Center className={styles.headerIcon}>
-          <FilePenLineIcon size={24} />
+          <FilePenLineIcon size={18} />
         </Center>
-        <Flexbox flex={1} gap={3} style={{ minWidth: 0 }}>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Text ellipsis className={styles.title}>
             {t('editedFiles.title', { count: entries.length })}
           </Text>
@@ -389,19 +401,34 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
             linesDeleted={totals.linesDeleted}
           />
         </Flexbox>
-        {expanded ? (
-          <ChevronDownIcon className={styles.chevron} size={16} />
-        ) : (
-          <ChevronRightIcon className={styles.chevron} size={16} />
+      </Flexbox>
+      <Flexbox className={styles.list}>
+        {visible.map((entry) => (
+          <EditedFileRow entry={entry} key={entry.path} onOpen={getOpenAction(entry)} />
+        ))}
+        {hiddenCount > 0 && (
+          <Flexbox
+            horizontal
+            align={'center'}
+            aria-expanded={showAll}
+            className={styles.showMore}
+            gap={6}
+            role={'button'}
+            tabIndex={0}
+            onClick={toggleShowAll}
+            onKeyDown={toggleOnKey(toggleShowAll)}
+          >
+            {showAll
+              ? t('editedFiles.showLess')
+              : t('editedFiles.showMore', { count: hiddenCount })}
+            {showAll ? (
+              <ChevronUpIcon className={styles.chevron} size={14} />
+            ) : (
+              <ChevronDownIcon className={styles.chevron} size={14} />
+            )}
+          </Flexbox>
         )}
       </Flexbox>
-      {expanded && (
-        <Flexbox className={styles.list}>
-          {entries.map((entry) => (
-            <EditedFileRow entry={entry} key={entry.path} onOpen={getOpenAction(entry)} />
-          ))}
-        </Flexbox>
-      )}
     </Flexbox>
   );
 });
