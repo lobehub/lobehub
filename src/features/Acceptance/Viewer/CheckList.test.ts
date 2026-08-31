@@ -18,6 +18,7 @@ import {
   checkRejectModalShell,
   checkRejectModalSize,
   mergeRejectComments,
+  REJECT_MODAL_INLINE_PADDING,
   rejectModalTitle,
   TEXT_REJECT_MODAL_WIDTH,
 } from './CheckRejectModal';
@@ -163,6 +164,12 @@ describe('check reject modal presentation', () => {
     expect(text.width).toBe(TEXT_REJECT_MODAL_WIDTH);
     expect(media.width).toBe(CHECK_REJECT_MODAL_SIZE.width);
     expect(media.classNames.popup).not.toBe(text.classNames.popup);
+  });
+
+  it('keeps title and body on the same inline inset', () => {
+    const shell = checkRejectModalShell(0);
+    expect(shell.styles.content?.paddingInline).toBe(0);
+    expect(shell.styles.header?.paddingInline).toBe(REJECT_MODAL_INLINE_PADDING);
   });
 
   it('shows the acceptance item description below its title', () => {
