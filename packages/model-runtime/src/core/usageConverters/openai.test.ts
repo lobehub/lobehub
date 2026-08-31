@@ -1,6 +1,6 @@
 import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { convertOpenAIImageUsage, convertOpenAIResponseUsage, convertOpenAIUsage } from './openai';
 
@@ -193,6 +193,66 @@ describe('convertUsage', () => {
       inputWriteCacheTokens: 200_000,
     });
     expect(mixedResult.cost).toBeCloseTo(0.78, 10);
+  });
+
+  it('should forward pricingOptions so lookup-priced units can resolve', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 2, '5m': 1.25 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const usage = {
+      prompt_tokens: 1_000_000,
+      prompt_tokens_details: {
+        cache_write_tokens: 1_000_000,
+        cached_tokens: 0,
+      },
+      completion_tokens: 0,
+      total_tokens: 1_000_000,
+    } as OpenAI.Completions.CompletionUsage;
+
+    // 1M cache-write tokens at the 1h rate. Without the forwarded options the
+    // lookup cannot resolve its key and the write unit contributes $0.
+    const result = convertOpenAIUsage(usage, {
+      pricing,
+      pricingOptions: { lookupParams: { ttl: '1h' } },
+    });
+    expect(result.cost).toBeCloseTo(2, 10);
+  });
+
+  it('should attach model and provider to pricing warnings', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const pricing: Pricing = {
+      units: [
+        {
+          lookup: { prices: { '1h': 2 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    };
+    const usage = {
+      completion_tokens: 0,
+      prompt_tokens: 1_000_000,
+      prompt_tokens_details: { cache_write_tokens: 1_000_000, cached_tokens: 0 },
+      total_tokens: 1_000_000,
+    } as OpenAI.Completions.CompletionUsage;
+
+    convertOpenAIUsage(usage, { model: 'gpt-x', pricing, provider: 'test-openai' });
+
+    const serialized = String(warn.mock.calls[0][1]);
+    expect(serialized).toContain('"model":"gpt-x"');
+    expect(serialized).toContain('"provider":"test-openai"');
+    warn.mockRestore();
   });
 
   it('should preserve zero cache miss tokens for fully cached completion usage', () => {
@@ -582,6 +642,40 @@ describe('convertUsage', () => {
       totalTokens: 4796,
     });
     expect(result.cost).toBeGreaterThan(0);
+  });
+
+  it('should forward pricingOptions so lookup-priced units can resolve', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 2, '5m': 1.25 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const responseUsage = {
+      input_tokens: 1_000_000,
+      input_tokens_details: {
+        cache_write_tokens: 1_000_000,
+        cached_tokens: 0,
+      },
+      output_tokens: 0,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
+      total_tokens: 1_000_000,
+    } as OpenAI.Responses.ResponseUsage;
+
+    const result = convertOpenAIResponseUsage(responseUsage, {
+      pricing,
+      pricingOptions: { lookupParams: { ttl: '1h' } },
+    });
+    expect(result.cost).toBeCloseTo(2, 10);
   });
 
   it('should map GPT-5.6+ cache_write_tokens for ResponseUsage and bill cache write', () => {
