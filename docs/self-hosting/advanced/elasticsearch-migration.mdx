@@ -101,8 +101,9 @@ supported by this initial migration tool.
 
 ## Run from source
 
-The package command bundles the worker and executes it on Node.js. Do not invoke the TypeScript
-entrypoint with Bun: production-size document batches can retain unbounded resident memory there.
+The package command bundles the worker and executes it on Node.js. Use this documented command
+instead of invoking the TypeScript entrypoint directly so runtime preparation and temporary-file
+cleanup remain consistent.
 
 Inspect the current state without writing to Elasticsearch:
 

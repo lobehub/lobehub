@@ -33,7 +33,6 @@ import { runWithLockRetry } from '../migrateServerDB/retry';
 import {
   assertFtsSearchReindexElasticsearchHostname,
   assertFtsSearchReindexRangeCollation,
-  assertFtsSearchReindexRuntime,
   assertFtsSearchReindexTelemetryExportConfigured,
   resolveFtsSearchReindexBatchSizeByEntity,
   resolveFtsSearchReindexElasticsearchEnvironment,
@@ -42,8 +41,6 @@ import {
   resolveFtsSearchReindexTelemetryEnvironment,
 } from './options';
 import { runFtsSearchReindexCommand } from './preparation';
-
-assertFtsSearchReindexRuntime('bun' in process.versions ? String(process.versions.bun) : undefined);
 
 const { Pool } = pg;
 

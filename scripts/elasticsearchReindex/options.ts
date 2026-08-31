@@ -16,14 +16,6 @@ const RANGE_ENTITIES = [
 ] as const satisfies readonly FtsSearchReindexRangeEntity[];
 const BYTEWISE_DATABASE_COLLATIONS = new Set(['C', 'C.UTF-8', 'C.utf8']);
 
-export const assertFtsSearchReindexRuntime = (bunVersion?: string) => {
-  if (bunVersion) {
-    throw new Error(
-      'Elasticsearch reindex must run on Node.js to keep memory bounded; use the repository package command or bundled Docker entrypoint',
-    );
-  }
-};
-
 export const resolveFtsSearchReindexBatchSizeByEntity = (
   args: readonly string[],
 ): Partial<Record<FtsSearchDocumentEntity, number>> => {

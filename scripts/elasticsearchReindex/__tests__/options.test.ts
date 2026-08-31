@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   assertFtsSearchReindexElasticsearchHostname,
   assertFtsSearchReindexRangeCollation,
-  assertFtsSearchReindexRuntime,
   assertFtsSearchReindexTelemetryExportConfigured,
   resolveFtsSearchReindexBatchSizeByEntity,
   resolveFtsSearchReindexElasticsearchEnvironment,
@@ -11,15 +10,6 @@ import {
   resolveFtsSearchReindexRangeConcurrencyByEntity,
   resolveFtsSearchReindexTelemetryEnvironment,
 } from '../options';
-
-describe('assertFtsSearchReindexRuntime', () => {
-  it('allows Node.js and rejects Bun before a production-size backfill starts', () => {
-    expect(() => assertFtsSearchReindexRuntime()).not.toThrow();
-    expect(() => assertFtsSearchReindexRuntime('1.4.0')).toThrow(
-      'must run on Node.js to keep memory bounded',
-    );
-  });
-});
 
 describe('resolveFtsSearchReindexRangeConcurrencyByEntity', () => {
   it('accepts repeatable high-volume entity concurrency', () => {
