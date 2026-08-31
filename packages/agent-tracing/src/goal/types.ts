@@ -136,11 +136,13 @@ export interface GoalBudgetState {
   totalCost: number;
 }
 
-/** The responsible task's state at decision time; drives every post-dispatch branch. */
+/** A candidate's responsible task at decision time; drives every post-dispatch branch. */
 export interface GoalFrontierTaskState {
   error?: string | null;
   id: string;
   identifier?: string;
+  /** The task node this task belongs to, so a reader can line the two up. */
+  nodeId?: string;
   status: string;
   updatedAt: number;
 }
@@ -170,10 +172,18 @@ export interface GoalTickSnapshot {
    */
   budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
-  chosenNodeId?: string;
   /** What this tick changed. Attributed per tick so an advance's writes stay ordered. */
+  /**
+   * The responsible task of every candidate that had one. The scheduler reads
+   * all of them — it has to know which are in flight before it can decide what
+   * else to start — so recording only the chosen one would leave a replay
+   * unable to reproduce the decision.
+   */
+  candidateTasks?: GoalFrontierTaskState[];
+  chosenNodeId?: string;
+  /** Concurrency cap in force for this tick. */
+  concurrency?: number;
   effects: GoalAdvanceEffect[];
-  frontierTask?: GoalFrontierTaskState;
   /**
    * Graph change since the previously recorded tick, observed on entry to this
    * one. Folding every delta up to and including this field reproduces exactly

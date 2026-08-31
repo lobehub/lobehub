@@ -15,9 +15,12 @@ export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
 
 export interface FrontierSelection {
-  /** Every eligible work node, best first. */
+  /** Every eligible task node, best first — the trace-shaped view. */
   candidates: FrontierCandidate[];
+  /** The first unblocked node, kept for callers that only need the head. */
   chosen?: GoalGraphNode;
+  /** The same ranking, carrying the nodes the scheduler has to walk. */
+  eligible: Array<{ blockedBy: string[]; node: GoalGraphNode }>;
 }
 
 /**
@@ -60,6 +63,7 @@ export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
       title: node.title,
     })),
     chosen: eligible.find(({ blockedBy }) => blockedBy.length === 0)?.node,
+    eligible,
   };
 };
 
@@ -81,11 +85,30 @@ export const needsBudget = (task?: TaskItem | null): boolean => {
 export interface GoalMoveInput {
   /** Required only when {@link needsBudget} says the branch could dispatch. */
   budget?: GoalBudgetState;
+  /** How many of this goal's Tasks may be in flight at once. */
+  concurrency: number;
   frontier: FrontierSelection;
-  /** The chosen work node's responsible task, when it already has one. */
-  frontierTask?: TaskItem | null;
   graph: GoalGraphSnapshot;
+  /** Idle time after which a running operation is treated as abandoned. */
+  leaseTimeoutMs: number;
+  /** Decision clock, so staleness is an input rather than a side effect. */
+  now: number;
+  /**
+   * The responsible Task of every candidate that has one, keyed by task id.
+   * A candidate whose task id is absent from the map has lost its row.
+   */
+  tasksById: Map<string, TaskItem>;
 }
+
+/** Task statuses that occupy a concurrency slot. */
+const IN_FLIGHT_STATUSES = new Set(['running', 'scheduled']);
+
+/**
+ * Whether this candidate is one the coordinator is already waiting on, and so
+ * neither actionable nor a reason to stop looking at the others.
+ */
+const isInFlight = (task: TaskItem | undefined): boolean =>
+  Boolean(task && IN_FLIGHT_STATUSES.has(task.status));
 
 export interface GoalMove {
   branch: GoalTickBranch;
@@ -100,6 +123,8 @@ export interface GoalMove {
    * which is why the trace records the actual outcome separately.
    */
   outcome: GoalTickOutcome;
+  /** The responsible task this move is about, when it has one. */
+  taskId?: string;
 }
 
 /**
@@ -113,9 +138,12 @@ export interface GoalMove {
  */
 export const decideNextMove = ({
   budget,
+  concurrency,
   frontier,
-  frontierTask,
   graph,
+  leaseTimeoutMs,
+  now,
+  tasksById,
 }: GoalMoveInput): GoalMove => {
   const { candidates, chosen } = frontier;
   const base = { candidates, chosenNodeId: chosen?.id };
@@ -151,18 +179,121 @@ export const decideNextMove = ({
     };
   }
 
+  // Walk the whole ranked frontier rather than stopping at its head. Four bug
+  // fixes that share no code have no reason to run one after another, and the
+  // old single-node frontier made them: the running node stayed eligible, was
+  // re-picked every tick, and reported `waiting_external`, which ends the
+  // advance before anything behind it is even considered.
+  const inFlight = graph.nodes.filter(
+    (node) => node.kind === 'task' && isInFlight(tasksById.get(node.taskId ?? '')),
+  ).length;
+
+  let parked = false;
+  let capacityBlocked = false;
+  let waitingOn: { node: GoalGraphNode; task: TaskItem } | undefined;
+
+  for (const candidate of frontier.eligible) {
+    if (candidate.blockedBy.length > 0) continue;
+
+    const task = candidate.node.taskId ? tasksById.get(candidate.node.taskId) : undefined;
+    if (isInFlight(task)) {
+      // Still examined for staleness — skipping it outright would make an
+      // abandoned operation unreclaimable, because the reclaim only ever runs
+      // from the branch that looks at a running Task.
+      if (now - new Date(task!.updatedAt).getTime() > leaseTimeoutMs) {
+        return {
+          ...base,
+          branch: 'task_running',
+          chosenNodeId: candidate.node.id,
+          message: `Task ${task!.identifier} is ${task!.status}`,
+          outcome: 'waiting_external',
+          taskId: task!.id,
+        };
+      }
+      waitingOn ??= { node: candidate.node, task: task! };
+      continue;
+    }
+
+    const move = decideForCandidate({
+      budget,
+      capacity: inFlight < concurrency,
+      candidates,
+      graph,
+      node: candidate.node,
+      task: candidate.node.taskId ? (task ?? null) : undefined,
+    });
+
+    if (move === 'needs-capacity') {
+      capacityBlocked = true;
+      continue;
+    }
+    if (move === 'parked') {
+      parked = true;
+      continue;
+    }
+    return move;
+  }
+
   if (!chosen) return decideWithoutFrontier(graph, candidates);
 
-  if (!chosen.taskId) {
+  // Everything eligible is either running, parked on a person, or waiting for a
+  // slot. Report which, so the row does not read as stalled when it is simply
+  // saturated.
+  if (waitingOn || capacityBlocked) {
+    return {
+      ...base,
+      branch: 'task_running',
+      chosenNodeId: waitingOn?.node.id ?? base.chosenNodeId,
+      message: capacityBlocked
+        ? `${inFlight} task(s) running at the concurrency limit of ${concurrency}`
+        : `Task ${waitingOn!.task.identifier} is ${waitingOn!.task.status}`,
+      outcome: 'waiting_external',
+      taskId: waitingOn?.task.id,
+    };
+  }
+  if (parked) {
+    return {
+      ...base,
+      branch: 'task_paused',
+      message: 'Every ready task is paused',
+      outcome: 'waiting_human',
+    };
+  }
+
+  return decideWithoutFrontier(graph, candidates);
+};
+
+/** What one candidate wants, or why it cannot be acted on right now. */
+type CandidateMove = GoalMove | 'needs-capacity' | 'parked';
+
+const decideForCandidate = ({
+  budget,
+  capacity,
+  candidates,
+  graph,
+  node,
+  task,
+}: {
+  budget?: GoalBudgetState;
+  capacity: boolean;
+  candidates: FrontierCandidate[];
+  graph: GoalGraphSnapshot;
+  node: GoalGraphNode;
+  task: TaskItem | null | undefined;
+}): CandidateMove => {
+  const base = { candidates, chosenNodeId: node.id };
+
+  if (task === undefined) {
+    if (!capacity) return 'needs-capacity';
     return {
       ...base,
       branch: 'create_task',
-      message: `Work "${chosen.title}" has no responsible task yet`,
+      message: `Task "${node.title}" has no responsible task yet`,
       outcome: 'advanced',
     };
   }
 
-  if (!frontierTask) {
+  if (task === null) {
     return {
       ...base,
       branch: 'missing_task',
@@ -171,7 +302,7 @@ export const decideNextMove = ({
     };
   }
 
-  return decideForTask(base, frontierTask, budget, graph);
+  return decideForTask(base, task, budget, graph, capacity);
 };
 
 const decideWithoutFrontier = (
@@ -229,7 +360,8 @@ const decideForTask = (
   task: TaskItem,
   budget: GoalBudgetState | undefined,
   graph: GoalGraphSnapshot,
-): GoalMove => {
+  capacity = true,
+): CandidateMove => {
   if (task.status === 'completed') {
     return {
       ...base,
@@ -245,6 +377,7 @@ const decideForTask = (
     (task.status === 'paused' && task.error)
   ) {
     if (task.status === 'paused' && task.error === LEASE_EXPIRED_ERROR) {
+      if (!capacity) return 'needs-capacity';
       return {
         ...base,
         branch: 'recover_lease',
@@ -253,6 +386,7 @@ const decideForTask = (
       };
     }
     if (task.status === 'paused' && task.error === VERIFICATION_FAILED_ERROR) {
+      if (!capacity) return 'needs-capacity';
       return {
         ...base,
         branch: 'recover_verification',
@@ -268,23 +402,12 @@ const decideForTask = (
     };
   }
 
-  if (task.status === 'paused') {
-    return {
-      ...base,
-      branch: 'task_paused',
-      message: `Task ${task.identifier} is paused`,
-      outcome: 'waiting_human',
-    };
-  }
+  // Parked on a person, and holding no slot. The goal has other work.
+  if (task.status === 'paused') return 'parked';
 
-  if (task.status === 'running' || task.status === 'scheduled') {
-    return {
-      ...base,
-      branch: 'task_running',
-      message: `Task ${task.identifier} is ${task.status}`,
-      outcome: 'waiting_external',
-    };
-  }
+  // Callers filter these out before they get here; kept so the classification
+  // stays total if a status slips through.
+  if (task.status === 'running' || task.status === 'scheduled') return 'parked';
 
   if (budget?.roundLimitReached || budget?.costLimitReached) {
     return {
@@ -297,10 +420,14 @@ const decideForTask = (
     };
   }
 
+  if (!capacity) return 'needs-capacity';
+
+  // Dispatching is progress, not a stopping point: the advance should carry on
+  // and fill the remaining slots rather than end after starting one Task.
   return {
     ...base,
     branch: 'dispatch_task',
     message: `Task ${task.identifier} is ready to run`,
-    outcome: 'waiting_external',
+    outcome: 'advanced',
   };
 };
