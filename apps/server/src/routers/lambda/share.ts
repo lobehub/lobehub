@@ -13,29 +13,28 @@ export const shareRouter = router({
    * slug or its raw share id, after enforcing signed-in access.
    *
    * `findBySlugOrId` intentionally does NOT enforce visibility — it resolves
-   * whatever share matches, of ANY visibility, so the id it returns can be
-   * handed to `findByShareIdWithAccessCheck` for the actual (private → owner
-   * only, link → any authed viewer) gate. Two lookups, not one, keeps the
-   * access-check logic itself in a single tested place instead of
-   * duplicating it here.
+   * whatever share matches, of ANY visibility; the (private → owner only,
+   * link → any authed viewer) gate runs on the resolved row via the shared
+   * `assertShareAccess` helper, so no second lookup is needed.
    */
   getSharedAgent: authedProcedure
     .use(serverDatabase)
     .input(z.object({ slugOrId: z.string().trim().min(1) }))
     .query(async ({ input, ctx }): Promise<SharedAgentData> => {
-      const resolved = await AgentShareModel.findBySlugOrId(ctx.serverDB, input.slugOrId);
+      const share = await AgentShareModel.findBySlugOrId(ctx.serverDB, input.slugOrId);
 
-      if (!resolved) {
+      if (!share) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
       }
 
-      const share = await AgentShareModel.findByShareIdWithAccessCheck(
-        ctx.serverDB,
-        resolved.shareId,
-        ctx.userId,
-      );
+      AgentShareModel.assertShareAccess(share, ctx.userId);
 
-      await AgentShareModel.incrementUserViewCount(ctx.serverDB, share.shareId);
+      const isOwner = share.ownerId === ctx.userId;
+      // Owner previews are not counted: userViewCount tracks visitor page
+      // views (PV, not deduplicated visitors).
+      if (!isOwner) {
+        await AgentShareModel.incrementUserViewCount(ctx.serverDB, share.shareId);
+      }
 
       return {
         agentId: share.agentId,
@@ -46,13 +45,12 @@ export const shareRouter = router({
           name: share.agentName,
           title: share.agentTitle,
         },
-        isOwner: share.ownerId === ctx.userId,
+        isOwner,
         shareId: share.shareId,
         slug: share.shareConfig.slug ?? null,
-        // TODO(LOBE-11930 budget gate): surface a `budgetExhausted` flag once
-        // the Cloud-side monthly spend gate (business slot) lands. This step
-        // only carries the creator's configured `monthlySpendLimit`, not
-        // enforcement/remaining-balance state.
+        // TODO(cloud budget gate): surface a `budgetExhausted` flag once the
+        // business-slot spend gate lands. This endpoint only carries the
+        // creator's configured `monthlySpendLimit`, not enforcement state.
         visibility: share.visibility as SharedAgentData['visibility'],
       };
     }),

@@ -14,7 +14,8 @@ export const agentShareConfigSchema = z
     enabledToolIds: z.array(z.string().trim().min(1)).optional(),
     maxTopicsPerVisitor: z.number().int().positive().optional(),
     maxTurnsPerTopic: z.number().int().positive().optional(),
-    monthlySpendLimit: z.number().nonnegative().optional(),
+    /** `null` clears the cap back to "unlimited" (removes the stored key). */
+    monthlySpendLimit: z.number().nonnegative().nullable().optional(),
     showErrorDetails: z.boolean().optional(),
     showModelInfo: z.boolean().optional(),
   })
@@ -78,14 +79,15 @@ export const agentShareRouter = router({
    * Custom URL slug for this share's public link. Pattern/reserved-word
    * validation runs again inside `AgentShareModel.updateSlug` — this router
    * check exists only to fail obviously-malformed input as `BAD_REQUEST`
-   * before it reaches the ownership-locking transaction.
+   * before it reaches the ownership-locking transaction. `slug: null` clears
+   * the custom slug.
    */
   updateSlug: agentShareProcedure
     .input(
       z
         .object({
           agentId: z.string().trim().min(1),
-          slug: z.string().trim().toLowerCase().min(3).max(64),
+          slug: z.string().trim().toLowerCase().min(3).max(64).nullable(),
         })
         .strict(),
     )

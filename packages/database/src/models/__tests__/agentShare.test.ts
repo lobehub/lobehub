@@ -165,6 +165,23 @@ describe('AgentShareModel', () => {
       });
     });
 
+    it('removes a key when patched with null, and never accepts slug via updateConfig', async () => {
+      await agentShareModel.create(agentId);
+      await agentShareModel.updateConfig(agentId, { monthlySpendLimit: 25 });
+
+      const cleared = await agentShareModel.updateConfig(agentId, {
+        monthlySpendLimit: null,
+        showModelInfo: true,
+        // smuggled past the type on purpose — must be stripped, not persisted
+        ...({ slug: 'sneaky-slug' } as object),
+      });
+
+      expect(cleared?.shareConfig.monthlySpendLimit).toBeUndefined();
+      expect(cleared?.shareConfig.showModelInfo).toBe(true);
+      expect(cleared?.shareConfig.slug).toBeUndefined();
+      expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
+    });
+
     it('updates visibility and deletes the share', async () => {
       const created = await agentShareModel.create(agentId);
 
@@ -215,12 +232,24 @@ describe('AgentShareModel', () => {
       expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.slug).toBe('my-cool-bot');
     });
 
+    it('clears the custom slug with null', async () => {
+      await agentShareModel.create(agentId);
+      await agentShareModel.updateSlug(agentId, 'short-lived');
+
+      const cleared = await agentShareModel.updateSlug(agentId, null);
+
+      expect(cleared?.shareConfig.slug).toBeUndefined();
+      expect(await AgentShareModel.findBySlugOrId(serverDB, 'short-lived')).toBeNull();
+    });
+
     it.each([
+      ['single char', 'a'],
       ['too short', 'ab'],
       ['uppercase', 'My-Bot'],
       ['leading hyphen', '-my-bot'],
       ['trailing hyphen', 'my-bot-'],
       ['underscore', 'my_bot'],
+      ['uuid-shaped (unreachable: id lookup wins)', '01234567-89ab-4cde-8f01-23456789abcd'],
     ])('rejects an invalid slug (%s)', async (_label, slug) => {
       await agentShareModel.create(agentId);
 
@@ -273,6 +302,15 @@ describe('AgentShareModel', () => {
       await agentShareModel.updateSlug(agentId, 'find-me');
 
       const share = await AgentShareModel.findBySlugOrId(serverDB, 'find-me');
+
+      expect(share?.shareId).toBe(created!.id);
+    });
+
+    it('resolves a slug case-insensitively (stored slugs are lowercase)', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+      await agentShareModel.updateSlug(agentId, 'find-me');
+
+      const share = await AgentShareModel.findBySlugOrId(serverDB, 'FIND-Me');
 
       expect(share?.shareId).toBe(created!.id);
     });

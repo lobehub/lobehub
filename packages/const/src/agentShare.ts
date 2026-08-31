@@ -35,9 +35,11 @@ export const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;
  * Validates `AgentShareConfig.slug`: lowercase alphanumerics and hyphens
  * only, 3-64 characters, no leading/trailing hyphen. Deliberately excludes
  * uppercase and underscores to keep share URLs visually unambiguous and
- * case-insensitive-safe.
+ * case-insensitive-safe. UUID-shaped slugs are additionally rejected in
+ * `AgentShareModel.updateSlug` — `findBySlugOrId` resolves UUID-shaped input
+ * as a share id first, so such a slug would be unreachable.
  */
-export const AGENT_SHARE_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$/;
+export const AGENT_SHARE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
 
 /**
  * Slugs that collide with existing (or foreseeable) static routes under the

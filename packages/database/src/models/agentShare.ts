@@ -169,16 +169,37 @@ export class AgentShareModel {
    * merge is enough here — unlike the old branch's `filePermissionConfig`,
    * every field on the current `AgentShareConfig` is a top-level scalar/array,
    * so there is no nested object that needs its own merge branch.
+   *
+   * `null`-valued keys REMOVE the key from the stored jsonb (back to
+   * "unset"), and `slug` is stripped even if smuggled past the type — it has
+   * its own validated write path (`updateSlug`).
    */
   updateConfig = async (
     agentId: string,
     config: AgentShareConfigPatch,
   ): Promise<NormalizedAgentShareItem | null> =>
     this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const { slug: _slug, ...patch } = config as AgentShareConfigPatch & { slug?: unknown };
+      const setEntries = Object.entries(patch).filter(([, v]) => v !== null && v !== undefined);
+      const removeKeys = Object.keys(patch).filter(
+        (key) => (patch as Record<string, unknown>)[key] === null,
+      );
+
+      let configExpr = sql`COALESCE(${agentShares.shareConfig}, '{}'::jsonb)`;
+      if (setEntries.length > 0) {
+        configExpr = sql`${configExpr} || ${JSON.stringify(Object.fromEntries(setEntries))}::jsonb`;
+      }
+      for (const key of removeKeys) {
+        // Parens are load-bearing: `-` has higher precedence than `||` in
+        // Postgres, so unparenthesized `a || b - key` deletes from the patch
+        // operand only. `::text` picks the key-deletion operator overload.
+        configExpr = sql`(${configExpr}) - ${key}::text`;
+      }
+
       const [updated] = await tx
         .update(agentShares)
         .set({
-          shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(config)}::jsonb`,
+          shareConfig: sql<AgentShareConfig>`${configExpr}`,
           updatedAt: new Date(),
         })
         .where(eq(agentShares.agentId, agentId))
@@ -216,9 +237,34 @@ export class AgentShareModel {
    * plain conflict-check SELECT (neither sees the other's uncommitted write),
    * so the check is additionally serialized on a transaction-scoped advisory
    * lock keyed by the slug itself.
+   *
+   * `slug: null` clears the custom slug (removes the jsonb key) — the share
+   * then resolves only by its raw id again.
    */
-  updateSlug = async (agentId: string, slug: string): Promise<NormalizedAgentShareItem | null> => {
-    if (!AGENT_SHARE_SLUG_PATTERN.test(slug)) {
+  updateSlug = async (
+    agentId: string,
+    slug: string | null,
+  ): Promise<NormalizedAgentShareItem | null> => {
+    if (slug === null) {
+      return this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+        const [updated] = await tx
+          .update(agentShares)
+          .set({
+            shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) - 'slug'`,
+            updatedAt: new Date(),
+          })
+          .where(eq(agentShares.agentId, agentId))
+          .returning();
+
+        if (!updated) return null;
+
+        return { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) };
+      });
+    }
+
+    // A UUID-shaped slug would be unreachable: `findBySlugOrId` resolves
+    // UUID-shaped input as a share id before ever trying the slug lookup.
+    if (!AGENT_SHARE_SLUG_PATTERN.test(slug) || isUuid(slug)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_SHARE_SLUG' });
     }
 
@@ -306,6 +352,35 @@ export class AgentShareModel {
   };
 
   /**
+   * Whether an in-flight visitor run is STILL authorized to continue: the
+   * agent's share row must exist, still be the SAME instance the run was
+   * authorized against (`shareId`), and still be `link`.
+   *
+   * The share row id doubles as the revocation token — disabling a share
+   * hard-deletes the row (`deleteByAgentId`) and re-enabling mints a new UUID
+   * (`create`), so this single query catches every revocation path uniformly:
+   * a visibility flip to `private`, a disable, a disable→re-enable cycle, and
+   * a full agent delete (the row cascades away with the agent).
+   *
+   * Deliberately cheap (one primary-key-ish lookup, no join): it runs once per
+   * runtime step. Returns `false` — never throws — for an ordinary
+   * "no longer authorized" outcome; a THROWN error must be treated as
+   * unauthorized too by the caller (fail closed, never fail open).
+   */
+  static isRunStillAuthorized = async (
+    db: LobeChatDatabase,
+    params: { agentId: string; shareId: string },
+  ): Promise<boolean> => {
+    const [share] = await db
+      .select({ id: agentShares.id, visibility: agentShares.visibility })
+      .from(agentShares)
+      .where(eq(agentShares.agentId, params.agentId))
+      .limit(1);
+
+    return !!share && share.id === params.shareId && share.visibility === 'link';
+  };
+
+  /**
    * Resolve the public metadata required by an agent share page. Workspace
    * agents never resolve here — `agentShares` rows only exist for personal
    * agents (see `create`'s ownership check), but the `isNull` guard is kept
@@ -357,10 +432,14 @@ export class AgentShareModel {
       return AgentShareModel.findByShareId(db, slugOrId);
     }
 
+    // Stored slugs are always lowercase (enforced in `updateSlug`), so
+    // lowercase the input to keep share URLs case-insensitive.
+    const slug = slugOrId.toLowerCase();
+
     const [share] = await db
       .select({ id: agentShares.id })
       .from(agentShares)
-      .where(sql`${agentShares.shareConfig} ->> 'slug' = ${slugOrId}`)
+      .where(sql`${agentShares.shareConfig} ->> 'slug' = ${slug}`)
       .limit(1);
 
     if (!share) return null;
@@ -376,6 +455,22 @@ export class AgentShareModel {
       .where(eq(agentShares.id, shareId));
   };
 
+  /**
+   * Enforce private-share owner access on an already-resolved share row.
+   * Kept as the single access-check implementation so callers that already
+   * hold a resolved row (e.g. via `findBySlugOrId`) don't need a second
+   * lookup just to reuse the gate.
+   */
+  static assertShareAccess = (
+    share: Pick<AgentShareData, 'ownerId' | 'visibility'>,
+    viewerId: string,
+  ): void => {
+    const isOwner = viewerId === share.ownerId;
+    if (!isOwner && share.visibility === 'private') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+    }
+  };
+
   /** Resolve a share and enforce private-share owner access. */
   static findByShareIdWithAccessCheck = async (
     db: LobeChatDatabase,
@@ -386,10 +481,7 @@ export class AgentShareModel {
 
     if (!share) throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
 
-    const isOwner = viewerId === share.ownerId;
-    if (!isOwner && share.visibility === 'private') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
-    }
+    AgentShareModel.assertShareAccess(share, viewerId);
 
     return share;
   };

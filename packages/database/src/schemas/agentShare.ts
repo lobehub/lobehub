@@ -41,16 +41,27 @@ export interface AgentShareConfig {
    * Custom URL slug for this share's public link (e.g. `/share/agent/my-cool-bot`).
    * Uniqueness is enforced at the APPLICATION level
    * (`AgentShareModel.updateSlug`), not by a DB constraint/index — acceptable
-   * at the current whitelist-rollout scale (low write volume, no adversarial
-   * multi-tenant contention). Add a unique index if this ever opens up to a
-   * larger audience.
+   * at the current low slug-write volume. Add a unique index if writes ever
+   * grow contentious.
    */
   slug?: string;
   // tipSplitRatio is platform-controlled, not configurable by the creator
 }
 
-/** Client-owned config fields accepted by atomic server-side patch updates. */
-export type AgentShareConfigPatch = Partial<AgentShareConfig>;
+/**
+ * Client-owned config fields accepted by atomic server-side patch updates.
+ *
+ * `slug` is excluded — it has a dedicated validated write path
+ * (`AgentShareModel.updateSlug`) and must never ride in on a generic patch.
+ * `monthlySpendLimit: null` explicitly clears the cap back to "unlimited"
+ * (the key is removed from the stored jsonb, not set to null).
+ */
+export type AgentShareConfigPatch = Omit<
+  Partial<AgentShareConfig>,
+  'monthlySpendLimit' | 'slug'
+> & {
+  monthlySpendLimit?: number | null;
+};
 
 export const agentShares = pgTable(
   'agent_shares',

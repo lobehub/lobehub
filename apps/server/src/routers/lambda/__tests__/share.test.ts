@@ -7,7 +7,7 @@ import { createContextInner } from '@/libs/trpc/lambda/context';
 
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: {
-    findByShareIdWithAccessCheck: vi.fn(),
+    assertShareAccess: vi.fn(),
     findBySlugOrId: vi.fn(),
     incrementUserViewCount: vi.fn(),
   },
@@ -32,7 +32,6 @@ const { shareRouter } = await import('../share');
 
 describe('shareRouter', () => {
   describe('getSharedAgent', () => {
-    const resolved = { shareId: 'agent-share-1' };
     const agentShare = {
       agentAvatar: 'avatar.png',
       agentBackgroundColor: '#ffffff',
@@ -49,8 +48,8 @@ describe('shareRouter', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
-      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(resolved as any);
-      vi.mocked(AgentShareModel.findByShareIdWithAccessCheck).mockResolvedValue(agentShare as any);
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(agentShare as any);
+      vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
       vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
     });
 
@@ -90,15 +89,20 @@ describe('shareRouter', () => {
         expect.anything(),
         'shared-agent',
       );
-      expect(AgentShareModel.findByShareIdWithAccessCheck).toHaveBeenCalledWith(
-        expect.anything(),
-        'agent-share-1',
-        'visitor-user',
-      );
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(agentShare, 'visitor-user');
       expect(AgentShareModel.incrementUserViewCount).toHaveBeenCalledWith(
         expect.anything(),
         'agent-share-1',
       );
+    });
+
+    it('does not count owner views', async () => {
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: true,
+      });
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
     });
 
     it('resolves by raw share id', async () => {
@@ -113,7 +117,7 @@ describe('shareRouter', () => {
     });
 
     it('allows the owner to resolve a private share', async () => {
-      vi.mocked(AgentShareModel.findByShareIdWithAccessCheck).mockResolvedValue({
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
         ...agentShare,
         visibility: 'private',
       } as any);
@@ -135,13 +139,11 @@ describe('shareRouter', () => {
       expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
     });
 
-    it.each([
-      ['FORBIDDEN', 'This share is private'],
-      ['NOT_FOUND', 'Share not found'],
-    ] as const)('does not count a failed %s access', async (code, message) => {
-      vi.mocked(AgentShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
-        new TRPCError({ code, message }),
-      );
+    it('does not count a failed FORBIDDEN access', async () => {
+      const code = 'FORBIDDEN';
+      vi.mocked(AgentShareModel.assertShareAccess).mockImplementation(() => {
+        throw new TRPCError({ code, message: 'This share is private' });
+      });
       const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
 
       await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
