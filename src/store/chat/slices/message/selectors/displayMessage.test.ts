@@ -382,6 +382,69 @@ describe('displayMessageSelectors', () => {
     });
   });
 
+  describe('thread display ordering', () => {
+    it('inserts thread messages after the source message when the source is in the middle', () => {
+      const parentMessages = [
+        { id: 'parent-1', content: 'one', role: 'user' },
+        { id: 'source', content: 'source', role: 'assistant' },
+        { id: 'parent-2', content: 'two', role: 'user' },
+        { id: 'parent-3', content: 'three', role: 'assistant' },
+      ] as UIChatMessage[];
+      const childMessages = [
+        { id: 'child-1', content: 'child one', role: 'user', threadId: 'thread-1' },
+        { id: 'child-2', content: 'child two', role: 'assistant', threadId: 'thread-1' },
+      ] as UIChatMessage[];
+
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'topic-1',
+        activeThreadId: 'thread-1',
+        messagesMap: {
+          [messageMapKey({ agentId: 'agent-1', topicId: 'topic-1' })]: [
+            ...parentMessages,
+            ...childMessages,
+          ],
+          [messageMapKey({
+            agentId: 'agent-1',
+            topicId: 'topic-1',
+            threadId: 'thread-1',
+          })]: childMessages,
+        },
+        threadMaps: {
+          'topic-1': [
+            {
+              id: 'thread-1',
+              sourceMessageId: 'source',
+            },
+          ],
+        },
+      });
+
+      expect(displayMessageSelectors.mainDisplayChats(state).map((message) => message.id)).toEqual([
+        'parent-1',
+        'source',
+        'child-1',
+        'child-2',
+      ]);
+    });
+
+    it('does not expose thread messages in the main conversation', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        messagesMap: {
+          [messageMapKey({ agentId: 'agent-1' })]: [
+            { id: 'parent-1', content: 'one', role: 'user' },
+            { id: 'child-1', content: 'child', role: 'assistant', threadId: 'thread-1' },
+          ] as UIChatMessage[],
+        },
+      });
+
+      expect(displayMessageSelectors.mainDisplayChats(state).map((message) => message.id)).toEqual([
+        'parent-1',
+      ]);
+    });
+  });
+
   describe('getGroupLatestMessageWithoutTools', () => {
     it('should return the last child without tools', () => {
       const groupMessage = {
