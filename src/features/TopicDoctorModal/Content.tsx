@@ -37,7 +37,7 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
     messageService.diagnoseTopic({ agentId, topicId }),
   );
 
-  if (isLoading) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
+  if (isLoading) return <Skeleton.Text  rows={3} />;
 
   // Without this the check failing would leave the skeleton up forever: SWR clears `isLoading`
   // but never produces `data`, so a `!data` skeleton has no way back.

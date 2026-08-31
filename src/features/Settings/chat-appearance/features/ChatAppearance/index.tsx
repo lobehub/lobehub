@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, FormGroup, highlighterThemes, mermaidThemes, Skeleton } from '@lobehub/ui';
-import { InputNumber, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, FormGroup, highlighterThemes, mermaidThemes } from '@lobehub/ui';
+import { InputNumber, Select, Skeleton, Switch, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +47,7 @@ const ChatAppearance = memo(() => {
     [t],
   );
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
 
   const handleChange = (key: string, value: any) => {
     setSavingKey(key);

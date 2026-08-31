@@ -5,8 +5,8 @@ import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
@@ -490,8 +490,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
           <Suspense
             fallback={
               <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
+                <Skeleton height={18} width={'100%'} />
+                <Skeleton height={18} width={'100%'} />
               </Flexbox>
             }
           >

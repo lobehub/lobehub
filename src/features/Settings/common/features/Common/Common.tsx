@@ -1,8 +1,8 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, ImageSelect, Skeleton } from '@lobehub/ui';
-import { Select, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Icon, ImageSelect } from '@lobehub/ui';
+import { Select, Skeleton, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -40,8 +40,7 @@ const Common = memo(() => {
     switchLocale(value);
   };
 
-  if (!(isStatusInit && isUserStateInit))
-    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!(isStatusInit && isUserStateInit)) return <Skeleton.Text rows={5} />;
 
   const themeFormGroup: FormGroupItemType = {
     children: [

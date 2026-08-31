@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Highlighter, Markdown, Skeleton } from '@lobehub/ui';
+import { Highlighter, Markdown } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
 
@@ -11,7 +12,7 @@ interface WriteArgs {
 }
 
 const Write = memo<BuiltinRenderProps<WriteArgs>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+  if (!args) return <Skeleton.Text rows={4} />;
 
   const filePath = args.file_path || '';
   const ext = filePath ? path.extname(filePath).slice(1).toLowerCase() : '';
