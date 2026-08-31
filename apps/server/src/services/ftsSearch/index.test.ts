@@ -95,11 +95,12 @@ describe('full-text search provider selection', () => {
       candidates: [],
       items: [],
     });
+    const createPgSearchBackend = vi.fn(() => ({ key: 'pg_search', search: pgSearch }));
     const repo = await createFtsSearchRepo(
       { db, userId: 'allowed-user' },
       {
         createElasticsearchClient: () => ({ search: elasticsearchSearch }),
-        createPgSearchBackend: () => ({ key: 'pg_search', search: pgSearch }),
+        createPgSearchBackend,
         loadElasticsearchConfig: () => ({
           apiKey: 'test-api-key',
           indexNamespace: 'lobehub-dev',
@@ -111,6 +112,7 @@ describe('full-text search provider selection', () => {
 
     await expect(repo.search({ query: 'candidate' })).resolves.toEqual([]);
     expect(elasticsearchSearch).toHaveBeenCalledTimes(9);
+    expect(createPgSearchBackend).not.toHaveBeenCalled();
     expect(pgSearch).not.toHaveBeenCalled();
   });
 

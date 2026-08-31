@@ -7,7 +7,6 @@ import {
   type FtsSearchBackendScope,
   FtsSearchRepo,
   type FtsSearchRepoOptions,
-  isElasticsearchFtsSearchEntity,
   PgSearchFtsSearchBackend,
 } from '@/database/repositories/ftsSearch';
 import { ftsSearchEnv } from '@/envs/ftsSearch';
@@ -83,14 +82,12 @@ const createFtsSearchBackendForProvider = (
   { db, provider, scope }: FtsSearchBackendFactoryContext,
   dependencies: FtsSearchBackendFactoryDependencies,
 ): FtsSearchBackend | undefined => {
-  const createPgSearchBackend =
-    dependencies.createPgSearchBackend ??
-    ((context: FtsSearchBackendFactoryContext) =>
-      new PgSearchFtsSearchBackend(context.db, context.scope));
-  const pgSearchBackend = createPgSearchBackend({ db, provider, scope });
-
   if (provider === FTS_SEARCH_PROVIDERS.pgSearch) {
-    return pgSearchBackend;
+    const createPgSearchBackend =
+      dependencies.createPgSearchBackend ??
+      ((context: FtsSearchBackendFactoryContext) =>
+        new PgSearchFtsSearchBackend(context.db, context.scope));
+    return createPgSearchBackend({ db, provider, scope });
   }
 
   const config = (dependencies.loadElasticsearchConfig ?? loadElasticsearchFtsSearchConfig)();
@@ -100,20 +97,11 @@ const createFtsSearchBackendForProvider = (
     dependencies.createElasticsearchClient ??
     ((input) => new ElasticsearchFtsSearchHttpClient(input))
   )(config);
-  const elasticsearchBackend = new ElasticsearchFtsSearchBackend(db, {
+  return new ElasticsearchFtsSearchBackend(db, {
     client,
     indexNamespace: config.indexNamespace,
     observer: createElasticsearchFtsSearchObserver(),
   });
-
-  return {
-    key: `${elasticsearchBackend.key}+${pgSearchBackend.key}`,
-    /** Unmigrated entities stay on pg_search; Elasticsearch failures on migrated entities remain fatal. */
-    search: (request) =>
-      isElasticsearchFtsSearchEntity(request.entity)
-        ? elasticsearchBackend.search(request)
-        : pgSearchBackend.search(request),
-  };
 };
 
 export const resolveFtsSearchProvider = (
@@ -146,12 +134,7 @@ export const createFtsSearchRepo = async (
 
   if (!backend) throw new FtsSearchBackendUnavailableError(provider);
 
-  const observedBackend = withFtsSearchBackendObservability(backend, (request) =>
-    provider === FTS_SEARCH_PROVIDERS.elasticsearch &&
-    !isElasticsearchFtsSearchEntity(request.entity)
-      ? FTS_SEARCH_PROVIDERS.pgSearch
-      : provider,
-  );
+  const observedBackend = withFtsSearchBackendObservability(backend, () => provider);
 
   return new FtsSearchRepo(input.db, input.userId, input.workspaceId, input.callerAgentVisibility, {
     ...input.options,
