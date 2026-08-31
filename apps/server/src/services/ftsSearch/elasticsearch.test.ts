@@ -240,18 +240,12 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
         Response.json({
           'lobehub-agents-v2': {
             mappings: {
-              fts_search_sync_deleted: {
-                full_name: 'fts_search_sync_deleted',
-                mapping: { fts_search_sync_deleted: { type: 'boolean' } },
-              },
+              properties: { fts_search_sync_deleted: { type: 'boolean' } },
             },
           },
           'lobehub-topics-v2': {
             mappings: {
-              fts_search_sync_deleted: {
-                full_name: 'fts_search_sync_deleted',
-                mapping: { fts_search_sync_deleted: { type: 'boolean' } },
-              },
+              properties: { fts_search_sync_deleted: { type: 'boolean' } },
             },
           },
         }),
@@ -267,7 +261,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     ).resolves.toBeUndefined();
     expect(fetchMock.mock.calls.map(([url]) => url.toString())).toEqual([
       'https://search.example.com/_alias/lobehub-agents,lobehub-topics',
-      'https://search.example.com/lobehub-agents-v2,lobehub-topics-v2/_mapping/field/fts_search_sync_deleted',
+      'https://search.example.com/lobehub-agents-v2,lobehub-topics-v2?filter_path=*.mappings.properties.fts_search_sync_deleted',
     ]);
   });
 
@@ -286,16 +280,12 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
           Response.json({
             'lobehub-agents-v2': {
               mappings: {
-                fts_search_sync_deleted: {
-                  mapping: { fts_search_sync_deleted: { type: 'boolean' } },
-                },
+                properties: { fts_search_sync_deleted: { type: 'boolean' } },
               },
             },
             'lobehub-topics-v2': {
               mappings: {
-                fts_search_sync_deleted: {
-                  mapping: { fts_search_sync_deleted: { type: 'boolean' } },
-                },
+                properties: { fts_search_sync_deleted: { type: 'boolean' } },
               },
             },
           }),
@@ -505,9 +495,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
           Response.json({
             'lobehub-agents-v2': {
               mappings: {
-                fts_search_sync_deleted: {
-                  mapping: { fts_search_sync_deleted: { type: 'boolean' } },
-                },
+                properties: { fts_search_sync_deleted: { type: 'boolean' } },
               },
             },
           }),

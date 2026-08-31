@@ -46,15 +46,12 @@ const aliasResponseSchema = z.record(
   }),
 );
 
-const fieldMappingResponseSchema = z.record(
+const syncMappingResponseSchema = z.record(
   z.string(),
   z.object({
-    mappings: z.record(
-      z.string(),
-      z.object({
-        mapping: z.record(z.string(), z.object({ type: z.string() }).passthrough()),
-      }),
-    ),
+    mappings: z.object({
+      properties: z.record(z.string(), z.object({ type: z.string() }).passthrough()).default({}),
+    }),
   }),
 );
 
@@ -223,7 +220,10 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
 
     const physicalPath = [...new Set(writeTargets.values())].map(encodeURIComponent).join(',');
     const mappingResponse = await fetch(
-      new URL(`/${physicalPath}/_mapping/field/fts_search_sync_deleted`, this.url),
+      new URL(
+        `/${physicalPath}?filter_path=*.mappings.properties.fts_search_sync_deleted`,
+        this.url,
+      ),
       {
         headers: { Authorization: `ApiKey ${this.apiKey}` },
         method: 'GET',
@@ -237,7 +237,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
       );
     }
 
-    const mappingPayload = fieldMappingResponseSchema.safeParse(await mappingResponse.json());
+    const mappingPayload = syncMappingResponseSchema.safeParse(await mappingResponse.json());
     if (!mappingPayload.success) {
       throw new ElasticsearchFtsSearchRequestError(
         'Elasticsearch full-text search sync mapping response has an invalid shape',
@@ -247,8 +247,9 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     }
 
     for (const [alias, physicalIndex] of writeTargets) {
-      const mapping = mappingPayload.data[physicalIndex]?.mappings.fts_search_sync_deleted;
-      if (mapping?.mapping.fts_search_sync_deleted?.type !== 'boolean') {
+      const mapping =
+        mappingPayload.data[physicalIndex]?.mappings.properties.fts_search_sync_deleted;
+      if (mapping?.type !== 'boolean') {
         throw new ElasticsearchFtsSearchRequestError(
           `Elasticsearch full-text search sync alias lacks a boolean fts_search_sync_deleted mapping: ${alias}`,
         );
