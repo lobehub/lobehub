@@ -1159,8 +1159,11 @@ export const agentRouter = router({
       }
 
       // Heavy history goes through an async backfill — kick the driver now
-      // that the transfer transaction has committed.
+      // that the transfer transaction has committed. Deferred group-history
+      // remaps are their own jobs and need the same kick, or they stay
+      // pending and keep the moved agent's delete/re-transfer guards up.
       if (result.transferJobId) startAgentTransferJob(ctx.serverDB, result.transferJobId);
+      for (const remapJobId of result.remapJobIds) startAgentTransferJob(ctx.serverDB, remapJobId);
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
@@ -1333,9 +1336,12 @@ export const agentRouter = router({
         throw error;
       }
 
-      // The whole batch shares one backfill job; kick it post-commit.
+      // The whole batch shares one backfill job (and one deferred-remap job
+      // list); kick them post-commit.
       const batchTransferJobId = results[0]?.transferJobId;
       if (batchTransferJobId) startAgentTransferJob(ctx.serverDB, batchTransferJobId);
+      for (const remapJobId of results[0]?.remapJobIds ?? [])
+        startAgentTransferJob(ctx.serverDB, remapJobId);
 
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);

@@ -95,7 +95,7 @@ import {
   AgentTransferJobModel,
   getAgentTransferSyncMessageThreshold,
   remapMessageAgentIdsForGroups,
-  remapMessageAgentIdsForTopics,
+  remapMessageAgentIdsForGroupTopics,
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
 } from './agentTransferJob';
@@ -2053,11 +2053,17 @@ export class AgentModel {
    * group history insert nothing — the common case costs a handful of
    * index-only probes.
    */
+  /**
+   * Returns the ids of any remap-only backfill jobs it recorded (one per
+   * group whose history exceeded the sync threshold). They are created inside
+   * the transfer transaction but the drain runs OUTSIDE it — the caller must
+   * kick each one post-commit, exactly like the main `transferJobId`.
+   */
   private preserveGroupHistoryForTransfer = async (
     trx: Transaction,
     agentIds: string[],
     agentById: Map<string, AgentItem>,
-  ): Promise<void> => {
+  ): Promise<string[]> => {
     // (group, agent) pairs holding history. The direct arms anchor on the
     // rows' own group_id; the join arms catch rows that carry only a topicId
     // into a group topic. Every arm probes an agent_id index.
@@ -2104,13 +2110,7 @@ export class AgentModel {
         ...rosterGroupRows.map((row) => row.groupId),
       ]),
     ].filter((id): id is string => Boolean(id));
-    if (candidateGroupIds.length === 0) return;
-
-    const candidateTopics = await trx
-      .select({ groupId: topics.groupId, id: topics.id, updatedAt: topics.updatedAt })
-      .from(topics)
-      .where(inArray(topics.groupId, candidateGroupIds));
-    const topicGroupById = new Map(candidateTopics.map((topic) => [topic.id, topic.groupId]));
+    if (candidateGroupIds.length === 0) return [];
 
     pairSources.push(
       ...(await trx
@@ -2119,24 +2119,17 @@ export class AgentModel {
         .where(
           and(inArray(messages.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
         )),
-    );
-    if (candidateTopics.length > 0) {
-      const targetRows = await trx
-        .selectDistinct({ agentId: messages.targetId, topicId: messages.topicId })
+      // Topic-anchored mentions: driven from the topics side (group_id index)
+      // through messages.topic_id — never by the unindexed target_id, and
+      // never by expanding a group's topic list into bind parameters.
+      ...(await trx
+        .selectDistinct({ agentId: messages.targetId, groupId: topics.groupId })
         .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
         .where(
-          and(
-            inArray(messages.topicId, [...topicGroupById.keys()]),
-            inArray(messages.targetId, agentIds),
-          ),
-        );
-      pairSources.push(
-        ...targetRows.map((row) => ({
-          agentId: row.agentId,
-          groupId: (row.topicId && topicGroupById.get(row.topicId)) || null,
-        })),
-      );
-    }
+          and(inArray(topics.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
+        )),
+    );
 
     const agentIdsByGroup = new Map<string, Set<string>>();
     for (const { agentId, groupId } of pairSources) {
@@ -2145,7 +2138,7 @@ export class AgentModel {
       set.add(agentId);
       agentIdsByGroup.set(groupId, set);
     }
-    if (agentIdsByGroup.size === 0) return;
+    if (agentIdsByGroup.size === 0) return [];
 
     // The FK guarantees every referenced group row still exists (topics /
     // threads cascade with their group; messages.group_id is SET NULL), so
@@ -2155,14 +2148,7 @@ export class AgentModel {
       .from(chatGroups)
       .where(inArray(chatGroups.id, [...agentIdsByGroup.keys()]));
 
-    const topicsByGroup = new Map<string, { id: string; updatedAt: Date }[]>();
-    for (const topic of candidateTopics) {
-      if (!topic.groupId) continue;
-      const list = topicsByGroup.get(topic.groupId) ?? [];
-      list.push({ id: topic.id, updatedAt: topic.updatedAt });
-      topicsByGroup.set(topic.groupId, list);
-    }
-
+    const remapJobIds: string[] = [];
     for (const group of groupRows) {
       const cloneSourceIds = [...agentIdsByGroup.get(group.id)!];
       const clones = await trx
@@ -2189,8 +2175,13 @@ export class AgentModel {
         sourceAgentId,
       }));
 
-      const groupTopics = topicsByGroup.get(group.id) ?? [];
-      const groupTopicIds = groupTopics.map((topic) => topic.id);
+      // The group's topics enter every probe below as a subquery, never as an
+      // expanded id list — a long-lived group can hold more topics than
+      // PostgreSQL's bind-parameter limit allows in an `IN (...)` list.
+      const groupTopicSubquery = trx
+        .select({ id: topics.id })
+        .from(topics)
+        .where(eq(topics.groupId, group.id));
 
       // One statement per pair, exactly like the group transfer's remap loop —
       // the pair count is the number of moved agents with history here, i.e. a
@@ -2207,14 +2198,12 @@ export class AgentModel {
           .update(threads)
           .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
           .where(and(eq(threads.groupId, group.id), eq(threads.agentId, sourceAgentId)));
-        if (groupTopicIds.length > 0) {
-          await trx
-            .update(threads)
-            .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
-            .where(
-              and(inArray(threads.topicId, groupTopicIds), eq(threads.agentId, sourceAgentId)),
-            );
-        }
+        await trx
+          .update(threads)
+          .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+          .where(
+            and(inArray(threads.topicId, groupTopicSubquery), eq(threads.agentId, sourceAgentId)),
+          );
       }
 
       // Message remap rides the same fast/slow contract as step 7's scope
@@ -2224,10 +2213,10 @@ export class AgentModel {
       // recorded as a remap-only backfill job (drained topic-by-topic, scope
       // untouched); until it drains, the guards on the covered agents block
       // re-transfers and deletes, so the cascade hazard cannot fire early.
-      const remapAnchor =
-        groupTopicIds.length > 0
-          ? or(eq(messages.groupId, group.id), inArray(messages.topicId, groupTopicIds))
-          : eq(messages.groupId, group.id);
+      const remapAnchor = or(
+        eq(messages.groupId, group.id),
+        inArray(messages.topicId, groupTopicSubquery),
+      );
       const [{ affectedGroupMessages }] = await trx
         .select({ affectedGroupMessages: count() })
         .from(messages)
@@ -2247,10 +2236,16 @@ export class AgentModel {
         // only a topicId into a group topic. Overlap is harmless — the remap
         // is idempotent.
         await remapMessageAgentIdsForGroups(trx, [group.id], remapPairs);
-        await remapMessageAgentIdsForTopics(trx, groupTopicIds, remapPairs);
+        await remapMessageAgentIdsForGroupTopics(trx, [group.id], remapPairs);
       } else {
+        // The topic list is only materialized on this rare path — it feeds
+        // the job's drain queue, and `createJob` chunks the inserts.
+        const groupTopics = await trx
+          .select({ id: topics.id, updatedAt: topics.updatedAt })
+          .from(topics)
+          .where(eq(topics.groupId, group.id));
         const groupScope = { userId: group.userId, workspaceId: group.workspaceId };
-        await AgentTransferJobModel.createJob(trx, {
+        const remapJobId = await AgentTransferJobModel.createJob(trx, {
           // Junction coverage on the moved agents: blocks a re-transfer
           // (step 1a's pending-job guard) and — via the remap payload — a
           // delete of the moved agent (`hasPendingRemapForSourceAgents`)
@@ -2267,8 +2262,11 @@ export class AgentModel {
           target: groupScope,
           topics: groupTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
         });
+        remapJobIds.push(remapJobId);
       }
     }
+
+    return remapJobIds;
   };
 
   transferAgent = async (
@@ -2277,7 +2275,12 @@ export class AgentModel {
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
     options: { rejectForeignTopicCommentAuthors?: boolean } = {},
-  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
+  ): Promise<{
+    agentId: string;
+    remapJobIds: string[];
+    slug: string | null;
+    transferJobId: string | null;
+  }> => {
     const [result] = await this.transferAgents(
       [agentId],
       targetWorkspaceId,
@@ -2300,7 +2303,9 @@ export class AgentModel {
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
     options: { rejectForeignTopicCommentAuthors?: boolean } = {},
-  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
+  ): Promise<
+    { agentId: string; remapJobIds: string[]; slug: string | null; transferJobId: string | null }[]
+  > => {
     if (agentIds.length === 0) return [];
 
     return this.db.transaction(async (trx) => {
@@ -2499,7 +2504,7 @@ export class AgentModel {
       // repointing the group rows first also keeps those moves from dragging
       // group history into the target scope (threads matched by `agent_id` in
       // step 8, topicless group messages in step 7's residual rewrite).
-      await this.preserveGroupHistoryForTransfer(trx, agentIds, agentById);
+      const remapJobIds = await this.preserveGroupHistoryForTransfer(trx, agentIds, agentById);
 
       // 6. Update topics (linked via sessionId or agentId)
       const topicCondition =
@@ -2789,6 +2794,9 @@ export class AgentModel {
 
       return agentIds.map((id) => ({
         agentId: id,
+        // Shared by the whole batch, like `transferJobId`: the caller must
+        // kick every one post-commit or the deferred remaps never drain.
+        remapJobIds,
         slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
         transferJobId,
       }));

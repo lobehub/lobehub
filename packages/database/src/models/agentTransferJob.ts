@@ -14,6 +14,7 @@ import {
   messagesFiles,
   messageTranslates,
   messageTTS,
+  topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 
@@ -225,6 +226,25 @@ export const remapMessageAgentIdsForGroups = async (
   if (groupIds.length === 0) return;
 
   await remapMessageAgentIds(executor, inArray(messages.groupId, groupIds), pairs);
+};
+
+/**
+ * {@link remapMessageAgentIds} over the messages of every topic the given
+ * groups hold, via a subquery — a long-lived group can hold more topics than
+ * PostgreSQL's bind-parameter limit allows in an `IN (...)` list.
+ */
+export const remapMessageAgentIdsForGroupTopics = async (
+  executor: Executor,
+  groupIds: string[],
+  pairs: AgentIdRemapPair[],
+): Promise<void> => {
+  if (groupIds.length === 0) return;
+
+  await remapMessageAgentIds(
+    executor,
+    sql`${messages.topicId} IN (SELECT ${topics.id} FROM ${topics} WHERE ${inArray(topics.groupId, groupIds)})`,
+    pairs,
+  );
 };
 
 /**

@@ -978,9 +978,9 @@ export class ChatGroupModel {
     // very history they preserve. Discover them from the group's content
     // references (every probe rides a group_id / topic_id index) and hand
     // them over with the group.
-    const groupTopicIds = (
-      await trx.select({ id: topics.id }).from(topics).where(eq(topics.groupId, groupId))
-    ).map((row) => row.id);
+    // Topic-anchored rows join through `topics` (group_id index) instead of
+    // expanding the group's topic list into bind parameters — a long-lived
+    // group can hold more topics than the parameter limit allows.
     const historyRefRows = [
       ...(await trx
         .selectDistinct({ agentId: topics.agentId })
@@ -998,23 +998,22 @@ export class ChatGroupModel {
         .selectDistinct({ agentId: messages.targetId })
         .from(messages)
         .where(eq(messages.groupId, groupId))),
+      ...(await trx
+        .selectDistinct({ agentId: threads.agentId })
+        .from(threads)
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(eq(topics.groupId, groupId))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.agentId })
+        .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
+        .where(eq(topics.groupId, groupId))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.targetId })
+        .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
+        .where(eq(topics.groupId, groupId))),
     ];
-    if (groupTopicIds.length > 0) {
-      historyRefRows.push(
-        ...(await trx
-          .selectDistinct({ agentId: threads.agentId })
-          .from(threads)
-          .where(inArray(threads.topicId, groupTopicIds))),
-        ...(await trx
-          .selectDistinct({ agentId: messages.agentId })
-          .from(messages)
-          .where(inArray(messages.topicId, groupTopicIds))),
-        ...(await trx
-          .selectDistinct({ agentId: messages.targetId })
-          .from(messages)
-          .where(inArray(messages.topicId, groupTopicIds))),
-      );
-    }
     const rosterIdSet = new Set(agentIds);
     const historyAgentIds = [...new Set(historyRefRows.map((row) => row.agentId))].filter(
       (id): id is string => Boolean(id) && !rosterIdSet.has(id!),
