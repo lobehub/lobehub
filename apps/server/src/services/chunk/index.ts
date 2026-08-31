@@ -1,6 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 
-import { MAX_FILE_PARSE_SIZE } from '@/const/file';
+import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { type ChunkContentParams } from '@/server/modules/ContentChunk';
@@ -82,18 +82,30 @@ export class ChunkService {
     const result = await this.fileModel.findById(fileId);
 
     if (!result) return;
-    if (result.size > MAX_FILE_PARSE_SIZE) return;
 
     // skip if already exist chunk tasks
     if (skipExist && result.chunkTaskId) return;
 
     // 1. create a asyncTaskId
     const asyncTaskId = await this.asyncTaskModel.create({
-      status: AsyncTaskStatus.Processing,
+      status:
+        result.size > MAX_FILE_PARSE_SIZE ? AsyncTaskStatus.Error : AsyncTaskStatus.Processing,
       type: AsyncTaskType.Chunking,
     });
 
     await this.fileModel.update(fileId, { chunkTaskId: asyncTaskId });
+
+    if (result.size > MAX_FILE_PARSE_SIZE) {
+      await this.asyncTaskModel.update(asyncTaskId, {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.FileTooLargeToParse,
+          FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE,
+        ),
+        status: AsyncTaskStatus.Error,
+      });
+
+      return asyncTaskId;
+    }
 
     // Async router will read keyVaults from DB, no need to pass jwtPayload.
     // Kept dynamic on purpose: the async router imports this chunk service, so a
