@@ -1,7 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
+
+import { mobileRoutes } from './mobileRouter.config';
+
+describe('mobileRouter agent share route', () => {
+  it('serves the agent-share visitor surface on mobile instead of bouncing to the catch-all', () => {
+    const matches = matchRoutes(mobileRoutes, '/share/agent/my-agent');
+
+    expect(matches?.at(-1)?.route.path).toBe('/share/agent/:slugOrId');
+    expect(matches?.at(-1)?.params).toMatchObject({ slugOrId: 'my-agent' });
+    expect(matches?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
+  });
+});
 
 describe('mobileRouter task routes', () => {
   it('registers task list and detail routes under the shared workspace layout', async () => {

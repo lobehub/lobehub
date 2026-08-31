@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { shareChatService } from '@/services/shareChat';
 import { useChatStore } from '@/store/chat';
@@ -83,6 +83,12 @@ export const useShareRunStop = (
 ): ShareRunStop => {
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState<unknown>();
+
+  // The failure belongs to the run in the topic it happened in; carrying it into
+  // another topic would offer a retry that resolves no running operation there.
+  useEffect(() => {
+    setStopError(undefined);
+  }, [topicId]);
 
   const stopSharedRun = useCallback(async () => {
     if (stopping) return;

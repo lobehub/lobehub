@@ -14,6 +14,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { sharedAgentDisplayName } from './displayName';
 import { resolveShareAccessState, SHARE_ACCESS_ERROR_KEYS } from './resolveShareAccessState';
+import { isShareInteractive } from './shareInteractivity';
 import TopicPanel from './TopicPanel';
 import { useSharedAgent } from './useSharedAgent';
 import VisitorConversation from './VisitorConversation';
@@ -76,6 +77,7 @@ const AgentShareVisitorPage = memo(() => {
   }
 
   const isOwnerPreview = data.isOwner;
+  const interactive = isShareInteractive(data.visibility);
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
@@ -84,7 +86,7 @@ const AgentShareVisitorPage = memo(() => {
           style={{ borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}` }}
           width={SIDEBAR_WIDTH}
         >
-          <TopicPanel shareId={data.shareId} />
+          <TopicPanel enabled={interactive} shareId={data.shareId} />
         </Flexbox>
       )}
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
@@ -142,6 +144,7 @@ const AgentShareVisitorPage = memo(() => {
         >
           {/* The Drawer already renders the title bar — skip the panel's own. */}
           <TopicPanel
+            enabled={interactive}
             shareId={data.shareId}
             showTitle={false}
             onSelect={() => setDrawerOpen(false)}

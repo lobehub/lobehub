@@ -303,6 +303,7 @@
   "share.visitor.errors.stopFailed": "停止失败，请重试。",
   "share.visitor.errors.topicLimit": "你在这个分享助手上的会话数量已达上限。",
   "share.visitor.errors.turnLimit": "本次会话的轮数已达上限，新建会话即可继续。",
+  "share.visitor.errors.unavailable": "该会话已不可用，请刷新页面后重试。",
   "share.visitor.input.placeholder": "和这个分享助手聊聊…",
   "share.visitor.input.send": "发送",
   "share.visitor.input.stop": "停止",

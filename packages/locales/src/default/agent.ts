@@ -393,6 +393,8 @@ export default {
     'You have reached the conversation limit on this shared agent.',
   'share.visitor.errors.turnLimit':
     'This conversation has reached its turn limit. Start a new conversation to continue.',
+  'share.visitor.errors.unavailable':
+    'This conversation is no longer available. Reload the page to continue.',
   'share.visitor.input.placeholder': 'Message this shared agent…',
   'share.visitor.input.send': 'Send',
   'share.visitor.input.stop': 'Stop',

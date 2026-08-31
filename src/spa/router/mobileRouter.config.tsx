@@ -8,6 +8,7 @@ import {
 } from '@/business/client/BusinessMobileRoutes';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
@@ -606,7 +607,20 @@ export const mobileRoutes: RouteObject[] = [
   },
   ...BusinessMobileRoutesWithoutMainLayout,
 
-  // `/share/*` is served by the standalone Share app (apps/share), not this router.
+  // `/share/*` is served by the standalone Share app (apps/share), not this
+  // router — except the agent-share visitor surface, which needs the full chat
+  // runtime and therefore stays in the main SPA on every platform. Without this
+  // entry a phone opening a share link falls through to `*` and gets bounced
+  // home.
+  {
+    element: dynamicElement(
+      () => import('@/routes/share/agent/[slugOrId]'),
+      'Mobile > Share > Agent',
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: agentShareVisitorRouteMeta },
+    path: '/share/agent/:slugOrId',
+  },
 
   // Messenger verify route (outside main layout)
   {

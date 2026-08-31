@@ -909,7 +909,11 @@ export class GatewayActionImpl {
       return result;
     }
 
-    if (result.topicId) {
+    // `updateTopicStatus` persists through the owner-scoped `topic.updateTopic`
+    // procedure, which a share visitor is never authorized to call — firing it
+    // would only produce a rejected request (and a pinned optimistic write that
+    // no owner topic list ever consumes).
+    if (result.topicId && !agentShareId) {
       void this.#get().updateTopicStatus?.({
         agentId: messageContext.agentId,
         groupId: messageContext.groupId,

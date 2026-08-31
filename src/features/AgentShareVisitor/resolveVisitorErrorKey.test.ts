@@ -3,7 +3,7 @@ import { TRPCClientError } from '@trpc/client';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { resolveVisitorErrorKey } from './resolveVisitorErrorKey';
+import { isTerminalVisitorError, resolveVisitorErrorKey } from './resolveVisitorErrorKey';
 
 describe('resolveVisitorErrorKey', () => {
   /**
@@ -37,12 +37,31 @@ describe('resolveVisitorErrorKey', () => {
     expect(resolveVisitorErrorKey(badRequest(message))).toBe('share.visitor.errors.generic');
   });
 
-  it('does not treat a non-BAD_REQUEST TRPCClientError as a prompt-length rejection', () => {
-    const error = new TRPCClientError('Not found', {
-      result: { error: { code: -32_600, data: { code: 'NOT_FOUND' }, message: 'Not Found' } },
+  const trpcError = (code: string, message = code) =>
+    new TRPCClientError(message, {
+      result: { error: { code: -32_600, data: { code }, message } },
     });
 
-    expect(resolveVisitorErrorKey(error)).toBe('share.visitor.errors.generic');
+  it('maps a FORBIDDEN send to the paused-share copy instead of a retryable failure', () => {
+    // The creator flipped visibility away from `link` mid-session:
+    // `resolveLinkShareOrThrow` rejects every further send, so retrying is futile.
+    expect(resolveVisitorErrorKey(trpcError('FORBIDDEN', 'This share is private'))).toBe(
+      'share.visitor.errors.sharingPaused',
+    );
+  });
+
+  it('maps a NOT_FOUND send to the unavailable copy instead of a retryable failure', () => {
+    expect(resolveVisitorErrorKey(trpcError('NOT_FOUND', 'Topic not found'))).toBe(
+      'share.visitor.errors.unavailable',
+    );
+  });
+
+  it('treats share-level failures as terminal and per-attempt ones as retryable', () => {
+    expect(isTerminalVisitorError('share.visitor.errors.sharingPaused')).toBe(true);
+    expect(isTerminalVisitorError('share.visitor.errors.unavailable')).toBe(true);
+    // The turn limit is scoped to one topic — a new conversation clears it.
+    expect(isTerminalVisitorError('share.visitor.errors.turnLimit')).toBe(false);
+    expect(isTerminalVisitorError('share.visitor.errors.generic')).toBe(false);
   });
 
   it('maps ShareTurnLimitExceeded', () => {

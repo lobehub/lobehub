@@ -34,6 +34,16 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
   )
     return 'share.visitor.errors.promptTooLong';
 
+  // The share itself stopped accepting traffic mid-session: the creator flipped
+  // visibility away from `link` (`resolveLinkShareOrThrow` → FORBIDDEN) or
+  // deleted the share entirely (NOT_FOUND). `useSharedAgent` never revalidates,
+  // so the page keeps rendering the stale "everything is fine" shell — without
+  // this branch the visitor only sees the generic copy and retries forever.
+  if (error instanceof TRPCClientError) {
+    if (error.data?.code === 'FORBIDDEN') return 'share.visitor.errors.sharingPaused';
+    if (error.data?.code === 'NOT_FOUND') return 'share.visitor.errors.unavailable';
+  }
+
   if (message.includes(ChatErrorType.ShareTurnLimitExceeded))
     return 'share.visitor.errors.turnLimit';
   if (message.includes(ChatErrorType.ShareTopicLimitExceeded))
@@ -47,3 +57,16 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
 
   return 'share.visitor.errors.generic';
 };
+
+/**
+ * Failures that describe the share itself rather than one attempt, so retrying
+ * (or switching topic) cannot clear them — the composer stays disabled and the
+ * message survives a topic switch.
+ */
+const TERMINAL_VISITOR_ERROR_KEYS = new Set([
+  'share.visitor.errors.sharingPaused',
+  'share.visitor.errors.unavailable',
+]);
+
+export const isTerminalVisitorError = (errorKey: string): boolean =>
+  TERMINAL_VISITOR_ERROR_KEYS.has(errorKey);

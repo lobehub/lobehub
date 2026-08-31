@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useChatStore } from '@/store/chat';
 
 import ReadOnlyConversationArea from './ReadOnlyConversationArea';
+import { isShareInteractive } from './shareInteractivity';
 import { useVisitorConversationSeed } from './useVisitorConversationSeed';
 import { useVisitorTopics } from './useVisitorTopics';
 import VisitorComposer from './VisitorComposer';
@@ -19,7 +20,8 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
   const { agentId, shareId } = data;
   const seeded = useVisitorConversationSeed(data);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const { mutate: refreshVisitorTopics } = useVisitorTopics(shareId);
+  const interactive = isShareInteractive(data.visibility);
+  const { mutate: refreshVisitorTopics } = useVisitorTopics(shareId, interactive);
 
   // The message surface reads the active ids on first render — mounting it
   // before the seed lands would fetch against a stale topic left by the main app.
@@ -30,10 +32,8 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
       <ReadOnlyConversationArea agentId={agentId} agentShareId={shareId} topicId={activeTopicId} />
       <VisitorComposer
         agentId={agentId}
-        // The visitor execution chain requires `link` visibility (see
-        // `resolveLinkShareOrThrow`): an owner previewing their own private
-        // share can view it but not chat.
-        blockedKey={data.visibility === 'link' ? undefined : 'share.visitor.errors.sharingPaused'}
+        // An owner previewing their own private share can view it but not chat.
+        blockedKey={interactive ? undefined : 'share.visitor.errors.sharingPaused'}
         shareId={shareId}
         // The gateway transport already switched the store to the new topic
         // (`switchTopic`); refreshing the list makes it show up in the panel.

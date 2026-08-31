@@ -281,7 +281,8 @@ describe('desktop router shared definition', () => {
     expect(webPaths).not.toContain('/share/t');
     expect(webPaths).not.toContain('/share/page');
     // …but the agent-share visitor surface needs the full chat runtime, so it
-    // stays in this router on both platforms rather than moving to apps/share.
+    // stays in the main SPA on every platform (Web, Electron, and the mobile
+    // router — see mobileRouter.test.tsx) rather than moving to apps/share.
     expect(webPaths).toContain('/share/agent/:slugOrId');
     expect(electronPaths).toContain('/share/agent/:slugOrId');
     expect(webPaths).not.toContain('/verify');

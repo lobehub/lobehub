@@ -5,7 +5,7 @@ import { Flexbox, TextArea } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleStop, SendHorizonal } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -14,7 +14,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
 import { shouldSubmitOnEnter } from './composerEnterGuard';
-import { resolveVisitorErrorKey } from './resolveVisitorErrorKey';
+import { isTerminalVisitorError, resolveVisitorErrorKey } from './resolveVisitorErrorKey';
 import { useShareRunStop } from './useShareRunStop';
 
 interface VisitorComposerProps {
@@ -55,12 +55,25 @@ const VisitorComposer = memo<VisitorComposerProps>(
         topicId,
       }),
     );
+    // A per-attempt failure belongs to the topic it happened in — the turn-limit
+    // copy even tells the visitor to start a new conversation, so it must not
+    // follow them there. Share-level failures (paused / deleted) do survive:
+    // they are true for every topic.
+    useEffect(() => {
+      setErrorKey((prev) => (prev && isTerminalVisitorError(prev) ? prev : undefined));
+    }, [topicId]);
+
     const busy = sending || isStreaming;
-    const displayedErrorKey = blockedKey ?? errorKey;
+    // A share that stopped accepting traffic mid-session blocks the composer the
+    // same way an up-front `blockedKey` does, instead of letting the visitor
+    // resend into a guaranteed rejection.
+    const blocked =
+      blockedKey ?? (errorKey && isTerminalVisitorError(errorKey) ? errorKey : undefined);
+    const displayedErrorKey = blocked ?? errorKey;
 
     const send = async () => {
       const message = value.trim();
-      if (!message || busy || blockedKey) return;
+      if (!message || busy || blocked) return;
 
       setErrorKey(undefined);
       setSending(true);
@@ -125,7 +138,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
         >
           <TextArea
             autoSize={{ maxRows: 6, minRows: 1 }}
-            disabled={!!blockedKey}
+            disabled={!!blocked}
             // Mirrors `SHARE_VISITOR_PROMPT_MAX_LENGTH` (the server-side gate in
             // `apps/server/src/routers/lambda/shareChat.ts`) so a legitimate
             // long paste is capped up front instead of round-tripping to a
@@ -163,7 +176,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
             />
           ) : (
             <ActionIcon
-              disabled={busy || !!blockedKey || !value.trim()}
+              disabled={busy || !!blocked || !value.trim()}
               icon={SendHorizonal}
               loading={busy}
               style={{ alignSelf: 'flex-end' }}
