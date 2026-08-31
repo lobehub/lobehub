@@ -66,6 +66,8 @@ import {
 
 /** Minimum gap between two webhook re-registrations for the same bot. */
 const WEBHOOK_RECONCILE_COOLDOWN_MS = 5 * 60 * 1000;
+/** Redis key prefix for the fleet-wide reconcile cooldown (SET NX EX). */
+const WEBHOOK_RECONCILE_KEY_PREFIX = 'bot:webhook-reconcile';
 
 const log = debug('lobe-server:bot:message-router');
 const WECHAT_PRO_FEATURE_NOTICE =
@@ -195,7 +197,7 @@ export class BotMessageRouter {
   /** "platform:applicationId" → registered bot */
   private bots = new Map<string, RegisteredBot>();
 
-  /** Last time `reconcileWebhook` was triggered per bot — bounds setWebhook calls under a flood of unverified requests. */
+  /** In-process fallback for the reconcile cooldown when no Redis is configured. */
   private webhookReconciledAt = new Map<string, number>();
 
   /** Per-key init promises to avoid duplicate concurrent loading */
@@ -251,7 +253,8 @@ export class BotMessageRouter {
 
     if (bot.chatBot.webhooks && platform in bot.chatBot.webhooks) {
       const response: Response = await (bot.chatBot.webhooks as any)[platform](req);
-      if (response.status === 401) this.scheduleWebhookReconcile(platform, appId, bot.client);
+      if (response.status === 401)
+        await this.reconcileWebhookAfterRejection(platform, appId, bot.client);
       return response;
     }
 
@@ -264,20 +267,64 @@ export class BotMessageRouter {
    * always a registration made before verification was mandatory, or with a
    * stale secret. Ask the client to re-register once per cooldown window; the
    * platform's retry of the rejected update then carries the right header.
-   * Fire-and-forget: the 401 is still returned so the platform retries.
+   *
+   * The 401 is still returned so the platform retries. The re-registration is
+   * awaited (one bounded API call) rather than fired and forgotten: on a
+   * serverless host the invocation may be frozen as soon as the response is
+   * sent, which would cancel the call and leave the bot on the stale
+   * registration indefinitely.
+   *
+   * Because anyone can hit the public webhook URL with a bogus header, the
+   * cooldown is shared across instances through Redis when available (SET NX
+   * EX), so a flood of unauthenticated requests costs at most one setWebhook
+   * per bot per window fleet-wide — and re-registering always writes the
+   * *current* secret, so an attacker cannot change the registration, only
+   * trigger that one idempotent refresh.
    */
-  private scheduleWebhookReconcile(platform: string, appId: string, client: PlatformClient) {
+  private async reconcileWebhookAfterRejection(
+    platform: string,
+    appId: string,
+    client: PlatformClient,
+  ): Promise<void> {
     if (!client.reconcileWebhook) return;
     const key = buildRuntimeKey(platform, appId);
-    const now = Date.now();
-    const last = this.webhookReconciledAt.get(key);
-    if (last !== undefined && now - last < WEBHOOK_RECONCILE_COOLDOWN_MS) return;
-    this.webhookReconciledAt.set(key, now);
+    if (!(await this.acquireWebhookReconcileSlot(key))) return;
 
     log('handleWebhook: %s rejected an update as unverified, re-registering webhook', key);
-    client.reconcileWebhook().catch((error) => {
+    try {
+      await client.reconcileWebhook();
+    } catch (error) {
       log('reconcileWebhook failed for %s: %O', key, error);
-    });
+    }
+  }
+
+  /**
+   * Claim the per-bot reconcile slot for the cooldown window. Shared through
+   * Redis when the runtime has one; falls back to a per-process map otherwise
+   * (single-instance self-hosted deployments).
+   */
+  private async acquireWebhookReconcileSlot(key: string): Promise<boolean> {
+    const redis = getAgentRuntimeRedisClient();
+    if (redis) {
+      try {
+        const result = await redis.set(
+          `${WEBHOOK_RECONCILE_KEY_PREFIX}:${key}`,
+          '1',
+          'EX',
+          Math.ceil(WEBHOOK_RECONCILE_COOLDOWN_MS / 1000),
+          'NX',
+        );
+        return result === 'OK';
+      } catch (error) {
+        log('webhook reconcile throttle: redis unavailable, using in-memory cooldown: %O', error);
+      }
+    }
+
+    const now = Date.now();
+    const last = this.webhookReconciledAt.get(key);
+    if (last !== undefined && now - last < WEBHOOK_RECONCILE_COOLDOWN_MS) return false;
+    this.webhookReconciledAt.set(key, now);
+    return true;
   }
 
   // ------------------------------------------------------------------

@@ -570,6 +570,7 @@ describe('BotMessageRouter', () => {
 
       beforeEach(() => {
         for (const key of Object.keys(mockChatWebhooks)) delete mockChatWebhooks[key];
+        mockGetAgentRuntimeRedisClient.mockReturnValue(null);
         vi.useRealTimers();
       });
 
@@ -610,6 +611,83 @@ describe('BotMessageRouter', () => {
         vi.advanceTimersByTime(5 * 60 * 1000 + 1);
         await handler(post());
         expect(mockReconcileWebhook).toHaveBeenCalledTimes(2);
+      });
+
+      it('shares the cooldown across instances through Redis SET NX when a client is available', async () => {
+        const redisSet = vi.fn().mockResolvedValueOnce('OK').mockResolvedValue(null);
+        mockGetAgentRuntimeRedisClient.mockReturnValue({ set: redisSet } as any);
+        mockFindEnabledByPlatform.mockResolvedValue([
+          makeProvider({ applicationId: 'tg-bot-123' }),
+        ]);
+        mockChatWebhooks.telegram = vi
+          .fn()
+          .mockResolvedValue(new Response('Invalid secret token', { status: 401 }));
+
+        // Two routers stand in for two serverless instances with independent memory.
+        const a = new BotMessageRouter().getWebhookHandler('telegram', 'tg-bot-123');
+        const b = new BotMessageRouter().getWebhookHandler('telegram', 'tg-bot-123');
+        await a(post());
+        await b(post());
+
+        expect(redisSet).toHaveBeenCalledTimes(2);
+        expect(redisSet).toHaveBeenCalledWith(
+          'bot:webhook-reconcile:telegram:tg-bot-123',
+          '1',
+          'EX',
+          300,
+          'NX',
+        );
+        // Only the instance that won the NX slot re-registers.
+        expect(mockReconcileWebhook).toHaveBeenCalledTimes(1);
+      });
+
+      it('falls back to the in-memory cooldown when Redis errors', async () => {
+        mockGetAgentRuntimeRedisClient.mockReturnValue({
+          set: vi.fn().mockRejectedValue(new Error('redis down')),
+        } as any);
+        mockFindEnabledByPlatform.mockResolvedValue([
+          makeProvider({ applicationId: 'tg-bot-123' }),
+        ]);
+        mockChatWebhooks.telegram = vi
+          .fn()
+          .mockResolvedValue(new Response('Invalid secret token', { status: 401 }));
+
+        const handler = new BotMessageRouter().getWebhookHandler('telegram', 'tg-bot-123');
+        await handler(post());
+        await handler(post());
+
+        expect(mockReconcileWebhook).toHaveBeenCalledTimes(1);
+      });
+
+      it('awaits the re-registration before answering, so a serverless host cannot cancel it', async () => {
+        let resolveReconcile!: () => void;
+        mockReconcileWebhook.mockImplementationOnce(
+          () =>
+            new Promise<void>((r) => {
+              resolveReconcile = r;
+            }),
+        );
+        mockFindEnabledByPlatform.mockResolvedValue([
+          makeProvider({ applicationId: 'tg-bot-123' }),
+        ]);
+        mockChatWebhooks.telegram = vi
+          .fn()
+          .mockResolvedValue(new Response('Invalid secret token', { status: 401 }));
+
+        const handler = new BotMessageRouter().getWebhookHandler('telegram', 'tg-bot-123');
+        let settled = false;
+        const pending = handler(post()).then((r) => {
+          settled = true;
+          return r;
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(mockReconcileWebhook).toHaveBeenCalledTimes(1);
+        expect(settled).toBe(false);
+
+        resolveReconcile();
+        expect((await pending).status).toBe(401);
       });
 
       it('does not touch the webhook registration when the adapter accepts the update', async () => {
