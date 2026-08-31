@@ -58,14 +58,21 @@ const styles = createStaticStyles(({ css }) => ({
   dim: css`
     opacity: 0.45;
   `,
-  footer: css`
+  statusRow: css`
     display: flex;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
-    justify-content: flex-end;
 
-    padding-block: 0 10px;
+    padding-block: 10px 0;
     padding-inline: 12px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-variant-numeric: tabular-nums;
+
+    /* The row owns the card's top padding; keep the head snug beneath it. */
+    & + div {
+      padding-block-start: 6px;
+    }
   `,
   gate: css`
     border-color: ${cssVar.colorWarningBorder};
@@ -182,7 +189,8 @@ const useStateChip = (data: GraphNodeData): { color: string; text: string } | nu
 const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
   const elapsed = useElapsed(startedAt);
   if (!elapsed) return null;
-  return <span style={{ marginInlineStart: 'auto' }}>{elapsed}</span>;
+  // Sits right behind the state chip in the status row — no auto margin.
+  return <span style={{ fontSize: 11 }}>{elapsed}</span>;
 });
 
 RunningClock.displayName = 'GoalGraphRunningClock';
@@ -214,6 +222,26 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
           selected && styles.selected,
         )}
       >
+        {/* Status reads first: its own top row, left-aligned, with the running
+            clock riding right behind it (review: bottom placements read poorly). */}
+        {(chip || view.humanTouches.length > 0) && (
+          <div className={styles.statusRow}>
+            {chip && (
+              <Flexbox horizontal align={'center'} gap={4}>
+                <span className={styles.chipDot} style={{ background: chip.color }} />
+                <span className={styles.chipText} style={{ color: chip.color }}>
+                  {chip.text}
+                </span>
+              </Flexbox>
+            )}
+            {running && <RunningClock startedAt={view.startedAt} />}
+            {view.humanTouches.length > 0 && (
+              <Tooltip title={t('goalProcess.node.humanTouched')}>
+                <span className={styles.human}>@</span>
+              </Tooltip>
+            )}
+          </div>
+        )}
         <div className={styles.head}>
           <div className={styles.glyph} style={{ background: palette.soft, color: palette.line }}>
             <Icon icon={KIND_ICON[node.kind]} size={16} />
@@ -223,36 +251,13 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
             {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
           </Flexbox>
         </div>
-        {/* State and human participation live on the card's bottom-left, so the
-            title row keeps its full width and every kind reads its status in
-            the same place. A task folds them into its metric strip; other kinds
-            get a light footer. */}
-        {!isTask && (chip || view.humanTouches.length > 0) && (
-          <div className={styles.footer}>
-            {chip && (
-              <Flexbox horizontal align={'center'} gap={4}>
-                <span className={styles.chipDot} style={{ background: chip.color }} />
-                <span className={styles.chipText} style={{ color: chip.color }}>
-                  {chip.text}
-                </span>
-              </Flexbox>
-            )}
-            {view.humanTouches.length > 0 && (
-              <Tooltip title={t('goalProcess.node.humanTouched')}>
-                <span className={styles.human}>@</span>
-              </Tooltip>
-            )}
-          </div>
-        )}
         {isTask && (
           <div className={styles.metrics}>
-            {/* Verifier is icon-only: with the state chip sharing this strip
-                the word no longer fits the card width, and the tooltip carries
-                the full meaning anyway. */}
             {node.taskId ? (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>
                 <span className={styles.metric}>
                   <Icon icon={ShieldCheck} size={13} />
+                  {t('goalProcess.node.verifier')}
                 </span>
               </Tooltip>
             ) : (
@@ -283,29 +288,6 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 </span>
               </Tooltip>
             )}
-            {/* State lives on the strip's right edge (review: bottom-left felt
-                off); the clock rides along when the task is running. */}
-            <Flexbox
-              horizontal
-              align={'center'}
-              gap={10}
-              style={{ flex: 'none', marginInlineStart: 'auto' }}
-            >
-              {running && <RunningClock startedAt={view.startedAt} />}
-              {chip && (
-                <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
-                  <span className={styles.chipDot} style={{ background: chip.color }} />
-                  <span className={styles.chipText} style={{ color: chip.color }}>
-                    {chip.text}
-                  </span>
-                </Flexbox>
-              )}
-              {view.humanTouches.length > 0 && (
-                <Tooltip title={t('goalProcess.node.humanTouched')}>
-                  <span className={styles.human}>@</span>
-                </Tooltip>
-              )}
-            </Flexbox>
           </div>
         )}
       </div>
