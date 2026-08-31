@@ -148,6 +148,12 @@ export const buildConnectorPayloadFromLegacy = (legacy: LobeToolCustomPlugin): M
  *      when no connector exists). Rolling back returns us atomically to the
  *      pre-migration state — legacy row only — so the user can retry once the
  *      endpoint is healthy (create is rebuilt from the untouched legacy shape).
+ *
+ *      A sync that RESOLVES with zero tools while the legacy manifest declares
+ *      tools is treated the same as a thrown sync failure (#18857): the remote
+ *      server answered but discovery found nothing, so completing the
+ *      migration would leave an enabled, "connected" connector with an empty
+ *      catalog that shadows — and then deletes — the working legacy plugin.
  *   4. `uninstallCustomPlugin` — best-effort. A throw is logged but swallowed;
  *      the runtime's `connectorIdentifierSet` filter in
  *      `aiAgent/index.ts:1717` dedupes by identifier (connector wins), so a
@@ -165,7 +171,8 @@ export interface MigrationSaveDeps {
    * failure path we must NOT delete a row we merely updated — only one we created.
    */
   hasExistingConnector: (identifier: string) => boolean;
-  syncConnectorTools: (id: string) => Promise<void>;
+  /** Resolves with the number of tools the sync persisted into the catalog. */
+  syncConnectorTools: (id: string) => Promise<number>;
   uninstallCustomPlugin: (id: string) => Promise<void>;
 }
 
@@ -199,8 +206,21 @@ export const executeLegacyMigrationSave = async (
 
   const newConnectorId = await deps.createConnector(payload);
 
+  // Tools the legacy manifest declares. A sync that discovers fewer than this
+  // — specifically zero — means discovery failed silently (auth rejected the
+  // tools/list call, the endpoint answered with a non-MCP payload, …), not
+  // that the server genuinely exposes nothing (#18857).
+  const expectedToolCount = legacyPlugin.manifest?.api?.length ?? 0;
+
   try {
-    await deps.syncConnectorTools(newConnectorId);
+    const syncedToolCount = await deps.syncConnectorTools(newConnectorId);
+    if (expectedToolCount > 0 && syncedToolCount === 0) {
+      throw new Error(
+        `Tool discovery returned an empty list, but the legacy plugin declares ` +
+          `${expectedToolCount} tool(s). Migration aborted — the legacy plugin was kept ` +
+          `so it keeps working; please retry once the MCP server is reachable.`,
+      );
+    }
   } catch (syncError) {
     // Endpoint unreachable / manifest fetch failed. Roll the just-created
     // connector back so we don't leave a tool-less duplicate alongside the

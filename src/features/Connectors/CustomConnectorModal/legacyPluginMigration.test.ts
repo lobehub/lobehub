@@ -407,6 +407,7 @@ describe('executeLegacyMigrationSave', () => {
     hasExistingConnector = vi.fn(() => false);
     syncConnectorTools = vi.fn(async () => {
       calls.push('syncConnectorTools');
+      return 1;
     });
     uninstallCustomPlugin = vi.fn(async () => {
       calls.push('uninstallCustomPlugin');
@@ -534,6 +535,100 @@ describe('executeLegacyMigrationSave', () => {
     expect(calls).toEqual(['createConnector', 'deleteConnector']);
     expect(deleteConnector).toHaveBeenCalledWith('new-conn-id');
     expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+  });
+
+  describe('zero-tool sync (#18857)', () => {
+    // Regression coverage for #18857: discovery can RESOLVE with an empty tool
+    // list instead of throwing. Before the fix this was treated as a
+    // successful migration: the fresh connector was marked connected with an
+    // empty catalog, shadowed the legacy plugin (connector-first routing in
+    // `mcp.ts`), and the legacy row was uninstalled — leaving the integration
+    // permanently broken ("Tool '<name>' is not available on this connector").
+    const legacyWithTools = (id = 'my-mcp', toolNames = ['pdf_creator']): LobeToolCustomPlugin =>
+      ({
+        customParams: { mcp: { type: 'http', url: 'https://mcp.example.com' } },
+        identifier: id,
+        manifest: {
+          api: toolNames.map((name) => ({ name })),
+          meta: { title: 'PDF Creator' },
+          version: '1.0.0',
+        },
+        type: 'customPlugin',
+      }) as LobeToolCustomPlugin;
+
+    it('aborts and rolls back the created connector when sync persists zero tools', async () => {
+      syncConnectorTools.mockResolvedValueOnce(0);
+      await expect(
+        executeLegacyMigrationSave(legacyWithTools(), legacyWithTools(), {
+          createConnector,
+          deleteConnector,
+          hasExistingConnector,
+          syncConnectorTools,
+          uninstallCustomPlugin,
+        }),
+      ).rejects.toThrow(/empty list/);
+      // Same atomic rollback as a thrown sync failure: the tool-less connector
+      // is deleted and the legacy plugin is preserved so it keeps working.
+      // (`mockResolvedValueOnce` replaces the default mock, so the sync call
+      // itself is not recorded in `calls`.)
+      expect(syncConnectorTools).toHaveBeenCalledTimes(1);
+      expect(calls).toEqual(['createConnector', 'deleteConnector']);
+      expect(deleteConnector).toHaveBeenCalledWith('new-conn-id');
+      expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+    });
+
+    it('does NOT delete a pre-existing connector on zero-tool sync, but still aborts', async () => {
+      // The upsert only UPDATED the pre-existing row — deleting it would
+      // destroy a working connector (same guard as the thrown-sync path).
+      hasExistingConnector.mockReturnValue(true);
+      syncConnectorTools.mockResolvedValueOnce(0);
+      await expect(
+        executeLegacyMigrationSave(legacyWithTools(), legacyWithTools(), {
+          createConnector,
+          deleteConnector,
+          hasExistingConnector,
+          syncConnectorTools,
+          uninstallCustomPlugin,
+        }),
+      ).rejects.toThrow(/empty list/);
+      expect(deleteConnector).not.toHaveBeenCalled();
+      expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+    });
+
+    it('still aborts when the rollback delete fails after a zero-tool sync', async () => {
+      syncConnectorTools.mockResolvedValueOnce(0);
+      deleteConnector.mockRejectedValueOnce(new Error('rollback network error'));
+      await expect(
+        executeLegacyMigrationSave(legacyWithTools(), legacyWithTools(), {
+          createConnector,
+          deleteConnector,
+          hasExistingConnector,
+          syncConnectorTools,
+          uninstallCustomPlugin,
+        }),
+      ).rejects.toThrow(/empty list/);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[connector-migration] rollback after failed sync failed',
+        expect.any(Error),
+      );
+      expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+    });
+
+    it('accepts a zero-tool sync when the legacy manifest declares no tools', async () => {
+      // No manifest / empty api list → nothing to compare against; an empty
+      // catalog is not proof of a broken migration, so the flow completes.
+      syncConnectorTools.mockResolvedValueOnce(0);
+      const result = await executeLegacyMigrationSave(legacy(), legacy(), {
+        createConnector,
+        deleteConnector,
+        hasExistingConnector,
+        syncConnectorTools,
+        uninstallCustomPlugin,
+      });
+      expect(result).toEqual({ connectorId: 'new-conn-id', ok: true });
+      expect(deleteConnector).not.toHaveBeenCalled();
+      expect(uninstallCustomPlugin).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does NOT roll back on sync failure when a connector already existed (idempotent update)', async () => {

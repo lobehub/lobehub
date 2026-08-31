@@ -164,16 +164,25 @@ export class ConnectorActionImpl {
     await this.#refreshConnectorLists();
   };
 
-  syncConnectorTools = async (id: string): Promise<void> => {
+  /**
+   * Returns the number of tools the sync persisted. Callers that promote a
+   * legacy plugin (see `executeLegacyMigrationSave`) need the count to detect
+   * a "successful" sync that discovered zero tools (#18857).
+   */
+  syncConnectorTools = async (id: string): Promise<number> => {
     this.#set(
       (s) => ({ connectorSyncing: { ...s.connectorSyncing, [id]: true } }),
       false,
       'syncConnectorTools/start',
     );
     try {
-      const syncedLocally = await this.#syncLocalConnectorTools(id);
-      if (!syncedLocally) await lambdaClient.connector.syncTools.mutate({ id });
+      const localToolCount = await this.#syncLocalConnectorTools(id);
+      const { toolCount } =
+        localToolCount === null
+          ? await lambdaClient.connector.syncTools.mutate({ id })
+          : { toolCount: localToolCount };
       await this.#refreshConnectorLists();
+      return toolCount;
     } finally {
       this.#set(
         (s) => ({ connectorSyncing: { ...s.connectorSyncing, [id]: false } }),
@@ -192,11 +201,12 @@ export class ConnectorActionImpl {
    * Electron main process, same path Test Connection uses) and reports them
    * through `syncToolsFromClientById`.
    *
-   * Returns false when the connector is server-reachable (public HTTP) or when
-   * not running in desktop — the caller falls back to the server-side sync.
+   * Returns the synced tool count, or `null` when the connector is
+   * server-reachable (public HTTP) or when not running in desktop — the caller
+   * falls back to the server-side sync.
    */
-  #syncLocalConnectorTools = async (id: string): Promise<boolean> => {
-    if (!isDesktop) return false;
+  #syncLocalConnectorTools = async (id: string): Promise<number | null> => {
+    if (!isDesktop) return null;
 
     // `getForEdit` returns the decrypted user-set credentials (bearer/apikey/
     // header) needed to connect locally. OAuth2 tokens are machine-managed and
@@ -205,7 +215,7 @@ export class ConnectorActionImpl {
     const detail = await lambdaClient.connector.getForEdit.query({ id });
     const isStdio = detail.mcpConnectionType === 'stdio';
     const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
-    if (!isStdio && !isLocalHttp) return false;
+    if (!isStdio && !isLocalHttp) return null;
 
     let api: Array<{ description?: string; name: string; parameters?: Record<string, unknown> }>;
     if (isStdio) {
@@ -241,7 +251,7 @@ export class ConnectorActionImpl {
       api = manifest.api ?? [];
     }
 
-    await lambdaClient.connector.syncToolsFromClientById.mutate({
+    const { toolCount } = await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
       tools: api.map((a) => ({
         description: a.description,
@@ -249,7 +259,7 @@ export class ConnectorActionImpl {
         toolName: a.name,
       })),
     });
-    return true;
+    return toolCount;
   };
 
   disconnectConnector = async (id: string): Promise<void> => {
