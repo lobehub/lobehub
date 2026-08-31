@@ -43,6 +43,7 @@ import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import {
+  answeredClarifications,
   buildConfirmedDraft,
   buildGoalSeed,
   buildInstructionSeed,
@@ -139,6 +140,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editorData: unknown;
   }>({ content: '', editorData: undefined });
   const [instructionRevision, setInstructionRevision] = useState(0);
+  // Set once the second reading has folded the answers into the instruction.
+  // The appended Q&A block is then already redundant — leaving it on would put
+  // the answers in the brief twice, once woven in and once as a list.
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isSynthesized, setIsSynthesized] = useState(false);
 
   // A private agent can only run a private task. Coerce + lock the
   // visibility chip when the selected agent is private.
@@ -481,6 +487,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             instruction: draft.instruction,
           }),
         );
+        setIsSynthesized(false);
         // A new reading is new content: bump the revision so the review editor
         // reloads instead of keeping the previous draft's text.
         setInstructionRevision((revision) => revision + 1);
@@ -521,6 +528,48 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * answers appended together, so the task page cannot show one and the agent
    * read the other.
    */
+  /**
+   * The second reading, run when the user reaches the confirm step.
+   *
+   * The first one was written before the answers existed, so its brief still
+   * names those details as open — concatenating the answers under it leaves a
+   * document that contradicts itself. This rewrites the whole brief with the
+   * answers folded in, and the user reviews *that* in the instruction editor.
+   *
+   * Like the first reading it is an assist, never a gate: on failure the seed
+   * from the first pass stays, and the answers are appended as before.
+   */
+  const handleEnterConfirmStep = useCallback(async () => {
+    const draft = readDraft();
+    if (!analysis || !draft) return;
+
+    const pairs = answeredClarifications(analysis, intentAnswers);
+    // Nothing was answered, so there is nothing new to fold in.
+    if (pairs.length === 0) return;
+
+    setIsSynthesizing(true);
+    try {
+      const result = await taskService.synthesizeInstruction({
+        answers: pairs,
+        context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
+        instruction: draft.instruction,
+      });
+
+      // No mirror: the brief is freshly written prose, so let the editor build
+      // its own rich text from the markdown rather than carry a stale document.
+      setInstructionSeed({ content: result.instruction, editorData: undefined });
+      setIntentTitle((current) => result.title.trim() || current);
+      setIsSynthesized(true);
+      setInstructionRevision((revision) => revision + 1);
+    } catch {
+      // Keep the first pass's seed; `handleConfirmIntent` still appends the
+      // answers, which is exactly the behaviour before this step existed.
+      setIsSynthesized(false);
+    } finally {
+      setIsSynthesizing(false);
+    }
+  }, [analysis, assigneeMeta?.title, intentAnswers, readDraft]);
+
   const handleConfirmIntent = useCallback(async () => {
     const draft = readDraft();
     if (!analysis || !draft) return;
@@ -531,7 +580,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     const edited = String(reviewEditor?.getDocument?.('markdown') ?? '').trim();
     const confirmed = buildConfirmedDraft({
       analysis,
-      answers: intentAnswers,
+      answers: isSynthesized ? {} : intentAnswers,
       editorJson: edited
         ? (reviewEditor?.getDocument?.('json') as unknown)
         : instructionSeed.editorData,
@@ -549,6 +598,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     instructionSeed,
     intentAnswers,
     intentTitle,
+    isSynthesized,
     readDraft,
     reviewEditor,
     submitDraft,
@@ -635,10 +685,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             instructionRevision={instructionRevision}
             instructionSeed={instructionSeed}
             isCreating={isCreating}
+            isSynthesizing={isSynthesizing}
             title={intentTitle}
             onAnswerChange={handleAnswerChange}
             onBack={() => setAnalysis(null)}
             onConfirm={handleConfirmIntent}
+            onEnterConfirmStep={handleEnterConfirmStep}
             onSwitchToGoal={canCreateGoal ? handleSwitchToGoal : undefined}
             onTitleChange={setIntentTitle}
           />

@@ -7,11 +7,13 @@ import { Flexbox, Icon, TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, Check, ListChecks, Paperclip, Sparkles, Target } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GeneratingBorder from '@/components/GeneratingBorder';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
+import { shinyTextStyles } from '@/styles';
 
 import type { ClarificationAnswers } from './taskIntent';
 
@@ -118,9 +120,17 @@ export interface TaskIntentReviewProps {
   /** What the instruction editor opens with: markdown plus its rich-text mirror. */
   instructionSeed: { content: string; editorData: unknown };
   isCreating?: boolean;
+  /** True while the second reading folds the answers into the instruction. */
+  isSynthesizing?: boolean;
   onAnswerChange: (index: number, value: string) => void;
   onBack: () => void;
   onConfirm: () => void;
+  /**
+   * Fired once the user reaches the confirm step. The answers are all in by
+   * then, which is what the second reading needs — running it any earlier
+   * would rewrite the brief around answers that do not exist yet.
+   */
+  onEnterConfirmStep?: () => void;
   /** Omitted when goals are unavailable — the exit is then simply not offered. */
   onSwitchToGoal?: () => void;
   onTitleChange: (title: string) => void;
@@ -143,6 +153,8 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
     instructionEditor,
     instructionRevision,
     instructionSeed,
+    isSynthesizing,
+    onEnterConfirmStep,
     isCreating,
     onAnswerChange,
     onBack,
@@ -185,6 +197,19 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
 
   const showGoalExit = analysis.kind === 'goal' && Boolean(onSwitchToGoal);
   const onConfirmStep = activeIndex >= confirmIndex;
+
+  // Only on the transition: the effect would otherwise re-run the second
+  // reading on every keystroke the confirm step re-renders for.
+  const enteredConfirmRef = useRef(false);
+  useEffect(() => {
+    if (!onConfirmStep) {
+      enteredConfirmRef.current = false;
+      return;
+    }
+    if (enteredConfirmRef.current) return;
+    enteredConfirmRef.current = true;
+    onEnterConfirmStep?.();
+  }, [onConfirmStep, onEnterConfirmStep]);
   const active = clarifications[activeIndex];
 
   // The primary button is the only thing telling the user where they are, so it
@@ -274,7 +299,11 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
           <Flexbox gap={8}>
             <Flexbox horizontal align={'center'} justify={'space-between'}>
               <Text fontSize={12} type={'secondary'}>
-                {t('taskIntent.instructionLabel')}
+                {isSynthesizing ? (
+                  <span className={shinyTextStyles.shinyText}>{t('taskIntent.synthesizing')}</span>
+                ) : (
+                  t('taskIntent.instructionLabel')
+                )}
               </Text>
               <ActionIcon
                 icon={Paperclip}
@@ -283,17 +312,19 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
                 onClick={() => pickAndInsertAttachments(instructionEditor)}
               />
             </Flexbox>
-            <Flexbox className={styles.instruction}>
-              <EditorCanvas
-                contentRevision={instructionRevision}
-                editor={instructionEditor}
-                editorData={instructionSeed}
-                entityId={'task-intent-review'}
-                floatingToolbar={false}
-                placeholder={t('createTask.instructionPlaceholder')}
-                style={{ fontSize: 13, padding: '8px 12px' }}
-              />
-            </Flexbox>
+            <GeneratingBorder generating={isSynthesizing}>
+              <Flexbox className={styles.instruction}>
+                <EditorCanvas
+                  contentRevision={instructionRevision}
+                  editor={instructionEditor}
+                  editorData={instructionSeed}
+                  entityId={'task-intent-review'}
+                  floatingToolbar={false}
+                  placeholder={t('createTask.instructionPlaceholder')}
+                  style={{ fontSize: 13, padding: '8px 12px' }}
+                />
+              </Flexbox>
+            </GeneratingBorder>
           </Flexbox>
         )}
 

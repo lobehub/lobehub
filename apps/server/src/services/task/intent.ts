@@ -1,11 +1,14 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
+  chainTaskInstruction,
   chainTaskIntent,
+  TASK_INSTRUCTION_JSON_SCHEMA,
+  TASK_INSTRUCTION_PROMPT_VERSION,
   TASK_INTENT_JSON_SCHEMA,
   TASK_INTENT_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import type { TaskIntentAnalysis } from '@lobechat/types';
+import type { TaskInstructionSynthesis, TaskIntentAnalysis } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -32,6 +35,11 @@ const analysisSchema = z.object({
   kindReason: z.string().optional(),
   refinedInstruction: z.string().min(1),
   summary: z.string().min(1),
+  title: z.string().min(1),
+});
+
+const synthesisSchema = z.object({
+  instruction: z.string().min(1),
   title: z.string().min(1),
 });
 
@@ -88,7 +96,82 @@ export class TaskIntentService {
 
     return normalizeIntent(parsed.data, params.instruction);
   }
+
+  /**
+   * Rewrite the confirmed draft into the brief that actually gets executed.
+   *
+   * `analyze` runs before the user answers, so its brief still names the
+   * answered details as open. Appending the answers under it produces a
+   * document that contradicts itself — the body calls a detail missing while
+   * the appendix states it. This pass folds them in instead.
+   */
+  async synthesize(params: {
+    answers: { answer: string; question: string }[];
+    context?: string;
+    instruction: string;
+  }): Promise<TaskInstructionSynthesis> {
+    const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
+
+    const raw = await ai.generateObject(
+      {
+        ...chainTaskInstruction(params),
+        ...modelConfig,
+        schema: TASK_INSTRUCTION_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
+      },
+      {
+        metadata: { trigger: 'task_instruction' },
+        tracing: {
+          promptVersion: TASK_INSTRUCTION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.TaskInstruction,
+          schemaName: TASK_INSTRUCTION_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
+    );
+
+    const parsed = synthesisSchema.safeParse(raw);
+    if (!parsed.success) {
+      log('task instruction did not match schema: %O', parsed.error.flatten());
+      throw new Error('Task instruction synthesis did not match the expected shape.');
+    }
+
+    return normalizeSynthesis(parsed.data, params.instruction);
+  }
 }
+
+/**
+ * Guard the one thing a rewrite must never do: lose what the user wrote.
+ *
+ * A brief that dropped a URL, a path or a number the draft carried is worse
+ * than no rewrite at all — the executor would act on an instruction missing
+ * the only concrete thing it was given. Exported for tests.
+ */
+export const normalizeSynthesis = (
+  raw: z.infer<typeof synthesisSchema>,
+  instruction: string,
+): TaskInstructionSynthesis => {
+  const written = raw.instruction.trim();
+  const dropped = literalTokens(instruction).filter((token) => !written.includes(token));
+
+  if (dropped.length > 0) {
+    log('synthesis dropped literals from the draft: %O', dropped);
+    // Keep the user's own text as the brief rather than shipping a lossy
+    // rewrite; the caller's fallback path handles the rest.
+    throw new Error('Task instruction synthesis dropped literals from the draft.');
+  }
+
+  return { instruction: written, title: raw.title.trim() };
+};
+
+/** URLs, paths and bare numbers — the parts a rewrite is not allowed to drop. */
+const literalTokens = (text: string): string[] => [
+  ...new Set([
+    ...(text.match(/https?:\/\/\S+/g) ?? []),
+    ...(text.match(/(?:^|\s)(\/[\w./-]+)/g) ?? []).map((token) => token.trim()),
+    ...(text.match(/\b\d[\d.,]*\b/g) ?? []),
+  ]),
+];
 
 type RawIntent = z.infer<typeof analysisSchema>;
 

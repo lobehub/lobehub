@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { normalizeIntent, TaskIntentService } from './intent';
+import { normalizeIntent, normalizeSynthesis, TaskIntentService } from './intent';
 
 const { generateObject, resolveGoalModelConfig } = vi.hoisted(() => ({
   generateObject: vi.fn(),
@@ -109,5 +109,41 @@ describe('normalizeIntent', () => {
     );
 
     expect(result.refinedInstruction).toBe('fix the readme typo');
+  });
+});
+
+describe('normalizeSynthesis', () => {
+  it('keeps a rewrite that carried every literal through', () => {
+    const result = normalizeSynthesis(
+      {
+        instruction:
+          '把 https://example.com/spec 整理成 API 表格，交付格式为 PDF，覆盖全部 12 个接口。',
+        title: '整理 API 表格',
+      },
+      '把 https://example.com/spec 整理成表格，一共 12 个接口',
+    );
+
+    expect(result.instruction).toContain('https://example.com/spec');
+    expect(result.title).toBe('整理 API 表格');
+  });
+
+  it('rejects a rewrite that dropped a URL the draft carried', () => {
+    // The executor would be left acting on a brief missing the only concrete
+    // thing it was given, which is worse than not rewriting at all.
+    expect(() =>
+      normalizeSynthesis(
+        { instruction: '把那篇文档整理成 API 表格。', title: '整理 API 表格' },
+        '把 https://example.com/spec 整理成表格',
+      ),
+    ).toThrow(/dropped literals/);
+  });
+
+  it('rejects a rewrite that dropped a number the draft carried', () => {
+    expect(() =>
+      normalizeSynthesis(
+        { instruction: '把接口整理成表格。', title: '整理表格' },
+        '把 12 个接口整理成表格',
+      ),
+    ).toThrow(/dropped literals/);
   });
 });

@@ -267,6 +267,39 @@ export const taskRouter = router({
       }
     }),
 
+  /**
+   * Rewrite a confirmed draft into the brief that gets executed, folding in the
+   * answers the user just gave. Returns a brief only; nothing is created.
+   */
+  synthesizeInstruction: taskProcedureWrite
+    .input(
+      z.object({
+        answers: z
+          .array(z.object({ answer: z.string().min(1), question: z.string().min(1) }))
+          .max(3),
+        context: z.string().optional(),
+        instruction: z.string().min(1).max(20_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.taskIntentService.synthesize(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
   reorderSubtasks: taskProcedureWrite
     .input(
       z.object({

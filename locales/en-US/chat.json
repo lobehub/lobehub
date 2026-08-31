@@ -1671,6 +1671,7 @@
   "taskIntent.openCreated": "Open",
   "taskIntent.reviewStep": "Confirm what I understood",
   "taskIntent.skipped": "Skipped — not added to the brief",
+  "taskIntent.synthesizing": "Folding in your answers…",
   "taskList.activeTasks": "Active Tasks",
   "taskList.all": "All tasks",
   "taskList.assignTo": "Assign to",

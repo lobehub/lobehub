@@ -59,6 +59,16 @@ export interface TaskIntentAnalysis {
   title: string;
 }
 
+/**
+ * The brief produced after the user answers, replacing the pre-answer reading.
+ * A second pass is needed because the first one was written while those details
+ * were still open, so it names them as gaps the answers have since closed.
+ */
+export interface TaskInstructionSynthesis {
+  instruction: string;
+  title: string;
+}
+
 // ── Config types ──
 
 export interface CheckpointConfig {

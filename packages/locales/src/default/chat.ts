@@ -1727,6 +1727,7 @@ export default {
   'taskIntent.goalCallout.desc':
     'A goal keeps working against a standing acceptance bar across multiple rounds.',
   'taskIntent.instructionLabel': 'Task instruction',
+  'taskIntent.synthesizing': 'Folding in your answers…',
   'taskIntent.goalCallout.title': 'This reads like an ongoing goal',
   'taskIntent.reviewStep': 'Confirm what I understood',
   'goalEmpty.create': 'Create your first goal',

@@ -17,6 +17,7 @@ const insertNewlineMock = vi.hoisted(() => vi.fn());
 const editorMarkdownMock = vi.hoisted(() => ({ value: '' }));
 const editorJsonMock = vi.hoisted(() => ({ value: {} as unknown }));
 const analyzeIntentMock = vi.hoisted(() => vi.fn());
+const synthesizeInstructionMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const toastSuccessMock = vi.hoisted(() => vi.fn());
 const createGoalModalMock = vi.hoisted(() => vi.fn());
@@ -28,15 +29,53 @@ const workspaceMembersMock = vi.hoisted(() => ({
   members: [{ role: 'member', userId: 'user-1' }],
 }));
 
-vi.mock('@lobehub/editor/react', () => ({
-  useEditor: () => ({
-    cleanDocument: vi.fn(),
-    focus: focusMock,
-    getDocument: (format: string) =>
-      format === 'markdown' ? editorMarkdownMock.value : editorJsonMock.value,
-    getLexicalEditor: () => undefined,
-  }),
-}));
+// `useEditor` is `useMemo(() => createEditor(), [])`, so each call site owns one
+// stable instance. The composer and the review step each hold their own, and the
+// review step's is seeded from `editorData` — a shared read-only stub would let
+// the composer's text stand in for the confirmed instruction.
+vi.mock('@lobehub/editor/react', async () => {
+  const { useRef } = await import('react');
+  return {
+    useEditor: () => {
+      const ref = useRef<Record<string, unknown> | null>(null);
+      if (!ref.current) {
+        const seeded: { json?: unknown; markdown?: string } = {};
+        ref.current = {
+          // Back to unseeded, not to empty: `editorMarkdownMock.value` stands
+          // for what the user typed, and the composer clears itself on mount.
+          cleanDocument: () => {
+            seeded.markdown = undefined;
+            seeded.json = undefined;
+          },
+          focus: focusMock,
+          getDocument: (format: string) =>
+            format === 'markdown'
+              ? (seeded.markdown ?? editorMarkdownMock.value)
+              : (seeded.json ?? editorJsonMock.value),
+          getLexicalEditor: () => undefined,
+          setDocument: (format: string, value: unknown) => {
+            if (format !== 'markdown') {
+              seeded.json = value;
+              return;
+            }
+            // A real editor builds its own rich text from the markdown, so the
+            // mirror it hands back afterwards carries the same content.
+            seeded.markdown = String(value);
+            seeded.json = {
+              root: {
+                children: String(value)
+                  .split('\n')
+                  .map((line) => ({ children: [{ text: line, type: 'text' }], type: 'paragraph' })),
+                type: 'root',
+              },
+            };
+          },
+        };
+      }
+      return ref.current;
+    },
+  };
+});
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -44,20 +83,41 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({
-  EditorCanvas: ({ disabled, style }: { disabled?: boolean; style?: CSSProperties }) => (
-    <textarea
-      data-disabled={String(!!disabled)}
-      data-padding-bottom={String(style?.paddingBottom)}
-      data-testid="task-editor"
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' && !event.defaultPrevented) insertNewlineMock();
-      }}
-    />
-  ),
+  EditorCanvas: ({
+    disabled,
+    editor,
+    editorData,
+    style,
+  }: {
+    disabled?: boolean;
+    editor?: { setDocument?: (format: string, value: unknown) => void };
+    editorData?: { content?: string; editorData?: unknown };
+    style?: CSSProperties;
+  }) => {
+    // Mirrors EditorDataMode: the rich-text mirror wins, and the markdown is
+    // only read when there is no mirror to load.
+    if (editorData && editor?.setDocument) {
+      if (editorData.editorData) editor.setDocument('json', editorData.editorData);
+      else if (editorData.content) editor.setDocument('markdown', editorData.content);
+    }
+    return (
+      <textarea
+        data-disabled={String(!!disabled)}
+        data-padding-bottom={String(style?.paddingBottom)}
+        data-testid="task-editor"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.defaultPrevented) insertNewlineMock();
+        }}
+      />
+    );
+  },
 }));
 
 vi.mock('@/services/task', () => ({
-  taskService: { analyzeIntent: analyzeIntentMock },
+  taskService: {
+    analyzeIntent: analyzeIntentMock,
+    synthesizeInstruction: synthesizeInstructionMock,
+  },
 }));
 
 vi.mock('@/features/AgentGoals/CreateGoalModal', () => ({
@@ -210,6 +270,13 @@ describe('CreateTaskInlineEntry', () => {
     permissionMock.allowed = true;
     setLabs({});
     analyzeIntentMock.mockReset();
+    synthesizeInstructionMock.mockReset();
+    // The second reading is the normal path: it rewrites the brief with the
+    // answers folded in, so the confirmed task carries no Q&A appendix.
+    synthesizeInstructionMock.mockResolvedValue({
+      instruction: 'Write the Q3 plan for lobe-chat.',
+      title: 'Write the Q3 project plan',
+    });
     navigateMock.mockReset();
     toastSuccessMock.mockReset();
     createGoalModalMock.mockReset();
@@ -450,10 +517,63 @@ describe('CreateTaskInlineEntry', () => {
       fireEvent.click(await screen.findByText('taskIntent.confirmCreate'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+      // The answer reaches the task through the rewritten brief, not as a list
+      // bolted underneath one written before the answer existed.
+      expect(createTaskMock.mock.calls[0][0].instruction).toBe('Write the Q3 plan for lobe-chat.');
+      expect(createTaskMock.mock.calls[0][0].instruction).not.toContain(
+        'taskIntent.answersHeading',
+      );
+      expect(createTaskMock.mock.calls[0][0].name).toBe('Write the Q3 project plan');
+    });
+
+    it('runs the second reading only once the answers are all in', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [
+          { options: ['lobe-chat'], question: 'Which repo?' },
+          { options: ['PDF'], question: 'Which format?' },
+        ],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      // Still on a question: rewriting the brief here would fold in answers
+      // that do not exist yet.
+      fireEvent.click(screen.getByText('lobe-chat'));
+      expect(synthesizeInstructionMock).not.toHaveBeenCalled();
+
+      fireEvent.click(await screen.findByText('PDF'));
+
+      await waitFor(() => expect(synthesizeInstructionMock).toHaveBeenCalledTimes(1));
+      expect(synthesizeInstructionMock.mock.calls[0][0].answers).toEqual([
+        { answer: 'lobe-chat', question: 'Which repo?' },
+        { answer: 'PDF', question: 'Which format?' },
+      ]);
+    });
+
+    it('falls back to appending the answers when the second reading fails', async () => {
+      // Same contract as the first reading: an assist, never a gate.
+      synthesizeInstructionMock.mockRejectedValue(new Error('offline'));
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      fireEvent.click(screen.getByText('lobe-chat'));
+      fireEvent.click(await screen.findByText('taskIntent.confirmCreate'));
+
+      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       expect(createTaskMock.mock.calls[0][0].instruction).toContain(
         '## taskIntent.answersHeading\n- Which repo? lobe-chat',
       );
-      expect(createTaskMock.mock.calls[0][0].name).toBe('Write the Q3 project plan');
     });
 
     it('sends a rich-text mirror carrying the same answers as the instruction', async () => {
@@ -487,8 +607,13 @@ describe('CreateTaskInlineEntry', () => {
         .flatMap((node: any) => (node.children ?? []).map((child: any) => child.text))
         .join('\n');
 
-      expect(mirrored).toContain('- Which repo? lobe-chat');
-      expect(instruction).toContain('- Which repo? lobe-chat');
+      // Whatever the brief ends up being, the mirror has to say the same thing:
+      // the mirror is what the task page renders, the markdown is what the
+      // agent receives, and a task where they disagree shows the user a brief
+      // that was never run.
+      expect(instruction).toBe('Write the Q3 plan for lobe-chat.');
+      expect(mirrored).toBe(instruction);
+      expect(mirrored).not.toContain('Write a project plan');
     });
 
     it('offers the goal handoff only for a request read as a standing goal', async () => {

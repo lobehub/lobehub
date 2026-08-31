@@ -1,6 +1,7 @@
 import type {
   CheckpointConfig,
   TaskAutomationMode,
+  TaskInstructionSynthesis,
   TaskIntentAnalysis,
   TaskStatus,
 } from '@lobechat/types';
@@ -77,6 +78,17 @@ class TaskService {
     context?: string;
     instruction: string;
   }): Promise<TaskIntentAnalysis> => lambdaClient.task.analyzeIntent.mutate(params);
+
+  /**
+   * Rewrite the confirmed draft into the brief that gets executed, with the
+   * user's answers folded in. Also a mutation on the wire, and also creates
+   * nothing.
+   */
+  synthesizeInstruction = async (params: {
+    answers: { answer: string; question: string }[];
+    context?: string;
+    instruction: string;
+  }): Promise<TaskInstructionSynthesis> => lambdaClient.task.synthesizeInstruction.mutate(params);
 
   create = async (params: {
     assigneeAgentId?: string;

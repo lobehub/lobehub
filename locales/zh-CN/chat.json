@@ -1671,6 +1671,7 @@
   "taskIntent.openCreated": "打开",
   "taskIntent.reviewStep": "先确认一下我的理解",
   "taskIntent.skipped": "已跳过，不会写进执行说明",
+  "taskIntent.synthesizing": "正在把你的回答整合进指令…",
   "taskList.activeTasks": "进行中的任务",
   "taskList.all": "全部任务",
   "taskList.assignTo": "指派给",
