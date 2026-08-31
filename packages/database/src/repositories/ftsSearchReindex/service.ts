@@ -48,13 +48,19 @@ export interface FtsSearchReindexServiceOptions {
   batchSizeByEntity: Partial<Record<FtsSearchDocumentEntity, number>>;
   bulkConcurrency: number;
   bulkMaxBytes: number;
+  /** Restricts one invocation to selected entities without allowing aliases to be created early. */
+  entities: FtsSearchDocumentEntity[];
   entityConcurrency: number;
   maxBatchesPerEntity?: number;
   maxRequestRetries: number;
   onProgress: (event: FtsSearchReindexProgressEvent) => Promise<void> | void;
+  /** Parallel key-range workers for high-volume entities. */
+  rangeConcurrencyByEntity: Partial<Record<FtsSearchRangeEntity, number>>;
   retryBaseDelayMs: number;
   validateIncrementalSyncSource: () => Promise<void> | void;
 }
+
+export type FtsSearchRangeEntity = 'documents' | 'messages';
 
 export type FtsSearchReindexStateRepository = Pick<
   FtsSearchReindexFileRepository,
@@ -137,13 +143,65 @@ interface BulkOperation {
   documentId: string;
 }
 
+interface FtsSearchReindexIdRange {
+  afterId?: string;
+  beforeId?: string;
+  fromId?: string;
+}
+
+interface FtsSearchReindexRangeResult {
+  bulkRequests: number;
+  bytes: number;
+  durationMs: number;
+  failures: FtsSearchReindexBatchFailure[];
+  indexedCount: number;
+  lastId?: string;
+  processedCount: number;
+}
+
 const DEFAULT_BATCH_SIZE = 500;
 const DEFAULT_BULK_CONCURRENCY = 1;
 const DEFAULT_BULK_MAX_BYTES = 50 * 1024 * 1024;
 const DEFAULT_ENTITY_CONCURRENCY = 1;
 const DEFAULT_MAX_REQUEST_RETRIES = 4;
 const DEFAULT_RETRY_BASE_DELAY_MS = 500;
+const DEFAULT_FAILURE_RETRY_BATCH_SIZE = 1000;
+const DOCUMENT_FAILURE_RETRY_BATCH_SIZE = 20;
+const FTS_SEARCH_ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const FTS_SEARCH_RANGE_PREFIXES = {
+  documents: 'docs_',
+  messages: 'msg_',
+} as const satisfies Record<FtsSearchRangeEntity, string>;
+const FTS_SEARCH_RANGE_SECOND_CHARACTER_STRIDE = 8;
 const textEncoder = new TextEncoder();
+
+const buildIdRanges = (entity: FtsSearchRangeEntity, cursor: string | null) => {
+  const prefix = FTS_SEARCH_RANGE_PREFIXES[entity];
+  const secondCharacters = [...FTS_SEARCH_ID_ALPHABET].filter(
+    (_, index) => index % FTS_SEARCH_RANGE_SECOND_CHARACTER_STRIDE === 0,
+  );
+  const boundaries = [...FTS_SEARCH_ID_ALPHABET]
+    .flatMap((first) => secondCharacters.map((second) => `${prefix}${first}${second}`))
+    .filter((boundary) => cursor === null || boundary > cursor);
+  const ranges: FtsSearchReindexIdRange[] = [];
+  let previousBoundary: string | undefined;
+  for (const boundary of boundaries) {
+    ranges.push({
+      afterId: previousBoundary === undefined ? (cursor ?? undefined) : undefined,
+      beforeId: boundary,
+      fromId: previousBoundary,
+    });
+    previousBoundary = boundary;
+  }
+  ranges.push({
+    afterId: previousBoundary === undefined ? (cursor ?? undefined) : undefined,
+    fromId: previousBoundary,
+  });
+  return ranges;
+};
+
+const isRangeEntity = (entity: FtsSearchDocumentEntity): entity is FtsSearchRangeEntity =>
+  entity === 'documents' || entity === 'messages';
 
 const errorStatus = (error: unknown) =>
   isRecord(error) && typeof error.status === 'number' ? error.status : undefined;
@@ -220,7 +278,10 @@ export class FtsSearchReindexService {
   private preparedRunId?: string;
 
   constructor(
-    private readonly builder: Pick<FtsSearchDocumentBuilder, 'buildBatch' | 'buildByIds'>,
+    private readonly builder: Pick<
+      FtsSearchDocumentBuilder,
+      'buildBatch' | 'buildByIds' | 'buildRangeBatch'
+    >,
     private readonly repository: FtsSearchReindexStateRepository,
     private readonly client: FtsSearchReindexElasticsearchClient,
     options: Partial<FtsSearchReindexServiceOptions> = {},
@@ -230,7 +291,9 @@ export class FtsSearchReindexService {
       bulkConcurrency: options.bulkConcurrency ?? DEFAULT_BULK_CONCURRENCY,
       bulkMaxBytes: options.bulkMaxBytes ?? DEFAULT_BULK_MAX_BYTES,
       batchSizeByEntity: { ...options.batchSizeByEntity },
+      entities: options.entities ? [...options.entities] : [...FTS_SEARCH_DOCUMENT_ENTITIES],
       entityConcurrency: options.entityConcurrency ?? DEFAULT_ENTITY_CONCURRENCY,
+      rangeConcurrencyByEntity: { ...options.rangeConcurrencyByEntity },
       maxBatchesPerEntity: options.maxBatchesPerEntity,
       maxRequestRetries: options.maxRequestRetries ?? DEFAULT_MAX_REQUEST_RETRIES,
       onProgress: options.onProgress ?? (() => {}),
@@ -255,14 +318,36 @@ export class FtsSearchReindexService {
     if (!Number.isInteger(this.options.bulkConcurrency) || this.options.bulkConcurrency < 1) {
       throw new Error('FTS reindex bulk concurrency must be a positive integer');
     }
+    if (
+      this.options.entities.length === 0 ||
+      new Set(this.options.entities).size !== this.options.entities.length ||
+      this.options.entities.some((entity) => !FTS_SEARCH_DOCUMENT_ENTITIES.includes(entity))
+    ) {
+      throw new Error('FTS reindex entities must be a non-empty unique list of search entities');
+    }
     if (!Number.isInteger(this.options.entityConcurrency) || this.options.entityConcurrency < 1) {
       throw new Error('FTS reindex entity concurrency must be a positive integer');
+    }
+    for (const [entity, concurrency] of Object.entries(this.options.rangeConcurrencyByEntity)) {
+      if (
+        !(entity in FTS_SEARCH_RANGE_PREFIXES) ||
+        !Number.isInteger(concurrency) ||
+        concurrency < 1
+      ) {
+        throw new Error(`FTS reindex range concurrency for ${entity} must be a positive integer`);
+      }
     }
     if (
       this.options.maxBatchesPerEntity !== undefined &&
       (!Number.isInteger(this.options.maxBatchesPerEntity) || this.options.maxBatchesPerEntity < 1)
     ) {
       throw new Error('FTS reindex maximum batches per entity must be a positive integer');
+    }
+    if (
+      this.options.maxBatchesPerEntity !== undefined &&
+      Object.values(this.options.rangeConcurrencyByEntity).some((value) => value > 1)
+    ) {
+      throw new Error('FTS reindex range concurrency cannot be combined with a batch limit');
     }
     if (!Number.isInteger(this.options.maxRequestRetries) || this.options.maxRequestRetries < 0) {
       throw new Error('FTS reindex request retries must be a non-negative integer');
@@ -474,51 +559,260 @@ export class FtsSearchReindexService {
   private async retryFailures(state: FtsSearchReindexRunState, entity: FtsSearchDocumentEntity) {
     const failures = await this.repository.listUnresolvedFailures(state.run.id, entity);
     if (failures.length === 0) return;
-
-    const documents = await this.builder.buildByIds(
-      entity,
-      failures.map(({ documentId }) => documentId),
-    );
-    const sources = new Map(
-      documents.map((document) => [document.id, document.source as Record<string, unknown>]),
-    );
     const progress = state.progress.find((item) => item.entity === entity);
     if (!progress) throw new Error(`Missing reindex progress for ${entity}`);
 
-    const retryDocuments = failures.map(({ documentId }) => ({
-      id: documentId,
-      /** A source row deleted during backfill remains versioned until the outbox applies its deletion. */
-      source:
-        sources.get(documentId) ??
-        ({ id: documentId, fts_search_sync_deleted: true } as Record<string, unknown>),
-    }));
-    const result = await this.indexDocuments(
-      retryDocuments,
-      entity,
-      progress.physicalIndex,
-      state.run.baseRevision,
-    );
-    await this.repository.resolveFailures(state.run.id, entity, result.indexedDocumentIds);
-    if (result.failures.length > 0) {
-      const checkpointed = await this.repository.checkpointBatch({
-        cursor: progress.cursor ?? '',
+    /** Document projections can be very large, so replay failures without retaining every source. */
+    const retryBatchSize =
+      entity === 'documents' ? DOCUMENT_FAILURE_RETRY_BATCH_SIZE : DEFAULT_FAILURE_RETRY_BATCH_SIZE;
+    for (let offset = 0; offset < failures.length; offset += retryBatchSize) {
+      const failureBatch = failures.slice(offset, offset + retryBatchSize);
+      const documents = await this.builder.buildByIds(
         entity,
-        failures: result.failures,
-        indexedCount: 0,
-        previousCursor: progress.cursor,
-        processedCount: 0,
-        runId: state.run.id,
-      });
-      if (!checkpointed) {
-        const refreshed = await this.repository.getRun(state.run.id);
-        await this.emitProgress({
-          actualCursor: refreshed?.progress.find((item) => item.entity === entity)?.cursor ?? null,
+        failureBatch.map(({ documentId }) => documentId),
+      );
+      const sources = new Map(
+        documents.map((document) => [document.id, document.source as Record<string, unknown>]),
+      );
+      const retryDocuments = failureBatch.map(({ documentId }) => ({
+        id: documentId,
+        /** A source row deleted during backfill remains versioned until the outbox applies its deletion. */
+        source:
+          sources.get(documentId) ??
+          ({ id: documentId, fts_search_sync_deleted: true } as Record<string, unknown>),
+      }));
+      let pendingDocuments = retryDocuments;
+      const unresolvedFailures: FtsSearchReindexBatchFailure[] = [];
+      for (let attempt = 0; pendingDocuments.length > 0; attempt += 1) {
+        const result = await this.indexDocuments(
+          pendingDocuments,
           entity,
-          expectedCursor: progress.cursor,
-          type: 'checkpoint_conflict',
+          progress.physicalIndex,
+          state.run.baseRevision,
+        );
+        await this.repository.resolveFailures(state.run.id, entity, result.indexedDocumentIds);
+        unresolvedFailures.push(...result.failures.filter(({ retryable }) => !retryable));
+        const retryableDocumentIds = new Set(
+          result.failures.filter(({ retryable }) => retryable).map(({ documentId }) => documentId),
+        );
+        if (retryableDocumentIds.size === 0) break;
+        if (attempt >= this.options.maxRequestRetries) {
+          unresolvedFailures.push(...result.failures.filter(({ retryable }) => retryable));
+          break;
+        }
+
+        const exponentialDelay = this.options.retryBaseDelayMs * 2 ** attempt;
+        const delayMs = Math.floor(Math.random() * exponentialDelay);
+        await this.emitProgress({
+          attempt: attempt + 1,
+          delayMs,
+          entity,
+          errorType: 'ElasticsearchBulkItemError',
+          type: 'bulk_retry',
         });
+        await sleep(delayMs);
+        pendingDocuments = pendingDocuments.filter(({ id }) => retryableDocumentIds.has(id));
+      }
+      if (unresolvedFailures.length > 0) {
+        const checkpointed = await this.repository.checkpointBatch({
+          cursor: progress.cursor ?? '',
+          entity,
+          failures: unresolvedFailures,
+          indexedCount: 0,
+          previousCursor: progress.cursor,
+          processedCount: 0,
+          runId: state.run.id,
+        });
+        if (!checkpointed) {
+          const refreshed = await this.repository.getRun(state.run.id);
+          await this.emitProgress({
+            actualCursor:
+              refreshed?.progress.find((item) => item.entity === entity)?.cursor ?? null,
+            entity,
+            expectedCursor: progress.cursor,
+            type: 'checkpoint_conflict',
+          });
+        }
       }
     }
+  }
+
+  private async runIdRange(
+    state: FtsSearchReindexRunState,
+    entity: FtsSearchRangeEntity,
+    range: FtsSearchReindexIdRange,
+    batchSize: number,
+  ): Promise<FtsSearchReindexRangeResult> {
+    const progress = state.progress.find((item) => item.entity === entity);
+    if (!progress) throw new Error(`Missing reindex progress for ${entity}`);
+
+    const startedAt = Date.now();
+    const failures: FtsSearchReindexBatchFailure[] = [];
+    let afterId = range.afterId;
+    let fromId = range.fromId;
+    let bulkRequests = 0;
+    let bytes = 0;
+    let indexedCount = 0;
+    let lastId: string | undefined;
+    let processedCount = 0;
+    while (true) {
+      const documents = await this.builder.buildRangeBatch(entity, {
+        afterId,
+        beforeId: range.beforeId,
+        fromId,
+        limit: batchSize,
+      });
+      if (documents.length === 0) break;
+
+      const result = await this.indexDocuments(
+        documents.map((document) => ({
+          id: document.id,
+          source: document.source as Record<string, unknown>,
+        })),
+        entity,
+        progress.physicalIndex,
+        state.run.baseRevision,
+      );
+      bulkRequests += result.bulkRequests;
+      bytes += result.bytes;
+      failures.push(...result.failures);
+      indexedCount += result.indexedDocumentIds.length;
+      processedCount += documents.length;
+      lastId = documents.at(-1)!.id;
+      afterId = lastId;
+      fromId = undefined;
+      if (documents.length < batchSize) break;
+    }
+
+    return {
+      bulkRequests,
+      bytes,
+      durationMs: Date.now() - startedAt,
+      failures,
+      indexedCount,
+      lastId,
+      processedCount,
+    };
+  }
+
+  /**
+   * Commit completed ranges strictly in ID order. Later ranges may finish first, but their ES
+   * writes remain safe to replay until every earlier range has advanced the durable entity cursor.
+   */
+  private async runEntityByIdRanges(
+    state: FtsSearchReindexRunState,
+    entity: FtsSearchRangeEntity,
+    concurrency: number,
+    batchSize: number,
+  ) {
+    let progress = state.progress.find((item) => item.entity === entity);
+    if (!progress) throw new Error(`Missing reindex progress for ${entity}`);
+
+    const ranges = buildIdRanges(entity, progress.cursor);
+    const completedRanges = new Map<number, FtsSearchReindexRangeResult>();
+    let checkpointFailure: unknown;
+    let checkpointQueue = Promise.resolve();
+    let nextCheckpointIndex = 0;
+
+    const queueCheckpoint = (index: number, result: FtsSearchReindexRangeResult) => {
+      completedRanges.set(index, result);
+      const operation = checkpointQueue.then(async () => {
+        if (checkpointFailure) throw checkpointFailure;
+        while (completedRanges.has(nextCheckpointIndex)) {
+          const completed = completedRanges.get(nextCheckpointIndex)!;
+          completedRanges.delete(nextCheckpointIndex);
+          nextCheckpointIndex += 1;
+          if (completed.processedCount === 0) continue;
+          if (!completed.lastId) throw new Error(`Missing completed ${entity} range cursor`);
+
+          const previousCursor = progress!.cursor;
+          const checkpointed = await this.repository.checkpointBatch({
+            cursor: completed.lastId,
+            entity,
+            failures: completed.failures,
+            indexedCount: completed.indexedCount,
+            previousCursor,
+            processedCount: completed.processedCount,
+            runId: state.run.id,
+          });
+          const refreshed = await this.repository.getRun(state.run.id);
+          const checkpointProgress = refreshed?.progress.find((item) => item.entity === entity);
+          if (!checkpointed || !checkpointProgress) {
+            await this.emitProgress({
+              actualCursor: checkpointProgress?.cursor ?? null,
+              entity,
+              expectedCursor: previousCursor,
+              type: 'checkpoint_conflict',
+            });
+            throw new Error(`Concurrent checkpoint update detected for ${entity}`);
+          }
+          progress = checkpointProgress;
+          await this.emitProgress({
+            bulkRequests: completed.bulkRequests,
+            bytes: completed.bytes,
+            checkpoint: {
+              failed: progress.failedCount,
+              indexed: progress.indexedCount,
+              scanned: progress.processedCount,
+            },
+            cursor: completed.lastId,
+            durationMs: completed.durationMs,
+            entity,
+            failed: completed.failures.length,
+            indexed: completed.indexedCount,
+            processed: completed.processedCount,
+            type: 'batch',
+          });
+        }
+      });
+      checkpointQueue = operation.catch((error) => {
+        checkpointFailure ??= error;
+      });
+      return operation;
+    };
+
+    await mapWithConcurrency(ranges, concurrency, async (range, index) => {
+      const result = await this.runIdRange(state, entity, range, batchSize);
+      await queueCheckpoint(index, result);
+    });
+    await checkpointQueue;
+    if (checkpointFailure) throw checkpointFailure;
+    if (nextCheckpointIndex !== ranges.length) {
+      throw new Error(
+        `FTS reindex committed ${nextCheckpointIndex} of ${ranges.length} ${entity} ID ranges`,
+      );
+    }
+  }
+
+  private async completeEntity(state: FtsSearchReindexRunState, entity: FtsSearchDocumentEntity) {
+    const refreshedState = await this.repository.getRun(state.run.id);
+    if (!refreshedState) throw new Error(`Missing reindex run ${state.run.id}`);
+    await this.retryFailures(refreshedState, entity);
+    const unresolved = await this.repository.listUnresolvedFailures(state.run.id, entity);
+    if (unresolved.length > 0) {
+      throw new Error(`Reindex paused with ${unresolved.length} unresolved ${entity} failures`);
+    }
+
+    const finalState = await this.repository.getRun(state.run.id);
+    const finalProgress = finalState?.progress.find((item) => item.entity === entity);
+    if (!finalProgress) throw new Error(`Missing final reindex progress for ${entity}`);
+    await this.client.refresh(finalProgress.physicalIndex);
+    const indexedCount = await this.client.count(finalProgress.physicalIndex);
+    await this.emitProgress({
+      checkpointCount: finalProgress.indexedCount,
+      drift: indexedCount - finalProgress.indexedCount,
+      elasticsearchCount: indexedCount,
+      entity,
+      type: 'reconciliation',
+    });
+    if (indexedCount !== finalProgress.indexedCount) {
+      throw new Error(
+        `Reindex count mismatch for ${entity}: checkpoint=${finalProgress.indexedCount}, Elasticsearch=${indexedCount}`,
+      );
+    }
+    await this.repository.completeEntity(state.run.id, entity);
+    await this.emitProgress({ count: indexedCount, entity, type: 'entity_completed' });
+    return true;
   }
 
   private async runEntity(state: FtsSearchReindexRunState, entity: FtsSearchDocumentEntity) {
@@ -529,6 +823,14 @@ export class FtsSearchReindexService {
     await this.emitProgress({ entity, type: 'entity_started' });
 
     const batchSize = this.options.batchSizeByEntity[entity] ?? this.options.batchSize;
+    const rangeConcurrency = isRangeEntity(entity)
+      ? (this.options.rangeConcurrencyByEntity[entity] ?? 1)
+      : 1;
+    if (isRangeEntity(entity) && rangeConcurrency > 1) {
+      await this.runEntityByIdRanges(state, entity, rangeConcurrency, batchSize);
+      return this.completeEntity(state, entity);
+    }
+
     let processedBatches = 0;
     let sourceExhausted = false;
     while (true) {
@@ -606,35 +908,7 @@ export class FtsSearchReindexService {
     }
 
     if (!sourceExhausted) return false;
-
-    const refreshedState = await this.repository.getRun(state.run.id);
-    if (!refreshedState) throw new Error(`Missing reindex run ${state.run.id}`);
-    await this.retryFailures(refreshedState, entity);
-    const unresolved = await this.repository.listUnresolvedFailures(state.run.id, entity);
-    if (unresolved.length > 0) {
-      throw new Error(`Reindex paused with ${unresolved.length} unresolved ${entity} failures`);
-    }
-
-    const finalState = await this.repository.getRun(state.run.id);
-    const finalProgress = finalState?.progress.find((item) => item.entity === entity);
-    if (!finalProgress) throw new Error(`Missing final reindex progress for ${entity}`);
-    await this.client.refresh(finalProgress.physicalIndex);
-    const indexedCount = await this.client.count(finalProgress.physicalIndex);
-    await this.emitProgress({
-      checkpointCount: finalProgress.indexedCount,
-      drift: indexedCount - finalProgress.indexedCount,
-      elasticsearchCount: indexedCount,
-      entity,
-      type: 'reconciliation',
-    });
-    if (indexedCount !== finalProgress.indexedCount) {
-      throw new Error(
-        `Reindex count mismatch for ${entity}: checkpoint=${finalProgress.indexedCount}, Elasticsearch=${indexedCount}`,
-      );
-    }
-    await this.repository.completeEntity(state.run.id, entity);
-    await this.emitProgress({ count: indexedCount, entity, type: 'entity_completed' });
-    return true;
+    return this.completeEntity(state, entity);
   }
 
   async run(namespace: string, schemaVersion: number): Promise<FtsSearchReindexResult> {
@@ -648,8 +922,8 @@ export class FtsSearchReindexService {
 
     await this.prepareIndices(initialState);
 
-    const completed = await mapWithConcurrency(
-      FTS_SEARCH_DOCUMENT_ENTITIES,
+    await mapWithConcurrency(
+      this.options.entities,
       this.options.entityConcurrency,
       async (entity) => {
         const currentState = await this.repository.getRun(initialState.run.id);
@@ -662,15 +936,15 @@ export class FtsSearchReindexService {
       },
     );
 
-    if (completed.some((value) => !value)) {
+    const currentState = await this.repository.getRun(initialState.run.id);
+    if (!currentState) throw new Error(`Missing reindex run ${initialState.run.id}`);
+    if (currentState.progress.some(({ status }) => status !== 'completed')) {
       await this.emitProgress({ type: 'run_paused' });
       return { runId: initialState.run.id, status: 'backfilling' };
     }
 
-    const completedState = await this.repository.getRun(initialState.run.id);
-    if (!completedState) throw new Error(`Missing reindex run ${initialState.run.id}`);
     await this.options.validateIncrementalSyncSource();
-    for (const progress of completedState.progress) {
+    for (const progress of currentState.progress) {
       await this.client.ensureAlias(
         getFtsSearchIndexAlias(namespace, progress.entity),
         progress.physicalIndex,

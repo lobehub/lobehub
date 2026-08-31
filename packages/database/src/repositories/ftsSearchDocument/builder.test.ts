@@ -286,6 +286,22 @@ describe('FtsSearchDocumentBuilder', () => {
     expect(second.map(({ id }) => id)).toEqual(['agent-2']);
   });
 
+  it('uses inclusive lower and exclusive upper bounds for parallel range batches', async () => {
+    await expect(
+      builder.buildRangeBatch('messages', {
+        beforeId: 'message-2',
+        fromId: 'message-1',
+        limit: 10,
+      }),
+    ).resolves.toMatchObject([{ id: 'message-1' }]);
+    await expect(
+      builder.buildRangeBatch('messages', { afterId: 'message-1', limit: 10 }),
+    ).resolves.toEqual([]);
+    await expect(
+      builder.buildRangeBatch('messages', { beforeId: 'message-1', limit: 10 }),
+    ).resolves.toEqual([]);
+  });
+
   it('normalizes duplicate IDs and omits missing source records', async () => {
     const result = await builder.buildByIds('agents', ['missing', 'agent-1', 'agent-1']);
 
@@ -296,6 +312,13 @@ describe('FtsSearchDocumentBuilder', () => {
     await expect(builder.buildBatch('agents', { limit: 0 })).rejects.toThrow(
       'FTS search document batch limit must be a positive integer',
     );
+    await expect(
+      builder.buildRangeBatch('messages', {
+        afterId: 'message-1',
+        fromId: 'message-1',
+        limit: 1,
+      }),
+    ).rejects.toThrow('cannot use afterId and fromId together');
   });
 
   it('lists file and file-backed document keys affected by KB relation changes', async () => {

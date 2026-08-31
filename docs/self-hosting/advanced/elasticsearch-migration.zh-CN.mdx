@@ -116,6 +116,11 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
 
 `--entity-concurrency` 控制同时读取多少类 PostgreSQL 数据，`--bulk-concurrency` 控制每个数据类型的单批数据可同时发出多少个按字节拆分的 Elasticsearch 请求。应从较小数值开始，仅在 PostgreSQL 和 Elasticsearch 运行稳定时逐步增加。`--batch-size` 限制每次按主键翻页读取的 PostgreSQL 行数；`--bulk-max-bytes` 按编码后的字节数限制单次 `_bulk` 请求。单个文档超过限制时会被明确记为失败，不会静默跳过。可以重复传入 `--entity-batch-size=<entity>:<rows>`，只缩小超宽数据类型的 PostgreSQL 单页行数，不拖慢其他数据类型。
 
+大规模部署可以重复传入
+`--entity-range-concurrency=<documents|messages>:<workers>`，按 ID 区间并行读取这两类高容量数据。区间模式要求数据库使用逐字节排序规则（`C`、`C.UTF-8` 或 `C.utf8`），命令会在写入前检查。完成的区间只会按 ID 顺序推进持久化游标，因此任务中断后可以安全重放 Elasticsearch 已收到的后续区间。应从较小的并发任务数开始，只在持续观测 PostgreSQL 和 Elasticsearch 均稳定后增加。区间并发不能与 `--max-batches-per-entity` 同时使用。
+
+可以重复传入 `--entity=<entity>`，将一次执行限制到选定的数据类型，例如单独调优 `documents` 和 `messages`。只执行部分类型时不会提前创建别名；只要还有未完成类型，任务就会保持 `backfilling`。选定类型全部完成后，必须再执行一次不带 `--entity` 的续跑，让命令对完整 14 类数据进行最终对账并创建稳定别名。
+
 临时请求失败会先按指数间隔自动重试，再决定是否推进本批游标。默认最多重试 4 次，基础间隔为 500 毫秒，单次请求超时为 30 秒；需要时可通过 `--max-request-retries`、`--retry-base-delay-ms` 和 `--request-timeout-ms` 调整。
 
 每次执行或续跑都会把脱敏后的详细运行事件追加到 `<状态目录>/runs/<run-id>/events.jsonl`，并原子更新 `<状态目录>/runs/<run-id>/summary.json`。日志包含各数据类型和批量请求的耗时、字节数、文档数、重试、游标、失败与最终状态，但不会记录数据库或 Elasticsearch 地址、密钥以及文档正文。迁移或归档任务时，应把这些私有日志和 checkpoint 一起保留。

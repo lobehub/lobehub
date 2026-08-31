@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, lt, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -28,12 +28,21 @@ import { FTS_SEARCH_DOCUMENT_ENTITIES, parseFtsSearchDocumentSource } from './sc
 
 interface FtsSearchDocumentSelection {
   afterId?: string;
+  beforeId?: string;
+  fromId?: string;
   ids?: string[];
   limit: number;
 }
 
 export interface FtsSearchDocumentBatchOptions {
   afterId?: string;
+  limit: number;
+}
+
+export interface FtsSearchDocumentRangeBatchOptions {
+  afterId?: string;
+  beforeId?: string;
+  fromId?: string;
   limit: number;
 }
 
@@ -102,6 +111,27 @@ export class FtsSearchDocumentBuilder {
     }
 
     return this.build(entity, { afterId, limit });
+  }
+
+  /**
+   * Build one bounded keyset page for the two high-volume entities supported by parallel backfill.
+   * `fromId` is inclusive for the first page of a range; later pages continue with `afterId`.
+   */
+  async buildRangeBatch(
+    entity: 'documents' | 'messages',
+    { afterId, beforeId, fromId, limit }: FtsSearchDocumentRangeBatchOptions,
+  ): Promise<FtsSearchBuiltDocument[]> {
+    if (!Number.isInteger(limit) || limit < 1) {
+      throw new Error('FTS search document batch limit must be a positive integer');
+    }
+    if (afterId && fromId) {
+      throw new Error('FTS search document range cannot use afterId and fromId together');
+    }
+    if (beforeId && (afterId ?? fromId) && beforeId <= (afterId ?? fromId)!) {
+      throw new Error('FTS search document range must have ascending ID boundaries');
+    }
+
+    return this.build(entity, { afterId, beforeId, fromId, limit });
   }
 
   async buildByIds(
@@ -900,9 +930,14 @@ export class FtsSearchDocumentBuilder {
       .where(
         selection.ids
           ? inArray(documents.id, selection.ids)
-          : selection.afterId
-            ? gt(documents.id, selection.afterId)
-            : undefined,
+          : and(
+              selection.afterId
+                ? gt(documents.id, selection.afterId)
+                : selection.fromId
+                  ? gte(documents.id, selection.fromId)
+                  : undefined,
+              selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
+            ),
       )
       .orderBy(asc(documents.id))
       .limit(selection.limit);
@@ -972,9 +1007,14 @@ export class FtsSearchDocumentBuilder {
       .where(
         selection.ids
           ? inArray(messages.id, selection.ids)
-          : selection.afterId
-            ? gt(messages.id, selection.afterId)
-            : undefined,
+          : and(
+              selection.afterId
+                ? gt(messages.id, selection.afterId)
+                : selection.fromId
+                  ? gte(messages.id, selection.fromId)
+                  : undefined,
+              selection.beforeId ? lt(messages.id, selection.beforeId) : undefined,
+            ),
       )
       .orderBy(asc(messages.id))
       .limit(selection.limit);

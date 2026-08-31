@@ -171,6 +171,21 @@ larger than this limit is stored as an explicit failure. Repeat
 `--entity-batch-size=<entity>:<rows>` to use a smaller PostgreSQL page only for source types with
 materially wider rows, without slowing narrower entities.
 
+Large installations can repeat
+`--entity-range-concurrency=<documents|messages>:<workers>` to scan either high-volume entity in
+parallel ID ranges. Range mode requires the database collation to be bytewise (`C`, `C.UTF-8`, or
+`C.utf8`); the command checks this before writing. Completed ranges advance the durable cursor in
+ID order, so an interrupted run may safely replay a later range that Elasticsearch already
+received. Start with a small worker count and increase it only after measuring sustained database
+and Elasticsearch behavior. Range concurrency cannot be combined with
+`--max-batches-per-entity`.
+
+Repeat `--entity=<entity>` to limit one invocation to selected entities, for example while tuning
+`documents` and `messages`. A selected invocation never creates aliases early and leaves the run in
+`backfilling` while any unselected entity is incomplete. Resume once without `--entity` after all
+selected work finishes so the command can perform the complete 14-entity reconciliation and create
+the stable aliases.
+
 Transient request failures are retried with exponential backoff before the batch cursor advances.
 The defaults are four retries, a 500 ms base delay, and a 30-second request timeout. Override them
 with `--max-request-retries`, `--retry-base-delay-ms`, and `--request-timeout-ms` when required.
