@@ -29,6 +29,7 @@ import {
 } from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
+import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -186,6 +187,12 @@ export interface GatewayConnection {
 
 export interface ConnectGatewayParams {
   /**
+   * Present on the agent-share visitor surface. Routes the `auth_expired`
+   * token refresh through `shareChat.refreshGatewayToken` — the owner-scoped
+   * refresh cannot see the creator-owned share topic.
+   */
+  agentShareId?: string;
+  /**
    * Gateway WebSocket URL (e.g. https://agent-gateway.lobehub.com)
    */
   gatewayUrl: string;
@@ -276,8 +283,16 @@ export class GatewayActionImpl {
    * Creates an AgentStreamClient, manages its lifecycle, and wires up event callbacks.
    */
   connectToGateway = (params: ConnectGatewayParams): void => {
-    const { operationId, gatewayUrl, token, topicId, onEvent, onSessionComplete, resumeOnConnect } =
-      params;
+    const {
+      agentShareId,
+      operationId,
+      gatewayUrl,
+      token,
+      topicId,
+      onEvent,
+      onSessionComplete,
+      resumeOnConnect,
+    } = params;
 
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
@@ -398,7 +413,9 @@ export class GatewayActionImpl {
     // autoReconnect would keep running past the local op's lifetime.
     client.on('auth_expired', async () => {
       try {
-        const { token: fresh } = await aiAgentService.refreshGatewayToken(topicId);
+        const { token: fresh } = agentShareId
+          ? await shareChatService.refreshGatewayToken(agentShareId, topicId)
+          : await aiAgentService.refreshGatewayToken(topicId);
         client.updateToken(fresh);
         await client.reconnect();
       } catch (error) {
@@ -658,74 +675,90 @@ export class GatewayActionImpl {
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
 
+    // Agent-share visitor surface: dispatch through the share-authorized mirror.
+    // It accepts only the share-safe subset (prompt / topic / clientIds) —
+    // everything else (tools, devices, mentions) is decided server-side by the
+    // share config, never by this client.
+    const agentShareId = executionContext.agentShareId;
+
     const result =
       precreatedResult ??
-      (await aiAgentService.execAgentTask(
-        {
-          agentId: executionContext.agentId,
-          // Fresh sends only — resume flows never pass this, and the server drops
-          // it defensively on resume-like params anyway.
-          clientIds,
-          appContext: {
-            agentDocumentId: executionContext.agentDocumentId,
-            ...(messageContext.agentId !== executionContext.agentId && {
-              conversationAgentId: messageContext.agentId,
-            }),
-            defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
-            documentId: executionContext.documentId,
-            // When AgentBuilder runs, context.agentId is the builtin builder agent.
-            // The actual editing target is chatStore.activeAgentId (kept in sync by
-            // AgentBuilderProvider). Pass it so the server can route tool calls to
-            // the correct agent rather than the builder itself.
-            ...(executionContext.scope === 'agent_builder' && {
-              editingAgentId: this.#get().activeAgentId ?? undefined,
-            }),
-            // Same shape as `editingAgentId`, for the Group Agent Builder panel on
-            // the group Profile page. The builder conversation is keyed by the
-            // builtin builder agent (no groupId in its ConversationContext, so the
-            // message map key and the group's own chat stay separate), which left
-            // the server runtime with no idea which group it was editing.
-            // The context value wins, and every surface that opens this scope sets
-            // it from its own route/group: it is fixed for the run, so a mid-run
-            // navigation cannot make the server stamp a different group than the
-            // panel is reading from. The `activeGroupId` fallback is a last resort
-            // for a caller that forgot — it is sampled here, AFTER the async
-            // preflight above, so it can already be stale by this point.
-            ...(executionContext.scope === 'group_agent_builder' && {
-              editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
-            }),
-            groupId: executionContext.groupId,
-            ...(initialTopicMetadata && { initialTopicMetadata }),
-            ...(newThread && { newThread }),
-            // Forward the group orchestration role so the server can stamp it onto
-            // the assistant message metadata. Without this the gateway-created
-            // supervisor turn loses its role on the step_start snapshot / refetch
-            // and renders as a generic assistant.
-            orchestrationRole: executionContext.orchestrationRole,
-            scope: executionContext.scope,
-            taskId,
-            threadId: executionContext.threadId,
-            topicId: executionContext.topicId,
-            // Goal-page side conversation: lets the server build the goal
-            // overview injection for gateway-run agents (mirrors the client
-            // streaming executor).
-            viewedGoal: executionContext.viewedGoal,
-          },
-          ...desktopDeviceHints,
-          fileIds,
-          replacesOperationId,
-          mentionedAgents,
-          parentMessageId,
-          prompt: message,
-          resumeApproval,
-          resumeApprovals,
-          resumeToolResult,
-          selectedToolIds,
-          trigger: metadata?.trigger,
-          userInterventionConfig,
-        },
-        { signal: abortSignal },
-      ));
+      (agentShareId
+        ? await shareChatService.execAgentTask(
+            {
+              clientIds,
+              prompt: message,
+              shareId: agentShareId,
+              topicId: executionContext.topicId,
+            },
+            { signal: abortSignal },
+          )
+        : await aiAgentService.execAgentTask(
+            {
+              agentId: executionContext.agentId,
+              // Fresh sends only — resume flows never pass this, and the server drops
+              // it defensively on resume-like params anyway.
+              clientIds,
+              appContext: {
+                agentDocumentId: executionContext.agentDocumentId,
+                ...(messageContext.agentId !== executionContext.agentId && {
+                  conversationAgentId: messageContext.agentId,
+                }),
+                defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
+                documentId: executionContext.documentId,
+                // When AgentBuilder runs, context.agentId is the builtin builder agent.
+                // The actual editing target is chatStore.activeAgentId (kept in sync by
+                // AgentBuilderProvider). Pass it so the server can route tool calls to
+                // the correct agent rather than the builder itself.
+                ...(executionContext.scope === 'agent_builder' && {
+                  editingAgentId: this.#get().activeAgentId ?? undefined,
+                }),
+                // Same shape as `editingAgentId`, for the Group Agent Builder panel on
+                // the group Profile page. The builder conversation is keyed by the
+                // builtin builder agent (no groupId in its ConversationContext, so the
+                // message map key and the group's own chat stay separate), which left
+                // the server runtime with no idea which group it was editing.
+                // The context value wins, and every surface that opens this scope sets
+                // it from its own route/group: it is fixed for the run, so a mid-run
+                // navigation cannot make the server stamp a different group than the
+                // panel is reading from. The `activeGroupId` fallback is a last resort
+                // for a caller that forgot — it is sampled here, AFTER the async
+                // preflight above, so it can already be stale by this point.
+                ...(executionContext.scope === 'group_agent_builder' && {
+                  editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
+                }),
+                groupId: executionContext.groupId,
+                ...(initialTopicMetadata && { initialTopicMetadata }),
+                ...(newThread && { newThread }),
+                // Forward the group orchestration role so the server can stamp it onto
+                // the assistant message metadata. Without this the gateway-created
+                // supervisor turn loses its role on the step_start snapshot / refetch
+                // and renders as a generic assistant.
+                orchestrationRole: executionContext.orchestrationRole,
+                scope: executionContext.scope,
+                taskId,
+                threadId: executionContext.threadId,
+                topicId: executionContext.topicId,
+                // Goal-page side conversation: lets the server build the goal
+                // overview injection for gateway-run agents (mirrors the client
+                // streaming executor).
+                viewedGoal: executionContext.viewedGoal,
+              },
+              ...desktopDeviceHints,
+              fileIds,
+              replacesOperationId,
+              mentionedAgents,
+              parentMessageId,
+              prompt: message,
+              resumeApproval,
+              resumeApprovals,
+              resumeToolResult,
+              selectedToolIds,
+              trigger: metadata?.trigger,
+              userInterventionConfig,
+            },
+            { signal: abortSignal },
+          ));
 
     // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
     // before handling a late abort so callers never delete a file already attached server-side.
@@ -743,10 +776,19 @@ export class GatewayActionImpl {
         hasInterruptedAfterPersistence = true;
         // Cancel arrived after execAgentTask resolved — server task exists. Interrupt generation,
         // but keep reconciling the persisted message before returning to the caller.
-        interruptGatewayTaskOrThrow({
-          operationId: result.operationId,
-          topicId: result.topicId,
-        }).catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+        // Share visitors have no access to the owner-scoped interrupt (and no
+        // device runtimes to confirm), so they go through the share mirror.
+        if (agentShareId)
+          shareChatService
+            .interruptTask(agentShareId, result.topicId, result.operationId)
+            .catch((err) =>
+              console.error('[Gateway] share interruptTask after cancel failed:', err),
+            );
+        else
+          interruptGatewayTaskOrThrow({
+            operationId: result.operationId,
+            topicId: result.topicId,
+          }).catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
       }
 
       return true;
@@ -839,9 +881,14 @@ export class GatewayActionImpl {
       // Unlike the direct-API sendMessage path (which receives topics[] in the
       // response and calls internal_updateTopics), the gateway path only gets a
       // topicId — we must explicitly refetch so the sidebar shows the new topic.
-      this.#get()
-        .refreshTopic()
-        .catch((err) => console.error('[Gateway] refreshTopic after topic creation failed:', err));
+      // Share visitors have no owner topic sidebar — their list refreshes via
+      // the share feature's own SWR hook, and refreshTopic is owner-scoped.
+      if (!agentShareId)
+        this.#get()
+          .refreshTopic()
+          .catch((err) =>
+            console.error('[Gateway] refreshTopic after topic creation failed:', err),
+          );
     }
 
     this.#get().moveQueuedMessages(
@@ -930,6 +977,13 @@ export class GatewayActionImpl {
     // depend on any metadata lookup. The returned promise preserves an
     // unconfirmed device shutdown so Send now can keep its queued message.
     this.#get().onOperationCancel(gatewayOpId, async () => {
+      if (agentShareId) {
+        await shareChatService
+          .interruptTask(agentShareId, result.topicId, result.operationId)
+          .catch((err) => console.error('[Gateway] share interruptTask failed:', err));
+        return;
+      }
+
       await interruptGatewayTaskOrThrow({
         operationId: result.operationId,
         topicId: result.topicId,
@@ -1010,13 +1064,16 @@ export class GatewayActionImpl {
           // when `lastSettledOperationId` still matches. It also remains the
           // backstop when `clearRunningMark` failed and left the marker in place.
           const viewing = this.#get().activeTopicId === result.topicId;
-          topicService
-            .settleRunningOperation(
-              result.topicId,
-              result.operationId,
-              viewing || !effectiveSucceeded ? 'active' : 'unread',
-            )
-            .catch(console.error);
+          // Share visitors cannot settle the creator-owned topic row (the topic
+          // router is owner-scoped) — the local clear below still runs.
+          if (!agentShareId)
+            topicService
+              .settleRunningOperation(
+                result.topicId,
+                result.operationId,
+                viewing || !effectiveSucceeded ? 'active' : 'unread',
+              )
+              .catch(console.error);
           // Also clear the local store copy — the server settle above does NOT
           // touch the Zustand topic map that useGatewayReconnect (and the sidebar
           // spinner) read. Mirror the same 'active' decision passed to the server
@@ -1033,6 +1090,7 @@ export class GatewayActionImpl {
         }
         onComplete?.();
       },
+      agentShareId,
       operationId: result.operationId,
       token: result.token || '',
       topicId: result.topicId,

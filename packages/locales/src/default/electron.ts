@@ -43,6 +43,7 @@ export default {
   'navigation.resourceVideos': 'Videos',
   'navigation.settings': 'Settings',
   'navigation.selfLearning': 'Self-evolving',
+  'navigation.sharedAgent': 'Shared Agent',
   'navigation.stats': 'Statistics',
   'navigation.task': 'Task',
   'navigation.tasks': 'Tasks',
