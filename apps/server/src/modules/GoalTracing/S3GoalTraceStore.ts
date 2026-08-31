@@ -24,6 +24,14 @@ export const buildGoalTraceKey = (goalId: string): string =>
   `${TRACE_PREFIX}/${goalId}${TRAJECTORY_SUFFIX}`;
 
 /**
+ * Where an in-progress trajectory lives. A long-horizon goal is a partial for
+ * nearly all of its life, so this is the object a reader wants most of the
+ * time — the finalized key only exists once the goal is terminal.
+ */
+export const buildGoalTracePartialKey = (goalId: string): string =>
+  `${TRACE_PREFIX}/_partial/${goalId}${TRAJECTORY_SUFFIX}`;
+
+/**
  * S3-backed goal trajectories.
  *
  * One object per goal, accumulated through a partial exactly like an operation
@@ -43,7 +51,7 @@ export class S3GoalTraceStore implements IGoalTraceStore {
   }
 
   private partialKey(goalId: string): string {
-    return `${TRACE_PREFIX}/_partial/${goalId}${TRAJECTORY_SUFFIX}`;
+    return buildGoalTracePartialKey(goalId);
   }
 
   private async encode(value: unknown): Promise<Buffer> {
