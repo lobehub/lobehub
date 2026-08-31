@@ -20,6 +20,7 @@ export * from './summaryGenerationTitle';
 export * from './summaryHistory';
 export * from './summaryTags';
 export * from './summaryTitle';
+export * from './taskIntent';
 export * from './taskTopicHandoff';
 export * from './topicAutoSummary';
 export * from './translate';

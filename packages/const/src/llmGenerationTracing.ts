@@ -28,6 +28,7 @@ export const TRACING_SCENARIOS = {
   TaskBrief: 'task_brief',
   TaskBriefJudge: 'task_brief_judge',
   TaskHandoff: 'task_handoff',
+  TaskIntent: 'task_intent',
   TopicTitle: 'topic_title',
   TopicAutoSummary: 'topic_auto_summary',
   UnderstandingAnalysis: 'understanding_analysis',

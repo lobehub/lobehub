@@ -1,4 +1,9 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  TaskAutomationMode,
+  TaskIntentAnalysis,
+  TaskStatus,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -62,6 +67,16 @@ class TaskService {
   getVerifyConfig = async (id: string) => lambdaClient.task.getVerifyConfig.query({ id });
 
   // ── Mutations ──
+
+  /**
+   * Read a composer draft and report what it means. A mutation on the wire
+   * (it spends a model call), but it creates nothing — the caller decides
+   * whether to act on the reading.
+   */
+  analyzeIntent = async (params: {
+    context?: string;
+    instruction: string;
+  }): Promise<TaskIntentAnalysis> => lambdaClient.task.analyzeIntent.mutate(params);
 
   create = async (params: {
     assigneeAgentId?: string;

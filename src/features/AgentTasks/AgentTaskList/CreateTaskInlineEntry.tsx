@@ -1,28 +1,34 @@
 'use client';
 
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
+import type { TaskIntentAnalysis } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { Block, Flexbox } from '@lobehub/ui';
+import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
-import { ChevronUp, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import GeneratingBorder from '@/components/GeneratingBorder';
+import { createGoalModal } from '@/features/AgentGoals/CreateGoalModal';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
+import { taskService } from '@/services/task';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { shinyTextStyles } from '@/styles';
 
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
@@ -32,9 +38,18 @@ import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { taskDetailPath } from '../shared/taskDetailPath';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import {
+  buildConfirmedDraft,
+  buildGoalSeed,
+  buildInstructionSeed,
+  type ClarificationAnswers,
+  shouldConfirmIntent,
+} from './taskIntent';
+import TaskIntentReview from './TaskIntentReview';
 
 interface CreateTaskInlineEntryProps {
   agentId?: string;
@@ -96,6 +111,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       ),
     [workspaceMembers],
   );
+  const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
@@ -105,6 +121,27 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // In personal mode the chip is hidden and the value is never sent.
   const [visibility, setVisibility] = useState<'private' | 'public'>(defaultVisibility);
 
+  // Reading the draft is what submit does now. It only stops for confirmation
+  // when it found something the user alone can settle, so the escape hatch is
+  // the dropdown's "create directly" rather than a setting nobody would find.
+  const canCreateGoal = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const [analysis, setAnalysis] = useState<TaskIntentAnalysis | null>(null);
+  const [intentTitle, setIntentTitle] = useState('');
+  const [intentAnswers, setIntentAnswers] = useState<ClarificationAnswers>({});
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // The instruction the review step shows is a real editor, not a preview: it
+  // is what gets created, so the user has to be able to read it and change it.
+  // It is a second editor rather than the composer's own so that going back
+  // returns to the untouched draft.
+  const reviewEditor = useEditor();
+  const [instructionSeed, setInstructionSeed] = useState<{
+    content: string;
+    editorData: unknown;
+  }>({ content: '', editorData: undefined });
+  const [instructionRevision, setInstructionRevision] = useState(0);
+
+  // A private agent can only run a private task. Coerce + lock the
+  // visibility chip when the selected agent is private.
   const assigneeVisibility = useAgentVisibility(assigneeAgentId);
   const isPrivateAgent = assigneeVisibility === 'private';
   const selfUserId = useUserStore(userProfileSelectors.userId);
@@ -287,12 +324,30 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!canCreateTask) return;
+  const resetComposer = useCallback(() => {
+    setPriority(0);
+    setAssigneeAgentId(agentId);
+    setAssigneeUserId(undefined);
+    setInstruction('');
+    setVisibility(defaultVisibility);
+    setAnalysis(null);
+    setIntentAnswers({});
+    editor?.cleanDocument?.();
+    if (draftStorageKey) {
+      try {
+        localStorage.removeItem(draftStorageKey);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [agentId, defaultVisibility, draftStorageKey, editor]);
+
+  /** What the composer currently holds, or null when there is nothing to create. */
+  const readDraft = useCallback(() => {
     const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
     const trimmedText = instruction.trim();
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
-    if (!trimmedText && !markdown && !hasFiles) return;
+    if (!trimmedText && !markdown && !hasFiles) return null;
 
     const firstLine =
       trimmedText
@@ -304,71 +359,246 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       name = firstLine.length > 30 ? `${firstLine.slice(0, 30)}…` : firstLine;
     }
 
-    const editorJson = editor?.getDocument?.('json') as unknown;
+    return {
+      editorJson: editor?.getDocument?.('json') as unknown,
+      instruction: markdown || trimmedText || name || '',
+      name,
+    };
+  }, [editor, instruction]);
 
-    // `createTask` keeps its rejecting contract (other callers rely on `catch`);
-    // handle the composer's own failure here so it isn't silent, keeping the
-    // draft intact (the reset only runs on success).
-    try {
-      const result = await createTask({
-        assigneeAgentId,
-        assigneeUserId,
-        editorData: editorJson,
-        instruction: markdown || trimmedText || name || '',
-        name,
-        parentTaskId,
-        priority: priority || undefined,
-        projectId,
-        // Only send visibility in workspace mode; personal mode lets the server
-        // fall through to the schema default ('public', inert in personal mode).
-        visibility: activeWorkspaceId ? visibility : undefined,
-      });
+  const submitDraft = useCallback(
+    async (draft: { editorJson: unknown; instruction: string; name?: string }) => {
+      // Drop the persisted draft BEFORE the request, not in the success reset.
+      // Creating the first task flips the list from empty to non-empty, which
+      // swaps the hero composer for the one that sits above the list — a
+      // different component instance, mounted while this await is still in
+      // flight. That new instance hydrates itself from this key, so a draft
+      // still on disk here comes straight back onto the screen and the reset
+      // below lands on the old, dying instance. Kept in hand so a failed
+      // create can put it back.
+      let persistedDraft: string | null = null;
+      if (draftStorageKey) {
+        try {
+          persistedDraft = localStorage.getItem(draftStorageKey);
+          localStorage.removeItem(draftStorageKey);
+        } catch {
+          /* storage unavailable — persistence is best-effort */
+        }
+      }
 
-      if (result) {
-        setPriority(0);
-        setAssigneeAgentId(agentId);
-        setAssigneeUserId(undefined);
-        setInstruction('');
-        setVisibility(defaultVisibility);
-        editor?.cleanDocument?.();
-        if (draftStorageKey) {
+      // `createTask` keeps its rejecting contract (other callers rely on `catch`);
+      // handle the composer's own failure here so it isn't silent, keeping the
+      // draft intact (the reset only runs on success).
+      try {
+        const result = await createTask({
+          assigneeAgentId,
+          assigneeUserId,
+          editorData: draft.editorJson,
+          instruction: draft.instruction,
+          name: draft.name,
+          parentTaskId,
+          priority: priority || undefined,
+          projectId,
+          // Only send visibility in workspace mode; personal mode lets the server
+          // fall through to the schema default ('public', inert in personal mode).
+          visibility: activeWorkspaceId ? visibility : undefined,
+        });
+
+        if (result) {
+          resetComposer();
+          // Creating from here leaves the user on the list, so without this the
+          // whole flow ends in a spinner blinking out — nothing says the task
+          // exists, what it ended up called, or where it went. The name matters
+          // most after a reading, since that name is what the reading produced.
+          toast.success({
+            description: result.name || draft.name,
+            title: t('taskIntent.created'),
+            actions: [
+              {
+                label: t('taskIntent.openCreated'),
+                onClick: () =>
+                  navigate(taskDetailPath(result.identifier, result.assigneeAgentId ?? undefined)),
+              },
+            ],
+          });
+          onCreated?.({
+            agentId: result.assigneeAgentId ?? undefined,
+            identifier: result.identifier,
+          });
+        }
+      } catch {
+        // Nothing was created, so the draft is still the user's work: put it
+        // back on disk to match the text the composer is still showing.
+        if (draftStorageKey && persistedDraft !== null) {
           try {
-            localStorage.removeItem(draftStorageKey);
+            localStorage.setItem(draftStorageKey, persistedDraft);
           } catch {
-            /* ignore */
+            /* storage unavailable — persistence is best-effort */
           }
         }
-        onCreated?.({
-          agentId: result.assigneeAgentId ?? undefined,
-          identifier: result.identifier,
-        });
+        toast.error(t('createTask.createFailed'));
       }
+    },
+    [
+      t,
+      activeWorkspaceId,
+      draftStorageKey,
+      assigneeAgentId,
+      assigneeUserId,
+      createTask,
+      navigate,
+      onCreated,
+      parentTaskId,
+      priority,
+      projectId,
+      resetComposer,
+      visibility,
+    ],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (!canCreateTask) return;
+    const draft = readDraft();
+    if (!draft) return;
+
+    setIsAnalyzing(true);
+    try {
+      const result = await taskService.analyzeIntent({
+        context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
+        instruction: draft.instruction,
+      });
+
+      // An unambiguous draft is never held up — it goes straight through, just
+      // with a real name instead of the first thirty characters of line one.
+      if (shouldConfirmIntent(result)) {
+        setAnalysis(result);
+        setIntentTitle(result.title);
+        setIntentAnswers({});
+        setInstructionSeed(
+          buildInstructionSeed({
+            analysis: result,
+            editorJson: draft.editorJson,
+            instruction: draft.instruction,
+          }),
+        );
+        // A new reading is new content: bump the revision so the review editor
+        // reloads instead of keeping the previous draft's text.
+        setInstructionRevision((revision) => revision + 1);
+        return;
+      }
+
+      await submitDraft({ ...draft, name: result.title || draft.name });
     } catch {
-      toast.error(t('createTask.createFailed'));
+      // Reading the draft is an assist, never a gate: when the model call fails
+      // the task is created exactly as it would have been without this step.
+      await submitDraft(draft);
+    } finally {
+      setIsAnalyzing(false);
     }
+  }, [assigneeMeta?.title, canCreateTask, readDraft, submitDraft]);
+
+  /**
+   * The escape hatch, one click away in the submit dropdown: create the task
+   * with no reading at all. Same path the composer took before this feature —
+   * first line truncated for the name, draft text handed straight over — so a
+   * user who finds the reading slow or wrong is never stuck behind it.
+   */
+  const handleCreateDirectly = useCallback(async () => {
+    if (!canCreateTask) return;
+    const draft = readDraft();
+    if (!draft) return;
+    await submitDraft(draft);
+  }, [canCreateTask, readDraft, submitDraft]);
+
+  const handleAnswerChange = useCallback((index: number, value: string) => {
+    setIntentAnswers((current) => ({ ...current, [index]: value }));
+  }, []);
+
+  /**
+   * The review editor is the source of truth for what gets created, not the
+   * composer draft it was seeded from — the user may have rewritten any of it.
+   * Markdown and its rich-text mirror are read from the same editor and get the
+   * answers appended together, so the task page cannot show one and the agent
+   * read the other.
+   */
+  const handleConfirmIntent = useCallback(async () => {
+    const draft = readDraft();
+    if (!analysis || !draft) return;
+
+    // Cmd+Enter can confirm from a question step, where the instruction editor
+    // has not mounted yet. Falling back to the seed rather than the raw draft
+    // keeps that path identical to clicking through to the confirm step.
+    const edited = String(reviewEditor?.getDocument?.('markdown') ?? '').trim();
+    const confirmed = buildConfirmedDraft({
+      analysis,
+      answers: intentAnswers,
+      editorJson: edited
+        ? (reviewEditor?.getDocument?.('json') as unknown)
+        : instructionSeed.editorData,
+      heading: t('taskIntent.answersHeading'),
+      instruction: edited || instructionSeed.content || draft.instruction,
+    });
+
+    await submitDraft({
+      editorJson: confirmed.editorData,
+      instruction: confirmed.instruction,
+      name: intentTitle.trim() || analysis.title,
+    });
   }, [
+    analysis,
+    instructionSeed,
+    intentAnswers,
+    intentTitle,
+    readDraft,
+    reviewEditor,
+    submitDraft,
     t,
-    activeWorkspaceId,
-    agentId,
-    assigneeAgentId,
-    assigneeUserId,
-    createTask,
-    defaultVisibility,
-    draftStorageKey,
-    editor,
-    instruction,
-    onCreated,
-    parentTaskId,
-    priority,
-    projectId,
-    canCreateTask,
-    visibility,
   ]);
 
+  // Hands the draft (and any answers already given) to the goal modal, then
+  // drops back to composing: the goal flow owns the outcome from here, and the
+  // untouched draft is still in the editor if the user backs out of it.
+  const handleSwitchToGoal = useCallback(() => {
+    const draft = readDraft();
+    if (!analysis || !draft) return;
+
+    const edited = String(reviewEditor?.getDocument?.('markdown') ?? '').trim();
+    const seed = buildGoalSeed({
+      analysis,
+      answers: intentAnswers,
+      heading: t('taskIntent.answersHeading'),
+      instruction: edited || instructionSeed.content || draft.instruction,
+    });
+
+    createGoalModal({
+      agentId: assigneeAgentId,
+      initialRequirement: seed.requirement,
+      initialTitle: intentTitle.trim() || seed.title,
+      onCreated: resetComposer,
+      projectId,
+    });
+    setAnalysis(null);
+  }, [
+    analysis,
+    assigneeAgentId,
+    instructionSeed,
+    intentAnswers,
+    intentTitle,
+    projectId,
+    readDraft,
+    resetComposer,
+    reviewEditor,
+    t,
+  ]);
+
+  const isReviewing = Boolean(analysis);
+
+  // Cmd+Enter means "the primary action of what is on screen": submit the
+  // draft while composing, confirm the reading while reviewing.
   const handleSubmitRef = useRef(handleSubmit);
   useEffect(() => {
-    handleSubmitRef.current = handleSubmit;
-  }, [handleSubmit]);
+    handleSubmitRef.current = isReviewing ? handleConfirmIntent : handleSubmit;
+  }, [handleConfirmIntent, handleSubmit, isReviewing]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -379,198 +609,267 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   }, []);
 
   return (
-    <Block
-      style={{ overflow: 'hidden', position: 'relative' }}
-      variant={'outlined'}
-      onKeyDownCapture={handleKeyDown}
-    >
-      {!isHero && (
-        <ActionIcon
-          icon={ChevronUp}
-          size={'small'}
-          style={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
-          title={t('createTask.collapse')}
-          onClick={handleCollapse}
-        />
-      )}
-      <Flexbox
-        style={{
-          fontSize: isHero ? 16 : 14,
-          // Cap the editor so a long draft scrolls inside the box instead of
-          // growing the composer until it pushes the task list below the fold.
-          maxHeight: isHero ? 360 : 200,
-          overflowY: 'auto',
-          padding: isHero ? '12px 16px 0' : '8px 40px 0 16px',
-        }}
+    // The ring belongs to the whole input surface — editor, controls and submit
+    // are one thing being read, so lighting only the text area would draw a
+    // second boundary the composer does not otherwise have.
+    <GeneratingBorder generating={isAnalyzing}>
+      <Block
+        style={{ overflow: 'hidden', position: 'relative' }}
+        variant={'outlined'}
+        onKeyDownCapture={handleKeyDown}
       >
-        <EditorCanvas
-          disabled={!canCreateTask}
-          editor={editor}
-          floatingToolbar={false}
-          placeholder={placeholder ?? t('createTask.instructionPlaceholder')}
-          style={{
-            fontSize: isHero ? 16 : 14,
-            minHeight: isHero ? 80 : undefined,
-            paddingBottom: 12,
-          }}
-          onContentChange={handleContentChange}
-        />
-      </Flexbox>
-      <Flexbox
-        horizontal
-        align={'center'}
-        justify={'space-between'}
-        style={{
-          borderTop: `1px solid ${cssVar.colorBorderSecondary}`,
-          paddingBlock: 8,
-          paddingInline: '8px 16px',
-        }}
-      >
-        <Flexbox horizontal align={'center'} gap={2} wrap={'wrap'}>
-          <TaskPriorityTag priority={priority} onChange={setPriority}>
-            <Block
-              clickable
-              horizontal
-              align="center"
-              gap={6}
-              height={24}
-              paddingBlock={3}
-              paddingInline={8}
-              variant={'borderless'}
-            >
-              <TaskPriorityTag disableDropdown priority={priority} size={14} />
-              <Text fontSize={12}>
-                {priority === 0
-                  ? t('taskDetail.priority.none')
-                  : t(
-                      `taskDetail.priority.${(['', 'urgent', 'high', 'normal', 'low'] as const)[priority]}` as never,
-                    )}
-              </Text>
-            </Block>
-          </TaskPriorityTag>
-
-          {activeWorkspaceId && (
-            <AssigneeMemberSelector
-              currentUserId={assigneeUserId}
-              taskVisibility={visibility}
-              onChange={handleMemberChange}
-            >
-              <Block
-                clickable
-                horizontal
-                align="center"
-                gap={6}
-                height={24}
-                paddingBlock={3}
-                paddingInline={8}
-                variant={'borderless'}
-              >
-                {assigneeUserId ? (
-                  <>
-                    <AssigneeUserAvatar size={18} userId={assigneeUserId} />
-                    <Text fontSize={12}>{memberMeta?.title}</Text>
-                  </>
-                ) : (
-                  <>
-                    <UnassignedAssigneeIcon kind={'human'} size={14} />
-                    <Text color={cssVar.colorTextDescription} fontSize={12}>
-                      {t('createTask.member')}
-                    </Text>
-                  </>
-                )}
-              </Block>
-            </AssigneeMemberSelector>
-          )}
-
-          {lockAssignee ? (
-            <Block
-              horizontal
-              align="center"
-              gap={6}
-              height={24}
-              paddingBlock={3}
-              paddingInline={8}
-              variant={'borderless'}
-            >
-              <AssigneeAvatar agentId={assigneeAgentId} size={18} />
-              <Text fontSize={12}>{assigneeMeta?.title}</Text>
-            </Block>
-          ) : (
-            <AssigneeAgentSelector
-              currentAgentId={assigneeAgentId}
-              taskVisibility={isOtherMemberAssignee ? 'public' : undefined}
-              onChange={handleAgentChange}
-            >
-              <Block
-                clickable
-                horizontal
-                align="center"
-                gap={6}
-                height={24}
-                paddingBlock={3}
-                paddingInline={8}
-                variant={'borderless'}
-              >
-                {assigneeAgentId ? (
-                  <>
-                    <AssigneeAvatar agentId={assigneeAgentId} size={18} />
-                    <Text fontSize={12}>{assigneeMeta?.title}</Text>
-                  </>
-                ) : (
-                  <>
-                    <UnassignedAssigneeIcon kind={'agent'} size={14} />
-                    <Text color={cssVar.colorTextDescription} fontSize={12}>
-                      {t('createTask.assignee')}
-                    </Text>
-                  </>
-                )}
-              </Block>
-            </AssigneeAgentSelector>
-          )}
-
+        {!isHero && !isReviewing && (
           <ActionIcon
-            icon={Paperclip}
+            icon={ChevronUp}
             size={'small'}
-            title={t('upload.action.tooltip')}
-            onClick={handleAttach}
+            style={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
+            title={t('createTask.collapse')}
+            onClick={handleCollapse}
+          />
+        )}
+        {isReviewing && analysis && (
+          <TaskIntentReview
+            analysis={analysis}
+            answers={intentAnswers}
+            instructionEditor={reviewEditor}
+            instructionRevision={instructionRevision}
+            instructionSeed={instructionSeed}
+            isCreating={isCreating}
+            title={intentTitle}
+            onAnswerChange={handleAnswerChange}
+            onBack={() => setAnalysis(null)}
+            onConfirm={handleConfirmIntent}
+            onSwitchToGoal={canCreateGoal ? handleSwitchToGoal : undefined}
+            onTitleChange={setIntentTitle}
+          />
+        )}
+        {/* Kept mounted through the review step so going back restores the draft
+            exactly as it was, attachments and all. */}
+        <Flexbox
+          style={{
+            display: isReviewing ? 'none' : undefined,
+            fontSize: isHero ? 16 : 14,
+            // Cap the editor so a long draft scrolls inside the box instead of
+            // growing the composer until it pushes the task list below the fold.
+            maxHeight: isHero ? 360 : 200,
+            overflowY: 'auto',
+            padding: isHero ? '12px 16px 0' : '8px 40px 0 16px',
+          }}
+        >
+          <EditorCanvas
+            disabled={!canCreateTask}
+            editor={editor}
+            floatingToolbar={false}
+            placeholder={placeholder ?? t('createTask.instructionPlaceholder')}
+            style={{
+              fontSize: isHero ? 16 : 14,
+              minHeight: isHero ? 80 : undefined,
+              paddingBottom: 12,
+            }}
+            onContentChange={handleContentChange}
           />
         </Flexbox>
+        <Flexbox
+          horizontal
+          align={'center'}
+          justify={'space-between'}
+          style={{
+            borderTop: `1px solid ${cssVar.colorBorderSecondary}`,
+            display: isReviewing ? 'none' : undefined,
+            paddingBlock: 8,
+            paddingInline: '8px 16px',
+          }}
+        >
+          <Flexbox horizontal align={'center'} gap={2} wrap={'wrap'}>
+            <TaskPriorityTag priority={priority} onChange={setPriority}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                <TaskPriorityTag disableDropdown priority={priority} size={14} />
+                <Text fontSize={12}>
+                  {priority === 0
+                    ? t('taskDetail.priority.none')
+                    : t(
+                        `taskDetail.priority.${(['', 'urgent', 'high', 'normal', 'low'] as const)[priority]}` as never,
+                      )}
+                </Text>
+              </Block>
+            </TaskPriorityTag>
 
-        <Flexbox horizontal align={'center'} gap={4}>
-          {activeWorkspaceId && (
-            <TaskVisibilityTag
-              visibility={visibility}
-              lockedReason={
-                isPrivateAgent
-                  ? t('createTask.visibility.privateAgentLocked', {
-                      defaultValue: 'Private agents can only run private tasks.',
-                    })
-                  : isOtherMemberAssignee
-                    ? t('createTask.visibility.memberAssigneeLocked', {
-                        defaultValue: 'A task assigned to a member stays visible to the workspace.',
+            {activeWorkspaceId && (
+              <AssigneeMemberSelector
+                currentUserId={assigneeUserId}
+                taskVisibility={visibility}
+                onChange={handleMemberChange}
+              >
+                <Block
+                  clickable
+                  horizontal
+                  align="center"
+                  gap={6}
+                  height={24}
+                  paddingBlock={3}
+                  paddingInline={8}
+                  variant={'borderless'}
+                >
+                  {assigneeUserId ? (
+                    <>
+                      <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                      <Text fontSize={12}>{memberMeta?.title}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <UnassignedAssigneeIcon kind={'human'} size={14} />
+                      <Text color={cssVar.colorTextDescription} fontSize={12}>
+                        {t('createTask.member')}
+                      </Text>
+                    </>
+                  )}
+                </Block>
+              </AssigneeMemberSelector>
+            )}
+
+            {lockAssignee ? (
+              <Block
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                <Text fontSize={12}>{assigneeMeta?.title}</Text>
+              </Block>
+            ) : (
+              <AssigneeAgentSelector
+                currentAgentId={assigneeAgentId}
+                taskVisibility={isOtherMemberAssignee ? 'public' : undefined}
+                onChange={handleAgentChange}
+              >
+                <Block
+                  clickable
+                  horizontal
+                  align="center"
+                  gap={6}
+                  height={24}
+                  paddingBlock={3}
+                  paddingInline={8}
+                  variant={'borderless'}
+                >
+                  {assigneeAgentId ? (
+                    <>
+                      <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                      <Text fontSize={12}>{assigneeMeta?.title}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <UnassignedAssigneeIcon kind={'agent'} size={14} />
+                      <Text color={cssVar.colorTextDescription} fontSize={12}>
+                        {t('createTask.assignee')}
+                      </Text>
+                    </>
+                  )}
+                </Block>
+              </AssigneeAgentSelector>
+            )}
+
+            <ActionIcon
+              icon={Paperclip}
+              size={'small'}
+              title={t('upload.action.tooltip')}
+              onClick={handleAttach}
+            />
+          </Flexbox>
+
+          <Flexbox horizontal align={'center'} gap={4}>
+            {activeWorkspaceId && (
+              <TaskVisibilityTag
+                visibility={visibility}
+                lockedReason={
+                  isPrivateAgent
+                    ? t('createTask.visibility.privateAgentLocked', {
+                        defaultValue: 'Private agents can only run private tasks.',
                       })
-                    : undefined
-              }
-              onChange={setVisibility}
-            >
-              <TaskVisibilityChipLabel height={24} paddingBlock={3} visibility={visibility} />
-            </TaskVisibilityTag>
-          )}
+                    : isOtherMemberAssignee
+                      ? t('createTask.visibility.memberAssigneeLocked', {
+                          defaultValue:
+                            'A task assigned to a member stays visible to the workspace.',
+                        })
+                      : undefined
+                }
+                onChange={setVisibility}
+              >
+                <TaskVisibilityChipLabel height={24} paddingBlock={3} visibility={visibility} />
+              </TaskVisibilityTag>
+            )}
 
-          <Button
-            disabled={!canCreateTask || isCreating || (!instruction.trim() && !hasAttachments)}
-            loading={isCreating}
-            shape={'round'}
-            size={'small'}
-            title={canCreateTask ? undefined : reason}
-            type={'primary'}
-            onClick={handleSubmit}
-          >
-            {t('createTask.submit')}
-          </Button>
+            <Flexbox horizontal align={'center'} gap={2}>
+              <Button
+                loading={isCreating || isAnalyzing}
+                shape={'round'}
+                size={'small'}
+                title={canCreateTask ? undefined : reason}
+                // The shimmer is a text-clipped gradient in the foreground color, so
+                // it only reads on a light surface. Dropping the filled style while
+                // reading also matches what is happening: the button has handed the
+                // draft off and is no longer the thing to press.
+                type={isAnalyzing ? 'default' : 'primary'}
+                disabled={
+                  !canCreateTask ||
+                  isCreating ||
+                  isAnalyzing ||
+                  (!instruction.trim() && !hasAttachments)
+                }
+                onClick={handleSubmit}
+              >
+                {isAnalyzing ? (
+                  // Same shimmer every other "a model is working on this" label in
+                  // the app uses, so the wait reads as the product thinking rather
+                  // than as the button having gone inert.
+                  <span className={shinyTextStyles.shinyText}>{t('taskIntent.analyzing')}</span>
+                ) : (
+                  t('createTask.submit')
+                )}
+              </Button>
+              {/* The escape hatch sits on the button it bypasses, so a user who
+                  does not want the reading finds it exactly where they already
+                  are — rather than in a setting they would have to know exists. */}
+              <DropdownMenu
+                placement={'bottomRight'}
+                items={[
+                  {
+                    key: 'create-directly',
+                    label: t('taskIntent.createDirectly'),
+                    onClick: () => void handleCreateDirectly(),
+                  },
+                ]}
+              >
+                <ActionIcon
+                  icon={ChevronDown}
+                  size={'small'}
+                  title={t('taskIntent.moreCreateOptions')}
+                  disabled={
+                    !canCreateTask ||
+                    isCreating ||
+                    isAnalyzing ||
+                    (!instruction.trim() && !hasAttachments)
+                  }
+                />
+              </DropdownMenu>
+            </Flexbox>
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
-    </Block>
+      </Block>
+    </GeneratingBorder>
   );
 });
 
