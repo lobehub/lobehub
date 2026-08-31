@@ -47,6 +47,9 @@ describe('goalRuntime.createGoal', () => {
 
     expect(mocks.scheduleGoalAdvance).toHaveBeenCalledWith({
       goalId: 'goal_1',
+      // The label survives the queue hop onto the trajectory, so a run can be
+      // sliced by what drove it — asserted here rather than left loose.
+      trigger: 'create',
       userId: 'user-1',
       workspaceId: 'ws-1',
     });
