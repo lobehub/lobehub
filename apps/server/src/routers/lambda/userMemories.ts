@@ -27,6 +27,8 @@ import {
   type IdentityEntryPayload,
 } from '@/database/models/userMemory';
 import {
+  normalizeUserMemorySearchQueries,
+  shouldRunUserMemoryLexicalSearch,
   UserMemoryActivityModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
@@ -48,6 +50,10 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import {
+  recordUserMemoryLexicalSearchDecision,
+  type UserMemoryLexicalSearchSource,
+} from '@/server/services/ftsSearch/observability';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
@@ -121,14 +127,13 @@ const applySearchLimitsByEffort = (
 const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
+  source: UserMemoryLexicalSearchSource,
 ): Promise<SearchMemoryResult> => {
   const normalizedInput = normalizeSearchMemoryParams(input);
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
   const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
-  const normalizedQueries = [
-    ...new Set((normalizedInput.queries ?? []).map((query) => query.trim()).filter(Boolean)),
-  ];
+  const normalizedQueries = normalizeUserMemorySearchQueries(normalizedInput.queries);
 
   const queryEmbeddings =
     normalizedQueries.length > 0
@@ -142,6 +147,12 @@ const searchUserMemories = async (
           })
         ).filter((embedding): embedding is number[] => Boolean(embedding))
       : [];
+  const lexicalSearch = shouldRunUserMemoryLexicalSearch(normalizedQueries, queryEmbeddings);
+  recordUserMemoryLexicalSearchDecision({
+    decision: lexicalSearch ? 'executed' : 'skipped_long_context',
+    queryCharacters: Array.from(normalizedQueries.join(' ')).length,
+    source,
+  });
 
   const effectiveEffort = normalizeMemoryEffort(normalizedInput.effort ?? ctx.memoryEffort);
   const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
@@ -977,7 +988,7 @@ export const userMemoriesRouter = router({
           topK: DEFAULT_SEARCH_USER_MEMORY_TOP_K,
         };
 
-        const result = await searchUserMemories(ctx, searchParams);
+        const result = await searchUserMemories(ctx, searchParams, 'topic_retrieval');
         return result;
       } catch (error) {
         rethrowCandidateSearchError(error);
@@ -988,7 +999,7 @@ export const userMemoriesRouter = router({
 
   searchMemory: memorySearchProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
     try {
-      return await searchUserMemories(ctx, input);
+      return await searchUserMemories(ctx, input, 'api');
     } catch (error) {
       rethrowCandidateSearchError(error);
       console.error('Failed to retrieve memories:', error);
@@ -1328,7 +1339,7 @@ export const userMemoriesRouter = router({
   toolSearchMemory: memorySearchProcedure
     .input(searchMemorySchema)
     .query(async ({ input, ctx }) => {
-      const result = await searchUserMemories(ctx, input);
+      const result = await searchUserMemories(ctx, input, 'tool');
       return result;
     }),
 

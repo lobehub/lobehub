@@ -33,6 +33,66 @@ const CANDIDATE_MULTIPLIER = 4;
 const UNBOUNDED_CANDIDATE_PAGE_SIZE = 1000;
 
 /**
+ * Elasticsearch expands `multi_match` queries into roughly `fields * analyzed terms` leaf
+ * clauses. Its dynamic clause limit never drops below 1024, so 768 leaves headroom for filters.
+ *
+ * This relies on the current search analyzers producing at most one query term per Unicode code
+ * point. Revisit the budget before adding ngram-style query analyzers.
+ *
+ * @see https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-multi-match-query
+ * @see https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/search-settings
+ */
+const MULTI_MATCH_LEAF_CLAUSE_BUDGET = 768;
+
+const CJK_CHARACTER_PATTERN =
+  /[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const WORD_CHARACTER_PATTERN = /[\p{L}\p{M}\p{N}_]/u;
+
+const isNonCjkWordCharacter = (character: string) =>
+  WORD_CHARACTER_PATTERN.test(character) && !CJK_CHARACTER_PATTERN.test(character);
+
+/**
+ * Preserve complete whitespace-delimited words when the clause budget cuts Latin-like text.
+ * CJK text keeps the exact budget because its analyzer emits terms without word separators.
+ */
+const sliceQueryAtLexicalBoundary = (characters: string[], maximumCharacters: number) => {
+  const executedCharacters = characters.slice(0, maximumCharacters);
+  const lastCharacter = executedCharacters.at(-1);
+  const nextCharacter = characters[maximumCharacters];
+
+  if (
+    !lastCharacter ||
+    !nextCharacter ||
+    !isNonCjkWordCharacter(lastCharacter) ||
+    !isNonCjkWordCharacter(nextCharacter)
+  ) {
+    return executedCharacters;
+  }
+
+  const boundaryIndex = executedCharacters.findLastIndex(
+    (character) => !isNonCjkWordCharacter(character),
+  );
+
+  return boundaryIndex > 0 ? executedCharacters.slice(0, boundaryIndex) : executedCharacters;
+};
+
+const prepareMultiMatchQuery = (query: string, fieldCount: number) => {
+  const originalCharacters = Array.from(query);
+  const maximumCharacters = Math.max(
+    1,
+    Math.floor(MULTI_MATCH_LEAF_CLAUSE_BUDGET / Math.max(1, fieldCount)),
+  );
+  const executedCharacters = sliceQueryAtLexicalBoundary(originalCharacters, maximumCharacters);
+
+  return {
+    executedQuery: executedCharacters.join(''),
+    executedQueryChars: executedCharacters.length,
+    originalQueryChars: originalCharacters.length,
+    truncated: executedCharacters.length < originalCharacters.length,
+  };
+};
+
+/**
  * Rolling reindexes leave legacy documents without newly denormalized fields. Keep those documents
  * eligible as candidates because PostgreSQL reapplies the exact filters during hydration.
  */
@@ -273,6 +333,7 @@ export const searchElasticsearchCandidates = async (
         : isElasticsearchFtsSearchMemoryEntity(target.entity)
           ? ELASTICSEARCH_FTS_SEARCH_MEMORY_QUERY_FIELDS[target.entity]
           : ELASTICSEARCH_FTS_SEARCH_RESOURCE_QUERY_FIELDS[target.entity]);
+  const preparedQuery = prepareMultiMatchQuery(query, fields.length);
   const requestedLimit = request.pagination.limit;
   const size = requestedLimit
     ? requestedLimit * CANDIDATE_MULTIPLIER
@@ -300,7 +361,7 @@ export const searchElasticsearchCandidates = async (
                 multi_match: {
                   fields,
                   operator: 'and',
-                  query,
+                  query: preparedQuery.executedQuery,
                   type: 'best_fields',
                 },
               },
@@ -314,8 +375,12 @@ export const searchElasticsearchCandidates = async (
         ...(trackTotalHits && isFirstPage ? { track_total_hits: true } : {}),
       },
       entity,
+      executedQueryChars: preparedQuery.executedQueryChars,
       index: getFtsSearchIndexAlias(indexNamespace, entity),
+      originalQueryChars: preparedQuery.originalQueryChars,
       pagination: requestedLimit ? 'bounded' : 'unbounded',
+      queryFieldCount: fields.length,
+      truncated: preparedQuery.truncated,
     });
     if (isFirstPage) {
       const responseTotal = response.hits.total;
