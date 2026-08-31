@@ -116,8 +116,23 @@ describe('acceptanceRoundDirName', () => {
   });
 
   it('places a round under its subject group', () => {
-    expect(acceptanceRoundDir('/repo', 'topic:tpc_x', 'first', at)).toBe(
-      path.join('/repo', ACCEPTANCE_DIR, 'topic-tpc_x', '20260831-010203-first'),
+    expect(acceptanceRoundDir(root, 'topic:tpc_x', 'first', at)).toBe(
+      path.join(root, ACCEPTANCE_DIR, 'topic-tpc_x', '20260831-010203-first'),
     );
+  });
+
+  it('never hands out a directory that already exists', () => {
+    // Two rounds started in the same second — parallel workers, or a fast
+    // fix-and-reverify. Sharing a name would let the second writer mix its
+    // evidence into a round the reviewer has already been shown.
+    const first = acceptanceRoundDir(root, 'topic:tpc_x', 'first', at);
+    mkdirSync(first, { recursive: true });
+
+    const second = acceptanceRoundDir(root, 'topic:tpc_x', 'first', at);
+    expect(second).not.toBe(first);
+    expect(second).toBe(`${first}-2`);
+
+    mkdirSync(second, { recursive: true });
+    expect(acceptanceRoundDir(root, 'topic:tpc_x', 'first', at)).toBe(`${first}-3`);
   });
 });

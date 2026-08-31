@@ -72,8 +72,10 @@ export function acceptanceSubjectKey(subject: string): string {
 const pad = (value: number): string => String(value).padStart(2, '0');
 
 /**
- * `YYYYMMDD-HHMMSS-<slug>` — sortable, and unique per round so an immutable
- * round can never overwrite the one before it.
+ * `YYYYMMDD-HHMMSS-<slug>` — sortable, and the base name a round is written
+ * under. Second resolution alone does NOT guarantee uniqueness (two workers can
+ * start the same round in the same second), so allocation goes through
+ * {@link acceptanceRoundDir}, which resolves collisions against the disk.
  */
 export function acceptanceRoundDirName(slug: string, now: Date = new Date()): string {
   const stamp =
@@ -86,19 +88,28 @@ export function acceptanceRoundDirName(slug: string, now: Date = new Date()): st
   return normalized ? `${stamp}-${normalized}` : stamp;
 }
 
-/** The directory one round should be written to, under its subject's group. */
+/**
+ * Allocate the directory one round is written to, under its subject's group.
+ *
+ * A round is immutable, so this never returns a path that already exists: two
+ * rounds started inside the same second — parallel workers, or a fast
+ * fix-and-reverify — would otherwise share a name and the second writer would
+ * mix its evidence into the first one's published round.
+ */
 export function acceptanceRoundDir(
   baseDir: string,
   subject: string,
   slug: string,
   now?: Date,
 ): string {
-  return path.join(
-    baseDir,
-    ACCEPTANCE_DIR,
-    acceptanceSubjectKey(subject),
-    acceptanceRoundDirName(slug, now),
-  );
+  const group = path.join(baseDir, ACCEPTANCE_DIR, acceptanceSubjectKey(subject));
+  const base = acceptanceRoundDirName(slug, now);
+
+  let candidate = path.join(group, base);
+  for (let suffix = 2; existsSync(candidate); suffix += 1) {
+    candidate = path.join(group, `${base}-${suffix}`);
+  }
+  return candidate;
 }
 
 /**

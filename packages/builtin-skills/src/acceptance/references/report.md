@@ -28,18 +28,32 @@ structured round ingest.** Never mix both for the same delivery round.
 `--operation` is optional on every command in this skill. Without one, author
 the checks and use one of these first-class paths:
 
-```bash
-# One directory per round, under the delivery it belongs to.
-REPORT_DIR=.acceptances/topic-tpc_xxx/$(date +%Y%m%d-%H%M%S)-<slug>
+A round is immutable, so **allocate a fresh directory before every ingest** —
+never point a second ingest at a directory you already published:
 
-# A. first external-project round — creates a standalone acceptance automatically
+```bash
+# $1 = subject key (see Directory layout), $2 = a short slug for this round.
+new_round() {
+  dir=".acceptances/$1/$(date +%Y%m%d-%H%M%S)-$2"
+  mkdir -p "$dir/assets" && printf '%s' "$dir"
+}
+```
+
+```bash
+# A. first external-project round — creates a standalone acceptance.
+# It has no subject yet, so group it under `standalone-<slug>` until the
+# returned acceptance id gives the tree its permanent name.
+REPORT_DIR=$(new_round standalone-checkout-flow first-pass)
 lh acceptance run ingest "$REPORT_DIR" \
   --requirement "<one-sentence business goal>" --json
 
-# Re-verification — append a new immutable round to the same acceptance
+# Re-verification after a fix — a NEW round on the SAME acceptance.
+REPORT_DIR=$(new_round standalone-checkout-flow repair)
 lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
 
-# Attach to a subject you were told to use — a Task, Topic, or Document
+# Attach to a subject you were told to use — a Task, Topic, or Document.
+# Group the round under that same subject so the tree and the page agree.
+REPORT_DIR=$(new_round topic-tpc_xxx first-pass)
 lh acceptance run ingest "$REPORT_DIR" --subject topic:tpc_xxx --json
 
 # B. atomic fallback — create the round first, then submit into it with --run
@@ -79,7 +93,8 @@ Rounds live under `.acceptances/`, grouped by the delivery they belong to:
 ```
 .acceptances/
 ├── .gitignore                     # `*` — the whole tree stays out of git
-└── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x | standalone-<id>
+└── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x
+    │                              # standalone-<slug> until an acceptance id exists
     ├── acceptance.json            # which acceptance these rounds belong to
     └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
         ├── result.json            # THE report — the page renders from this
@@ -91,7 +106,9 @@ Three things the shape buys, none of them cosmetic:
 
 - **The subject key mirrors `--subject <type>:<id>`**, so a directory listing
   answers what the acceptance page answers: which delivery is this, and how many
-  rounds has it had. A flat `./acceptance-report` answers neither.
+  rounds has it had. A flat `./acceptance-report` answers neither. A standalone
+  round has no subject to key on, so group it under `standalone-<slug>` and keep
+  every later round of that delivery in the same directory.
 - **A round is immutable**, so its directory name carries the timestamp and is
   written once. Re-verification after a fix creates the NEXT directory; reusing
   one silently destroys the evidence a reviewer already decided against.
