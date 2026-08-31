@@ -1,7 +1,7 @@
 'use client';
 
 import { upsertPluginMode } from '@lobechat/types';
-import { Dropdown, Flexbox, Icon } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon, PlugZapIcon, PlusIcon } from 'lucide-react';
@@ -89,16 +89,11 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
           {t('settingAgent.agentTools.tabAgent')} · {agentConnectors.length}
         </Text>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          <Dropdown
-            disabled={!canEdit}
-            menu={{ items: addMenuItems }}
-            placement={'bottomLeft'}
-            trigger={['click']}
-          >
+          <DropdownMenu disabled={!canEdit} items={addMenuItems} placement={'bottomLeft'}>
             <Button icon={<Icon icon={PlusIcon} />} size={'small'} type={'text'}>
               {t('settingAgent.agentTools.add')}
             </Button>
-          </Dropdown>
+          </DropdownMenu>
 
           {agentConnectors.length === 0 && (
             <Text style={{ fontSize: 12 }} type={'secondary'}>
