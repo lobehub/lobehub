@@ -214,9 +214,17 @@ const pickChip = (args: Record<string, unknown> | undefined): ChipResult => ({
 });
 
 const GitHubInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>(
-  ({ apiName, args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({
+    apiDisplayName,
+    apiName,
+    args,
+    partialArgs,
+    isArgumentsStreaming,
+    isLoading,
+    toolDisplayName,
+  }) => {
     const effectiveArgs = args ?? partialArgs;
-    const label = staticGitHubLabelFor(parseGitHubToolName(apiName));
+    const label = apiDisplayName || staticGitHubLabelFor(parseGitHubToolName(apiName));
     const { branch, primary } = pickChip(effectiveArgs);
 
     return (
@@ -227,7 +235,7 @@ const GitHubInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>
         )}
       >
         <GitHubMark />
-        <span className={styles.productPrefix}>GitHub</span>
+        <span className={styles.productPrefix}>{toolDisplayName || 'GitHub'}</span>
         <span className={styles.chip}>
           <span className={styles.chipAction}>{label}</span>
           {primary && (
