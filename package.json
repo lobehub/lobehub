@@ -590,6 +590,7 @@
       "workerd"
     ],
     "overrides": {
+      "@ant-design/icons": "6.3.2",
       "@react-pdf/image": "3.0.4",
       "@types/react": "19.2.13",
       "@vitest/coverage-v8": "3.2.6",
