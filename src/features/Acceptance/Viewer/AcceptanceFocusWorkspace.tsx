@@ -63,8 +63,10 @@ const AcceptanceFocusWorkspace = () => {
       subjectTitle={data.subject.title ?? data.subject.id}
       onBack={() => navigate(acceptanceOverviewPath(acceptanceId), { replace: true })}
       onSelectCheck={(id) => navigate(acceptanceCheckPath(acceptanceId, id), { replace: true })}
+      // Checklist authoring writes through the subject — creator-only until that
+      // path is reviewer-aware. Reviewing the checks themselves is not.
       onAddChecks={
-        canReviewAcceptance(data)
+        data.isOwner
           ? () =>
               openAddCheckModal({
                 existingIds: (data.acceptance.config?.checklist ?? []).map((item) => item.id),
@@ -82,7 +84,7 @@ const AcceptanceFocusWorkspace = () => {
           : undefined
       }
       onEditStandingCheck={
-        canReviewAcceptance(data)
+        data.isOwner
           ? async (item) => {
               const { openCheckEditModal } =
                 await import('@/features/Conversation/ChatInput/VerifyTray/EditModal');

@@ -362,12 +362,28 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
      * Re-read the list, refresh the bundles the sweep touched, and leave the
      * rows that did NOT move selected — a partial sweep hands back exactly the
      * remainder to retry instead of making the user re-pick it.
+     *
+     * `attemptedIds` is what the sweep actually acted on, which is only ever the
+     * VISIBLE selection. Picks the user made under another filter were never
+     * attempted, so they survive untouched — dropping them here would contradict
+     * the rule that clearing the filter brings earlier picks back.
      */
-    const settleBatch = async (changedIds: string[], failedIds: string[]) => {
+    const settleBatch = async (
+      attemptedIds: string[],
+      changedIds: string[],
+      failedIds: string[],
+    ) => {
       await mutate();
       await Promise.all(changedIds.map((id) => globalMutate(verifyKeys.acceptanceBundle(id))));
-      setSelected(failedIds);
-      if (failedIds.length === 0) setSelecting(false);
+
+      const attempted = new Set(attemptedIds);
+      let remaining: string[] = [];
+      setSelected((previous) => {
+        remaining = [...previous.filter((id) => !attempted.has(id)), ...failedIds];
+        return remaining;
+      });
+      // Only a sweep that leaves nothing selected at all is finished.
+      if (remaining.length === 0) setSelecting(false);
     };
 
     // "Unchanged" covers both halves of a mixed sweep — rows the transition
@@ -399,15 +415,31 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
         // The endpoint caps one request, so a long selection goes in chunks —
         // otherwise select-all after enough scrolling is refused wholesale and
         // nothing moves at all.
-        const results = await Promise.all(
-          chunkAcceptanceBatch(targets).map((chunk) =>
-            verifyService.updateAcceptanceStatusBatch(chunk, status),
-          ),
+        //
+        // `allSettled`, never `all`: a sibling chunk that rejects must not hide
+        // the chunks that already committed. Skipping the refresh there would
+        // leave the list showing rows the server has already moved.
+        const chunks = chunkAcceptanceBatch(targets);
+        const settled = await Promise.allSettled(
+          chunks.map((chunk) => verifyService.updateAcceptanceStatusBatch(chunk, status)),
         );
-        const failedIds = results.flatMap((part) => part.failedIds);
-        const updated = results.reduce((total, part) => total + part.updated, 0);
+
+        let updated = 0;
+        const failedIds: string[] = [];
+        settled.forEach((part, index) => {
+          if (part.status === 'fulfilled') {
+            updated += part.value.updated;
+            failedIds.push(...part.value.failedIds);
+            return;
+          }
+          // A chunk that never reached the server: every id in it is unchanged.
+          console.error('[acceptance:batchStatus]', part.reason);
+          failedIds.push(...chunks[index]);
+        });
+
         const failedSet = new Set(failedIds);
         await settleBatch(
+          selectedVisible,
           targets.filter((id) => !failedSet.has(id)),
           selectedVisible.filter((id) => !targets.includes(id) || failedSet.has(id)),
         );
@@ -435,18 +467,32 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
         onOk: async () => {
           setBatchPending(true);
           try {
-            const results = await Promise.all(
-              chunkAcceptanceBatch(targets).map((chunk) =>
-                verifyService.deleteAcceptanceBatch(chunk),
-              ),
+            // `allSettled`, never `all`: a rejected chunk must not hide the ones
+            // that already deleted. Bailing out here would skip the refresh AND
+            // the navigate-away, leaving the route pointed at a row a sibling
+            // chunk had just removed.
+            const chunks = chunkAcceptanceBatch(targets);
+            const settled = await Promise.allSettled(
+              chunks.map((chunk) => verifyService.deleteAcceptanceBatch(chunk)),
             );
-            const failedIds = results.flatMap((part) => part.failedIds);
-            const deleted = results.reduce((total, part) => total + part.deleted, 0);
+
+            let deleted = 0;
+            const failedIds: string[] = [];
+            settled.forEach((part, index) => {
+              if (part.status === 'fulfilled') {
+                deleted += part.value.deleted;
+                failedIds.push(...part.value.failedIds);
+                return;
+              }
+              console.error('[acceptance:batchDelete]', part.reason);
+              failedIds.push(...chunks[index]);
+            });
+
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
             if (acceptanceId && targets.includes(acceptanceId) && !failedIds.includes(acceptanceId))
               navigate(acceptanceHomePath(), { replace: true });
-            await settleBatch([], failedIds);
+            await settleBatch(targets, [], failedIds);
             reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
           } catch (cause) {
             console.error('[acceptance:batchDelete]', cause);

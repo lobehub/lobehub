@@ -14,7 +14,6 @@ import { openAddCheckModal } from './AddCheckModal';
 import { hasVisualEvidence } from './CheckList';
 import { countAwaitingPrediction, summarizePredictRound } from './predictRound';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
-import { canReviewAcceptance } from './visibility';
 
 /** How long to wait between bundle re-fetches while the batch runs. */
 const PREDICT_POLL_INTERVAL_MS = 4000;
@@ -26,7 +25,14 @@ const AcceptanceCheckOwnerToolbar = () => {
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [predicting, setPredicting] = useState(false);
-  if (!data || !canReviewAcceptance(data)) return null;
+  /**
+   * Authoring the standing checklist and the goal writes through the SUBJECT
+   * (`ensureForSubject`), which is still resolved in the caller's own scope — it
+   * cannot reach a teammate's row, and the workspace-unique insert fallback then
+   * fails. Until that path is reviewer-aware these stay the creator's, so the page
+   * never offers an action that is guaranteed to answer `NOT_FOUND`.
+   */
+  if (!data?.isOwner) return null;
 
   const standing = data.acceptance.config?.checklist ?? [];
   const predictableCount = data.checks.filter(

@@ -10,13 +10,19 @@ import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
-import { canReviewAcceptance } from './visibility';
 
 const AcceptanceGoalEdit = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  if (!data || !canReviewAcceptance(data)) return null;
+  /**
+   * Authoring the standing checklist and the goal writes through the SUBJECT
+   * (`ensureForSubject`), which is still resolved in the caller's own scope — it
+   * cannot reach a teammate's row, and the workspace-unique insert fallback then
+   * fails. Until that path is reviewer-aware these stay the creator's, so the page
+   * never offers an action that is guaranteed to answer `NOT_FOUND`.
+   */
+  if (!data?.isOwner) return null;
 
   const handleEdit = async () => {
     const { openGoalModal } =
