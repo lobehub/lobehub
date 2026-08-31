@@ -1,4 +1,9 @@
-import type { GoalGraphDecision, GoalGraphSnapshot, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalGraphDecision,
+  GoalGraphSnapshot,
+  GoalNodeKind,
+  GoalTickResult,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -7,7 +12,15 @@ import { outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { resolveAppUrlBuilder } from './task/url';
 
-const nodeIcon = { decision: '◆', finding: '●', problem: '◇', work: '▣' } as const;
+// Typed rather than inferred: an `as const` map is indexable by a widened
+// `any` node kind, which is how a renamed kind silently printed `undefined`
+// here after the type checker had signed off everywhere else.
+const nodeIcon: Record<GoalNodeKind, string> = {
+  decision: '◆',
+  finding: '●',
+  problem: '◇',
+  task: '▣',
+};
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
 
 interface GoalRunTickResult extends GoalTickResult {

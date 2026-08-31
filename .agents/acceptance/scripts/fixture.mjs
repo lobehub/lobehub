@@ -12,7 +12,7 @@
  * CONSUMES (files to upload, DB seed fragments, config, stand-in evidence for
  * synthetic ingest rounds). What a run PRODUCES (screenshots, transcripts) is
  * tied to that one execution and lives only in the round dir's assets/ under
- * .records/reports/ — never copy it back into the fixture.
+ * the report root — never copy it back into the fixture.
  *
  * Layout (gitignored, like all .records/ output):
  *   .records/fixtures/<subject-key>/<check-id>/
@@ -20,7 +20,8 @@
  *   └── seed/          # reusable INPUT assets referenced by check.json / steps
  *
  * <subject-key> = task-<id> | topic-<id> | document-<id> (subject with ':'→'-'),
- * matching the report group dirs under .records/reports/.
+ * matching the report group dirs under the report root
+ * (ACCEPTANCE_REPORT_ROOT, default ${TMPDIR:-/tmp}/lobe-acceptance/reports).
  *
  * Usage:
  *   fixture.mjs init-check --subject topic:tpc_xxx <check-id>
@@ -29,7 +30,7 @@
  *   fixture.mjs compose --subject topic:tpc_xxx --slug <slug> [--title "..."]
  *                       [--focus "..."] [--entry "..."] <check-id> [<check-id>...]
  *       Assemble a report-shaped round dir from the given checks:
- *       .records/reports/topic-tpc_xxx/<ts>-<slug>/  (ready for
+ *       <report-root>/topic-tpc_xxx/<ts>-<slug>/  (ready for
  *       `lh acceptance run ingest <dir>`). Files referenced by case.evidence
  *       (seed/…) are copied into the round's assets/<check-id>/ and paths
  *       rewritten. Prints the dir path.
@@ -45,6 +46,9 @@ const { basename, join } = path;
 // The generic skill is invoked from the consumer repository. Keep all
 // generated fixtures and reports anchored to that explicit working directory.
 const REPO_ROOT = process.cwd();
+const REPORT_ROOT =
+  process.env.ACCEPTANCE_REPORT_ROOT ||
+  join(process.env.TMPDIR || '/tmp', 'lobe-acceptance/reports');
 
 const fail = (msg) => {
   console.error(`fixture.mjs: ${msg}`);
@@ -120,7 +124,7 @@ if (command === 'init-check') {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  const dir = join(REPO_ROOT, '.records/reports', key, `${ts}-${slug}`);
+  const dir = join(REPORT_ROOT, key, `${ts}-${slug}`);
   mkdirSync(join(dir, 'assets'), { recursive: true });
 
   const plan = [];

@@ -18,6 +18,7 @@ import { useTreeStore } from '@/store/tree';
 import AddButton from '../Header/AddButton';
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import { HierarchyNode } from './HierarchyNode';
+import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
 
 interface VisibleNode {
@@ -79,7 +80,7 @@ const LibraryHierarchy = memo(() => {
     return result;
   }, [children, expanded]);
 
-  const selectedKey = currentFolderSlug ?? null;
+  const selectedKey = resolveHierarchySelectedKey({ currentFolderSlug, currentViewItemId });
 
   const hasData = visibleNodes.length > 0;
   // The root fetch is in flight with nothing cached yet.

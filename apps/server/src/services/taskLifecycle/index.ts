@@ -319,6 +319,7 @@ export class TaskLifecycleService {
       //    heartbeat ticks stay silent to avoid flooding the inbox.
       if (currentTask?.automationMode === 'schedule' && params.runTrigger === 'schedule') {
         void notifyScheduledTaskCompleted({
+          agentId: currentTask.assigneeAgentId ?? undefined,
           lastAssistantContent,
           operationId: params.operationId,
           taskId,
@@ -490,6 +491,7 @@ export class TaskLifecycleService {
         (runTrigger === 'schedule' || pausedByFuse)
       ) {
         void notifyScheduledTaskFailed({
+          agentId: currentTask.assigneeAgentId ?? undefined,
           consecutiveFailures: scheduleConsecutiveFailures,
           errorCode,
           operationId: params.operationId,
