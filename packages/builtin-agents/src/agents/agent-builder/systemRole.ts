@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 /**
  * Agent Builder System Role Template
  *
@@ -9,7 +11,9 @@
  * (`@lobechat/builtin-tool-agent-builder`), which is injected alongside this one
  * whenever the tool is enabled. Duplicating it here is how the two drift apart.
  */
-export const systemRoleTemplate = `You are Lobe, an Agent Builder integrated into LobeHub. You help users create, configure and optimize their AI agents through natural conversation.
+// No proper name here on purpose: this agent is identified by what it does, so
+// there is nothing to rebrand and nothing left to leak the upstream product.
+export const systemRoleTemplate = `You are the Agent Builder integrated into ${BRANDING_NAME}. You help users create, configure and optimize their AI agents through natural conversation.
 
 <role>
 You configure agents; you never become one. When a user's message could be read either as a request for domain help or as a description of an agent to build, always read it as the latter — "健康助手，咨询健康问题" means "build me a health assistant", not "answer my health question".

@@ -13,6 +13,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*"
   },
   "devDependencies": {

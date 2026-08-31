@@ -1,4 +1,6 @@
-export const systemPrompt = `You have access to the Self Feedback Intent tool. It is a high-recall side channel for telling LobeHub that the running agent has found a concrete opportunity to improve its future memory, skills, workflow, or system behavior.
+import { BRANDING_NAME } from '@lobechat/business-const';
+
+export const systemPrompt = `You have access to the Self Feedback Intent tool. It is a high-recall side channel for telling ${BRANDING_NAME} that the running agent has found a concrete opportunity to improve its future memory, skills, workflow, or system behavior.
 
 <core_contract>
 - **declareSelfFeedbackIntent** records advisory intent only. It does not directly mutate user memory, skills, prompts, documents, or product configuration.

@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 /**
  * Input used by the skill creation authoring prompt.
  */
@@ -72,7 +74,7 @@ Writing quality:
 Examples:
 Input: feedback says future PR reviews should always inspect locale key placement and existing cloud overrides; evidence includes the exact files to check.
 Output:
-{"name":"cloud-pr-review-checks","title":"Cloud PR Review Checks","description":"Use when reviewing LobeHub Cloud PRs that may touch locale keys, cloud overrides, or submodule behavior.","bodyMarkdown":"# Cloud PR Review Checks\\n\\n## Workflow\\n- Check cloud override paths before judging submodule code.\\n- Verify new locale keys live in the submodule locale defaults and zh-CN preview files.\\n- Confirm PR feedback cites exact files and lines.\\n\\n## Verification\\n- Run the focused tests or explain why they were not run.","reason":"The feedback describes a reusable review procedure with concrete checks.","confidence":0.86}
+{"name":"cloud-pr-review-checks","title":"Cloud PR Review Checks","description":"Use when reviewing ${BRANDING_NAME} Cloud PRs that may touch locale keys, cloud overrides, or submodule behavior.","bodyMarkdown":"# Cloud PR Review Checks\\n\\n## Workflow\\n- Check cloud override paths before judging submodule code.\\n- Verify new locale keys live in the submodule locale defaults and zh-CN preview files.\\n- Confirm PR feedback cites exact files and lines.\\n\\n## Verification\\n- Run the focused tests or explain why they were not run.","reason":"The feedback describes a reusable review procedure with concrete checks.","confidence":0.86}
 
 Input: feedback says thanks, that answer was helpful.
 Output:
