@@ -1,4 +1,5 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
+import path from 'pathe';
 
 export interface ProjectFileDisplayFilter {
   changedOnly: boolean;
@@ -7,6 +8,56 @@ export interface ProjectFileDisplayFilter {
 
 const isPathInsideDirectory = (filePath: string, directoryPath: string) =>
   filePath.startsWith(directoryPath);
+
+const getDirectoryPaths = (relativePath: string): string[] => {
+  const segments = relativePath.split('/');
+  return segments.slice(0, -1).map((_, index) => `${segments.slice(0, index + 1).join('/')}/`);
+};
+
+/**
+ * A staged deletion is absent from `git ls-files`, so the project index cannot
+ * supply its row. Recreate only those missing rows (and ancestors) from Git's
+ * status paths so the Changes view remains complete.
+ */
+export const mergeMissingDeletedEntries = (
+  entries: ProjectFileIndexEntry[],
+  deletedPaths: string[],
+  root: string,
+  query?: string,
+): ProjectFileIndexEntry[] => {
+  const normalizedQuery = query?.trim().toLocaleLowerCase();
+  const existingPaths = new Set(entries.map((entry) => entry.relativePath));
+  const missingPaths = deletedPaths.filter(
+    (relativePath) =>
+      !existingPaths.has(relativePath) &&
+      (!normalizedQuery || relativePath.toLocaleLowerCase().includes(normalizedQuery)),
+  );
+  if (missingPaths.length === 0) return entries;
+
+  const additions: ProjectFileIndexEntry[] = [];
+  for (const relativePath of missingPaths) {
+    for (const directoryPath of getDirectoryPaths(relativePath)) {
+      if (existingPaths.has(directoryPath)) continue;
+      existingPaths.add(directoryPath);
+      additions.push({
+        isDirectory: true,
+        name: path.basename(directoryPath),
+        path: path.join(root, directoryPath),
+        relativePath: directoryPath,
+      });
+    }
+
+    existingPaths.add(relativePath);
+    additions.push({
+      isDirectory: false,
+      name: path.basename(relativePath),
+      path: path.join(root, relativePath),
+      relativePath,
+    });
+  }
+
+  return [...entries, ...additions];
+};
 
 export const filterProjectFileEntries = (
   entries: ProjectFileIndexEntry[],

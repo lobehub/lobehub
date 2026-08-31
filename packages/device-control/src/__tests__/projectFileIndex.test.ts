@@ -145,6 +145,29 @@ describe('defaultSearchProjectFiles', () => {
     ]);
   });
 
+  it('applies eligible-path and ignore filters before truncating search results', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-filtered-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, '.gitignore'), '*.local\n');
+    await Promise.all(
+      Array.from({ length: 201 }, (_, index) =>
+        writeFile(path.join(dir, `target-${index.toString().padStart(3, '0')}.ts`), 'target\n'),
+      ),
+    );
+    await writeFile(path.join(dir, 'target-secret.local'), 'ignored\n');
+
+    const result = await defaultSearchProjectFiles({
+      excludeIgnored: true,
+      includePaths: ['target-200.ts'],
+      limit: 1,
+      query: 'target',
+      scope: dir,
+    });
+
+    expect(result.entries.map((entry) => entry.relativePath)).toEqual(['target-200.ts']);
+  });
+
   it('searches hidden project directories in non-git scopes', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-hidden-'));
     cleanup.push(dir);

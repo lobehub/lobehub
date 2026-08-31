@@ -138,6 +138,8 @@ export interface ProjectFileIndexResult {
 }
 
 export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  excludeIgnored?: boolean;
+  includePaths?: string[];
   limit?: number;
   query: string;
 }

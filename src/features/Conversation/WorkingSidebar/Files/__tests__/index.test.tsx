@@ -147,6 +147,7 @@ vi.mock('../useProjectFiles', () => ({
   useProjectFiles: (_deviceId: string | undefined, workingDirectory: string) => ({
     data: {
       ...projectFilesMock.data,
+      entries: projectFilesMock.data.entries,
       source: workingDirectory === '/non-git' ? 'glob' : projectFilesMock.data.source,
     },
     isLoading: false,
@@ -198,12 +199,24 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
     items,
   }: {
     children?: ReactNodeType;
-    items: { key: string; label: ReactNodeType; onClick?: () => void }[];
+    items: {
+      key: string;
+      label: ReactNodeType;
+      onCheckedChange?: (checked: boolean) => void;
+      onClick?: () => void;
+    }[];
   }) => (
     <div>
       {children}
       {items.map((item) => (
-        <button key={item.key} type={'button'} onClick={item.onClick}>
+        <button
+          key={item.key}
+          type={'button'}
+          onClick={() => {
+            item.onClick?.();
+            item.onCheckedChange?.(true);
+          }}
+        >
           {item.label}
         </button>
       ))}
@@ -341,7 +354,31 @@ describe('Files — reveal request integration', () => {
       'src/foo/',
       'src/foo/bar.ts',
       'root.ts',
+      'deleted.ts',
     ]);
+  });
+
+  it('sends active Git and ignore filters to the file host before search truncation', async () => {
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.click(screen.getByText('workingPanel.files.views.changes'));
+    fireEvent.click(screen.getByTitle('workingPanel.files.filters.title'));
+    fireEvent.click(screen.getByText('workingPanel.files.filters.hideIgnored'));
+    expandSearch();
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'bar' },
+    });
+
+    await waitFor(() => {
+      expect(searchProjectFilesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludeIgnored: true,
+          includePaths: ['root.ts', 'src/foo/bar.ts', 'deleted.ts'],
+          limit: 200,
+          query: 'bar',
+        }),
+      );
+    });
   });
 
   it('resets the Git changes view when the workspace changes or is not Git-backed', async () => {
@@ -500,6 +537,8 @@ describe('Files — reveal request integration', () => {
     await waitFor(() => {
       expect(searchProjectFilesMock).toHaveBeenCalledWith({
         deviceId: undefined,
+        excludeIgnored: false,
+        includePaths: undefined,
         limit: 200,
         query: 'bar',
         scope: '/repo',

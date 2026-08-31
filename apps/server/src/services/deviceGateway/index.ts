@@ -933,6 +933,8 @@ export class DeviceGateway {
    */
   async searchProjectFiles(params: {
     deviceId: string;
+    excludeIgnored?: boolean;
+    includePaths?: string[];
     limit?: number;
     query: string;
     scope: string;
@@ -940,14 +942,27 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }): Promise<DeviceProjectFileSearchResult | undefined> {
-    const { userId, deviceId, limit, query, scope, timeout = 30_000, workspaceId } = params;
+    const {
+      userId,
+      deviceId,
+      excludeIgnored,
+      includePaths,
+      limit,
+      query,
+      scope,
+      timeout = 30_000,
+      workspaceId,
+    } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
     try {
       const result = await client.invokeRpc<DeviceProjectFileSearchResult>(
         { deviceId, timeout, userId, workspaceId },
-        { method: 'searchProjectFiles', params: { limit, query, scope } },
+        {
+          method: 'searchProjectFiles',
+          params: { excludeIgnored, includePaths, limit, query, scope },
+        },
       );
 
       if (!result.success || !result.data) {

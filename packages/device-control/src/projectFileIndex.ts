@@ -193,6 +193,21 @@ export const defaultGetProjectFileIndex = async (
   };
 };
 
+const filterSearchCandidates = (
+  entries: ProjectFileIndexEntry[],
+  params: ProjectFileSearchParams,
+) => {
+  if (!params.excludeIgnored && !params.includePaths) return entries;
+
+  const includedPaths = params.includePaths ? new Set(params.includePaths) : undefined;
+  return entries.filter(
+    (entry) =>
+      entry.isDirectory ||
+      ((!params.excludeIgnored || !entry.gitIgnored) &&
+        (!includedPaths || includedPaths.has(entry.relativePath))),
+  );
+};
+
 export const defaultSearchProjectFiles = async (
   params: ProjectFileSearchParams,
 ): Promise<ProjectFileSearchResult> => {
@@ -246,7 +261,7 @@ export const defaultSearchProjectFiles = async (
         .split('\n')
         .map((item) => item.trim())
         .filter(Boolean);
-      const entries = buildEntries(files, root, ignoredPaths);
+      const entries = filterSearchCandidates(buildEntries(files, root, ignoredPaths), params);
 
       return {
         entries: projectFileSearchManager.selectEntries(entries, params.query, limit),
@@ -260,7 +275,7 @@ export const defaultSearchProjectFiles = async (
   }
 
   const files = await projectFileSearchManager.collectNonGitFilePaths(requestedScope);
-  const entries = buildEntries(files, requestedScope);
+  const entries = filterSearchCandidates(buildEntries(files, requestedScope), params);
 
   return {
     entries: projectFileSearchManager.selectEntries(entries, params.query, limit),

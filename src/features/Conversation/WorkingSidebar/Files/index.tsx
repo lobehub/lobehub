@@ -37,7 +37,7 @@ import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
-import { filterProjectFileEntries } from './fileFilter';
+import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
 import { isExcludedProjectFileEntry } from './fileVisibility';
 import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
 import { useProjectFiles } from './useProjectFiles';
@@ -244,20 +244,39 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const changedOnly = viewMode === 'changes';
   const hasDisplayFilter = isFiltering || changedOnly || hideIgnored;
   const workingTreeGitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
+  const changedSearchPaths = useMemo(
+    () => (changedOnly ? workingTreeGitStatus.map((entry) => entry.path) : undefined),
+    [changedOnly, workingTreeGitStatus],
+  );
   const dirtyFilePaths = useMemo(
     () => new Set(workingTreeGitStatus.map((entry) => entry.path)),
     [workingTreeGitStatus],
   );
   const displayEntries = useMemo(() => {
-    const visibleEntries = (isFiltering ? (searchEntries ?? []) : entries).filter(
-      (entry) => !isExcludedProjectFileEntry(entry),
+    const indexedEntries = isFiltering ? (searchEntries ?? []) : entries;
+    const entriesWithDeleted = mergeMissingDeletedEntries(
+      indexedEntries,
+      gitFiles?.deleted ?? [],
+      projectRoot,
+      isFiltering ? normalizedDebouncedQuery : undefined,
     );
+    const visibleEntries = entriesWithDeleted.filter((entry) => !isExcludedProjectFileEntry(entry));
 
     return filterProjectFileEntries(visibleEntries, dirtyFilePaths, {
       changedOnly,
       hideIgnored,
     });
-  }, [changedOnly, dirtyFilePaths, entries, hideIgnored, isFiltering, searchEntries]);
+  }, [
+    changedOnly,
+    dirtyFilePaths,
+    entries,
+    gitFiles?.deleted,
+    hideIgnored,
+    isFiltering,
+    normalizedDebouncedQuery,
+    projectRoot,
+    searchEntries,
+  ]);
   const nodes = useMemo(
     () => buildTreeNodes(displayEntries, projectRootName),
     [displayEntries, projectRootName],
@@ -311,6 +330,8 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     void projectFileService
       .searchProjectFiles({
         deviceId,
+        excludeIgnored: hideIgnored,
+        includePaths: changedSearchPaths,
         limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
         query: normalizedDebouncedQuery,
         scope: workingDirectory,
@@ -331,7 +352,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     return () => {
       cancelled = true;
     };
-  }, [deviceId, normalizedDebouncedQuery, workingDirectory]);
+  }, [changedSearchPaths, deviceId, hideIgnored, normalizedDebouncedQuery, workingDirectory]);
 
   // Skip resyncs when defaultExpandedIds is structurally unchanged so the user's expansions survive re-renders.
   const prevDefaultRef = useRef<string[]>([]);
