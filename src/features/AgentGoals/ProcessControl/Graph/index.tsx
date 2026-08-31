@@ -205,6 +205,18 @@ const Canvas = memo<GraphProps & { className: string; interactive: boolean; view
       return layoutGraph(nodes, edges);
     }, [graph, visibleIds]);
 
+    // Inline, the canvas hugs its content: a two-node graph in a fixed 560px
+    // frame is mostly empty margin, and `fitView` then shrinks the nodes to
+    // fill it. Sizing the frame from the layout keeps small graphs at natural
+    // node scale; 560px stays the ceiling so large graphs still zoom out.
+    const inlineHeight = useMemo(() => {
+      const boxes = Object.values(positions);
+      if (boxes.length === 0) return 216;
+      const top = Math.min(...boxes.map((box) => box.y));
+      const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+      return Math.min(560, Math.max(216, bottom - top + 72));
+    }, [positions]);
+
     const flowNodes: FlowNode[] = useMemo(
       () =>
         graph.nodes
@@ -269,7 +281,7 @@ const Canvas = memo<GraphProps & { className: string; interactive: boolean; view
     }, [view, flowNodes.length, fitView]);
 
     return (
-      <div className={className}>
+      <div className={className} style={interactive ? undefined : { height: inlineHeight }}>
         {/* Inline, the map is a picture: it settles on `fitView` and stays
             there. Panning or zooming it inside a scrolling page moves the graph
             under the cursor while the page moves too, and leaves no way back to

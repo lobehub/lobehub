@@ -58,6 +58,14 @@ const styles = createStaticStyles(({ css }) => ({
   dim: css`
     opacity: 0.45;
   `,
+  footer: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 0 10px;
+    padding-inline: 12px;
+  `,
   gate: css`
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
@@ -210,15 +218,13 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
             <span className={styles.title}>{node.title}</span>
             {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
           </Flexbox>
-          {/* State and human participation sit inside the card, on the header's
-              trailing edge. Floating them on the card's outline collided with
-              the edges and arrowheads routed around it. */}
-          <Flexbox horizontal align={'center'} gap={6} style={{ flex: 'none' }}>
-            {view.humanTouches.length > 0 && (
-              <Tooltip title={t('goalProcess.node.humanTouched')}>
-                <span className={styles.human}>@</span>
-              </Tooltip>
-            )}
+        </div>
+        {/* State and human participation live on the card's bottom-left, so the
+            title row keeps its full width and every kind reads its status in
+            the same place. A task folds them into its metric strip; other kinds
+            get a light footer. */}
+        {!isTask && (chip || view.humanTouches.length > 0) && (
+          <div className={styles.footer}>
             {chip && (
               <Flexbox horizontal align={'center'} gap={4}>
                 <span className={styles.chipDot} style={{ background: chip.color }} />
@@ -227,10 +233,28 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 </span>
               </Flexbox>
             )}
-          </Flexbox>
-        </div>
+            {view.humanTouches.length > 0 && (
+              <Tooltip title={t('goalProcess.node.humanTouched')}>
+                <span className={styles.human}>@</span>
+              </Tooltip>
+            )}
+          </div>
+        )}
         {isTask && (
           <div className={styles.metrics}>
+            {chip && (
+              <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
+                <span className={styles.chipDot} style={{ background: chip.color }} />
+                <span className={styles.chipText} style={{ color: chip.color }}>
+                  {chip.text}
+                </span>
+              </Flexbox>
+            )}
+            {view.humanTouches.length > 0 && (
+              <Tooltip title={t('goalProcess.node.humanTouched')}>
+                <span className={styles.human}>@</span>
+              </Tooltip>
+            )}
             {node.taskId ? (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>
                 <span className={styles.metric}>
