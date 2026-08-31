@@ -42,3 +42,25 @@ describe('mobileRouter workspace provider routes', () => {
     expect(source).toContain("path: 'provider/:providerId'");
   });
 });
+
+describe('mobile community route layouts', () => {
+  it('wraps shared community list and detail pages in SWR suspense boundaries', async () => {
+    const readLayout = (layoutPath: string) =>
+      readFile(path.join(process.cwd(), layoutPath), 'utf8');
+
+    const [listLayout, detailLayout] = await Promise.all([
+      readLayout('src/routes/(mobile)/community/(list)/_layout/index.tsx'),
+      readLayout('src/routes/(mobile)/community/(detail)/_layout/index.tsx'),
+    ]);
+
+    for (const source of [listLayout, detailLayout]) {
+      expect(source).toContain("import { SWRConfig } from 'swr'");
+      expect(source).toContain(
+        "import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary'",
+      );
+      expect(source).toContain('<SWRConfig value={{ suspense: true }}>');
+      expect(source).toContain('<SuspenseRouteBoundary>');
+      expect(source).toContain('<Outlet />');
+    }
+  });
+});
