@@ -68,7 +68,7 @@ export class CliMessageTransport implements MessageTransport {
     // A redelivered step resolves to the row already stored, so the replica
     // must not be told to create it twice.
     if (this.store.size > before) {
-      this.queue?.enqueue({
+      await this.queue?.enqueue({
         message: { ...withClientId, id: message.id },
         type: 'createMessage',
       });
@@ -79,7 +79,7 @@ export class CliMessageTransport implements MessageTransport {
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     const message = this.store.insert(params, nanoid());
-    this.queue?.enqueue({ message: { ...params, id: message.id }, type: 'createMessage' });
+    await this.queue?.enqueue({ message: { ...params, id: message.id }, type: 'createMessage' });
     return toRef(message);
   }
 
@@ -114,14 +114,14 @@ export class CliMessageTransport implements MessageTransport {
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {
     this.store.update(id, params);
-    this.queue?.enqueue({ id, type: 'updateMessage', value: params });
+    await this.queue?.enqueue({ id, type: 'updateMessage', value: params });
   }
 
   async updatePluginState(id: string, state: Record<string, any>): Promise<void> {
     this.store.updatePluginState(id, state);
     // The cloud's batch union has no plugin-state operation of its own; the
     // tool-message one carries the same column.
-    this.queue?.enqueue({ id, type: 'updateToolMessage', value: { pluginState: state } });
+    await this.queue?.enqueue({ id, type: 'updateToolMessage', value: { pluginState: state } });
   }
 
   async updateToolIntervention(id: string, intervention: Record<string, any>): Promise<void> {
@@ -133,6 +133,6 @@ export class CliMessageTransport implements MessageTransport {
 
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {
     this.store.updateToolMessage(id, params);
-    this.queue?.enqueue({ id, type: 'updateToolMessage', value: params });
+    await this.queue?.enqueue({ id, type: 'updateToolMessage', value: params });
   }
 }

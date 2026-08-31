@@ -48,6 +48,7 @@ export class MessageWriteQueue {
   private worker: Promise<void> = Promise.resolve();
   /** Serializes log appends so concurrent enqueues cannot interleave a line. */
   private logWrites: Promise<void> = Promise.resolve();
+  private logDegraded = false;
 
   constructor(private readonly options: MessageWriteQueueOptions) {}
 
@@ -56,13 +57,29 @@ export class MessageWriteQueue {
     return this.fatalError !== null;
   }
 
+  /**
+   * True once a log append has failed. Replication still runs, but a crash from
+   * here on loses whatever has not yet been confirmed.
+   */
+  get degraded(): boolean {
+    return this.logDegraded;
+  }
+
   get pending(): number {
     return this.buffer.length;
   }
 
-  /** Record a mutation for eventual replication. Never awaits the network. */
-  enqueue(operation: MessageSyncOperation): void {
-    this.appendToLog(operation);
+  /**
+   * Record a mutation for eventual replication.
+   *
+   * Awaits the log append but never the network — the distinction is the whole
+   * design. A local append costs microseconds; the network round trip this
+   * exists to avoid costs hundreds of milliseconds. Returning before the record
+   * is on disk would leave a window where an operation is neither sent nor
+   * recoverable, which is the one thing a write-ahead log must not allow.
+   */
+  async enqueue(operation: MessageSyncOperation): Promise<void> {
+    await this.appendToLog(operation);
 
     if (this.fatalError) return;
     this.buffer.push(operation);
@@ -156,6 +173,13 @@ export class MessageWriteQueue {
         await this.confirm(batch.length);
         return;
       } catch (error) {
+        // A batch replayed after a crash reaches a backend that already has
+        // those rows. Retrying it can never succeed, and letting it exhaust the
+        // retries would set `fatalError` and end replication for the whole run.
+        if (this.options.sink.isAlreadyApplied?.(error)) {
+          await this.confirm(batch.length);
+          return;
+        }
         if (attempt === maxRetries) {
           this.fatalError = error instanceof Error ? error : new Error(String(error));
           this.warn(`giving up on a batch of ${batch.length}: ${this.fatalError.message}`);
@@ -197,18 +221,33 @@ export class MessageWriteQueue {
     await this.logWrites;
   }
 
-  private appendToLog(operation: MessageSyncOperation): void {
+  /**
+   * Append one record, serialized against other appends so two enqueues cannot
+   * interleave a line.
+   *
+   * A failure here is surfaced and marks the queue {@link degraded} rather than
+   * throwing: an unwritable log means replication is no longer crash-safe, but
+   * the run itself is still correct and its trace is still being recorded
+   * locally. Killing a working agent run because its replica log is
+   * inaccessible trades a recoverable problem for an unrecoverable one.
+   */
+  private async appendToLog(operation: MessageSyncOperation): Promise<void> {
     const logPath = this.options.logPath;
     if (!logPath) return;
 
     this.logWrites = this.logWrites.then(async () => {
-      try {
-        await fs.mkdir(path.dirname(logPath), { recursive: true });
-        await fs.appendFile(logPath, `${JSON.stringify(operation)}\n`, 'utf8');
-      } catch (error) {
-        this.warn(`failed to append to the write log: ${String(error)}`);
-      }
+      await fs.mkdir(path.dirname(logPath), { recursive: true });
+      await fs.appendFile(logPath, `${JSON.stringify(operation)}\n`, 'utf8');
     });
+
+    try {
+      await this.logWrites;
+    } catch (error) {
+      this.logDegraded = true;
+      this.warn(`write log is not durable: ${String(error)}`);
+      // Reset the chain so one failure does not reject every later append.
+      this.logWrites = Promise.resolve();
+    }
   }
 
   private async writeAtomic(filePath: string, content: string): Promise<void> {

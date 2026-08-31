@@ -102,9 +102,10 @@ describe('CliMessageTransport driving the real runtime executors', () => {
 
   it('persists a tool result and rebuilds state from the local store', async () => {
     const assistant = await transport.createAssistantMessage({
-      // Scoped to the run: the runtime re-queries with the state's `agentId`,
-      // and — exactly as on the server — a row without one is out of scope.
-      agentId: 'agent-1',
+      // Deliberately NO agentId: the runtime re-queries with the state's
+      // `agentId`, but a concrete topic is the conversation boundary, so this
+      // row must still come back — the same rule that keeps delegated-agent
+      // (`callAgent`) replies in context.
       content: 'calling a tool',
       role: 'assistant',
       topicId: 'topic-1',

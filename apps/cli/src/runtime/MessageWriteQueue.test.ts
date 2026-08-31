@@ -32,7 +32,7 @@ describe('MessageWriteQueue', () => {
 
     // The whole point: enqueue is synchronous, so the agent loop never blocks
     // on replication.
-    queue.enqueue(op('a'));
+    await queue.enqueue(op('a'));
     expect(queue.pending).toBe(1);
 
     release();
@@ -50,14 +50,14 @@ describe('MessageWriteQueue', () => {
       },
     });
 
-    queue.enqueue(op('a'));
+    await queue.enqueue(op('a'));
     await vi.waitFor(() => expect(batches).toHaveLength(1));
 
     // Three more arrive mid-flight; they should ship as ONE follow-up batch,
     // not three round trips queued behind each other.
-    queue.enqueue(op('b'));
-    queue.enqueue(op('c'));
-    queue.enqueue(op('d'));
+    await queue.enqueue(op('b'));
+    await queue.enqueue(op('c'));
+    await queue.enqueue(op('d'));
     resolveFirst();
     await queue.drain();
 
@@ -76,7 +76,7 @@ describe('MessageWriteQueue', () => {
       },
     });
 
-    queue.enqueue(op('a'));
+    await queue.enqueue(op('a'));
     await queue.drain();
 
     expect(attempts).toBe(3);
@@ -91,8 +91,8 @@ describe('MessageWriteQueue', () => {
       onError: () => {},
       sink: { flush: async () => { throw new Error('offline'); } },
     });
-    dying.enqueue(op('a'));
-    dying.enqueue(op('b'));
+    await dying.enqueue(op('a'));
+    await dying.enqueue(op('b'));
     await dying.drain().catch(() => {});
 
     expect((await fs.readFile(logPath, 'utf8')).trim().split('\n')).toHaveLength(2);
@@ -116,6 +116,83 @@ describe('MessageWriteQueue', () => {
       'b',
     ]);
     await expect(fs.readFile(logPath, 'utf8')).rejects.toThrow();
+  });
+
+  it('survives a replay of a batch the backend already has', async () => {
+    // The crash window: the sink commits, then the process dies before the
+    // acknowledgement is recorded. On restart the identical batch is replayed
+    // and a plain-insert backend rejects it as a duplicate. Without the
+    // classifier that batch fails forever, exhausts its retries, and ends ALL
+    // later replication for the run.
+    await fs.writeFile(logPath, `${JSON.stringify(op('a'))}\n`, 'utf8');
+
+    let calls = 0;
+    const queue = new MessageWriteQueue({
+      initialBackoffMs: 1,
+      logPath,
+      sink: {
+        flush: async () => {
+          calls += 1;
+          throw new Error('duplicate key value violates unique constraint');
+        },
+        isAlreadyApplied: (error) => String(error).includes('duplicate key'),
+      },
+    });
+
+    expect(await queue.recover()).toBe(1);
+    await queue.drain();
+
+    expect(calls).toBe(1);
+    expect(queue.failed).toBe(false);
+    // Acknowledged, so the log is cleared rather than replayed again forever.
+    await expect(fs.readFile(logPath, 'utf8')).rejects.toThrow();
+  });
+
+  it('without the classifier a replayed batch still stops replication', async () => {
+    // Documents why `isAlreadyApplied` exists: this is the behaviour it fixes.
+    await fs.writeFile(logPath, `${JSON.stringify(op('a'))}\n`, 'utf8');
+
+    const queue = new MessageWriteQueue({
+      initialBackoffMs: 1,
+      logPath,
+      onError: () => {},
+      sink: { flush: async () => { throw new Error('duplicate key'); } },
+    });
+
+    await queue.recover();
+    await queue.drain().catch(() => {});
+    expect(queue.failed).toBe(true);
+  });
+
+  it('has the record on disk before the enqueue resolves', async () => {
+    const queue = new MessageWriteQueue({
+      logPath,
+      sink: { flush: () => new Promise<void>(() => {}) },
+    });
+
+    await queue.enqueue(op('a'));
+
+    // Not "eventually" — by the time enqueue resolves. Anything less leaves a
+    // window where an operation is neither sent nor recoverable.
+    expect((await fs.readFile(logPath, 'utf8')).trim()).toBe(JSON.stringify(op('a')));
+  });
+
+  it('reports an unwritable log instead of failing the run', async () => {
+    const warnings: string[] = [];
+    const queue = new MessageWriteQueue({
+      // A directory where the file should be — appending can never succeed.
+      logPath: dir,
+      onError: (message) => warnings.push(message),
+      sink: { flush: async () => {} },
+    });
+
+    // Replication is no longer crash-safe, and that is surfaced — but a working
+    // run is not killed because its replica log is inaccessible.
+    await expect(queue.enqueue(op('a'))).resolves.toBeUndefined();
+    expect(queue.degraded).toBe(true);
+    expect(warnings.join()).toContain('not durable');
+
+    await queue.drain();
   });
 
   it('recovers the intact entries when the last log line was truncated', async () => {
@@ -152,9 +229,9 @@ describe('MessageWriteQueue', () => {
       },
     });
 
-    queue.enqueue(op('a'));
+    await queue.enqueue(op('a'));
     await vi.waitFor(() => expect(calls).toBe(1));
-    queue.enqueue(op('b'));
+    await queue.enqueue(op('b'));
 
     // Confirming the first batch must trim only its own prefix — truncating the
     // whole file here would discard `b`, which nothing has delivered yet.
