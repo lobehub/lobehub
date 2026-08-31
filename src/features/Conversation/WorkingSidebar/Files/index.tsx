@@ -256,9 +256,8 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     const indexedEntries = isFiltering ? (searchEntries ?? []) : entries;
     const entriesWithDeleted = mergeMissingDeletedEntries(
       indexedEntries,
-      gitFiles?.deleted ?? [],
+      isFiltering ? [] : (gitFiles?.deleted ?? []),
       projectRoot,
-      isFiltering ? normalizedDebouncedQuery : undefined,
     );
     const visibleEntries = entriesWithDeleted.filter((entry) => !isExcludedProjectFileEntry(entry));
 
@@ -273,7 +272,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     gitFiles?.deleted,
     hideIgnored,
     isFiltering,
-    normalizedDebouncedQuery,
     projectRoot,
     searchEntries,
   ]);

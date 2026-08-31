@@ -87,16 +87,4 @@ describe('mergeMissingDeletedEntries', () => {
       path: '/repo/removed/deep/file.ts',
     });
   });
-
-  it('only recreates deleted paths that match an active search query', () => {
-    const result = mergeMissingDeletedEntries(
-      entries,
-      ['removed/alpha.ts', 'removed/beta.ts'],
-      '/repo',
-      'beta',
-    );
-
-    expect(result.map((entry) => entry.relativePath)).toContain('removed/beta.ts');
-    expect(result.map((entry) => entry.relativePath)).not.toContain('removed/alpha.ts');
-  });
 });

@@ -188,6 +188,7 @@ const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedur
 // handler enables `allowMethodOverride`).
 const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   'agent.getTransferJobStatus',
+  'device.searchProjectFiles',
   'group.getTransferJobStatus',
 ]);
 

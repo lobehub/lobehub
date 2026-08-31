@@ -208,6 +208,31 @@ const filterSearchCandidates = (
   );
 };
 
+const includeMissingSearchCandidates = (
+  entries: ProjectFileIndexEntry[],
+  includePaths: string[] | undefined,
+  root: string,
+) => {
+  if (!includePaths) return entries;
+
+  const indexedPaths = new Set(entries.map((entry) => entry.relativePath));
+  const rootPrefix = `${path.resolve(root)}${path.sep}`;
+  const missingFiles = includePaths
+    .filter((relativePath) => !indexedPaths.has(relativePath))
+    .map((relativePath) => path.resolve(root, relativePath))
+    .filter((absolutePath) => absolutePath.startsWith(rootPrefix));
+
+  if (missingFiles.length === 0) return entries;
+
+  const additions = buildEntries(missingFiles, root).filter((entry) => {
+    if (indexedPaths.has(entry.relativePath)) return false;
+    indexedPaths.add(entry.relativePath);
+    return true;
+  });
+
+  return [...entries, ...additions];
+};
+
 export const defaultSearchProjectFiles = async (
   params: ProjectFileSearchParams,
 ): Promise<ProjectFileSearchResult> => {
@@ -261,7 +286,14 @@ export const defaultSearchProjectFiles = async (
         .split('\n')
         .map((item) => item.trim())
         .filter(Boolean);
-      const entries = filterSearchCandidates(buildEntries(files, root, ignoredPaths), params);
+      const entries = filterSearchCandidates(
+        includeMissingSearchCandidates(
+          buildEntries(files, root, ignoredPaths),
+          params.includePaths,
+          root,
+        ),
+        params,
+      );
 
       return {
         entries: projectFileSearchManager.selectEntries(entries, params.query, limit),
@@ -275,7 +307,14 @@ export const defaultSearchProjectFiles = async (
   }
 
   const files = await projectFileSearchManager.collectNonGitFilePaths(requestedScope);
-  const entries = filterSearchCandidates(buildEntries(files, requestedScope), params);
+  const entries = filterSearchCandidates(
+    includeMissingSearchCandidates(
+      buildEntries(files, requestedScope),
+      params.includePaths,
+      requestedScope,
+    ),
+    params,
+  );
 
   return {
     entries: projectFileSearchManager.selectEntries(entries, params.query, limit),

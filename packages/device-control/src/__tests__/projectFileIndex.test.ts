@@ -168,6 +168,26 @@ describe('defaultSearchProjectFiles', () => {
     expect(result.entries.map((entry) => entry.relativePath)).toEqual(['target-200.ts']);
   });
 
+  it('fuzzy-ranks missing eligible paths with indexed files before applying the limit', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-deleted-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, 'button-helper.ts'), 'button\n');
+
+    const result = await defaultSearchProjectFiles({
+      includePaths: ['Button.tsx', 'button-helper.ts', 'ButtonStory.tsx'],
+      limit: 2,
+      query: 'btn',
+      scope: dir,
+    });
+
+    const relativePaths = result.entries
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => entry.relativePath);
+    expect(relativePaths).toHaveLength(2);
+    expect(relativePaths).toContain('Button.tsx');
+  });
+
   it('searches hidden project directories in non-git scopes', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-hidden-'));
     cleanup.push(dir);

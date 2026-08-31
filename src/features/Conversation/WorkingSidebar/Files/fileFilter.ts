@@ -23,15 +23,9 @@ export const mergeMissingDeletedEntries = (
   entries: ProjectFileIndexEntry[],
   deletedPaths: string[],
   root: string,
-  query?: string,
 ): ProjectFileIndexEntry[] => {
-  const normalizedQuery = query?.trim().toLocaleLowerCase();
   const existingPaths = new Set(entries.map((entry) => entry.relativePath));
-  const missingPaths = deletedPaths.filter(
-    (relativePath) =>
-      !existingPaths.has(relativePath) &&
-      (!normalizedQuery || relativePath.toLocaleLowerCase().includes(normalizedQuery)),
-  );
+  const missingPaths = deletedPaths.filter((relativePath) => !existingPaths.has(relativePath));
   if (missingPaths.length === 0) return entries;
 
   const additions: ProjectFileIndexEntry[] = [];
