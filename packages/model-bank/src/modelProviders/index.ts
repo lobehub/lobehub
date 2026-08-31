@@ -36,6 +36,7 @@ import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
 import JinaProvider from './jina';
 import KimiCodingPlanProvider from './kimiCodingPlan';
+import LlmmanProvider from './llmman';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import LongCatProvider from './longcat';
@@ -204,6 +205,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VolcengineCodingPlanProvider,
   MinimaxProvider,
   MinimaxCodingPlanProvider,
+  LlmmanProvider,
   LMStudioProvider,
   InternLMProvider,
   HigressProvider,
@@ -280,6 +282,7 @@ export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
 export { default as JinaProviderCard } from './jina';
 export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
+export { default as LlmmanProviderCard } from './llmman';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';

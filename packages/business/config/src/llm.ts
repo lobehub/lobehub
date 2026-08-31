@@ -13,6 +13,7 @@ const providerDefaults: Partial<
   [ModelProvider.DeepSeek]: { enabled: true },
   [ModelProvider.Google]: { enabled: true },
   [ModelProvider.LMStudio]: { fetchOnClient: true },
+  [ModelProvider.Llmman]: { fetchOnClient: true },
   [ModelProvider.Ollama]: { fetchOnClient: true },
   [ModelProvider.OpenAI]: { enabled: true },
   [ModelProvider.OpenCodeZen]: { enabledModels: enabledOpenCodeZenModels },
