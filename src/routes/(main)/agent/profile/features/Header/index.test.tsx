@@ -35,6 +35,10 @@ const mocks = vi.hoisted(() => ({
   homeState: {
     removeAgent: vi.fn(),
   },
+  hasActiveWorkspace: true,
+  serverConfigState: {
+    featureFlags: { enableAgentShare: undefined as boolean | undefined },
+  },
   navigate: vi.fn(),
   // The two independent halves of "may configure this agent": the workspace
   // role permission and this agent's General Access level.
@@ -122,6 +126,7 @@ vi.mock('lucide-react', async (importOriginal) => ({
   Download: () => null,
   MoreHorizontal: () => null,
   Settings2Icon: () => null,
+  Share2Icon: () => <span data-testid="share-entry-icon" />,
   Trash: () => null,
 }));
 
@@ -146,7 +151,7 @@ vi.mock('@/features/AgentBreadcrumb', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
-  useHasActiveWorkspace: () => true,
+  useHasActiveWorkspace: () => mocks.hasActiveWorkspace,
 }));
 
 vi.mock('@/features/ResourcePermission/AccessLevelTag', () => ({
@@ -225,6 +230,15 @@ vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: typeof mocks.homeState) => unknown) => selector(mocks.homeState),
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: typeof mocks.serverConfigState) => unknown) =>
+    selector(mocks.serverConfigState),
+}));
+
+vi.mock('@/store/serverConfig/selectors', () => ({
+  featureFlagsSelectors: (state: typeof mocks.serverConfigState) => state.featureFlags,
+}));
+
 vi.mock('../store', () => ({
   selectors: {
     lockHolderId: (s: typeof mocks.profileState) => s.lockState.holderId,
@@ -261,6 +275,37 @@ describe('Agent profile Header', () => {
     mocks.permission.allowed = true;
     mocks.resourceAccess.canEditResource = true;
     mocks.resourceAccess.canManageResource = true;
+    mocks.hasActiveWorkspace = true;
+    mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
+  });
+
+  describe('share entry', () => {
+    // Agent sharing is personal-only, so the entry needs a personal agent.
+    beforeEach(() => {
+      mocks.hasActiveWorkspace = false;
+    });
+
+    it('offers the share entry to a personal agent owner', () => {
+      render(<Header />);
+
+      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
+    });
+
+    it('hides the share entry when the account may not publish shares', () => {
+      mocks.serverConfigState.featureFlags.enableAgentShare = false;
+
+      render(<Header />);
+
+      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
+    });
+
+    it('keeps the share entry while the capability is still unresolved', () => {
+      mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
+
+      render(<Header />);
+
+      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
+    });
   });
 
   // `ResourceConfigAccessGate` requires the role permission AND resource-level

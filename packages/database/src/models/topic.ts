@@ -18,6 +18,7 @@ import {
   and,
   asc,
   count,
+  countDistinct,
   desc,
   eq,
   getTableColumns,
@@ -1125,6 +1126,39 @@ export class TopicModel {
       .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
 
     return result[0].count;
+  };
+
+  /**
+   * Creator-facing roll-up for one shared agent: how many conversations
+   * visitors started, and how many distinct visitors started them.
+   *
+   * Counterpart to {@link countBySender}, which counts ONE visitor. Both rely
+   * on `senderId` being non-null only for share-originated topics, so the
+   * creator's own conversations with the same agent are excluded. Scoped by
+   * `this.mine()` like every other read here, so the numbers can only ever
+   * describe rows the caller owns.
+   *
+   * `agentShares` is 1:1 per agent, so `agentId` alone is the share dimension
+   * — see {@link queryBySender} for why a disable → re-enable cycle keeps
+   * counting the earlier conversations.
+   */
+  countShareVisitors = async ({
+    agentId,
+  }: {
+    agentId: string;
+  }): Promise<{ topicCount: number; visitorCount: number }> => {
+    const [result] = await this.db
+      .select({
+        topicCount: count(topics.id),
+        visitorCount: countDistinct(topics.senderId),
+      })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), isNotNull(topics.senderId)));
+
+    return {
+      topicCount: Number(result?.topicCount ?? 0),
+      visitorCount: Number(result?.visitorCount ?? 0),
+    };
   };
 
   // **************** Create *************** //

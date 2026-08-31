@@ -1156,6 +1156,10 @@ export const inboxKeys = {
 export const shareKeys = {
   agentInfo: def('share:agentInfo', (slugOrId: string) => ['share:agentInfo', slugOrId]),
   // Creator-side share status keyed by agentId (visitor side uses `agentInfo`).
+  agentShareStats: def('share:agentShareStats', (agentId: string) => [
+    'share:agentShareStats',
+    agentId,
+  ]),
   agentShareStatus: def('share:agentShareStatus', (agentId: string) => [
     'share:agentShareStatus',
     agentId,

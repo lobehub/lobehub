@@ -26,6 +26,22 @@ vi.mock('@/database/models/agentShare', () => ({
   })),
 }));
 
+const mockCountShareVisitors = vi.fn();
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn(() => ({ countShareVisitors: mockCountShareVisitors })),
+}));
+
+const mockGetAgentShareMonthlySpend = vi.fn();
+vi.mock('@/business/server/agent-share/spendGate', () => ({
+  getAgentShareMonthlySpend: (...args: unknown[]) => mockGetAgentShareMonthlySpend(...args),
+}));
+
+const mockGetFeatureFlagsState = vi.fn();
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: (...args: unknown[]) =>
+    mockGetFeatureFlagsState(...args),
+}));
+
 const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
   await import('../agentShare');
 
@@ -48,6 +64,9 @@ describe('agentShareRouter', () => {
       shareConfig: { ...share.shareConfig, slug: 'my-slug' },
     });
     mockUpdateVisibility.mockResolvedValue(share);
+    mockCountShareVisitors.mockResolvedValue({ topicCount: 7, visitorCount: 3 });
+    mockGetAgentShareMonthlySpend.mockResolvedValue(null);
+    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
   });
 
   it('requires authentication for share management', async () => {
@@ -194,6 +213,105 @@ describe('agentShareRouter', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(caller.updateSlug({ agentId: 'agent-1', slug: 'my-slug' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
+    });
+  });
+
+  describe('publish capability', () => {
+    it('rejects enabling a share when the capability is off for this user', async () => {
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.enableShare({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('user-1');
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects publishing an existing share when the capability is off', async () => {
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(
+        caller.updateVisibility({ agentId: 'agent-1', visibility: 'link' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+    });
+
+    it('still lets a user unpublish, read and manage a share when the capability is off', async () => {
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' });
+      await caller.disableShare({ agentId: 'agent-1' });
+      await caller.getShareStatus({ agentId: 'agent-1' });
+      await caller.updateShareConfig({ agentId: 'agent-1', config: { maxTurnsPerTopic: 3 } });
+
+      expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'private');
+      expect(mockDeleteByAgentId).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('allows publishing when the capability is unconfigured', async () => {
+      mockGetFeatureFlagsState.mockResolvedValue({});
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.enableShare({ agentId: 'agent-1' });
+
+      expect(mockCreate).toHaveBeenCalledWith('agent-1', undefined);
+    });
+  });
+
+  describe('getShareStats', () => {
+    it('returns visitor aggregates and the configured cap for the owner', async () => {
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, monthlySpendLimit: 10 },
+        userViewCount: 42,
+      });
+      mockGetAgentShareMonthlySpend.mockResolvedValue(2.5);
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.getShareStats({ agentId: 'agent-1' })).resolves.toEqual({
+        monthlySpend: 2.5,
+        monthlySpendLimit: 10,
+        topicCount: 7,
+        userViewCount: 42,
+        visitorCount: 3,
+      });
+      expect(mockCountShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
+      expect(mockGetAgentShareMonthlySpend).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        ownerUserId: 'user-1',
+      });
+    });
+
+    it('reports unknown spend as null rather than zero', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      const stats = await caller.getShareStats({ agentId: 'agent-1' });
+
+      expect(stats.monthlySpend).toBeNull();
+      expect(stats.monthlySpendLimit).toBeNull();
+    });
+
+    it('refuses stats for an agent the caller does not own', async () => {
+      // `getByAgentId` is ownership-scoped, so a non-owner resolves to null.
+      mockGetByAgentId.mockResolvedValue(null);
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-2' }));
+
+      await expect(caller.getShareStats({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockCountShareVisitors).not.toHaveBeenCalled();
+      expect(mockGetAgentShareMonthlySpend).not.toHaveBeenCalled();
+    });
+
+    it('requires authentication', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner());
+
+      await expect(caller.getShareStats({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
     });
   });
 });

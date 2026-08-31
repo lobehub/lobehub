@@ -18,6 +18,14 @@ export const FeatureFlagsSchema = z.object({
   api_key_manage: FeatureFlagValue.optional(),
   edit_agent: FeatureFlagValue.optional(),
 
+  /**
+   * Whether a user may publish an Agent as a shared link. Only the CREATOR
+   * side is gated: an existing share link keeps resolving for its visitors
+   * regardless of this flag, so turning it off never breaks links already
+   * handed out.
+   */
+  agent_share: FeatureFlagValue.optional(),
+
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
   voice_dictation: FeatureFlagValue.optional(),
@@ -78,6 +86,8 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   api_key_manage: false,
   edit_agent: true,
 
+  agent_share: true,
+
   ai_image: true,
 
   check_updates: true,
@@ -117,6 +127,7 @@ export const mapFeatureFlagsEnvToState = (
 ): IFeatureFlagsState => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
+    enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

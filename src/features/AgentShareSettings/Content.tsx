@@ -9,6 +9,7 @@ import LimitsSection from './LimitsSection';
 import LinkSection from './LinkSection';
 import PermissionsSection from './PermissionsSection';
 import ToolsSection from './ToolsSection';
+import UsageSection from './UsageSection';
 import { type AgentShareConfigPatch, useAgentShare } from './useAgentShare';
 
 interface AgentShareSettingsContentProps {
@@ -56,6 +57,7 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
           />
           {share && (
             <>
+              <UsageSection agentId={agentId} />
               <PermissionsSection shareConfig={share.shareConfig} onChange={handleConfigChange} />
               <ToolsSection
                 agentId={agentId}

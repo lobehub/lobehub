@@ -39,6 +39,8 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { featureFlagsSelectors } from '@/store/serverConfig/selectors';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -253,10 +255,21 @@ const Header = memo(() => {
     [],
   );
 
+  // Whether this account may publish shares at all. Presentation only — the
+  // same capability is enforced on `agentShare.enableShare` server-side.
+  // `undefined` (flags not resolved yet) keeps the entry visible, matching the
+  // schema default.
+  const enableAgentShare = useServerConfigStore(featureFlagsSelectors).enableAgentShare;
+
   // Agent sharing is personal-only — `agentShares` rows can never exist for a
   // workspace agent (see `AgentShareModel`'s ownership check) — and a builtin
   // row (Inbox, the builders) is not the owner's to hand out.
-  const canShareAgent = !!activeAgentId && !hasActiveWorkspace && !isBuiltinAgent && canConfigure;
+  const canShareAgent =
+    !!activeAgentId &&
+    !hasActiveWorkspace &&
+    !isBuiltinAgent &&
+    canConfigure &&
+    enableAgentShare !== false;
 
   const handleOpenShare = useCallback(() => {
     if (!activeAgentId) return;

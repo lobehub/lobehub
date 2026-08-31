@@ -13,6 +13,11 @@ class AgentShareService {
     return lambdaClient.agentShare.enableShare.mutate({ agentId, visibility });
   }
 
+  /** Owner-only aggregate usage (views, visitors, conversations, spend). */
+  async getShareStats(agentId: string) {
+    return lambdaClient.agentShare.getShareStats.query({ agentId });
+  }
+
   async getShareStatus(agentId: string) {
     return lambdaClient.agentShare.getShareStatus.query({ agentId });
   }
