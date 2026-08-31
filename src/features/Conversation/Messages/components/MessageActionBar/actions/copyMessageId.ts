@@ -4,12 +4,14 @@ import { Braces } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+
 import { defineAction } from '../defineAction';
 
 /**
- * Copies this message's id — the handle for `lh` queries, eval cases and bug
- * reports. It lives in the Advanced submenu, which is what keeps it out of the
- * way.
+ * Dev-tool action (visible only with Advanced Tools enabled): copies this
+ * message's id — the handle for `lh` queries, eval cases and bug reports.
  *
  * For a group message the useful id is the underlying assistant message, not
  * the aggregate group, same as `copyOperationId`.
@@ -18,10 +20,11 @@ export const copyMessageIdAction = defineAction({
   key: 'copyMessageId',
   useBuild: (ctx) => {
     const { t } = useTranslation('chat');
+    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
     const messageId = ctx.contentBlock?.id ?? ctx.id;
 
     return useMemo(() => {
-      if (!messageId) return null;
+      if (!isDevMode || !messageId) return null;
       return {
         handleClick: async () => {
           await copyToClipboard(messageId);
@@ -31,6 +34,6 @@ export const copyMessageIdAction = defineAction({
         key: 'copyMessageId',
         label: t('messageAction.copyMessageId'),
       };
-    }, [t, messageId]);
+    }, [t, isDevMode, messageId]);
   },
 });
