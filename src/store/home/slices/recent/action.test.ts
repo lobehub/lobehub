@@ -8,7 +8,7 @@ import * as cacheScope from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
 import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
-import { recentProjectionStorage } from '@/store/home/slices/recent/projectionStorage';
+import { recentProjection } from '@/store/home/slices/recent/projection';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
 const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem => ({
@@ -69,15 +69,15 @@ describe('RecentActionImpl', () => {
     const queryKey = createRecentQueryKey(11);
     act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Cached')]));
 
-    const persisted = await recentProjectionStorage.get({ queryKey, scope: 'user-1:ws-A' });
+    const persisted = await recentProjection.get({ queryKey, scope: 'user-1:ws-A' });
     expect(persisted?.data[0].title).toBe('Cached');
     expect(persisted?.data[0].updatedAt).toEqual(new Date(0));
   });
 
   it('ignores storage hydration that resolves after server data', async () => {
     const queryKey = createRecentQueryKey(11);
-    const cached = deferred<Awaited<ReturnType<typeof recentProjectionStorage.get>>>();
-    vi.spyOn(recentProjectionStorage, 'get').mockReturnValue(cached.promise);
+    const cached = deferred<Awaited<ReturnType<typeof recentProjection.get>>>();
+    vi.spyOn(recentProjection, 'get').mockReturnValue(cached.promise);
 
     const hydration = useHomeStore.getState().hydrateRecentQuery('user-1:ws-A', queryKey);
     act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Server')]));

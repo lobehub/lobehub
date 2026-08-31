@@ -13,7 +13,7 @@ import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { createRecentQueryKey } from './initialState';
-import { recentProjectionStorage } from './projectionStorage';
+import { recentProjection } from './projection';
 import type { RecentDispatchAction } from './reducer';
 import { recentReducer } from './reducer';
 
@@ -72,7 +72,7 @@ export class RecentActionImpl {
     const query = this.#get().recentsByScope[scope]?.queries[queryKey];
     if (!query) return;
 
-    void recentProjectionStorage
+    void recentProjection
       .set({ queryKey, scope }, { data: query.items, updatedAt: query.updatedAt })
       .catch((error) => console.error('Failed to persist recent projection', error));
   };
@@ -109,7 +109,7 @@ export class RecentActionImpl {
       this.internal_dispatchRecent({ queryKey, scope, type: 'startHydration' });
 
       try {
-        const projection = await recentProjectionStorage.get({ queryKey, scope });
+        const projection = await recentProjection.get({ queryKey, scope });
         if (getCacheScope() !== scope) return;
 
         if (projection) {

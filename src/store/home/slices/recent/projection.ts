@@ -14,7 +14,7 @@ const deserialize = (value: string): QueryProjection<RecentItem[]> => {
   };
 };
 
-export const recentProjectionStorage = new LocalStorageQueryProjectionStorage<RecentItem[]>({
+export const recentProjection = new LocalStorageQueryProjectionStorage<RecentItem[]>({
   deserialize,
   namespace: 'lobechat-home-recents-v2',
 });
