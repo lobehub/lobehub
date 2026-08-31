@@ -1,14 +1,5 @@
-import type {
-  Agent,
-  AgentRuntimeContext,
-  AgentState,
-  GeneralAgentConfig,
-} from '@lobechat/agent-runtime';
-import {
-  extractActivatedToolIdsFromMessages,
-  GeneralChatAgent,
-  GraphAgent,
-} from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import {
   BUILTIN_AGENT_SLUGS,
   getAgentRuntimeConfig,
@@ -37,7 +28,6 @@ import {
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
-  type BotPlatformContext,
   buildExpertiseContextSnapshot,
   type LobeToolManifest,
   SkillEngine,
@@ -48,7 +38,6 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
-  getHeterogeneousAgentConfig,
   HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
@@ -58,10 +47,8 @@ import type {
   AgentModelOverride,
   ChatAudioItem,
   ChatFileItem,
-  ChatTopicBotContext,
   ChatVideoItem,
   ErrorType,
-  ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
@@ -71,17 +58,13 @@ import type {
   HeterogeneousTopicModel,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
-  LobeAgentConfig,
   MessagePluginItem,
-  RuntimeMentionedAgent,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
-  UserInterventionConfig,
   WorkingDirConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
 import {
-  AgentGraphSchema,
   applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   ChatErrorType,
@@ -130,7 +113,6 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
-import { toolsEnv } from '@/envs/tools';
 import {
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
@@ -150,7 +132,7 @@ import {
   createStreamEventManager,
 } from '@/server/modules/AgentRuntime/factory';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
+import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
@@ -159,7 +141,6 @@ import type {
   AgentExecutionParams,
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
-  EvalRuntimeContext,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -212,448 +193,32 @@ import {
   isDeviceToolIdentifier,
   REMOTE_DEVICE_TOOL_IDENTIFIERS,
 } from './deviceToolRegistry';
+import { createGraphAwareAgentFactory, STOPPED_TOOL_CONTENT } from './helpers/agentFactory';
+import {
+  buildBotConversationGroupContext,
+  buildGroupAgentContext,
+  formatErrorForMetadata,
+} from './helpers/groupContext';
+import {
+  getHeterogeneousAgentTitle,
+  humanizeHeteroDispatchError,
+  resolveHeteroDispatchErrorType,
+  supportsCloudHeterogeneousSandbox,
+} from './helpers/heteroErrors';
+import {
+  getMediaAvailabilityFromFileTypes,
+  getMediaAvailabilityFromMessages,
+  isMultimodalUnderstandingConfigured,
+} from './helpers/mediaAvailability';
 import { ingestAttachment } from './ingestAttachment';
 import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
 import { acquireTopicStartReservation } from './topicStartReservation';
+import type { InternalExecAgentParams, ResolvedWorkspaceInit } from './types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
-
-const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
-  type === 'claude-code' || type === 'codex';
-
-const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
-  getHeterogeneousAgentConfig(type)?.title ?? type;
-
-/**
- * Content written onto a tool row that the user stopped before it ran. Mirrors
- * the runtime's aborted-tool wording so a stopped call reads the same whether
- * it was settled here or by `resolve_aborted_tools`.
- */
-const STOPPED_TOOL_CONTENT = 'Tool execution was aborted by user.';
-
-const createGraphAwareAgentFactory =
-  (
-    upstreamFactory?: AgentRuntimeServiceOptions['agentFactory'],
-  ): ((config: GeneralAgentConfig) => Agent) =>
-  (config) => {
-    if (upstreamFactory) {
-      return upstreamFactory(config);
-    }
-
-    const runtimeAgentConfig = config.agentConfig as LobeAgentConfig | undefined;
-    // Graph Agent is an agency-level behavior: read from `agencyConfig`.
-    // Legacy rows stored the graph on `chatConfig` — fall back so existing
-    // agents keep running until their next write migrates them.
-    const agencyConfig = runtimeAgentConfig?.agencyConfig;
-    const legacyChatConfig = runtimeAgentConfig?.chatConfig as
-      (LobeAgentChatConfig & { enableGraphMode?: boolean; graph?: unknown }) | undefined;
-    const graph = agencyConfig?.graph ?? legacyChatConfig?.graph;
-    const graphEnabled =
-      (agencyConfig?.enableGraphMode ?? legacyChatConfig?.enableGraphMode) === true;
-    if (graphEnabled && graph) {
-      const graphResult = AgentGraphSchema.safeParse(graph);
-
-      if (graphResult.success) {
-        return new GraphAgent({ ...config, graph: graphResult.data });
-      }
-
-      log('Invalid graph agent snapshot, falling back to default runtime: %O', graphResult.error);
-    }
-
-    return new GeneralChatAgent(config);
-  };
-
-/**
- * Format error for storage in thread metadata
- * Handles Error objects which don't serialize properly with JSON.stringify
- */
-function formatErrorForMetadata(error: unknown): Record<string, any> | undefined {
-  if (!error) return undefined;
-
-  // Handle Error objects
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      name: error.name,
-    };
-  }
-
-  // Handle objects with message property (like ChatMessageError)
-  if (typeof error === 'object' && 'message' in error) {
-    return error as Record<string, any>;
-  }
-
-  // Fallback: wrap in object
-  return { message: String(error) };
-}
-
-const getMediaAvailabilityFromFileTypes = (fileTypes: string[]) => ({
-  hasAudios: fileTypes.some((fileType) => fileType.startsWith('audio')),
-  hasImages: fileTypes.some((fileType) => fileType.startsWith('image')),
-  hasVideos: fileTypes.some((fileType) => fileType.startsWith('video')),
-});
-
-interface MediaAvailabilityMessage {
-  audioList?: unknown[];
-  imageList?: unknown[];
-  role?: string;
-  videoList?: unknown[];
-}
-
-const getMediaAvailabilityFromMessages = (messages: MediaAvailabilityMessage[]) => ({
-  hasAudios: messages.some(
-    (message) => message.role === 'user' && (message.audioList?.length ?? 0) > 0,
-  ),
-  hasImages: messages.some(
-    (message) => message.role === 'user' && (message.imageList?.length ?? 0) > 0,
-  ),
-  hasVideos: messages.some(
-    (message) => message.role === 'user' && (message.videoList?.length ?? 0) > 0,
-  ),
-});
-
-const isMultimodalUnderstandingConfigured = () => {
-  try {
-    return (
-      !!toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && !!toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
-    );
-  } catch {
-    // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
-    return false;
-  }
-};
-
-/**
- * Build the multi-agent group context from a group's member roster, mirroring
- * the client `contextEngineering.ts` `agentGroup` build. Carries every member's
- * real `agt_*` ID so the supervisor dispatches members by ID instead of role
- * name (role names don't resolve → "Agent member(s) failed to start."). Resolves
- * the responding agent's own role/name so GroupContextInjector marks it with
- * `you="true"` and the orchestration filter activates for participants.
- */
-const buildGroupAgentContext = (
-  currentAgentId: string,
-  group: { content?: string | null; title?: string | null } | undefined,
-  roster: Array<{ agentId: string; role: string | null; title: string | null }>,
-): AgentGroupConfig | undefined => {
-  if (roster.length === 0) return undefined;
-
-  const agentMap: AgentGroupConfig['agentMap'] = {};
-  const members: NonNullable<AgentGroupConfig['members']> = [];
-  let currentAgentName: string | undefined;
-  let currentAgentRole: 'supervisor' | 'participant' | undefined;
-
-  for (const member of roster) {
-    const role = member.role === 'supervisor' ? 'supervisor' : 'participant';
-    const name = member.title?.trim() || 'Untitled Agent';
-    agentMap[member.agentId] = { name, role };
-    members.push({ id: member.agentId, name, role });
-
-    if (member.agentId === currentAgentId) {
-      currentAgentName = name;
-      currentAgentRole = role;
-    }
-  }
-
-  return {
-    agentMap,
-    currentAgentId,
-    currentAgentName,
-    currentAgentRole,
-    groupTitle: group?.title || undefined,
-    members,
-    systemPrompt: group?.content || undefined,
-  };
-};
-
-/**
- * Bot-conversation fallback: a single bot agent has no real group, so build a
- * degenerate one-member context purely to give it its `<group_context>`
- * identity block. Only used when there is no `groupId`.
- */
-const buildBotConversationGroupContext = (
-  currentAgentId: string,
-  agentConfig: { description?: unknown; title?: unknown } | undefined,
-): AgentGroupConfig => {
-  const title = agentConfig?.title;
-  const description = agentConfig?.description;
-  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Current Agent';
-
-  return {
-    agentMap: { [currentAgentId]: { name, role: 'participant' } },
-    currentAgentId,
-    currentAgentName: name,
-    currentAgentRole: 'participant',
-    members: [{ id: currentAgentId, name, role: 'participant' }],
-    systemPrompt: typeof description === 'string' ? description : undefined,
-  };
-};
-
-/**
- * Internal params for execAgent with step lifecycle callbacks
- * This extends the public ExecAgentParams with server-side only options
- */
-interface InternalExecAgentParams extends ExecAgentParams {
-  /** Additional plugin IDs to inject (e.g., task tool during task execution) */
-  additionalPluginIds?: string[];
-  /**
-   * Server-authored generic intervention claim id. When present, the message
-   * claim stores this exact id so a retry after dispatch-but-before-publish can
-   * prove the runtime side effect already happened. Never client-passable.
-   */
-  approvalResolutionRequestId?: string;
-  /**
-   * Server-authored parked operation expected on every claimed tool row. Used
-   * to retire its Redis/agent_operations lifecycle only after the replacement
-   * continuation has been scheduled. Never client-passable.
-   */
-  approvalSourceOperationId?: string;
-  /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
-  botContext?: ChatTopicBotContext;
-  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
-  botPlatformContext?: BotPlatformContext;
-  /**
-   * chatConfig overrides (thinking / reasoning-effort extend params) merged over
-   * the executing agent's own chatConfig, skipping nulled keys. Internal-only:
-   * set by the callSubAgent thread-run path, never client-passable.
-   */
-  chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
-  /**
-   * Thread `execAgent` materialised from `appContext.newThread` for THIS turn.
-   * Internal-only: set by the wrapper after it creates the row, never
-   * client-passable. Tells the turn its thread is brand new, so the first
-   * message anchors on the branch point instead of a (non-existent) spine head.
-   */
-  createdThreadId?: string;
-  /** Cron job ID that triggered this execution (if trigger is 'cron') */
-  cronJobId?: string;
-  /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
-  disableLocalSystem?: boolean;
-  /** Disable the self-iteration declaration tool for reviewer/runtime paths. */
-  disableSelfFeedbackIntentTool?: boolean;
-  /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
-  disableTools?: boolean;
-  /** Discord context for injecting channel/guild info into agent system message */
-  discordContext?: any;
-  /**
-   * Inject a user-role message into the LLM context for this turn WITHOUT
-   * persisting it (no DB row, no Agent Signal). Used for ephemeral orchestration
-   * instructions — e.g. a group supervisor's `<speaker>` instruction to a member —
-   * so it drives the member's response without polluting the group conversation.
-   * Requires `suppressUserMessage` (the turn runs off existing history).
-   */
-  ephemeralUserMessage?: string;
-  /** Eval context for injecting environment prompts into system message */
-  evalContext?: EvalContext;
-  /** Eval execution controls, such as fixture tool forwarding. */
-  evalRuntime?: EvalRuntimeContext;
-  /**
-   * Restrict this orchestration turn to exactly these plugins. Unlike
-   * `additionalPluginIds`, this excludes the agent's pinned and default tools
-   * as well as activator-discoverable manifests.
-   */
-  exclusivePluginIds?: string[];
-  /** External files to upload to S3 and attach to the user message */
-  files?: Array<{
-    /** Pre-downloaded buffer (from adapter/platform layer) */
-    buffer?: Buffer;
-    mimeType?: string;
-    name?: string;
-    size?: number;
-    /** External URL — fetched if no buffer provided */
-    url?: string;
-  }>;
-  /** Client-side function tools from Response API — injected into LLM with source='client' */
-  functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
-  /** External lifecycle hooks (auto-adapt to local/production mode) */
-  hooks?: AgentHook[];
-  /** Initial step count offset for resumed operations (accumulated from previous runs) */
-  initialStepCount?: number;
-  /**
-   * This start came from a person waiting at a composer, not from a background
-   * producer (task callback, cron, bot, API). Interactive starts serialize only
-   * on the short topic-start reservation and never on `runningOperation` — the
-   * client already owns "one foreground turn at a time" with a queue and a UI,
-   * and a refusal here destroys the message before it is ever persisted.
-   */
-  interactiveStart?: boolean;
-  /** Maximum steps for the agent operation */
-  maxSteps?: number;
-  /**
-   * Agents the user @-mentioned in this message (multi-mention). When present
-   * (and non-group), the run enables the callAgent tool and persists the mentioned
-   * agents into the runtime `initialContext` so the context engine injects the
-   * delegation context at step time — making the supervisor delegate to them
-   * instead of answering itself. Mirrors the client runtime's mention wiring.
-   */
-  mentionedAgents?: RuntimeMentionedAgent[];
-  /** Parent message ID to continue from. Only takes effect when resume is true */
-  parentMessageId?: string;
-  queueRetries?: number;
-  queueRetryDelay?: string;
-  /** Whether to continue execution from an existing persisted message */
-  resume?: boolean;
-  /**
-   * When present, this execAgent call acts as the "continue" step for a
-   * previous op that hit `human_approve_required`. The service writes the
-   * decision to the target tool message and either runs the approved tool
-   * (`approved`), halts with `reason='human_rejected'` (`rejected`), or
-   * surfaces the rejection as user feedback so the LLM can respond
-   * (`rejected_continue`). `parentMessageId` must point at the pending tool
-   * message.
-   */
-  resumeApproval?: {
-    decision: 'approved' | 'rejected' | 'rejected_continue';
-    parentMessageId: string;
-    rejectionReason?: string;
-    toolCallId: string;
-  };
-  /**
-   * Batch form of `resumeApproval` — every decision the user made in ONE
-   * action ("approve all" on a parallel tool batch). The service applies each
-   * decision to its tool message and resumes with a single `call_tools_batch`
-   * covering all approved tools, so the LLM is continued exactly once with the
-   * complete result set.
-   *
-   * Resolving a parallel batch as N sequential `resumeApproval` calls instead
-   * produces N operations, and each one continues the LLM while the tools not
-   * yet approved are still empty rows. Mutually exclusive with
-   * `resumeApproval`; when both are absent nothing approval-related runs.
-   */
-  resumeApprovals?: {
-    decision: 'approved' | 'rejected' | 'rejected_continue';
-    parentMessageId: string;
-    rejectionReason?: string;
-    toolCallId: string;
-  }[];
-  /**
-   * When present, this execAgent call resumes a previous op that paused on a
-   * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
-   * service writes the human-provided `content` as the target tool message's
-   * result and resumes from `phase: 'tool_result'` — the tool is NOT
-   * re-executed. `parentMessageId` must point at the pending `role='tool'`
-   * message. Mutually exclusive with `resumeApproval`.
-   */
-  resumeToolResult?: {
-    content: string;
-    outcome?: 'skipped' | 'submitted';
-    parentMessageId: string;
-    pluginState?: Record<string, unknown>;
-    rejectionReason?: string;
-    toolCallId: string;
-  };
-  /**
-   * Tool identifiers the user @-mentioned in this message. Merged into the
-   * agent's plugin set for this run (alongside `additionalPluginIds`) so a
-   * mentioned tool that isn't pinned to the agent — e.g. a custom MCP connector
-   * picked from the @ list — is enabled and callable. User-scoped lookups
-   * downstream (connectors, installed plugins) keep it to the caller's own tools.
-   */
-  selectedToolIds?: string[];
-  /** Abort startup before the agent runtime operation is created */
-  signal?: AbortSignal;
-  /**
-   * Whether the LLM call should use streaming.
-   * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
-   */
-  stream?: boolean;
-  /**
-   * Run the turn off existing topic history without injecting a new user message
-   * (no user-message row, no Agent Signal source event). The agent responds to
-   * whatever the context engine surfaces as the latest turn. Used by auto-repair,
-   * where the failure feedback already lives on the verify card in history.
-   * `prompt` is still used for the operation title / logs. Unlike `resume`, this
-   * starts a fresh operation and skips the resume-specific validation.
-   */
-  suppressUserMessage?: boolean;
-  /** Task ID that triggered this execution (if trigger is 'task') */
-  taskId?: string;
-  /**
-   * Custom title for the topic.
-   * When provided (including empty string), overrides the default prompt-based title.
-   * When undefined, falls back to prompt.slice(0, 50).
-   */
-  title?: string;
-  /**
-   * Force the effective `chatConfig.toolMode` for this run. Set by IM bot
-   * conversations where the user explicitly switched mode via `/mode` —
-   * an explicit per-conversation choice, so it wins over the agent's own
-   * chatConfig AND workspace member-mode overrides.
-   */
-  toolModeOverride?: 'agent' | 'chat';
-  /** Running operation that owns the topic for an internally spawned child run. */
-  topicStartOwnerOperationId?: string;
-  /**
-   * Re-enter a topic-start reservation already acquired by an upstream caller,
-   * such as TaskResultBridgeService.
-   */
-  topicStartReservationId?: string;
-  /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
-  trigger?: string;
-  /**
-   * User intervention configuration
-   * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
-   */
-  userInterventionConfig?: UserInterventionConfig;
-}
-
-/**
- * Result of {@link AiAgentService.resolveWorkspaceInit}: the cacheable scan
- * (`workspace`) plus the per-run resolved bound directory (`boundCwd`).
- *
- * `boundCwd` is deliberately kept OUT of {@link WorkspaceInitResult}: that type
- * is persisted into `devices.workingDirs[].workspace` and read by the web UI,
- * and its scanned root is always the enclosing `WorkingDirEntry.path` — not a
- * field on the scan. Surfacing it here lets the caller fill the system prompt's
- * `{{workingDirectory}}` (and the tool cwd/scope downstream) without re-loading
- * the device + topic the scan already read.
- */
-interface ResolvedWorkspaceInit {
-  boundCwd?: string;
-  /**
-   * The full config behind {@link boundCwd} (source path + repoType + the
-   * active worktree). Callers persist THIS onto the topic, not the flat path:
-   * project grouping keys off `config.path` (the source repo), so a run inside
-   * a linked worktree must still file under its repo.
-   */
-  boundCwdConfig?: WorkingDirConfig;
-  /**
-   * The cwd the topic was ALREADY pinned to, so a caller can tell a first-time
-   * binding from a no-op rewrite without re-reading the topic row.
-   */
-  topicWorkingDirectory?: string;
-  workspace: WorkspaceInitResult;
-}
-
-/**
- * Turn a raw device-gateway dispatch error code into a human-readable headline.
- * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
- * surfaced verbatim, render as a cryptic error card. We rewrite the headline the
- * caller keeps for non-web surfaces (IM bots) while retaining the raw code in
- * `detail` for diagnostics. Web clients localize via the mapped error type below.
- */
-const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
-  GATEWAY_NOT_CONFIGURED:
-    "The run device gateway isn't configured on the server, so this agent can't reach a device to run on. Configure the device gateway, or switch this agent to a connected local device.",
-};
-
-const humanizeHeteroDispatchError = (raw?: string): string =>
-  (raw && HETERO_DISPATCH_ERROR_HEADLINES[raw]) || raw || 'Device dispatch failed';
-
-/**
- * Map a raw dispatch code to a dedicated `ChatErrorType` so the web client renders
- * its own localized headline (the generic `ServerAgentRuntimeError` copy would
- * otherwise mask the specific message). Unknown codes keep the generic type.
- */
-const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
-  GATEWAY_NOT_CONFIGURED: ChatErrorType.DeviceGatewayNotConfigured,
-};
-
-const resolveHeteroDispatchErrorType = (raw?: string): ErrorType =>
-  (raw && HETERO_DISPATCH_ERROR_TYPES[raw]) || ChatErrorType.ServerAgentRuntimeError;
 
 /**
  * AI Agent Service
