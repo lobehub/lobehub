@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "زمان اجرای سرور اپلیکیشن Codex",
   "features.desktopSplitView.desc": "نمایش دو تب دسکتاپ در کنار هم، با ناوبری مستقل و تقسیم‌کننده قابل تغییر اندازه.",
   "features.desktopSplitView.title": "نمایش تب تقسیم‌شده",
+  "features.evalCapture.desc": "یک اقدام پیام اضافه می‌کند که یک نوبت مکالمه — زمینه قبلی، ورودی و پاسخی که تولید کرده است — را به عنوان یک مورد آزمایشی ارزیابی ضبط می‌کند.",
+  "features.evalCapture.title": "ذخیره یک نوبت به عنوان یک مورد ارزیابی",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
   "features.heteroSessionImport.desc": "افزودن گزینه \"وارد کردن جلسات عامل محلی\" به منوی لیست موضوعات: اسکن متن‌های Claude Code / Codex CLI محلی و وارد کردن آنها به عنوان موضوعات، با همگام‌سازی افزایشی در وارد کردن مجدد.",

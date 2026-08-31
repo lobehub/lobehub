@@ -64,6 +64,9 @@ import {
   renderSenderRejected,
 } from './replyTemplate';
 
+/** Minimum gap between two webhook re-registrations for the same bot. */
+const WEBHOOK_RECONCILE_COOLDOWN_MS = 5 * 60 * 1000;
+
 const log = debug('lobe-server:bot:message-router');
 const WECHAT_PRO_FEATURE_NOTICE =
   '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要升级到个人付费 Plan。';
@@ -192,6 +195,9 @@ export class BotMessageRouter {
   /** "platform:applicationId" → registered bot */
   private bots = new Map<string, RegisteredBot>();
 
+  /** Last time `reconcileWebhook` was triggered per bot — bounds setWebhook calls under a flood of unverified requests. */
+  private webhookReconciledAt = new Map<string, number>();
+
   /** Per-key init promises to avoid duplicate concurrent loading */
   private loadingPromises = new Map<string, Promise<RegisteredBot | null>>();
 
@@ -244,10 +250,34 @@ export class BotMessageRouter {
     }
 
     if (bot.chatBot.webhooks && platform in bot.chatBot.webhooks) {
-      return (bot.chatBot.webhooks as any)[platform](req);
+      const response: Response = await (bot.chatBot.webhooks as any)[platform](req);
+      if (response.status === 401) this.scheduleWebhookReconcile(platform, appId, bot.client);
+      return response;
     }
 
     return new Response(`No bot configured for ${platform}`, { status: 404 });
+  }
+
+  /**
+   * An adapter answering 401 means the platform delivered an update that fails
+   * verification — for webhook registrations we own (Telegram) that is almost
+   * always a registration made before verification was mandatory, or with a
+   * stale secret. Ask the client to re-register once per cooldown window; the
+   * platform's retry of the rejected update then carries the right header.
+   * Fire-and-forget: the 401 is still returned so the platform retries.
+   */
+  private scheduleWebhookReconcile(platform: string, appId: string, client: PlatformClient) {
+    if (!client.reconcileWebhook) return;
+    const key = buildRuntimeKey(platform, appId);
+    const now = Date.now();
+    const last = this.webhookReconciledAt.get(key);
+    if (last !== undefined && now - last < WEBHOOK_RECONCILE_COOLDOWN_MS) return;
+    this.webhookReconciledAt.set(key, now);
+
+    log('handleWebhook: %s rejected an update as unverified, re-registering webhook', key);
+    client.reconcileWebhook().catch((error) => {
+      log('reconcileWebhook failed for %s: %O', key, error);
+    });
   }
 
   // ------------------------------------------------------------------

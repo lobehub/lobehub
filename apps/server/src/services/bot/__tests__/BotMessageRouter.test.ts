@@ -94,7 +94,7 @@ vi.mock('chat', () => ({
     onNewMessage: mockOnNewMessage,
     onSlashCommand: mockOnSlashCommand,
     onSubscribedMessage: mockOnSubscribedMessage,
-    webhooks: {},
+    webhooks: mockChatWebhooks,
   })),
   ConsoleLogger: vi.fn(),
 }));
@@ -124,6 +124,11 @@ vi.mock('../AgentBridgeService', () => ({
 // Mock platform entries
 const mockCreateAdapter = vi.hoisted(() =>
   vi.fn().mockReturnValue({ testplatform: { type: 'mock-adapter' } }),
+);
+const mockReconcileWebhook = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+/** Per-platform webhook handlers exposed by the mocked Chat instance (`chat.webhooks`). */
+const mockChatWebhooks = vi.hoisted(
+  () => ({}) as Record<string, (req: Request) => Promise<Response>>,
 );
 const mockMergeWithDefaults = vi.hoisted(() =>
   vi.fn((_: unknown, settings?: Record<string, unknown>) => settings ?? {}),
@@ -161,6 +166,7 @@ const mockGetPlatform = vi.hoisted(() =>
         createClient: vi.fn().mockReturnValue({
           applicationId: 'mock-app',
           createAdapter: mockCreateAdapter,
+          reconcileWebhook: mockReconcileWebhook,
           extractAuthorLocale: (msg: any) => msg?.raw?.from?.language_code,
           // Match the per-platform contract: return the most-specific raw
           // ID (last segment of the composite). Telegram `telegram:chat-1`
@@ -556,6 +562,69 @@ describe('BotMessageRouter', () => {
       const resp = await handler(req);
 
       expect(resp.status).toBe(400);
+    });
+
+    describe('unverified webhook self-heal', () => {
+      const post = (headers?: Record<string, string>) =>
+        new Request('https://example.com/webhook', { body: '{}', headers, method: 'POST' });
+
+      beforeEach(() => {
+        for (const key of Object.keys(mockChatWebhooks)) delete mockChatWebhooks[key];
+        vi.useRealTimers();
+      });
+
+      it('asks the client to re-register its webhook when the adapter rejects an update with 401', async () => {
+        mockFindEnabledByPlatform.mockResolvedValue([
+          makeProvider({ applicationId: 'tg-bot-123' }),
+        ]);
+        mockChatWebhooks.telegram = vi
+          .fn()
+          .mockResolvedValue(new Response('Invalid secret token', { status: 401 }));
+
+        const router = new BotMessageRouter();
+        const handler = router.getWebhookHandler('telegram', 'tg-bot-123');
+        const resp = await handler(post());
+
+        // The 401 is still returned so Telegram retries the update…
+        expect(resp.status).toBe(401);
+        // …and by then the webhook carries the current secret.
+        expect(mockReconcileWebhook).toHaveBeenCalledTimes(1);
+      });
+
+      it('re-registers at most once per cooldown window even under a flood of 401s', async () => {
+        vi.useFakeTimers();
+        mockFindEnabledByPlatform.mockResolvedValue([
+          makeProvider({ applicationId: 'tg-bot-123' }),
+        ]);
+        mockChatWebhooks.telegram = vi
+          .fn()
+          .mockResolvedValue(new Response('Invalid secret token', { status: 401 }));
+
+        const router = new BotMessageRouter();
+        const handler = router.getWebhookHandler('telegram', 'tg-bot-123');
+        await handler(post());
+        await handler(post());
+        await handler(post());
+        expect(mockReconcileWebhook).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+        await handler(post());
+        expect(mockReconcileWebhook).toHaveBeenCalledTimes(2);
+      });
+
+      it('does not touch the webhook registration when the adapter accepts the update', async () => {
+        mockFindEnabledByPlatform.mockResolvedValue([
+          makeProvider({ applicationId: 'tg-bot-123' }),
+        ]);
+        mockChatWebhooks.telegram = vi.fn().mockResolvedValue(new Response('OK', { status: 200 }));
+
+        const router = new BotMessageRouter();
+        const handler = router.getWebhookHandler('telegram', 'tg-bot-123');
+        const resp = await handler(post({ 'x-telegram-bot-api-secret-token': 's' }));
+
+        expect(resp.status).toBe(200);
+        expect(mockReconcileWebhook).not.toHaveBeenCalled();
+      });
     });
 
     it('should handle DB errors gracefully', async () => {

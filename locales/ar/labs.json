@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "وقت تشغيل خادم تطبيق Codex",
   "features.desktopSplitView.desc": "عرض علامتي تبويب سطح المكتب جنبًا إلى جنب، مع التنقل المستقل وفاصل قابل لتغيير الحجم.",
   "features.desktopSplitView.title": "عرض علامات التبويب المنقسمة",
+  "features.evalCapture.desc": "يضيف إجراء رسالة يلتقط دورة المحادثة - سياقها السابق، الإدخال والإجابة التي أنتجتها - كحالة اختبار تقييم.",
+  "features.evalCapture.title": "حفظ دورة كمثال تقييم",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
   "features.heteroSessionImport.desc": "إضافة خيار \"استيراد جلسات الوكيل المحلي\" إلى قائمة مواضيع القائمة: قم بمسح نصوص Claude Code / Codex CLI المحلية واستيرادها كمواضيع، مع مزامنة تدريجية عند إعادة الاستيراد.",
