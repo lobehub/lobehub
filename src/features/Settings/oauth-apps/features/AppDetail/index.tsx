@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { Button, confirmModal, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Skeleton, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';
@@ -110,9 +110,9 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   if (!detail)
     return (
       <Flexbox gap={16}>
-        <Skeleton active paragraph={{ rows: 1, width: 200 }} title={false} />
+        <Skeleton.Text rows={1} width={200} />
         <div className={styles.card}>
-          <Skeleton active paragraph={{ rows: 4 }} title={false} />
+          <Skeleton.Text rows={4} />
         </div>
       </Flexbox>
     );

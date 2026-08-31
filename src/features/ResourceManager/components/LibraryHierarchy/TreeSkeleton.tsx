@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -24,23 +25,14 @@ interface TreeSkeletonItemProps {
 const TreeSkeletonItem = memo<TreeSkeletonItemProps>(({ opacity = 1 }) => {
   return (
     <Flexbox horizontal className={styles.container} style={{ opacity }}>
-      <Skeleton.Button
-        active
-        size={'small'}
+      <Skeleton
         style={{
           flex: 'none',
           height: 16,
           width: 16,
         }}
       />
-      <Skeleton.Button
-        active
-        size={'small'}
-        style={{
-          height: 16,
-          width: `${Math.floor(Math.random() * 30 + 40)}%`,
-        }}
-      />
+      <Skeleton height={16} width={`${Math.floor(Math.random() * 30 + 40)}%`} />
     </Flexbox>
   );
 });

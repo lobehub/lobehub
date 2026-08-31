@@ -1,9 +1,11 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ListLoading from '@/routes/(main)/community/components/ListLoading';
 
 import Banner from './features/Header/Banner';
@@ -18,7 +20,7 @@ const Loading = memo(() => {
           size={64}
           style={{ boxShadow: `0 0 0 4px ${cssVar.colorBgContainer}`, flexShrink: 0 }}
         />
-        <Skeleton paragraph={{ rows: 1 }} />
+        <ArticleSkeleton rows={1} />
       </Flexbox>
 
       <ListLoading length={4} rows={4} />
