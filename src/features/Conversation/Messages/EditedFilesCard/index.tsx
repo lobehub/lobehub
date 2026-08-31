@@ -27,8 +27,8 @@ import FileIcon from '@/components/FileIcon';
 import { type OperationEditedFile, summarizeEditedFilesTotals } from './deriveEditedFiles';
 import { useOpenEditedFile } from './useOpenEditedFile';
 
-export const SINGLE_EDITED_FILE_ICON_SIZE = 32;
-export const AGGREGATE_EDITED_FILE_ICON_SIZE = 32;
+export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
+export const AGGREGATE_EDITED_FILE_ICON_SIZE = 40;
 
 /** Files listed before the "show N more" row, matching Codex's file toolbar. */
 export const INITIAL_VISIBLE_EDITED_FILES = 3;
@@ -67,6 +67,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   singleHeader: css`
+    position: relative;
     padding-block: 8px;
     padding-inline: 12px;
 
@@ -84,47 +85,49 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
-  singleIcon: css`
-    flex-shrink: 0;
-
-    width: ${SINGLE_EDITED_FILE_ICON_SIZE}px;
-    height: ${SINGLE_EDITED_FILE_ICON_SIZE}px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
   singleTitle: css`
     min-width: 0;
     font-size: 14px;
     font-weight: 500;
   `,
+  /**
+   * The action slides *over* the line stats instead of displacing them, so the
+   * `+N -M` column stays put on hover. The two stacked gradients composite to
+   * exactly the hovered row colour (fill over elevated), which is why the
+   * opaque end shows no seam against the row behind it.
+   */
   viewChanges: css`
     pointer-events: none;
 
-    transform: translateX(4px);
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
 
-    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
 
-    height: 22px;
-    padding: 0;
-
-    color: ${cssVar.colorTextSecondary};
+    padding-inline: 56px 12px;
 
     opacity: 0;
+    background:
+      linear-gradient(to left, ${cssVar.colorFillQuaternary} 62%, transparent),
+      linear-gradient(to left, ${cssVar.colorBgElevated} 62%, transparent);
 
-    transition:
-      opacity 150ms ease,
-      transform 150ms ease;
+    transition: opacity 160ms ${cssVar.motionEaseOut};
 
     @media (hover: none) {
       pointer-events: auto;
-      transform: translateX(0);
       opacity: 1;
     }
   `,
+  viewChangesButton: css`
+    height: 22px;
+    padding: 0;
+    color: ${cssVar.colorTextSecondary};
+  `,
   viewChangesVisible: css`
     pointer-events: auto;
-    transform: translateX(0);
     opacity: 1;
   `,
   chevron: css`
@@ -156,6 +159,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   row: css`
+    position: relative;
     padding-block: 6px;
     padding-inline: 12px;
 
@@ -228,22 +232,26 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
           linesDeleted={entry.linesDeleted}
         />
         {onOpen && hasDiff && (
-          <Button
+          <div
             data-view-changes
-            aria-expanded={expanded}
             className={cx(styles.viewChanges, expanded && styles.viewChangesVisible)}
-            size={'small'}
-            type={'text'}
-            // Enter/Space on the button must not bubble into the row's own
-            // key handler, which would also open the file preview.
-            onKeyDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              setExpanded((prev) => !prev);
-            }}
           >
-            {t(expanded ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
-          </Button>
+            <Button
+              aria-expanded={expanded}
+              className={styles.viewChangesButton}
+              size={'small'}
+              type={'text'}
+              // Enter/Space on the button must not bubble into the row's own
+              // key handler, which would also open the file preview.
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded((prev) => !prev);
+              }}
+            >
+              {t(expanded ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
+            </Button>
+          </div>
         )}
         {!onOpen &&
           hasDiff &&
@@ -306,9 +314,10 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
           onClick={onOpen}
           onKeyDown={onOpen ? toggleOnKey(onOpen) : undefined}
         >
-          <Center className={styles.singleIcon}>
-            <FileIcon fileName={getEditedFileIconName(entry.path)} size={20} />
-          </Center>
+          <FileIcon
+            fileName={getEditedFileIconName(entry.path)}
+            size={SINGLE_EDITED_FILE_ICON_SIZE}
+          />
           <Flexbox flex={1} gap={2}>
             <Text ellipsis className={styles.singleTitle}>
               {t('editedFiles.singleTitle', { path: displayPath })}
@@ -321,24 +330,28 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
             />
           </Flexbox>
           {hasDiff && (
-            <Button
+            <div
               data-view-changes
-              aria-expanded={showDiff}
               className={cx(styles.viewChanges, showDiff && styles.viewChangesVisible)}
-              icon={<ArrowUpRightIcon size={14} />}
-              iconPosition={'end'}
-              size={'small'}
-              type={'text'}
-              onKeyDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                // The header itself may open the file preview — keep the diff
-                // toggle from also triggering it.
-                event.stopPropagation();
-                setShowDiff((prev) => !prev);
-              }}
             >
-              {t(showDiff ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
-            </Button>
+              <Button
+                aria-expanded={showDiff}
+                className={styles.viewChangesButton}
+                icon={<ArrowUpRightIcon size={14} />}
+                iconPosition={'end'}
+                size={'small'}
+                type={'text'}
+                onKeyDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  // The header itself may open the file preview — keep the diff
+                  // toggle from also triggering it.
+                  event.stopPropagation();
+                  setShowDiff((prev) => !prev);
+                }}
+              >
+                {t(showDiff ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
+              </Button>
+            </div>
           )}
         </Flexbox>
         {hasDiff && showDiff && (
@@ -388,7 +401,7 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
     <Flexbox className={styles.card}>
       <Flexbox horizontal align={'center'} className={styles.header} gap={10}>
         <Center className={styles.headerIcon}>
-          <FilePenLineIcon size={18} />
+          <FilePenLineIcon size={20} />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Text ellipsis className={styles.title}>
