@@ -20,6 +20,7 @@ const {
   mockApiKeyUpdateLastUsed,
   mockAssertOIDCUserActive,
   mockAuthEnv,
+  mockDebugLog,
   mockGetServerDB,
   mockExtractBearerToken,
   mockServerDB,
@@ -30,11 +31,16 @@ const {
   mockApiKeyUpdateLastUsed: vi.fn(),
   mockAssertOIDCUserActive: vi.fn(),
   mockAuthEnv: { ENABLE_OIDC: true },
+  mockDebugLog: vi.fn(),
   mockExtractBearerToken: vi.fn(),
   mockGetServerDB: vi.fn(),
   mockServerDB: {},
   mockValidateApiKeyFormat: vi.fn(),
   mockValidateOIDCJWT: vi.fn(),
+}));
+
+vi.mock('debug', () => ({
+  default: () => mockDebugLog,
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -120,6 +126,21 @@ describe('OpenAPI auth middleware', () => {
     expect(response.status).toBe(200);
     expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token');
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(mockServerDB, 'oidc-user');
+  });
+
+  it('should redact bearer token content from debug logs', async () => {
+    const bearerToken = 'redact-me-0123456789';
+    mockExtractBearerToken.mockReturnValueOnce(bearerToken);
+
+    const response = await createApp().request('/protected', {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockDebugLog).toHaveBeenCalledWith('Bearer token received: present');
+    const serializedLogs = JSON.stringify(mockDebugLog.mock.calls);
+    expect(serializedLogs).not.toContain(bearerToken);
+    expect(serializedLogs).not.toContain(bearerToken.slice(0, 10));
   });
 
   it('does not accept an operation token on ordinary OpenAPI routes', async () => {

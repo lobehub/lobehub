@@ -33,6 +33,16 @@ const buildRedirectUrl = (req: NextRequest, pathname: string): URL => {
   return fallbackUrl;
 };
 
+const buildErrorRedirectUrl = (req: NextRequest, reason: string): URL => {
+  const errorUrl = buildRedirectUrl(req, errorPathname);
+
+  // APP_URL and the fallback request URL may both carry attacker-controlled query
+  // parameters. Error redirects expose only the stable reason code.
+  errorUrl.search = '';
+  errorUrl.searchParams.set('reason', reason);
+  return errorUrl;
+};
+
 export const GET = async (req: NextRequest) => {
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -42,8 +52,7 @@ export const GET = async (req: NextRequest) => {
     if (!code || !state || typeof code !== 'string' || typeof state !== 'string') {
       log('Missing code or state in form data');
 
-      const errorUrl = buildRedirectUrl(req, errorPathname);
-      errorUrl.searchParams.set('reason', 'invalid_request');
+      const errorUrl = buildErrorRedirectUrl(req, 'invalid_request');
 
       log('Redirecting to error URL: %s', errorUrl.toString());
       return NextResponse.redirect(errorUrl);
@@ -79,12 +88,11 @@ export const GET = async (req: NextRequest) => {
   } catch (error) {
     log('Error in OIDC callback: %O', error);
 
-    const errorUrl = buildRedirectUrl(req, errorPathname);
-    errorUrl.searchParams.set('reason', 'internal_error');
+    const errorUrl = buildErrorRedirectUrl(req, 'internal_error');
 
-    if (error instanceof Error) {
-      errorUrl.searchParams.set('errorMessage', error.message);
-    }
+    // Don't expose internal error messages to users in production
+    // Only log the detailed error server-side for debugging
+    log('Detailed error (not exposed to user): %O', error);
 
     log('Redirecting to error URL: %s', errorUrl.toString());
     return NextResponse.redirect(errorUrl);
