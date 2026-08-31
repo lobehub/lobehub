@@ -1,10 +1,10 @@
 import type { AgentItem, NewAgent } from '../schemas';
 
 /**
- * The field-copy core shared by every agent clone site: the group transfer's
- * referenced-member clone, the group copy, and the agent transfer's history
- * tombstone. One list, or the sites drift apart on which config a clone
- * carries.
+ * The field-copy core for clone sites that need a WORKING replacement agent:
+ * the group transfer's referenced-member clone and the group copy. (The agent
+ * transfer's history tombstone deliberately does NOT use this — see
+ * {@link buildAgentTombstoneValues}.)
  *
  * Deliberately never copies `slug` (the schema default mints a fresh random
  * one — a clone must not steal the source's identity) or `clientId` (device
@@ -41,5 +41,29 @@ export const buildAgentCopyValues = (
   userId: target.userId,
   virtual: source?.virtual ?? true,
   ...(target.workspaceId && targetVisibility ? { visibility: targetVisibility } : {}),
+  workspaceId: target.workspaceId,
+});
+
+/**
+ * The history tombstone's field set: ONLY what rendering a past speaker needs
+ * (`agentDisplayName` + avatar treatment). Nothing operational is copied — a
+ * tombstone lands in the GROUP's scope, which may belong to someone the
+ * source agent's owner never shared configuration with, and a rosterless
+ * clone sits outside the parent-group permission cap; copying `systemRole` /
+ * `plugins` / `params` / `agencyConfig` would hand the tombstone's owner a
+ * readable snapshot of configuration `getAgentConfigById` would otherwise
+ * redact.
+ */
+export const buildAgentTombstoneValues = (
+  source: AgentItem | undefined,
+  target: { userId: string; workspaceId: string | null },
+  fallbackTitle: string,
+): NewAgent => ({
+  avatar: source?.avatar,
+  backgroundColor: source?.backgroundColor,
+  name: source?.name,
+  title: source?.title || fallbackTitle,
+  userId: target.userId,
+  virtual: true,
   workspaceId: target.workspaceId,
 });

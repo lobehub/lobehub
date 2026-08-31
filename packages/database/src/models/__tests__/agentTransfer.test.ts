@@ -1967,10 +1967,15 @@ describe('AgentModel.transferAgents group history preservation', () => {
       // `agentDisplayName` prefers `name` — a clone missing it would render
       // the role/title instead of the original speaker.
       name: 'Herodotus',
-      systemRole: 'The historian',
       title: 'History Agent',
       workspaceId: null,
     });
+    // Display-only: nothing operational crosses into the tombstone — its
+    // owner may be someone the source agent's owner never shared
+    // configuration with.
+    expect(clone.systemRole).toBeNull();
+    expect(clone.plugins).toBeNull();
+    expect(clone.agencyConfig).toBeNull();
     expect(clone.slug).not.toBe(moved?.slug);
     await expect(
       serverDB.select().from(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, clone.id)),

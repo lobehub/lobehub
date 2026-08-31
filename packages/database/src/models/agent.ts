@@ -67,7 +67,7 @@ import {
   collectBoundDeviceIds,
   sanitizeAgencyConfigsForWorkspace,
 } from '../utils/agencyConfigDevices';
-import { buildAgentCopyValues } from '../utils/agentClone';
+import { buildAgentTombstoneValues } from '../utils/agentClone';
 import {
   rehomeAgentConnectorsForRecipient,
   rehomeAgentConnectorsForScopeTransfer,
@@ -2152,22 +2152,20 @@ export class AgentModel {
     const remapJobIds: string[] = [];
     for (const group of groupRows) {
       const cloneSourceIds = [...agentIdsByGroup.get(group.id)!];
+      // Display-only field set on purpose: the tombstone exists to render
+      // past speakers, and its owner may be someone the source agent's owner
+      // never shared configuration with. `virtual: true` (baked into the
+      // builder) hides it from every list and member picker.
       const clones = await trx
         .insert(agents)
         .values(
-          cloneSourceIds.map((sourceId) => ({
-            ...buildAgentCopyValues(
+          cloneSourceIds.map((sourceId) =>
+            buildAgentTombstoneValues(
               agentById.get(sourceId),
               { userId: group.userId, workspaceId: group.workspaceId },
               'Agent',
             ),
-            // Same overrides, same rationale as the group transfer's clone
-            // site: the tombstone exists for this history and nothing else —
-            // `virtual: true` hides it from every list and member picker, and
-            // a pin is the source owner's sidebar choice, not the group's.
-            pinned: false,
-            virtual: true,
-          })),
+          ),
         )
         .returning({ id: agents.id });
 

@@ -39,16 +39,16 @@ const running = new Set<string>();
 const waiting: { db: LobeChatDatabase; jobId: string }[] = [];
 let activeDrains = 0;
 
-const drainWithRetry = async (db: LobeChatDatabase, jobId: string): Promise<void> => {
+const drainOnce = async (db: LobeChatDatabase, jobId: string): Promise<boolean> => {
   try {
     // Type-dispatching drain: the same runner serves transfer and copy jobs.
     await drainAgentHistoryJob(db, jobId);
+    return true;
   } catch (error) {
     // Keep the job pending and retry forever — the job row stays visible as
     // "migrating" instead of silently dying, per the transfer design.
     console.error(`[agent-transfer] drain of ${jobId} failed, retrying:`, error);
-    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-    return drainWithRetry(db, jobId);
+    return false;
   }
 };
 
@@ -56,9 +56,20 @@ const pumpDrains = (): void => {
   while (activeDrains < MAX_CONCURRENT_DRAINS && waiting.length > 0) {
     const next = waiting.shift()!;
     activeDrains += 1;
-    void drainWithRetry(next.db, next.jobId).finally(() => {
+    void drainOnce(next.db, next.jobId).then((done) => {
       activeDrains -= 1;
-      running.delete(next.jobId);
+      if (done) {
+        running.delete(next.jobId);
+      } else {
+        // Yield the slot between retries: the job stays in `running` (so
+        // repeated start calls stay deduped) but re-queues after a delay,
+        // letting healthy jobs drain instead of a persistently failing one
+        // pinning a slot forever.
+        setTimeout(() => {
+          waiting.push(next);
+          pumpDrains();
+        }, RETRY_DELAY_MS);
+      }
       pumpDrains();
     });
   }
