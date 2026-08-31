@@ -204,6 +204,29 @@ const throwIfSendAborted = (signal?: AbortSignal) => {
     : new DOMException('Message send was cancelled', 'AbortError');
 };
 
+/**
+ * The model an assistant turn should be recorded under: the topic's pinned model
+ * when the topic has one, otherwise the agent default.
+ *
+ * A topic records the model it was started with plus every switch made while it
+ * is active (top-level `topics.model`/`provider`), and the client runtime resolves
+ * the run from that pin (`internal_createAgentState`). Resolving the persisted row
+ * the same way keeps the record consistent with the request — the agent default
+ * on its own diverges from the pin as soon as the user switches model while a
+ * topic is active.
+ */
+const resolvePersistedTurnModel = (
+  agentId: string,
+  topicId: string | null | undefined,
+  chatState: ChatStore,
+): { model: string; provider?: string } => {
+  const topicModel = topicId ? topicSelectors.getTopicModelById(topicId)(chatState) : undefined;
+  if (topicModel) return topicModel;
+
+  const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+  return { model, provider };
+};
+
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
   userMessageId: string,
@@ -1824,9 +1847,9 @@ export class ConversationLifecycleActionImpl {
 
     try {
       throwIfSendAborted(signal);
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       const topicId = operationContext.topicId;
+      const { model, provider } = resolvePersistedTurnModel(agentId, topicId, this.#get());
 
       // Persist selected skill/tool context into user message content so it survives across turns.
       // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
