@@ -85,6 +85,12 @@ const useRefLazyInitRestrictedSyntax = [
   },
 ];
 
+const electronIpcRemoveListenerRestrictedSyntax = {
+  message:
+    'Do not use removeListener in renderer code. Electron contextBridge does not preserve listener identity across calls; use the disposer returned by ipcRenderer.on().',
+  selector: "CallExpression > MemberExpression.callee[property.name='removeListener']",
+};
+
 export default eslint(
   {
     ignores: [
@@ -358,6 +364,21 @@ export default eslint(
         },
       ],
       'no-restricted-syntax': ['error', ...useRefLazyInitRestrictedSyntax],
+    },
+  },
+  {
+    files: [
+      'apps/desktop/src/overlay/**/*.{ts,tsx}',
+      'packages/electron-client-ipc/src/**/*.{ts,tsx}',
+      'src/**/*.{ts,tsx}',
+    ],
+    ignores: ['src/hooks/usePWAInstall.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...useRefLazyInitRestrictedSyntax,
+        electronIpcRemoveListenerRestrictedSyntax,
+      ],
     },
   },
   // MDX files

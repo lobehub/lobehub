@@ -233,3 +233,28 @@ describe('useRef lazy-init boundary', () => {
     await expect(lintRestrictedSyntax(useRefLazyInitFixture, code)).resolves.toEqual([]);
   });
 });
+
+describe('Electron renderer IPC listener boundary', () => {
+  it.each([
+    [
+      'aliased ipcRenderer',
+      `const ipc = window.electron.ipcRenderer;\nconst listener = () => {};\nipc.removeListener('event', listener);`,
+    ],
+    [
+      'optional ipcRenderer chain',
+      `const listener = () => {};\nwindow.electron?.ipcRenderer?.removeListener?.('event', listener);`,
+    ],
+  ])('rejects removeListener through %s', async (_name, code) => {
+    await expect(
+      lintRestrictedSyntax('src/features/Electron/lint-fixture.ts', code),
+    ).resolves.toEqual([expect.stringContaining('disposer returned by ipcRenderer.on()')]);
+  });
+
+  it('allows the disposer returned by ipcRenderer.on()', async () => {
+    const code = `const ipc = window.electron.ipcRenderer;\nconst listener = () => {};\nconst dispose = ipc.on('event', listener);\ndispose();`;
+
+    await expect(
+      lintRestrictedSyntax('src/features/Electron/lint-fixture.ts', code),
+    ).resolves.toEqual([]);
+  });
+});
