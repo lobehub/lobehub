@@ -10,6 +10,7 @@ import {
   Download,
   MoreHorizontal,
   Settings2Icon,
+  Share2Icon,
   Trash,
   UserRound,
   UsersIcon,
@@ -25,6 +26,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import { openAgentShareSettingsModal } from '@/features/AgentShareSettings';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -46,7 +48,10 @@ import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
-type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'agent'],
+  undefined
+>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -98,7 +103,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common']);
+  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
 
@@ -237,13 +242,27 @@ const Header = memo(() => {
   const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
+  const shareModalRef = useRef<ModalInstance | null>(null);
   useEffect(
     () => () => {
       settingsModalRef.current?.close();
       settingsModalRef.current = null;
+      shareModalRef.current?.close();
+      shareModalRef.current = null;
     },
     [],
   );
+
+  // Agent sharing is personal-only — `agentShares` rows can never exist for a
+  // workspace agent (see `AgentShareModel`'s ownership check) — and a builtin
+  // row (Inbox, the builders) is not the owner's to hand out.
+  const canShareAgent = !!activeAgentId && !hasActiveWorkspace && !isBuiltinAgent && canConfigure;
+
+  const handleOpenShare = useCallback(() => {
+    if (!activeAgentId) return;
+    shareModalRef.current?.close();
+    shareModalRef.current = openAgentShareSettingsModal(activeAgentId);
+  }, [activeAgentId]);
 
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
@@ -358,6 +377,15 @@ const Header = memo(() => {
       style={{ position: 'relative' }}
       right={
         <Flexbox horizontal align={'center'} gap={4}>
+          {canShareAgent && (
+            <ActionIcon
+              icon={Share2Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('share.entry', { ns: 'agent' })}
+              tooltipProps={{ placement: 'bottom' }}
+              onClick={handleOpenShare}
+            />
+          )}
           <DropdownMenu items={menuItems}>
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>
