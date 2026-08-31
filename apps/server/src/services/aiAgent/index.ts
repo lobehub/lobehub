@@ -10,6 +10,7 @@ import type {
   ExecVirtualSubAgentParams,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
+  UserInterventionConfig,
   WorkingDirConfig,
 } from '@lobechat/types';
 import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
@@ -23,6 +24,7 @@ import {
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
@@ -66,6 +68,7 @@ import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
 import { discoverTools } from './pipeline/toolDiscovery';
 import { setupTurn } from './pipeline/turnSetup';
+import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
 import { acquireTopicStartReservation } from './topicStartReservation';
@@ -150,6 +153,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
+        verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
       },
       workspaceId: wsId,
     });
@@ -635,7 +639,7 @@ export class AiAgentService {
       disableLocalSystem,
       initialStepCount,
       signal,
-      userInterventionConfig = { approvalMode: 'headless' },
+      userInterventionConfig: requestedUserInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
       parentMessageId,
@@ -647,10 +651,25 @@ export class AiAgentService {
       approvalResolutionRequestId: providedApprovalResolutionRequestId,
       approvalSourceOperationId: providedApprovalSourceOperationId,
       selectedToolIds,
+      shareGate,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
+
+    // Agent Share visitor runs execute under the CREATOR's credentials (see
+    // `shareChat.ts` `execAgent` → `AiAgentService.execAgent({ shareGate })`)
+    // with no visitor-facing approval UI at all. The `headless` default above
+    // exists for TRUSTED async/background tasks and auto-runs any overridable
+    // ('required') tool-level intervention — correct only when the operator who
+    // queued the task is the one being trusted. A share visitor is not that
+    // operator, and nobody is present to grant consent, so every share run is
+    // forced onto the fail-closed `reject` policy here — unconditionally
+    // overriding whatever the caller passed — so this cannot be bypassed by a
+    // future execAgent call site that forgets to set it explicitly.
+    const userInterventionConfig: UserInterventionConfig = shareGate
+      ? { approvalMode: 'reject' }
+      : requestedUserInterventionConfig;
 
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration
     // replays reach this method too (resumeApproval, resumeToolResult,
@@ -750,6 +769,11 @@ export class AiAgentService {
         toolModeOverride,
       },
     );
+
+    // Share-visitor runs must never see the creator's files/knowledge bases.
+    // Applied to the resolved config before anything downstream (knowledge
+    // flags, tools engine, context snapshot) reads it.
+    if (shareGate) applyShareGateToAgentConfig(agentConfig);
 
     let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
@@ -908,6 +932,7 @@ export class AiAgentService {
         resolvedAgentId,
         resume,
         runFromHistory,
+        shareGate,
         throwIfExecutionAborted,
         title,
         trigger,
@@ -942,6 +967,7 @@ export class AiAgentService {
       prompt,
       provider,
       resolvedAgentId,
+      shareGate,
       topicId,
       trigger,
       userMessageId: turn.userMessageId,
@@ -1006,6 +1032,13 @@ export class AiAgentService {
       enableExpertise = preference?.lab?.enableSelfLearning === true;
     } catch (error) {
       console.error('Failed to resolve expertise injection Lab preference:', error);
+    }
+    // Share visitors only get the creator's memory (persona + learned
+    // expertise) when the share explicitly allows it — both surfaces would
+    // otherwise leak the creator's personal context into visitor turns.
+    if (shareGate && !shareGate.shareConfig.allowReadMemory) {
+      globalMemoryEnabled = false;
+      enableExpertise = false;
     }
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
@@ -1303,6 +1336,27 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
+
+  /**
+   * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
+   * `AgentShareModel.isRunStillAuthorized`'s JSDoc for what "authorized" means
+   * and why a per-step recheck (not only at step 0) is what actually stops a
+   * revoked share's run: nothing tears down an operation that already exists,
+   * and the visitor's own Stop button breaks the instant the share goes
+   * private, so the step loop has to re-prove authorization itself.
+   *
+   * A plain top-level `db` read (not scoped to `this.userId`/workspace):
+   * `agent_shares` has no ownership predicate applicable here — this call runs
+   * from inside the CREATOR's own runtime step, so `this.db` is already the
+   * correct connection.
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  verifyShareRunStillAuthorized = async (params: {
+    agentId: string;
+    shareId: string;
+  }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**
    * Execute an agent in an isolated Thread context.

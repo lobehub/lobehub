@@ -1,3 +1,4 @@
+import { AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR } from '@lobechat/const';
 import type {
   ChatTopicMetadata,
   ChatTopicStatus,
@@ -105,6 +106,26 @@ export interface TopicListItem extends TopicItem {
   runStartedAt?: Date | null;
 }
 
+/**
+ * Visitor-facing topic DTO for the agent-share surface. Deliberately narrow:
+ * the underlying row is CREATOR-owned and also carries the creator's userId,
+ * model/provider snapshot, cost/usage and internal metadata.
+ */
+export interface VisitorTopicItem {
+  createdAt: Date;
+  id: string;
+  title: string | null;
+  updatedAt: Date;
+}
+
+/**
+ * Page size for {@link TopicModel.queryBySender}. Pinned to the share's own
+ * default per-visitor topic cap so a visitor's full list always fits in one
+ * page under the default configuration; a creator who raises the cap gets a
+ * capped list rather than an unbounded read.
+ */
+const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
+
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
@@ -114,6 +135,13 @@ export interface CreateTopicParams {
   /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
   model?: string | null;
   provider?: string | null;
+  /**
+   * Agent-share visitor topics carry the CREATOR's `userId` (billing/data
+   * attribution) plus the visitor's id here, so creator-facing listings can
+   * exclude them (`notShareVisitorTopic`) while the share surface scopes reads
+   * per visitor (`queryBySender` / `countBySender`).
+   */
+  senderId?: string | null;
   sessionId?: string | null;
   /**
    * Initial status. Defaults to the column default (`active`). A topic created
@@ -1040,6 +1068,63 @@ export class TopicModel {
       type: item.groupId ? ('group' as const) : ('agent' as const),
       updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
     }));
+  };
+
+  // **************** Agent Share (visitor-scoped) *************** //
+
+  /**
+   * Share-visitor topic list for one visitor on one shared agent. The model is
+   * constructed with the CREATOR's userId (visitor topics carry it), so the
+   * caller — the shareChat router — must have already authorized the visitor
+   * via the share access check; `agentId` + `senderId` together are the
+   * per-visitor boundary.
+   *
+   * `agent_shares` is 1:1 per agent (`agent_shares_agent_id_unique`), so
+   * `agentId` alone identifies which share a visitor topic belongs to — there
+   * is no `topics.share_id` column to scope by. A disable → re-enable cycle
+   * mints a new `agentShares.id` but keeps the same `agentId`, so a returning
+   * visitor's older conversations DO resurface under the republished share.
+   * That is the accepted trade-off of not carrying a share id on the row.
+   *
+   * Selects a visitor-facing DTO instead of the full row: the visitor surface
+   * only renders id/title, and the row also carries creator-only fields
+   * (owning userId, model/provider snapshot, cost/usage, internal status and
+   * metadata) that must never reach a share visitor.
+   */
+  queryBySender = async (
+    { agentId, senderId }: { agentId: string; senderId: string },
+    { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
+  ): Promise<VisitorTopicItem[]> =>
+    this.db
+      .select({
+        createdAt: topics.createdAt,
+        id: topics.id,
+        title: topics.title,
+        updatedAt: topics.updatedAt,
+      })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
+      .orderBy(desc(topics.updatedAt))
+      .limit(pageSize);
+
+  /**
+   * Per-visitor topic count on a shared agent — drives `maxTopicsPerVisitor`.
+   * Same `(agentId, senderId)` scoping as {@link queryBySender}; see that
+   * method's JSDoc for why there is no share-id dimension.
+   */
+  countBySender = async ({
+    agentId,
+    senderId,
+  }: {
+    agentId: string;
+    senderId: string;
+  }): Promise<number> => {
+    const result = await this.db
+      .select({ count: count(topics.id) })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
+
+    return result[0].count;
   };
 
   // **************** Create *************** //

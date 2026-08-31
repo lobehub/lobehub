@@ -125,19 +125,23 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      agentShareRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
   ): Promise<void> {
     const metadata: AgentOperationMetadata = {
       agentConfig: data.agentConfig,
+      agentShareRedaction: data.agentShareRedaction,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
       mirrorToOperationId: data.mirrorToOperationId,
       modelRuntimeConfig: data.modelRuntimeConfig,
       status: 'idle',
+      streamOwnerUserId: data.streamOwnerUserId,
       totalCost: 0,
       totalSteps: 0,
       userId: data.userId,

@@ -70,6 +70,23 @@ export class CriticalAgentInterventionPersistenceError extends Error {
 type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
+ * Whether a lifecycle event's `metadata` belongs to an Agent Share visitor
+ * run. `metadata.agentShare.visitorUserId` is stamped once at operation
+ * creation (`AgentRuntimeService.createOperation`'s `initialState.metadata`)
+ * and rides the state through to the terminal event — mirrors
+ * `GatewayStreamNotifier`'s share-visitor check, the sibling chokepoint that
+ * scrubs the creator's `AgentState` off the visitor's WS channel.
+ *
+ * Exported so every OTHER chokepoint that emits a `userId`-scoped Agent
+ * Signal source event on the runtime's `state`/operation metadata (the
+ * `runtime.before_step` / `runtime.after_step` emissions in
+ * `AgentRuntimeService`) can reuse the exact same check instead of
+ * hand-rolling their own.
+ */
+export const isAgentShareRun = (metadata: Record<string, unknown> | undefined | null): boolean =>
+  Boolean((metadata?.agentShare as { visitorUserId?: string } | undefined)?.visitorUserId);
+
+/**
  * Normalized terminal-completion input for {@link CompletionLifecycle.completeOperation}.
  *
  * This is the single typed shape every NON-in-process terminal path passes in —
@@ -456,6 +473,23 @@ export class CompletionLifecycle {
   async emitSignalEvents(operationId: string, state: any, reason: string): Promise<SignalEvent[]> {
     try {
       const { assistantMessageId, metadata } = this.buildLifecycleEvent(operationId, state, reason);
+
+      // Agent Share visitor runs execute AS the creator (`metadata.userId` is
+      // the creator's id — see `isAgentShareRun`'s JSDoc), so every completion
+      // signal below (`agent.execution.completed` / `.failed`) would otherwise
+      // run synchronous policy processing and record creator-scoped windows /
+      // telemetry for a run an anonymous link visitor triggered. Suppress the
+      // whole emission rather than merely re-scoping it: a share visitor has no
+      // Agent Signal identity of its own to attribute this to.
+      if (isAgentShareRun(metadata)) {
+        log(
+          '[completion-lifecycle] skip agent signal emission for share visitor run op=%s reason=%s',
+          operationId,
+          reason,
+        );
+        return [];
+      }
+
       let selfIteration =
         reason === 'error' ? undefined : extractSelfIterationCompletionPayload(state);
       if (reason !== 'error' && !selfIteration) {
@@ -855,10 +889,18 @@ export class CompletionLifecycle {
       // WITHOUT `isSubAgent` (see execAgentMember), so guard both. The
       // remaining condition — only interactive chat runs recall the user —
       // lives in recallUserOnCompletion.
+      //
+      // Agent Share visitor runs execute AS the creator, so this `userId`-scoped
+      // recall would otherwise reach the creator's push/inbox for every turn an
+      // arbitrary link visitor completes — a visitor could spam the owner by
+      // repeatedly running the shared agent, and the notification would deep-link
+      // into a visitor topic (`topics.senderId`) that is deliberately excluded
+      // from creator-facing surfaces.
       if (
         isSuccessLikeCompletionReason(reason) &&
         metadata?.isSubAgent !== true &&
-        metadata?.orchestrationRole !== 'member'
+        metadata?.orchestrationRole !== 'member' &&
+        !isAgentShareRun(metadata)
       ) {
         void this.recallUserOnCompletion(operationId, event, metadata).catch((error) =>
           log('[%s] Completion notification failed (non-fatal): %O', operationId, error),

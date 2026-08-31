@@ -80,6 +80,7 @@ import {
   CriticalAgentInterventionPersistenceError,
   extractTextFromMessage,
   findLastAssistantMessage,
+  isAgentShareRun,
   isSuccessLikeCompletionReason,
   normalizeCompletionMessages,
 } from './CompletionLifecycle';
@@ -332,6 +333,25 @@ export interface AgentRuntimeDelegate {
    * placeholder before resuming the parked parent operation.
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
+  /**
+   * Re-check that an Agent Share visitor run is STILL authorized to continue,
+   * called on EVERY step. Without it, a revocation that lands mid-run (link →
+   * private, share disabled, agent deleted) would only stop NEW requests: the
+   * already-created operation keeps its tool snapshot and gateway channel and
+   * keeps running under the CREATOR's credentials and budget, unstoppable by
+   * the visitor (whose Stop button re-resolves the now-private share and gets
+   * `FORBIDDEN`). Re-checking at every step boundary means a revocation always
+   * takes effect within one step, with no durable interrupt-retry machinery.
+   *
+   * Implemented by AiAgentService via `AgentShareModel.isRunStillAuthorized`.
+   * Returns `false` (not a throw) for an ordinary "no longer authorized"
+   * outcome; the caller treats a THROWN error the same as `false` — fail
+   * closed, never fail open.
+   */
+  verifyShareRunStillAuthorized?: (params: {
+    agentId: string;
+    shareId: string;
+  }) => Promise<boolean>;
 }
 
 export interface AgentRuntimeServiceOptions {
@@ -734,6 +754,48 @@ export class AgentRuntimeService {
     }
   }
 
+  /**
+   * Terminate an Agent Share visitor run whose authorization was revoked
+   * mid-flight (see the per-step check in `executeStep`).
+   *
+   * Persists `interrupted` onto the already-loaded state — the same terminal
+   * status a visitor's own Stop produces — so the client's stream settles
+   * normally instead of hanging. Falls back to `interruptOperation` when no
+   * state was readable. A persistence failure is logged, never rethrown: the
+   * run must stop regardless of whether the terminal status could be written.
+   */
+  private async buildShareAbortResult(
+    operationId: string,
+    state: AgentState | null | undefined,
+  ): Promise<AgentExecutionResult> {
+    log('[%s] Aborting share visitor run — the share is no longer authorized', operationId);
+
+    try {
+      if (state) {
+        await this.coordinator.saveAgentState(operationId, {
+          ...state,
+          lastModified: new Date().toISOString(),
+          status: 'interrupted',
+        });
+      } else {
+        await this.interruptOperation(operationId);
+      }
+    } catch (error) {
+      log(
+        '[%s] Failed to persist interrupted state for an aborted share run: %O',
+        operationId,
+        error,
+      );
+    }
+
+    return {
+      nextStepScheduled: false,
+      state: { status: 'interrupted' },
+      stepResult: null,
+      success: false,
+    };
+  }
+
   // ==================== Operation Management ====================
 
   /**
@@ -747,6 +809,7 @@ export class AgentRuntimeService {
       initialContext,
       agentConfig,
       agentGroup,
+      agentShare,
       modelRuntimeConfig,
       userId,
       autoStart = true,
@@ -888,6 +951,7 @@ export class AgentRuntimeService {
           activeDeviceScope,
           agentConfig,
           agentGroup,
+          agentShare,
           botContext,
           botPlatformContext,
           deviceAccessPolicy,
@@ -938,8 +1002,20 @@ export class AgentRuntimeService {
         appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
       await this.coordinator.createAgentOperation(operationId, {
         agentConfig,
+        // Persisted so a queue worker that never ran this op's init still
+        // applies the owner-configured visitor redaction policy instead of the
+        // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
+        agentShareRedaction: agentShare
+          ? {
+              showErrorDetails: agentShare.showErrorDetails,
+              showModelInfo: agentShare.showModelInfo,
+            }
+          : undefined,
         mirrorToOperationId,
         modelRuntimeConfig,
+        // Share-visitor runs execute as the creator (`userId`) but stream only
+        // to the visitor — the gateway registers the WS channel under this id.
+        streamOwnerUserId: agentShare?.visitorUserId,
         userId,
         workspaceId: this.workspaceId,
       });
@@ -1529,32 +1605,76 @@ export class AgentRuntimeService {
           };
         }
 
+        // Agent Share: re-prove this visitor run's authorization on EVERY step.
+        // A revocation only flips the `agent_shares` row — nothing tears down
+        // an operation that was already created, so without this the run keeps
+        // going under the creator's credentials/budget for the rest of its
+        // (potentially very long) lifetime, and the visitor's own Stop button
+        // has already stopped working (it re-resolves the now-private share and
+        // gets FORBIDDEN). Re-checking here means a revocation cannot survive a
+        // step boundary. See `AgentShareModel.isRunStillAuthorized`'s JSDoc for
+        // why one query covers every revocation path (visibility flip, share
+        // delete, disable → re-enable, agent delete).
+        if (this.delegate.verifyShareRunStillAuthorized) {
+          const shareMarker = agentState.metadata?.agentShare as
+            { agentId?: string; shareId?: string } | undefined;
+          if (shareMarker?.agentId && shareMarker.shareId) {
+            let stillAuthorized = false;
+            try {
+              stillAuthorized = await this.delegate.verifyShareRunStillAuthorized({
+                agentId: shareMarker.agentId,
+                shareId: shareMarker.shareId,
+              });
+            } catch (error) {
+              // Fail closed: a read failure must not be read as "still
+              // authorized". Falls through to the abort below with
+              // `stillAuthorized` left `false`.
+              log(
+                '[%s][%d] Share run authorization re-check failed: %O',
+                operationId,
+                stepIndex,
+                error,
+              );
+            }
+            if (!stillAuthorized) {
+              return this.buildShareAbortResult(operationId, agentState);
+            }
+          }
+        }
+
         let beforeStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
 
         // Dispatch beforeStep hooks
         try {
           const beforeStepMetadata = agentState?.metadata || {};
-          const beforeStepSignalEmission = await emitAgentSignalSourceEvent(
-            {
-              payload: {
-                agentId: beforeStepMetadata?.agentId,
-                operationId,
-                serializedContext: undefined,
-                stepIndex,
-                topicId: beforeStepMetadata?.topicId,
-                turnCount: agentState?.stepCount || 0,
-              },
-              sourceId: `${operationId}:before:${stepIndex}`,
-              sourceType: 'runtime.before_step',
-            },
-            {
-              agentId: beforeStepMetadata?.agentId,
-              db: this.serverDB,
-              userId: beforeStepMetadata?.userId || this.userId,
-              workspaceId: this.workspaceId,
-            },
-            { ignoreError: true },
-          );
+          // Agent Share visitor runs execute AS the creator, so this
+          // `userId`-scoped source event would record creator-owned Agent
+          // Signal state for a turn an anonymous link visitor triggered — same
+          // reasoning (and same predicate) as the completion-signal guard in
+          // `CompletionLifecycle.emitSignalEvents`.
+          const beforeStepSignalEmission = isAgentShareRun(beforeStepMetadata)
+            ? undefined
+            : await emitAgentSignalSourceEvent(
+                {
+                  payload: {
+                    agentId: beforeStepMetadata?.agentId,
+                    operationId,
+                    serializedContext: undefined,
+                    stepIndex,
+                    topicId: beforeStepMetadata?.topicId,
+                    turnCount: agentState?.stepCount || 0,
+                  },
+                  sourceId: `${operationId}:before:${stepIndex}`,
+                  sourceType: 'runtime.before_step',
+                },
+                {
+                  agentId: beforeStepMetadata?.agentId,
+                  db: this.serverDB,
+                  userId: beforeStepMetadata?.userId || this.userId,
+                  workspaceId: this.workspaceId,
+                },
+                { ignoreError: true },
+              );
           beforeStepSignalEvents = toAgentSignalSnapshotEvents(beforeStepSignalEmission);
           await hookDispatcher.dispatch(
             operationId,
@@ -1881,27 +2001,31 @@ export class AgentRuntimeService {
             : undefined;
           const stepLabel = metadata?._stepLabel;
 
+          // See the `runtime.before_step` guard above — same share-visitor
+          // suppression at the sibling per-step emission.
           afterStepSignalEvents = toAgentSignalSnapshotEvents(
-            await emitAgentSignalSourceEvent(
-              {
-                payload: {
-                  agentId: metadata?.agentId,
-                  operationId,
-                  serializedContext: undefined,
-                  stepIndex,
-                  topicId: metadata?.topicId,
-                  turnCount: stepResult.newState?.stepCount || 0,
-                },
-                sourceId: `${operationId}:after:${stepIndex}`,
-                sourceType: 'runtime.after_step',
-              },
-              {
-                agentId: metadata?.agentId,
-                db: this.serverDB,
-                userId: metadata?.userId || this.userId,
-              },
-              { ignoreError: true },
-            ),
+            isAgentShareRun(metadata)
+              ? undefined
+              : await emitAgentSignalSourceEvent(
+                  {
+                    payload: {
+                      agentId: metadata?.agentId,
+                      operationId,
+                      serializedContext: undefined,
+                      stepIndex,
+                      topicId: metadata?.topicId,
+                      turnCount: stepResult.newState?.stepCount || 0,
+                    },
+                    sourceId: `${operationId}:after:${stepIndex}`,
+                    sourceType: 'runtime.after_step',
+                  },
+                  {
+                    agentId: metadata?.agentId,
+                    db: this.serverDB,
+                    userId: metadata?.userId || this.userId,
+                  },
+                  { ignoreError: true },
+                ),
           );
 
           await hookDispatcher.dispatch(
@@ -3550,6 +3674,7 @@ export class AgentRuntimeService {
       // an early hint would end the visible loading seconds before that card
       // can exist. Deferring to the terminal `visible_output_end` lets loading
       // cover the export and the card land with `agent_runtime_end`.
+      agentShare: metadata?.agentShare,
       allowEarlyFinalAnswerVisibleOutputEnd:
         agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,

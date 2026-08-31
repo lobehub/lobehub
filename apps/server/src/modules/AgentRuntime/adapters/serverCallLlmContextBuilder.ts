@@ -117,11 +117,37 @@ export const buildServerCallLlmContext = async ({
   if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
     const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
     const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
+    const agentShare = ctx.agentShare;
+    // Topic references are limited to the visitor's own topics in shared runs.
+    // `TopicModel`'s built-in ownership scoping is not sufficient here — the
+    // rows are owned by the CREATOR, so every one of the creator's private
+    // topics would otherwise be addressable by a `<refer_topic>` tag the
+    // visitor typed. Match the visitor/agent pairing of the active share
+    // instead: a visitor topic is tied to its share purely through
+    // `(agentId, senderId)`, since `agent_shares` is 1:1 per agent.
+    //
+    // Known gap: a topic created under a share instance the owner has since
+    // disabled and replaced still matches `(agentId, senderId)` for a
+    // returning visitor, because topics carry no share-instance column. Such a
+    // topic is the SAME visitor's own prior conversation with the SAME agent,
+    // so this leaks nothing across identities — it only means old context can
+    // resurface after a disable → re-enable cycle.
+    const isTopicVisibleToRun = (
+      topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
+    ): boolean => {
+      if (!agentShare) return true;
+      return topic?.senderId === agentShare.visitorUserId && topic?.agentId === agentShare.agentId;
+    };
     topicReferences = await resolveTopicReferences(
       messagesForContext as Array<{ content: string | unknown }>,
-      async (topicId) => topicModel.findById(topicId),
       async (topicId) => {
         const topic = await topicModel.findById(topicId);
+        return isTopicVisibleToRun(topic) ? topic : null;
+      },
+      async (topicId) => {
+        const topic = await topicModel.findById(topicId);
+        if (!isTopicVisibleToRun(topic)) return [];
+
         return messageModel.query(
           {
             agentId: topic?.agentId ?? undefined,
@@ -135,9 +161,15 @@ export const buildServerCallLlmContext = async ({
   }
 
   // Fetch agent documents for context injection.
+  // A share visitor run never sees the creator's agent context documents.
+  // `applyShareGateToAgentConfig` already blanks `agentConfig.files` /
+  // `knowledgeBases`, but this source is fetched independently of agentConfig,
+  // so it needs its own gate. Fail closed unconditionally: the share config has
+  // no setting that could grant file access.
+  const agentDocumentsAllowedForShare = !ctx.agentShare;
   let agentDocuments: AgentContextDocument[] | undefined;
   const agentId = state.metadata?.agentId;
-  if (agentId && ctx.serverDB && ctx.userId) {
+  if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
     try {
       const agentDocService = new AgentDocumentsService(
         ctx.serverDB,
@@ -171,7 +203,20 @@ export const buildServerCallLlmContext = async ({
     );
   });
 
-  if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
+  // Onboarding context is the creator's own persona, SOUL document and initial
+  // user info — personal profile data with no share permission that could ever
+  // grant it, so a share visitor run never builds it. Two paths reach here: the
+  // builtin `web-onboarding` agent, and any shared agent whose enabled tools
+  // include `lobe-web-onboarding`. Gating on `ctx.agentShare` closes both.
+  const onboardingContextAllowedForShare = !ctx.agentShare;
+
+  if (
+    isOnboardingAgent &&
+    onboardingContextAllowedForShare &&
+    !alreadyHasOnboardingContext &&
+    ctx.serverDB &&
+    ctx.userId
+  ) {
     try {
       const { formatWebOnboardingStateMessage } =
         await import('@lobechat/builtin-tool-web-onboarding/utils');

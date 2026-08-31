@@ -33,6 +33,7 @@ import { FileService } from '@/server/services/file';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
+import { applyShareGateToToolSet, filterPluginsByShareGate } from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams, ResolvedWorkspaceInit } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -325,6 +326,7 @@ export const prepareOperation = async (
     prompt,
     provider,
     resolvedAgentId,
+    shareGate,
     topicId,
     userMessageId,
   } = ctx;
@@ -648,6 +650,31 @@ export const prepareOperation = async (
         }).enabledToolIds
       : [];
 
+  // Final share-gate allowlist enforcement — run once here, after every
+  // manifest/default/dynamic-activation source (installed plugins, LobeHub
+  // Skills, Composio, real-MCP connectors, always-on builtin defaults) has
+  // been merged into `toolManifestMap` / `toolsResult.enabledToolIds` /
+  // `tools` / `activatableToolIds` by `toolDiscovery` and the historical
+  // re-activation pass above. `filterPluginsByShareGate` in `toolDiscovery`
+  // only trimmed the initial candidate id list — it does not stop
+  // `lobe-activator` from dynamically activating (and `ToolExecutionService`
+  // from executing, with the CREATOR's credentials) a creator-connected tool
+  // that was never in `shareConfig.enabledToolIds`. Mutates the discovery maps
+  // in place, so the `toolSet` handed to `createOperation` is the pruned one.
+  if (shareGate) {
+    applyShareGateToToolSet(
+      {
+        activatableToolIds,
+        enabledToolIds: toolsResult.enabledToolIds,
+        executorMap: discovery.toolExecutorMap,
+        manifestMap: discovery.toolManifestMap,
+        sourceMap: discovery.toolSourceMap,
+        tools,
+      },
+      shareGate,
+    );
+  }
+
   log('execAgent: prepared evalContext for executor');
 
   await throwIfExecutionAborted('operation preparation');
@@ -909,10 +936,28 @@ export const prepareOperation = async (
     // against, so a disabled identifier absent here is neither listed nor
     // activatable — mirrors the tool-manifest treatment above (installedPlugins/
     // additionalManifests), which this array had never received.
+    //
+    // Shared runs only see skills allowed by the share configuration. The
+    // candidate pool must be trimmed here rather than left to
+    // `SkillEngine.generate`, which annotates activation state on its input
+    // rather than shrinking it. Reuse `filterPluginsByShareGate` (id-list
+    // intersection, not tool-specific) to keep this pool the single
+    // enforcement point — an empty/missing allowlist collapses it to nothing.
+    const shareAllowedSkillIds = shareGate
+      ? new Set(
+          filterPluginsByShareGate(
+            [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
+              (skill) => skill.identifier,
+            ),
+            shareGate,
+          ),
+        )
+      : undefined;
     const seenNames = new Set<string>();
     const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
       (skill) => {
         if (disabledPluginIds.includes(skill.identifier)) return false;
+        if (shareAllowedSkillIds && !shareAllowedSkillIds.has(skill.identifier)) return false;
         if (seenNames.has(skill.name)) return false;
         seenNames.add(skill.name);
         return true;

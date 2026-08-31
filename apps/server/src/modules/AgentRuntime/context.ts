@@ -28,6 +28,41 @@ export interface RuntimeExecutorContext {
   abortSignal?: AbortSignal;
   agentConfig?: any;
   /**
+   * Shared-agent visitor marker, read back from `state.metadata.agentShare`.
+   * Present ONLY for a share-visitor run; its presence alone is the signal
+   * every per-step consumer keys off.
+   *
+   * `enabledToolIds` mirrors `shareConfig.enabledToolIds` so tool runtimes that
+   * resolve their target outside `toolManifestMap` (e.g. `activateSkill`,
+   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * already enforces.
+   *
+   * `allowReadMemory` mirrors `shareConfig.allowReadMemory`, forwarded into
+   * `ToolExecutionContext.agentShare` so `BuiltinToolsExecutor.execute` can
+   * re-check the memory tool's grant right before dispatch — see
+   * `isShareBlockedDataToolCall` in `shareGate.ts`.
+   *
+   * `knowledgeBaseIds` mirrors the agent's persisted knowledge-base assignment
+   * so `isShareBlockedDataToolCall` can id-scope `viewKnowledgeBase`'s `id`
+   * argument. Always empty today (a share grants no knowledge-base access).
+   *
+   * `shareId` is the `agentShares.id` this run was authorized against — the
+   * revocation token re-checked at every step boundary (see
+   * `AgentShareModel.isRunStillAuthorized`).
+   */
+  agentShare?: {
+    agentId: string;
+    allowReadMemory?: boolean;
+    enabledToolIds?: string[];
+    knowledgeBaseIds?: string[];
+    shareId: string;
+    /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
+    showErrorDetails?: boolean;
+    /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
+    showModelInfo?: boolean;
+    visitorUserId: string;
+  };
+  /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result
    * as a final answer; injected multi-step agents such as GraphAgent can emit

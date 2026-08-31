@@ -80,6 +80,7 @@ import {
   isMultimodalUnderstandingConfigured,
 } from '../helpers/mediaAvailability';
 import { resolveServerSearchDecision } from '../searchDecision';
+import { filterPluginsByShareGate } from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -176,6 +177,7 @@ export const discoverTools = async (
     prompt,
     provider,
     resolvedAgentId,
+    shareGate,
     topicId,
   } = ctx;
   const {
@@ -604,6 +606,18 @@ export const discoverTools = async (
       ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
     ];
 
+    // Share allowlist filters the full candidate set (pinned + mentioned +
+    // internal additions) before manifest discovery. This only trims which
+    // plugin ids get *activated*; the separate skill candidate pool built in
+    // `operationPrep` (`skills`, consumed by `SkillEngine`) needs its own pass
+    // against the same allowlist, since building the skill list is a distinct
+    // step from `SkillEngine.generate` and is not scoped by the plugin id list
+    // on its own. The operationToolSet snapshot then carries the restricted
+    // surface into every later step.
+    if (shareGate) {
+      agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
+    }
+
     // Resolve THE device decision for this run. All rules live in
     // `resolveExecutionPlan` (gated on `canUseDevice` first, `none`/`sandbox`
     // never route to a device, offline bindings stay unrouted, unbound runs
@@ -1000,8 +1014,19 @@ export const discoverTools = async (
 
     const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
     const isLobeAiAgent = isLobeAiAgentSlug(agentSlug);
+    // Share-visitor fail-closed gate — never expose the
+    // `declareSelfFeedbackIntent` tool to a share-visitor turn. This tool sits
+    // outside the normal `toolManifestMap` / `applyShareGateToToolSet`
+    // allowlist (it's injected directly into `tools` below), so the visitor's
+    // own model call can reach it even with an empty `enabledToolIds`. Its
+    // execution context is stamped with the share CREATOR's user id, and the
+    // resulting `agent.self_feedback_intent.declared` event dispatches a full
+    // autonomous background run under the creator's account, which can write
+    // to the creator's memory. Same root cause as the `agent.user.message`
+    // gate in `turnSetup`; `allowReadMemory` is a read-only grant so this must
+    // not be conditional on it either.
     const shouldCheckUserSelfIterationGate =
-      !disableSelfFeedbackIntentTool && (agentSelfIterationEnabled || isLobeAiAgent);
+      !shareGate && !disableSelfFeedbackIntentTool && (agentSelfIterationEnabled || isLobeAiAgent);
     if (shouldCheckUserSelfIterationGate) {
       const featureUserEnabled = await isAgentSignalEnabledForUser(deps.db, deps.userId);
       const effectiveAgentSelfIterationEnabled = resolveAgentSelfIterationCapability({
