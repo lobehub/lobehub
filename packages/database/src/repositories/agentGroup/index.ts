@@ -40,6 +40,7 @@ import {
   topics,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildAgentCopyValues } from '../../utils/agentClone';
 import { insertInBatches, splitCrossBatchSelfReferences } from '../../utils/batchInsert';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
 import { copyMessagesInDatabase, type IdPair } from '../../utils/copyMessagesInDatabase';
@@ -158,30 +159,13 @@ export class AgentGroupRepository {
     targetUserId: string,
     fallbackTitle: string,
     targetVisibility?: 'private' | 'public',
-  ): NewAgent => ({
-    agencyConfig: source?.agencyConfig,
-    avatar: source?.avatar,
-    backgroundColor: source?.backgroundColor,
-    chatConfig: source?.chatConfig,
-    description: source?.description,
-    editorData: source?.editorData,
-    fewShots: source?.fewShots,
-    model: source?.model,
-    openingMessage: source?.openingMessage,
-    openingQuestions: source?.openingQuestions,
-    params: source?.params,
-    pinned: source?.pinned,
-    plugins: source?.plugins,
-    provider: source?.provider,
-    systemRole: source?.systemRole,
-    tags: source?.tags,
-    title: source?.title || fallbackTitle,
-    tts: source?.tts,
-    userId: targetUserId,
-    virtual: source?.virtual ?? true,
-    ...(targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {}),
-    workspaceId: targetWorkspaceId,
-  });
+  ): NewAgent =>
+    buildAgentCopyValues(
+      source,
+      { userId: targetUserId, workspaceId: targetWorkspaceId },
+      fallbackTitle,
+      targetVisibility,
+    );
 
   /**
    * Duplicate a group's conversations into the freshly created target group,

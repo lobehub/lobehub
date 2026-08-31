@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -1867,5 +1867,288 @@ describe('AgentModel.transferAgents (batch)', () => {
 
     await expect(model.transferHasForeignRows([mine.id])).resolves.toBe(false);
     await expect(model.transferHasForeignRows([mine.id, foreign.id])).resolves.toBe(true);
+  });
+});
+
+describe('AgentModel.transferAgents group history preservation', () => {
+  /**
+   * Fixture: a personal-scope group with the given agent as a referenced
+   * member, holding a group topic, a thread and messages (topic'd + topicless)
+   * all attributed to the agent.
+   */
+  const seedGroupHistory = async (groupId: string, agentId: string) => {
+    await serverDB.insert(chatGroups).values({ id: groupId, title: `Group ${groupId}`, userId });
+    await serverDB.insert(chatGroupsAgents).values({ agentId, chatGroupId: groupId, userId });
+    await serverDB.insert(topics).values([
+      // Group topic attributed to the member agent
+      { agentId, groupId, id: `${groupId}-topic-attr`, userId },
+      // Group topic with no agent attribution
+      { groupId, id: `${groupId}-topic-plain`, userId },
+    ]);
+    await serverDB.insert(threads).values([
+      // Thread carrying only the group anchor
+      {
+        agentId,
+        groupId,
+        id: `${groupId}-thr-grp`,
+        topicId: `${groupId}-topic-plain`,
+        type: 'continuation',
+        userId,
+      },
+      // Thread carrying only the topic anchor into a group topic
+      {
+        agentId,
+        id: `${groupId}-thr-top`,
+        topicId: `${groupId}-topic-plain`,
+        type: 'continuation',
+        userId,
+      },
+    ]);
+    await serverDB.insert(messages).values([
+      // Topic'd group message spoken by the agent
+      {
+        agentId,
+        groupId,
+        id: `${groupId}-msg-topic`,
+        role: 'assistant',
+        topicId: `${groupId}-topic-plain`,
+        userId,
+      },
+      // Topicless group residue spoken by the agent
+      { agentId, groupId, id: `${groupId}-msg-residual`, role: 'assistant', userId },
+      // Message addressed TO the agent (target_id soft reference)
+      { groupId, id: `${groupId}-msg-target`, role: 'user', targetId: agentId, userId },
+      // Topic-anchored row without its own group_id
+      {
+        agentId,
+        id: `${groupId}-msg-topic-only`,
+        role: 'assistant',
+        topicId: `${groupId}-topic-plain`,
+        userId,
+      },
+    ]);
+  };
+
+  it('leaves a tombstone clone so group history survives the transfer AND a later delete', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({
+      avatar: 'https://example.com/a.png',
+      systemRole: 'The historian',
+      title: 'History Agent',
+    });
+    await seedGroupHistory('gh-group', agent.id);
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    // The agent itself moved and left the roster.
+    const moved = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+    expect(moved).toMatchObject({ userId: targetUserId, workspaceId: wsId2 });
+    await expect(
+      serverDB.select().from(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, agent.id)),
+    ).resolves.toHaveLength(0);
+
+    // Exactly one tombstone clone, in the GROUP's scope, virtual and rosterless.
+    const clones = await serverDB
+      .select()
+      .from(agents)
+      .where(and(eq(agents.userId, userId), eq(agents.virtual, true)));
+    expect(clones).toHaveLength(1);
+    const clone = clones[0];
+    expect(clone).toMatchObject({
+      avatar: 'https://example.com/a.png',
+      systemRole: 'The historian',
+      title: 'History Agent',
+      workspaceId: null,
+    });
+    expect(clone.slug).not.toBe(moved?.slug);
+    await expect(
+      serverDB.select().from(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, clone.id)),
+    ).resolves.toHaveLength(0);
+
+    // Every group row stayed in the source scope and now points at the clone.
+    const groupTopics = await serverDB.select().from(topics).where(eq(topics.groupId, 'gh-group'));
+    expect(groupTopics).toHaveLength(2);
+    for (const topic of groupTopics) {
+      expect(topic.userId).toBe(userId);
+      expect(topic.workspaceId).toBeNull();
+      expect(topic.agentId === null || topic.agentId === clone.id).toBe(true);
+    }
+
+    const groupThreads = await serverDB
+      .select()
+      .from(threads)
+      .where(inArray(threads.id, ['gh-group-thr-grp', 'gh-group-thr-top']));
+    expect(groupThreads).toHaveLength(2);
+    for (const thread of groupThreads) {
+      expect(thread.agentId).toBe(clone.id);
+      // Regression: step 8 used to drag agent-linked group threads into the
+      // target scope.
+      expect(thread.userId).toBe(userId);
+      expect(thread.workspaceId).toBeNull();
+    }
+
+    const groupMessages = await serverDB
+      .select()
+      .from(messages)
+      .where(
+        inArray(messages.id, [
+          'gh-group-msg-topic',
+          'gh-group-msg-residual',
+          'gh-group-msg-target',
+          'gh-group-msg-topic-only',
+        ]),
+      );
+    expect(groupMessages).toHaveLength(4);
+    for (const message of groupMessages) {
+      // Regression: the residual rewrite used to re-scope topicless group
+      // messages to the target.
+      expect(message.userId).toBe(userId);
+      expect(message.workspaceId).toBeNull();
+      if (message.id === 'gh-group-msg-target') {
+        expect(message.targetId).toBe(clone.id);
+      } else {
+        expect(message.agentId).toBe(clone.id);
+      }
+    }
+
+    // The cascade regression itself: deleting the moved agent in its new
+    // scope must not erase the old group's history.
+    await serverDB.delete(agents).where(eq(agents.id, agent.id));
+    await expect(
+      serverDB.select().from(topics).where(eq(topics.groupId, 'gh-group')),
+    ).resolves.toHaveLength(2);
+    await expect(
+      serverDB
+        .select()
+        .from(threads)
+        .where(inArray(threads.id, ['gh-group-thr-grp', 'gh-group-thr-top'])),
+    ).resolves.toHaveLength(2);
+    await expect(
+      serverDB
+        .select()
+        .from(messages)
+        .where(
+          inArray(messages.id, [
+            'gh-group-msg-topic',
+            'gh-group-msg-residual',
+            'gh-group-msg-target',
+            'gh-group-msg-topic-only',
+          ]),
+        ),
+    ).resolves.toHaveLength(4);
+  });
+
+  it('creates no clone when the agent leaves groups without history', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Quiet Member' });
+    await serverDB.insert(chatGroups).values({ id: 'quiet-group', userId });
+    await serverDB
+      .insert(chatGroupsAgents)
+      .values({ agentId: agent.id, chatGroupId: 'quiet-group', userId });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const leftBehind = await serverDB
+      .select()
+      .from(agents)
+      .where(and(eq(agents.userId, userId), isNull(agents.workspaceId)));
+    expect(leftBehind).toHaveLength(0);
+  });
+
+  it('reuses one clone across every group in the same scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Busy Member' });
+    await seedGroupHistory('multi-a', agent.id);
+    await seedGroupHistory('multi-b', agent.id);
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const clones = await serverDB
+      .select()
+      .from(agents)
+      .where(and(eq(agents.userId, userId), eq(agents.virtual, true)));
+    expect(clones).toHaveLength(1);
+
+    for (const groupId of ['multi-a', 'multi-b']) {
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, `${groupId}-msg-topic`));
+      expect(message.agentId).toBe(clones[0].id);
+    }
+  });
+
+  it('round-trips without stacking tombstones', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Traveler' });
+    await seedGroupHistory('rt-group', agent.id);
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+    const back = new AgentModel(serverDB, targetUserId, wsId2);
+    await back.transferAgent(agent.id, null, userId);
+
+    // The first leg remapped every group reference, so the return leg finds
+    // nothing to preserve and mints no second clone.
+    const clones = await serverDB
+      .select()
+      .from(agents)
+      .where(and(eq(agents.userId, userId), eq(agents.virtual, true)));
+    expect(clones).toHaveLength(1);
+
+    const [message] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'rt-group-msg-topic'));
+    expect(message.agentId).toBe(clones[0].id);
+    expect(message.userId).toBe(userId);
+  });
+
+  it('clones into each group scope for cross-scope memberships', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Shared Agent', visibility: 'public' });
+
+    // A workspace group in wsId1 and a personal group of targetUserId both
+    // hold history from this agent.
+    await serverDB.insert(chatGroups).values([
+      { id: 'xs-ws-group', userId, workspaceId: wsId1 },
+      { id: 'xs-personal-group', userId: targetUserId },
+    ]);
+    await serverDB.insert(messages).values([
+      {
+        agentId: agent.id,
+        groupId: 'xs-ws-group',
+        id: 'xs-msg-ws',
+        role: 'assistant',
+        userId,
+        workspaceId: wsId1,
+      },
+      {
+        agentId: agent.id,
+        groupId: 'xs-personal-group',
+        id: 'xs-msg-personal',
+        role: 'assistant',
+        userId: targetUserId,
+      },
+    ]);
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [wsMessage] = await serverDB.select().from(messages).where(eq(messages.id, 'xs-msg-ws'));
+    const [personalMessage] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'xs-msg-personal'));
+
+    expect(wsMessage.agentId).not.toBe(agent.id);
+    expect(personalMessage.agentId).not.toBe(agent.id);
+    expect(wsMessage.agentId).not.toBe(personalMessage.agentId);
+
+    const [wsClone] = await serverDB.select().from(agents).where(eq(agents.id, wsMessage.agentId!));
+    expect(wsClone).toMatchObject({ virtual: true, workspaceId: wsId1 });
+    const [personalClone] = await serverDB
+      .select()
+      .from(agents)
+      .where(eq(agents.id, personalMessage.agentId!));
+    expect(personalClone).toMatchObject({ userId: targetUserId, virtual: true, workspaceId: null });
   });
 });

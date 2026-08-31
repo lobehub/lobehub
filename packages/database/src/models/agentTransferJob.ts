@@ -198,6 +198,25 @@ export const remapMessageAgentIdsForTopics = async (
 };
 
 /**
+ * {@link remapMessageAgentIds} over EVERYTHING the given groups hold — topic'd
+ * rows and topicless residue alike, anchored on `messages.group_id`.
+ *
+ * The group transfer cannot use this (its fast/slow split needs the per-topic
+ * form so the drain can batch); it exists for the AGENT transfer, where the
+ * groups stay put and their whole history is repointed in one synchronous
+ * stroke before the agent leaves.
+ */
+export const remapMessageAgentIdsForGroups = async (
+  executor: Executor,
+  groupIds: string[],
+  pairs: AgentIdRemapPair[],
+): Promise<void> => {
+  if (groupIds.length === 0) return;
+
+  await remapMessageAgentIds(executor, inArray(messages.groupId, groupIds), pairs);
+};
+
+/**
  * {@link remapMessageAgentIds} over the topicless residue of the given groups —
  * the same rows `rewriteResidualMessageScope` picks up on its group arm.
  */

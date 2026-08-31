@@ -16,6 +16,7 @@ import {
   gt,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   like,
   ne,
@@ -66,6 +67,7 @@ import {
   collectBoundDeviceIds,
   sanitizeAgencyConfigsForWorkspace,
 } from '../utils/agencyConfigDevices';
+import { buildAgentCopyValues } from '../utils/agentClone';
 import {
   rehomeAgentConnectorsForRecipient,
   rehomeAgentConnectorsForScopeTransfer,
@@ -89,8 +91,11 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
+  type AgentIdRemapPair,
   AgentTransferJobModel,
   getAgentTransferSyncMessageThreshold,
+  remapMessageAgentIdsForGroups,
+  remapMessageAgentIdsForTopics,
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
 } from './agentTransferJob';
@@ -2031,6 +2036,159 @@ export class AgentModel {
     );
   };
 
+  /**
+   * The tombstone half of step 5c in {@link transferAgents} — see the call
+   * site for the why. Finds every chat group the moved agents left history in
+   * (NOT limited to current roster rows: a reference left over from an
+   * earlier membership is just as much a cascade hazard), inserts one virtual
+   * clone per (agent × group scope) in the GROUPS' scope, and repoints
+   * `topics/threads/messages.agent_id` (+ the FK-less `messages.target_id`)
+   * from the moved agent onto its clone.
+   *
+   * The clone is scoped per group scope, not per group: every group in one
+   * scope can resolve the same tombstone, and cross-scope groups (a workspace
+   * group referencing a personal agent) each get one that THEIR readers can
+   * load. Agents with no group history insert nothing — the common case costs
+   * six index-only probes.
+   */
+  private preserveGroupHistoryForTransfer = async (
+    trx: Transaction,
+    agentIds: string[],
+    agentById: Map<string, AgentItem>,
+  ): Promise<void> => {
+    // (group, agent) pairs holding history. The direct arms anchor on the
+    // rows' own group_id; the join arms catch rows that carry only a topicId
+    // into a group topic. `messages.target_id` (no FK) rides the same pairs —
+    // it cannot cascade anything, but left stale it would attribute @mentions
+    // to an agent the scope cannot see.
+    const pairSources: { agentId: string | null; groupId: string | null }[] = [
+      ...(await trx
+        .selectDistinct({ agentId: topics.agentId, groupId: topics.groupId })
+        .from(topics)
+        .where(and(inArray(topics.agentId, agentIds), isNotNull(topics.groupId)))),
+      ...(await trx
+        .selectDistinct({ agentId: threads.agentId, groupId: threads.groupId })
+        .from(threads)
+        .where(and(inArray(threads.agentId, agentIds), isNotNull(threads.groupId)))),
+      ...(await trx
+        .selectDistinct({ agentId: threads.agentId, groupId: topics.groupId })
+        .from(threads)
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(and(inArray(threads.agentId, agentIds), isNotNull(topics.groupId)))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.agentId, groupId: messages.groupId })
+        .from(messages)
+        .where(and(inArray(messages.agentId, agentIds), isNotNull(messages.groupId)))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.agentId, groupId: topics.groupId })
+        .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
+        .where(and(inArray(messages.agentId, agentIds), isNotNull(topics.groupId)))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.targetId, groupId: messages.groupId })
+        .from(messages)
+        .where(and(inArray(messages.targetId, agentIds), isNotNull(messages.groupId)))),
+    ];
+
+    const agentIdsByGroup = new Map<string, Set<string>>();
+    for (const { agentId, groupId } of pairSources) {
+      if (!agentId || !groupId) continue;
+      const set = agentIdsByGroup.get(groupId) ?? new Set<string>();
+      set.add(agentId);
+      agentIdsByGroup.set(groupId, set);
+    }
+    if (agentIdsByGroup.size === 0) return;
+
+    // The FK guarantees every referenced group row still exists (topics /
+    // threads cascade with their group; messages.group_id is SET NULL), so
+    // this read is total over the pairs above.
+    const groupRows = await trx
+      .select({ id: chatGroups.id, userId: chatGroups.userId, workspaceId: chatGroups.workspaceId })
+      .from(chatGroups)
+      .where(inArray(chatGroups.id, [...agentIdsByGroup.keys()]));
+
+    const scopes = new Map<
+      string,
+      { agentIds: Set<string>; groupIds: string[]; userId: string; workspaceId: string | null }
+    >();
+    for (const group of groupRows) {
+      const key = `${group.userId}\0${group.workspaceId ?? ''}`;
+      const scope = scopes.get(key) ?? {
+        agentIds: new Set<string>(),
+        groupIds: [],
+        userId: group.userId,
+        workspaceId: group.workspaceId,
+      };
+      scope.groupIds.push(group.id);
+      for (const agentId of agentIdsByGroup.get(group.id)!) scope.agentIds.add(agentId);
+      scopes.set(key, scope);
+    }
+
+    for (const scope of scopes.values()) {
+      const cloneSourceIds = [...scope.agentIds];
+      const clones = await trx
+        .insert(agents)
+        .values(
+          cloneSourceIds.map((sourceId) => ({
+            ...buildAgentCopyValues(
+              agentById.get(sourceId),
+              { userId: scope.userId, workspaceId: scope.workspaceId },
+              'Agent',
+            ),
+            // Same overrides, same rationale as the group transfer's clone
+            // site: the tombstone exists for this history and nothing else —
+            // `virtual: true` hides it from every list and member picker, and
+            // a pin is the source owner's sidebar choice, not the group's.
+            pinned: false,
+            virtual: true,
+          })),
+        )
+        .returning({ id: agents.id });
+
+      const remapPairs: AgentIdRemapPair[] = cloneSourceIds.map((sourceAgentId, index) => ({
+        newAgentId: clones[index].id,
+        sourceAgentId,
+      }));
+
+      const groupTopicIds = (
+        await trx
+          .select({ id: topics.id })
+          .from(topics)
+          .where(inArray(topics.groupId, scope.groupIds))
+      ).map((row) => row.id);
+
+      // One statement per pair, exactly like the group transfer's remap loop —
+      // the pair count is the number of moved agents with history here, i.e. a
+      // handful. `updatedAt` is pinned so `$onUpdate` does not stamp a scope
+      // repair as fresh activity.
+      for (const { newAgentId, sourceAgentId } of remapPairs) {
+        await trx
+          .update(topics)
+          .set({ agentId: newAgentId, updatedAt: topics.updatedAt })
+          .where(and(inArray(topics.groupId, scope.groupIds), eq(topics.agentId, sourceAgentId)));
+        await trx
+          .update(threads)
+          .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+          .where(and(inArray(threads.groupId, scope.groupIds), eq(threads.agentId, sourceAgentId)));
+        if (groupTopicIds.length > 0) {
+          await trx
+            .update(threads)
+            .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+            .where(
+              and(inArray(threads.topicId, groupTopicIds), eq(threads.agentId, sourceAgentId)),
+            );
+        }
+      }
+
+      // Both anchors on purpose: `group_id` covers topicless residue and rows
+      // whose topic is gone; the topic anchor covers rows that carry only a
+      // topicId into a group topic. Overlap is harmless — the remap is
+      // idempotent.
+      await remapMessageAgentIdsForGroups(trx, scope.groupIds, remapPairs);
+      await remapMessageAgentIdsForTopics(trx, groupTopicIds, remapPairs);
+    }
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
@@ -2241,6 +2399,25 @@ export class AgentModel {
       await trx
         .delete(agentLabelAssignments)
         .where(inArray(agentLabelAssignments.agentId, agentIds));
+
+      // 5c. Preserve the history these agents leave behind in chat groups.
+      // Step 15 drops the roster rows, but the groups' topics / threads /
+      // messages keep `agent_id` pointing at the moved agents — and all three
+      // FKs are ON DELETE CASCADE, so deleting the agent later in its NEW
+      // scope would silently erase the old groups' history across scopes.
+      //
+      // Mirror of the group transfer's referenced-member clone
+      // (`AgentGroupRepository.transferToWorkspace`): whoever is the SUBJECT
+      // of a move is kept whole, and the side left behind gets a clone. Here
+      // the subject is the agent, so the clone — virtual, rosterless,
+      // invisible to every list — stays with the groups as a history
+      // tombstone in THEIR scope.
+      //
+      // Runs BEFORE the topic / thread / message moves below on purpose:
+      // repointing the group rows first also keeps those moves from dragging
+      // group history into the target scope (threads matched by `agent_id` in
+      // step 8, topicless group messages in step 7's residual rewrite).
+      await this.preserveGroupHistoryForTransfer(trx, agentIds, agentById);
 
       // 6. Update topics (linked via sessionId or agentId)
       const topicCondition =
