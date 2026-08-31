@@ -22,6 +22,7 @@ export const useInitAgentConfig = (agentId?: string) => {
   const id = agentId || params.aid || activeAgentId || '';
 
   const data = useFetchAgentConfig(isLogin, id);
+  const hasConfig = useAgentStore((s) => Boolean(id && s.agentMap[id]));
 
-  return { ...data, isLoading: data.isLoading && isLogin };
+  return { ...data, isLoading: data.isLoading && isLogin && !hasConfig };
 };

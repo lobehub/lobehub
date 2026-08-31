@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
+import { projectKeys } from '@/libs/swr/keys';
 import { projectService } from '@/services/project';
 
 import type { ProjectDetail, ProjectListItem } from './store';
@@ -26,11 +28,19 @@ vi.mock('@/libs/swr', () => ({
   ),
 }));
 
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => mocks.activeWorkspaceId ?? 'personal',
+}));
+
 describe('project store workspace scope', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
     mocks.swrConfigs = [];
-    useProjectStore.setState({ projectDetails: {}, projectLists: {} });
+    useProjectStore.setState({
+      projectDetails: {},
+      projectLists: {},
+      projectOptimisticPatches: {},
+    });
   });
 
   it('keeps project lists isolated between personal and workspace contexts', () => {
@@ -92,40 +102,44 @@ describe('project store workspace scope', () => {
   });
 
   it('refreshes the project list after deletion', async () => {
-    const refreshProjectList = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(projectService, 'delete').mockResolvedValue({
       data: { id: 'project-1' } as ProjectListItem,
       message: 'Project deleted',
       success: true,
     });
-    useProjectStore.setState({ refreshProjectList });
-
     await useProjectStore.getState().deleteProject('project-1');
 
     expect(projectService.delete).toHaveBeenCalledWith('project-1');
-    expect(refreshProjectList).toHaveBeenCalledOnce();
+    const matcher = vi.mocked(mutate).mock.calls.at(-1)?.[0];
+    expect(typeof matcher === 'function' && matcher(projectKeys.list('personal'))).toBe(true);
   });
 
   it('updates project list and detail caches after renaming', async () => {
     const project = { id: 'project-1', name: 'Original', slug: 'launch' } as ProjectListItem;
     const renamed = { ...project, name: 'Renamed' };
     const detail = { project } as ProjectDetail;
-    const refreshProjectList = vi.fn().mockResolvedValue(undefined);
-    vi.spyOn(projectService, 'update').mockResolvedValue({
-      data: renamed,
-      message: 'Project updated',
-      success: true,
-    });
+    let resolveUpdate!: (value: { data: ProjectListItem; message: string; success: true }) => void;
+    vi.spyOn(projectService, 'update').mockImplementation(
+      () => new Promise((resolve) => (resolveUpdate = resolve)),
+    );
     useProjectStore.setState({
       projectDetails: { personal: { launch: detail } },
       projectLists: { personal: [project] },
-      refreshProjectList,
     });
 
-    await useProjectStore.getState().updateProject('project-1', { name: 'Renamed' });
+    const operation = useProjectStore.getState().updateProject('project-1', { name: 'Renamed' });
+
+    expect(renderHook(() => useCurrentProjectList()).result.current[0].name).toBe('Renamed');
+    expect(renderHook(() => useCurrentProjectDetail('launch')).result.current?.project.name).toBe(
+      'Renamed',
+    );
+
+    resolveUpdate({ data: renamed, message: 'Project updated', success: true });
+    await operation;
 
     expect(useProjectStore.getState().projectLists.personal[0].name).toBe('Renamed');
     expect(useProjectStore.getState().projectDetails.personal.launch.project.name).toBe('Renamed');
-    expect(refreshProjectList).toHaveBeenCalledOnce();
+    const matcher = vi.mocked(mutate).mock.calls.at(-1)?.[0];
+    expect(typeof matcher === 'function' && matcher(projectKeys.list('personal'))).toBe(true);
   });
 });

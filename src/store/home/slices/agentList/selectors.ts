@@ -1,38 +1,58 @@
 import { type SidebarAgentItem, type SidebarGroup } from '@/database/repositories/home';
 import { type HomeStore } from '@/store/home/store';
 
+const applyOptimisticPatch = (item: SidebarAgentItem, state: HomeStore): SidebarAgentItem => {
+  const optimistic = state.agentOptimisticPatches[item.id];
+  return optimistic?.scope === state.agentListScope ? { ...item, ...optimistic.patch } : item;
+};
+
+const applyOptimisticPatches = (items: SidebarAgentItem[], state: HomeStore) =>
+  Object.keys(state.agentOptimisticPatches).length === 0
+    ? items
+    : items.map((item) => applyOptimisticPatch(item, state));
+
+const applyGroupOptimisticPatches = (groups: SidebarGroup[], state: HomeStore) =>
+  Object.keys(state.agentOptimisticPatches).length === 0
+    ? groups
+    : groups.map((group) => ({ ...group, items: applyOptimisticPatches(group.items, state) }));
+
 /**
  * Get all pinned agents
  */
-const pinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.pinnedAgents;
+const pinnedAgents = (s: HomeStore): SidebarAgentItem[] =>
+  applyOptimisticPatches(s.pinnedAgents, s);
 
 /**
  * Get all agent groups (folders)
  */
-const agentGroups = (s: HomeStore): SidebarGroup[] => s.agentGroups;
+const agentGroups = (s: HomeStore): SidebarGroup[] => applyGroupOptimisticPatches(s.agentGroups, s);
 
 /**
  * Get private agent groups (folders) owned by the current user.
  * Empty array in personal mode.
  */
-const privateAgentGroups = (s: HomeStore): SidebarGroup[] => s.privateAgentGroups;
+const privateAgentGroups = (s: HomeStore): SidebarGroup[] =>
+  applyGroupOptimisticPatches(s.privateAgentGroups, s);
 
 /**
  * Get pinned private agents owned by the current user.
  * Empty array in personal mode.
  */
-const privatePinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.privatePinnedAgents;
+const privatePinnedAgents = (s: HomeStore): SidebarAgentItem[] =>
+  applyOptimisticPatches(s.privatePinnedAgents, s);
 
 /**
  * Get all ungrouped agents
  */
-const ungroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.ungroupedAgents;
+const ungroupedAgents = (s: HomeStore): SidebarAgentItem[] =>
+  applyOptimisticPatches(s.ungroupedAgents, s);
 
 /**
  * Get ungrouped private agents owned by the current user.
  * Empty array in personal mode.
  */
-const privateUngroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.privateUngroupedAgents;
+const privateUngroupedAgents = (s: HomeStore): SidebarAgentItem[] =>
+  applyOptimisticPatches(s.privateUngroupedAgents, s);
 
 /**
  * Whether the current user has any private content in this workspace.
@@ -48,7 +68,7 @@ const hasPrivateAgents = (s: HomeStore): boolean =>
 const ungroupedAgentsLimited =
   (pageSize: number) =>
   (s: HomeStore): SidebarAgentItem[] =>
-    s.ungroupedAgents.slice(0, pageSize);
+    applyOptimisticPatches(s.ungroupedAgents.slice(0, pageSize), s);
 
 /**
  * Limit private ungrouped agents for the Private sidebar bucket
@@ -56,7 +76,7 @@ const ungroupedAgentsLimited =
 const privateUngroupedAgentsLimited =
   (pageSize: number) =>
   (s: HomeStore): SidebarAgentItem[] =>
-    s.privateUngroupedAgents.slice(0, pageSize);
+    applyOptimisticPatches(s.privateUngroupedAgents.slice(0, pageSize), s);
 
 /**
  * Get ungrouped agents count
@@ -86,7 +106,7 @@ const allAgents = (s: HomeStore): SidebarAgentItem[] => {
     ...s.privatePinnedAgents,
     ...privateGroupedAgents,
     ...s.privateUngroupedAgents,
-  ];
+  ].map((item) => applyOptimisticPatch(item, s));
 };
 
 /**

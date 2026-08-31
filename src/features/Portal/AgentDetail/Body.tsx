@@ -24,6 +24,7 @@ const Body = memo(() => {
   const openingMessage = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage,
   );
+  const hasConfig = useAgentStore((s) => Boolean(s.agentMap[agentId]));
   const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(agentId));
   const displayName = agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
@@ -47,7 +48,7 @@ const Body = memo(() => {
     );
   }
 
-  if (isLoading) return <SurfaceSkeleton header={false} variant={'form'} />;
+  if (isLoading && !hasConfig) return <SurfaceSkeleton header={false} variant={'form'} />;
 
   return (
     <Flexbox align="center" flex={1} gap={16} padding={32} style={{ overflowY: 'auto' }}>

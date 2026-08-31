@@ -93,11 +93,11 @@ const ProjectWorkspace = memo(() => {
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const detail = useCurrentProjectDetail(projectId);
   const [message, setMessage] = useState('');
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const { error, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
 
   if (!enabled) return <ProjectDisabled />;
   if (error) return <AsyncError error={error} variant={'page'} onRetry={() => mutate()} />;
-  if (isLoading || !detail)
+  if (!detail)
     return (
       <Center height={'100%'}>
         <NeuralNetworkLoading />

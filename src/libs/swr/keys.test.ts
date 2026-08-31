@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agentBuilderKeys,
+  agentConfigKeys,
+  agentKeys,
+  agentProjectionKeys,
   documentCommentKeys,
   isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
+  projectKeys,
   recentKeys,
   resourceKeys,
   taskKeys,
@@ -60,6 +64,48 @@ describe('recentKeys', () => {
     );
 
     expect(persisted).toBe(true);
+  });
+});
+
+describe('agent projection keys', () => {
+  it('keeps network sync and hydration isolated by identity scope', () => {
+    expect(agentKeys.list(true, 'user-1:workspace-1')).not.toEqual(
+      agentKeys.list(true, 'user-2:workspace-1'),
+    );
+    expect(agentConfigKeys.config('agent-1', 'user-1:workspace-1')).not.toEqual(
+      agentConfigKeys.config('agent-1', 'user-1:workspace-2'),
+    );
+    expect(agentProjectionKeys.configHydration('user-1:workspace-1', 'agent-1')).toEqual([
+      'agentProjection:configHydration',
+      'user-1:workspace-1',
+      'agent-1',
+    ]);
+  });
+
+  it('keeps SWR orchestration entries out of the persistence tiers', () => {
+    for (const key of [
+      agentKeys.list(true, 'user-1:personal'),
+      agentConfigKeys.config('agent-1', 'user-1:personal'),
+    ]) {
+      const serialized = unstable_serialize(key);
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
+  });
+});
+
+describe('projectKeys', () => {
+  it('uses the same scoped factory family for list, detail, and hydration', () => {
+    expect(projectKeys.list('user-1:workspace-1')).toEqual(['project:list', 'user-1:workspace-1']);
+    expect(projectKeys.detail('user-1:workspace-1', 'project-1')).toEqual([
+      'project:detail',
+      'user-1:workspace-1',
+      'project-1',
+    ]);
+    expect(projectKeys.listHydration('user-1:workspace-1')).not.toEqual(
+      projectKeys.listHydration('user-1:workspace-2'),
+    );
   });
 });
 

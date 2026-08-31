@@ -6,14 +6,13 @@ import { useAgentIdentityForm } from './useAgentIdentityForm';
 const mocks = vi.hoisted(() => ({
   agentMap: {} as Record<string, { name?: string; slug?: string; title?: string }>,
   refreshAgentConfig: vi.fn(),
-  refreshAgentList: vi.fn(),
-  updateAgentMetaById: vi.fn(),
+  updateAgentMeta: vi.fn(),
   updateAgentSlug: vi.fn(),
 }));
 
 vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: unknown) => unknown) =>
-    selector({ refreshAgentList: mocks.refreshAgentList }),
+    selector({ updateAgentMeta: mocks.updateAgentMeta }),
 }));
 
 vi.mock('@/services/agent', () => ({
@@ -27,7 +26,6 @@ vi.mock('@/store/agent', () => ({
     selector({
       agentMap: mocks.agentMap,
       internal_refreshAgentConfig: mocks.refreshAgentConfig,
-      updateAgentMetaById: mocks.updateAgentMetaById,
     }),
 }));
 
@@ -50,7 +48,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.agentMap = { 'agent-a': { name: 'Alice', slug: 'old-slug', title: 'Health Assistant' } };
   mocks.updateAgentSlug.mockResolvedValue({ success: true });
-  mocks.updateAgentMetaById.mockResolvedValue(undefined);
+  mocks.updateAgentMeta.mockResolvedValue(undefined);
 });
 
 describe('useAgentIdentityForm', () => {
@@ -70,7 +68,7 @@ describe('useAgentIdentityForm', () => {
       await result.current.save();
     });
 
-    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
+    expect(mocks.updateAgentMeta).toHaveBeenCalledExactlyOnceWith('agent-a', {
       name: '小艾',
       title: 'Health Assistant',
     });
@@ -78,9 +76,7 @@ describe('useAgentIdentityForm', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
-  // The sidebar keeps its own copy of the label; without a refresh the list
-  // shows the old name while the profile shows the new one.
-  it('refreshes the sidebar list after a rename', async () => {
+  it('routes identity changes through the optimistic sidebar projection', async () => {
     const { result } = setup();
 
     act(() => result.current.setName('小艾'));
@@ -88,7 +84,7 @@ describe('useAgentIdentityForm', () => {
       await result.current.save();
     });
 
-    expect(mocks.refreshAgentList).toHaveBeenCalledOnce();
+    expect(mocks.updateAgentMeta).toHaveBeenCalledOnce();
   });
 
   it('does not refresh the sidebar when the save was rejected', async () => {
@@ -100,7 +96,7 @@ describe('useAgentIdentityForm', () => {
       await result.current.save();
     });
 
-    expect(mocks.refreshAgentList).not.toHaveBeenCalled();
+    expect(mocks.updateAgentMeta).not.toHaveBeenCalled();
   });
 
   it('routes a slug change to its own endpoint, normalized to lowercase', async () => {
@@ -127,7 +123,7 @@ describe('useAgentIdentityForm', () => {
 
     expect(result.current.error).toBe('settingAgent.slug.error.taken');
     // A rejected slug must not leave name/role persisted behind a closed form.
-    expect(mocks.updateAgentMetaById).not.toHaveBeenCalled();
+    expect(mocks.updateAgentMeta).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
   });
 
@@ -162,7 +158,7 @@ describe('useAgentIdentityForm', () => {
       });
 
       expect(mocks.updateAgentSlug).not.toHaveBeenCalled();
-      expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
+      expect(mocks.updateAgentMeta).toHaveBeenCalledExactlyOnceWith('agent-a', {
         name: '',
         title: 'Lobe AI',
       });

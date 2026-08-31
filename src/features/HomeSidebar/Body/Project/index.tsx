@@ -51,7 +51,7 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
     >
       {error ? (
         <AsyncError error={error} variant="inline" onRetry={() => mutate()} />
-      ) : isLoading ? (
+      ) : isLoading && projects.length === 0 ? (
         <Flexbox align="center" padding={12}>
           <NeuralNetworkLoading size={18} />
         </Flexbox>
