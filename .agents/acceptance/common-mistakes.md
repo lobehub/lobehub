@@ -783,6 +783,30 @@ directly — strip `--> statement-breakpoint` and run it with `psql -v ON_ERROR_
 — and treat the collision as a local multi-worktree artifact, never as a defect of
 the branch or of canary (the numbers get rebased on merge).
 
+**Same container, second shape — a sibling session truncates the data out from under
+you.** The tables can be perfectly migrated and still hold none of your fixtures: a
+worktree running the repo's DB test suites seeds and truncates `postgres` repeatedly,
+so a seeded user is gone seconds after `seed-user` reports success. It surfaces as
+web auth failing with `401` on `/api/auth/sign-in/email` while the seed command keeps
+printing the same credentials — nothing points at the database. Confirm by listing
+the table (`select id, email from users`) right after seeding and looking for rows
+that are not yours (`test-user-id` and friends are another suite's fixtures).
+
+Do NOT wait it out and do NOT reset the shared database — that destroys the other
+session's run. Create your own database inside the same container and point the whole
+run at it:
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -c "CREATE DATABASE <run>"
+docker exec lobehub-agent-testing-postgres psql -U postgres -d "CREATE EXTENSION IF NOT EXISTS vector" < run > -c
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/<run>"
+# migrate / seed-user / dev all inherit it; drop the database at teardown
+```
+
+`init-dev-env.sh` honours an inherited `DATABASE_URL` (PROJECT.md §2), so nothing else
+about the run changes. Drop the database when finished and verify the shared one still
+holds the other session's rows.
+
 ### L-S10 — Judging popover/menu behaviour from a Chrome MCP tab (it is hidden)
 
 **Wrong approach:** drive the debug-proxy page through the Chrome MCP tools, click a
@@ -912,3 +936,88 @@ recording an unhealthy interval.
 timeouts, record timeout/`000` as an observation, and keep the monitor advancing.
 Prove recovery with a successful application request after restarting the owned
 server; neither a PID nor a listening socket is sufficient.
+
+### L-S17 — Starting the dev server by a relative path, and getting the main checkout's SPA
+
+**Wrong approach:** in a worktree under `.claude/worktrees/<name>/`, invoke
+`.agents/acceptance/scripts/init-dev-env.sh dev` by its relative path and assume the
+resulting dev server serves the worktree. Then, when the feature never fires, look for
+the bug in the feature: check the lab flag, the store hydration, the click handler.
+
+**Why it fails:** `REPO_ROOT` is derived from the invocation path
+(`dirname "$0"/../../..`), and `cmd_dev` does `cd "$REPO_ROOT"` before `bun run dev`,
+which spawns Vite with that inherited cwd. A worktree-isolated session's shell cwd can
+silently reset to the main checkout between tool calls, so the very same relative
+command starts the **main checkout's** stack instead. Nothing looks wrong: the port
+answers, auth succeeds, `task.create` returns 200, the page renders the current
+product. Only the code under test is absent, because the SPA is a different tree.
+Fetching the module through the Next origin does not reveal it either — unknown `/src/*`
+paths fall through to the SPA HTML shell, so a `grep` for your symbol "fails" against
+`<!DOCTYPE html>` and reads as a stale bundle.
+
+**Correct approach:** invoke the script by absolute path from the worktree, and before
+capturing any evidence prove the SPA's identity rather than the server's liveness:
+resolve the Vite pid from its port and read its cwd
+(`lsof -a -p <pid> -d cwd -Fn`), then fetch the changed module **from the Vite origin
+directly** (the port in the `Debug Proxy` line, not the Next port) and require a marker
+unique to the change. A behavioural probe is equally decisive and cheaper: drive the
+feature once and assert its server call appears in the log — an absent call with a
+successful sibling call is this failure, not a client bug. Related but distinct:
+\[\[L-S7]] is a stale bundle from the _right_ tree; this is a healthy bundle from the
+_wrong_ tree.
+
+### L-S18 — Calling a fix verified without reproducing the failure's precondition
+
+**What happened.** A "draft stays in the composer after the task is created"
+bug was declared fixed across four separate rounds (r5 / r7 / r8 / r9) and was
+still fully present. Each verification ran against a task list that _already had
+tasks in it_, and the bug only exists on the empty→non-empty transition — that
+transition is what swaps the composer for a different component instance. Every
+"fix" ran green on a page where the failure could not occur.
+
+Two false root causes were shipped on the way: a stale editor handle (the handle
+is `useMemo(..., [])`, it was never stale) and a Lexical update landing outside
+the React event batch. Both were reasoned by analogy to other call sites rather
+than measured.
+
+**Rule.** Before verifying a fix, first reproduce the failure and write down the
+precondition that makes it appear. Then verify with that precondition held. A
+verification run that cannot fail proves nothing, and a green result on it is
+worse than no result — it retires the bug from the todo list.
+
+**Tell.** The bug reproduces "sometimes" or "only on the first try". That is not
+flakiness; it is an unnamed precondition. Find it before touching the code.
+
+**Tell.** The unit tests pass and the real app still breaks. Check what the test
+mocks: here `cleanDocument` was `vi.fn()`, so the tests asserted the call was
+made and could never observe that it landed on a dead instance. When the mocked
+seam _is_ the suspect, drop the mock and drive the real thing — a 20-line probe
+with the real editor kernel settled in one run what four rounds of analogy had
+not.
+
+### L-S19 — Putting your own work plan into `result.json` `plan[]`
+
+**What happened.** A round's `plan[]` was filled with the agent's task list —
+"find the root cause", "fix it and add a regression test", "record the flows" —
+instead of acceptance criteria. `plan[]` is the *frozen check plan*: every item
+is a check that must be executed by a case with the same `id`, and a planned
+item with no case renders as **未执行** rather than vanishing. The three items
+had no `id`, so the server numbered them `case-1..3` and three permanent
+`not executed` gate checks appeared on the user's acceptance board — gates that
+can never pass, on work that was in fact complete.
+
+**Rule.** `plan[]` holds only what the *user* would accept or reject, each with
+a stable `id` that a case in the same round fulfills. Your own steps —
+investigate, fix, test, record — are not checks. If a round has one criterion,
+`plan[]` has exactly one item.
+
+**Rule.** Read the ingest summary line. `plan: N item(s) — N planned but not
+executed — M unplanned case(s)` is not cosmetic: it says the plan and the
+results do not line up, and the board is about to render rows nobody can clear.
+A clean round prints `plan: N item(s)` with nothing after it.
+
+**Repair.** Fold the bogus ids into the real check with
+`supersedes: ['case-1', ...]` in the next round. Prefer this over
+`lh acceptance run delete`: deleting the round to hide a bookkeeping error also
+destroys the real results and evidence it carried, and rounds are immutable
+snapshots.
