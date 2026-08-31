@@ -8,29 +8,30 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginTag from '@/features/ProfileEditor/PluginTag';
-import type { AgentShareConfigPatchInput } from '@/services/agentShare';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { Section } from './SectionLayout';
 import {
+  getShareToolAvailability,
   getShareToolCandidateIds,
   getVisitorVisibleEnabledToolIds,
-  isToolAvailableToVisitors,
+  toggleShareToolId,
 } from './toolVisitorAvailability';
-import type { AgentShareConfigState } from './useAgentShare';
+import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 
 interface ToolsSectionProps {
   agentId: string;
-  onChange: (patch: AgentShareConfigPatchInput) => void;
+  onChange: (patch: AgentShareConfigPatch) => void;
   shareConfig: AgentShareConfigState;
 }
 
 /**
  * Whitelist of tools a visitor's run may call. Default-deny: an unchecked tool
  * is stripped by the server gate even if the agent itself has it enabled.
- * High-risk identifiers (device, local system, sandbox, ...) are never listed —
- * the server refuses them for share runs regardless of what is stored here.
+ * High-risk identifiers (device, local system, sandbox, ...) and tools the
+ * gate refuses outright (knowledge base, agent documents) are never selectable
+ * — see `toolVisitorAvailability`.
  */
 const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }) => {
   const { t } = useTranslation('agent');
@@ -40,11 +41,14 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
   const selectedToolIds = getVisitorVisibleEnabledToolIds(shareConfig.enabledToolIds);
 
   const toggleTool = (toolId: string) => {
-    onChange({
-      enabledToolIds: selectedToolIds.includes(toolId)
-        ? selectedToolIds.filter((id) => id !== toolId)
-        : [...selectedToolIds, toolId],
-    });
+    // Functional patch: resolved against the latest known config at send time,
+    // so toggling two tools in quick succession composes instead of the second
+    // payload overwriting the first. Composing over the FULL persisted array
+    // (not `selectedToolIds`, which is display-filtered) keeps ids this picker
+    // does not render from being wiped.
+    onChange((current) => ({
+      enabledToolIds: toggleShareToolId(current.enabledToolIds, toolId),
+    }));
   };
 
   return (
@@ -56,26 +60,33 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
       ) : (
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
           {candidateToolIds.map((toolId) => {
-            // A builtin absent from the server's visitor allowlist can never
-            // reach a visitor run, so offer it disabled with an explanation
-            // rather than letting the owner "grant" something always stripped.
-            const availableToVisitors = isToolAvailableToVisitors(toolId);
+            const availability = getShareToolAvailability(toolId, {
+              allowReadMemory: shareConfig.allowReadMemory,
+            });
+            // A blocked tool can never reach a visitor run, so offer it
+            // disabled with an explanation rather than letting the owner
+            // "grant" something the server always strips.
+            const blocked = availability === 'blocked';
 
             return (
               <Tooltip
                 key={toolId}
                 title={
-                  availableToVisitors ? undefined : t('share.settings.tools.notAvailableToVisitors')
+                  blocked
+                    ? t('share.settings.tools.notAvailableToVisitors')
+                    : availability === 'needsMemoryPermission'
+                      ? t('share.settings.tools.needsMemoryPermission')
+                      : undefined
                 }
               >
                 <PluginTag
                   selectable
                   useAllMetaList
                   agentId={agentId}
-                  disabled={!availableToVisitors}
+                  disabled={blocked}
                   pluginId={toolId}
-                  selected={availableToVisitors && selectedToolIds.includes(toolId)}
-                  onSelect={availableToVisitors ? () => toggleTool(toolId) : undefined}
+                  selected={!blocked && selectedToolIds.includes(toolId)}
+                  onSelect={blocked ? undefined : () => toggleTool(toolId)}
                 />
               </Tooltip>
             );

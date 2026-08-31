@@ -5,13 +5,11 @@ import { Alert, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentShareConfigPatchInput } from '@/services/agentShare';
-
 import LimitsSection from './LimitsSection';
 import LinkSection from './LinkSection';
 import PermissionsSection from './PermissionsSection';
 import ToolsSection from './ToolsSection';
-import { useAgentShare } from './useAgentShare';
+import { type AgentShareConfigPatch, useAgentShare } from './useAgentShare';
 
 interface AgentShareSettingsContentProps {
   agentId: string;
@@ -27,7 +25,7 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
   const { disable, enable, isLoading, share, updateConfig, updateSlug } = useAgentShare(agentId);
 
   const handleConfigChange = useCallback(
-    async (patch: AgentShareConfigPatchInput) => {
+    async (patch: AgentShareConfigPatch) => {
       try {
         await updateConfig(patch);
       } catch {

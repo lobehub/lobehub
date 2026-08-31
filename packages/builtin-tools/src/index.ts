@@ -231,6 +231,31 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   AgentDocumentsManifest.identifier,
 ]);
 
+/**
+ * Subset of {@link AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS} whose server-side
+ * data grant is UNCONDITIONALLY `none` — surviving the master allowlist only
+ * to be blocked outright by `DATA_TOOL_ACCESS_RULES` in
+ * `apps/server/src/services/aiAgent/shareGate.ts`, for every API and no matter
+ * what the share config says. There is no knowledge-base or agent-file grant
+ * in `AgentShareConfig` at all (see `applyShareGateToAgentConfig`), so a
+ * visitor run can never reach either store.
+ *
+ * Memory is deliberately NOT here: its grant is conditional on
+ * `allowReadMemory`, so the owner enabling that switch does change what a
+ * visitor run can do.
+ *
+ * Exists so the owner-facing share settings tool picker can render these as
+ * permanently unavailable instead of offering a toggle the server will always
+ * ignore. `shareGate.test.ts` asserts this set stays exactly the set of
+ * identifiers `isShareBlockedDataToolCall` blocks under maximal permissions,
+ * so relaxing a grant server-side without updating this list fails there
+ * rather than silently lying in the UI.
+ */
+export const AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS = new Set<string>([
+  KnowledgeBaseManifest.identifier,
+  AgentDocumentsManifest.identifier,
+]);
+
 const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     discoverable: false,

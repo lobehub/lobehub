@@ -5,10 +5,8 @@ import { InputNumber, Switch } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentShareConfigPatchInput } from '@/services/agentShare';
-
 import { Section, SettingRow } from './SectionLayout';
-import type { AgentShareConfigState } from './useAgentShare';
+import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 import { type AgentShareLimitPatch, useDebouncedLimitPatch } from './useDebouncedLimitPatch';
 
 /** Default cap offered when the owner first switches the monthly budget on. */
@@ -17,7 +15,7 @@ const DEFAULT_MONTHLY_SPEND_LIMIT = 10;
 type CountField = 'maxTopicsPerVisitor' | 'maxTurnsPerTopic';
 
 interface LimitsSectionProps {
-  onChange: (patch: AgentShareConfigPatchInput) => void;
+  onChange: (patch: AgentShareConfigPatch) => void;
   shareConfig: AgentShareConfigState;
 }
 

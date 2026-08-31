@@ -1,13 +1,25 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 
 import { shareKeys } from '@/libs/swr/keys';
 import type { AgentShareConfigPatchInput } from '@/services/agentShare';
 import { agentShareService } from '@/services/agentShare';
 
+import { mergeShareConfig } from './shareConfigPatch';
+
 export type AgentShareInfo = Awaited<ReturnType<typeof agentShareService.getShareStatus>>;
 /** Server-normalized share config (every optional field already defaulted). */
 export type AgentShareConfigState = NonNullable<AgentShareInfo>['shareConfig'];
+
+/**
+ * A config patch, or a function producing one from the LATEST known config.
+ * Use the function form for any edit derived from the current value (toggling
+ * an item in `enabledToolIds`, say) — a plain object captures whatever the
+ * component rendered with, which is stale the moment a previous write is
+ * still in flight.
+ */
+export type AgentShareConfigPatch =
+  AgentShareConfigPatchInput | ((current: AgentShareConfigState) => AgentShareConfigPatchInput);
 
 /**
  * Creator-side share state for one agent.
@@ -28,10 +40,25 @@ export const useAgentShare = (agentId: string) => {
   });
 
   /**
+   * The config as it will be once every write issued so far has landed —
+   * `undefined` while unknown, `null` once the share row is known to be gone.
+   * Patches resolve against THIS, not against the last rendered `share`, so
+   * two edits fired before the first response composes rather than the second
+   * overwriting the first.
+   */
+  const latestConfigRef = useRef<AgentShareConfigState | null | undefined>(undefined);
+  const pendingWritesRef = useRef(0);
+
+  // Only adopt a server snapshot while idle: mid-flight it would be older than
+  // the local projection above.
+  useEffect(() => {
+    if (pendingWritesRef.current > 0) return;
+    latestConfigRef.current = share === undefined ? undefined : (share?.shareConfig ?? null);
+  }, [share]);
+
+  /**
    * Every mutation replaces the whole row in the SWR cache, so two writes that
-   * resolve out of order would let the older response win. Chain them instead:
-   * the settings surface fires one write per control, and the server merges
-   * each config patch atomically anyway.
+   * resolve out of order would let the older response win.
    */
   const queueRef = useRef<Promise<unknown> | null>(null);
   const enqueue = useCallback(<T>(task: () => Promise<T>): Promise<T> => {
@@ -53,26 +80,68 @@ export const useAgentShare = (agentId: string) => {
           created.visibility === 'link'
             ? created
             : await agentShareService.updateVisibility(agentId, 'link');
+        latestConfigRef.current = updated.shareConfig;
         await mutate(updated, { revalidate: false });
       }),
     [agentId, enqueue, mutate],
   );
 
-  const disable = useCallback(
-    () =>
-      enqueue(async () => {
+  const disable = useCallback(() => {
+    // Marked gone BEFORE the request so a debounced patch flushed on unmount
+    // in the same tick is dropped rather than writing to a deleted row.
+    const previousConfig = latestConfigRef.current;
+    latestConfigRef.current = null;
+
+    return enqueue(async () => {
+      try {
         await agentShareService.disableShare(agentId);
-        await mutate(null, { revalidate: false });
-      }),
-    [agentId, enqueue, mutate],
-  );
+      } catch (error) {
+        latestConfigRef.current = previousConfig;
+        throw error;
+      }
+      await mutate(null, { revalidate: false });
+    });
+  }, [agentId, enqueue, mutate]);
 
   const updateConfig = useCallback(
-    (config: AgentShareConfigPatchInput) =>
-      enqueue(async () => {
-        const updated = await agentShareService.updateShareConfig(agentId, config);
-        await mutate(updated, { revalidate: false });
-      }),
+    (patch: AgentShareConfigPatch) => {
+      const base = latestConfigRef.current;
+      // No share row: either nothing is loaded yet, or the owner just disabled
+      // sharing and a debounced patch is flushing on unmount. Writing would
+      // only surface a spurious NOT_FOUND "save failed".
+      if (!base) return Promise.resolve();
+
+      const resolved = typeof patch === 'function' ? patch(base) : patch;
+      // Project the patch locally right away, so the control reflects the edit
+      // immediately AND the next patch composes on top of this one.
+      latestConfigRef.current = mergeShareConfig(base, resolved);
+      const optimisticConfig = latestConfigRef.current;
+      pendingWritesRef.current += 1;
+      void mutate(
+        (current) => (current ? { ...current, shareConfig: optimisticConfig } : current),
+        {
+          revalidate: false,
+        },
+      );
+
+      return enqueue(async () => {
+        try {
+          const updated = await agentShareService.updateShareConfig(agentId, resolved);
+          // A disable that raced this write already invalidated the row; do not
+          // resurrect it in the cache.
+          if (latestConfigRef.current === null) return;
+          latestConfigRef.current = updated.shareConfig;
+          await mutate(updated, { revalidate: false });
+        } catch (error) {
+          // Drop the optimistic projection and re-read the server truth; the
+          // effect above re-seeds `latestConfigRef` once the queue drains.
+          void mutate();
+          throw error;
+        } finally {
+          pendingWritesRef.current -= 1;
+        }
+      });
+    },
     [agentId, enqueue, mutate],
   );
 
@@ -80,6 +149,7 @@ export const useAgentShare = (agentId: string) => {
     (slug: string | null) =>
       enqueue(async () => {
         const updated = await agentShareService.updateSlug(agentId, slug);
+        latestConfigRef.current = updated.shareConfig;
         await mutate(updated, { revalidate: false });
       }),
     [agentId, enqueue, mutate],

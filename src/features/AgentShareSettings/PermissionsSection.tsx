@@ -5,13 +5,11 @@ import { Switch } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentShareConfigPatchInput } from '@/services/agentShare';
-
 import { Section, SettingRow } from './SectionLayout';
-import type { AgentShareConfigState } from './useAgentShare';
+import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 
 interface PermissionsSectionProps {
-  onChange: (patch: AgentShareConfigPatchInput) => void;
+  onChange: (patch: AgentShareConfigPatch) => void;
   shareConfig: AgentShareConfigState;
 }
 

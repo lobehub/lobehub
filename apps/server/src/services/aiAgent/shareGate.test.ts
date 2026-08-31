@@ -14,7 +14,11 @@ import {
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
-import { AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS, builtinTools } from '@lobechat/builtin-tools';
+import {
+  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
+  AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
+  builtinTools,
+} from '@lobechat/builtin-tools';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -131,6 +135,38 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
     ]) {
       expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier)).toBe(false);
     }
+  });
+});
+
+/**
+ * The owner-facing share settings tool picker renders this set as permanently
+ * unavailable. If a grant here is ever relaxed server-side without updating
+ * the exported set, the UI would start offering a toggle the gate still
+ * ignores — so pin the two together.
+ */
+describe('AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS', () => {
+  const maximalPermissions = { allowReadMemory: true, knowledgeBaseIds: ['kb1'] };
+
+  it('names only allowlisted identifiers', () => {
+    for (const identifier of AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS) {
+      expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier)).toBe(true);
+    }
+  });
+
+  it('matches exactly the allowlisted identifiers blocked under maximal permissions', () => {
+    // `readOnlyApiName` stands in for any API: an unconditional `none` grant
+    // blocks the identifier before the per-API rules are ever consulted.
+    const blockedUnderMaximalPermissions = [...AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS].filter(
+      (identifier) => isShareBlockedDataToolCall(maximalPermissions, identifier, 'readOnlyApiName'),
+    );
+
+    expect(new Set(blockedUnderMaximalPermissions)).toEqual(
+      AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
+    );
+  });
+
+  it('excludes memory, whose grant is conditional on allowReadMemory', () => {
+    expect(AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS.has(MemoryIdentifier)).toBe(false);
   });
 });
 
