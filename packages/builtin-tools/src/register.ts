@@ -174,6 +174,7 @@ import { CodexInspectors, CodexRenders } from './codex';
 import { GithubIdentifier, GithubInspectors, GithubRenders } from './github';
 import { registerBuiltinInspectors } from './inspectors';
 import { registerBuiltinInterventions } from './interventions';
+import { KimiCodeInspectors, KimiCodeRenders } from './kimiCode';
 import { LinearIdentifier, LinearInspectors, LinearRenders } from './linear';
 import { NotebookIdentifier, NotebookRenders } from './notebook';
 import { registerBuiltinPlaceholders } from './placeholders';
@@ -186,6 +187,7 @@ const DROID_IDENTIFIER = 'droid';
 const QODER_IDENTIFIER = 'qoder';
 const OPENCODE_IDENTIFIER = 'opencode';
 const PI_IDENTIFIER = 'pi';
+const KIMI_CODE_IDENTIFIER = 'kimi-code';
 
 const heterogeneousCliInspectors: Record<string, BuiltinInspector> = {
   bash: createRunCommandInspector(
@@ -250,6 +252,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
     [OPENCODE_IDENTIFIER]: heterogeneousCliRenders,
     [PI_IDENTIFIER]: heterogeneousCliRenders,
+    [KIMI_CODE_IDENTIFIER]: KimiCodeRenders,
     codex: {
       ...CodexRenders,
       command_execution: RunCommandRender as BuiltinRender,
@@ -308,6 +311,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
     [OPENCODE_IDENTIFIER]: heterogeneousCliInspectors,
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
+    [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
     codex: CodexInspectors,
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
