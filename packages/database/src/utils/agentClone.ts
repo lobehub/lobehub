@@ -24,6 +24,10 @@ export const buildAgentCopyValues = (
   editorData: source?.editorData,
   fewShots: source?.fewShots,
   model: source?.model,
+  // `agentDisplayName` prefers `name` over `title` for author attribution —
+  // dropping it would make preserved history render the role instead of the
+  // original speaker.
+  name: source?.name,
   openingMessage: source?.openingMessage,
   openingQuestions: source?.openingQuestions,
   params: source?.params,

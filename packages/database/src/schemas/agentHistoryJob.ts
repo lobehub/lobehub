@@ -42,6 +42,13 @@ export interface AgentHistoryJobPayload {
    * of the single-agent remap.
    */
   group?: { newGroupId: string; sourceGroupId: string };
+  /**
+   * `transfer` jobs only: the job's topics stay in their CURRENT scope — the
+   * drain applies `agentIdRemap` but skips every scope rewrite. Used when an
+   * agent transfer defers a large group-history remap: the group is not
+   * moving, only who its rows point at changes.
+   */
+  remapOnly?: boolean;
 }
 
 /** `copy` queue-row payload. */

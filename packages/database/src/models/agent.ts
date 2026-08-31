@@ -2107,7 +2107,7 @@ export class AgentModel {
     if (candidateGroupIds.length === 0) return;
 
     const candidateTopics = await trx
-      .select({ groupId: topics.groupId, id: topics.id })
+      .select({ groupId: topics.groupId, id: topics.id, updatedAt: topics.updatedAt })
       .from(topics)
       .where(inArray(topics.groupId, candidateGroupIds));
     const topicGroupById = new Map(candidateTopics.map((topic) => [topic.id, topic.groupId]));
@@ -2155,12 +2155,12 @@ export class AgentModel {
       .from(chatGroups)
       .where(inArray(chatGroups.id, [...agentIdsByGroup.keys()]));
 
-    const topicIdsByGroup = new Map<string, string[]>();
+    const topicsByGroup = new Map<string, { id: string; updatedAt: Date }[]>();
     for (const topic of candidateTopics) {
       if (!topic.groupId) continue;
-      const list = topicIdsByGroup.get(topic.groupId) ?? [];
-      list.push(topic.id);
-      topicIdsByGroup.set(topic.groupId, list);
+      const list = topicsByGroup.get(topic.groupId) ?? [];
+      list.push({ id: topic.id, updatedAt: topic.updatedAt });
+      topicsByGroup.set(topic.groupId, list);
     }
 
     for (const group of groupRows) {
@@ -2189,12 +2189,15 @@ export class AgentModel {
         sourceAgentId,
       }));
 
-      const groupTopicIds = topicIdsByGroup.get(group.id) ?? [];
+      const groupTopics = topicsByGroup.get(group.id) ?? [];
+      const groupTopicIds = groupTopics.map((topic) => topic.id);
 
       // One statement per pair, exactly like the group transfer's remap loop —
       // the pair count is the number of moved agents with history here, i.e. a
       // handful. `updatedAt` is pinned so `$onUpdate` does not stamp a scope
-      // repair as fresh activity.
+      // repair as fresh activity. Topics and threads are always remapped
+      // inline (their counts are small and steps 6/8 below would otherwise
+      // drag them into the target scope).
       for (const { newAgentId, sourceAgentId } of remapPairs) {
         await trx
           .update(topics)
@@ -2214,12 +2217,57 @@ export class AgentModel {
         }
       }
 
-      // Both anchors on purpose: `group_id` covers topicless residue and rows
-      // whose topic is gone; the topic anchor covers rows that carry only a
-      // topicId into a group topic. Overlap is harmless — the remap is
-      // idempotent.
-      await remapMessageAgentIdsForGroups(trx, [group.id], remapPairs);
-      await remapMessageAgentIdsForTopics(trx, groupTopicIds, remapPairs);
+      // Message remap rides the same fast/slow contract as step 7's scope
+      // rewrite: rewriting a message row maintains every message index, so a
+      // group holding a HUGE history from these agents must not be rewritten
+      // inside this foreground transaction. Above the threshold the remap is
+      // recorded as a remap-only backfill job (drained topic-by-topic, scope
+      // untouched); until it drains, the guards on the covered agents block
+      // re-transfers and deletes, so the cascade hazard cannot fire early.
+      const remapAnchor =
+        groupTopicIds.length > 0
+          ? or(eq(messages.groupId, group.id), inArray(messages.topicId, groupTopicIds))
+          : eq(messages.groupId, group.id);
+      const [{ affectedGroupMessages }] = await trx
+        .select({ affectedGroupMessages: count() })
+        .from(messages)
+        .where(
+          and(
+            remapAnchor,
+            or(
+              inArray(messages.agentId, cloneSourceIds),
+              inArray(messages.targetId, cloneSourceIds),
+            ),
+          ),
+        );
+
+      if (affectedGroupMessages <= getAgentTransferSyncMessageThreshold()) {
+        // Both anchors on purpose: `group_id` covers topicless residue and
+        // rows whose topic is gone; the topic anchor covers rows that carry
+        // only a topicId into a group topic. Overlap is harmless — the remap
+        // is idempotent.
+        await remapMessageAgentIdsForGroups(trx, [group.id], remapPairs);
+        await remapMessageAgentIdsForTopics(trx, groupTopicIds, remapPairs);
+      } else {
+        const groupScope = { userId: group.userId, workspaceId: group.workspaceId };
+        await AgentTransferJobModel.createJob(trx, {
+          // Junction coverage on the moved agents: blocks a re-transfer
+          // (step 1a's pending-job guard) and — via the remap payload — a
+          // delete of the moved agent (`hasPendingRemapForSourceAgents`)
+          // until the group's rows stop pointing at it.
+          agentIds: cloneSourceIds,
+          agentIdRemap: remapPairs,
+          groupIds: [group.id],
+          remapOnly: true,
+          // No residual scope rewrite happens for a remap-only job; the
+          // residual REMAP anchors on `groupIds` above.
+          residualAgentIds: [],
+          sessionIds: [],
+          source: groupScope,
+          target: groupScope,
+          topics: groupTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
+        });
+      }
     }
   };
 

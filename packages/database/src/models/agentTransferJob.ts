@@ -111,9 +111,20 @@ export const rewriteResidualMessageScope = async (
   linkage: { agentIds: string[]; groupIds?: string[]; sessionIds: string[] },
   target: AgentTransferTargetScope,
 ): Promise<void> => {
+  // A row that carries a group_id belongs to that group's scope and moves
+  // only when its group is the thing being transferred — the session / agent
+  // arms therefore exclude group rows. Without this, an agent transfer whose
+  // group-history remap is still pending (deferred to a remap-only job) would
+  // drag the group's topicless residue into the target scope.
+  const scopeArms: SQL[] = [];
+  if (linkage.sessionIds.length > 0)
+    scopeArms.push(inArray(messages.sessionId, linkage.sessionIds));
+  if (linkage.agentIds.length > 0) scopeArms.push(inArray(messages.agentId, linkage.agentIds));
   const arms: SQL[] = [];
-  if (linkage.sessionIds.length > 0) arms.push(inArray(messages.sessionId, linkage.sessionIds));
-  if (linkage.agentIds.length > 0) arms.push(inArray(messages.agentId, linkage.agentIds));
+  if (scopeArms.length > 0)
+    arms.push(
+      and(scopeArms.length === 1 ? scopeArms[0] : or(...scopeArms), isNull(messages.groupId))!,
+    );
   if (linkage.groupIds && linkage.groupIds.length > 0)
     arms.push(inArray(messages.groupId, linkage.groupIds));
   if (arms.length === 0) return;
@@ -285,6 +296,13 @@ export interface CreateAgentTransferJobParams {
    * group transfer move strictly more than a small one: exactly the fast/slow
    * drift this framework exists to avoid.
    */
+  /**
+   * Remap-without-moving: the drain applies `agentIdRemap` to the job's
+   * topics and residual but skips every scope rewrite. An agent transfer uses
+   * this to defer a LARGE group-history remap — the group's rows stay exactly
+   * where they are, only their `agent_id` / `target_id` change.
+   */
+  remapOnly?: boolean;
   residualAgentIds?: string[];
   sessionIds: string[];
   source: AgentTransferTargetScope;
@@ -322,11 +340,17 @@ export class AgentTransferJobModel {
         // the junction below is the coverage set. They differ for a group job.
         agentIds: params.residualAgentIds ?? params.agentIds,
         groupIds: params.groupIds ?? [],
-        // `payload` is the generic per-job slot; the remap only exists for
-        // group transfers, so it stays out of the columns.
+        // `payload` is the generic per-job slot; the remap fields only exist
+        // for group transfers and deferred group-history remaps, so they stay
+        // out of the columns.
         payload:
-          params.agentIdRemap && params.agentIdRemap.length > 0
-            ? { agentIdRemap: params.agentIdRemap }
+          (params.agentIdRemap && params.agentIdRemap.length > 0) || params.remapOnly
+            ? {
+                ...(params.agentIdRemap && params.agentIdRemap.length > 0
+                  ? { agentIdRemap: params.agentIdRemap }
+                  : {}),
+                ...(params.remapOnly ? { remapOnly: true } : {}),
+              }
             : undefined,
         sessionIds: params.sessionIds,
         sourceUserId: params.source.userId,
@@ -681,6 +705,9 @@ export class AgentTransferJobModel {
       // contract as the scope rewrite itself: the synchronous branch does this
       // inline, so the drain must do it on exactly the same rows.
       const agentIdRemap = job.payload?.agentIdRemap;
+      // A remap-only job never moves anything: the rows belong to a group
+      // that stayed put, and only who they point at changes.
+      const remapOnly = job.payload?.remapOnly === true;
 
       const [next] = await trx
         .select({ topicId: agentHistoryJobTopics.topicId })
@@ -690,11 +717,13 @@ export class AgentTransferJobModel {
         .limit(1);
 
       if (!next) {
-        await rewriteResidualMessageScope(
-          trx,
-          { agentIds: job.agentIds, groupIds: job.groupIds, sessionIds: job.sessionIds },
-          target,
-        );
+        if (!remapOnly) {
+          await rewriteResidualMessageScope(
+            trx,
+            { agentIds: job.agentIds, groupIds: job.groupIds, sessionIds: job.sessionIds },
+            target,
+          );
+        }
         if (agentIdRemap) await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);
         await trx
           .update(agentHistoryJobs)
@@ -709,7 +738,7 @@ export class AgentTransferJobModel {
         return { done: true };
       }
 
-      await rewriteMessageScopeForTopics(trx, [next.topicId], target);
+      if (!remapOnly) await rewriteMessageScopeForTopics(trx, [next.topicId], target);
       if (agentIdRemap) await remapMessageAgentIdsForTopics(trx, [next.topicId], agentIdRemap);
       await trx
         .delete(agentHistoryJobTopics)

@@ -7,6 +7,7 @@ import {
   agentBotProviders,
   agentCronJobs,
   agentDocuments,
+  agentHistoryJobs,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -42,6 +43,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
 import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
@@ -67,7 +69,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  delete process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD;
   await serverDB.delete(users);
+  // Jobs deliberately carry no FK onto users, so they survive the cascade —
+  // clean them up explicitly or they leak into later files on the shared
+  // server test DB.
+  await serverDB.delete(agentHistoryJobs);
 });
 
 describe('AgentModel.transferAgent', () => {
@@ -1933,6 +1940,7 @@ describe('AgentModel.transferAgents group history preservation', () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({
       avatar: 'https://example.com/a.png',
+      name: 'Herodotus',
       systemRole: 'The historian',
       title: 'History Agent',
     });
@@ -1956,6 +1964,9 @@ describe('AgentModel.transferAgents group history preservation', () => {
     const clone = clones[0];
     expect(clone).toMatchObject({
       avatar: 'https://example.com/a.png',
+      // `agentDisplayName` prefers `name` — a clone missing it would render
+      // the role/title instead of the original speaker.
+      name: 'Herodotus',
       systemRole: 'The historian',
       title: 'History Agent',
       workspaceId: null,
@@ -2083,6 +2094,83 @@ describe('AgentModel.transferAgents group history preservation', () => {
       cloneIdByGroup.set(groupId, message.agentId!);
     }
     expect(cloneIdByGroup.get('multi-a')).not.toBe(cloneIdByGroup.get('multi-b'));
+  });
+
+  it('defers a large group-history remap to a remap-only job and keeps scope untouched', async () => {
+    process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '2';
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Chatty Member' });
+    await seedGroupHistory('big-group', agent.id); // 4 message references > threshold 2
+
+    await model.transferAgents([agent.id], wsId2, targetUserId);
+
+    // The clone is minted and topics/threads are remapped inline either way.
+    const clones = await serverDB
+      .select()
+      .from(agents)
+      .where(and(eq(agents.userId, userId), eq(agents.virtual, true)));
+    expect(clones).toHaveLength(1);
+    const clone = clones[0];
+    const [attrTopic] = await serverDB
+      .select()
+      .from(topics)
+      .where(eq(topics.id, 'big-group-topic-attr'));
+    expect(attrTopic.agentId).toBe(clone.id);
+
+    // Message rows are untouched so far: still in the group's scope, still
+    // pointing at the moved agent, waiting for the drain.
+    const messageIds = [
+      'big-group-msg-topic',
+      'big-group-msg-residual',
+      'big-group-msg-target',
+      'big-group-msg-topic-only',
+    ];
+    const pendingRows = await serverDB
+      .select()
+      .from(messages)
+      .where(inArray(messages.id, messageIds));
+    expect(pendingRows).toHaveLength(4);
+    for (const message of pendingRows) {
+      expect(message.userId).toBe(userId);
+      expect(message.workspaceId).toBeNull();
+      if (message.id === 'big-group-msg-target') expect(message.targetId).toBe(agent.id);
+      else expect(message.agentId).toBe(agent.id);
+    }
+
+    // A remap-only job was recorded, and while it is pending the moved agent
+    // cannot be deleted — the cascade hazard the tombstone exists to stop.
+    const jobs = await serverDB.query.agentHistoryJobs.findMany();
+    const remapJobs = jobs.filter((job) => job.payload?.remapOnly);
+    expect(remapJobs).toHaveLength(1);
+    expect(remapJobs[0].payload?.agentIdRemap).toEqual([
+      { newAgentId: clone.id, sourceAgentId: agent.id },
+    ]);
+    const targetModel = new AgentModel(serverDB, targetUserId, wsId2);
+    await expect(targetModel.delete(agent.id)).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
+
+    // Drain every pending job (the low threshold defers the main scope
+    // rewrite too); the remap lands, the scope does not move.
+    for (const job of jobs) {
+      let done = false;
+      while (!done) ({ done } = await AgentTransferJobModel.processNextTopic(serverDB, job.id));
+    }
+    const drainedRows = await serverDB
+      .select()
+      .from(messages)
+      .where(inArray(messages.id, messageIds));
+    expect(drainedRows).toHaveLength(4);
+    for (const message of drainedRows) {
+      expect(message.userId).toBe(userId);
+      expect(message.workspaceId).toBeNull();
+      if (message.id === 'big-group-msg-target') expect(message.targetId).toBe(clone.id);
+      else expect(message.agentId).toBe(clone.id);
+    }
+
+    // With the remap drained the delete goes through — and takes no history.
+    await targetModel.delete(agent.id);
+    await expect(
+      serverDB.select().from(messages).where(inArray(messages.id, messageIds)),
+    ).resolves.toHaveLength(4);
   });
 
   it('discovers a mention that references the agent only via topic-anchored target_id', async () => {

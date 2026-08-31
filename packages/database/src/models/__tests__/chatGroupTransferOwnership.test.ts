@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentHistoryJobs,
   agents,
   agentsKnowledgeBases,
   chatGroups,
@@ -80,6 +81,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(users);
+  // Jobs deliberately carry no FK onto users, so they survive the cascade —
+  // clean them up explicitly or they leak into later files on the shared
+  // server test DB.
+  await serverDB.delete(agentHistoryJobs);
 });
 
 describe('ChatGroupModel.transferGroupOwnership', () => {
