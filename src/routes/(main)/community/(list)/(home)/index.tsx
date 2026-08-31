@@ -2,6 +2,7 @@
 
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SWRConfig } from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useDiscoverStore } from '@/store/discover';
@@ -13,7 +14,7 @@ import AssistantList from '../agent/features/List';
 import McpList from '../mcp/features/List';
 import CreatorRewardBanner from './features/CreatorRewardBanner';
 
-const HomePage = memo(() => {
+const HomeSections = memo(() => {
   const { t } = useTranslation('discover');
   const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
   const useMcpList = useDiscoverStore((s) => s.useFetchMcpList);
@@ -43,6 +44,9 @@ const HomePage = memo(() => {
   // Gate each section independently so a failure in one featured list surfaces a
   // Retry there instead of leaving the whole page on a permanent skeleton
   //
+  // The two featured lists are gated independently (see AsyncBoundary), so this
+  // page opts out of the subtree's suspense: a failing list must surface its own
+  // Retry instead of throwing the whole page to the route error boundary.
   return (
     <>
       <CreatorRewardBanner />
@@ -74,5 +78,19 @@ const HomePage = memo(() => {
     </>
   );
 });
+
+HomeSections.displayName = 'CommunityHomeSections';
+
+/**
+ * The two featured lists are gated independently (see `AsyncBoundary`), so this
+ * page opts out of the subtree's suspense: a list that fails must surface its own
+ * Retry instead of throwing the whole page to the route error boundary. The
+ * sections live in a child because `SWRConfig` only reaches hooks below it.
+ */
+const HomePage = memo(() => (
+  <SWRConfig value={{ suspense: false }}>
+    <HomeSections />
+  </SWRConfig>
+));
 
 export default HomePage;

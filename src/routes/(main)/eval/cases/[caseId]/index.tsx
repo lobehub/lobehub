@@ -18,7 +18,7 @@ const Page = memo(() => {
 
   const useFetchTestCase = useEvalStore((s) => s.useFetchTestCase);
   const useFetchDatasetDetail = useEvalStore((s) => s.useFetchDatasetDetail);
-  const { data: testCase, error, isLoading, mutate } = useFetchTestCase(caseId);
+  const { data: testCase, error, mutate } = useFetchTestCase(caseId);
   const { data: dataset } = useFetchDatasetDetail(testCase?.datasetId);
 
   // A deleted or mistyped case id is an absent resource, not a failed request:
@@ -33,7 +33,6 @@ const Page = memo(() => {
       error={isMissing ? undefined : error}
       errorVariant={'page'}
       isEmpty={isMissing || !testCase}
-      isLoading={isLoading}
       empty={
         <Center flex={1}>
           <Text type="secondary">{t('testCaseDetail.notFound')}</Text>

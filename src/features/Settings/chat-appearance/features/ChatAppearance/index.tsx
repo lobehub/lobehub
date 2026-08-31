@@ -1,13 +1,16 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, highlighterThemes, mermaidThemes } from '@lobehub/ui';
-import { Select, Skeleton, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, FormGroup, highlighterThemes, mermaidThemes } from '@lobehub/ui';
+import { InputNumber, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import DiscreteSlider from '@/components/DiscreteSlider';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import ChatPreview from '@/features/Settings/appearance/features/Font/ChatPreview';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -23,8 +26,29 @@ const ChatAppearance = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const [savingKey, setSavingKey] = useState<string>();
+  const fontSizeOptions = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const value = index + 12;
 
-  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
+        return {
+          ariaLabel: `${value}px`,
+          label:
+            value === 12
+              ? 'A'
+              : value === 14
+                ? t('settingChatAppearance.fontSize.marks.normal')
+                : value === 18
+                  ? 'A'
+                  : ' ',
+          style: { fontSize: value === 14 ? 14 : value },
+          value,
+        };
+      }),
+    [t],
+  );
+
+  if (!isUserStateInit) return <SettingsSectionSkeleton />;
 
   const handleChange = (key: string, value: any) => {
     setSavingKey(key);
@@ -71,59 +95,77 @@ const ChatAppearance = memo(() => {
         <ChatTransitionPreview key={general.transitionMode} mode={general.transitionMode} />
       </FormGroup>
 
-      <Form
+      <FormGroup
+        active={false}
         collapsible={false}
-        itemsType={'group'}
+        title={t('settingChatAppearance.autoScrollOnStreaming.title')}
         variant={'filled'}
-        items={[
-          {
-            children: [
-              {
-                children: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    {renderSaveHint('enableAutoScrollOnStreaming')}
-                    <Switch
-                      checked={general.enableAutoScrollOnStreaming ?? true}
-                      onChange={(checked) => handleChange('enableAutoScrollOnStreaming', checked)}
-                    />
-                  </Flexbox>
-                ),
-                label: t('settingChatAppearance.autoScrollOnStreaming.title'),
-                minWidth: undefined,
-              },
-              {
-                children: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    {renderSaveHint('expandWorkflowWhileStreaming')}
-                    <Switch
-                      checked={general.expandWorkflowWhileStreaming ?? false}
-                      onChange={(checked) => handleChange('expandWorkflowWhileStreaming', checked)}
-                    />
-                  </Flexbox>
-                ),
-                label: t('settingChatAppearance.workflowStreamingExpand.title'),
-                minWidth: undefined,
-              },
-              {
-                children: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    {renderSaveHint('enableMessageLinkIcon')}
-                    <Switch
-                      checked={general.enableMessageLinkIcon ?? true}
-                      onChange={(checked) => handleChange('enableMessageLinkIcon', checked)}
-                    />
-                  </Flexbox>
-                ),
-                desc: <LinkIconPreview />,
-                label: t('settingChatAppearance.linkIcon.title'),
-                minWidth: undefined,
-              },
-            ],
-            title: t('settingChatAppearance.chatBehavior.title'),
-          },
-        ]}
-        {...FORM_STYLE}
-      />
+        extra={
+          <Flexbox horizontal align={'center'} gap={8}>
+            {renderSaveHint('enableAutoScrollOnStreaming')}
+            <Switch
+              checked={general.enableAutoScrollOnStreaming ?? true}
+              onChange={(checked) => handleChange('enableAutoScrollOnStreaming', checked)}
+            />
+          </Flexbox>
+        }
+      >
+        {null}
+      </FormGroup>
+
+      <FormGroup
+        collapsible={false}
+        gap={16}
+        title={t('settingChatAppearance.linkIcon.title')}
+        variant={'filled'}
+        extra={
+          <Flexbox horizontal align={'center'} gap={8}>
+            {renderSaveHint('enableMessageLinkIcon')}
+            <Switch
+              checked={general.enableMessageLinkIcon ?? true}
+              onChange={(checked) => handleChange('enableMessageLinkIcon', checked)}
+            />
+          </Flexbox>
+        }
+      >
+        <LinkIconPreview />
+      </FormGroup>
+
+      <FormGroup
+        collapsible={false}
+        gap={16}
+        variant={'filled'}
+        extra={
+          <Flexbox horizontal align={'center'} gap={8}>
+            {renderSaveHint('fontSize')}
+            <Flexbox horizontal align={'center'} gap={12} style={{ width: 240 }}>
+              <DiscreteSlider
+                options={fontSizeOptions}
+                style={{ flex: 1 }}
+                value={general.fontSize}
+                onChange={(value) => handleChange('fontSize', value)}
+              />
+              <InputNumber
+                max={18}
+                min={12}
+                step={1}
+                style={{ width: 56 }}
+                value={general.fontSize}
+                onChange={(value) => {
+                  if (value !== null) handleChange('fontSize', value);
+                }}
+              />
+            </Flexbox>
+          </Flexbox>
+        }
+        title={
+          <SettingsSearchAnchor id={'appearance-font-size'}>
+            {t('settingChatAppearance.fontSize.title')}
+          </SettingsSearchAnchor>
+        }
+      >
+        <ChatPreview fontSize={general.fontSize} />
+      </FormGroup>
 
       <FormGroup
         collapsible={false}

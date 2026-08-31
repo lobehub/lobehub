@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -145,8 +145,6 @@ const MessengerSettings = memo(() => {
               error={platformsSWR.error}
               errorVariant={'block'}
               isEmpty={platforms.length === 0}
-              isLoading={platformsSWR.isLoading}
-              loading={<Skeleton.Text rows={3} />}
               empty={
                 <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
               }

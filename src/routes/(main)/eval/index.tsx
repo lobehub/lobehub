@@ -93,14 +93,13 @@ const EvalOverview = memo(() => {
   const benchmarkList = useEvalStore((s) => s.benchmarkList);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   const useFetchAllDatasets = useEvalStore((s) => s.useFetchAllDatasets);
-  const { data, isLoading, error, mutate } = useFetchBenchmarks();
+  const { data, error, mutate } = useFetchBenchmarks();
   const { data: allDatasets } = useFetchAllDatasets();
 
   const experimentList = useEvalStore((s) => s.experimentList);
   const useFetchExperiments = useEvalStore((s) => s.useFetchExperiments);
   const {
     data: experimentData,
-    isLoading: isLoadingExperiments,
     error: experimentError,
     mutate: mutateExperiments,
   } = useFetchExperiments();
@@ -174,8 +173,6 @@ const EvalOverview = memo(() => {
           error={experimentError}
           errorVariant={'block'}
           isEmpty={experimentList.length === 0}
-          isLoading={isLoadingExperiments}
-          loading={<SkeletonGrid />}
           onRetry={() => mutateExperiments()}
         >
           <div className={styles.grid}>
@@ -198,8 +195,6 @@ const EvalOverview = memo(() => {
           error={error}
           errorVariant={'block'}
           isEmpty={benchmarkList.length === 0}
-          isLoading={isLoading}
-          loading={<SkeletonGrid />}
           onRetry={() => mutate()}
         >
           <div className={styles.grid}>

@@ -12,12 +12,11 @@ import { DiscoverTab, McpSorts } from '@/types/discover';
 import McpEmpty from '../../features/McpEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const McpPage = memo(() => {
   const { q, page, category, sort, order } = useQuery() as McpQueryParams;
   const useMcpList = useDiscoverStore((s) => s.useFetchMcpList);
-  const { data, isLoading, error, mutate } = useMcpList({
+  const { data, error, mutate } = useMcpList({
     category,
     order,
     page,
@@ -35,8 +34,6 @@ const McpPage = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading}
-      loading={<Loading />}
       onRetry={() => mutate()}
     >
       {data && (

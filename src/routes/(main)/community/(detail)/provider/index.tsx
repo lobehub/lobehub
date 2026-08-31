@@ -10,7 +10,6 @@ import NotFound from '../components/NotFound';
 import { DetailProvider } from './features/DetailProvider';
 import Details from './features/Details';
 import Header from './features/Header';
-import Loading from './loading';
 
 interface ProviderDetailPageProps {
   mobile?: boolean;
@@ -21,9 +20,7 @@ const ProviderDetailPage = memo<ProviderDetailPageProps>(({ mobile }) => {
   const identifier = decodeURIComponent(params.slug ?? '');
 
   const useProviderDetail = useDiscoverStore((s) => s.useProviderDetail);
-  const { data, isLoading } = useProviderDetail({ identifier, withReadme: true });
-
-  if (isLoading) return <Loading />;
+  const { data } = useProviderDetail({ identifier, withReadme: true });
   if (!data) return <NotFound />;
 
   return (

@@ -2,7 +2,9 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Outlet } from 'react-router';
+import { SWRConfig } from 'swr';
 
+import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
 import AgentDocumentSidebarContent from '../RightPanel';
@@ -20,7 +22,11 @@ const AgentDocumentLayout = () => (
       width={'100%'}
     >
       <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
-        <Outlet />
+        <SWRConfig value={{ suspense: true }}>
+          <SuspenseRouteBoundary>
+            <Outlet />
+          </SuspenseRouteBoundary>
+        </SWRConfig>
       </Flexbox>
     </Flexbox>
   </>
