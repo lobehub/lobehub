@@ -421,9 +421,27 @@ export class AcceptanceService {
   private readonly evidenceModel: VerifyEvidenceModel;
   private readonly reportModel: VerifyReportModel;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  /**
+   * Who is CREDITED for the writes this service performs.
+   *
+   * Normally the same person the service is scoped to. They diverge for an
+   * elevated write — a workspace owner acting on a teammate's delivery — where
+   * the scope has to be the row's owner for the ownership predicate to resolve
+   * it at all, while `decidedBy` must still name the human who decided. An
+   * audit trail that credits a teammate's verdict to the author is worse than
+   * one nobody can sign.
+   */
+  private readonly actorUserId: string;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: { actorUserId?: string },
+  ) {
     this.db = db;
     this.userId = userId;
+    this.actorUserId = options?.actorUserId ?? userId;
     this.workspaceId = workspaceId;
     this.acceptanceModel = new AcceptanceModel(db, userId, workspaceId);
     this.runModel = new VerifyRunModel(db, userId, workspaceId);
@@ -842,7 +860,7 @@ export class AcceptanceService {
     const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
     const detail: VerifyCheckDecisionDetail = {
       decidedAt: new Date().toISOString(),
-      decidedBy: this.userId,
+      decidedBy: this.actorUserId,
       roundIndex: currentRoundIndex,
       ...(input.comment ? { comment: input.comment } : {}),
       ...(input.annotations?.length ? { annotations: input.annotations } : {}),
@@ -935,7 +953,7 @@ export class AcceptanceService {
 
     const detail: VerifyRunDecisionDetail = {
       decidedAt: new Date().toISOString(),
-      decidedBy: this.userId,
+      decidedBy: this.actorUserId,
       ...(comment ? { comment } : {}),
     };
     await this.runModel.setDecision(current.id, decision, detail);

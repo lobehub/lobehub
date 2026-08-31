@@ -344,6 +344,33 @@ describe('AcceptanceModel', () => {
     });
   });
 
+  it('resolves a private workspace row only for the scope it is bound to', async () => {
+    // The write path binds a service to the acceptance's OWNER precisely because
+    // of this: `acceptances` carries a `visibility` column, so the ownership
+    // predicate narrows PRIVATE rows to the bound user — and a workspace
+    // acceptance is private by default. Binding to the acting workspace owner
+    // instead makes every write miss the row and answer NOT_FOUND, after
+    // authorization has already said yes.
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'scope-ws', primaryOwnerId: otherUserId, slug: 'scope-ws' })
+      .returning();
+
+    const creatorModel = new AcceptanceModel(serverDB, userId, workspace.id);
+    const acceptance = await creatorModel.ensureForSubject('topic', topicId);
+    expect(acceptance.visibility).toBe('private');
+
+    // Bound to the acting owner: invisible, and a write silently changes nothing.
+    const actorScoped = new AcceptanceModel(serverDB, otherUserId, workspace.id);
+    expect(await actorScoped.findById(acceptance.id)).toBeUndefined();
+    await actorScoped.updateStatus(acceptance.id, 'accepted');
+    expect((await creatorModel.findById(acceptance.id))?.status).not.toBe('accepted');
+
+    // Bound to the row's owner: found, and the write lands.
+    await creatorModel.updateStatus(acceptance.id, 'accepted');
+    expect((await creatorModel.findById(acceptance.id))?.status).toBe('accepted');
+  });
+
   it('findById reads a malformed uuid as not-found instead of aborting in Postgres', async () => {
     // Chat autolinkers glue trailing CJK punctuation onto shared links, so the
     // route param can arrive as `<uuid>（本轮` — 22P02 (→ 500) before the guard.

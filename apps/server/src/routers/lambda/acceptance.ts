@@ -69,15 +69,16 @@ const acceptanceWriteProcedure = acceptanceProcedure.use(requireWorkspaceRoleWhe
  * Resolve an acceptance for WRITING, with a service bound to the scope the row
  * actually lives in.
  *
- * Every model write is scoped by `buildWorkspaceWhere`, which matches on the
- * bound workspace — so a service bound to the caller's ACTIVE workspace simply
- * fails to find a row that lives in another one, and the write dies as
- * `NOT_FOUND` after authorization already said yes. Binding to the row's own
- * workspace is what makes the workspace-owner path actually resolve.
+ * Every model write is scoped by `buildWorkspaceWhere`, and `acceptances`
+ * carries a `visibility` column — so that predicate narrows PRIVATE rows to
+ * `userId = <bound user>`, and workspace acceptances default to private. A
+ * service bound to the caller therefore cannot resolve a teammate's row at all,
+ * and the write dies as `NOT_FOUND` after authorization already said yes.
  *
- * The bound user stays the CALLER, never the creator: decisions record
- * `decidedBy`, and an acceptance whose audit trail attributes a teammate's
- * verdict to its author is worse than one nobody can sign off at all.
+ * So the service is bound to the row's OWNER — the one binding that resolves it
+ * — while the acting user is carried separately, because decisions record
+ * `decidedBy` and an audit trail that credits a teammate's verdict to the
+ * author is worse than one nobody can sign.
  */
 const resolveAcceptanceForWrite = async (
   ctx: { serverDB: LobeChatDatabase; userId: string },
@@ -95,7 +96,12 @@ const resolveAcceptanceForWrite = async (
 
   return {
     acceptance,
-    service: new AcceptanceService(ctx.serverDB, ctx.userId, acceptance.workspaceId ?? undefined),
+    service: new AcceptanceService(
+      ctx.serverDB,
+      acceptance.userId,
+      acceptance.workspaceId ?? undefined,
+      { actorUserId: ctx.userId },
+    ),
   };
 };
 
