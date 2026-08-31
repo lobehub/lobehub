@@ -159,10 +159,13 @@ export class GeneralChatAgent implements Agent {
       const { identifier, apiName } = toolCalling;
       const toolKey = `${identifier}/${apiName}`;
 
-      // Parse arguments for intervention checking
       let toolArgs: Record<string, any> = {};
       try {
-        toolArgs = JSON.parse(toolCalling.arguments || '{}');
+        if (typeof toolCalling.arguments === 'object' && toolCalling.arguments !== null) {
+          toolArgs = toolCalling.arguments as Record<string, any>;
+        } else {
+          toolArgs = JSON.parse((toolCalling.arguments as string) || '{}');
+        }
       } catch {
         // Invalid JSON, treat as empty args
       }

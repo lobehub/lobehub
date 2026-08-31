@@ -93,8 +93,18 @@ const getEmbeddingRuntime = async (
   userId: string,
   workspaceId?: string,
 ) => {
-  const { provider, model: embeddingModel } =
-    getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+  let provider = getServerDefaultFilesConfig().embeddingModel?.provider || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM.provider;
+  let embeddingModel = getServerDefaultFilesConfig().embeddingModel?.model || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM.model;
+
+  const userSettingsRow = await serverDB.query.userSettings.findFirst({
+    where: eq(userSettings.id, userId),
+  });
+
+  const customEmbedding = (userSettingsRow?.systemAgent as any)?.userMemoryEmbedding;
+  if (customEmbedding?.provider && customEmbedding?.model) {
+    provider = customEmbedding.provider;
+    embeddingModel = customEmbedding.model;
+  }
 
   const agentRuntime = await initModelRuntimeFromDB(
     serverDB,

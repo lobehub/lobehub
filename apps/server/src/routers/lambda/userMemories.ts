@@ -123,9 +123,7 @@ const searchUserMemories = async (
   input: z.infer<typeof searchMemorySchema>,
 ): Promise<SearchMemoryResult> => {
   const normalizedInput = normalizeSearchMemoryParams(input);
-  const { provider, model: embeddingModel } =
-    getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-  const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+  const { agentRuntime: modelRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.serverDB, ctx.userId);
   const normalizedQueries = [
     ...new Set((normalizedInput.queries ?? []).map((query) => query.trim()).filter(Boolean)),
   ];
@@ -164,8 +162,19 @@ const searchUserMemories = async (
 };
 
 const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
-  const { provider, model: embeddingModel } =
-    getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+  let provider = getServerDefaultFilesConfig().embeddingModel?.provider || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM.provider;
+  let embeddingModel = getServerDefaultFilesConfig().embeddingModel?.model || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM.model;
+
+  const userSettingsRow = await serverDB.query.userSettings.findFirst({
+    where: eq(userSettings.id, userId),
+  });
+
+  const customEmbedding = (userSettingsRow?.systemAgent as any)?.userMemoryEmbedding;
+  if (customEmbedding?.provider && customEmbedding?.model) {
+    provider = customEmbedding.provider;
+    embeddingModel = customEmbedding.model;
+  }
+
   // Read user's provider config from database
   const agentRuntime = await initModelRuntimeFromDB(
     serverDB,

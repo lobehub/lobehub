@@ -3,6 +3,8 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { mutate } from '@/libs/swr';
+
 import { type DisplayPreferenceMemory } from '@/database/repositories/userMemory';
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
@@ -42,6 +44,8 @@ export class PreferenceActionImpl {
       q: this.#get().preferencesQuery,
       sort: this.#get().preferencesSort,
     });
+    await mutate((key) => typeof key === 'string' && key.startsWith('useFetchPreferences'));
+    await mutate(`memoryDetail-preference-${id}`, undefined, { revalidate: false });
   };
 
   loadMorePreferences = (): void => {

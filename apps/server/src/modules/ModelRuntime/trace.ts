@@ -17,6 +17,17 @@ export const createTraceOptions = (
   { trace: tracePayload, provider }: AgentChatOptions,
 ) => {
   const { messages, model, tools, ...parameters } = payload;
+
+  const modelParameters: Record<string, any> = {};
+  const extraMetadata: Record<string, any> = {};
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value !== null && typeof value === 'object') {
+      extraMetadata[key] = value;
+    } else {
+      modelParameters[key] = value;
+    }
+  }
+
   // create a trace to monitor the completion
   const traceClient = new TraceClient();
   const messageLength = messages.length;
@@ -25,7 +36,7 @@ export const createTraceOptions = (
   const trace = traceClient.createTrace({
     id: tracePayload?.traceId,
     input: messages,
-    metadata: { messageLength, model, provider, systemRole, tools },
+    metadata: { messageLength, model, provider, systemRole, tools, ...extraMetadata },
     name: tracePayload?.traceName,
     sessionId: tracePayload?.topicId
       ? tracePayload.topicId
@@ -36,9 +47,9 @@ export const createTraceOptions = (
 
   const generation = trace?.generation({
     input: messages,
-    metadata: { messageLength, model, provider },
+    metadata: { messageLength, model, provider, ...extraMetadata },
     model,
-    modelParameters: parameters as any,
+    modelParameters: modelParameters as any,
     name: `Chat Completion (${provider})`,
     startTime: new Date(),
   });

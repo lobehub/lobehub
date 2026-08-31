@@ -21,7 +21,7 @@ const Container: FC<PropsWithChildren> = ({ children }) => {
   }, [pathname]);
 
   return (
-    <Flexbox height={'100%'} width={'100%'}>
+    <Flexbox height={'100%'} flex={1} style={{ minWidth: 0 }}>
       <NavHeader />
       <SettingContainer
         maxWidth={1024}

@@ -8,6 +8,8 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { mutate } from '@/libs/swr';
+
 import { type AddIdentityEntryResult } from '@/database/models/userMemory';
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
@@ -50,6 +52,7 @@ export class IdentityActionImpl {
       sort: this.#get().identitiesSort,
       types: this.#get().identitiesTypes,
     });
+    await mutate((key) => typeof key === 'string' && key.startsWith('useFetchIdentities'));
     return result;
   };
 
@@ -62,6 +65,8 @@ export class IdentityActionImpl {
       sort: this.#get().identitiesSort,
       types: this.#get().identitiesTypes,
     });
+    await mutate((key) => typeof key === 'string' && key.startsWith('useFetchIdentities'));
+    await mutate(`memoryDetail-identity-${id}`, undefined, { revalidate: false });
   };
 
   loadMoreIdentities = (): void => {
@@ -102,6 +107,8 @@ export class IdentityActionImpl {
       sort: this.#get().identitiesSort,
       types: this.#get().identitiesTypes,
     });
+    await mutate((key) => typeof key === 'string' && key.startsWith('useFetchIdentities'));
+    await mutate(`memoryDetail-identity-${id}`);
     return result;
   };
 
