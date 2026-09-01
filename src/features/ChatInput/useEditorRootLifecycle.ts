@@ -7,7 +7,8 @@ import { useEffect, useRef } from 'react';
  */
 export const useEditorRootLifecycle = (editor: IEditor) => {
   const disconnectObserverRef = useRef<MutationObserver | null>(null);
-  const destroyedRef = useRef(false);
+  const destroyedEditorRef = useRef<IEditor | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
   const inactiveEditorRef = useRef<{
     lexicalEditor: NonNullable<ReturnType<IEditor['getLexicalEditor']>>;
     root: HTMLElement;
@@ -25,17 +26,22 @@ export const useEditorRootLifecycle = (editor: IEditor) => {
       lexicalEditor.setRootElement(inactiveEditor.root);
       inactiveEditorRef.current = null;
     }
+    rootRef.current = lexicalEditor.getRootElement();
 
     return () => {
-      const root = lexicalEditor.getRootElement();
+      // The root is read from our own ref as well, because a future editor
+      // release may detach it from a ref cleanup, which React runs before this
+      // passive cleanup — leaving getRootElement() already null.
+      const root = lexicalEditor.getRootElement() ?? rootRef.current;
       lexicalEditor.setRootElement(null);
+      rootRef.current = null;
 
       if (!root) return;
       inactiveEditorRef.current = { lexicalEditor, root };
 
       const destroyWhenDisconnected = () => {
-        if (root.isConnected || destroyedRef.current) return;
-        destroyedRef.current = true;
+        if (root.isConnected || destroyedEditorRef.current === editor) return;
+        destroyedEditorRef.current = editor;
         observer.disconnect();
         if (disconnectObserverRef.current === observer) disconnectObserverRef.current = null;
         inactiveEditorRef.current = null;
