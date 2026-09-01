@@ -271,6 +271,77 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
+  /**
+   * @example Operation B cannot reserve the topic until operation A's interrupt resolves.
+   */
+  it('waits for the replaced operation to stop before reserving the replacement', async () => {
+    // ROOT CAUSE:
+    //
+    // The old marker was atomically replaced without waiting for the device
+    // process behind it. That let operation B resume while operation A still
+    // owned the native Codex thread writer.
+    //
+    // Before: tryReserveTaskCallback ran immediately for the replacement.
+    // After: interruptTask settles the old physical run before reservation.
+    let releaseInterrupt: (() => void) | undefined;
+    const interruptSpy = vi.spyOn(service, 'interruptTask').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseInterrupt = () => resolve({ operationId: 'op-old', success: true });
+        }),
+    );
+
+    const replacement = service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'replacement turn',
+      replacesOperationId: 'op-old',
+    } as any);
+    await vi.waitFor(() => expect(interruptSpy).toHaveBeenCalledOnce());
+
+    expect(topicMock.tryReserveTaskCallback).not.toHaveBeenCalled();
+
+    releaseInterrupt?.();
+    await replacement;
+
+    expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', expect.any(String), {
+      allowRunningOperationId: undefined,
+      allowSameReservationReentry: true,
+      ignoreRunningOperation: undefined,
+      replacesOperationId: 'op-old',
+    });
+  });
+
+  /**
+   * @example Operation B is rejected when operation A's device process remains alive.
+   */
+  it('does not reserve a replacement when device cancellation is unconfirmed', async () => {
+    // ROOT CAUSE:
+    //
+    // Device Gateway reports transport success separately from the cancellation
+    // payload. Ignoring `state.exited` allowed a replacement to resume while the
+    // previous native process could still own the Codex thread writer.
+    //
+    // Before: every resolved interrupt allowed topic reservation.
+    // After: an explicitly unconfirmed device cancellation rejects replacement.
+    vi.spyOn(service, 'interruptTask').mockResolvedValue({
+      deviceCancellationConfirmed: false,
+      operationId: 'op-old',
+      success: true,
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        prompt: 'replacement turn',
+        replacesOperationId: 'op-old',
+      } as any),
+    ).rejects.toThrow('Replaced heterogeneous agent process did not confirm termination');
+
+    expect(topicMock.tryReserveTaskCallback).not.toHaveBeenCalled();
+  });
+
   it('should attach fileIds to the user message (SPA gateway device/sandbox mode)', async () => {
     // regression: the hetero early exit used to create the user message
     // without `files`, so images attached in device mode were never linked
@@ -313,15 +384,54 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(userCall![0].files).toEqual(['file-1', 'file-2']);
   });
 
-  it('should pin the runtime type — not the agent chat model — on a server-created topic', async () => {
-    // regression: the topic-scoped model snapshot pinned the agent's chat
-    // model/provider, so a Gateway-created hetero topic came back from the
-    // server tagged with the default chat provider instead of the CLI runtime.
+  it('should pin the CLI default selection and runtime type on a server-created topic', async () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
 
     expect(topicMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({ model: undefined, provider: 'claude-code' }),
+      expect.objectContaining({ model: 'default', provider: 'claude-code' }),
       undefined,
+    );
+  });
+
+  it('should snapshot and execute a selected heterogeneous model on a server-created topic', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'opus',
+      type: 'claude-code',
+    } as any;
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Run with Opus' });
+
+    expect(topicMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'opus', provider: 'claude-code' }),
+      undefined,
+    );
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--model', 'opus'] }),
+    );
+  });
+
+  it('should execute an existing topic with its pinned heterogeneous model', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      args: ['--model', 'stale-arg-model'],
+      model: 'agent-model',
+      type: 'claude-code',
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      id: 'topic-existing',
+      metadata: undefined,
+      model: 'topic-model',
+      provider: 'claude-code',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-existing' },
+      prompt: 'Continue with the topic model',
+    } as any);
+
+    expect(topicMock.create).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--model', 'topic-model'] }),
     );
   });
 
@@ -419,14 +529,21 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       type: 'claude-code',
     } as any;
 
-    await service.execAgent({
+    const result = await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Use the selected Claude Code model',
     });
 
+    expect(result.heteroType).toBe('claude-code');
     expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
         args: ['--model', 'opus', '--effort', 'high'],
+      }),
+    );
+    expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        runningOperation: expect.objectContaining({ heteroType: 'claude-code' }),
       }),
     );
   });
@@ -457,6 +574,13 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           status: 'error',
           success: false,
         }),
+      );
+      expect(topicMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: type === 'codex' ? 'gpt-test' : 'claude-test',
+          provider: type === 'codex' ? 'openai' : 'anthropic',
+        }),
+        undefined,
       );
       expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
       expect(mockDispatchAgentRun).not.toHaveBeenCalled();
@@ -648,6 +772,42 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       conversationHistory: [
         { content: 'Earlier question', role: 'user' },
         { content: 'Earlier answer', role: 'assistant' },
+      ],
+    });
+  });
+
+  /**
+   * @example A topic whose native resume token is missing still receives its prior turns.
+   */
+  it('injects recent conversation history when a device run must start fresh', async () => {
+    mockMessageQuery.mockResolvedValue([
+      { content: 'Create the GPU pod', id: 'old-user', role: 'user' },
+      { content: 'The pod is electron-gpu-shell', id: 'old-assistant', role: 'assistant' },
+      { content: 'Delete it', id: 'msg-1', role: 'user' },
+    ]);
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Delete it',
+    });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeFallbackSystemContext: undefined,
+        resumeSessionId: undefined,
+        systemContext: 'device recovery context',
+      }),
+    );
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith({
+      agentSystemContext: undefined,
+      conversationHistory: [
+        { content: 'Create the GPU pod', role: 'user' },
+        { content: 'The pod is electron-gpu-shell', role: 'assistant' },
       ],
     });
   });
@@ -1027,12 +1187,12 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         'parent-operation',
         expect.objectContaining({ operationId: expect.stringContaining('op_') }),
       );
-      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith(
-        'topic-1',
-        expect.any(String),
-        'parent-operation',
-        undefined,
-      );
+      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', expect.any(String), {
+        allowRunningOperationId: 'parent-operation',
+        allowSameReservationReentry: true,
+        ignoreRunningOperation: undefined,
+        replacesOperationId: undefined,
+      });
       expect(mockCreateOperationMetadata).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),
@@ -1336,8 +1496,81 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           workspaceId: undefined,
         },
         expect.objectContaining({ apiName: 'cancelHeteroTask' }),
-        5_000,
+        10_000,
       );
+    });
+
+    /**
+     * @example Stopping a device Codex run sends `cancelHeteroTask` to that device.
+     */
+    it('cancels a device local hetero run before releasing its topic', async () => {
+      mockExecuteToolCall.mockResolvedValueOnce({ success: true, state: { exited: true } });
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-codex',
+            deviceId: 'author-desktop',
+            deviceUserId: 'author-user',
+            heteroType: 'codex',
+            operationId: 'operation-codex',
+          },
+        },
+      });
+
+      const result = await service.interruptTask({
+        operationId: 'operation-codex',
+        topicId: 'topic-1',
+      });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        {
+          deviceId: 'author-desktop',
+          userId: 'author-user',
+          workspaceId: undefined,
+        },
+        expect.objectContaining({
+          apiName: 'cancelHeteroTask',
+          arguments: JSON.stringify({ signal: 'SIGINT', taskId: 'operation-codex' }),
+        }),
+        10_000,
+      );
+      expect(result.deviceCancellationConfirmed).toBe(true);
+    });
+
+    /**
+     * @example A device response with `exited: false` remains an unsafe cancellation result.
+     */
+    it('reports an unconfirmed device local hetero cancellation', async () => {
+      // ROOT CAUSE:
+      //
+      // A successful Gateway envelope only proves that the device handled the
+      // tool call. The nested cancellation state is authoritative for whether
+      // the native writer actually exited.
+      //
+      // Before: `{ success: true, state: { exited: false } }` was ignored.
+      // After: interruptTask surfaces `deviceCancellationConfirmed: false`.
+      mockExecuteToolCall.mockResolvedValueOnce({ success: true, state: { exited: false } });
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            deviceId: 'author-desktop',
+            deviceUserId: 'author-user',
+            heteroType: 'codex',
+            operationId: 'operation-codex',
+          },
+        },
+      });
+
+      const result = await service.interruptTask({
+        operationId: 'operation-codex',
+        topicId: 'topic-1',
+      });
+
+      expect(result).toMatchObject({
+        deviceCancellationConfirmed: false,
+        operationId: 'operation-codex',
+        success: true,
+      });
     });
 
     it('cancels a remote child operation without touching the supervisor device', async () => {
@@ -1372,7 +1605,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           apiName: 'cancelHeteroTask',
           arguments: JSON.stringify({ signal: 'SIGINT', taskId: 'operation-child' }),
         }),
-        5_000,
+        10_000,
       );
     });
 
@@ -1398,7 +1631,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
         expect.objectContaining({ deviceId: 'member-desktop', userId }),
         expect.objectContaining({ apiName: 'cancelHeteroTask' }),
-        5_000,
+        10_000,
       );
     });
 
@@ -1418,6 +1651,66 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       await service.interruptTask({ operationId: 'operation-1', topicId: 'topic-1' });
 
       expect(mockExecuteToolCall).not.toHaveBeenCalled();
+    });
+
+    // Regression guard: a callAgent/callSubAgent-spawned hetero
+    // child (isolation-thread, no topicStartOwnerOperationId) must still get
+    // its userId/workspaceId written to the state-manager metadata store —
+    // subAgentCallback reads it to authorize resuming the parked parent
+    // operation. Without it, the completion webhook 401s, the parent is
+    // never resumed, and it stays parked until the inactivity watchdog
+    // abandons it ~10 minutes later.
+    it('persists userId/workspaceId metadata for a callAgent-spawned hetero child', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      const call = mockCreateOperationMetadata.mock.calls.find(
+        ([, data]) => data.userId === 'test-user-id',
+      );
+      expect(call).toBeDefined();
+      // No topic-owner mirror target on this path — mirrorToOperationId must
+      // stay unset rather than being derived from parentOperationId.
+      expect(call?.[1]).not.toHaveProperty('mirrorToOperationId');
+    });
+
+    it('nests an isolation-thread child under the parent marker instead of claiming topic root', async () => {
+      // heteroIngest/heteroFinish resolve an operationId via
+      // topic.metadata.runningOperation (root or childOperations) — a plain
+      // updateMetadata() here would clobber the parent's own root marker
+      // instead of nesting under it.
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      expect(topicMock.appendRunningOperationChild).toHaveBeenCalledWith(
+        'topic-1',
+        'parent-operation',
+        expect.objectContaining({ operationId: expect.stringContaining('op_') }),
+      );
+      // Not claimed as the topic's own root marker.
+      expect(findRunningOpSeed()).toBeUndefined();
+    });
+
+    it('falls back to claiming the topic marker when the parent is not the current root (e.g. nested isolation chain)', async () => {
+      topicMock.appendRunningOperationChild.mockResolvedValueOnce(false);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      // Otherwise this child would never be recognized by
+      // heteroIngest/heteroFinish at all.
+      expect(findRunningOpSeed()).toBeDefined();
     });
   });
 });

@@ -10,11 +10,6 @@ vi.mock('@/features/NavHeader', () => ({
     React.createElement('header', undefined, children),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Text: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement(React.Fragment, undefined, children),
-}));
-
 vi.mock('./Container', () => ({
   default: ({ children }: { children?: React.ReactNode }) =>
     React.createElement('main', undefined, children),
@@ -72,7 +67,9 @@ describe('WorkspaceSettingsContentLayout', () => {
   ])('renders the compact header for the %s tab', (tab, title) => {
     const html = renderLayout(tab);
 
-    expect(html).toContain(`<header>${title}</header>`);
+    expect(html).toMatch(
+      new RegExp(`<header>(?:(?!</header>).)*>${title}<(?:(?!<header>).)*</header>`),
+    );
     expect(html).toContain('<main><div>Page content</div></main>');
   });
 

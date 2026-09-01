@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "La connexion au serveur a expiré. Cela indique généralement un problème de réseau local — veuillez vérifier la qualité de votre réseau, vos paramètres de proxy ou de VPN et réessayer.",
   "response.RemoteServerUnreachable": "Le serveur n'a pas pu être atteint. Cela indique généralement un problème de réseau local — veuillez vérifier votre connexion internet, vos paramètres de proxy ou de VPN et réessayer.",
   "response.ServerAgentRuntimeError": "Désolé, le service Agent est actuellement indisponible. Veuillez réessayer plus tard ou nous contacter par e-mail.",
-  "response.SubscriptionKeyMismatch": "Désolé, un dysfonctionnement temporaire empêche l'utilisation de votre abonnement. Cliquez ci-dessous pour le réactiver ou contactez-nous.",
   "response.SubscriptionPlanLimit": "Votre quota d'abonnement est épuisé. Veuillez passer à un plan supérieur ou configurer une API personnalisée.",
   "response.SubscriptionPlanLimitUltimate": "Votre quota d'abonnement est épuisé. Veuillez recharger votre crédit ou configurer une API personnalisée.",
   "response.SystemTimeNotMatchError": "Désolé, l'heure de votre système ne correspond pas à celle du serveur. Veuillez la corriger et réessayer.",

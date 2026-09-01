@@ -5,8 +5,16 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { ActionIcon, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
@@ -19,6 +27,7 @@ import {
   styleReferencesForArtworkStyle,
 } from '@/features/AgentArtworkStudio';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { resolveArtworkReferenceSource } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -193,6 +202,7 @@ interface AgentProfileArtworkProps {
   name?: string | null;
   onAvatarChange: (avatar: string | null) => void;
   onBackgroundChange: (background: string | null) => void;
+  storedAvatar?: string | null;
   systemRole?: string | null;
   title?: string | null;
 }
@@ -206,6 +216,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     description,
     locale,
     name,
+    storedAvatar,
     systemRole,
     title,
     onAvatarChange,
@@ -267,13 +278,19 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       async (kind: 'avatar' | 'background', style: AgentArtworkStyle) => {
         if (!canEdit || !canGenerate) return;
 
+        const avatarSource = resolveArtworkReferenceSource(storedAvatar, appOrigin);
+        const backgroundSource = resolveArtworkReferenceSource(background, appOrigin);
+
         try {
           await generateAgentArtwork({
+            avatarIdentity: avatarSource.text,
+            backgroundIdentity: backgroundSource.text,
             description,
             id: agentId,
             kind,
             name,
-            referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
+            referenceImageUrl:
+              kind === 'background' ? avatarSource.imageUrl : backgroundSource.imageUrl,
             style,
             styleReferenceImageUrls: styleReferencesForArtworkStyle(style, appOrigin),
             systemRole,
@@ -286,13 +303,13 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       [
         agentId,
         appOrigin,
-        avatar,
-        backgroundUrl,
+        background,
         canEdit,
         canGenerate,
         description,
         generateAgentArtwork,
         name,
+        storedAvatar,
         systemRole,
         title,
       ],

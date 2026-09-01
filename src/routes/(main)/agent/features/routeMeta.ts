@@ -11,6 +11,7 @@ import { lazy } from 'react';
 
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
 import { routeMeta } from '@/spa/router/routeMeta';
 
@@ -70,23 +71,27 @@ export const agentProfileRouteMeta = routeMeta({
 export const agentChannelRouteMeta = routeMeta({
   DynamicMeta: ChannelDynamicMeta,
   icon: RadioTowerIcon,
+  Skeleton: createSurfaceSkeleton('grid'),
   titleKey: 'navigation.channels',
 });
 
 export const agentStatisticsRouteMeta = routeMeta({
   DynamicMeta: StatisticsDynamicMeta,
   icon: ChartColumnBigIcon,
+  Skeleton: createSurfaceSkeleton('grid'),
   titleKey: 'navigation.stats',
 });
 
 export const agentSelfLearningRouteMeta = routeMeta({
   DynamicMeta: SelfLearningDynamicMeta,
   icon: GraduationCapIcon,
+  Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'navigation.selfLearning',
 });
 
 export const agentPermissionRouteMeta = routeMeta({
   DynamicMeta: PermissionDynamicMeta,
   icon: UsersIcon,
+  Skeleton: createSurfaceSkeleton('form'),
   titleKey: 'navigation.permission',
 });

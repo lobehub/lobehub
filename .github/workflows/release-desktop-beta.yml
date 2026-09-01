@@ -31,6 +31,7 @@ jobs:
     name: Check if Beta Release
     runs-on: ubuntu-latest
     outputs:
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
       is_beta: ${{ steps.check.outputs.is_beta }}
       version: ${{ steps.check.outputs.version }}
     steps:
@@ -52,6 +53,32 @@ jobs:
             echo "is_beta=false" >> $GITHUB_OUTPUT
             echo "⏭️ Skipping: $version is a stable release (handled by release-desktop-stable.yml)"
           fi
+
+      - name: Resolve Cloud revision
+        id: cloud-ref
+        if: steps.check.outputs.is_beta == 'true'
+        env:
+          CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
+          CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
+          # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
+          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
+          if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Unable to resolve Cloud revision"
+            exit 1
+          fi
+          echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
+
+  renderer-ota:
+    name: Publish Renderer OTA
+    needs: [check-beta]
+    if: needs.check-beta.outputs.is_beta == 'true'
+    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    with:
+      channel: beta
+    secrets: inherit
 
   test:
     name: Code quality check
@@ -87,6 +114,8 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-ref: ${{ needs.check-beta.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
@@ -109,6 +138,8 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -127,6 +158,8 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -141,6 +174,8 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -151,6 +186,9 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
+          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          update-channel: beta
 
   # 汇总门禁: test/build 完成后决定是否继续
   gate:
@@ -246,3 +284,21 @@ jobs:
             release/*.tar.gz*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-renderer-base:
+    needs: [check-beta, merge-mac-files]
+    name: Publish Beta Renderer Base
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/desktop-publish-s3
+        with:
+          channel: beta
+          cloud-ref: ${{ needs.check-beta.outputs.cloud_ref }}
+          version: ${{ needs.check-beta.outputs.version }}
+          upload-release-files: false
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}

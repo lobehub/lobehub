@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import FallbackIntervention from './Fallback';
@@ -12,19 +11,6 @@ const metaMap: Record<string, { avatar?: string; title?: string }> = {
   'lobe-activator': { avatar: '🛠', title: 'Tools & Skills Activator' },
   'search': { title: 'Web Search' },
 };
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <button {...props}>{children}</button>
-  ),
-  Avatar: ({ avatar, title }: { avatar?: string; title?: string }) => (
-    <img alt={title} src={avatar} />
-  ),
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
-  Icon: () => <span>icon</span>,
-}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -66,6 +52,9 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 vi.mock('../../../../../store', () => ({
+  dataSelectors: {
+    getDbMessageById: () => () => undefined,
+  },
   useConversationStore: (
     selector: (state: { updatePluginArguments: ReturnType<typeof vi.fn> }) => unknown,
   ) => selector({ updatePluginArguments: vi.fn() }),

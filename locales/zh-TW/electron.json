@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "下載新版本",
   "updater.downloadingUpdate": "正在下載更新",
   "updater.downloadingUpdateDesc": "更新正在下載中，請稍候...",
+  "updater.ignore": "忽略",
   "updater.installLater": "下次啟動時更新",
   "updater.isLatestVersion": "當前已是最新版本",
   "updater.isLatestVersionDesc": "非常棒，使用的版本 {{version}} 已是最前沿的版本。",

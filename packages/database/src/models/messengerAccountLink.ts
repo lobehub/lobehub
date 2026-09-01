@@ -450,6 +450,24 @@ export class MessengerAccountLinkModel {
     return result ? decryptRow(result, gateKeeper) : undefined;
   };
 
+  /**
+   * All account links for a platform, credentials decrypted. Powers the
+   * gateway reconcile for polling platforms (WeChat), whose per-user
+   * connections must be re-pushed to the owning gateway host after restarts
+   * or host migrations — server-only, never expose through TRPC.
+   */
+  static findAllByPlatformWithCredentials = async (
+    db: LobeChatDatabase,
+    platform: string,
+    gateKeeper?: GateKeeper,
+  ): Promise<DecryptedMessengerAccountLink[]> => {
+    const rows = await db
+      .select()
+      .from(messengerAccountLinks)
+      .where(eq(messengerAccountLinks.platform, platform));
+    return Promise.all(rows.map((row) => decryptRow(row, gateKeeper)));
+  };
+
   /** Static setter used by IM `/switch` (no user-scope context, but trusted by sender match). */
   static setActiveAgentById = async (
     db: LobeChatDatabase,

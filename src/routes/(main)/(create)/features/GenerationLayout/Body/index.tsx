@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
+import { Tabs, Text } from '@lobehub/ui/base-ui';
 import { LayoutGrid, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

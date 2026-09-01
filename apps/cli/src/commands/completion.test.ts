@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLI_COMPLETION_CWORD_ENV } from '../constants/identity';
 import { registerCompletionCommand } from './completion';
 
 describe('completion command', () => {
@@ -13,7 +14,7 @@ describe('completion command', () => {
 
   afterEach(() => {
     consoleSpy.mockRestore();
-    delete process.env.LOBEHUB_COMP_CWORD;
+    delete process.env[CLI_COMPLETION_CWORD_ENV];
     process.env.SHELL = originalShell;
   });
 
@@ -55,7 +56,7 @@ describe('completion command', () => {
   });
 
   it('should suggest root commands and aliases', async () => {
-    process.env.LOBEHUB_COMP_CWORD = '0';
+    process.env[CLI_COMPLETION_CWORD_ENV] = '0';
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', '__complete', 'g']);
@@ -64,7 +65,7 @@ describe('completion command', () => {
   });
 
   it('should suggest nested subcommands in the current command context', async () => {
-    process.env.LOBEHUB_COMP_CWORD = '1';
+    process.env[CLI_COMPLETION_CWORD_ENV] = '1';
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', '__complete', 'agent']);
@@ -73,7 +74,7 @@ describe('completion command', () => {
   });
 
   it('should suggest command options after leaf commands', async () => {
-    process.env.LOBEHUB_COMP_CWORD = '1';
+    process.env[CLI_COMPLETION_CWORD_ENV] = '1';
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', '__complete', 'usage']);
@@ -82,7 +83,7 @@ describe('completion command', () => {
   });
 
   it('should not suggest commands while completing an option value', async () => {
-    process.env.LOBEHUB_COMP_CWORD = '2';
+    process.env[CLI_COMPLETION_CWORD_ENV] = '2';
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', '__complete', 'usage', '--month']);
@@ -91,7 +92,7 @@ describe('completion command', () => {
   });
 
   it('should not expose hidden commands', async () => {
-    process.env.LOBEHUB_COMP_CWORD = '0';
+    process.env[CLI_COMPLETION_CWORD_ENV] = '0';
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', '__complete']);

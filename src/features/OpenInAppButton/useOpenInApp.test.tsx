@@ -9,6 +9,11 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{children}</SWRConfig>
 );
 
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
 vi.mock('@lobechat/const', () => ({
   isDesktop: true,
 }));
@@ -18,10 +23,6 @@ vi.mock('@/services/electron/openInApp', () => ({
     detectApps: vi.fn(),
     openInApp: vi.fn(),
   },
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { error: vi.fn() },
 }));
 
 vi.mock('react-i18next', () => ({

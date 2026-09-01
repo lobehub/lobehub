@@ -74,16 +74,6 @@ vi.mock('../api/client', () => ({
   getTrpcClient: getTrpcClientMock,
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-  setVerbose: vi.fn(),
-}));
-
 describe('eval command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -160,6 +150,99 @@ describe('eval command', () => {
       await program.parseAsync(['node', 'test', 'eval', 'benchmark', 'delete', '--id', 'b1']);
 
       expect(mockTrpcClient.agentEval.deleteBenchmark.mutate).toHaveBeenCalledWith({ id: 'b1' });
+    });
+  });
+
+  describe('testcase', () => {
+    it('should create a test case with messages from a JSON file', async () => {
+      const tmpFile = path.join(os.tmpdir(), `eval-messages-${process.pid}.json`);
+      await writeFile(tmpFile, JSON.stringify([{ content: 'Earlier turn', role: 'user' }]));
+      mockTrpcClient.agentEval.createTestCase.mutate.mockResolvedValue({ id: 'case-1' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'eval',
+          'testcase',
+          'create',
+          '--dataset-id',
+          'dataset-1',
+          '--input',
+          'Continue',
+          '--messages-file',
+          tmpFile,
+        ]);
+
+        expect(mockTrpcClient.agentEval.createTestCase.mutate).toHaveBeenCalledWith({
+          content: {
+            input: 'Continue',
+            messages: [{ content: 'Earlier turn', role: 'user' }],
+          },
+          datasetId: 'dataset-1',
+        });
+      } finally {
+        await rm(tmpFile, { force: true });
+      }
+    });
+
+    it('should omit an empty messages file when creating a test case', async () => {
+      const tmpFile = path.join(os.tmpdir(), `eval-empty-messages-${process.pid}.json`);
+      await writeFile(tmpFile, '[]');
+      mockTrpcClient.agentEval.createTestCase.mutate.mockResolvedValue({ id: 'case-1' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'eval',
+          'testcase',
+          'create',
+          '--dataset-id',
+          'dataset-1',
+          '--input',
+          'Fresh conversation',
+          '--messages-file',
+          tmpFile,
+        ]);
+
+        expect(mockTrpcClient.agentEval.createTestCase.mutate).toHaveBeenCalledWith({
+          content: { input: 'Fresh conversation' },
+          datasetId: 'dataset-1',
+        });
+      } finally {
+        await rm(tmpFile, { force: true });
+      }
+    });
+
+    it('should pass an empty messages file when updating a test case', async () => {
+      const tmpFile = path.join(os.tmpdir(), `eval-empty-messages-${process.pid}.json`);
+      await writeFile(tmpFile, '[]');
+      mockTrpcClient.agentEval.updateTestCase.mutate.mockResolvedValue({ id: 'case-1' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'eval',
+          'testcase',
+          'update',
+          '--id',
+          'case-1',
+          '--messages-file',
+          tmpFile,
+        ]);
+
+        expect(mockTrpcClient.agentEval.updateTestCase.mutate).toHaveBeenCalledWith({
+          content: { messages: [] },
+          id: 'case-1',
+        });
+      } finally {
+        await rm(tmpFile, { force: true });
+      }
     });
   });
 

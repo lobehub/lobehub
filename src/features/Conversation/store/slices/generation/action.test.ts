@@ -1773,6 +1773,36 @@ describe('Generation Actions', () => {
       );
     });
 
+    it('regenerates with the topic-pinned heterogeneous model', async () => {
+      await setupHeteroChatStore({
+        topicDataMap: {
+          test: {
+            items: [{ id: 'topic-1', model: 'opus', provider: 'claude-code' }],
+          },
+        },
+      });
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+      store.setState({
+        displayMessages: [{ content: 'Retry with the pinned model', id: 'msg-1', role: 'user' }],
+      } as any);
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          heterogeneousProvider: expect.objectContaining({ model: 'opus', type: 'claude-code' }),
+        }),
+      );
+    });
+
     it('preserves a legacy subscription resume when the Provider Binding Lab is enabled', async () => {
       const previousLab = useUserStore.getState().preference.lab;
       useUserStore.setState((state) => ({

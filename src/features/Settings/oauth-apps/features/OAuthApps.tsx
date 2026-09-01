@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';

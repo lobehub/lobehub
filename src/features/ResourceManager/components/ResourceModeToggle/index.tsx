@@ -1,59 +1,15 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { LockIcon, UsersIcon } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { type DropdownItem, DropdownMenu, Flexbox, Icon, type MenuInfo } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
+import { CheckIcon, ChevronDownIcon, LockIcon, UsersIcon } from 'lucide-react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import type { ResourceListVisibilityFilter } from '@/features/ResourceManager/store/initialState';
-
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    button: css`
-      cursor: pointer;
-
-      display: inline-flex;
-      flex: 1;
-      gap: 6px;
-      align-items: center;
-      justify-content: center;
-
-      padding-block: 6px;
-      padding-inline: 8px;
-      border: none;
-      border-radius: ${cssVar.borderRadius};
-
-      font-size: 13px;
-      font-weight: 500;
-      color: ${cssVar.colorTextSecondary};
-
-      background: transparent;
-
-      transition: background 0.15s;
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-    buttonActive: css`
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorBgElevated};
-      box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
-    `,
-    group: css`
-      display: inline-flex;
-
-      width: 100%;
-      padding: 3px;
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorFillQuaternary};
-    `,
-  };
-});
 
 const OPTIONS: Array<{
   icon: typeof LockIcon;
@@ -76,7 +32,7 @@ const OPTIONS: Array<{
 ];
 
 /**
- * Sidebar-top dual toggle: `[🔒 Private] [👥 Workspace]`.
+ * Sidebar-header scope chip, mirroring the task list's visibility filter.
  *
  * Rendered only in team-workspace mode — personal mode has no notion of
  * visibility, so the toggle is meaningless there and is deliberately hidden.
@@ -90,6 +46,7 @@ const ResourceModeToggle = memo(() => {
   const [listVisibility, setListVisibility, hydrateListVisibility] = useResourceManagerStore(
     (s) => [s.listVisibility, s.setListVisibility, s.hydrateListVisibility],
   );
+  const [open, setOpen] = useState(false);
 
   const workspaceId = activeWorkspaceId ?? undefined;
 
@@ -101,35 +58,50 @@ const ResourceModeToggle = memo(() => {
     hydrateListVisibility(workspaceId);
   }, [workspaceId, hydrateListVisibility]);
 
+  const menuItems = useMemo<DropdownItem[]>(
+    () =>
+      OPTIONS.map((option) => {
+        const OptionIcon = option.icon;
+        return {
+          extra:
+            option.key === listVisibility ? (
+              <Icon color={cssVar.colorTextSecondary} icon={CheckIcon} size={14} />
+            ) : undefined,
+          icon: <Icon color={cssVar.colorTextSecondary} icon={OptionIcon} size={16} />,
+          key: option.key,
+          label: t(option.labelKey as never),
+          onClick: ({ domEvent }: MenuInfo) => {
+            domEvent.stopPropagation();
+            if (!workspaceId) return;
+            setListVisibility(option.key, workspaceId);
+          },
+        };
+      }),
+    [listVisibility, setListVisibility, t, workspaceId],
+  );
+
   if (!workspaceId) return null;
 
+  const current = OPTIONS.find((option) => option.key === listVisibility) ?? OPTIONS[0];
+  const currentLabel = t(current.labelKey as never);
+
   return (
-    <Flexbox paddingBlock={6} paddingInline={4}>
-      <div className={styles.group} role={'tablist'}>
-        {OPTIONS.map((option) => {
-          const isActive = listVisibility === option.key;
-          const OptionIcon = option.icon;
-          const label = t(option.labelKey as never);
-          return (
-            <Tooltip key={option.key} title={t(option.tooltipKey as never)}>
-              <button
-                aria-selected={isActive}
-                className={cx(styles.button, isActive && styles.buttonActive)}
-                role={'tab'}
-                type={'button'}
-                onClick={() => {
-                  if (isActive) return;
-                  setListVisibility(option.key, workspaceId);
-                }}
-              >
-                <Icon icon={OptionIcon} size={14} />
-                <span>{label}</span>
-              </button>
-            </Tooltip>
-          );
-        })}
-      </div>
-    </Flexbox>
+    <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
+      <Button
+        size={'small'}
+        style={{ paddingInline: 6 }}
+        title={`${t('resources.visibility.label')}: ${currentLabel}`}
+        type={'text'}
+      >
+        <Flexbox horizontal align={'center'} gap={4}>
+          <Icon color={cssVar.colorIcon} icon={current.icon} size={14} />
+          <Text ellipsis fontSize={12} style={{ maxWidth: 96 }} type={'secondary'}>
+            {currentLabel}
+          </Text>
+          <Icon color={cssVar.colorIcon} icon={ChevronDownIcon} size={12} />
+        </Flexbox>
+      </Button>
+    </DropdownMenu>
   );
 });
 

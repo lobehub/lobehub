@@ -1,5 +1,6 @@
 import type {
   DesktopBootstrapIdentity,
+  RendererMemoryInfo,
   ScreenCaptureSession,
   StreamInvokeRequestParams,
 } from './types';
@@ -50,6 +51,7 @@ declare global {
   interface Window {
     electronAPI?: {
       getDesktopBootstrapIdentity?: () => DesktopBootstrapIdentity;
+      getRendererMemoryInfo?: () => Promise<RendererMemoryInfo>;
       invoke?: IpcInvoke;
       onScreenCaptureSession?: (listener: (session: ScreenCaptureSession) => void) => () => void;
       onStreamInvoke: (

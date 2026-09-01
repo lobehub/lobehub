@@ -19,8 +19,6 @@ const localFileTabId = ({
   workingDirectory: string;
 }) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
 
-vi.mock('zustand/traditional');
-
 describe('chatDockSlice', () => {
   describe('pushPortalView', () => {
     it('should push a new view onto the stack and open portal', () => {
@@ -381,6 +379,60 @@ describe('chatDockSlice', () => {
         { agentId: 'agt_1', type: PortalViewType.AgentDetail },
       ]);
       expect(result.current.showPortal).toBe(true);
+    });
+  });
+
+  describe('goal drill-down', () => {
+    it('openGoalNode pushes a GoalNode view and exposes it via selector', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { goalId: 'goal_1', nodeId: 'node_1', type: PortalViewType.GoalNode },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalNodeView(result.current)).toEqual({
+        goalId: 'goal_1',
+        nodeId: 'node_1',
+        type: PortalViewType.GoalNode,
+      });
+    });
+
+    it('openGoalMetric pushes a GoalMetric view; a second metric replaces it in place', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalMetric('goal_1', 'budget');
+        result.current.openGoalMetric('goal_1', 'liveness');
+      });
+
+      // Same view type replaces instead of stacking, so Back never walks
+      // through a trail of metric tabs.
+      expect(result.current.portalStack).toEqual([
+        { goalId: 'goal_1', metric: 'liveness', type: PortalViewType.GoalMetric },
+      ]);
+      expect(chatPortalSelectors.goalMetricView(result.current)?.metric).toBe('liveness');
+    });
+
+    it('a work node drill-down stacks TaskDetail on top of GoalNode for Back navigation', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.openTaskDetail('task_1');
+      });
+
+      expect(result.current.portalStack).toHaveLength(2);
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.TaskDetail);
+
+      act(() => {
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('node_1');
     });
   });
 

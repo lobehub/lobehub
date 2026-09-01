@@ -1,7 +1,8 @@
 'use client';
 
 import { CaretDownFilled } from '@ant-design/icons';
-import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';

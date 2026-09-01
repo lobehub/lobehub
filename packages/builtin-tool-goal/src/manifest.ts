@@ -9,7 +9,7 @@ export const GoalManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Create and immediately start a goal-driven task with an editable acceptance plan. Use this only when the user explicitly starts their request with /goal. The call pauses for confirmation; after approval it creates the underlying task, persists the acceptance criteria, enables bounded automatic repair, and runs the current agent in a separate task topic. Once it succeeds, do not execute or reproduce the work in the current conversation; the live result card is the progress and result entry point.',
+        'Create and immediately start a long-horizon goal with an editable acceptance plan. Use this only when the user explicitly starts their request with /goal. The call pauses for confirmation; after approval it creates the goal, records the acceptance criteria as its requirement, and advances its coordinator once — which dispatches the first task with its own verifier. Once it succeeds, do not execute or reproduce the work in the current conversation; the live result card is the progress and result entry point.',
       humanIntervention: 'always',
       name: GoalApiName.createGoal,
       parameters: {
@@ -40,7 +40,7 @@ export const GoalManifest: BuiltinToolManifest = {
           instruction: { description: 'Detailed task direction and constraints.', type: 'string' },
           maxIterations: {
             description:
-              'Maximum automatic execution/repair rounds. Default 3, minimum 2. Null means no user-specified cap.',
+              'Maximum attempts one task may take before the goal opens a decision gate. Default 3, minimum 2. Null means no user-specified cap.',
             type: ['number', 'null'],
           },
           maxTotalCost: {

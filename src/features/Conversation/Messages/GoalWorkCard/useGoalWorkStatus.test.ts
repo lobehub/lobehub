@@ -1,62 +1,84 @@
+import type { GoalGraphSnapshot } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGoalWorkStatus } from './useGoalWorkStatus';
 
 const mocks = vi.hoisted(() => ({
-  taskDetailMap: {} as Record<
-    string,
-    { config?: unknown; goal?: unknown; name?: string; startedAt?: string }
-  >,
-  useAcceptanceBundle: vi.fn(() => ({ data: undefined })),
-  useAcceptanceBySubject: vi.fn(() => ({ data: undefined })),
-  useFetchTaskDetail: vi.fn(),
+  goalGraphById: {} as Record<string, unknown>,
+  useFetchGoalGraph: vi.fn(),
 }));
 
-vi.mock('@/features/Verify', () => ({
-  useAcceptanceBundle: mocks.useAcceptanceBundle,
-  useAcceptanceBySubject: mocks.useAcceptanceBySubject,
-}));
-
-vi.mock('@/store/task', () => ({
-  useTaskStore: (selector: (state: unknown) => unknown) =>
+vi.mock('@/store/goal', () => ({
+  goalSelectors: {
+    goalGraph: (goalId?: string | null) => (state: { goalGraphById: Record<string, unknown> }) =>
+      goalId ? state.goalGraphById[goalId] : undefined,
+  },
+  useGoalStore: (selector: (state: unknown) => unknown) =>
     selector({
-      taskDetailMap: mocks.taskDetailMap,
-      useFetchTaskDetail: mocks.useFetchTaskDetail,
+      goalGraphById: mocks.goalGraphById,
+      useFetchGoalGraph: mocks.useFetchGoalGraph,
     }),
 }));
 
+const node = (id: string, kind: string, status: string) => ({ id, kind, status });
+
+const snapshot = (overrides: Partial<GoalGraphSnapshot> = {}) =>
+  ({
+    decisions: [],
+    edges: [],
+    events: [],
+    goal: {
+      agentId: 'agt-1',
+      id: 'goal-1',
+      startedAt: new Date('2026-08-14T08:00:00.000Z'),
+      status: 'running',
+      title: 'Reproduce nanoGPT',
+    },
+    nodes: [],
+    workVersions: [],
+    ...overrides,
+  }) as unknown as GoalGraphSnapshot;
+
 describe('useGoalWorkStatus', () => {
   beforeEach(() => {
-    mocks.taskDetailMap = {};
+    mocks.goalGraphById = {};
     vi.clearAllMocks();
   });
 
-  it('does not poll acceptance for a plain task callback', () => {
-    mocks.taskDetailMap['T-1'] = { config: {} };
+  it('falls back to the drafted criteria count until the graph resolves', () => {
+    const { result } = renderHook(() => useGoalWorkStatus({ criteriaCount: 3, goalId: 'goal-1' }));
 
-    const { result } = renderHook(() => useGoalWorkStatus({ identifier: 'T-1', taskId: 'task-1' }));
-
-    expect(result.current.isGoal).toBe(false);
-    expect(mocks.useAcceptanceBySubject).toHaveBeenCalledWith('task', null);
+    expect(mocks.useFetchGoalGraph).toHaveBeenCalledWith('goal-1');
+    expect(result.current.progress).toMatchObject({ phase: 'running', total: 3 });
+    expect(result.current.title).toBeUndefined();
   });
 
-  it('polls acceptance after task detail identifies a Goal task', () => {
-    mocks.taskDetailMap['T-2'] = {
-      goal: { id: 'goal-1', status: 'running' },
-      startedAt: '2026-08-14T08:00:00.000Z',
-    };
+  it('counts every terminal Work node as closed', () => {
+    mocks.goalGraphById['goal-1'] = snapshot({
+      nodes: [
+        node('w1', 'task', 'resolved'),
+        node('w2', 'task', 'retired'),
+        node('w3', 'task', 'active'),
+        node('f1', 'finding', 'resolved'),
+      ] as never,
+    });
 
-    const { result } = renderHook(() => useGoalWorkStatus({ identifier: 'T-2', taskId: 'task-2' }));
+    const { result } = renderHook(() => useGoalWorkStatus({ goalId: 'goal-1' }));
 
-    expect(result.current.isGoal).toBe(true);
-    expect(result.current.startedAt).toBe('2026-08-14T08:00:00.000Z');
-    expect(mocks.useAcceptanceBySubject).toHaveBeenCalledWith('task', 'task-2');
+    expect(result.current.progress).toMatchObject({ passed: 2, total: 3 });
+    expect(result.current.agentId).toBe('agt-1');
+    expect(result.current.title).toBe('Reproduce nanoGPT');
   });
 
-  it('keeps polling for a Goal tracker before task detail loads', () => {
-    renderHook(() => useGoalWorkStatus({ goalKnown: true, identifier: 'T-3', taskId: 'task-3' }));
+  it('reads a pending gate as waiting on the user', () => {
+    mocks.goalGraphById['goal-1'] = snapshot({
+      decisions: [{ status: 'pending' }] as never,
+      nodes: [node('w1', 'task', 'active')] as never,
+    });
 
-    expect(mocks.useAcceptanceBySubject).toHaveBeenCalledWith('task', 'task-3');
+    const { result } = renderHook(() => useGoalWorkStatus({ goalId: 'goal-1' }));
+
+    expect(result.current.progress.phase).toBe('waiting');
   });
 });

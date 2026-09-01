@@ -1,5 +1,6 @@
 import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
@@ -13,6 +14,7 @@ import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
@@ -39,6 +41,7 @@ import type {
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
@@ -152,15 +155,28 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    // Seed a personal name so a new agent has an identity before the Agent
+    // Seed a default name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
+    //
+    // A heterogeneous agent never draws a random personal name. In personal or
+    // workspace-private scope its name is the product title; a shared workspace
+    // agent adds the creator so members can distinguish identical tools.
+    const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
       ...params.config,
-      name: params.config?.name || randomAgentName(locale),
+      name:
+        params.config?.name ||
+        (heteroProvider
+          ? heteroAgentDefaultName({
+              productTitle: params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+              visibility: params.visibility,
+              workspaceId: getActiveWorkspaceId(),
+            })
+          : randomAgentName(locale)),
     };
 
     const result = await agentService.createAgent({ ...params, config });

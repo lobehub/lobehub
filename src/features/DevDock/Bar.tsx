@@ -5,7 +5,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, Wrench } from 'lucide-react';
 import { Fragment, memo } from 'react';
 
-import { BAR_HEIGHT, DOCK_Z_INDEX } from './const';
+import { BAR_HEIGHT, BAR_OVERLAP, DOCK_Z_INDEX } from './const';
 import OverflowMenu from './OverflowMenu';
 import { PinnedAction, PinnedSelect, PinnedToggle, WidgetSlot } from './pinnedItems';
 import {
@@ -22,7 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     height: ${BAR_HEIGHT}px;
-    margin-block-start: -8px;
+    margin-block-start: -${BAR_OVERLAP}px;
     padding-inline: 8px;
 
     font-size: 11px;

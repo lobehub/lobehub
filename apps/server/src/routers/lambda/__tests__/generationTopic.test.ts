@@ -97,6 +97,8 @@ describe('generationTopicRouter', () => {
         visibility: 'public',
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
       },
       {
@@ -109,6 +111,8 @@ describe('generationTopicRouter', () => {
         visibility: 'public',
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
       },
     ];

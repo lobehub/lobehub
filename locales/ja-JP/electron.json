@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "新しいバージョンをダウンロード",
   "updater.downloadingUpdate": "更新をダウンロード中",
   "updater.downloadingUpdateDesc": "更新をダウンロードしています。しばらくお待ちください...",
+  "updater.ignore": "無視する",
   "updater.installLater": "次回起動時に更新",
   "updater.isLatestVersion": "現在最新のバージョンです",
   "updater.isLatestVersionDesc": "素晴らしい、使用中のバージョン {{version}} は最新のバージョンです。",

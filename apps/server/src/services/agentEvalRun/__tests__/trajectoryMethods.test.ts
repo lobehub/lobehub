@@ -1,4 +1,5 @@
-import type { EvalCaseEnvironment } from '@lobechat/types';
+import type { EvalCaseEnvironment, ImportedMessage } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -59,6 +60,7 @@ beforeEach(async () => {
 async function setupTrajectoryChain(opts?: {
   envPrompt?: string;
   input?: string;
+  messages?: ImportedMessage[];
   sortOrder?: number;
   targetAgentId?: string | null;
   environment?: EvalCaseEnvironment;
@@ -89,6 +91,7 @@ async function setupTrajectoryChain(opts?: {
         ...(opts?.environment && { environment: opts.environment }),
         expected: '42',
         input: opts?.input ?? 'What is 6*7?',
+        ...(opts?.messages && { messages: opts.messages }),
       },
       datasetId: dataset.id,
       sortOrder: opts?.sortOrder ?? 1,
@@ -107,6 +110,32 @@ async function setupTrajectoryChain(opts?: {
 }
 
 describe('AgentEvalRunService', () => {
+  describe('createRun restored history', () => {
+    it('should link a child to a parent in a later message batch', async () => {
+      const history: ImportedMessage[] = Array.from({ length: 501 }, (_, index) => ({
+        content: `history-${index}`,
+        id: `source-${index}`,
+        role: 'user' as const,
+      }));
+      history[0]!.parentId = 'source-500';
+
+      const { run, testCase } = await setupTrajectoryChain({ messages: history });
+      const [runTopic] = await serverDB
+        .select()
+        .from(agentEvalRunTopics)
+        .where(eq(agentEvalRunTopics.runId, run.id));
+      const restored = await serverDB
+        .select({ content: messages.content, id: messages.id, parentId: messages.parentId })
+        .from(messages)
+        .where(eq(messages.topicId, runTopic.topicId));
+      const byContent = new Map(restored.map((message) => [message.content, message]));
+
+      expect(restored).toHaveLength(history.length);
+      expect(byContent.get('history-0')?.parentId).toBe(byContent.get('history-500')?.id);
+      expect(runTopic.testCaseId).toBe(testCase.id);
+    });
+  });
+
   // ─── loadTrajectoryData ─────────────────────────────────────────────
   describe('loadTrajectoryData', () => {
     it('should return run, testCase, and envPrompt when all exist', async () => {
@@ -193,7 +222,7 @@ describe('AgentEvalRunService', () => {
       const evalTopic = allTopics.find((t) => t.id === result.topicId);
       expect(evalTopic).toBeDefined();
       expect(evalTopic?.trigger).toBe('eval');
-      expect(evalTopic?.title).toContain('[Eval Case #');
+      expect(evalTopic?.title).toContain(`[${(testCase.sortOrder ?? 0) + 1}]`);
 
       // Verify runTopic was created with 'running' status
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
@@ -271,12 +300,12 @@ describe('AgentEvalRunService', () => {
 
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          evalContext: { envPrompt: undefined, toolForwarding: environment.toolForwarding },
+          evalRuntime: { toolForwarding: environment.toolForwarding },
         }),
       );
     });
 
-    it('should pass the dataset case id through evalContext', async () => {
+    it('should pass the dataset case id through evalRuntime', async () => {
       const { run, testCase } = await setupTrajectoryChain();
 
       mockExecAgent.mockResolvedValue({ operationId: 'op-case-id' });
@@ -294,7 +323,7 @@ describe('AgentEvalRunService', () => {
       });
 
       expect(mockExecAgent).toHaveBeenCalledWith(
-        expect.objectContaining({ evalContext: { caseId: 'case-42' } }),
+        expect.objectContaining({ evalRuntime: { caseId: 'case-42' } }),
       );
     });
 
@@ -383,7 +412,7 @@ describe('AgentEvalRunService', () => {
       expect(result).toHaveProperty('error', 'Agent execution failed to start');
     });
 
-    it('should use correct topic title with sortOrder and input', async () => {
+    it('should use an ordinal topic title without evaluation metadata', async () => {
       const { run, testCase } = await setupTrajectoryChain({
         input: 'A very long input that should be truncated at some point',
         sortOrder: 4,
@@ -404,7 +433,7 @@ describe('AgentEvalRunService', () => {
 
       const allTopics = await serverDB.select().from(topics);
       const evalTopic = allTopics.find((t) => t.id === result.topicId);
-      expect(evalTopic?.title).toContain('[Eval Case #5]');
+      expect(evalTopic?.title).toContain('[5]');
       expect(evalTopic?.title).toContain('A very long input that should be truncated at so');
     });
 

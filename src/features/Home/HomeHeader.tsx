@@ -1,6 +1,6 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,37 +27,10 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.4;
     letter-spacing: -0.01em;
   `,
-  promo: css`
-    overflow: hidden;
-    justify-self: center;
-
-    min-width: 0;
-    max-width: 100%;
-
-    white-space: nowrap;
-
-    @container home (width <= 720px) {
-      justify-self: end;
-      max-width: 280px;
-    }
-  `,
-  spacer: css`
-    @container home (width <= 720px) {
-      display: none;
-    }
-  `,
   toolbar: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr);
-    align-items: center;
-
     width: 100%;
     min-width: 0;
     min-height: 48px;
-
-    @container home (width <= 720px) {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
   `,
 }));
 
@@ -69,10 +42,9 @@ const getGreetingKey = (hour: number): 'afternoon' | 'evening' | 'morning' => {
 
 interface HomeHeaderProps {
   centered?: boolean;
-  promo?: ReactNode;
 }
 
-const HomeHeader = memo<HomeHeaderProps>(({ centered, promo }) => {
+const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
   const { t } = useTranslation('home');
   const displayName = useUserStore(userProfileSelectors.displayUserName);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -91,11 +63,9 @@ const HomeHeader = memo<HomeHeaderProps>(({ centered, promo }) => {
       {centered ? (
         <AgentSelect />
       ) : (
-        <div className={styles.toolbar}>
+        <Flexbox horizontal align={'center'} className={styles.toolbar}>
           <AgentSelect />
-          {promo && <div className={styles.promo}>{promo}</div>}
-          <div aria-hidden className={styles.spacer} />
-        </div>
+        </Flexbox>
       )}
       <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}

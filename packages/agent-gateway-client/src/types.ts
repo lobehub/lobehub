@@ -193,6 +193,32 @@ export interface OperationHeartbeatData extends StepCompleteData {
   phase: 'operation_heartbeat';
 }
 
+/** Semantic interaction shape, independent of the legacy tool renderer id. */
+export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
+
+/** Producer that owns the blocked interaction. */
+export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'droid' | 'qoder';
+
+/** Whitelisted option surface that may be persisted for cold-start review. */
+export interface AgentInterventionRenderOption {
+  description?: string;
+  /** Required for provider-owned permission/plan choices. */
+  id?: string;
+  label: string;
+}
+
+/** Canonical AskUserQuestion surface shared by every supported provider. */
+export interface AgentInterventionRenderQuestion {
+  header: string;
+  multiSelect: boolean;
+  options: AgentInterventionRenderOption[];
+  question: string;
+}
+
+export interface AgentInterventionRenderArguments {
+  questions: AgentInterventionRenderQuestion[];
+}
+
 /**
  * Producer → consumer: structured-input request the user must answer
  * directly (no tool execution involved). The producer's tool handler stays
@@ -208,6 +234,17 @@ export interface AgentInterventionRequestData {
   deadline: number;
   /** Tool plugin identifier (e.g. `'claude-code'`). */
   identifier: string;
+  /**
+   * Semantic interaction shape. Optional only for older wire producers; all
+   * current producers stamp it explicitly so consumers never infer behavior
+   * from `identifier`.
+   */
+  interactionKind?: AgentInterventionInteractionKind;
+  /**
+   * Agent provider that owns the blocked request. Optional for backward wire
+   * compatibility; current producers always include it.
+   */
+  provider?: AgentInterventionProvider;
   /** Correlation key. Stable for the lifetime of the intervention. */
   toolCallId: string;
 }
@@ -221,6 +258,13 @@ export interface AgentInterventionResponseData {
   cancelled?: boolean;
   /** When `cancelled`, optional reason for telemetry/logging. */
   cancelReason?: 'timeout' | 'user_cancelled' | 'session_ended';
+  /** True only on the producer's post-resolution echo (durable ACK boundary). */
+  producerAck?: boolean;
+  /**
+   * Client-minted idempotency key. Present on user-driven responses and echoed
+   * unchanged by the producer so durable storage can cross the ACK boundary.
+   */
+  resolutionRequestId?: string;
   /** User-supplied answer (JSON-serializable). Absent when cancelled. */
   result?: unknown;
   toolCallId: string;
@@ -358,6 +402,16 @@ export interface SessionCompleteMessage {
 export type SessionStatus =
   'running' | 'waiting_input' | 'waiting_confirmation' | 'completed' | 'error' | 'interrupted';
 
+/** Provenance for a terminal session signal emitted by AgentStreamClient. */
+export type AgentStreamSessionCompletion =
+  | {
+      source: 'raw_session_complete';
+    }
+  | {
+      source: 'resume_status';
+      status: Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+    };
+
 /**
  * Server → Client: sent right after a `resume` replay, carrying the DO's
  * authoritative `status` from storage. Because the DO's in-memory event buffer
@@ -400,7 +454,7 @@ export interface AgentStreamClientEvents {
   disconnected: () => void;
   error: (error: Error) => void;
   reconnecting: (delay: number) => void;
-  session_complete: () => void;
+  session_complete: (completion: AgentStreamSessionCompletion) => void;
   status_changed: (status: ConnectionStatus) => void;
 }
 

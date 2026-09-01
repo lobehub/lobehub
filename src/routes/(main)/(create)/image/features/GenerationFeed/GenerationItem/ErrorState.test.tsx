@@ -6,19 +6,6 @@ import { type Generation, type GenerationBatch } from '@/types/generation';
 
 import { ErrorState } from './ErrorState';
 
-vi.mock('@lobehub/ui', async () => {
-  const React = await import('react');
-
-  return {
-    ActionIconGroup: () => React.createElement('div', { 'data-testid': 'action-buttons' }),
-    Block: ({ children, onClick, style }: any) =>
-      React.createElement('div', { onClick, style }, children),
-    Center: ({ children }: any) => React.createElement('div', null, children),
-    Icon: () => React.createElement('span', { 'data-testid': 'icon' }),
-    Text: ({ children }: any) => React.createElement('span', null, children),
-  };
-});
-
 vi.mock('./styles', () => ({
   styles: {
     generationActionButton: 'generation-actions',

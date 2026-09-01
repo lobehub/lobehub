@@ -4,7 +4,6 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readlinkSync,
   rmSync,
   symlinkSync,
@@ -15,7 +14,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { detectClaudeHarness, ensureSkillIgnored, linkHarnessSkills } from './skillWiring';
+import { detectClaudeHarness, linkHarnessSkills } from './skillWiring';
 
 let root: string;
 
@@ -102,97 +101,26 @@ describe('linkHarnessSkills', () => {
   });
 });
 
-describe('ensureSkillIgnored', () => {
-  it('skips entirely outside a git repository', () => {
-    expect(ensureSkillIgnored(root, 'acceptance', false)).toEqual([
-      { kind: 'skipped', reason: 'not a git repository' },
-    ]);
-    expect(existsSync(path.join(root, '.gitignore'))).toBe(false);
-  });
-
-  it('records the skill in a nested .agents/skills/.gitignore that also ignores itself', () => {
-    gitInit(root);
-
-    const results = ensureSkillIgnored(root, 'acceptance', false);
-
-    expect(results[0]).toMatchObject({ entry: '/acceptance/', kind: 'added' });
-    const nested = path.join(root, '.agents', 'skills', '.gitignore');
-    expect(readFileSync(nested, 'utf8')).toBe('/.gitignore\n/acceptance/\n');
-    expect(existsSync(path.join(root, '.gitignore'))).toBe(false);
-  });
-
-  it('leaves git status clean after wiring a fresh project', () => {
+describe('install wiring never writes .gitignore', () => {
+  // The materialized acceptance skill is checked into the consuming repo, so
+  // wiring must leave every ignore file untouched — an ignored skill dir would
+  // silently keep it out of review.
+  it('leaves the repo without any generated ignore entry', () => {
     gitInit(root);
     writeFileSync(path.join(root, 'CLAUDE.md'), '# project');
     mkdirSync(path.join(root, '.agents', 'skills', 'acceptance'), { recursive: true });
     writeFileSync(path.join(root, '.agents', 'skills', 'acceptance', 'SKILL.md'), '# skill');
 
-    const link = linkHarnessSkills(root, 'acceptance');
-    ensureSkillIgnored(root, 'acceptance', link.kind === 'linked');
-    execFileSync('git', ['add', '.gitignore', 'CLAUDE.md'], { cwd: root, stdio: 'ignore' });
+    linkHarnessSkills(root, 'acceptance');
+
+    expect(existsSync(path.join(root, '.gitignore'))).toBe(false);
+    expect(existsSync(path.join(root, '.agents', 'skills', '.gitignore'))).toBe(false);
 
     const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
       cwd: root,
       encoding: 'utf8',
     });
 
-    expect(status).not.toContain('.agents/skills/.gitignore');
-    expect(status).not.toContain('.agents/skills/acceptance');
-    expect(status).not.toContain('.claude/skills');
-  });
-
-  it('does not seed the self-ignore into a pre-existing nested file', () => {
-    gitInit(root);
-    mkdirSync(path.join(root, '.agents', 'skills'), { recursive: true });
-    writeFileSync(path.join(root, '.agents', 'skills', '.gitignore'), '/legacy/\n');
-
-    ensureSkillIgnored(root, 'acceptance', false);
-
-    expect(readFileSync(path.join(root, '.agents', 'skills', '.gitignore'), 'utf8')).toBe(
-      '/legacy/\n/acceptance/\n',
-    );
-  });
-
-  it('does not duplicate an entry on re-run', () => {
-    gitInit(root);
-    ensureSkillIgnored(root, 'acceptance', false);
-
-    const results = ensureSkillIgnored(root, 'acceptance', false);
-
-    expect(results[0]).toMatchObject({ entry: '/acceptance/', kind: 'present' });
-    expect(readFileSync(path.join(root, '.agents', 'skills', '.gitignore'), 'utf8')).toBe(
-      '/.gitignore\n/acceptance/\n',
-    );
-  });
-
-  it('adds the root .gitignore line when we created the link and git does not ignore it', () => {
-    gitInit(root);
-    writeFileSync(path.join(root, '.gitignore'), 'node_modules\n');
-
-    ensureSkillIgnored(root, 'acceptance', true);
-
-    expect(readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(
-      'node_modules\n/.claude/skills\n',
-    );
-  });
-
-  it('leaves the root .gitignore alone when .claude is already ignored', () => {
-    gitInit(root);
-    writeFileSync(path.join(root, '.gitignore'), '.claude/\n');
-
-    ensureSkillIgnored(root, 'acceptance', true);
-
-    expect(readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe('.claude/\n');
-  });
-
-  it('appends a missing trailing newline before the new entry', () => {
-    gitInit(root);
-    writeFileSync(path.join(root, '.gitignore'), 'node_modules');
-
-    ensureSkillIgnored(root, 'acceptance', true);
-
-    expect(readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(
-      'node_modules\n/.claude/skills\n',
-    );
+    expect(status).toContain('.agents/skills/acceptance/SKILL.md');
   });
 });

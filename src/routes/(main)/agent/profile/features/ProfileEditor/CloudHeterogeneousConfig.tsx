@@ -3,8 +3,8 @@
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
-import { Avatar, Input, Spin, Tag, Typography } from 'antd';
+import { Avatar, Button, Select, Tag } from '@lobehub/ui/base-ui';
+import { Input, Spin, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -317,7 +317,7 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     const githubCredOptions = githubCreds.map((cred) => ({
       label: (
         <span className={styles.credOption}>
-          {cred.oauthAvatar ? <Avatar size={16} src={cred.oauthAvatar} /> : <Github size={14} />}
+          {cred.oauthAvatar ? <Avatar avatar={cred.oauthAvatar} size={16} /> : <Github size={14} />}
           <span>{cred.name}</span>
           {cred.oauthUsername && (
             <Typography.Text style={{ fontSize: 12 }} type="secondary">

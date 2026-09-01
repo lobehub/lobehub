@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Alert, Button, Select, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Alert, Button, Select, Text, toast } from '@lobehub/ui/base-ui';
 import { SendIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

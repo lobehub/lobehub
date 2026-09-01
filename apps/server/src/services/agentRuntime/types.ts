@@ -9,13 +9,17 @@ import type {
 } from '@lobechat/context-engine';
 import type {
   ChatTopicBotContext,
+  EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
-import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type {
+  EvalContext,
+  ServerUserMemoryConfig,
+} from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
 
@@ -379,6 +383,8 @@ export interface OperationCreationParams {
      */
     orchestrationRole?: 'supervisor' | 'member';
     scope?: string | null;
+    /** Conversation/session locator used to rebuild an authenticated Review route. */
+    sessionId?: string;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
     /**
@@ -427,7 +433,10 @@ export interface OperationCreationParams {
   discordContext?: any;
   /** Whether ContextEngine may inject the operation expertise snapshot. */
   enableExpertise?: boolean;
-  evalContext?: any;
+  /** Evaluation prompt data consumed by Context Engine. */
+  evalContext?: EvalContext;
+  /** Evaluation execution controls consumed by Agent Runtime. */
+  evalRuntime?: EvalRuntimeContext;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
    * Forwarded into `state.metadata.executionPlan` so step-level layers (the
@@ -446,8 +455,21 @@ export interface OperationCreationParams {
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
+  /**
+   * Server-authored provenance for a continuation created from a durable human
+   * intervention claim. It is persisted in both agent_operations.metadata and
+   * runtime state so a retry can distinguish this exact continuation from an
+   * unrelated operation that happens to reuse an id. Never client-passable.
+   */
+  interventionResolution?: {
+    resolutionRequestId: string;
+    sourceOperationId: string;
+    sourceToolMessageIds: string[];
+  };
   maxSteps?: number;
   modelRuntimeConfig?: any;
+  /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
+  onInterventionPrepared?: () => void;
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;
@@ -557,4 +579,8 @@ export interface StartExecutionResult {
   operationId: string;
   scheduled: boolean;
   success: boolean;
+}
+export interface EvalRuntimeContext {
+  caseId?: string;
+  toolForwarding?: EvalToolForwardingConfig;
 }

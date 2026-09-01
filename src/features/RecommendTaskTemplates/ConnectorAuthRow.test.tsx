@@ -22,10 +22,6 @@ vi.mock('./providerMeta', () => ({
   getProviderMeta: () => ({ icon: 'https://example.com/icon.png', label: 'HubSpot' }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 describe('ConnectorAuthRow', () => {
   beforeEach(() => {
     connectMock.mockReset();

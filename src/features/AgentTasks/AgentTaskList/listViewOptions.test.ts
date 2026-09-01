@@ -74,6 +74,32 @@ describe('automation mode grouping', () => {
   });
 });
 
+describe('assignment grouping', () => {
+  it('groups agent and member assignments independently', () => {
+    const dualAssigned = task('dual', {
+      assigneeAgentId: 'agent-1',
+      assigneeUserId: 'user-1',
+    });
+    const memberOnly = task('member-only', { assigneeUserId: 'user-1' });
+
+    expect(
+      groupTaskItems([dualAssigned, memberOnly], 'assignee').map(([group, items]) => [
+        group.key,
+        items.map((item) => item.id),
+      ]),
+    ).toEqual([
+      ['assignee:agent-1', ['dual']],
+      ['assignee:unassigned', ['member-only']],
+    ]);
+    expect(
+      groupTaskItems([dualAssigned, memberOnly], 'member').map(([group, items]) => [
+        group.key,
+        items.map((item) => item.id),
+      ]),
+    ).toEqual([['member:user-1', ['dual', 'member-only']]]);
+  });
+});
+
 describe('collapseSubTasks', () => {
   it('drops a sub-task whose parent is already listed', () => {
     const items = [task('parent'), task('child', { parentTaskId: 'parent' })];

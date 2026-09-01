@@ -185,9 +185,6 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableInAppBrowser: () => false,
-  },
   settingsSelectors: {
     memoryEnabled: () => false,
   },

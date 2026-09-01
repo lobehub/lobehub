@@ -19,10 +19,7 @@ vi.mock('@lobechat/shared-tool-ui/styles', () => ({
 
 vi.mock('@lobehub/ui', () => ({}));
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => new Proxy({}, { get: (_target, property) => String(property) }),
-  cx: (...classNames: Array<string | false | undefined>) => classNames.filter(Boolean).join(' '),
-}));
+vi.mock('@lobehub/ui/base-ui', () => ({}));
 
 describe('AskUserQuestionInspector', () => {
   afterEach(cleanup);

@@ -1,5 +1,6 @@
 import { LOADING_FLAT } from '@lobechat/const';
-import { type LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
+import { idGenerator } from '@lobechat/database';
 import { evaluate } from '@lobechat/eval-rubric';
 import type {
   EvalBenchmarkRubric,
@@ -11,10 +12,13 @@ import type {
   EvalRunTopicResult,
   EvalTestCaseMetadata,
   EvalThreadResult,
+  ImportedMessage,
   RubricType,
+  ToolIntervention,
 } from '@lobechat/types';
 import { getActivePluginIds, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import {
   AgentEvalBenchmarkModel,
@@ -27,8 +31,10 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { agentEvalRunTopics, messagePlugins, messages, topics } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
+import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import {
   AgentEvalRunWorkflow,
@@ -40,22 +46,27 @@ import {
 const roundCost = (v: number): number => Math.round(v * 1e6) / 1e6;
 const EVAL_AGENT_RUNTIME_QSTASH_RETRIES = 5;
 const EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY = '10000 * (1 + retried)';
+const EVAL_HISTORY_MESSAGE_BATCH_SIZE = 500;
+const EVAL_HISTORY_TAIL_METADATA_KEY = 'evalHistoryTailMessageId';
 const RESUMABLE_THREAD_STATUSES = new Set(['error', 'timeout']);
 
 const getEvalContextParams = (
   envPrompt?: string,
   environment?: EvalCaseEnvironment,
   caseId?: string,
-) =>
-  envPrompt || environment || caseId
-    ? {
-        evalContext: {
-          ...(caseId && { caseId }),
-          envPrompt,
-          toolForwarding: environment?.toolForwarding,
-        },
-      }
-    : {};
+) => {
+  const mergedEnvPrompt =
+    [envPrompt, environment?.envPrompt].filter(Boolean).join('\n\n') || undefined;
+  const evalRuntime: EvalRuntimeContext | undefined =
+    caseId || environment?.toolForwarding
+      ? { ...(caseId && { caseId }), toolForwarding: environment?.toolForwarding }
+      : undefined;
+
+  return {
+    ...(mergedEnvPrompt && { evalContext: { envPrompt: mergedEnvPrompt } }),
+    ...(evalRuntime && { evalRuntime }),
+  };
+};
 
 const getCaseId = (metadata?: EvalTestCaseMetadata | null) => metadata?.caseId;
 
@@ -276,25 +287,187 @@ export class AgentEvalRunService {
     const testCases = await this.testCaseModel.findByDatasetId(datasetId);
 
     if (testCases.length > 0) {
-      const createdTopics = await this.topicModel.batchCreate(
-        testCases.map((tc) => ({
-          agentId: targetAgentId ?? undefined,
-          title: `[Eval Case #${(tc.sortOrder ?? 0) + 1}] ${tc.content?.input?.slice(0, 50) || 'Test Case'}...`,
-          trigger: RequestTrigger.Eval,
-        })),
-      );
-
-      await this.runTopicModel.batchCreate(
-        createdTopics.map((topic, index) => ({
-          runId: run.id,
-          status: 'pending' as const,
-          testCaseId: testCases[index].id,
-          topicId: topic.id,
-        })),
-      );
+      await this.createRunTopics(run.id, targetAgentId, testCases);
     }
 
     return run;
+  }
+
+  private createRunTopics(
+    runId: string,
+    targetAgentId: string | null | undefined,
+    testCases: Array<{
+      content: { input: string; messages?: ImportedMessage[] };
+      id: string;
+      sortOrder: number | null;
+    }>,
+  ) {
+    return this.db.transaction(async (tx) => {
+      const preparedCases = testCases.map((testCase) => ({
+        testCase,
+        topicId: idGenerator('topics'),
+      }));
+
+      await tx.insert(topics).values(
+        preparedCases.map(({ testCase, topicId }) => ({
+          agentId: targetAgentId ?? null,
+          id: topicId,
+          title: `[${(testCase.sortOrder ?? 0) + 1}] ${testCase.content.input.slice(0, 50) || 'Topic'}...`,
+          trigger: 'eval' as const,
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
+        })),
+      );
+
+      for (const { testCase, topicId } of preparedCases) {
+        const history = testCase.content.messages?.filter((message) => message.role !== 'system');
+        if (!history?.length) continue;
+
+        const idMapping = new Map<string, string>();
+        const hasParentInfo = history.some((message) => message.parentId != null);
+        const now = Date.now();
+        let previousCreatedAt = Number.NEGATIVE_INFINITY;
+        const preparedMessages = history.map((message, index) => {
+          const id = idGenerator('messages');
+          if (message.id) idMapping.set(message.id, id);
+
+          const timestamp =
+            message.createdAt === undefined
+              ? now + index
+              : typeof message.createdAt === 'number'
+                ? message.createdAt
+                : Date.parse(message.createdAt);
+          const createdAt = Math.max(
+            Number.isNaN(timestamp) ? now + index : timestamp,
+            previousCreatedAt + 1,
+          );
+          previousCreatedAt = createdAt;
+
+          const updatedTimestamp =
+            message.updatedAt === undefined
+              ? createdAt
+              : typeof message.updatedAt === 'number'
+                ? message.updatedAt
+                : Date.parse(message.updatedAt);
+
+          return {
+            createdAt,
+            id,
+            message,
+            updatedAt: Math.max(
+              Number.isNaN(updatedTimestamp) ? createdAt : updatedTimestamp,
+              createdAt,
+            ),
+          };
+        });
+
+        const messageRows = preparedMessages.map(
+          ({ createdAt, id, message, updatedAt }, index) => ({
+            agentId: null,
+            content: message.content,
+            createdAt: new Date(createdAt),
+            error: message.error ?? null,
+            id,
+            metadata: message.metadata ?? null,
+            model: message.model ?? null,
+            parentId: null,
+            provider: message.provider ?? null,
+            reasoning: message.reasoning ?? null,
+            role: message.role,
+            search: message.search ?? null,
+            tools: message.tools ?? null,
+            topicId,
+            traceId: message.traceId ?? null,
+            updatedAt: new Date(updatedAt),
+            userId: this.userId,
+            workspaceId: this.workspaceId ?? null,
+          }),
+        );
+        const pluginRows = preparedMessages.flatMap(({ id, message }) => {
+          if (
+            !message.plugin &&
+            !message.pluginError &&
+            !message.pluginIntervention &&
+            !message.pluginState &&
+            !message.tool_call_id
+          ) {
+            return [];
+          }
+
+          return [
+            {
+              apiName: message.plugin?.apiName ?? null,
+              arguments: message.plugin?.arguments ?? null,
+              error: message.pluginError ?? null,
+              id,
+              identifier: message.plugin?.identifier ?? null,
+              intervention: message.pluginIntervention as ToolIntervention | undefined,
+              state: message.pluginState ?? null,
+              toolCallId: message.tool_call_id ?? null,
+              type: message.plugin?.type ?? null,
+              userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
+            },
+          ];
+        });
+
+        for (let index = 0; index < messageRows.length; index += EVAL_HISTORY_MESSAGE_BATCH_SIZE) {
+          await tx
+            .insert(messages)
+            .values(messageRows.slice(index, index + EVAL_HISTORY_MESSAGE_BATCH_SIZE));
+        }
+        const parentLinks = preparedMessages
+          .map(({ id, message }, index) => ({
+            id,
+            parentId: hasParentInfo
+              ? message.parentId
+                ? (idMapping.get(message.parentId) ?? null)
+                : null
+              : (preparedMessages[index - 1]?.id ?? null),
+          }))
+          .filter((link): link is { id: string; parentId: string } => link.parentId !== null);
+        for (let index = 0; index < parentLinks.length; index += EVAL_HISTORY_MESSAGE_BATCH_SIZE) {
+          const chunk = parentLinks.slice(index, index + EVAL_HISTORY_MESSAGE_BATCH_SIZE);
+          await tx
+            .update(messages)
+            .set({
+              parentId: sql`case ${messages.id} ${sql.join(
+                chunk.map(({ id, parentId }) => sql`when ${id} then ${parentId}`),
+                sql` `,
+              )} end`,
+            })
+            .where(
+              inArray(
+                messages.id,
+                chunk.map(({ id }) => id),
+              ),
+            );
+        }
+        for (let index = 0; index < pluginRows.length; index += EVAL_HISTORY_MESSAGE_BATCH_SIZE) {
+          await tx
+            .insert(messagePlugins)
+            .values(pluginRows.slice(index, index + EVAL_HISTORY_MESSAGE_BATCH_SIZE));
+        }
+
+        await tx
+          .update(topics)
+          .set({ metadata: { [EVAL_HISTORY_TAIL_METADATA_KEY]: preparedMessages.at(-1)!.id } })
+          .where(eq(topics.id, topicId));
+      }
+
+      await tx.insert(agentEvalRunTopics).values(
+        preparedCases.map(({ testCase, topicId }) => ({
+          runId,
+          status: 'pending' as const,
+          testCaseId: testCase.id,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
+        })),
+      );
+
+      return preparedCases.map(({ topicId }) => topicId);
+    });
   }
 
   async deleteRun(id: string) {
@@ -350,9 +523,9 @@ export class AgentEvalRunService {
 
     // Collect test case IDs and info for recreation
     const errorTestCases = errorTopics.map((t) => ({
+      content: t.testCase?.content ?? { input: '' },
       id: t.testCaseId,
-      input: t.testCase?.content?.input,
-      sortOrder: t.testCase?.sortOrder,
+      sortOrder: t.testCase?.sortOrder ?? null,
     }));
 
     // 1. Delete error/terminal RunTopics (the filter above excludes active
@@ -361,23 +534,8 @@ export class AgentEvalRunService {
 
     // 2. Preserve old Topics (old conversations are kept for audit/history);
     // only the RunTopic association is replaced.
-    // 3. Create new Topics and pending RunTopics for the error test cases
-    const createdTopics = await this.topicModel.batchCreate(
-      errorTestCases.map((tc) => ({
-        agentId: run.targetAgentId ?? undefined,
-        title: `[Eval Case #${(tc.sortOrder ?? 0) + 1}] ${tc.input?.slice(0, 50) || 'Test Case'}...`,
-        trigger: RequestTrigger.Eval,
-      })),
-    );
-
-    await this.runTopicModel.batchCreate(
-      createdTopics.map((topic, index) => ({
-        runId,
-        status: 'pending' as const,
-        testCaseId: errorTestCases[index].id,
-        topicId: topic.id,
-      })),
-    );
+    // 3. Create fresh Topics, histories, and pending RunTopics together.
+    await this.createRunTopics(runId, run.targetAgentId, errorTestCases);
 
     // 4. Set run status to pending
     await this.runModel.update(runId, { status: 'pending' });
@@ -401,22 +559,12 @@ export class AgentEvalRunService {
     await this.runTopicModel.deleteByRunAndTestCase(runId, testCaseId);
 
     // 2. Preserve the old Topic (conversation history); only re-link.
-    // 3. Create new Topic
-    const [newTopic] = await this.topicModel.batchCreate([
+    // 3. Create a fresh Topic, its history, and its RunTopic together.
+    await this.createRunTopics(runId, run.targetAgentId, [
       {
-        agentId: run.targetAgentId ?? undefined,
-        title: `[Eval Case #${(runTopic.testCase?.sortOrder ?? 0) + 1}] ${runTopic.testCase?.content?.input?.slice(0, 50) || 'Test Case'}...`,
-        trigger: RequestTrigger.Eval,
-      },
-    ]);
-
-    // 4. Create new RunTopic with pending status
-    await this.runTopicModel.batchCreate([
-      {
-        runId,
-        status: 'pending' as const,
-        testCaseId,
-        topicId: newTopic.id,
+        content: runTopic.testCase?.content ?? { input: '' },
+        id: testCaseId,
+        sortOrder: runTopic.testCase?.sortOrder ?? null,
       },
     ]);
 
@@ -1323,17 +1471,11 @@ export class AgentEvalRunService {
       await this.runTopicModel.deleteByRunAndTestCase(runId, testCaseId);
     }
 
-    const [topic] = await this.topicModel.batchCreate([
-      {
-        agentId: run.targetAgentId ?? undefined,
-        title: `[Eval Case #${(testCase.sortOrder ?? 0) + 1}] ${(testCase.content?.input ?? '').slice(0, 50)}...`,
-        trigger: RequestTrigger.Eval,
-      },
-    ]);
-
-    await this.runTopicModel.batchCreate([
-      { runId, status: 'pending' as const, testCaseId, topicId: topic.id },
-    ]);
+    const topicId = (
+      await this.createRunTopics(runId, run.targetAgentId, [
+        { content: testCase.content, id: testCaseId, sortOrder: testCase.sortOrder },
+      ])
+    )[0]!;
 
     const result = await this.executeTrajectoryCore({
       deviceId: params.deviceId,
@@ -1346,7 +1488,7 @@ export class AgentEvalRunService {
         sortOrder: testCase.sortOrder,
       },
       testCaseId,
-      topicId: topic.id,
+      topicId,
       environment,
     });
 
@@ -1375,6 +1517,10 @@ export class AgentEvalRunService {
     }
 
     const topicId = runTopic.topicId;
+    const topic = await this.topicModel.findById(topicId);
+    const historyTailMessageId = topic?.metadata?.[EVAL_HISTORY_TAIL_METADATA_KEY];
+    const sourceMessageId =
+      typeof historyTailMessageId === 'string' ? historyTailMessageId : undefined;
 
     // Update status from 'pending' to 'running'
     await this.runTopicModel.updateByRunAndTopic(runId, topicId, { status: 'running' });
@@ -1383,6 +1529,7 @@ export class AgentEvalRunService {
     const threadIds: string[] = [];
     for (let i = 0; i < k; i++) {
       const thread = await this.threadModel.create({
+        sourceMessageId,
         topicId,
         type: 'eval',
       });
@@ -1738,8 +1885,13 @@ export class AgentEvalRunService {
     const dataset = await this.datasetModel.findById(run.datasetId);
     if (!dataset) return { ...baseMeta, error: 'Dataset not found', passed: false, score: 0 };
 
-    const benchmark = await this.benchmarkModel.findById(dataset.benchmarkId);
-    if (!benchmark) return { ...baseMeta, error: 'Benchmark not found', passed: false, score: 0 };
+    // A dataset need not belong to a benchmark; such a dataset simply
+    // contributes no benchmark-level rubrics, and scoring falls back to the
+    // per-case / per-dataset evalMode. Bailing here would leave every case in a
+    // captured dataset permanently unscored.
+    const benchmark = dataset.benchmarkId
+      ? await this.benchmarkModel.findById(dataset.benchmarkId)
+      : null;
 
     const testCase = await this.testCaseModel.findById(testCaseId);
     if (!testCase) return { ...baseMeta, error: 'Test case not found', passed: false, score: 0 };
@@ -1788,7 +1940,7 @@ export class AgentEvalRunService {
         },
       ];
     } else {
-      effectiveRubrics = benchmark.rubrics ?? [];
+      effectiveRubrics = benchmark?.rubrics ?? [];
     }
 
     // Run evaluation
@@ -2339,11 +2491,12 @@ export class AgentEvalRunService {
     const dataset = await this.datasetModel.findById(run.datasetId);
     if (!dataset) return;
 
-    const benchmark = await this.benchmarkModel.findById(dataset.benchmarkId);
-    if (!benchmark) return;
+    const benchmark = dataset.benchmarkId
+      ? await this.benchmarkModel.findById(dataset.benchmarkId)
+      : null;
 
     const passThreshold = (run.config?.passThreshold as number) ?? 0.6;
-    const benchmarkRubrics = benchmark.rubrics;
+    const benchmarkRubrics = benchmark?.rubrics ?? [];
 
     // Get messages for this topic
     const messages = await this.messageModel.query({ topicId: runTopic.topicId });

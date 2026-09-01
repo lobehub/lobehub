@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "Изтегли нова версия",
   "updater.downloadingUpdate": "Изтегляне на актуализация",
   "updater.downloadingUpdateDesc": "Актуализацията се изтегля, моля изчакайте...",
+  "updater.ignore": "Игнорирай",
   "updater.installLater": "Актуализирай при следващо стартиране",
   "updater.isLatestVersion": "Използвате най-новата версия",
   "updater.isLatestVersionDesc": "Чудесно! Версията {{version}}, която използвате, е най-новата налична.",

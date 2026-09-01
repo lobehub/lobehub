@@ -8,6 +8,7 @@ import {
 } from '@lobechat/prompts';
 import debug from 'debug';
 
+import { DocumentModel } from '@/database/models/document';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReportModel } from '@/database/models/verifyReport';
@@ -43,6 +44,7 @@ export class VerifyReporterService {
   private readonly resultModel: VerifyCheckResultModel;
   private readonly evidenceModel: VerifyEvidenceModel;
   private readonly reportModel: VerifyReportModel;
+  private readonly documentModel: DocumentModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
@@ -50,6 +52,7 @@ export class VerifyReporterService {
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
     this.reportModel = new VerifyReportModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
 
   async generateReport(params: GenerateReportParams) {
@@ -62,10 +65,20 @@ export class VerifyReporterService {
     }
 
     const evidenceRows = await this.evidenceModel.listByRun(verifyRunId);
+    const documentIds = [
+      ...new Set(evidenceRows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+    ];
+    const documents = await this.documentModel.findByIds(documentIds);
+    const documentContent = new Map(documents.map((document) => [document.id, document.content]));
     const evidenceByItem = new Map<string, JudgeEvidence[]>();
     for (const row of evidenceRows) {
       const list = evidenceByItem.get(row.checkItemId) ?? [];
-      list.push({ content: row.content, description: row.description, type: row.type });
+      list.push({
+        content: row.documentId ? documentContent.get(row.documentId) : row.content,
+        description: row.description,
+        documentId: row.documentId,
+        type: row.type,
+      });
       evidenceByItem.set(row.checkItemId, list);
     }
 

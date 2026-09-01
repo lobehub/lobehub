@@ -238,6 +238,48 @@ describe('compressContext executor', () => {
     );
   });
 
+  it('preserves the latest user Work contract even after assistant and tool messages', async () => {
+    const activeContract = {
+      content: 'Current Work contract: verify Micron BW 150 suppliers only',
+      id: 'msg-current-work',
+      role: 'user',
+    };
+    const toolResult = { content: 'search result', id: 'msg-tool', role: 'tool' };
+    messagesQuery.mockResolvedValue([
+      { content: 'old objective', id: 'msg-old', role: 'user' },
+      activeContract,
+      { content: 'searching', id: 'msg-assistant', role: 'assistant' },
+      toolResult,
+    ]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [{ content: 'old objective', id: 'msg-old', role: 'user' }],
+    });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'historical summary', id: 'group-123', role: 'compressedGroup' }],
+    });
+
+    const state = createState({
+      messages: [
+        { content: 'old objective', id: 'msg-old', role: 'user' },
+        activeContract,
+        { content: 'searching', id: 'msg-assistant', role: 'assistant' },
+        toolResult,
+      ],
+    });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['msg-old', 'msg-assistant', 'msg-tool'],
+      }),
+    );
+    expect(result.newState.messages).toEqual([
+      { content: 'historical summary', id: 'group-123', role: 'compressedGroup' },
+      activeContract,
+    ]);
+  });
+
   it('skips without compression side effects when topic context is missing', async () => {
     const state = createState({
       metadata: { agentId: 'agent-123' },
@@ -334,6 +376,7 @@ describe('compressContext executor', () => {
     );
     expect(result.newState.messages).toEqual([
       { content: 'combined summary', id: 'group-123', role: 'compressedGroup' },
+      { content: 'recent question', id: 'msg-recent', role: 'user' },
     ]);
     expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
   });

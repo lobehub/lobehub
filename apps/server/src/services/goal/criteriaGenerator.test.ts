@@ -17,7 +17,11 @@ describe('GoalCriteriaGeneratorService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resolveGoalModelConfig.mockResolvedValue({ model: 'goal-model', provider: 'goal-provider' });
-    generateObject.mockResolvedValue({ criteria: [] });
+    generateObject.mockResolvedValue({
+      criteria: [],
+      instruction: 'Publish the benchmark paper.',
+      title: 'Publish benchmark paper',
+    });
   });
 
   it('uses the dedicated goal model, prompt version, schema, and tracing scenario', async () => {
@@ -34,7 +38,7 @@ describe('GoalCriteriaGeneratorService', () => {
       }),
       expect.objectContaining({
         tracing: {
-          promptVersion: 'v1',
+          promptVersion: 'v3',
           scenario: 'goal_criteria_gen',
           schemaName: 'goal_criteria_draft',
         },
@@ -57,10 +61,30 @@ describe('GoalCriteriaGeneratorService', () => {
           verifierType: 'agent',
         },
       ],
+      instruction: 'Ship it.',
+      title: 'Ship it',
     });
 
     await expect(
       new GoalCriteriaGeneratorService({} as any, 'user-1').generate({ goal: 'Ship it' }),
     ).resolves.toEqual([]);
+  });
+
+  it('keeps the array response for existing callers while exposing the full generated plan', async () => {
+    generateObject.mockResolvedValue({
+      criteria: [{ title: 'Benchmark is published', verifierType: 'agent' }],
+      instruction: 'Publish the benchmark paper.',
+      title: 'Publish benchmark paper',
+    });
+    const service = new GoalCriteriaGeneratorService({} as any, 'user-1');
+
+    await expect(service.generate({ goal: 'Publish a benchmark paper' })).resolves.toEqual([
+      { title: 'Benchmark is published', verifierType: 'agent' },
+    ]);
+    await expect(service.generatePlan({ goal: 'Publish a benchmark paper' })).resolves.toEqual({
+      criteria: [{ title: 'Benchmark is published', verifierType: 'agent' }],
+      instruction: 'Publish the benchmark paper.',
+      title: 'Publish benchmark paper',
+    });
   });
 });

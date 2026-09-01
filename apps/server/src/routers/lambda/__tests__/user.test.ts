@@ -75,6 +75,7 @@ vi.mock('@/database/server', () => ({
 }));
 
 vi.mock('@/database/models/message');
+vi.mock('@/database/models/rbac');
 vi.mock('@/database/models/session');
 vi.mock('@/database/models/user');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
@@ -143,7 +144,7 @@ describe('userRouter', () => {
         userRouter.createCaller(scopedCtx).getSupportedUnderstandingProviders(),
       ).resolves.toEqual({
         connectionSources: {
-          github: 'composio',
+          github: 'lobehub',
           gmail: 'composio',
           notion: 'composio',
           twitter: 'lobehub',
@@ -995,6 +996,111 @@ describe('userRouter', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('updateToolIntervention', () => {
+    it('delegates to the atomic model merge with the raw input', async () => {
+      const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(() => ({ mergeToolInterventionSetting }) as any);
+
+      await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
+        appendAllowList: ['bash/bash'],
+        approvalMode: 'auto-run',
+      });
+
+      // Merge semantics (sibling-key preservation, allowList union, concurrency)
+      // are covered by the UserModel integration tests against a real database.
+      expect(mergeToolInterventionSetting).toHaveBeenCalledWith({
+        appendAllowList: ['bash/bash'],
+        approvalMode: 'auto-run',
+      });
+    });
+
+    it('rejects workspace members without content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
+      );
+
+      await expect(
+        userRouter
+          .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+          .updateToolIntervention({ approvalMode: 'auto-run' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('allows workspace members holding content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(true) }) as any,
+      );
+
+      const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(() => ({ mergeToolInterventionSetting }) as any);
+
+      await userRouter
+        .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+        .updateToolIntervention({ approvalMode: 'auto-run' });
+
+      expect(mergeToolInterventionSetting).toHaveBeenCalledWith({ approvalMode: 'auto-run' });
+    });
+  });
+
+  describe('updateUninstalledBuiltinTools', () => {
+    it('patches the slot pinned by the input workspace, gated on that workspace', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      const hasAnyPermission = vi.fn().mockResolvedValue(true);
+      vi.mocked(RbacModel).mockImplementation(() => ({ hasAnyPermission }) as any);
+
+      const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(
+        () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
+      );
+
+      // ctx carries a DIFFERENT workspace than the pinned target — the write and
+      // the RBAC check must both follow the pinned input scope, not the header.
+      await userRouter
+        .createCaller({ ...mockCtx, workspaceId: 'ws_other' } as any)
+        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: ['dalle'], workspaceId: 'ws_1' });
+
+      expect(hasAnyPermission).toHaveBeenCalledWith(expect.anything(), { workspaceId: 'ws_1' });
+      expect(replaceUninstalledBuiltinToolsSetting).toHaveBeenCalledWith({
+        uninstalledBuiltinTools: ['dalle'],
+        workspaceId: 'ws_1',
+      });
+    });
+
+    it('targets the personal scope when the pinned workspace is null', async () => {
+      const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(
+        () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
+      );
+
+      await userRouter
+        .createCaller({ ...mockCtx })
+        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: [], workspaceId: null });
+
+      expect(replaceUninstalledBuiltinToolsSetting).toHaveBeenCalledWith({
+        uninstalledBuiltinTools: [],
+        workspaceId: null,
+      });
+    });
+
+    it('rejects members without content permission on the target workspace', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
+      );
+
+      await expect(
+        userRouter
+          .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+          .updateUninstalledBuiltinTools({
+            uninstalledBuiltinTools: ['dalle'],
+            workspaceId: 'ws_1',
+          }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
 });

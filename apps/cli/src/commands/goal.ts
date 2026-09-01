@@ -1,13 +1,39 @@
-import type { GoalGraphDecision, GoalGraphSnapshot, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalGraphDecision,
+  GoalGraphSnapshot,
+  GoalNodeKind,
+  GoalTickResult,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveAppUrlBuilder } from './task/url';
 
-const nodeIcon = { decision: '◆', finding: '●', problem: '◇', work: '▣' } as const;
+// Typed rather than inferred: an `as const` map is indexable by a widened
+// `any` node kind, which is how a renamed kind silently printed `undefined`
+// here after the type checker had signed off everywhere else.
+const nodeIcon: Record<GoalNodeKind, string> = {
+  decision: '◆',
+  finding: '●',
+  problem: '◇',
+  task: '▣',
+};
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
+
+interface GoalRunTickResult extends GoalTickResult {
+  pollCount?: number;
+  waitedMs?: number;
+}
+
+const isSameWaitingState = (previous: GoalRunTickResult | undefined, current: GoalTickResult) =>
+  previous?.outcome === 'waiting_external' &&
+  current.outcome === 'waiting_external' &&
+  previous.message === current.message &&
+  previous.nodeId === current.nodeId &&
+  previous.taskId === current.taskId;
 
 function printGraph(graph: GoalGraphSnapshot) {
   console.log(`\n${pc.bold(graph.goal.title)} ${pc.dim(graph.goal.id)} [${graph.goal.status}]`);
@@ -56,25 +82,102 @@ export function registerGoalCommand(program: Command) {
     .command('create <title>')
     .description('Create a standalone goal and seed its graph')
     .option('-r, --requirement <text>', 'Acceptance requirement')
-    .option('-w, --work <title...>', 'Initial work node titles')
+    .option(
+      '-i, --instruction <text>',
+      "The ask in the user's own words, shown on the problem node",
+    )
+    .option('-w, --work <title...>', 'Initial work node titles (omit to let the planner decompose)')
     .option('--agent <id>', 'Responsible agent ID')
     .option('--project <id>', 'Project ID')
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
+    .option('--max-attempts-per-work <n>', 'Attempts per Work before opening a decision gate')
+    .option(
+      '--max-concurrent-tasks <n>',
+      "How many of this goal's tasks may run at once (default 3)",
+    )
+
+    .option('--max-steps-per-run <n>', 'Optional agent step cap per Work run (for example 500)')
+    .option(
+      '--operation-lease-timeout-ms <n>',
+      'Reclaim a Work operation after this idle time (minimum: 60000)',
+    )
     .option('--json [fields]', 'Output JSON')
     .action(async (title: string, options) => {
       const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
       const result = await client.goal.create.mutate({
         agentId: options.agent,
+        config:
+          options.maxAttemptsPerTask ||
+          options.maxStepsPerRun ||
+          options.operationLeaseTimeoutMs ||
+          options.maxConcurrentTasks
+            ? {
+                maxConcurrentTasks: options.maxConcurrentTasks
+                  ? Number.parseInt(options.maxConcurrentTasks, 10)
+                  : undefined,
+                recovery: {
+                  maxAttemptsPerTask: options.maxAttemptsPerTask
+                    ? Number.parseInt(options.maxAttemptsPerTask, 10)
+                    : undefined,
+                  maxStepsPerRun: options.maxStepsPerRun
+                    ? Number.parseInt(options.maxStepsPerRun, 10)
+                    : undefined,
+                  operationLeaseTimeoutMs: options.operationLeaseTimeoutMs
+                    ? Number.parseInt(options.operationLeaseTimeoutMs, 10)
+                    : undefined,
+                },
+              }
+            : undefined,
         maxRounds: options.maxRounds ? Number.parseInt(options.maxRounds, 10) : undefined,
         maxTotalCost: options.maxCost ? Number.parseFloat(options.maxCost) : undefined,
+        problemDescription: options.instruction,
         projectId: options.project,
         requirement: options.requirement,
         title,
         work: options.work,
       });
-      if (options.json !== undefined) return outputJson(result.data, options.json);
+      // `goal.create` returns the whole graph snapshot, so the id is on its
+      // goal — `result.data.id` is undefined, and the CLI cannot resolve the
+      // router's types to catch that, which is how it reached a printed URL.
+      const url = buildUrl(`/goal/${encodeURIComponent(result.data.goal.id)}`);
+      if (options.json !== undefined) return outputJson({ ...result.data, url }, options.json);
       printGraph(result.data);
+      console.log(`${pc.bold('goal')}: ${url}`);
+    });
+
+  goal
+    .command('list')
+    .description('List goals with their graph roll-up')
+    .option('--agent <id>', 'Filter by responsible agent')
+    .option('--project <id>', 'Filter by project')
+    .option('--status <status...>', 'Filter by lifecycle status')
+    .option('--limit <n>', 'Maximum rows', '50')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (options) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.list.query({
+        agentId: options.agent,
+        limit: Number.parseInt(options.limit, 10),
+        projectId: options.project,
+        statuses: options.status,
+      });
+      if (options.json !== undefined) return outputJson(result.goals, options.json);
+      if (result.goals.length === 0) return log.info('No goals yet.');
+      printTable(
+        result.goals.map((item) => [
+          item.goal.status,
+          truncate(item.goal.title, 44),
+          `${item.workDone}/${item.workTotal}`,
+          String(item.findingCount),
+          item.pendingDecisions > 0 ? pc.yellow(String(item.pendingDecisions)) : '-',
+          `$${item.totalRunCost.toFixed(2)}`,
+          item.goal.id,
+        ]),
+        ['STATUS', 'TITLE', 'WORK', 'FINDINGS', 'NEEDS YOU', 'COST', 'GOAL ID'],
+      );
     });
 
   const show = async (id: string, options: { json?: boolean | string }) => {
@@ -111,13 +214,23 @@ export function registerGoalCommand(program: Command) {
     .option('--json', 'Output tick results as JSON')
     .action(async (id: string, options: { json?: boolean; maxTicks: string; pollMs: string }) => {
       const client = await getTrpcClient();
-      const results: GoalTickResult[] = [];
+      const results: GoalRunTickResult[] = [];
       const maxTicks = Number.parseInt(options.maxTicks, 10);
       const pollMs = Number.parseInt(options.pollMs, 10);
       for (let index = 0; index < maxTicks; index++) {
         const { data } = await client.goal.tick.mutate({ id });
-        results.push(data);
-        if (!options.json) printTick(data);
+        const previous = results.at(-1);
+        if (isSameWaitingState(previous, data)) {
+          previous.pollCount = (previous.pollCount ?? 1) + 1;
+          previous.waitedMs = (previous.waitedMs ?? pollMs) + pollMs;
+        } else {
+          results.push(
+            data.outcome === 'waiting_external'
+              ? { ...data, pollCount: 1, waitedMs: pollMs }
+              : data,
+          );
+          if (!options.json) printTick(data);
+        }
         if (terminalOutcomes.has(data.outcome)) break;
         if (data.outcome === 'waiting_external') {
           await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -125,7 +238,7 @@ export function registerGoalCommand(program: Command) {
       }
       if (options.json) outputJson(results);
       const last = results.at(-1);
-      if (last && !terminalOutcomes.has(last.outcome) && results.length === maxTicks) {
+      if (last && !terminalOutcomes.has(last.outcome)) {
         log.warn(`Stopped after ${maxTicks} ticks; rerun to continue.`);
       }
     });
@@ -208,7 +321,7 @@ export function registerGoalCommand(program: Command) {
     .action(
       async (
         id: string,
-        kind: 'decision' | 'finding' | 'problem' | 'work',
+        kind: 'decision' | 'finding' | 'problem' | 'task',
         title: string,
         options,
       ) => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
+  applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   canPublishAgentTopicLink,
@@ -12,6 +13,7 @@ import {
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
   resolveAgentTopicSharePolicy,
+  resolveHeterogeneousProviderTopicModel,
   unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
@@ -113,6 +115,88 @@ describe('pruneWorkingDirByDeviceDeletes', () => {
     expect(() =>
       pruneWorkingDirByDeviceDeletes(undefined, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
+  });
+});
+
+describe('heterogeneous topic models', () => {
+  it('snapshots the persisted selector and Default', () => {
+    expect(
+      resolveHeterogeneousProviderTopicModel({
+        args: ['--model', 'cursor-arg-model'],
+        model: 'stale-structured-model',
+        type: 'cursor',
+      }),
+    ).toEqual({ model: 'stale-structured-model', provider: 'cursor' });
+    expect(resolveHeterogeneousProviderTopicModel({ type: 'cursor' })).toEqual({
+      model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      provider: 'cursor',
+    });
+  });
+
+  it('keeps server-default API models Agent-scoped and ignores stale topic bindings', () => {
+    const config = {
+      apiConfig: { model: 'server-model', source: 'server-default' },
+      authMode: 'api',
+      type: 'claude-code',
+    } as const;
+
+    expect(resolveHeterogeneousProviderTopicModel(config)).toBeUndefined();
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'stale-topic-model',
+        provider: 'anthropic',
+      }),
+    ).toBe(config);
+  });
+
+  it('overrides a CLI model without retaining a conflicting global flag', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      {
+        args: ['--model', 'global-model', '--mode', 'plan'],
+        model: 'global-model',
+        type: 'cursor',
+      },
+      { model: 'topic-model', provider: 'cursor' },
+    );
+
+    expect(effective).toEqual({
+      args: ['--mode', 'plan'],
+      model: 'topic-model',
+      type: 'cursor',
+    });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--mode', 'plan', '--model', 'topic-model']);
+  });
+
+  it('overrides an API binding and drops a provider-specific fast model', () => {
+    expect(
+      applyTopicModelToHeterogeneousProvider(
+        {
+          apiConfig: {
+            model: 'global-model',
+            providerId: 'openai',
+            smallFastModel: 'gpt-4.1-mini',
+          },
+          authMode: 'api',
+          type: 'cursor',
+        },
+        { model: 'topic-model', provider: 'anthropic' },
+      ),
+    ).toMatchObject({
+      apiConfig: { model: 'topic-model', providerId: 'anthropic' },
+      authMode: 'api',
+      type: 'cursor',
+    });
+  });
+
+  it('ignores a topic model pinned for another heterogeneous runtime', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'codex-topic-model',
+        provider: 'codex',
+      }),
+    ).toBe(config);
   });
 });
 
@@ -253,6 +337,22 @@ describe('buildHeteroSpawnArgs', () => {
       '--agent-arg=test',
       '--model',
       'ignored-selector',
+    ]);
+  });
+
+  it('keeps Droid model selection in ACP instead of native process arguments', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--tag', 'lobe'],
+      model: 'gpt-5.4',
+      type: 'droid',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--tag', 'lobe']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--tag',
+      '--agent-arg=lobe',
+      '--model',
+      'gpt-5.4',
     ]);
   });
 
@@ -860,21 +960,11 @@ describe('resolveAgentAgencyConfig', () => {
     ).toEqual(shared);
   });
 
-  it('ignores member policy and overrides while a Workspace Agent is private', () => {
-    expect(
-      resolveAgentAgencyConfig(
-        {
-          boundDeviceId: 'owner-device',
-          executionTarget: 'device',
-          executionTargetSelectionPolicy: 'fixed',
-        },
-        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
-        { visibility: 'private', workspaceId: 'workspace-1' },
-      ),
-    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
-  });
-
-  it('ignores member policy and overrides for an author or Workspace admin', () => {
+  // A `local` / this-machine pick is per-user even for the owner: the shared
+  // row must never reference a personal device (the server rejects it), so the
+  // owner's pick lives in the same override slot members use and must merge
+  // back at read time — bypassing `fixed`, which constrains members only.
+  it("applies the owner's own override on a private Workspace Agent, stripping the member policy", () => {
     expect(
       resolveAgentAgencyConfig(
         {
@@ -882,10 +972,48 @@ describe('resolveAgentAgencyConfig', () => {
           executionTarget: 'device',
           executionTargetSelectionPolicy: 'fixed',
         },
-        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-desktop', executionTarget: 'local' });
+  });
+
+  it("applies an author's or Workspace admin's own override on a public Workspace Agent", () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'manager-desktop', executionTarget: 'local' });
+  });
+
+  it('keeps the shared config (policy stripped) for an owner without an override', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        undefined,
         { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
       ),
     ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
+  });
+
+  it('never applies an override on a personal agent', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        { executionTarget: 'sandbox' },
+        { boundDeviceId: 'stale-device', executionTarget: 'local' },
+        { workspaceId: null },
+      ),
+    ).toEqual({ executionTarget: 'sandbox' });
   });
 });
 

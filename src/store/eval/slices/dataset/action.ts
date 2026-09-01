@@ -66,6 +66,13 @@ export class DatasetActionImpl {
       },
     );
 
+  /**
+   * Every dataset. Without this a dataset is only reachable through its
+   * benchmark, so one belonging to none could be created but never found.
+   */
+  useFetchAllDatasets = (): SWRResponse =>
+    useClientDataSWR(evalKeys.datasetsAll(), () => agentEvalService.listAllDatasets());
+
   internal_dispatchDatasetDetail = (payload: DatasetDetailDispatch): void => {
     const currentMap = this.#get().datasetDetailMap;
     const nextMap = datasetDetailReducer(currentMap, payload);

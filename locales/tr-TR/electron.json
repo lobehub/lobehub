@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "Yeni sürümü indir",
   "updater.downloadingUpdate": "Güncelleme indiriliyor",
   "updater.downloadingUpdateDesc": "Güncelleme indiriliyor, lütfen bekleyin...",
+  "updater.ignore": "Yoksay",
   "updater.installLater": "Bir sonraki başlatmada güncelle",
   "updater.isLatestVersion": "En son sürümü kullanıyorsunuz",
   "updater.isLatestVersionDesc": "Harika! Kullandığınız {{version}} sürümü en güncel sürümdür.",

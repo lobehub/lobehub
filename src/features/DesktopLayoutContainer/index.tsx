@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC, type PropsWithChildren } from 'react';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { useIsDark } from '@/hooks/useIsDark';
 import { useGlobalStore } from '@/store/global';
@@ -21,6 +21,20 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
     () => getInnerCssVariables({ isDark: isDarkMode }),
     [isDarkMode],
   );
+
+  // Toast viewport is portaled to body, so it can't inherit the container-scoped vars
+  useEffect(() => {
+    const vars: Record<string, string> = {
+      '--toast-border-radius': innerCssVariables['--container-border-radius'],
+      '--toast-viewport-offset-x': '24px',
+      '--toast-viewport-offset-y': '24px',
+    };
+    const root = document.documentElement;
+    for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value);
+    return () => {
+      for (const key of Object.keys(vars)) root.style.removeProperty(key);
+    };
+  }, [innerCssVariables]);
 
   return (
     <Flexbox

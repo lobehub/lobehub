@@ -69,8 +69,8 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 }));
 
 describe('ChatService payload construction', () => {
-  const buildService = () => {
-    const service = new ChatService({} as LobeChatDatabase, 'user-1');
+  const buildService = (workspaceId?: string) => {
+    const service = new ChatService({} as LobeChatDatabase, 'user-1', workspaceId);
     // Bypass permission + credential resolution; only the payload is under test.
     (service as any).resolveOperationPermission = vi.fn().mockResolvedValue({ isPermitted: true });
     (service as any).getApiKey = vi.fn().mockResolvedValue(JSON.stringify({ apiKey: 'k' }));
@@ -111,6 +111,17 @@ describe('ChatService payload construction', () => {
     await buildService().chat({ messages, temperature: 0.7 } as any);
 
     expect(chatMock.mock.calls[0][0]).toMatchObject({ temperature: 0.7 });
+  });
+
+  it('passes workspace context to the runtime constructor', async () => {
+    await buildService('workspace-1').chat({ messages } as any);
+
+    expect(initModelRuntimeWithUserPayloadMock).toHaveBeenCalledWith(
+      'p',
+      { apiKey: 'k', userId: 'user-1' },
+      { workspaceId: 'workspace-1' },
+      undefined,
+    );
   });
 });
 

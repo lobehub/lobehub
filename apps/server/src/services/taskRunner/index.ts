@@ -21,6 +21,8 @@ const log = debug('task-runner');
 export interface RunTaskParams {
   continueTopicId?: string;
   extraPrompt?: string;
+  /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
+  maxSteps?: number;
   taskId: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
@@ -66,7 +68,13 @@ export class TaskRunnerService {
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
-    const { taskId: idOrIdentifier, continueTopicId, extraPrompt, trigger = 'manual' } = params;
+    const {
+      taskId: idOrIdentifier,
+      continueTopicId,
+      extraPrompt,
+      maxSteps,
+      trigger = 'manual',
+    } = params;
 
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) {
@@ -88,7 +96,12 @@ export class TaskRunnerService {
             message: 'Failed to resolve fallback inbox agent for task',
           });
         }
-        await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        // A human-assigned task still executes via the inbox agent, but the
+        // fallback must stay ephemeral — persisting it would silently replace
+        // the member assignment on the first run.
+        if (!task.assigneeUserId) {
+          await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        }
         task.assigneeAgentId = inboxAgent.id;
       }
 
@@ -222,6 +235,7 @@ export class TaskRunnerService {
           },
         ],
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
+        ...(maxSteps ? { maxSteps } : {}),
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,

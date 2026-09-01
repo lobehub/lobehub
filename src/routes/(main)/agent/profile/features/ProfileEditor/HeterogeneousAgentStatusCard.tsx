@@ -12,18 +12,8 @@ import type {
   HeterogeneousAuthMode,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
-import {
-  ActionIcon,
-  CopyButton,
-  Flexbox,
-  Icon,
-  Input,
-  Tag,
-  Text,
-  Tooltip,
-  TooltipGroup,
-} from '@lobehub/ui';
-import { Button, Segmented, Select } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon, Input, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Button, Segmented, Select, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -365,6 +355,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         provider.type === 'codebuddy' ||
         provider.type === 'codex' ||
         provider.type === 'cursor' ||
+        provider.type === 'droid' ||
         provider.type === 'kimi-code' ||
         provider.type === 'opencode' ||
         provider.type === 'pi' ||

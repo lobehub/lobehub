@@ -33,10 +33,12 @@ import { registerStatusCommand } from './commands/status';
 import { registerTaskCommand } from './commands/task';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
+import { registerTraceCommand } from './commands/trace';
 import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
 import { registerAcceptanceCommands } from './commands/verifyAcceptance';
+import { CLI_DISPLAY_NAME, CLI_PRIMARY_BIN, CLI_PRODUCT_NAME } from './constants/identity';
 import { cliVersion } from './pkg';
 import { executeToolCall } from './tools';
 
@@ -44,8 +46,8 @@ export function createProgram() {
   const program = new Command();
 
   program
-    .name('lh')
-    .description('LobeHub CLI - manage and connect to LobeHub services')
+    .name(CLI_PRIMARY_BIN)
+    .description(`${CLI_DISPLAY_NAME} - manage and connect to ${CLI_PRODUCT_NAME} services`)
     .version(cliVersion);
 
   const internalToolWorker = program
@@ -93,6 +95,7 @@ export function createProgram() {
   registerTaskCommand(program);
   registerThreadCommand(program);
   registerTopicCommand(program);
+  registerTraceCommand(program);
   registerMessageCommand(program);
   registerModelCommand(program);
   registerNotifyCommand(program);

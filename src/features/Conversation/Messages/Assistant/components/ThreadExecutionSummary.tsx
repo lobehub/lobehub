@@ -1,4 +1,5 @@
-import { Accordion, AccordionItem, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { type Key, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

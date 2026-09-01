@@ -71,6 +71,12 @@ describe('TaskService', () => {
       expect(lambdaClient.task.list.query).toHaveBeenCalledWith(params);
     });
 
+    it('uses the agent-only API contract for the Agent board', async () => {
+      await taskService.groupList({ groupBy: 'assignee' });
+
+      expect(lambdaClient.task.groupList.query).toHaveBeenCalledWith({ groupBy: 'agent' });
+    });
+
     it('getSubtasks should call task.getSubtasks.query', async () => {
       await taskService.getSubtasks('T-1');
       expect(lambdaClient.task.getSubtasks.query).toHaveBeenCalledWith({ id: 'T-1' });
@@ -101,11 +107,6 @@ describe('TaskService', () => {
     it('delete should call task.delete.mutate', async () => {
       await taskService.delete('T-1');
       expect(lambdaClient.task.delete.mutate).toHaveBeenCalledWith({ id: 'T-1' });
-    });
-
-    it('deleteGoal should call the subtree deletion endpoint', async () => {
-      await taskService.deleteGoal('GOAL-1');
-      expect(lambdaClient.task.deleteGoal.mutate).toHaveBeenCalledWith({ id: 'GOAL-1' });
     });
 
     it('updateStatus should pass status directly', async () => {

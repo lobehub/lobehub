@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TaskParentBar from './TaskParentBar';
@@ -24,29 +23,6 @@ const createState = (parent: any) => ({
     },
   },
 });
-
-vi.mock('@lobehub/ui', () => ({
-  Button: ({
-    children,
-    icon,
-    onClick,
-  }: {
-    children: ReactNode;
-    icon?: ReactNode;
-    onClick?: () => void;
-  }) => (
-    <button type="button" onClick={onClick}>
-      {icon}
-      {children}
-    </button>
-  ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,

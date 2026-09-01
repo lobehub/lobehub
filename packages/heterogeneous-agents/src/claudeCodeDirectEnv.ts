@@ -49,9 +49,10 @@ const pickNonEmptyString = (value: unknown): string | undefined => {
 };
 
 /**
- * Claude Code appends `/v1/messages` to `ANTHROPIC_BASE_URL`.
- * LobeHub provider settings often store the SDK-style host (`…/v1` or `…/v1/messages`).
- * Strip with linear string ops; quantified-slash regexes are ReDoS on user URLs.
+ * Anthropic SDK clients append `/v1/messages` to their base URL. LobeHub
+ * provider settings often store the SDK-style host (`…/v1` or
+ * `…/v1/messages`). Strip with linear string ops; quantified-slash regexes
+ * are ReDoS on user URLs.
  */
 const ANTHROPIC_SDK_BASE_URL_SUFFIXES = ['/v1/messages', '/v1'] as const;
 const FIRST_PARTY_ANTHROPIC_HOSTS = new Set(['api.anthropic.com']);
@@ -62,7 +63,7 @@ const stripTrailingSlashes = (value: string): string => {
   return value.slice(0, end);
 };
 
-const normalizeClaudeCodeBaseURL = (baseURL: string): string | undefined => {
+export const normalizeAnthropicSdkBaseURL = (baseURL: string): string | undefined => {
   let normalized = stripTrailingSlashes(baseURL);
   for (const suffix of ANTHROPIC_SDK_BASE_URL_SUFFIXES) {
     if (!normalized.endsWith(suffix)) continue;
@@ -141,7 +142,7 @@ export const buildClaudeCodeDirectEnv = (
   }
 
   const baseURL = pickNonEmptyString(input.keyVaults?.baseURL);
-  const normalizedBaseURL = baseURL ? normalizeClaudeCodeBaseURL(baseURL) : undefined;
+  const normalizedBaseURL = baseURL ? normalizeAnthropicSdkBaseURL(baseURL) : undefined;
   const useFirstPartyApiKey = isFirstPartyAnthropicBaseURL(normalizedBaseURL);
 
   const env: Record<string, string> = {

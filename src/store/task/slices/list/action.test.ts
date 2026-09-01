@@ -1,3 +1,4 @@
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTaskStore } from '../../store';
@@ -19,11 +20,16 @@ vi.mock('@/libs/swr', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
+    groupListQueryAutomated: undefined,
+    isTaskGroupListInit: false,
     isTaskListInit: false,
     listAgentId: undefined,
+    listGroupBy: 'status',
+    listGroupExcludeStatuses: undefined,
     listQueryAutomated: undefined,
     listQueryVisibility: 'all',
     listVisibility: 'all',
+    taskGroups: [],
     tasks: [],
     tasksTotal: 0,
   });
@@ -72,6 +78,72 @@ describe('TaskListSliceAction', () => {
       expect(matcher!(['task:list', '__project__:p1', 'all', 'createdAt', 'p1'])).toBe(true);
       // …while other task caches are refreshed through their own keys.
       expect(matcher!(['task:groupList', 'agt_1', 'private'])).toBe(false);
+    });
+  });
+
+  describe('useFetchTaskGroupList', () => {
+    it('keys and requests assignee groups independently from status groups', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({
+          allAgents: true,
+          automated: false,
+          excludeStatuses: ['completed', 'canceled'],
+          groupBy: 'assignee',
+        }),
+      );
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        [
+          'task:groupList',
+          '__all__',
+          'all',
+          'assignee',
+          'canceled,completed',
+          { automated: false },
+        ],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
+      await fetcher();
+      expect(taskService.groupList).toHaveBeenCalledWith({
+        assigneeAgentId: undefined,
+        automated: false,
+        excludeStatuses: ['completed', 'canceled'],
+        groupBy: 'assignee',
+        projectId: undefined,
+        visibility: undefined,
+      });
+    });
+
+    it('resets a changed group query scope after render and gates stale data meanwhile', () => {
+      useTaskStore.setState({
+        isTaskGroupListInit: true,
+        listAgentId: '__all__',
+        listGroupBy: 'status',
+        listGroupExcludeStatuses: undefined,
+        taskGroups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
+      });
+      let groupByObservedDuringRender: string | undefined;
+
+      const { result } = renderHook(() => {
+        const swr = useTaskStore
+          .getState()
+          .useFetchTaskGroupList({ allAgents: true, groupBy: 'assignee' });
+        groupByObservedDuringRender = useTaskStore.getState().listGroupBy;
+        return swr;
+      });
+
+      expect(groupByObservedDuringRender).toBe('status');
+      expect(result.current.isQueryScopeCurrent).toBe(false);
+      expect(useTaskStore.getState()).toMatchObject({
+        isTaskGroupListInit: false,
+        listGroupBy: 'assignee',
+        taskGroups: [],
+      });
     });
   });
 
@@ -232,7 +304,9 @@ describe('TaskListSliceAction', () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false });
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false }),
+      );
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
         ['task:groupList', '__all__', 'all', { automated: false }],
@@ -263,6 +337,42 @@ describe('TaskListSliceAction', () => {
       await fetcher();
       expect(taskService.list).toHaveBeenCalledWith(
         expect.objectContaining({ automated: true, limit: 50, offset: 50 }),
+      );
+    });
+
+    it('scopes the scheduled roll-up to one agent, key included', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ agentId: 'agent-1', limit: 50 });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:scheduledList', 'agent-1', 'all', { limit: 50, offset: undefined }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
+      await fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agent-1', automated: true }),
+      );
+    });
+
+    it('scopes the scheduled roll-up to one project, key included', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, projectId: 'project-1' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:scheduledList', '__project__:project-1', 'all', { limit: 50, offset: undefined }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
+      await fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ automated: true, projectId: 'project-1' }),
       );
     });
 

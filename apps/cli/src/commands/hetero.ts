@@ -31,8 +31,10 @@ import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
+import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
 import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
+import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
@@ -135,7 +137,7 @@ const buildExtraArgs = (
   const selectorArgs =
     options.type === 'amp'
       ? [...(options.mode ? ['--mode', options.mode] : [])]
-      : options.type === 'trae'
+      : options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [
@@ -421,6 +423,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
+  // Local execution trace. Recorded for EVERY run, not just server-ingest ones:
+  // a standalone `lh hetero exec` is exactly the case where nothing else keeps
+  // a record of what the agent did, and it is the same snapshot format a native
+  // agent run produces, so `lh trace op inspect` reads both.
+  const traceRecorder = new HeteroTraceRecorder({
+    agentType: options.type,
+    operationId,
+    onError: (message) => log.warn(`Trace: ${message}`),
+    store: createLocalTraceStore(),
+    topicId: options.topic,
+  });
+
   // Determine JSONL output mode.
   // Explicit --render flag always wins. Otherwise: emit JSONL in standalone
   // mode; suppress in server-ingest mode (sink handles the data path).
@@ -486,15 +500,24 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const askPollAbort = new AbortController();
   if (
     serverIngest &&
-    (agentType === 'claude-code' || agentType === 'cursor' || agentType === 'qoder') &&
+    (agentType === 'claude-code' ||
+      agentType === 'cursor' ||
+      agentType === 'droid' ||
+      agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor') {
-      askBridge = new AskUserBridge(operationId);
+    if (agentType === 'cursor' || agentType === 'droid') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
+        provider: agentType,
+      });
     } else {
       askServer = new LobeBuiltinMcpServer();
       await askServer.start();
-      askBridge = askServer.registerOperation(operationId);
+      askBridge = askServer.registerOperation(
+        operationId,
+        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+      );
       askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
       await writeFile(
         askMcpConfigPath,
@@ -511,17 +534,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
       );
     }
 
-    // (i) Forward bridge events into the same ordered ingest path as CC's. The
-    // request always goes out. For responses, only forward the ones the browser
-    // can't have published itself — producer-side timeout / session_ended — so
-    // the renderer's card un-sticks; browser-originated answers (success /
-    // user_cancelled) are already on the stream via `submitHeteroIntervention`.
+    // (i) Forward every bridge event into the same ordered durable ingest path
+    // as CC's. Browser submit already XADDed a response for producer delivery,
+    // but that is only transport acceptance. The bridge echo after resolve is
+    // the producer ACK (producerAck=true + resolutionRequestId) that transitions
+    // Cloud from `resolving` to terminal. Persistence de-dupes transitions by
+    // (operationId, toolCallId, transition).
     void (async () => {
       for await (const event of askBridge!.events()) {
-        if (event.type === 'agent_intervention_response') {
-          const reason = (event.data as { cancelReason?: string })?.cancelReason;
-          if (reason !== 'timeout' && reason !== 'session_ended') continue;
-        }
         serverIngester!.push(event as AgentStreamEvent);
       }
     })();
@@ -530,7 +550,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // actually pending, so an idle run holds no server invocation.
     void (async () => {
       const client = await getTrpcClient();
-      let lastEventId = '$';
+      // Start at the beginning of this operation stream. A response can be
+      // published after `pendingCount` flips but before the first XREAD; `$`
+      // would skip that already-present response and strand the CLI until the
+      // bridge timeout. Unknown/stale tool ids are harmless (`resolve` no-ops).
+      let lastEventId = '0-0';
       while (!askPollAbort.signal.aborted) {
         if (askBridge!.pendingCount === 0) {
           await sleep(200);
@@ -547,6 +571,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
               cancelReason?: 'session_ended' | 'timeout' | 'user_cancelled';
               cancelled?: boolean;
               result?: unknown;
+              resolutionRequestId?: string;
               toolCallId: string;
             };
             // Idempotent: resolve() no-ops on an unknown / already-settled id.
@@ -554,11 +579,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
               cancelReason: data.cancelReason,
               cancelled: data.cancelled,
               result: data.result,
+              resolutionRequestId: data.resolutionRequestId,
             });
           }
         } catch {
           // Transient (server hiccup / token refresh) — back off and retry.
-          // The bridge's 5-min timeout still bounds the overall wait.
+          // The bridge's 10-min timeout still bounds the overall wait.
           await sleep(1000);
         }
       }
@@ -657,6 +683,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
           ? err.code
           : undefined;
       log.error('Failed to start agent:', message);
+      await traceRecorder.finalize({
+        error: buildFinishError(message, 'AgentRuntimeError', errnoCode),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
@@ -729,7 +759,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
+            // The local trace still records it: "attempt 1 could not resume" is
+            // the whole reason someone reads the trace back.
             if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+            traceRecorder.observe(event);
             continue;
           }
         }
@@ -750,6 +783,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
         operationHeartbeat?.observe(event);
+        traceRecorder.observe(event);
         serverIngester?.push(event);
       }
     } catch (err) {
@@ -757,6 +791,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
         'Stream error from agent process:',
         err instanceof Error ? err.message : String(err),
       );
+      await traceRecorder.finalize({
+        error: buildFinishError(
+          String(err),
+          'stream_error',
+          (err as NodeJS.ErrnoException | null)?.code,
+        ),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
@@ -841,7 +883,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
-      initialModel: options.type === 'trae' ? options.model : undefined,
+      initialModel: options.type === 'droid' || options.type === 'trae' ? options.model : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -876,7 +918,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
-        initialModel: options.type === 'trae' ? options.model : undefined,
+        initialModel:
+          options.type === 'droid' || options.type === 'trae' ? options.model : undefined,
         operationId,
         prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
         uploadImage,
@@ -902,46 +945,57 @@ const exec = async (options: ExecOptions): Promise<void> => {
       );
       result = { ...result, ingestError: true };
     }
+  }
 
-    // CC relays API/rate-limit errors as an in-stream terminal `error` event but
-    // still exits 0, so the exit code alone would report `success`. Treat any
-    // pushed terminal error as a failed run so the topic/task is marked failed.
-    const exitedClean =
-      !result.cancelled &&
-      !result.ingestError &&
-      !result.sawTerminalError &&
-      (code === 0 || signal === 'SIGTERM');
+  // CC relays API/rate-limit errors as an in-stream terminal `error` event but
+  // still exits 0, so the exit code alone would report `success`. Treat any
+  // pushed terminal error as a failed run so the topic/task is marked failed.
+  const exitedClean =
+    !result.cancelled &&
+    !result.ingestError &&
+    !result.sawTerminalError &&
+    (code === 0 || signal === 'SIGTERM');
 
-    // When the run failed, pass an error detail so the server surfaces a useful
-    // message instead of the generic "Agent execution failed" fallback. Prefer
-    // the in-stream terminal error (CC relays API/rate-limit errors here while
-    // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
-    // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
-    // payload small.
-    const stderrTail = result.stderrContent.trim();
-    const errorDetail = result.terminalErrorMessage || stderrTail;
-    // The adapter's in-stream classification (overloaded / rate_limit) already
-    // carries the structured status-guide body — forward it verbatim instead of
-    // re-deriving from the flattened message via the process-only classifier,
-    // which would drop `agentType`/`code` and demote the client UI to the
-    // generic error card.
-    const finishError =
-      result.cancelled || exitedClean
-        ? undefined
-        : result.terminalErrorData
-          ? {
-              body: { ...result.terminalErrorData },
-              message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
-              type: 'AgentRuntimeError',
-            }
-          : errorDetail
-            ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-            : undefined;
+  // When the run failed, pass an error detail so the server surfaces a useful
+  // message instead of the generic "Agent execution failed" fallback. Prefer
+  // the in-stream terminal error (CC relays API/rate-limit errors here while
+  // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
+  // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
+  // payload small.
+  const stderrTail = result.stderrContent.trim();
+  const errorDetail = result.terminalErrorMessage || stderrTail;
+  // The adapter's in-stream classification (overloaded / rate_limit) already
+  // carries the structured status-guide body — forward it verbatim instead of
+  // re-deriving from the flattened message via the process-only classifier,
+  // which would drop `agentType`/`code` and demote the client UI to the
+  // generic error card.
+  const finishError =
+    result.cancelled || exitedClean
+      ? undefined
+      : result.terminalErrorData
+        ? {
+            body: { ...result.terminalErrorData },
+            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+            type: 'AgentRuntimeError',
+          }
+        : errorDetail
+          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+          : undefined;
 
+  const runResult = result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error';
+
+  // Close the local trace for EVERY run — the outcome is derived above from the
+  // same signals the server finish uses, so a standalone run records the same
+  // completion reason a server-ingest one does. Runs before the sink so a
+  // failing server call still leaves a complete snapshot on disk.
+  await traceRecorder.finalize({ error: finishError, result: runResult });
+
+  if (serverIngester && sink) {
     try {
       await sink.finish({
         error: finishError,
-        result: result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
+        resumeSessionInvalidated: first.resumeNotFound || undefined,
+        result: runResult,
         sessionId,
       });
     } catch (err) {

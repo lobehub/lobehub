@@ -14,6 +14,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
+import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
@@ -382,6 +383,7 @@ describe('desktop router shared definition', () => {
       ['/settings/profile', SettingsPageSkeleton],
       ['/apps', AppsSkeleton],
       ['/memory', MemorySkeleton],
+      ['/resource', ResourceHomeSkeleton],
     ] as const) {
       const matches = matchRoutes(getRoutes(pathname), pathname);
       expect(
@@ -452,6 +454,24 @@ describe('desktop router shared definition', () => {
 
       expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
       expect(registeredTabs).toEqual([...WORKSPACE_SETTINGS_TABS].sort());
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s keeps workspace provider deep-links inside the workspace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+      const listMatches = matchRoutes(routes, '/acme/settings/provider');
+      const detailMatches = matchRoutes(routes, '/acme/settings/provider/lobehub');
+
+      expect(listMatches?.at(-1)?.route.path).toBe('provider');
+      // Before the redirect route existed, the detail path fell through to the
+      // root catch-all (`*`) and kicked the user out of the workspace.
+      expect(detailMatches?.at(-1)?.route.path).toBe('provider/:providerId');
+      expect(detailMatches?.at(-1)?.params).toMatchObject({
+        providerId: 'lobehub',
+        workspaceSlug: 'acme',
+      });
     },
   );
 

@@ -1,0 +1,23 @@
+id: duplicate-completion
+description: Completion delivery is duplicated and the consumer remains idempotent.
+layer: L3-orchestration
+discoveredFrom: first-phase reference scenario
+seed: duplicate-completion-v1
+timeoutMs: 5000
+cleanup: always
+safety:
+  allowedEnvironments: [test, ci]
+  maxInjections: 1
+target:
+  adapter: runtime
+  selector:
+    operationId: op-duplicate
+    phase: completion
+trigger:
+  when: before
+effect:
+  type: duplicate
+  count: 2
+oracles:
+  - name: completion-idempotent
+    timeoutMs: 1000

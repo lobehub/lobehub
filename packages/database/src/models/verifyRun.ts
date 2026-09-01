@@ -533,12 +533,23 @@ export class VerifyRunModel {
         and(
           eq(verifyRuns.id, runId),
           or(
-            eq(verifyRuns.status, 'planned'),
+            or(eq(verifyRuns.status, 'planned'), eq(verifyRuns.status, 'collecting_evidence')),
             and(eq(verifyRuns.status, 'verifying'), lt(verifyRuns.updatedAt, staleBefore)),
           ),
           this.ownership(),
         ),
       )
+      .returning({ id: verifyRuns.id });
+
+    return claimed.length > 0;
+  };
+
+  /** Atomically reserve the builder-owned evidence-submission phase. */
+  claimEvidenceCollection = async (runId: string): Promise<boolean> => {
+    const claimed = await this.db
+      .update(verifyRuns)
+      .set({ status: 'collecting_evidence' })
+      .where(and(eq(verifyRuns.id, runId), eq(verifyRuns.status, 'planned'), this.ownership()))
       .returning({ id: verifyRuns.id });
 
     return claimed.length > 0;

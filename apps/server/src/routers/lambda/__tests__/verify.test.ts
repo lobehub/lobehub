@@ -16,6 +16,7 @@ const modelMocks = vi.hoisted(() => ({
   findResultById: vi.fn(),
   generateCriteria: vi.fn(),
   generateGoalCriteria: vi.fn(),
+  generateGoalPlan: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
   updateRun: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
 vi.mock('@/server/services/goal/criteriaGenerator', () => ({
   GoalCriteriaGeneratorService: class GoalCriteriaGeneratorService {
     generate = modelMocks.generateGoalCriteria;
+    generatePlan = modelMocks.generateGoalPlan;
   },
 }));
 
@@ -145,6 +147,19 @@ describe('verifyRouter', () => {
       expect(modelMocks.generateGoalCriteria).toHaveBeenCalledWith({
         goal: 'Ship a responsive task board',
       });
+    });
+
+    it('returns the generated plan from the versioned endpoint', async () => {
+      const plan = {
+        criteria: [{ title: 'Responsive task board is shipped' }],
+        instruction: 'Ship a responsive task board.',
+        title: 'Ship task board',
+      };
+      modelMocks.generateGoalPlan.mockResolvedValueOnce(plan);
+
+      await expect(
+        createCaller().generateGoalPlan({ goal: 'Ship a responsive task board' }),
+      ).resolves.toEqual(plan);
     });
   });
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Skeleton } from '@lobehub/ui';
-import { createModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { ActionIcon, createModal } from '@lobehub/ui/base-ui';
 import { cssVar, useTheme } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';

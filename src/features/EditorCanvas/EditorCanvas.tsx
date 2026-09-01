@@ -1,7 +1,7 @@
 'use client';
 
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps, type Editor } from '@lobehub/editor/react';
+import type { ChatInputActionsProps, Editor, EditorProps } from '@lobehub/editor/react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
@@ -56,6 +56,9 @@ export interface EditorCanvasProps {
    */
   contentRevision?: number;
 
+  /** Styles applied to the editable content instead of the outer data-mode wrapper. */
+  contentStyle?: CSSProperties;
+
   disabled?: boolean;
 
   /**
@@ -97,6 +100,12 @@ export interface EditorCanvasProps {
    * Whether to show the floating toolbar. Defaults to true.
    */
   floatingToolbar?: boolean;
+
+  /** Resolve the portal host used by slash and mention menus. */
+  getPopupContainer?: EditorProps['getPopupContainer'];
+
+  /** Structured @mention configuration forwarded to the editor. */
+  mentionOption?: EditorProps['mentionOption'];
 
   /**
    * Optional configured link plugin. Defaults to ReactLinkPlugin.

@@ -2,6 +2,7 @@ import type {
   GoalDecisionAuthority,
   GoalDecisionOption,
   GoalEdgeKind,
+  GoalEventActor,
   GoalEventActorType,
   GoalEventEntityType,
   GoalEventType,
@@ -10,7 +11,7 @@ import type {
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
 } from '@lobechat/types';
-import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -20,6 +21,7 @@ import {
   goalNodes,
   goalNodeWorkVersions,
 } from '../schemas/goalGraph';
+import { tasks } from '../schemas/task';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
@@ -57,10 +59,17 @@ interface CreateDecisionInput {
 
 /** Persistence boundary for an owned Goal Graph and its append-only audit trail. */
 export class GoalGraphModel {
+  /**
+   * `actor` is who the audit trail records for the transitions made through this
+   * instance. It defaults to the owning user, which is right for anything a
+   * person did; the coordinator passes its own so the trail can answer "did a
+   * human do this, or did the system decide it".
+   */
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    private readonly actor?: GoalEventActor,
   ) {}
 
   private ownership = () =>
@@ -76,12 +85,13 @@ export class GoalGraphModel {
   };
 
   private appendEvent = async (tx: Transaction, goalId: string, input: EventInput) => {
+    const actor = this.actor ?? { id: this.userId, type: 'user' as const };
     const [event] = await tx
       .insert(goalEvents)
       .values({
         ...input,
-        actorId: input.actorId ?? this.userId,
-        actorType: input.actorType ?? 'user',
+        actorId: input.actorId ?? actor.id,
+        actorType: input.actorType ?? actor.type,
         goalId,
       })
       .returning();
@@ -177,6 +187,28 @@ export class GoalGraphModel {
       return link;
     });
 
+  /**
+   * How many of a goal's tasks are occupying a concurrency slot.
+   *
+   * Counted in the database rather than from a graph snapshot so it can be read
+   * inside the same transaction as the dispatch claim — two advances that each
+   * counted from their own snapshot would both see room and both start work.
+   */
+  countRunningTasks = async (goalId: string): Promise<number> => {
+    const [row] = await this.db
+      .select({ count: count() })
+      .from(goalNodes)
+      .innerJoin(tasks, eq(goalNodes.taskId, tasks.id))
+      .where(
+        and(
+          eq(goalNodes.goalId, goalId),
+          eq(goalNodes.kind, 'task'),
+          inArray(tasks.status, ['running', 'scheduled']),
+        ),
+      );
+    return row?.count ?? 0;
+  };
+
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
@@ -191,12 +223,51 @@ export class GoalGraphModel {
         .returning();
       await this.appendEvent(tx, goalId, {
         actorId: input.createdByAgentId,
-        actorType: input.createdByAgentId ? 'agent' : 'user',
+        actorType: input.createdByAgentId ? 'agent' : undefined,
         entityId: node.id,
         entityType: 'node',
         eventType: 'created',
       });
       return node;
+    });
+
+  /** Serialize synthesized-node creation by semantic identity within one Goal. */
+  createNodeOnce = async (goalId: string, input: CreateNodeInput) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`goal-node:${goalId}:${input.kind}:${input.title}`}))`,
+      );
+      const [existing] = await tx
+        .select()
+        .from(goalNodes)
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, input.kind),
+            eq(goalNodes.title, input.title),
+          ),
+        )
+        .limit(1);
+      if (existing) return { created: false, node: existing };
+
+      const [node] = await tx
+        .insert(goalNodes)
+        .values({
+          ...input,
+          confidence: input.confidence?.toString(),
+          createdByUserId: input.createdByAgentId ? undefined : this.userId,
+          goalId,
+        })
+        .returning();
+      await this.appendEvent(tx, goalId, {
+        actorId: input.createdByAgentId,
+        actorType: input.createdByAgentId ? 'agent' : undefined,
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'created',
+      });
+      return { created: true, node };
     });
 
   createEdge = async (
@@ -229,7 +300,7 @@ export class GoalGraphModel {
           and(
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
-            eq(goalNodes.kind, 'work'),
+            eq(goalNodes.kind, 'task'),
             isNull(goalNodes.taskId),
           ),
         )
@@ -244,7 +315,7 @@ export class GoalGraphModel {
       return node;
     });
 
-  claimWorkNode = async (goalId: string, nodeId: string, staleBefore: Date) =>
+  claimTaskNode = async (goalId: string, nodeId: string, staleBefore: Date) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
       const [node] = await tx
@@ -254,7 +325,7 @@ export class GoalGraphModel {
           and(
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
-            eq(goalNodes.kind, 'work'),
+            eq(goalNodes.kind, 'task'),
             or(
               eq(goalNodes.status, 'proposed'),
               and(eq(goalNodes.status, 'active'), lt(goalNodes.updatedAt, staleBefore)),
@@ -268,6 +339,26 @@ export class GoalGraphModel {
         entityId: node.id,
         entityType: 'node',
         eventType: 'activated',
+      });
+      return node;
+    });
+
+  /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
+  updateNodeDescription = async (goalId: string, nodeId: string, description: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ description, updatedAt: new Date() })
+        .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Planner refined the description',
+        taskId: node.taskId ?? undefined,
       });
       return node;
     });

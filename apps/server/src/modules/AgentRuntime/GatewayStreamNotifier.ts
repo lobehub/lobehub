@@ -16,8 +16,9 @@ const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency
 
 /**
- * Decorator that wraps an IStreamEventManager and additionally
- * pushes events to the Agent Gateway via HTTP (fire-and-forget).
+ * Decorator that wraps an IStreamEventManager and additionally pushes events
+ * to the Agent Gateway via HTTP. Runtime init is an awaited ordering barrier;
+ * subsequent event delivery remains best-effort and mostly fire-and-forget.
  *
  * Redis SSE remains the primary event storage / subscription mechanism.
  * The Gateway is an additional push channel for WebSocket delivery.
@@ -110,10 +111,24 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       log('mirror registered: %s → %s', operationId, mirrorTo);
     }
 
-    this.httpPost('/api/operations/init', {
-      operationId,
-      userId: initialState?.userId || 'unknown',
-    });
+    // Ordering barrier: a subscriber connects immediately after execAgent
+    // returns and asks the Gateway for the operation's authoritative status.
+    // If init is still fire-and-forget, that resume can win the race and report
+    // a live heterogeneous/device run as terminal before its first producer
+    // event arrives. httpPost intentionally swallows Gateway failures, so
+    // awaiting it preserves best-effort semantics while preventing the normal
+    // success path from exposing an operation before the Gateway knows it. Init
+    // uses the non-lossy request lane: ordinary stream events may be dropped at
+    // MAX_INFLIGHT, but dropping this control-plane barrier would recreate the
+    // exact resume-before-init race under load.
+    try {
+      await this.httpPostAwait('/api/operations/init', {
+        operationId,
+        userId: initialState?.userId || 'unknown',
+      });
+    } catch (error) {
+      log('Gateway /api/operations/init failed: %O', error);
+    }
 
     void this.pushEvent(operationId, {
       data: initialState,

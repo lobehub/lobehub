@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, ClockIcon, MoonIcon, RefreshCwIcon } from 'lucide-react';
 import { memo } from 'react';

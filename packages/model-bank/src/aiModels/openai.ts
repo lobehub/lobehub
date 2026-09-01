@@ -60,8 +60,8 @@ export const openaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 5, upTo: 272_000 },
-            { rate: 10, upTo: 'infinity' },
+            { rate: 4, upTo: 272_000 },
+            { rate: 8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -69,8 +69,8 @@ export const openaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.5, upTo: 272_000 },
-            { rate: 1, upTo: 'infinity' },
+            { rate: 0.4, upTo: 272_000 },
+            { rate: 0.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -78,8 +78,8 @@ export const openaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheWrite',
           strategy: 'tiered',
           tiers: [
-            { rate: 6.25, upTo: 272_000 },
-            { rate: 12.5, upTo: 'infinity' },
+            { rate: 5, upTo: 272_000 },
+            { rate: 10, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -87,8 +87,8 @@ export const openaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 30, upTo: 272_000 },
-            { rate: 45, upTo: 'infinity' },
+            { rate: 20, upTo: 272_000 },
+            { rate: 30, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },

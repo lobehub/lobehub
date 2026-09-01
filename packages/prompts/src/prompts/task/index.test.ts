@@ -453,7 +453,9 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('login page renders (required)');
     expect(result).toContain('· evidence: screenshot — full page');
     expect(result).toContain('console is clean');
-    expect(result).toContain('lh acceptance run result submit');
+    expect(result).toContain('include artifact paths, commands, and observed results');
+    expect(result).toContain('an independent verifier decides whether this Task is complete');
+    expect(result).not.toContain('lh acceptance run result submit');
   });
 
   it('should omit the verify section when verify is disabled', () => {

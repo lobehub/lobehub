@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Grid, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Center, Grid, Icon, Skeleton } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { InboxIcon, ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

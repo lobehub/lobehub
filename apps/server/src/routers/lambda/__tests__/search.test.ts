@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserModel } from '@/database/models/user';
-import { SearchRepo } from '@/database/repositories/search';
 import { DiscoverService } from '@/server/services/discover';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 import { searchRouter } from '../search';
 
@@ -11,9 +11,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock('@/database/repositories/search', () => ({
-  SearchRepo: vi.fn(),
-}));
+vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }));
 
 vi.mock('@/database/models/user', () => ({
   UserModel: Object.assign(vi.fn(), { findById: vi.fn() }),
@@ -42,7 +40,7 @@ describe('searchRouter', () => {
       fullName: 'Test User',
     } as any);
     vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings }) as any);
-    vi.mocked(SearchRepo).mockImplementation(() => ({ search }) as unknown as SearchRepo);
+    vi.mocked(createFtsSearchRepo).mockResolvedValue({ search } as any);
     vi.mocked(DiscoverService).mockImplementation(
       () => ({ getAssistantList, getMcpList, getPluginList }) as unknown as DiscoverService,
     );
@@ -82,6 +80,7 @@ describe('searchRouter', () => {
       },
       { throwOnError: true },
     );
+    expect(createFtsSearchRepo).not.toHaveBeenCalled();
   });
 
   it('does not load market identity for a local-only search', async () => {
@@ -95,6 +94,9 @@ describe('searchRouter', () => {
       query: 'local message',
       type: 'message',
     });
+    expect(createFtsSearchRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'test-user', workspaceId: undefined }),
+    );
     expect(UserModel.findById).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
   });

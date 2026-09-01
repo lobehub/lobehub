@@ -83,7 +83,7 @@ export const settleAbortedToolRows = async ({
   /** `tool_call_id → the row that now holds its aborted result`. */
   messageIds: Record<string, string>;
   /** Tool messages to append to `state.messages`, in call order. */
-  messages: Array<{ content: string; role: 'tool'; tool_call_id: string }>;
+  messages: Array<{ content: string; id: string; role: 'tool'; tool_call_id: string }>;
 }> => {
   const { operation, transports } = host;
   const agentId = operation.agentId ?? state.metadata?.agentId;
@@ -98,7 +98,7 @@ export const settleAbortedToolRows = async ({
   }
 
   const messageIds: Record<string, string> = {};
-  const messages: Array<{ content: string; role: 'tool'; tool_call_id: string }> = [];
+  const messages: Array<{ content: string; id: string; role: 'tool'; tool_call_id: string }> = [];
 
   for (const toolPayload of toolsCalling) {
     // Prefer an ID carried by the approval resume: its `parentMessageId` is the
@@ -140,8 +140,10 @@ export const settleAbortedToolRows = async ({
       throw error;
     }
 
+    /** Keep the persisted id even though aborted operations normally stop here. */
     messages.push({
       content: ABORTED_TOOL_CONTENT,
+      id: messageIds[toolPayload.id],
       role: 'tool',
       tool_call_id: toolPayload.id,
     });

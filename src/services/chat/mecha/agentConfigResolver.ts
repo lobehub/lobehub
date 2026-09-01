@@ -18,6 +18,7 @@ import {
 import debug from 'debug';
 import { produce } from 'immer';
 
+import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -202,16 +203,23 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
   const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
   const currentUserId = userProfileSelectors.userId(useUserStore.getState());
-  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
+  // server (`isResourceAuthorOrAdmin`) — an admin reads the shared row like
+  // the author does, so client and gateway execution resolve the same config.
+  const canManage = getRuntimeCanManageAgent({
+    agentId,
+    agentUserId: agent?.userId,
+    currentUserId,
+  });
   const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
   // A collaborative builtin has no real author (the row is provisioned by
   // whoever opened the feature first), so its *model* stays personal even for
   // that member — see `AgentModelConfig.personalModelSelection`. Chat/Agent mode
   // keeps the ordinary author rule.
   const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
-  const usesWorkspaceMemberSelection = isPublicWorkspaceAgent && !isAuthor;
+  const usesWorkspaceMemberSelection = isPublicWorkspaceAgent && !canManage;
   const memberModelOverride =
-    isPublicWorkspaceAgent && (personalModelSelection || !isAuthor)
+    isPublicWorkspaceAgent && (personalModelSelection || !canManage)
       ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
       : undefined;
   const memberModeOverride = usesWorkspaceMemberSelection
@@ -222,7 +230,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     ...resolveAgentModelConfig(
       {
         ...sharedAgentConfig,
-        canManage: isAuthor,
+        canManage,
         personalModelSelection,
         visibility: agent?.visibility,
         workspaceId: agent?.workspaceId,

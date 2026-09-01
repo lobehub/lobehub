@@ -19,15 +19,6 @@ vi.mock('electron', () => ({
   screen: mockScreen,
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 describe('WindowStateManager', () => {
   let manager: WindowStateManager;
   let mockApp: AppCore;

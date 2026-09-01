@@ -168,12 +168,14 @@ export class VerifyService {
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
   listAcceptances = (options?: {
+    filter?: 'active' | 'all' | 'completed';
     /** Widen the recency window (server-capped) — the merge picker asks for more. */
     limit?: number;
+    q?: string;
     quiet?: boolean;
   }): Promise<AcceptanceListItem[]> =>
     lambdaClient.acceptance.list.query(
-      options?.limit ? { limit: options.limit } : undefined,
+      options ? { filter: options.filter, limit: options.limit, q: options.q } : undefined,
       options?.quiet ? { context: { showNotification: false } } : undefined,
     );
 
@@ -380,6 +382,18 @@ export class VerifyService {
     maxCriteria?: number;
   }): Promise<VerifyCriterionDraft[]> =>
     lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Draft the title, instruction, and criteria used by the create-goal review step. */
+  generateGoalPlan = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<
+    { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+  > =>
+    lambdaClient.verify.generateGoalPlan.mutate(input) as Promise<
+      { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+    >;
 
   /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
   createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>

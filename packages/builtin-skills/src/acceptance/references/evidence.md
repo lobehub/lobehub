@@ -29,7 +29,7 @@ page gives the reviewer a player.
 ```bash
 # The generated file is the evidence — attach the artifact the feature produced,
 # not a re-encode and not a screenshot of the player.
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type audio --file ./out/tts-zh-female.mp3 --by program \
   --desc "TTS output for 「今天天气不错」, zh-CN female voice, 2.4s"
 ```
@@ -69,12 +69,12 @@ join an explanation from an older round with fresh execution output.
 
 ```bash
 # File artifact captured by the selected surface.
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type "$EVIDENCE_TYPE" --file "$ARTIFACT_PATH" --by "$PROVENANCE" \
   --desc "Observed state after the planned action"
 
 # Short text assertion.
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type text --content "$ASSERTION_OUTPUT" --by cli \
   --desc "Machine-readable assertion output"
 ```

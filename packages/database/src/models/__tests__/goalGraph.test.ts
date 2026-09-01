@@ -1,9 +1,10 @@
 // @vitest-environment node
+import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { goalNodes, users } from '../../schemas';
+import { agents, goalNodes, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -34,7 +35,7 @@ describe('GoalGraphModel', () => {
       title: 'Can the published specification reproduce the system?',
     });
     const work = await graphModel.createNode(goal.id, {
-      kind: 'work',
+      kind: 'task',
       title: 'Implement the minimal training loop',
     });
 
@@ -45,6 +46,59 @@ describe('GoalGraphModel', () => {
     expect(graph?.nodes).toHaveLength(2);
     expect(graph?.edges).toHaveLength(1);
     expect(graph?.events.map((event) => event.eventType)).toEqual(['created', 'created', 'linked']);
+  });
+
+  it('records who made each transition', async () => {
+    // Every event used to be attributed to the goal's owner, because the model
+    // falls back to its `userId` — which made a move the coordinator decided on
+    // its own indistinguishable from one a person made.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Attributed' });
+    const coordinator = new GoalGraphModel(serverDB, userId, undefined, {
+      id: GOAL_COORDINATOR_ACTOR_ID,
+      type: 'system',
+    });
+
+    const byUser = await graphModel.createNode(goal.id, { kind: 'task', title: 'Asked for' });
+    const bySystem = await coordinator.createNode(goal.id, { kind: 'finding', title: 'Concluded' });
+    await serverDB.insert(agents).values({ id: 'agt_author', slug: 'agt-author', userId });
+    const byAgent = await coordinator.createNode(goal.id, {
+      createdByAgentId: 'agt_author',
+      kind: 'finding',
+      title: 'Written by an agent',
+    });
+
+    const { events } = (await graphModel.getGraph(goal.id))!;
+    const actorOf = (nodeId: string) => {
+      const event = events.find((item) => item.entityId === nodeId);
+      return { actorId: event?.actorId, actorType: event?.actorType };
+    };
+
+    expect(actorOf(byUser!.id)).toEqual({ actorId: userId, actorType: 'user' });
+    expect(actorOf(bySystem!.id)).toEqual({
+      actorId: GOAL_COORDINATOR_ACTOR_ID,
+      actorType: 'system',
+    });
+    // An explicit agent author still wins over the instance actor.
+    expect(actorOf(byAgent!.id)).toEqual({ actorId: 'agt_author', actorType: 'agent' });
+  });
+
+  it('creates a synthesized node only once when coordinators race', async () => {
+    const goal = await goalModel.create({
+      subjectType: 'standalone',
+      title: 'Concurrent synthesis',
+    });
+    const input = { kind: 'task' as const, title: 'Complete full Goal acceptance' };
+
+    const results = await Promise.all([
+      graphModel.createNodeOnce(goal.id, input),
+      graphModel.createNodeOnce(goal.id, input),
+    ]);
+    const graph = await graphModel.getGraph(goal.id);
+
+    expect(results.filter((result) => result?.created)).toHaveLength(1);
+    expect(new Set(results.map((result) => result?.node.id))).toHaveLength(1);
+    expect(graph?.nodes).toHaveLength(1);
+    expect(graph?.events).toHaveLength(1);
   });
 
   it('creates and resolves a durable human decision', async () => {
@@ -104,14 +158,14 @@ describe('GoalGraphModel', () => {
 
   it('allows only one task binding for a work node', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Task binding race' });
-    const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'Run once' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Run once' });
     const taskModel = new TaskModel(serverDB, userId);
     const [firstTask, secondTask] = await Promise.all([
       taskModel.create({ instruction: 'First candidate' }),
       taskModel.create({ instruction: 'Second candidate' }),
     ]);
 
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date(0))).toBeDefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeDefined();
     const bindings = await Promise.all([
       graphModel.bindTask(goal.id, node!.id, firstTask.id),
       graphModel.bindTask(goal.id, node!.id, secondTask.id),
@@ -123,24 +177,35 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
+  it('refuses to bind a task to a node that is not a task node', async () => {
+    // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
+    // so the rule needs a test on the write path or nothing enforces it.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Wrong kind' });
+    const finding = await graphModel.createNode(goal.id, { kind: 'finding', title: 'A finding' });
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Should not bind' });
+
+    expect(await graphModel.bindTask(goal.id, finding!.id, task.id)).toBeUndefined();
+    expect((await graphModel.getGraph(goal.id))?.nodes[0].taskId).toBeNull();
+  });
+
   it('allows an abandoned work claim to be recovered after its lease expires', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Recover claim' });
-    const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'Recoverable work' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Recoverable work' });
 
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date(0))).toBeDefined();
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date(0))).toBeUndefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeDefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeUndefined();
 
     await serverDB
       .update(goalNodes)
       .set({ updatedAt: new Date('2020-01-01') })
       .where(eq(goalNodes.id, node!.id));
 
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date('2021-01-01'))).toBeDefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date('2021-01-01'))).toBeDefined();
   });
 
   it('pins an immutable Work version to an owned graph node', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Evidence goal' });
-    const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'Produce evidence' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Produce evidence' });
     const task = await new TaskModel(serverDB, userId).create({ instruction: 'Produce evidence' });
     const work = await new WorkModel(serverDB, userId).registerTask({
       changeType: 'created',
@@ -164,7 +229,7 @@ describe('GoalGraphModel', () => {
     const otherGoalModel = new GoalModel(serverDB, otherUserId);
     const otherGraphModel = new GoalGraphModel(serverDB, otherUserId);
     const goal = await otherGoalModel.create({ subjectType: 'standalone', title: 'Private graph' });
-    const node = await otherGraphModel.createNode(goal.id, { kind: 'work', title: 'Private work' });
+    const node = await otherGraphModel.createNode(goal.id, { kind: 'task', title: 'Private work' });
 
     expect(await graphModel.getGraph(goal.id)).toBeUndefined();
     expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();

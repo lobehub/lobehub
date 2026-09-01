@@ -35,7 +35,9 @@ const isDarwin = getTargetPlatform() === 'darwin';
 // The packaged macOS runtime invokes get-windows' native helper directly.
 // Its optional dependencies are build/install tooling and the Windows loader
 // chain, neither of which is required in a macOS application artifact.
-const dependencyOptions = isDarwin ? { skipOptionalDependenciesFor: new Set(['get-windows']) } : {};
+export const dependencyOptions = isDarwin
+  ? { skipOptionalDependenciesFor: new Set(['get-windows']) }
+  : {};
 
 /**
  * First-party native addon packages are discovered instead of being listed by

@@ -11,13 +11,6 @@ let mockStoreContent = 'original full content';
 let mockStoreHasTools = true;
 let mockStoreMessage: { createdAt?: number } | undefined = { createdAt: 1000 };
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    pWithTool: 'tool-line',
-  }),
-  cx: (...values: unknown[]) => values.filter(Boolean).join(' '),
-}));
-
 vi.mock('@/features/Conversation/Markdown', () => ({
   default: ({ children, className }: { children?: ReactNode; className?: string }) => (
     <div className={className} data-testid="markdown">

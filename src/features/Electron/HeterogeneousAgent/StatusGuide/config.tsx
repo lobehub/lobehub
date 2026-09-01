@@ -1,5 +1,6 @@
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import { DroidIcon } from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
   ClaudeCode,
@@ -40,6 +41,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'cursor': {
     icon: Cursor,
     translationPrefix: 'cursorInstallGuide',
+  },
+  'droid': {
+    icon: DroidIcon,
+    translationPrefix: 'droidInstallGuide',
   },
   'grok-build': {
     icon: Grok,

@@ -20,7 +20,7 @@ import {
   resolveServerDefaultHeterogeneousModel,
 } from '@/server/modules/ModelRuntime';
 
-import type { BaseStreamEvent } from '../types/responses.type';
+import type { BaseStreamEvent, ResponseUsage } from '../types/responses.type';
 
 export const SERVER_DEFAULT_MODEL_ALIAS = SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS;
 
@@ -205,18 +205,30 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
           >[number],
         );
       } else if (item.type === 'function_call' && typeof item.call_id === 'string') {
-        messages.push({
-          content: '',
-          role: 'assistant',
-          ...takePendingReasoning(),
-          tool_calls: [
-            {
-              function: { arguments: String(item.arguments || ''), name: String(item.name || '') },
-              id: item.call_id,
-              type: 'function',
-            },
-          ],
-        });
+        const toolCall = {
+          function: { arguments: String(item.arguments || ''), name: String(item.name || '') },
+          id: item.call_id,
+          type: 'function' as const,
+        };
+        const previousMessage = messages.at(-1);
+
+        // Responses history records every parallel call before their outputs.
+        // Chat Completions requires those calls in one assistant message, followed
+        // by the contiguous batch of tool-result messages.
+        if (
+          !pendingReasoningItems?.length &&
+          previousMessage?.role === 'assistant' &&
+          previousMessage.tool_calls?.length
+        ) {
+          previousMessage.tool_calls.push(toolCall);
+        } else {
+          messages.push({
+            content: '',
+            role: 'assistant',
+            ...takePendingReasoning(),
+            tool_calls: [toolCall],
+          });
+        }
       } else if (item.type === 'function_call_output' && typeof item.call_id === 'string') {
         messages.push({
           content: String(item.output || ''),
@@ -224,7 +236,7 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
           tool_call_id: item.call_id,
         });
       } else if (
-        item.type === 'message' &&
+        (item.type === undefined || item.type === 'message') &&
         ['assistant', 'developer', 'system', 'user'].includes(String(item.role))
       ) {
         messages.push({
@@ -423,8 +435,22 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model:
         },
         transform(event, controller) {
           if (finalized) return;
-          if (event.type === 'text' || event.type === 'reasoning') {
-            const isThinking = event.type === 'reasoning';
+          const part =
+            (event.type === 'content_part' || event.type === 'reasoning_part') &&
+            isRecord(event.data) &&
+            event.data.partType === 'text'
+              ? event.data
+              : undefined;
+          const content =
+            event.type === 'text' || event.type === 'reasoning'
+              ? typeof event.data === 'string'
+                ? event.data
+                : undefined
+              : typeof part?.content === 'string'
+                ? part.content
+                : undefined;
+          if (content !== undefined) {
+            const isThinking = event.type === 'reasoning' || event.type === 'reasoning_part';
             let index = isThinking ? thinkingIndex : textIndex;
             if (index === undefined) {
               closeTextBlocks(controller);
@@ -441,19 +467,26 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model:
               if (isThinking) thinkingIndex = index;
               else textIndex = index;
             }
+            if (content) {
+              controller.enqueue(
+                sse('content_block_delta', {
+                  delta: isThinking
+                    ? { thinking: content, type: 'thinking_delta' }
+                    : { text: content, type: 'text_delta' },
+                  index,
+                  type: 'content_block_delta',
+                }),
+              );
+            }
+          } else if (
+            event.type === 'reasoning_signature' &&
+            thinkingIndex !== undefined &&
+            typeof event.data === 'string' &&
+            event.data
+          ) {
             controller.enqueue(
               sse('content_block_delta', {
-                delta: isThinking
-                  ? { thinking: String(event.data), type: 'thinking_delta' }
-                  : { text: String(event.data), type: 'text_delta' },
-                index,
-                type: 'content_block_delta',
-              }),
-            );
-          } else if (event.type === 'reasoning_signature' && thinkingIndex !== undefined) {
-            controller.enqueue(
-              sse('content_block_delta', {
-                delta: { signature: String(event.data), type: 'signature_delta' },
+                delta: { signature: event.data, type: 'signature_delta' },
                 index: thinkingIndex,
                 type: 'content_block_delta',
               }),
@@ -528,7 +561,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
   let stopReason: unknown;
   let textOutputIndex: number | undefined;
   let outputText = '';
-  let usage: { input_tokens: number; output_tokens: number; total_tokens: number } | undefined;
+  let usage: ResponseUsage | undefined;
   const toolItems = new Map<
     number,
     { arguments: string; callId: string; id: string; name: string; outputIndex: number }
@@ -705,8 +738,8 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
         },
         transform(event, controller) {
           if (finalized) return;
-          if (event.type === 'text') {
-            outputText += String(event.data);
+          if (event.type === 'text' && typeof event.data === 'string' && event.data) {
+            outputText += event.data;
             if (textOutputIndex === undefined) {
               textOutputIndex = nextOutputIndex++;
               controller.enqueue(
@@ -735,14 +768,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             controller.enqueue(
               responseSse('response.output_text.delta', {
                 content_index: 0,
-                delta: String(event.data),
+                delta: event.data,
                 item_id: `msg_${responseId}`,
                 output_index: textOutputIndex,
                 type: 'response.output_text.delta',
               }),
             );
-          } else if (event.type === 'reasoning') {
-            reasoningText += String(event.data);
+          } else if (event.type === 'reasoning' && typeof event.data === 'string' && event.data) {
+            reasoningText += event.data;
             if (reasoningOutputIndex === undefined) {
               reasoningItemId = event.id || `rs_${responseId}`;
               reasoningOutputIndex = nextOutputIndex++;
@@ -761,7 +794,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             }
             controller.enqueue(
               responseSse('response.reasoning_summary_text.delta', {
-                delta: String(event.data),
+                delta: event.data,
                 item_id: reasoningItemId,
                 output_index: reasoningOutputIndex,
                 summary_index: 0,
@@ -812,11 +845,17 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
               }
             }
           } else if (event.type === 'usage' && isRecord(event.data)) {
-            const inputTokens = Number(event.data.totalInputTokens || 0);
-            const outputTokens = Number(event.data.totalOutputTokens || 0);
+            const inputTokens = nonNegativeNumber(event.data.totalInputTokens) ?? 0;
+            const outputTokens = nonNegativeNumber(event.data.totalOutputTokens) ?? 0;
             usage = {
               input_tokens: inputTokens,
+              input_tokens_details: {
+                cached_tokens: nonNegativeNumber(event.data.inputCachedTokens) ?? 0,
+              },
               output_tokens: outputTokens,
+              output_tokens_details: {
+                reasoning_tokens: nonNegativeNumber(event.data.outputReasoningTokens) ?? 0,
+              },
               total_tokens: inputTokens + outputTokens,
             };
           } else if (event.type === 'stop') {
@@ -899,4 +938,51 @@ export const invokeServerDefaultModel = async (params: {
   );
   if (!response.body) throw new Error('Model runtime returned an empty stream');
   return { model, response };
+};
+
+const readMessage = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return value;
+  if (!isRecord(value)) return undefined;
+  if (typeof value.message === 'string') return value.message;
+  return undefined;
+};
+
+/**
+ * Describe a failed relay in terms its caller can act on.
+ *
+ * `runtime.chat` rejects with a plain `{ error, errorType, provider }` object
+ * rather than an `Error`, and Hono's default handler cannot serialise that: an
+ * uncaught one leaves the client a **500 with an empty body**. That is how an
+ * Ark rejection ("The parameter `type` specified in the request are not valid:
+ * invalid value adaptive") reached Claude Code — as `API Error: 500 status code
+ * (no body)`, retried for a minute and a half because nothing in the response
+ * said it could never succeed.
+ *
+ * The upstream's own status is deliberately not forwarded: `handleOpenAIError`
+ * keeps the provider's error body and drops the status whenever there is one,
+ * so any status here would be invented. 502 says what is actually known — the
+ * request reached us, and the hop past us failed — and the message carries the
+ * provider's own words, which is the part that was missing.
+ */
+export const describeRelayFailure = (error: unknown) => {
+  const payload = isRecord(error) ? error : undefined;
+  const message =
+    readMessage(payload) ??
+    readMessage(payload?.error) ??
+    (payload?.error === undefined ? undefined : JSON.stringify(payload.error)) ??
+    String(error);
+  const provider = typeof payload?.provider === 'string' ? payload.provider : undefined;
+  const errorType = payload?.errorType;
+
+  return {
+    // Never empty. A blank message here would put the caller back where the
+    // bodyless 500 left it — a failure with no way to tell what failed — and
+    // `String(error)` is blank for a thrown empty string.
+    message:
+      [provider && `[${provider}]`, errorType && `${String(errorType)}:`, message]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'Model runtime failed without a message',
+    status: 502 as const,
+  };
 };

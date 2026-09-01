@@ -1,4 +1,5 @@
-import { Avatar, Center, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Origami } from 'lucide-react';

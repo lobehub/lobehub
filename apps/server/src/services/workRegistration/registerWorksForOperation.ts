@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 
-import { isParkedStatus } from '@lobechat/agent-runtime';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   classifyEditedFile,
@@ -314,7 +313,7 @@ export const registerWorksForOperation = async (
   // scan, so the parent will never scan again and the repair's edits would be
   // lost. Distinguish by the parent's status:
   //   - parent still active (idle / running / parked — waiting_for_human or
-  //     waiting_for_async_tool, per isParkedStatus) → it will scan the whole
+  //     waiting_for_async_tool) → it will scan the whole
   //     subtree on its own completion, so no-op here to avoid the duplicate.
   //   - parent already terminal (done / error / interrupted) → register this
   //     op's OWN edits (a legitimately new version for the repair), scanning
@@ -327,7 +326,8 @@ export const registerWorksForOperation = async (
       !parentStatus ||
       parentStatus === 'idle' ||
       parentStatus === 'running' ||
-      isParkedStatus(parentStatus);
+      parentStatus === 'waiting_for_human' ||
+      parentStatus === 'waiting_for_async_tool';
     if (parentActive) {
       log(
         '[%s] Skipping file Work registration: parent operation is still active (%s)',

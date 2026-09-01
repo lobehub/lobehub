@@ -546,6 +546,34 @@ export const verifyRouter = router({
       }
     }),
 
+  /** Draft the generated goal title, instruction, and standing acceptance contract. */
+  generateGoalPlan: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generatePlan(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
   /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
   createCriteria: verifyWriteProcedure
     .input(
@@ -614,6 +642,9 @@ export const verifyRouter = router({
       ),
       identifier: skill.identifier,
       name: skill.name,
+      // The skill's own declared version, so an installer can compare a copy
+      // already on disk against the latest bundle.
+      version: skill.version,
     };
   }),
 

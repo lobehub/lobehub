@@ -3,10 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createLambdaFileStorePort } from './fileStorePort';
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 const auth = {
   getAccessToken: async () => 'token-123',
   getServerUrl: async () => 'https://cloud.lobehub.com',

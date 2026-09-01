@@ -34,6 +34,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
@@ -77,6 +78,22 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const topicSearchProcedure = topicProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });
@@ -911,7 +928,7 @@ export const topicRouter = router({
       return result;
     }),
 
-  searchTopics: topicProcedure
+  searchTopics: topicSearchProcedure
     .input(
       z.object({
         agentId: z.string().optional(),
@@ -1031,6 +1048,21 @@ export const topicRouter = router({
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
 
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
+    }),
+
+  settleRunningOperation: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        operationId: z.string(),
+        status: chatTopicStatusSchema.optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+
+      return ctx.topicModel.settleRunningOperation(input.id, input.operationId, input.status);
     }),
 });
 
