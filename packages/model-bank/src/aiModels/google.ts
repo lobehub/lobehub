@@ -30,14 +30,16 @@ const googleChatModels: AIChatModelCard[] = [
     id: 'gemini-pro-latest',
     knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
+    // Mirrors gemini-3.1-pro-preview, the model this alias points to.
+    // See https://ai.google.dev/gemini-api/docs/pricing
     pricing: {
       units: [
         {
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.31, upTo: 200_000 },
-            { rate: 0.625, upTo: 'infinity' },
+            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -45,8 +47,35 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 200_000 },
-            { rate: 2.5, upTo: 'infinity' },
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'videoInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'audioInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -54,9 +83,15 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 10, upTo: 200_000 },
-            { rate: 15, upTo: 'infinity' },
+            { rate: 12, upTo: 200_000 },
+            { rate: 18, upTo: 'infinity' },
           ],
+          unit: 'millionTokens',
+        },
+        {
+          lookup: { prices: { '1h': 4.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
           unit: 'millionTokens',
         },
       ],
@@ -85,16 +120,20 @@ const googleChatModels: AIChatModelCard[] = [
     id: 'gemini-flash-latest',
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
+    // Mirrors gemini-3.7-flash, the model this alias points to.
+    // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
+    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // See https://ai.google.dev/gemini-api/docs/pricing
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
         {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
           name: 'textInput_cacheWrite',
           strategy: 'lookup',
           unit: 'millionTokens',
@@ -757,8 +796,8 @@ const googleChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.31, upTo: 200_000 },
-            { rate: 0.625, upTo: 'infinity' },
+            { rate: 0.125, upTo: 200_000 },
+            { rate: 0.25, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -842,7 +881,7 @@ const googleChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'imageInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'videoInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
@@ -907,7 +946,7 @@ const googleChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],

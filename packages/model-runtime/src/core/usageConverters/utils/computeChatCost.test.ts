@@ -292,8 +292,8 @@ describe('computeChatPricing', () => {
       // Verify cached tokens
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(253_891);
-      expect(cached?.credits).toBe(158_682); // ceil(253891 * 0.625) = 158682
-      expect(cached?.segments).toEqual([{ quantity: 253_891, rate: 0.625, credits: 158_681.875 }]);
+      expect(cached?.credits).toBe(63_473); // ceil(253891 * 0.25) = 63473
+      expect(cached?.segments).toEqual([{ quantity: 253_891, rate: 0.25, credits: 63_472.75 }]);
 
       // Verify input cache miss tokens
       const input = breakdown.find((item) => item.unit.name === 'textInput');
@@ -308,8 +308,8 @@ describe('computeChatPricing', () => {
       expect(output?.segments).toEqual([{ quantity: 3_063, rate: 15, credits: 45_945 }]);
 
       // Verify totals
-      expect(totalCredits).toBe(215_315); // 158682 + 10688 + 45945 = 215315
-      expect(totalCost).toBeCloseTo(0.215315, 6);
+      expect(totalCredits).toBe(120_106); // 63473 + 10688 + 45945 = 120106
+      expect(totalCost).toBeCloseTo(0.120106, 6);
     });
 
     it('supports multi-modal fixed units for Gemini 2.5 Flash Image Preview', () => {
@@ -864,8 +864,8 @@ describe('computeChatPricing', () => {
       // Verify cached tokens
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(257_955);
-      expect(cached?.credits).toBe(161_222); // ceil(257955 * 0.625) = 161222
-      expect(cached?.segments).toEqual([{ quantity: 257_955, rate: 0.625, credits: 161_221.875 }]);
+      expect(cached?.credits).toBe(64_489); // ceil(257955 * 0.25) = 64489
+      expect(cached?.segments).toEqual([{ quantity: 257_955, rate: 0.25, credits: 64_488.75 }]);
 
       // Verify input cache miss tokens
       const input = breakdown.find((item) => item.unit.name === 'textInput');
@@ -880,8 +880,8 @@ describe('computeChatPricing', () => {
       expect(output?.segments).toEqual([{ quantity: 1_744, rate: 15, credits: 26_160 }]);
 
       // Verify totals
-      expect(totalCredits).toBe(199_895); // 161222 + 12513 + 26160 = 199895
-      expect(totalCost).toBeCloseTo(0.199895, 6);
+      expect(totalCredits).toBe(103_162); // 64489 + 12513 + 26160 = 103162
+      expect(totalCost).toBeCloseTo(0.103162, 6);
     });
 
     it('bills tool-use (grounding) tokens at textInput rate when no explicit cache', () => {
