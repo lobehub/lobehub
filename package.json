@@ -524,7 +524,7 @@
     "@types/unist": "^3.0.3",
     "@types/ws": "^8.18.1",
     "@types/xast": "^2.0.4",
-    "@typescript/native-preview": "7.0.0-dev.20260630.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitejs/devtools": "0.2.0",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "3.2.6",
