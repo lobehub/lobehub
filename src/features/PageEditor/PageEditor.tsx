@@ -317,7 +317,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
                 compact status badge lives in the Header (EditingIndicator). */}
             <LockedAlert />
             <EditorCanvas askCopilotTarget={askCopilotTarget} />
-            {documentId && <DocumentLikes documentId={documentId} />}
+            {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
             {documentId && <DocumentComments documentId={documentId} />}
           </Flexbox>
         </WideScreenContainer>

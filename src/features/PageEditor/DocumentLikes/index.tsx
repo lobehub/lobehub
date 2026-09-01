@@ -141,11 +141,12 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
         summary = sent
           ? await documentLikeService.like(documentId)
           : await documentLikeService.unlike(documentId);
+        // Bounded dimensions only — no document id, which would create an
+        // unbounded high-cardinality analytics field.
         analytics?.track({
           name: 'document_like_toggle',
           properties: {
             action: sent ? 'like' : 'unlike',
-            document_id: documentId,
             outcome: 'success',
             spm: 'page_editor.likes.toggle',
           },
@@ -159,7 +160,6 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
         name: 'document_like_toggle',
         properties: {
           action: targetRef.current ? 'like' : 'unlike',
-          document_id: documentId,
           outcome: 'failure',
           spm: 'page_editor.likes.toggle',
         },
@@ -167,8 +167,11 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
       targetRef.current = null;
       toast.error(t('pageEditor.likes.failed'));
       // Recover the truth from the server rather than guessing a rollback
-      // point across coalesced toggles.
-      await mutate();
+      // point across coalesced toggles. The recovery fetch itself can fail
+      // (e.g. an outage) — swallow it so drain() never rejects out of a void
+      // call; SWR revalidates again on the next focus/interval and corrects
+      // any stale optimistic state then.
+      await mutate().catch(() => undefined);
     } finally {
       inFlightRef.current = false;
     }
