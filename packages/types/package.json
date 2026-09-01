@@ -15,7 +15,7 @@
     "ajv": "^8.20.0",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",
-    "zustand": "5.0.4"
+    "zustand": "5.0.15"
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",

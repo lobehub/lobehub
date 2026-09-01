@@ -476,7 +476,7 @@
     "xastscript": "^4.0.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3",
-    "zustand": "5.0.4",
+    "zustand": "5.0.15",
     "zustand-utils": "^2.1.1"
   },
   "devDependencies": {
