@@ -35,7 +35,7 @@ import {
   PlanExecutionRuntime,
   type PlanRuntimeContext,
   type PlanRuntimeService,
-} from './PlanRuntime';
+} from '../../PlanRuntime';
 import { getTodosFromContext } from './planTodoHelper';
 import { resolveClientMediaPayloadItems } from './resolveMediaUris';
 

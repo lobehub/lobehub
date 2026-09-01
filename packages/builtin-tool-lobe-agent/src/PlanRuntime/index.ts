@@ -11,7 +11,7 @@ import type {
   TodoUpdateOperation,
   UpdatePlanParams,
   UpdateTodosParams,
-} from '../../../types';
+} from '../types';
 
 export interface PlanDocument {
   content: string | null;

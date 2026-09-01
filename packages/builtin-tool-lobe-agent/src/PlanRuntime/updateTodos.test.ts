@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { TodoItem } from '../../../types';
+import type { TodoItem } from '../types';
 import type { PlanRuntimeService } from './index';
 import { PlanExecutionRuntime } from './index';
 
