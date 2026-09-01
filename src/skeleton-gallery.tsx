@@ -1,14 +1,14 @@
 import { Flexbox, ThemeProvider } from '@lobehub/ui';
+import { type ReactNode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Suspense, type ReactNode } from 'react';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
 import ConversationListSkeleton from '@/components/Skeleton/Conversation/List';
-import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
-import MemoryLoading from '@/routes/(main)/memory/features/Loading';
-import MemoryDetailLoading from '@/routes/(main)/memory/features/DetailLoading';
 import TaskItemSkeleton from '@/features/AgentTasks/AgentTaskList/TaskItemSkeleton';
+import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import ModelSkeletonList from '@/features/Settings/provider/features/ModelList/SkeletonList';
+import MemoryDetailLoading from '@/routes/(main)/memory/features/DetailLoading';
+import MemoryLoading from '@/routes/(main)/memory/features/Loading';
 
 const Case = ({ children, title }: { children: ReactNode; title: string }) => (
   <Flexbox gap={12} style={{ borderBottom: '1px solid #eee', padding: 24 }} width={'100%'}>
