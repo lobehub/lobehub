@@ -83,7 +83,7 @@
     "@types/resolve": "^1.20.6",
     "@types/semver": "^7.7.1",
     "@types/set-cookie-parser": "^2.4.10",
-    "@typescript/native-preview": "7.0.0-dev.20260630.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vanilla-extract/css": "^1.21.1",
     "@vanilla-extract/vite-plugin": "^5.2.3",
     "consola": "^3.4.2",
