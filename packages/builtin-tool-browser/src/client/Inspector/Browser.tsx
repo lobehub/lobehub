@@ -118,13 +118,10 @@ export const BrowserInspector = memo<BuiltinInspectorProps<BrowserArgs>>(
     const Icon = API_ICONS[browserApiName];
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{value ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {value ? `${label}:` : label}
+        </span>
         {value && Icon && (
           <span className={styles.chip}>
             <Icon className={styles.icon} size={14} />

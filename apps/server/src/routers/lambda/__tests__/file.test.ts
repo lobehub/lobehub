@@ -1085,6 +1085,9 @@ describe('fileRouter', () => {
         null,
         'test-user',
         undefined,
+        {
+          forbidForeignRows: true,
+        },
       );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });

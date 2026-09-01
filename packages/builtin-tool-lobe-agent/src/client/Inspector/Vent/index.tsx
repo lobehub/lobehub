@@ -59,8 +59,8 @@ export const VentInspector = memo<BuiltinInspectorProps<VentParams, VentState>>(
 
     if (isArgumentsStreaming && !hasContext) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{title}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>{title}</span>
         </div>
       );
     }
@@ -68,14 +68,10 @@ export const VentInspector = memo<BuiltinInspectorProps<VentParams, VentState>>(
     const isSettled = !isArgumentsStreaming && !isLoading && !!pluginState;
 
     return (
-      <div
-        style={{ flexWrap: 'wrap', gap: 4 }}
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{title}</span>
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {title}
+        </span>
         {summary && (
           <span className={cx(highlightTextStyles.primary, styles.summary)}>{summary}</span>
         )}

@@ -1,7 +1,11 @@
 import type { ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { hasRepeatedToolCall, updateToolCallRepeatGuard } from './toolCallRepeatGuard';
+import {
+  hasRepeatedToolCall,
+  TOOL_CALL_REPEAT_LIMIT,
+  updateToolCallRepeatGuard,
+} from './toolCallRepeatGuard';
 
 const createToolCall = (argumentsValue: string): ChatToolPayload => ({
   apiName: 'inject',
@@ -12,10 +16,10 @@ const createToolCall = (argumentsValue: string): ChatToolPayload => ({
 });
 
 describe('toolCallRepeatGuard', () => {
-  it('allows four consecutive calls and blocks the fifth with canonically equivalent arguments', () => {
+  it('allows limit-1 consecutive calls and blocks the next with canonically equivalent arguments', () => {
     let guard: ReturnType<typeof updateToolCallRepeatGuard> | undefined;
 
-    for (let index = 0; index < 4; index++) {
+    for (let index = 0; index < TOOL_CALL_REPEAT_LIMIT - 1; index++) {
       guard = updateToolCallRepeatGuard(guard, [
         createToolCall('{"keys":["github"],"scope":"repo"}'),
       ]);

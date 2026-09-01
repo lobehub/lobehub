@@ -66,7 +66,7 @@ describe('AskUserQuestionInspector', () => {
       />,
     );
 
-    expect(screen.getByTestId('ask-user-question-inspector').classList).toContain('shiny-text');
+    expect(screen.getByText('Ask user question').classList).toContain('shiny-text');
     expect(screen.getByText('Next step')).toBeTruthy();
   });
 

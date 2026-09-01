@@ -6,7 +6,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { FREE_DOCUMENT_HISTORY_WINDOW_DAYS } from '@/const/documentHistory';
 import { ChunkModel } from '@/database/models/chunk';
-import { DocumentModel } from '@/database/models/document';
+import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
@@ -536,20 +536,6 @@ export const documentRouter = router({
         }
       }
 
-      // The transfer rehomes every descendant document and anchored file. A
-      // non-owner member may transfer their own root only when the entire
-      // subtree is theirs; workspace owners retain the administrative override.
-      if (
-        isWorkspaceNonOwner(ctx) &&
-        (await ctx.documentModel.subtreeHasForeignRows(input.documentId))
-      ) {
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.OwnerOnly } },
-          code: 'FORBIDDEN',
-          message: "Only workspace owners can transfer a document tree containing others' content",
-        });
-      }
-
       const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.documentId);
       await businessFileTransferStorageCheck({
         additionalSize,
@@ -557,12 +543,32 @@ export const documentRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      const result = await ctx.documentModel.transferTo(
-        input.documentId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      // The transfer rehomes every descendant document, anchored file, comment,
+      // and like. A non-owner member may transfer their own root only when the
+      // entire subtree is theirs; workspace owners retain the administrative
+      // override. The check runs INSIDE the transfer transaction (after the
+      // subtree rows are locked) so content committed between any preflight and
+      // the transfer cannot slip past the guard.
+      let result: Awaited<ReturnType<typeof ctx.documentModel.transferTo>>;
+      try {
+        result = await ctx.documentModel.transferTo(
+          input.documentId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { forbidForeignRows: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message === DOCUMENT_TRANSFER_FOREIGN_ROWS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message:
+              "Only workspace owners can transfer a document tree containing others' content",
+          });
+        }
+        throw error;
+      }
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
         await Promise.all(

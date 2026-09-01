@@ -215,8 +215,8 @@ export const messageRouter = router({
 
   listAll: messageProcedure
     .input(
-      z
-        .object({
+      messageAnalyticsSchema
+        .extend({
           current: z.number().optional(),
           pageSize: z.number().optional(),
         })
