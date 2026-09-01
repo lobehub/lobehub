@@ -270,7 +270,7 @@ export function spawnDaemon(args: string[]): Promise<number> {
 
 function readStartupError(startOffset: number): string | undefined {
   try {
-    const content = fs.readFileSync(getLogFilePath(), 'utf8').slice(startOffset).trim();
+    const content = fs.readFileSync(getLogFilePath()).subarray(startOffset).toString('utf8').trim();
     const lastError = content
       .split('\n')
       .toReversed()

@@ -424,7 +424,6 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const startedAt = new Date();
   updateStatus('connecting');
-  await reportDaemonStartupReady();
 
   // Housekeeping for the local trace store: partials left behind by killed
   // agent processes become `interrupted` snapshots (so `lh trace op list` shows
@@ -808,6 +807,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       error(`Device registration failed (non-fatal): ${(err as Error).message}`);
     }
   }
+
+  await reportDaemonStartupReady();
 
   // Connect
   await client.connect();
