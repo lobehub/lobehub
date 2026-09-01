@@ -52,7 +52,7 @@ describe('message command', () => {
   }
 
   describe('list', () => {
-    it('should use listAll when no filters', async () => {
+    it('should use listAll with a default page size of 50 when no filters', async () => {
       mockTrpcClient.message.listAll.query.mockResolvedValue([
         { content: 'Hello', createdAt: new Date().toISOString(), id: 'm1', role: 'user' },
       ]);
@@ -60,7 +60,9 @@ describe('message command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'message', 'list']);
 
-      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalled();
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 50 }),
+      );
       expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledTimes(2);
     });

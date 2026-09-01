@@ -1578,6 +1578,31 @@ describe('MessageModel Query Tests', () => {
       });
       expect(byRoleAndDate.map((m) => m.id)).toEqual(['q-user-new']);
     });
+
+    it('should include agent name/title for messages bound to an agent', async () => {
+      await serverDB
+        .insert(agents)
+        .values([{ id: 'q-agent', name: 'Lobe', title: 'Diary Agent', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          agentId: 'q-agent',
+          content: 'assistant reply',
+          id: 'q-with-agent',
+          role: 'assistant',
+          userId,
+        },
+        { content: 'user question', id: 'q-without-agent', role: 'user', userId },
+      ]);
+
+      const result = await messageModel.queryAll();
+      const withAgent = result.find((m) => m.id === 'q-with-agent');
+      const withoutAgent = result.find((m) => m.id === 'q-without-agent');
+
+      expect(withAgent?.agentName).toBe('Lobe');
+      expect(withAgent?.agentTitle).toBe('Diary Agent');
+      expect(withoutAgent?.agentName).toBeNull();
+      expect(withoutAgent?.agentTitle).toBeNull();
+    });
   });
 
   describe('findById', () => {

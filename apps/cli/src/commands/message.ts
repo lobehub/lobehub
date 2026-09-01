@@ -18,7 +18,7 @@ export function registerMessageCommand(program: Command) {
     .option('--role <role>', 'Filter by role (user, assistant, tool, system)')
     .option('--start <date>', 'Only messages created at/after this date (ISO or YYYY-MM-DD)')
     .option('--end <date>', 'Only messages created at/before this date (ISO or YYYY-MM-DD)')
-    .option('-L, --limit <n>', 'Page size', '30')
+    .option('-L, --limit <n>', 'Page size', '50')
     .option('-P, --page <n>', 'Page number', '1')
     .option('--user', 'Shorthand for --role user')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -68,12 +68,13 @@ export function registerMessageCommand(program: Command) {
         const rows = items.map((m: any) => [
           m.id || '',
           m.role || '',
+          m.agentName || m.agentTitle || '',
           truncate(m.content || '', 60),
           m.threadId ? `${m.topicId || ''} › ${m.threadId}` : m.topicId || '',
           m.createdAt ? timeAgo(m.createdAt) : '',
         ]);
 
-        printTable(rows, ['ID', 'ROLE', 'CONTENT', 'TOPIC/THREAD', 'CREATED']);
+        printTable(rows, ['ID', 'ROLE', 'AGENT', 'CONTENT', 'TOPIC/THREAD', 'CREATED']);
       },
     );
 
