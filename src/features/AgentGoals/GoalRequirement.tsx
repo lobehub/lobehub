@@ -2,6 +2,7 @@
 
 import { useEditor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -46,9 +47,44 @@ const GoalRequirement = memo<GoalRequirementProps>(({ goalId, requirement }) => 
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastSavedRef = useRef(requirement);
+
+  const saveNow = useCallback(() => {
+    if (!canEdit || !editor) return;
+    let markdown: string;
+    try {
+      // On the unmount flush the child editor may already be disposed; a dead
+      // instance means nothing newer than the last change event to save.
+      markdown = String(editor.getDocument('markdown') ?? '').trim();
+    } catch {
+      return;
+    }
+    // An emptied requirement is far more likely a half-finished edit than an
+    // intent to drop the acceptance bar; keep the last saved text until the
+    // user writes a replacement.
+    if (!markdown || markdown === lastSavedRef.current) return;
+    // The marker advances only on success: a transiently failed save stays
+    // different from `lastSavedRef`, so the next edit (or the unmount flush)
+    // retries the same content instead of silently considering it saved.
+    updateGoalRequirement(goalId, markdown)
+      .then(() => {
+        lastSavedRef.current = markdown;
+      })
+      .catch((error) => {
+        console.error('[GoalRequirement] Failed to save:', error);
+        toast.error(t('goalProcess.requirementSaveFailed'));
+      });
+  }, [canEdit, editor, goalId, t, updateGoalRequirement]);
+
+  // The unmount cleanup runs with the closure of a stale render; the ref keeps
+  // it flushing the *current* document instead of an early one.
+  const saveNowRef = useRef(saveNow);
+  saveNowRef.current = saveNow;
   useEffect(
     () => () => {
+      // Leaving the page inside the debounce window must not discard the edit —
+      // flush it now instead of only cancelling the timer.
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveNowRef.current();
     },
     [],
   );
@@ -58,17 +94,9 @@ const GoalRequirement = memo<GoalRequirementProps>(({ goalId, requirement }) => 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       debounceRef.current = undefined;
-      const markdown = String(editor.getDocument('markdown') ?? '').trim();
-      // An emptied requirement is far more likely a half-finished edit than an
-      // intent to drop the acceptance bar; keep the last saved text until the
-      // user writes a replacement.
-      if (!markdown || markdown === lastSavedRef.current) return;
-      lastSavedRef.current = markdown;
-      updateGoalRequirement(goalId, markdown).catch((error) => {
-        console.error('[GoalRequirement] Failed to save:', error);
-      });
+      saveNow();
     }, SAVE_DEBOUNCE_MS);
-  }, [canEdit, editor, goalId, updateGoalRequirement]);
+  }, [canEdit, editor, saveNow]);
 
   // One click both expands the clamped text and lands the caret where it aimed.
   const handleFocus = useCallback(() => setExpanded(true), []);

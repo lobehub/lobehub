@@ -1091,8 +1091,41 @@ export class GoalService {
     const problem = graph.nodes.find((node) => node.kind === 'problem');
     const requirement = graph.goal.requirement ?? problem?.description ?? graph.goal.title;
 
+    // Two advances can reach this branch together — the queued kickoff and the
+    // client's fire-and-forget fallback both see zero Works. The conditional
+    // `planning → running` write is the claim: the loser stops before even
+    // calling the planner, so nothing double-plans and nothing double-pays.
+    // `waiting_external` ends its advance loop — the winner carries the goal.
+    if (graph.goal.status === 'planning') {
+      const claimed = await this.goalModel.claimPlanning(goalId);
+      if (!claimed) {
+        return {
+          goalId,
+          message: 'Another advance is already planning this goal',
+          outcome: 'waiting_external' as const,
+        };
+      }
+      await this.coordinatorGraph
+        .recordGoalStatus(goalId, 'planning', 'running', 'decomposition claimed')
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    }
+
     const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
     const plan = await generator.decompose({ requirement }).catch(() => undefined);
+
+    // Rare shape: a goal already past `planning` whose Works were all removed.
+    // There is no status edge to claim on that path, so shrink the duplicate
+    // window to the instant before the inserts with a re-read instead.
+    if (graph.goal.status !== 'planning') {
+      const fresh = await this.graphModel.getGraph(goalId);
+      if (fresh?.nodes.some((node) => node.kind === 'task')) {
+        return {
+          goalId,
+          message: 'Decomposition already planned by a concurrent advance',
+          outcome: 'advanced' as const,
+        };
+      }
+    }
 
     const works: GoalDecompositionDraft['works'] = plan?.works ?? [
       { instruction: problem?.description ?? requirement, title: graph.goal.title },

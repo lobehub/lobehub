@@ -449,11 +449,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
         title,
       });
-      // `goal.create` already queued the first advance server-side. Awaiting a
-      // second one here held the modal open through the whole decomposition
-      // (and raced the queued run into double-planning); instead hand the user
-      // the goal page immediately — it polls while the goal is `planning` and
-      // grows the exploration graph in place.
+      // `goal.create` already queued the first advance server-side, but on a
+      // queue-less serverless deployment that kickoff is an in-process timer
+      // the host may freeze before firing. This request-bound advance is the
+      // durable fallback — fired and forgotten so the modal still closes
+      // immediately; the server dedupes a raced decomposition.
+      void goalService.advance(graph.goal.id).catch(() => {});
       close();
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {

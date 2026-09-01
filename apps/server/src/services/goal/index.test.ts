@@ -274,6 +274,44 @@ describe('GoalService', () => {
     );
   });
 
+  it('plans the decomposition once when two advances race through the planner', async () => {
+    // The queued kickoff and the client's fire-and-forget fallback can both
+    // reach plan_decomposition together; the atomic planning claim must stop
+    // the loser BEFORE the planner call, so nothing double-plans or double-pays.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let plannerCalls = 0;
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockImplementation(async () => {
+      plannerCalls += 1;
+      await gate;
+      return {
+        problemStatement: '并发规划',
+        works: [
+          { dependsOn: [], instruction: '收集', title: '方向A' },
+          { dependsOn: [0], instruction: '分析', title: '方向B' },
+        ],
+      };
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ problemDescription: '原话', title: 'Raced planning' });
+
+    const ticks = Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+    // The winner holds the planner open; the loser must lose the claim and
+    // return without ever entering it.
+    await vi.waitFor(() => expect(plannerCalls).toBe(1));
+    release();
+    const results = await ticks;
+
+    expect(plannerCalls).toBe(1);
+    expect(results.filter((r) => r.outcome === 'advanced')).toHaveLength(1);
+    expect(results.filter((r) => r.outcome === 'waiting_external')).toHaveLength(1);
+    const after = await service.graph(graph.goal.id);
+    expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
+    expect(after.edges.filter((e) => e.kind === 'depends_on')).toHaveLength(1);
+  });
+
   it('falls back to a single work when the planner fails, instead of stalling', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockRejectedValue(
       new Error('model unavailable'),

@@ -89,6 +89,25 @@ export class GoalModel {
   };
 
   /**
+   * Atomically take `planning → running` as the decomposition claim: several
+   * concurrent advances can all see an unplanned goal, and only the one this
+   * conditional write succeeds for may seed the graph. `startedAt` is stamped
+   * here because the later dispatch transition becomes a same-status no-op.
+   */
+  claimPlanning = async (id: string) => {
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        startedAt: sql`coalesce(${goals.startedAt}, now())`,
+        status: 'running',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), eq(goals.status, 'planning'), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
+  /**
    * Advance the lifecycle state, stamping the boundary timestamps as a side
    * effect: first entry into `running` records `startedAt`, any terminal state
    * records `completedAt` (and re-opening a terminal goal clears it).

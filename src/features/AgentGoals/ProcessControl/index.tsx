@@ -80,11 +80,14 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   // to control here, so the page keeps its original shape.
   if (!graph || graph.nodes.length === 0) return null;
 
-  // Freshly created: the coordinator is still decomposing the problem into
-  // tasks. The surfaces below promise the incoming structure instead of
+  // The coordinator is decomposing the problem into tasks. `running` with zero
+  // Works counts too: the decomposition claim flips the status before the
+  // planner returns, and a re-plan after all Works were removed is the same
+  // state. The surfaces below promise the incoming structure instead of
   // reading as an empty goal — the graph poll fills them in as nodes land.
   const planning =
-    graph.goal.status === 'planning' && !graph.nodes.some((view) => view.node.kind === 'task');
+    ['planning', 'running'].includes(graph.goal.status) &&
+    !graph.nodes.some((view) => view.node.kind === 'task');
   // A closed goal cannot move: the coordinator returns immediately for these,
   // and a Work added here would sit `proposed` forever. Stop offering actions
   // that cannot land. The goal otherwise advances entirely on its own — the

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Button, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +29,11 @@ const AddTaskContent = memo<AddTaskContentProps>(({ onAdd }) => {
     try {
       await onAdd(trimmed, description.trim() || undefined);
       close();
+    } catch (error) {
+      // Keep the form (and the user's input) open — a silent close would be
+      // indistinguishable from success.
+      console.error('[AddGoalTask] Failed to add task:', error);
+      toast.error(t('goalProcess.addTask.failed'));
     } finally {
       setBusy(false);
     }
