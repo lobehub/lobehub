@@ -40,6 +40,8 @@
   "document_comment_activity_title": "Nieuwe opmerking over uw document",
   "document_comment_mentioned": "{{actorLabel}} heeft u genoemd in een opmerking over \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "U bent genoemd in een documentopmerking",
+  "document_liked": "{{actorLabel}} vond je document \"{{documentTitle}}\" leuk.",
+  "document_liked_title": "Iemand vond je document leuk",
   "email.footer.contactSupport": "Neem contact op met ondersteuning",
   "email.footer.joinDiscord": "Word lid van Discord",
   "email.footer.manage": "Beheer meldingen",

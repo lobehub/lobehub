@@ -40,6 +40,8 @@
   "document_comment_activity_title": "あなたのドキュメントへの新しいコメント",
   "document_comment_mentioned": "{{actorLabel}}が「{{documentTitle}}」のコメントであなたに言及しました。",
   "document_comment_mentioned_title": "ドキュメントのコメントで言及されました",
+  "document_liked": "{{actorLabel}}があなたのドキュメント「{{documentTitle}}」を気に入りました。",
+  "document_liked_title": "誰かがあなたのドキュメントを気に入りました",
   "email.footer.contactSupport": "サポートに連絡する",
   "email.footer.joinDiscord": "Discordに参加する",
   "email.footer.manage": "通知を管理する",
