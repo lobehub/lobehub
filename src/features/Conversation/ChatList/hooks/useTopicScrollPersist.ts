@@ -45,24 +45,35 @@ const findDeepLinkElement = (
   displayMessageId: string,
 ) => {
   const document = container.ownerDocument;
-  const candidateIds = [
-    messageId,
-    `${messageId}__answer`,
-    `${messageId}__workflow`,
+  const exactCandidateIds = [messageId, `${messageId}__answer`, `${messageId}__workflow`];
+
+  for (const id of exactCandidateIds) {
+    const element = document.getElementById(id);
+    if (element && container.contains(element)) return { element, exact: true };
+  }
+
+  const messageElements = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
+  const exactMessageElement = messageElements.find(
+    (element) => element.dataset.messageId === messageId,
+  );
+  if (exactMessageElement) return { element: exactMessageElement, exact: true };
+
+  if (messageId === displayMessageId) return;
+
+  const fallbackCandidateIds = [
     displayMessageId,
     `${displayMessageId}__answer`,
     `${displayMessageId}__workflow`,
   ];
-
-  for (const id of candidateIds) {
+  for (const id of fallbackCandidateIds) {
     const element = document.getElementById(id);
-    if (element && container.contains(element)) return element;
+    if (element && container.contains(element)) return { element, exact: false };
   }
 
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]')).find(
-    (element) =>
-      element.dataset.messageId === messageId || element.dataset.messageId === displayMessageId,
+  const displayMessageElement = messageElements.find(
+    (element) => element.dataset.messageId === displayMessageId,
   );
+  return displayMessageElement ? { element: displayMessageElement, exact: false } : undefined;
 };
 
 /**
@@ -258,14 +269,25 @@ export const useTopicScrollPersist = ({
           return;
         }
 
-        const targetElement = findDeepLinkElement(
+        const targetMatch = findDeepLinkElement(
           container,
           targetDeepLink.id,
           targetDeepLink.displayMessageId,
         );
-        if (targetElement || attempts >= DEEP_LINK_MAX_ATTEMPTS) {
-          targetElement?.scrollIntoView({ block: 'center' });
+        if (targetMatch?.exact) {
+          targetMatch.element.scrollIntoView({ block: 'center' });
           targetDeepLink.onHandled?.();
+          finalize(false);
+          return;
+        }
+
+        if (attempts >= DEEP_LINK_MAX_ATTEMPTS) {
+          // A nested message can be absent while its process fold is collapsed
+          // or its compressed group is showing the summary tab. Keep the hash
+          // pending instead of consuming the deep link at the owning row, so a
+          // later render can retry the exact target.
+          handledDeepLinkRef.current = undefined;
+          targetMatch?.element.scrollIntoView({ block: 'center' });
           finalize(false);
           return;
         }

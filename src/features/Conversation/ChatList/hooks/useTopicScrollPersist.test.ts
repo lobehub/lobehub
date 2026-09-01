@@ -116,13 +116,14 @@ describe('useTopicScrollPersist', () => {
       }
     });
 
-    it('centers the rendered top-level row when the nested message has no DOM node', async () => {
+    it('keeps the deep link pending when only the owning row is rendered', async () => {
       const handle = createFakeVList({ scrollSize: 6000 });
       const container = document.createElement('div');
       const topLevelMessage = document.createElement('div');
       topLevelMessage.id = 'assistant-group';
       container.append(topLevelMessage);
       document.body.append(container);
+      const onHandled = vi.fn();
       const originalScrollIntoView = Element.prototype.scrollIntoView;
       const scrollIntoView = vi.fn();
       Element.prototype.scrollIntoView = scrollIntoView;
@@ -138,14 +139,16 @@ describe('useTopicScrollPersist', () => {
               id: 'assistant-child',
               index: 12,
               navigationKey: 'navigation-1',
+              onHandled,
             },
             virtuaRef: refOf(handle),
           }),
         );
 
-        await advanceFrames(4);
+        await advanceFrames(40);
 
         expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+        expect(onHandled).not.toHaveBeenCalled();
       } finally {
         container.remove();
         Element.prototype.scrollIntoView = originalScrollIntoView;
