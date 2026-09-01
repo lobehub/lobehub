@@ -1,9 +1,8 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { Pause, Play } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,8 +42,6 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
 
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
   const decideGoal = useGoalStore((s) => s.decideGoal);
-  const pauseGoal = useGoalStore((s) => s.pauseGoal);
-  const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const openGoalNode = useChatStore((s) => s.openGoalNode);
@@ -83,7 +80,6 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   // to control here, so the page keeps its original shape.
   if (!graph || graph.nodes.length === 0) return null;
 
-  const paused = graph.goal.status === 'paused';
   // Freshly created: the coordinator is still decomposing the problem into
   // tasks. The surfaces below promise the incoming structure instead of
   // reading as an empty goal — the graph poll fills them in as nodes land.
@@ -99,23 +95,6 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   return (
     <Flexbox gap={20}>
       <Flexbox gap={12}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          {canAct && (
-            <Button
-              icon={<Icon icon={paused ? Play : Pause} />}
-              size={'small'}
-              onClick={() => void (paused ? resumeGoal(goalId) : pauseGoal(goalId))}
-            >
-              {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-            </Button>
-          )}
-          {paused && (
-            <Text fontSize={12} type={'secondary'}>
-              {t('goalProcess.paused')}
-            </Text>
-          )}
-        </Flexbox>
-
         <Frontier
           actions={actions}
           canEdit={canAct}

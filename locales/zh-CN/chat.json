@@ -600,7 +600,6 @@
   "goalProcess.planning.description": "协调器正在把目标拆解为可执行任务，节点稍后会陆续出现",
   "goalProcess.planning.title": "正在规划探索方向",
   "goalProcess.requirementPlaceholder": "描述怎样才算达成这个目标…",
-  "goalProcess.requirement": "什么算完成",
   "goalProcess.resume": "继续",
   "goalProcess.running.elapsed": "已运行 {{duration}}",
   "goalProcess.stale.description": "已 {{duration}} 没有心跳。下一次推进会把这次尝试标为失联并重开一次，不计失败次数。",

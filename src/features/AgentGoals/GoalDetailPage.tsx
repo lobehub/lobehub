@@ -1,8 +1,9 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { Pause, Play } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +17,7 @@ import { PortalContent } from '@/features/Portal/router';
 import RightPanel from '@/features/RightPanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { type GoalMetricKind } from '@/store/chat/slices/portal/initialState';
@@ -102,9 +104,12 @@ interface GoalDetailPageProps {
 
 const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canEdit } = usePermission('create_content');
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
   const { error, isLoading, mutate } = useFetchGoalGraph(goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
+  const pauseGoal = useGoalStore((s) => s.pauseGoal);
+  const resumeGoal = useGoalStore((s) => s.resumeGoal);
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const openGoalMetric = useChatStore((s) => s.openGoalMetric);
@@ -137,6 +142,11 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const tasks = nodes.filter((node) => node.kind === 'task').length;
   const findings = nodes.filter((node) => node.kind === 'finding').length;
   const open = (metric: GoalMetricKind) => () => openGoalMetric(goalId, metric);
+
+  const paused = goal.status === 'paused';
+  // A closed goal cannot move, so pace control would be a dead button.
+  const canPause =
+    canEdit && nodes.length > 0 && !['achieved', 'canceled', 'failed'].includes(goal.status);
 
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
@@ -232,6 +242,24 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   onClick={open('liveness')}
                 />
               </Flexbox>
+              {/* Pause/resume sits above the requirement document (review: it
+                  was a small button buried below it) — the one control over the
+                  goal's pace, at full button size. */}
+              {canPause && (
+                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
+                  <Button
+                    icon={<Icon icon={paused ? Play : Pause} />}
+                    onClick={() => void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id))}
+                  >
+                    {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
+                  </Button>
+                  {paused && (
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('goalProcess.paused')}
+                    </Text>
+                  )}
+                </Flexbox>
+              )}
               {goal.requirement && (
                 <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}

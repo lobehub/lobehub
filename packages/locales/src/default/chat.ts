@@ -1927,7 +1927,6 @@ export default {
   'goalProcess.nodeStatus.waiting': 'Waiting',
   'goalProcess.metrics.tasks': 'Tasks',
   'goalProcess.metrics.findings': 'Findings',
-  'goalProcess.requirement': 'What counts as done',
   'goalProcess.node.answered': 'Answered by a finding',
   'goalProcess.node.generating': 'Generating…',
   'goalProcess.node.unassigned': 'Not dispatched',

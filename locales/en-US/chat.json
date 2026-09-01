@@ -600,7 +600,6 @@
   "goalProcess.planning.description": "The coordinator is breaking the goal into executable tasks — they will appear here shortly.",
   "goalProcess.planning.title": "Planning the exploration",
   "goalProcess.requirementPlaceholder": "Describe what counts as done…",
-  "goalProcess.requirement": "What counts as done",
   "goalProcess.resume": "Resume",
   "goalProcess.running.elapsed": "Running {{duration}}",
   "goalProcess.stale.description": "No heartbeat for {{duration}}. The next advance marks this attempt lost and starts a fresh one — it does not count as a failure.",

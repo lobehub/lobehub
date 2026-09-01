@@ -81,17 +81,36 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
+  /* Fullscreen chrome floats over the canvas in two corner cards instead of a
+     full-width bar, so a node panned to the top edge is never hidden behind an
+     opaque header strip. */
+  float: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 16px;
+
+    display: flex;
+    gap: 12px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 14px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
+  `,
+  floatLeft: css`
+    inset-inline-start: 16px;
+  `,
+  floatRight: css`
+    inset-inline-end: 16px;
+  `,
   overlay: css`
     position: fixed;
     z-index: 1000;
     inset: 0;
-
-    display: flex;
-    flex-direction: column;
-
-    padding-block: 12px 16px;
-    padding-inline: 24px;
-
     background: ${cssVar.colorBgLayout};
   `,
 }));
@@ -387,56 +406,68 @@ const Graph = memo<GraphProps>((props) => {
   const [view, setView] = useState<GraphViewMode>('stage');
   const [fullscreen, setFullscreen] = useState(false);
 
-  const head = (
-    <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={4}>
-      <Flexbox horizontal align={'center'} gap={12}>
-        <Text fontSize={16} weight={600}>
-          {t('goalProcess.graph.title')}
-        </Text>
-        <Segmented
-          size={'small'}
-          value={view}
-          options={[
-            { label: t('goalProcess.graph.view.stage'), value: 'stage' },
-            { label: t('goalProcess.graph.view.all'), value: 'all' },
-          ]}
-          onChange={(value) => setView(value as GraphViewMode)}
-        />
-      </Flexbox>
-      <Flexbox horizontal align={'center'} gap={12}>
-        <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
-          {(['problem', 'task', 'finding', 'decision'] as const).map((kind) => (
-            <Flexbox horizontal align={'center'} gap={4} key={kind}>
-              <KindDot kind={kind} />
-              <span>{t(`goalProcess.kind.${kind}` as const)}</span>
-            </Flexbox>
-          ))}
+  const titleAndViews = (
+    <>
+      <Text fontSize={16} weight={600}>
+        {t('goalProcess.graph.title')}
+      </Text>
+      <Segmented
+        size={'small'}
+        value={view}
+        options={[
+          { label: t('goalProcess.graph.view.stage'), value: 'stage' },
+          { label: t('goalProcess.graph.view.all'), value: 'all' },
+        ]}
+        onChange={(value) => setView(value as GraphViewMode)}
+      />
+    </>
+  );
+  const legend = (
+    <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
+      {(['problem', 'task', 'finding', 'decision'] as const).map((kind) => (
+        <Flexbox horizontal align={'center'} gap={4} key={kind}>
+          <KindDot kind={kind} />
+          <span>{t(`goalProcess.kind.${kind}` as const)}</span>
         </Flexbox>
-        <ActionIcon
-          icon={fullscreen ? X : Maximize2}
-          size={'small'}
-          title={
-            fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')
-          }
-          onClick={() => setFullscreen(!fullscreen)}
-        />
-      </Flexbox>
+      ))}
     </Flexbox>
+  );
+  const toggle = (
+    <ActionIcon
+      icon={fullscreen ? X : Maximize2}
+      size={'small'}
+      title={fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')}
+      onClick={() => setFullscreen(!fullscreen)}
+    />
   );
 
   if (fullscreen)
     return (
       <div className={styles.overlay}>
-        {head}
         <ReactFlowProvider>
           <Canvas {...props} interactive className={cx(styles.canvas, styles.full)} view={view} />
         </ReactFlowProvider>
+        {/* Corner cards float over the canvas — the map owns the whole screen
+            and panned content stays visible between them. */}
+        <div className={cx(styles.float, styles.floatLeft)}>{titleAndViews}</div>
+        <div className={cx(styles.float, styles.floatRight)}>
+          {legend}
+          {toggle}
+        </div>
       </div>
     );
 
   return (
     <Flexbox gap={4}>
-      {head}
+      <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={4}>
+        <Flexbox horizontal align={'center'} gap={12}>
+          {titleAndViews}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={12}>
+          {legend}
+          {toggle}
+        </Flexbox>
+      </Flexbox>
       <ReactFlowProvider>
         <Canvas {...props} className={styles.canvas} interactive={false} view={view} />
       </ReactFlowProvider>
