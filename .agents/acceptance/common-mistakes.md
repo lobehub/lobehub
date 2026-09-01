@@ -504,6 +504,26 @@ supposed to have — a dialog opens, a request fires, a store field changes. Tre
 closed and nothing happened" as the expected failure signature, not as a missed click. When
 the entry is nested, verify the child's own dispatch wiring, not the parent's.
 
+### L-D13 — Picking `cssVar` color-scale steps by antd-palette intuition
+
+**Wrong approach:** choose antd-style palette steps (`cssVar.blue1` for a tint,
+`cssVar.blue6` for the primary line) from the standard antd 10-step palette in
+your head, and judge the result from the code alone.
+
+**Why it fails:** LobeHub's theme overrides the color scales with an 11-step
+palette whose primary-strength band sits at x9–x10 — light-mode `blue-6`
+resolves to `#acd4ff` and `blue-7` to `#93c8ff`, both near-pastel, nothing like
+antd's `blue-6` `#1677ff`. The UI then renders washed out while every token
+name in the code reads correct, and a one-step "fix" (x1→x2, x6→x7) changes
+almost nothing.
+
+**Correct approach:** never pick a scale step without reading the resolved
+value in the running app (`getComputedStyle` on the element, or resolve
+`--ant-<color>-<n>` from the element's scope — the variables are scoped, not on
+`:root`). For a tinted-tile + line pairing, the working band is around x3 for
+the tint and x9–x10 for the line, verified in both themes: the scale flips in
+dark mode, so a step that is a tint in light is a deep fill in dark.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
