@@ -137,6 +137,8 @@ export default {
   'pageEditor.likes.like': 'Find this page helpful? Give it a like',
   'pageEditor.likes.liked': 'Liked',
   'pageEditor.likes.count': '{{count}} likes',
+  'pageEditor.likes.count_one': '{{count}} like',
+  'pageEditor.likes.count_other': '{{count}} likes',
   'pageEditor.likes.more': '+{{count}} more',
   'pageEditor.deleteConfirm.content':
     'This page will be deleted and cannot be recovered. Please proceed with caution.',

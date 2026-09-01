@@ -1,6 +1,7 @@
 'use client';
 
 import type { DocumentLikeSummary } from '@lobechat/types';
+import { useAnalytics } from '@lobehub/analytics/react';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { Avatar, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -9,6 +10,7 @@ import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AsyncError from '@/components/AsyncError';
 import { useClientDataSWR } from '@/libs/swr';
 import { documentLikeKeys } from '@/libs/swr/keys';
 import { documentLikeService } from '@/services/documentLike';
@@ -118,7 +120,8 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
   const workspaceId = useActiveWorkspaceId();
   const user = useUserStore(userProfileSelectors.userProfile);
-  const { data, isLoading, mutate } = useDocumentLikeSummary(workspaceId, documentId);
+  const { analytics } = useAnalytics();
+  const { data, error, isLoading, mutate } = useDocumentLikeSummary(workspaceId, documentId);
   // Last user-intended liked state; null when the UI matches the server.
   const targetRef = useRef<boolean | null>(null);
   const inFlightRef = useRef(false);
@@ -138,11 +141,29 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
         summary = sent
           ? await documentLikeService.like(documentId)
           : await documentLikeService.unlike(documentId);
+        analytics?.track({
+          name: 'document_like_toggle',
+          properties: {
+            action: sent ? 'like' : 'unlike',
+            document_id: documentId,
+            outcome: 'success',
+            spm: 'page_editor.likes.toggle',
+          },
+        });
       }
       targetRef.current = null;
       if (summary) await mutate(summary, { revalidate: false });
-    } catch (error) {
-      console.error('Failed to toggle document like', error);
+    } catch (toggleError) {
+      console.error('Failed to toggle document like', toggleError);
+      analytics?.track({
+        name: 'document_like_toggle',
+        properties: {
+          action: targetRef.current ? 'like' : 'unlike',
+          document_id: documentId,
+          outcome: 'failure',
+          spm: 'page_editor.likes.toggle',
+        },
+      });
       targetRef.current = null;
       toast.error(t('pageEditor.likes.failed'));
       // Recover the truth from the server rather than guessing a rollback
@@ -151,7 +172,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
     } finally {
       inFlightRef.current = false;
     }
-  }, [documentId, mutate, t]);
+  }, [analytics, documentId, mutate, t]);
 
   const toggle = useCallback(() => {
     if (!data) return;
@@ -188,6 +209,15 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   }, [data, drain, mutate, user?.avatar, user?.fullName, user?.id, user?.username]);
 
   if (!workspaceId) return null;
+
+  // A failed initial load must not masquerade as a zero-like page: surface a
+  // retryable error instead of the idle state with a dead button.
+  if (!data && error)
+    return (
+      <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
+        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+      </Flexbox>
+    );
 
   // Match the surrounding page skeleton while the summary loads instead of
   // flashing the finished idle state ahead of the rest of the content.

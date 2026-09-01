@@ -153,6 +153,27 @@ describe('documentLikeRouter integration', () => {
     expect(publishResourceEvent).toHaveBeenCalledTimes(2);
   });
 
+  it('does not notify an author who was removed from the workspace', async () => {
+    await db
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, ownerId));
+
+    const member = documentLikeRouter.createCaller(context(memberId, workspaceId));
+    const liked = await member.like({ documentId });
+    expect(liked.total).toBe(1);
+    await flushAfterResponse();
+
+    // The like lands, but the stale author id must not receive workspace
+    // content (the notification carries the document title).
+    expect(notifyDocumentLiked).not.toHaveBeenCalled();
+
+    // Withdrawal is cleanup, not disclosure — it still reaches the inbox.
+    await member.unlike({ documentId });
+    await flushAfterResponse();
+    expect(revokeDocumentLikeNotification).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects non-members and documents outside the workspace', async () => {
     const outsider = documentLikeRouter.createCaller(context(outsiderId, workspaceId));
     await expect(outsider.like({ documentId })).rejects.toMatchObject({ code: 'FORBIDDEN' });

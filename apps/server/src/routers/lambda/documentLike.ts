@@ -17,7 +17,11 @@ import { workspaceMembers } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
-import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  assertCanPerformResourceAction,
+  canPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 const documentIdSchema = z.object({ documentId: z.string().trim().min(1).max(255) });
@@ -93,14 +97,62 @@ const publishLikesChanged = (ctx: Pick<LikeContext, 'userId'>, documentId: strin
   );
 };
 
+/**
+ * A like notification carries the document title, so before dispatch the
+ * recipient (the document author) must still be an active member who can view
+ * the document — membership is soft-deleted and documents survive removal, so
+ * a stale author id must not receive workspace content. Mirrors the
+ * document-comment notification path.
+ */
+const canRecipientViewDocument = async (
+  ctx: LikeContext,
+  params: DocumentLikeActivityParams,
+): Promise<boolean> => {
+  const [meta, permissionsByUserId] = await Promise.all([
+    getResourceMeta(ctx.serverDB, 'document', params.documentId),
+    RbacModel.getWorkspaceUsersPermissions({
+      db: ctx.serverDB,
+      requireMembership: true,
+      userIds: [params.recipientUserId],
+      workspaceId: ctx.workspaceId,
+    }),
+  ]);
+  if (!meta) return false;
+  const grantedPermissions = permissionsByUserId.get(params.recipientUserId);
+  if (!grantedPermissions) return false;
+
+  return canPerformResourceAction({
+    action: 'view',
+    db: ctx.serverDB,
+    effectiveAccessLevel: 'view',
+    grantedPermissions,
+    meta,
+    resourceId: params.documentId,
+    resourceType: 'document',
+    userId: params.recipientUserId,
+    workspaceId: ctx.workspaceId,
+  });
+};
+
 const runActivityBestEffort = (
+  ctx: LikeContext,
   label: string,
   params: DocumentLikeActivityParams,
   run: (params: DocumentLikeActivityParams) => Promise<void>,
+  options?: {
+    /**
+     * Withdrawing a notification is cleanup, not disclosure — it should reach
+     * a removed author's inbox too, so revoke skips the access recheck.
+     */
+    skipRecipientAccessCheck?: boolean;
+  },
 ) => {
   if (params.recipientUserId === params.actorUserId) return;
   after(async () => {
     try {
+      if (!options?.skipRecipientAccessCheck && !(await canRecipientViewDocument(ctx, params))) {
+        return;
+      }
       await run(params);
     } catch (error) {
       console.error(`[document-like] Failed to ${label}`, error);
@@ -115,6 +167,7 @@ export const documentLikeRouter = router({
       const result = await ctx.documentLikeModel.like(input.documentId);
       if (result.created) {
         runActivityBestEffort(
+          ctx,
           'send like notification',
           {
             actorUserId: ctx.userId,
@@ -147,6 +200,7 @@ export const documentLikeRouter = router({
       const result = await ctx.documentLikeModel.unlike(input.documentId);
       if (result.removed) {
         runActivityBestEffort(
+          ctx,
           'revoke like notification',
           {
             actorUserId: ctx.userId,
@@ -155,6 +209,7 @@ export const documentLikeRouter = router({
             workspaceId: ctx.workspaceId,
           },
           revokeDocumentLikeNotification,
+          { skipRecipientAccessCheck: true },
         );
         publishLikesChanged(ctx, input.documentId);
       }
