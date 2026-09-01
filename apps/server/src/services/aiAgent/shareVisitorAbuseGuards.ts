@@ -17,18 +17,16 @@ import { agentShares } from '@/database/schemas';
  * `AgentShareModel.lockOwnedAgentRow` just took.
  *
  * WHY this must run BEFORE the topic/message INSERT the two guard functions
- * below perform, not only later: an owner who makes the link private — or
- * disables and republishes it — while a visitor's request is mid-flight must
- * never get ANY row written under the stale authorization.
+ * below perform, not only later: an owner who makes the link private while a
+ * visitor's request is mid-flight must never get ANY row written under the
+ * stale authorization.
  *
- * `expectedShareId`, not merely `visibility === 'link'`, is what closes the
- * disable → re-enable race: `AgentShareModel.create()` mints a brand-new
- * `agentShares.id` every disable → re-enable cycle (`deleteByAgentId` hard-
- * deletes the row), so a stale request that started under the OLD instance
- * would otherwise pass a bare visibility check — the NEW instance is also
- * `link`. The share row id IS the revocation token; see
- * `AgentShareGate.shareId`'s JSDoc. Fail closed on a missing row, a
- * non-`link` visibility, or an id mismatch.
+ * `expectedShareId` is checked alongside `visibility === 'link'` because the
+ * row can also be replaced by a different instance (a hard delete via
+ * `AgentShareModel.deleteByAgentId`, or an agent delete + recreate), which a
+ * bare visibility check would miss since the replacement is `link` too. See
+ * `AgentShareGate.shareId`'s JSDoc. Fail closed on a missing row, a non-`link`
+ * visibility, or an id mismatch.
  */
 const assertShareStillAuthorized = async (
   tx: LobeChatDatabase,

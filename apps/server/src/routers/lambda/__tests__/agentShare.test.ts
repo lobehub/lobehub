@@ -9,7 +9,6 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 const mockCreate = vi.fn();
-const mockDeleteByAgentId = vi.fn();
 const mockGetByAgentId = vi.fn();
 const mockUpdateConfig = vi.fn();
 const mockUpdateSlug = vi.fn();
@@ -18,7 +17,6 @@ const mockUpdateVisibility = vi.fn();
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: vi.fn(() => ({
     create: mockCreate,
-    deleteByAgentId: mockDeleteByAgentId,
     getByAgentId: mockGetByAgentId,
     updateConfig: mockUpdateConfig,
     updateSlug: mockUpdateSlug,
@@ -56,7 +54,6 @@ describe('agentShareRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreate.mockResolvedValue(share);
-    mockDeleteByAgentId.mockResolvedValue(share);
     mockGetByAgentId.mockResolvedValue(share);
     mockUpdateConfig.mockResolvedValue(share);
     mockUpdateSlug.mockResolvedValue({
@@ -145,14 +142,18 @@ describe('agentShareRouter', () => {
     ).toBe(false);
   });
 
-  it('updates visibility and disables an existing share', async () => {
+  // Disabling is a pause, not a revocation: it flips the row to `private` and
+  // never deletes it, so the share id and slug (i.e. the link already handed
+  // out) survive and re-enabling republishes the same url.
+  it('disables an existing share by making it private, keeping the row', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
     await caller.updateVisibility({ agentId: 'agent-1', visibility: 'link' });
-    await caller.disableShare({ agentId: 'agent-1' });
+    const disabled = await caller.disableShare({ agentId: 'agent-1' });
 
-    expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'link');
-    expect(mockDeleteByAgentId).toHaveBeenCalledWith('agent-1');
+    expect(mockUpdateVisibility).toHaveBeenNthCalledWith(1, 'agent-1', 'link');
+    expect(mockUpdateVisibility).toHaveBeenNthCalledWith(2, 'agent-1', 'private');
+    expect(disabled.id).toBe('share-1');
   });
 
   it('updates the custom slug', async () => {
@@ -193,7 +194,6 @@ describe('agentShareRouter', () => {
   });
 
   it('returns NOT_FOUND when an existing share is required', async () => {
-    mockDeleteByAgentId.mockResolvedValue(null);
     mockUpdateConfig.mockResolvedValue(null);
     mockUpdateVisibility.mockResolvedValue(null);
     mockUpdateSlug.mockResolvedValue(null);
@@ -248,7 +248,7 @@ describe('agentShareRouter', () => {
       await caller.updateShareConfig({ agentId: 'agent-1', config: { maxTurnsPerTopic: 3 } });
 
       expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'private');
-      expect(mockDeleteByAgentId).toHaveBeenCalledWith('agent-1');
+      expect(mockUpdateVisibility).toHaveBeenCalledTimes(2);
     });
 
     it('allows publishing when the capability is unconfigured', async () => {

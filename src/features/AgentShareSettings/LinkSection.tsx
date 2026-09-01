@@ -34,10 +34,9 @@ interface LinkSectionProps {
 /**
  * Sharing on/off, the visitor link, and the custom slug.
  *
- * Turning sharing off DELETES the share record, which is precisely what
- * revokes the link that was handed out; turning it back on mints a new share
- * id, i.e. a different url. The copy makes that explicit because it is not
- * recoverable — see `AgentShareModel.create`.
+ * Turning sharing off only PAUSES it: the share row keeps its id and custom
+ * slug, so visitors are locked out while it is off and turning it back on
+ * republishes the very same url — see `AgentShareModel.updateVisibility`.
  */
 const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug, share }) => {
   const { t } = useTranslation('agent');
@@ -51,8 +50,8 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
   const [slugError, setSlugError] = useState<string>('');
   const [savingSlug, setSavingSlug] = useState(false);
 
-  // Re-sync the draft whenever the server value changes (enable/disable mints
-  // a new record whose slug is empty again).
+  // Re-sync the draft whenever the server value changes — a save elsewhere, or
+  // the row reloading after an enable/disable (which keeps the saved slug).
   useEffect(() => {
     setSlugDraft(savedSlug);
     setSlugError('');
@@ -94,7 +93,6 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: t('share.settings.link.disableConfirmContent'),
-        okButtonProps: { danger: true },
         okText: t('share.settings.link.disableConfirmOk'),
         onOk: apply,
         title: t('share.settings.link.disableConfirmTitle'),

@@ -79,7 +79,7 @@ describe('resolveVisitorErrorKey', () => {
     );
   });
 
-  it('maps ShareSpendLimitExceeded to non-terminal "temporarily unavailable" copy', () => {
+  it('maps ShareSpendLimitExceeded to non-terminal "monthly limit reached" copy', () => {
     expect(resolveVisitorErrorKey(new Error(ChatErrorType.ShareSpendLimitExceeded))).toBe(
       'share.visitor.errors.spendLimit',
     );

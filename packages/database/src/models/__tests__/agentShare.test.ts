@@ -182,7 +182,9 @@ describe('AgentShareModel', () => {
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
     });
 
-    it('updates visibility and deletes the share', async () => {
+    // `deleteByAgentId` is the hard-teardown path, deliberately NOT what the
+    // disable flow uses (see the cycle test below).
+    it('updates visibility, and hard-deletes the share on demand', async () => {
       const created = await agentShareModel.create(agentId);
 
       const updated = await agentShareModel.updateVisibility(agentId, 'link');
@@ -212,13 +214,26 @@ describe('AgentShareModel', () => {
       expect(await otherAgentShareModel.getByAgentId(otherAgentId)).toEqual(otherShare);
     });
 
-    it('generates a new UUID after sharing is disabled and re-enabled', async () => {
-      const first = await agentShareModel.create(agentId);
-      await agentShareModel.deleteByAgentId(agentId);
-      const second = await agentShareModel.create(agentId);
+    // Turning sharing off is a pause, not a revocation — `updateVisibility`,
+    // never a delete — so the link (share id + custom slug) survives the cycle
+    // and re-enabling republishes the very same url.
+    it('keeps the share id and slug across a disable → re-enable cycle', async () => {
+      const first = await agentShareModel.create(agentId, 'link');
+      await agentShareModel.updateSlug(agentId, 'stable-link');
 
-      expect(second?.id).not.toBe(first?.id);
-      expect(await AgentShareModel.findByShareId(serverDB, first!.id)).toBeNull();
+      const disabled = await agentShareModel.updateVisibility(agentId, 'private');
+      expect(disabled?.id).toBe(first?.id);
+      expect(disabled?.shareConfig.slug).toBe('stable-link');
+
+      // `create` falls back to the existing row rather than inserting a new one.
+      const recreated = await agentShareModel.create(agentId, 'link');
+      const reEnabled = await agentShareModel.updateVisibility(agentId, 'link');
+
+      expect(recreated?.id).toBe(first?.id);
+      expect(reEnabled?.id).toBe(first?.id);
+      expect(reEnabled?.shareConfig.slug).toBe('stable-link');
+      expect(await AgentShareModel.findByShareId(serverDB, first!.id)).not.toBeNull();
+      expect(await AgentShareModel.findBySlugOrId(serverDB, 'stable-link')).not.toBeNull();
     });
   });
 

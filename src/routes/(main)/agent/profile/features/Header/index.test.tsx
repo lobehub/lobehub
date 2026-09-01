@@ -306,6 +306,16 @@ describe('Agent profile Header', () => {
 
       expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
+
+    // Share settings are a sibling tab of the profile group now, so the entry
+    // navigates instead of opening a modal.
+    it('navigates to the share tab', () => {
+      render(<Header />);
+
+      fireEvent.click(screen.getByTestId('share-entry-icon'));
+
+      expect(mocks.navigate).toHaveBeenCalledWith('/agent/agent-1/share');
+    });
   });
 
   // `ResourceConfigAccessGate` requires the role permission AND resource-level

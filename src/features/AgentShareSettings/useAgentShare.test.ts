@@ -160,103 +160,27 @@ describe('useAgentShare · updateConfig', () => {
     expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(30);
   });
 
-  it('drops a patch that lands after sharing was disabled', async () => {
-    service.disableShare.mockResolvedValue({ id: 'share-1' });
+  it('keeps the paused row in the cache instead of dropping it', async () => {
+    service.disableShare.mockResolvedValue({ ...buildShare(), visibility: 'private' });
 
     const { result } = renderHook(() => useAgentShare('agent-1'));
 
     await act(async () => {
-      // A debounced limit patch flushing on unmount races the disable; the
-      // share row is already gone, so writing would only raise NOT_FOUND.
-      const disabling = result.current.disable();
-      await result.current.updateConfig({ maxTurnsPerTopic: 30 });
-      await disabling;
+      await result.current.disable();
     });
 
-    expect(service.disableShare).toHaveBeenCalledTimes(1);
-    expect(service.updateShareConfig).not.toHaveBeenCalled();
-    expect(result.current.share).toBeNull();
+    // Disabling only pauses the share: the row (hence its id and slug) stays,
+    // so the same link resumes on the next enable.
+    expect(result.current.share?.id).toBe('share-1');
+    expect(result.current.share?.visibility).toBe('private');
   });
 
-  it('replays an edit made during a pending disable when the disable fails', async () => {
-    // The window the debounce lands in: `disable` has already nulled the local
-    // projection, but its request has not come back yet.
-    let failDisable: () => void = () => {};
-    service.disableShare.mockImplementationOnce(
-      () =>
-        new Promise((_resolve, reject) => {
-          failDisable = () => reject(new Error('network down'));
-        }),
-    );
-
-    const { result } = renderHook(() => useAgentShare('agent-1'));
-
-    let disabling: Promise<unknown> = Promise.resolve();
-    await act(async () => {
-      disabling = result.current.disable().catch(() => undefined);
-    });
-    await waitFor(() => expect(service.disableShare).toHaveBeenCalledTimes(1));
-
-    await act(async () => {
-      // Resolves immediately (buffered), which is what lets the debounce hook
-      // clear its draft — so the edit must not be dropped.
-      await result.current.updateConfig({ maxTurnsPerTopic: 30 });
-    });
-    expect(service.updateShareConfig).not.toHaveBeenCalled();
-
-    await act(async () => {
-      failDisable();
-      await disabling;
-    });
-
-    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
-    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({ maxTurnsPerTopic: 30 });
-  });
-
-  it('accumulates several edits made during a pending disable into one replay', async () => {
-    let failDisable: () => void = () => {};
-    service.disableShare.mockImplementationOnce(
-      () =>
-        new Promise((_resolve, reject) => {
-          failDisable = () => reject(new Error('network down'));
-        }),
-    );
-
-    const { result } = renderHook(() => useAgentShare('agent-1'));
-
-    let disabling: Promise<unknown> = Promise.resolve();
-    await act(async () => {
-      disabling = result.current.disable().catch(() => undefined);
-    });
-    await waitFor(() => expect(service.disableShare).toHaveBeenCalledTimes(1));
-
-    await act(async () => {
-      await result.current.updateConfig({ maxTurnsPerTopic: 30 });
-      // Functional patches resolve against the pre-disable config plus what is
-      // already buffered, so they compose just like on the normal path.
-      await result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-a'],
-      }));
-    });
-
-    await act(async () => {
-      failDisable();
-      await disabling;
-    });
-
-    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
-    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({
-      enabledToolIds: ['tool-a'],
-      maxTurnsPerTopic: 30,
-    });
-  });
-
-  it('discards an edit made during a pending disable when the disable succeeds', async () => {
+  it('still lands an edit made while a disable is in flight', async () => {
     let completeDisable: () => void = () => {};
     service.disableShare.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          completeDisable = () => resolve({ id: 'share-1' });
+          completeDisable = () => resolve({ ...buildShare(), visibility: 'private' });
         }),
     );
 
@@ -268,21 +192,24 @@ describe('useAgentShare · updateConfig', () => {
     });
     await waitFor(() => expect(service.disableShare).toHaveBeenCalledTimes(1));
 
+    // A debounced limit patch flushing on unmount races the disable. The row
+    // survives the disable, so the edit must be written, not dropped.
+    let editing: Promise<unknown> = Promise.resolve();
     await act(async () => {
-      await result.current.updateConfig({ maxTurnsPerTopic: 30 });
+      editing = result.current.updateConfig({ maxTurnsPerTopic: 30 });
     });
 
     await act(async () => {
       completeDisable();
       await disabling;
+      await editing;
     });
 
-    // The row is gone: nothing must be written against it (no NOT_FOUND).
-    expect(service.updateShareConfig).not.toHaveBeenCalled();
-    expect(result.current.share).toBeNull();
+    expect(service.updateShareConfig).toHaveBeenCalledTimes(1);
+    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({ maxTurnsPerTopic: 30 });
   });
 
-  it('still writes when a failed disable left the share in place', async () => {
+  it('still writes when a disable failed outright', async () => {
     service.disableShare.mockRejectedValue(new Error('nope'));
 
     const { result } = renderHook(() => useAgentShare('agent-1'));

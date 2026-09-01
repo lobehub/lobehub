@@ -40,9 +40,10 @@ const log = debug('lobe-server:router:shareChat');
  * its share purely through `(agentId, senderId)`, which is unambiguous because
  * `agent_shares` is 1:1 per agent. The known consequence is that a visitor's
  * own older topics resurface after an owner disables and re-enables the share
- * (which mints a brand-new `agentShares.id`). That crosses no identity
- * boundary — it is the same visitor's own prior conversation with the same
- * agent — but it does mean the per-visitor topic cap counts them.
+ * (a pause that keeps the same row, so nothing marks the topics as belonging
+ * to an earlier run of it). That crosses no identity boundary — it is the same
+ * visitor's own prior conversation with the same agent — but it does mean the
+ * per-visitor topic cap counts them.
  *
  * Agent sharing is personal-only (workspace agents cannot be shared), so no
  * workspaceId is ever threaded into the creator-scoped models/services.

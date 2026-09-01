@@ -64,7 +64,7 @@ const assertAgentSharePublishable = async (userId: string) => {
   }
 };
 
-/** `updateConfig` / `updateVisibility` / `deleteByAgentId` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
+/** `updateConfig` / `updateVisibility` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
 const requireShare = <T>(share: T | null): T => {
   if (!share) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent share not found' });
@@ -74,10 +74,17 @@ const requireShare = <T>(share: T | null): T => {
 };
 
 export const agentShareRouter = router({
+  /**
+   * Turning sharing OFF is a pause, not a revocation: the row (and with it the
+   * share id and custom slug the owner handed out) is kept and only flipped to
+   * `private`, so re-enabling later resolves the very same link. Visitors are
+   * locked out in the meantime — `getSharedAgent` and the runtime's
+   * `isRunStillAuthorized` both require `link`.
+   */
   disableShare: agentShareProcedure
     .input(agentIdInput)
     .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.deleteByAgentId(input.agentId)),
+      requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private')),
     ),
 
   enableShare: agentShareProcedure

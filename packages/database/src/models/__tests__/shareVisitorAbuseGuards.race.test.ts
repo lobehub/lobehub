@@ -161,12 +161,12 @@ describe('reserveShareVisitorTurnOrThrow — visitor turn cap race (real Postgre
 });
 
 // Adapted from the old design's `staleAuthorization` race: the revocation
-// token is now the `agentShares.id` itself rather than a separate generation
-// counter, because disabling a share hard-deletes the row and re-enabling it
-// mints a brand-new UUID. `assertShareStillAuthorized` therefore fails closed
-// on a missing row, a non-`link` visibility, OR an id mismatch — all three
-// checked inside the guard's own locked transaction, BEFORE any row is
-// written.
+// token is the `agentShares.id` itself rather than a separate generation
+// counter. Turning sharing off only flips the row to `private` (the visibility
+// check covers that), while a hard delete replaces the instance outright (the
+// id check covers that). `assertShareStillAuthorized` fails closed on a
+// missing row, a non-`link` visibility, OR an id mismatch — all three checked
+// inside the guard's own locked transaction, BEFORE any row is written.
 describe('shareVisitorAbuseGuards — revoked share authorization', () => {
   beforeEach(async () => {
     await cleanup();
@@ -198,15 +198,16 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
     expect(inserted.length).toBe(0);
   });
 
-  it('rejects a reservation stamped with a superseded share instance (disable → re-enable)', async () => {
+  it('rejects a reservation stamped with a superseded share instance', async () => {
     const agentId = 'revoked-share-topic-replaced';
     await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId: ownerId });
     const shareModel = new AgentShareModel(serverDB, ownerId);
     const staleShare = await shareModel.create(agentId, 'link');
 
-    // Disable hard-deletes the row; re-enabling mints a brand-new id. The
-    // replacement is ALSO `link`, so a bare visibility check would pass here —
-    // only the id comparison catches it.
+    // Turning sharing off only pauses it (visibility flip), so the id survives
+    // that cycle. A HARD delete is what replaces the instance: the new row is
+    // ALSO `link`, so a bare visibility check would pass here — only the id
+    // comparison catches it.
     await shareModel.deleteByAgentId(agentId);
     const freshShare = await shareModel.create(agentId, 'link');
     expect(freshShare.id).not.toBe(staleShare.id);

@@ -47,15 +47,17 @@ export interface AgentShareGate {
    * `shareConfig` in the SAME `AgentShareModel.findByShareIdWithAccessCheck`
    * call.
    *
-   * This id IS the revocation token. There is no separate generation counter:
-   * disabling a share hard-deletes the `agent_shares` row
-   * (`AgentShareModel.deleteByAgentId`) and re-enabling it inserts a fresh one
-   * with a brand-new UUID (`AgentShareModel.create`), so "the share row for
-   * this agent still exists AND its id still equals `shareId` AND its
-   * visibility is still `link`" is exactly the condition "this run's
-   * authorization has not been revoked". Every re-validation in the visitor
-   * chain (`shareVisitorAbuseGuards`, the per-step runtime re-check) is that
-   * one comparison.
+   * "The share row for this agent still exists AND its id still equals
+   * `shareId` AND its visibility is still `link`" is exactly the condition
+   * "this run's authorization has not been revoked". Every re-validation in
+   * the visitor chain (`shareVisitorAbuseGuards`, the per-step runtime
+   * re-check) is that one comparison.
+   *
+   * The visibility half carries the ordinary case: turning sharing off flips
+   * the row to `private` and keeps it, so the owner can resume the same link
+   * later (`AgentShareModel.updateVisibility`). The id half covers a row that
+   * genuinely went away and came back as a different instance — a hard delete
+   * (`AgentShareModel.deleteByAgentId`) or an agent delete + recreate.
    */
   shareId: string;
   /**

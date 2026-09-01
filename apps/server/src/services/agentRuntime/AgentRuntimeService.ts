@@ -1613,8 +1613,8 @@ export class AgentRuntimeService {
         // has already stopped working (it re-resolves the now-private share and
         // gets FORBIDDEN). Re-checking here means a revocation cannot survive a
         // step boundary. See `AgentShareModel.isRunStillAuthorized`'s JSDoc for
-        // why one query covers every revocation path (visibility flip, share
-        // delete, disable → re-enable, agent delete).
+        // why one query covers every revocation path (visibility flip — which
+        // is what turning sharing off does — share delete, agent delete).
         if (this.delegate.verifyShareRunStillAuthorized) {
           const shareMarker = agentState.metadata?.agentShare as
             { agentId?: string; shareId?: string } | undefined;

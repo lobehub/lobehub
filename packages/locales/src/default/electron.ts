@@ -1,4 +1,5 @@
 export default {
+  'navigation.agentShare': 'Share',
   'navigation.agents': 'Agents',
   'navigation.channels': 'Channels',
   'navigation.chat': 'Chat',

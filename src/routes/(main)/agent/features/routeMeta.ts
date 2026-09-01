@@ -5,6 +5,7 @@ import {
   MessageSquare,
   MessagesSquareIcon,
   RadioTowerIcon,
+  Share2Icon,
   UsersIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
@@ -34,6 +35,11 @@ const ChannelDynamicMeta = lazy(() =>
 const StatisticsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.StatisticsDynamicMeta,
+  })),
+);
+const ShareDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ShareDynamicMeta,
   })),
 );
 const SelfLearningDynamicMeta = lazy(() =>
@@ -80,6 +86,13 @@ export const agentStatisticsRouteMeta = routeMeta({
   icon: ChartColumnBigIcon,
   Skeleton: createSurfaceSkeleton('grid'),
   titleKey: 'navigation.stats',
+});
+
+export const agentShareRouteMeta = routeMeta({
+  DynamicMeta: ShareDynamicMeta,
+  icon: Share2Icon,
+  Skeleton: createSurfaceSkeleton('form'),
+  titleKey: 'navigation.agentShare',
 });
 
 export const agentSelfLearningRouteMeta = routeMeta({

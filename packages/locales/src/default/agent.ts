@@ -391,11 +391,11 @@ export default {
   'share.settings.link.desc':
     'Anyone signed in who has the link can chat with this Agent. Runs execute on your account.',
   'share.settings.link.disableConfirmContent':
-    'The current link stops working immediately and cannot be restored. Turning sharing back on creates a different link, so anyone you shared with will need the new one.',
-  'share.settings.link.disableConfirmOk': 'Turn off and revoke',
+    'Visitors lose access to the link right away. The link itself is kept, so turning sharing back on later republishes the exact same URL.',
+  'share.settings.link.disableConfirmOk': 'Turn off sharing',
   'share.settings.link.disableConfirmTitle': 'Turn off sharing?',
   'share.settings.link.offHint':
-    'Sharing is off. Turning it on creates a link you can hand out — turning it off again permanently revokes that link.',
+    'Sharing is off. Turn it on to get a link you can hand out — turning it off again only pauses it, and the same link resumes whenever you turn it back on.',
   'share.settings.link.slugError.invalid':
     'Use lowercase letters, numbers and hyphens only, and don’t start or end with a hyphen.',
   'share.settings.link.slugError.reserved': 'This word is reserved. Please pick another one.',
@@ -464,7 +464,7 @@ export default {
   'share.visitor.errors.sharingPaused':
     'The owner has paused sharing, so new messages are turned off.',
   'share.visitor.errors.spendLimit':
-    'This shared agent is temporarily unavailable. Please try again later.',
+    'This shared agent has reached its monthly usage limit set by its creator. It will be available again next month.',
   'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
   'share.visitor.errors.topicLimit':
     'You have reached the conversation limit on this shared agent.',

@@ -19,9 +19,9 @@ interface AgentShareSettingsContentProps {
 }
 
 /**
- * Creator-side share settings for one agent. Every control saves immediately;
- * the server merges each config patch atomically, so a failed write leaves the
- * other fields untouched.
+ * Creator-side share settings for one agent, the body of `/agent/:aid/share`.
+ * Every control saves immediately; the server merges each config patch
+ * atomically, so a failed write leaves the other fields untouched.
  */
 const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentId }) => {
   const { t } = useTranslation('agent');
@@ -40,7 +40,7 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
   );
 
   return (
-    <Flexbox gap={16} padding={20}>
+    <Flexbox gap={16} paddingBlock={16}>
       {/* Sharing grants real execution on the creator's account — say so plainly. */}
       <Alert
         showIcon
@@ -60,7 +60,10 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
             onEnable={enable}
             onUpdateSlug={updateSlug}
           />
-          {share && (
+          {/* Turning sharing off keeps the row (and its config) so the link can
+              be resumed unchanged — but while it is off there is no audience to
+              configure, so only the on/off + link section stays. */}
+          {share?.visibility === 'link' && (
             <>
               <UsageSection agentId={agentId} />
               <PermissionsSection shareConfig={share.shareConfig} onChange={handleConfigChange} />

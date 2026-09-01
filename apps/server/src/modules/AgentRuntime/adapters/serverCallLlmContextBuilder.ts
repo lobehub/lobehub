@@ -126,12 +126,12 @@ export const buildServerCallLlmContext = async ({
     // instead: a visitor topic is tied to its share purely through
     // `(agentId, senderId)`, since `agent_shares` is 1:1 per agent.
     //
-    // Known gap: a topic created under a share instance the owner has since
-    // disabled and replaced still matches `(agentId, senderId)` for a
-    // returning visitor, because topics carry no share-instance column. Such a
-    // topic is the SAME visitor's own prior conversation with the SAME agent,
-    // so this leaks nothing across identities — it only means old context can
-    // resurface after a disable → re-enable cycle.
+    // Known gap: a topic created before the owner paused the share still
+    // matches `(agentId, senderId)` for a returning visitor, because topics
+    // carry no share-instance column. Such a topic is the SAME visitor's own
+    // prior conversation with the SAME agent, so this leaks nothing across
+    // identities — it only means old context can resurface once the share is
+    // turned back on.
     const isTopicVisibleToRun = (
       topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
     ): boolean => {

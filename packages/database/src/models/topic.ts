@@ -1111,10 +1111,10 @@ export class TopicModel {
    *
    * `agent_shares` is 1:1 per agent (`agent_shares_agent_id_unique`), so
    * `agentId` alone identifies which share a visitor topic belongs to — there
-   * is no `topics.share_id` column to scope by. A disable → re-enable cycle
-   * mints a new `agentShares.id` but keeps the same `agentId`, so a returning
-   * visitor's older conversations DO resurface under the republished share.
-   * That is the accepted trade-off of not carrying a share id on the row.
+   * is no `topics.share_id` column to scope by. Turning sharing off and back
+   * on keeps the same row and the same `agentId`, so a returning visitor's
+   * older conversations DO resurface under the republished share. That is the
+   * accepted trade-off of not carrying a share id on the row.
    *
    * Selects a visitor-facing DTO instead of the full row: the visitor surface
    * only renders id/title, and the row also carries creator-only fields

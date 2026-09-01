@@ -26,7 +26,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
-import { openAgentShareSettingsModal } from '@/features/AgentShareSettings';
+import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -39,8 +39,6 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { featureFlagsSelectors } from '@/store/serverConfig/selectors';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -244,38 +242,23 @@ const Header = memo(() => {
   const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
-  const shareModalRef = useRef<ModalInstance | null>(null);
   useEffect(
     () => () => {
       settingsModalRef.current?.close();
       settingsModalRef.current = null;
-      shareModalRef.current?.close();
-      shareModalRef.current = null;
     },
     [],
   );
 
-  // Whether this account may publish shares at all. Presentation only — the
-  // same capability is enforced on `agentShare.enableShare` server-side.
-  // `undefined` (flags not resolved yet) keeps the entry visible, matching the
-  // schema default.
-  const enableAgentShare = useServerConfigStore(featureFlagsSelectors).enableAgentShare;
+  const shareSupported = useAgentShareSupported(activeAgentId);
+  const canShareAgent = shareSupported && canConfigure;
 
-  // Agent sharing is personal-only — `agentShares` rows can never exist for a
-  // workspace agent (see `AgentShareModel`'s ownership check) — and a builtin
-  // row (Inbox, the builders) is not the owner's to hand out.
-  const canShareAgent =
-    !!activeAgentId &&
-    !hasActiveWorkspace &&
-    !isBuiltinAgent &&
-    canConfigure &&
-    enableAgentShare !== false;
-
+  // Share settings are a sibling tab of the profile group, not a popup — the
+  // shortcut just jumps to that tab.
   const handleOpenShare = useCallback(() => {
     if (!activeAgentId) return;
-    shareModalRef.current?.close();
-    shareModalRef.current = openAgentShareSettingsModal(activeAgentId);
-  }, [activeAgentId]);
+    navigate(`/agent/${activeAgentId}/share`);
+  }, [activeAgentId, navigate]);
 
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
@@ -386,8 +369,22 @@ const Header = memo(() => {
   ]);
 
   return (
+    // `relative` anchors the absolutely-centered switcher below.
     <NavHeader
       style={{ position: 'relative' }}
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {/* No section title — the Segmented beside it names the current tab. */}
+          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
+          <AgentStatusTag />
+          <AgentVersionReviewTag />
+          <AgentForkTag />
+          <AccessLevelTag
+            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
+            resourceType={'agent'}
+          />
+        </Flexbox>
+      }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
           {canShareAgent && (
@@ -410,20 +407,6 @@ const Header = memo(() => {
               onToggle={() => toggleAgentBuilderPanel()}
             />
           )}
-        </Flexbox>
-      }
-      // `relative` anchors the absolutely-centered switcher below.
-      left={
-        <Flexbox horizontal align={'center'} gap={8}>
-          {/* No section title — the Segmented beside it names the current tab. */}
-          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
-          <AgentStatusTag />
-          <AgentVersionReviewTag />
-          <AgentForkTag />
-          <AccessLevelTag
-            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
-            resourceType={'agent'}
-          />
         </Flexbox>
       }
       styles={{

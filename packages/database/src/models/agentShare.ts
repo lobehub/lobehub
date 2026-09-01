@@ -120,10 +120,11 @@ export class AgentShareModel {
   /** Create a private share by default, or return the existing share for the agent. */
   create = async (agentId: string, visibility: ShareVisibility = 'private') => {
     const share = await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
-      // `id` mints a fresh UUID on every insert — disabling (`deleteByAgentId`)
-      // and re-enabling a share therefore always yields a NEW id, so any link
-      // previously handed out no longer resolves. This is a deliberate
-      // revocation property, not an incidental side effect of the schema.
+      // One row per agent, forever: `onConflictDoNothing` on `agentId` makes a
+      // re-enable fall back to the SELECT below, returning the existing row
+      // untouched. That is what keeps a share's id and custom slug — i.e. the
+      // link already handed out — stable across a disable → re-enable cycle,
+      // since disabling only flips `visibility` to `private`.
       const [created] = await tx
         .insert(agentShares)
         .values({ agentId, shareConfig: DEFAULT_AGENT_SHARE_CONFIG, visibility })
@@ -210,7 +211,12 @@ export class AgentShareModel {
       return { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) };
     });
 
-  /** Update share visibility for a personally owned agent. */
+  /**
+   * Update share visibility for a personally owned agent. This is also the
+   * "turn sharing off" path (`private`): the row, its id and its custom slug
+   * are all preserved, so flipping back to `link` republishes the exact same
+   * URL the owner already handed out.
+   */
   updateVisibility = async (
     agentId: string,
     visibility: ShareVisibility,
@@ -306,7 +312,14 @@ export class AgentShareModel {
     });
   };
 
-  /** Disable sharing by deleting the agent's share record. */
+  /**
+   * Hard-delete the agent's share record, dropping its id and custom slug for
+   * good.
+   *
+   * NOT the "turn sharing off" path — that is `updateVisibility(agentId,
+   * 'private')`, which keeps the link resumable. This exists for a genuine,
+   * irreversible teardown of a share instance.
+   */
   deleteByAgentId = async (agentId: string): Promise<AgentShareItem | null> =>
     this.withOwnedPersonalAgentLock(agentId, async (tx) => {
       const [deleted] = await tx
@@ -356,11 +369,12 @@ export class AgentShareModel {
    * agent's share row must exist, still be the SAME instance the run was
    * authorized against (`shareId`), and still be `link`.
    *
-   * The share row id doubles as the revocation token — disabling a share
-   * hard-deletes the row (`deleteByAgentId`) and re-enabling mints a new UUID
-   * (`create`), so this single query catches every revocation path uniformly:
-   * a visibility flip to `private`, a disable, a disable→re-enable cycle, and
-   * a full agent delete (the row cascades away with the agent).
+   * Turning sharing off flips `visibility` to `private` and KEEPS the row, so
+   * a disable → re-enable cycle deliberately resumes the same link and must
+   * not invalidate anything: the visibility check alone covers the pause. The
+   * id comparison still guards the cases where the row genuinely goes away and
+   * comes back as a different instance — a hard delete (`deleteByAgentId`) or
+   * the agent being deleted and recreated under the same id.
    *
    * Deliberately cheap (one primary-key-ish lookup, no join): it runs once per
    * runtime step. Returns `false` — never throws — for an ordinary
