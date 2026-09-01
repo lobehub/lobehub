@@ -13,39 +13,52 @@ const Probe = ({ editor, rootRef }: { editor: IEditor; rootRef: Ref<HTMLDivEleme
 };
 
 describe('useEditorRootLifecycle', () => {
-  it('preserves a hidden editor and destroys it only after its root unmounts', async () => {
-    let currentRoot: HTMLElement | null = null;
+  it('restores a hidden root to its owning editor and destroys it only after unmount', async () => {
+    let ownerRoot: HTMLElement | null = null;
+    let replacementRoot: HTMLElement | null = document.createElement('div');
     const destroy = vi.fn();
-    const setRootElement = vi.fn((root: HTMLElement | null) => {
-      currentRoot = root;
+    const ownerSetRootElement = vi.fn((root: HTMLElement | null) => {
+      ownerRoot = root;
     });
-    const lexicalEditor = {
-      getRootElement: vi.fn(() => currentRoot),
-      setRootElement,
+    const ownerLexicalEditor = {
+      getRootElement: vi.fn(() => ownerRoot),
+      setRootElement: ownerSetRootElement,
+    };
+    const replacementSetRootElement = vi.fn((root: HTMLElement | null) => {
+      replacementRoot = root;
+    });
+    const replacementLexicalEditor = {
+      getRootElement: vi.fn(() => replacementRoot),
+      setRootElement: replacementSetRootElement,
     };
     const editor = {
       destroy,
-      getLexicalEditor: vi.fn(() => lexicalEditor),
+      getLexicalEditor: vi
+        .fn()
+        .mockReturnValueOnce(ownerLexicalEditor)
+        .mockReturnValue(replacementLexicalEditor),
     } as unknown as IEditor;
     const rootRef = (root: HTMLDivElement | null) => {
-      if (root) currentRoot = root;
+      if (root) ownerRoot = root;
     };
     const tree = (mode: 'hidden' | 'visible') =>
       createElement(Activity, { children: createElement(Probe, { editor, rootRef }), mode });
 
     const { rerender, unmount } = render(tree('visible'));
-    const element = currentRoot;
+    const element = ownerRoot;
 
     rerender(tree('hidden'));
-    expect(setRootElement).toHaveBeenLastCalledWith(null);
+    expect(ownerSetRootElement).toHaveBeenLastCalledWith(null);
     expect(destroy).not.toHaveBeenCalled();
 
     rerender(tree('visible'));
-    expect(setRootElement).toHaveBeenLastCalledWith(element);
+    expect(ownerSetRootElement).toHaveBeenLastCalledWith(element);
+    expect(replacementSetRootElement).not.toHaveBeenCalled();
+    expect(editor.getLexicalEditor).toHaveBeenCalledOnce();
 
     rerender(tree('hidden'));
     unmount();
-    expect(setRootElement).toHaveBeenLastCalledWith(null);
+    expect(ownerSetRootElement).toHaveBeenLastCalledWith(null);
     await waitFor(() => expect(destroy).toHaveBeenCalledOnce());
   });
 });

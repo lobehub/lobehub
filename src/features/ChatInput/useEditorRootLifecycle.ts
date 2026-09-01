@@ -8,33 +8,37 @@ import { useEffect, useRef } from 'react';
 export const useEditorRootLifecycle = (editor: IEditor) => {
   const disconnectObserverRef = useRef<MutationObserver | null>(null);
   const destroyedRef = useRef(false);
-  const inactiveRootRef = useRef<HTMLElement | null>(null);
+  const inactiveEditorRef = useRef<{
+    lexicalEditor: NonNullable<ReturnType<IEditor['getLexicalEditor']>>;
+    root: HTMLElement;
+  } | null>(null);
 
   useEffect(() => {
     disconnectObserverRef.current?.disconnect();
     disconnectObserverRef.current = null;
 
-    const lexicalEditor = editor.getLexicalEditor();
+    const inactiveEditor = inactiveEditorRef.current;
+    const lexicalEditor = inactiveEditor?.lexicalEditor ?? editor.getLexicalEditor();
     if (!lexicalEditor) return;
 
-    if (inactiveRootRef.current) {
-      lexicalEditor.setRootElement(inactiveRootRef.current);
-      inactiveRootRef.current = null;
+    if (inactiveEditor) {
+      lexicalEditor.setRootElement(inactiveEditor.root);
+      inactiveEditorRef.current = null;
     }
 
     return () => {
       const root = lexicalEditor.getRootElement();
-      inactiveRootRef.current = root;
       lexicalEditor.setRootElement(null);
 
       if (!root) return;
+      inactiveEditorRef.current = { lexicalEditor, root };
 
       const destroyWhenDisconnected = () => {
         if (root.isConnected || destroyedRef.current) return;
         destroyedRef.current = true;
         observer.disconnect();
         if (disconnectObserverRef.current === observer) disconnectObserverRef.current = null;
-        inactiveRootRef.current = null;
+        inactiveEditorRef.current = null;
         editor.destroy();
       };
       const observer = new MutationObserver(destroyWhenDisconnected);
